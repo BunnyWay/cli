@@ -238,6 +238,178 @@ bunny db tokens invalidate <database-id>
 bunny db tokens invalidate --force
 ```
 
+### `bunny apps`
+
+Manage apps (Magic Containers). Apps are multi-container deployments where all containers share a localhost network. Configuration is stored in a `bunny.toml` file; the API is the source of truth.
+
+```bash
+# Create a new app (interactive)
+bunny apps init
+
+# Link to an existing app
+bunny apps link
+
+# Deploy a new image
+bunny apps deploy --image ghcr.io/myorg/api:v1.2
+
+# Sync remote config to local bunny.toml
+bunny apps pull
+
+# Apply local bunny.toml changes to remote
+bunny apps push
+```
+
+#### `bunny apps init`
+
+Create a new app. Prompts for name, runtime, image, and regions. Scaffolds `bunny.toml` and `.bunny/app.json`.
+
+```bash
+bunny apps init
+bunny apps init --name my-api --runtime shared --image nginx:latest
+```
+
+| Flag        | Description                           |
+| ----------- | ------------------------------------- |
+| `--name`    | App name                              |
+| `--runtime` | Runtime type: `shared` or `reserved`  |
+| `--image`   | Primary container image               |
+
+#### `bunny apps link`
+
+Link the current directory to an existing app. Creates `bunny.toml` and `.bunny/app.json`.
+
+```bash
+bunny apps link
+bunny apps link --id <app-id>
+```
+
+#### `bunny apps list`
+
+List all apps.
+
+```bash
+bunny apps list
+bunny apps ls --output json
+```
+
+#### `bunny apps show`
+
+Show app details including status, regions, scaling, cost, and containers.
+
+```bash
+bunny apps show
+bunny apps show <app-id>
+```
+
+#### `bunny apps deploy`
+
+Deploy an app. Optionally update the primary container image before deploying.
+
+```bash
+# Prompt for image
+bunny apps deploy
+
+# Deploy a specific image
+bunny apps deploy --image ghcr.io/myorg/api:v1.2
+```
+
+| Flag      | Description                       |
+| --------- | --------------------------------- |
+| `--image` | Container image to deploy         |
+
+#### `bunny apps pull` / `bunny apps push`
+
+Sync configuration between the remote API and local `bunny.toml`.
+
+```bash
+# Pull remote state to local bunny.toml
+bunny apps pull
+bunny apps pull --force
+
+# Push local bunny.toml to remote
+bunny apps push
+bunny apps push --dry-run
+```
+
+#### `bunny apps accessory`
+
+Manage accessory containers (databases, caches, sidecars). Accessories are defined in the `[accessories]` section of `bunny.toml`.
+
+```bash
+# List accessories
+bunny apps accessory list
+
+# Start an accessory from bunny.toml
+bunny apps accessory start postgres
+bunny apps accessory start all
+
+# Stop an accessory
+bunny apps accessory stop redis --force
+
+# Restart all containers
+bunny apps accessory restart
+```
+
+#### `bunny apps env`
+
+Manage environment variables per container.
+
+```bash
+# List vars (primary container)
+bunny apps env list
+
+# Set a variable on a specific container
+bunny apps env set DATABASE_URL postgres://localhost:5432/mydb --container postgres
+
+# Remove a variable
+bunny apps env remove OLD_VAR
+
+# Pull remote vars to .env
+bunny apps env pull
+```
+
+| Flag          | Description                        |
+| ------------- | ---------------------------------- |
+| `--container` | Target container (default: primary)|
+
+#### `bunny apps endpoints`
+
+Manage endpoints (CDN or Anycast) per container.
+
+```bash
+bunny apps endpoints list
+bunny apps endpoints add --type cdn --ssl --container-port 3000 --public-port 443
+bunny apps endpoints remove <endpoint-id>
+```
+
+#### `bunny apps volumes`
+
+Manage persistent volumes.
+
+```bash
+bunny apps volumes list
+bunny apps volumes remove <volume-id> --force
+```
+
+#### `bunny apps regions`
+
+View available regions and app region settings.
+
+```bash
+bunny apps regions list
+bunny apps regions show
+```
+
+#### `bunny apps registry`
+
+Manage container registries (account-level).
+
+```bash
+bunny apps registry list
+bunny apps registry add --name "GitHub" --username myorg
+bunny apps registry remove <registry-id>
+```
+
 ### `bunny scripts`
 
 Manage Edge Scripts.

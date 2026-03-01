@@ -111,6 +111,51 @@ bunny-cli/
 │   │   └── paths.ts                      # XDG-compliant config file path resolution
 │   │
 │   ├── commands/
+│   │   ├── apps/
+│   │   │   ├── index.ts                  # defineNamespace("apps", ...) — registers all app commands
+│   │   │   ├── constants.ts              # APP_MANIFEST, AppManifest, status/runtime labels
+│   │   │   ├── resolve-app.ts            # resolveAppId(), resolveContainerId(), manifest helpers
+│   │   │   ├── toml.ts                   # bunny.toml parse/write/convert (BunnyToml, apiToToml, tomlToApi)
+│   │   │   ├── init.ts                   # Create new app + scaffold bunny.toml
+│   │   │   ├── link.ts                   # Link directory to existing app
+│   │   │   ├── list.ts                   # List all apps
+│   │   │   ├── show.ts                   # Show app details and overview
+│   │   │   ├── deploy.ts                 # Deploy app (update image + deploy)
+│   │   │   ├── undeploy.ts               # Undeploy app
+│   │   │   ├── restart.ts                # Restart app
+│   │   │   ├── delete.ts                 # Delete app
+│   │   │   ├── pull.ts                   # Sync API → bunny.toml
+│   │   │   ├── push.ts                   # Sync bunny.toml → API
+│   │   │   ├── accessory/
+│   │   │   │   ├── index.ts              # defineNamespace("accessory", ...)
+│   │   │   │   ├── list.ts               # List accessory containers
+│   │   │   │   ├── start.ts              # Add container from bunny.toml + deploy
+│   │   │   │   ├── stop.ts               # Remove container template
+│   │   │   │   └── restart.ts            # Restart all containers
+│   │   │   ├── env/
+│   │   │   │   ├── index.ts              # defineNamespace("env", ...)
+│   │   │   │   ├── list.ts               # List env vars per container
+│   │   │   │   ├── set.ts                # Set env var (read-modify-write)
+│   │   │   │   ├── remove.ts             # Remove env var
+│   │   │   │   └── pull.ts               # Pull env vars to .env file
+│   │   │   ├── endpoints/
+│   │   │   │   ├── index.ts              # defineNamespace("endpoints", ...)
+│   │   │   │   ├── list.ts               # List endpoints per container
+│   │   │   │   ├── add.ts                # Add CDN or Anycast endpoint
+│   │   │   │   └── remove.ts             # Remove endpoint
+│   │   │   ├── volumes/
+│   │   │   │   ├── index.ts              # defineNamespace("volumes", ...)
+│   │   │   │   ├── list.ts               # List volumes
+│   │   │   │   └── remove.ts             # Remove volume
+│   │   │   ├── regions/
+│   │   │   │   ├── index.ts              # defineNamespace("regions", ...)
+│   │   │   │   ├── list.ts               # List available regions
+│   │   │   │   └── show.ts               # Show app region settings
+│   │   │   └── registry/
+│   │   │       ├── index.ts              # defineNamespace("registry", ...)
+│   │   │       ├── list.ts               # List container registries
+│   │   │       ├── add.ts                # Add registry with credentials
+│   │   │       └── remove.ts             # Remove registry
 │   │   ├── auth/
 │   │   │   ├── login.ts                  # Browser-based OAuth login via Bun.serve() callback (top-level: bunny login)
 │   │   │   └── logout.ts                 # Profile removal with --force confirmation bypass (top-level: bunny logout)
@@ -540,6 +585,42 @@ bunny
 │   └── profile
 │       ├── create <name>  (alias: add)     Create a named profile with API key
 │       └── delete <name>                   Delete a named profile
+├── apps
+│   ├── init            [--name] [--runtime] [--image]
+│   │                                       Create a new app with bunny.toml
+│   ├── link            [--id]              Link directory to an existing app
+│   ├── list            (alias: ls)         List all apps
+│   ├── show            [id]                Show app details and overview
+│   ├── deploy          [id] [--image]      Deploy an app
+│   ├── undeploy        [id] [--force]      Undeploy an app
+│   ├── restart         [id]                Restart an app
+│   ├── delete          [id] [--force]      Delete an app
+│   ├── pull            [id] [--force]      Sync remote config to bunny.toml
+│   ├── push            [id] [--dry-run]    Apply bunny.toml to remote
+│   ├── accessory
+│   │   ├── list        [--id]              List accessory containers
+│   │   ├── start       <name|all> [--id]   Start accessory from bunny.toml
+│   │   ├── stop        <name|all> [--force] Stop accessory container
+│   │   └── restart     [name] [--id]       Restart containers
+│   ├── env
+│   │   ├── list        [--container]       List environment variables
+│   │   ├── set         <key> <value> [--container]  Set environment variable
+│   │   ├── remove      <key> [--container] Remove environment variable
+│   │   └── pull        [--container] [--force]      Pull env vars to .env
+│   ├── endpoints
+│   │   ├── list        [--container]       List endpoints
+│   │   ├── add         [--container] [--type] [--ssl]  Add endpoint
+│   │   └── remove      <id> [--force]      Remove endpoint
+│   ├── volumes
+│   │   ├── list                            List volumes
+│   │   └── remove      <id> [--force]      Remove volume
+│   ├── regions
+│   │   ├── list        (alias: ls)         List available regions
+│   │   └── show        [id]                Show app region settings
+│   └── registry
+│       ├── list        (alias: ls)         List container registries
+│       ├── add         [--name] [--username] Add registry
+│       └── remove      <id>                Remove registry
 ├── db
 │   ├── create          [--name] [--primary] [--replicas] [--storage-region]
 │   │                                       Create a new database

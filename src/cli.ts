@@ -1,5 +1,6 @@
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import { appsNamespace } from "./commands/apps/index.ts";
 import { authLoginCommand } from "./commands/auth/login.ts";
 import { authLogoutCommand } from "./commands/auth/logout.ts";
 import { configNamespace } from "./commands/config/index.ts";
@@ -43,6 +44,7 @@ export const cli = yargs(hideBin(process.argv))
     global: true,
   })
 
+  .command(appsNamespace)
   .command(authLoginCommand)
   .command(authLogoutCommand)
   .command(configNamespace)
