@@ -5,6 +5,13 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
 import {
+  ensureDockerAvailable,
+  buildImage,
+  pushImage,
+  generateTag,
+  promptRegistry,
+} from "./docker.ts";
+import {
   loadBunnyToml,
   saveBunnyToml,
   parseImageRef,
@@ -25,7 +32,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
   builder: (yargs) =>
     yargs.option("image", {
       type: "string",
-      describe: "Container image to deploy (e.g. ghcr.io/org/app:v1.2)",
+      describe: "Container image to deploy (skips build if dockerfile is set)",
     }),
 
   handler: async ({ image, profile, output, verbose, apiKey }) => {
@@ -34,6 +41,54 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     const client = createMcClient(config.apiKey, undefined, verbose);
 
     let appId = toml.app.id;
+    let deployImage = image;
+
+    // Build from Dockerfile if configured and no --image override
+    const { dockerfile } = toml.app.container;
+    let registry = toml.app.container.registry;
+
+    if (dockerfile && !image) {
+      await ensureDockerAvailable();
+
+      // Prompt for registry if not set
+      if (!registry) {
+        const registryId = await promptRegistry(client);
+        if (!registryId) {
+          throw new UserError("A registry is required to build and push images.");
+        }
+        registry = registryId;
+        toml.app.container.registry = registry;
+        saveBunnyToml(toml);
+      }
+
+      // Fetch registry details to get hostname
+      const regSpin = spinner("Fetching registry...");
+      regSpin.start();
+
+      const { data: reg } = await client.GET("/registries/{registryId}", {
+        params: { path: { registryId: Number(registry) } },
+      });
+
+      regSpin.stop();
+
+      if (!reg?.hostName) {
+        throw new UserError(
+          `Registry ${registry} not found or has no hostname.`,
+          "Use `bunny apps registry list` to check your registries.",
+        );
+      }
+
+      const tag = await generateTag();
+      const imageRef = `${reg.hostName}/${toml.app.name}:${tag}`;
+
+      logger.info(`Building ${imageRef}...`);
+      await buildImage(dockerfile, imageRef);
+
+      logger.info(`Pushing ${imageRef}...`);
+      await pushImage(imageRef);
+
+      deployImage = imageRef;
+    }
 
     // If no id, create the app on MC first
     if (!appId) {
@@ -57,8 +112,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       logger.success(`App "${toml.app.name}" created (${appId}).`);
     }
 
-    // If an image was provided, update the primary container first
-    if (image) {
+    // If we have an image to deploy (from build or --image), update the primary container
+    if (deployImage) {
       const fetchSpin = spinner("Fetching app...");
       fetchSpin.start();
 
@@ -73,18 +128,24 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         throw new UserError("App has no containers.");
       }
 
-      const { imageName, imageNamespace, imageTag } = parseImageRef(image);
+      const { imageName, imageNamespace, imageTag } = parseImageRef(deployImage);
 
       const updateSpin = spinner("Updating container image...");
       updateSpin.start();
 
       await client.PATCH("/apps/{appId}/containers/{containerId}", {
         params: { path: { appId, containerId } },
-        body: { image, imageName, imageNamespace, imageTag },
+        body: {
+          image: deployImage,
+          imageName,
+          imageNamespace,
+          imageTag,
+          imageRegistryId: registry ?? "",
+        },
       });
 
       updateSpin.stop();
-      logger.success(`Image updated to ${image}.`);
+      logger.success(`Image updated to ${deployImage}.`);
     }
 
     const deploySpin = spinner("Deploying...");
@@ -97,7 +158,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     deploySpin.stop();
 
     if (output === "json") {
-      logger.log(JSON.stringify({ id: appId, deployed: true, image }));
+      logger.log(
+        JSON.stringify({ id: appId, deployed: true, image: deployImage }),
+      );
       return;
     }
 

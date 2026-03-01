@@ -1,3 +1,5 @@
+import { existsSync } from "fs";
+import { basename, join, resolve } from "path";
 import prompts from "prompts";
 import { createMcClient } from "../../api/mc-client.ts";
 import { resolveConfig } from "../../config/index.ts";
@@ -5,8 +7,9 @@ import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
+import { promptRegistry } from "./docker.ts";
 import { saveBunnyToml, bunnyTomlExists } from "./toml.ts";
-import type { BunnyToml } from "./toml.ts";
+import type { BunnyToml, ContainerConfig } from "./toml.ts";
 
 const COMMAND = "init";
 const DESCRIPTION = "Initialize a new app config.";
@@ -53,12 +56,15 @@ export const appsInitCommand = defineCommand<InitArgs>({
       );
     }
 
+    // Default app name to current directory name
     let name = rawName;
     if (!name) {
+      const defaultName = basename(resolve(process.cwd()));
       const { value } = await prompts({
         type: "text",
         name: "value",
         message: "App name:",
+        initial: defaultName,
       });
       name = value;
     }
@@ -79,19 +85,48 @@ export const appsInitCommand = defineCommand<InitArgs>({
     }
     if (!runtime) throw new UserError("Runtime type is required.");
 
-    let image = rawImage;
-    if (!image) {
+    const config = resolveConfig(profile, apiKey);
+    const client = createMcClient(config.apiKey, undefined, verbose);
+
+    // Detect Dockerfile in cwd
+    const dockerfilePath = join(process.cwd(), "Dockerfile");
+    const hasDockerfile = existsSync(dockerfilePath);
+
+    let container: ContainerConfig;
+
+    if (hasDockerfile && !rawImage) {
+      logger.info("Detected Dockerfile in current directory.");
+      const { useDockerfile } = await prompts({
+        type: "confirm",
+        name: "useDockerfile",
+        message: "Use this Dockerfile to build and deploy?",
+        initial: true,
+      });
+
+      if (useDockerfile) {
+        const registryId = await promptRegistry(client);
+        if (!registryId) throw new UserError("A registry is required to build and push images.");
+        container = { dockerfile: "Dockerfile", registry: registryId };
+      } else {
+        const { value } = await prompts({
+          type: "text",
+          name: "value",
+          message: "Primary container image (e.g. nginx:latest):",
+        });
+        if (!value) throw new UserError("Container image is required.");
+        container = { image: value };
+      }
+    } else if (rawImage) {
+      container = { image: rawImage };
+    } else {
       const { value } = await prompts({
         type: "text",
         name: "value",
         message: "Primary container image (e.g. nginx:latest):",
       });
-      image = value;
+      if (!value) throw new UserError("Container image is required.");
+      container = { image: value };
     }
-    if (!image) throw new UserError("Container image is required.");
-
-    const config = resolveConfig(profile, apiKey);
-    const client = createMcClient(config.apiKey, undefined, verbose);
 
     // Fetch available regions for selection
     const spin = spinner("Fetching regions...");
@@ -132,7 +167,7 @@ export const appsInitCommand = defineCommand<InitArgs>({
           allowed: selectedRegions,
           required: [selectedRegions[0]!],
         },
-        container: { image },
+        container,
       },
     };
 

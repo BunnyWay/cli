@@ -36,9 +36,10 @@ export interface VolumeConfig {
 }
 
 export interface ContainerConfig {
-  image: string;
+  image?: string;
+  dockerfile?: string;
   command?: string[];
-  registry?: { server: string; username: string };
+  registry?: string;
   env?: Record<string, string>;
   probes?: {
     readiness?: ProbeConfig;
@@ -158,9 +159,11 @@ export function resolveContainerId(
 // ─── API → TOML conversion ──────────────────────────────────────────
 
 function containerTemplateToConfig(ct: ContainerTemplate): ContainerConfig {
-  const config: ContainerConfig = {
-    image: ct.image,
-  };
+  const config: ContainerConfig = {};
+
+  if (ct.image) {
+    config.image = ct.image;
+  }
 
   if (ct.entryPoint?.commandArray?.length) {
     config.command = ct.entryPoint.commandArray;
@@ -208,7 +211,7 @@ export function apiToToml(app: Application): BunnyToml {
       runtime: app.runtimeType.toLowerCase() as "shared" | "reserved",
       container: primary
         ? containerTemplateToConfig(primary)
-        : { image: "" },
+        : {},
     },
   };
 
@@ -285,16 +288,17 @@ function containerConfigToRequest(
   config: ContainerConfig,
   id?: string,
 ): ContainerRequest {
-  const { imageName, imageNamespace, imageTag } = parseImageRef(config.image);
+  const image = config.image ?? "";
+  const { imageName, imageNamespace, imageTag } = parseImageRef(image);
 
   const req: ContainerRequest = {
     id: id ?? undefined,
     name,
-    image: config.image,
+    image,
     imageName,
     imageNamespace,
     imageTag,
-    imageRegistryId: "",
+    imageRegistryId: config.registry ?? "",
   };
 
   if (config.command) {

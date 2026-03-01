@@ -74,7 +74,7 @@ export const appsAccessoryStartCommand = defineCommand<StartArgs>({
       }
 
       const { imageName, imageNamespace, imageTag } = parseImageRef(
-        accConfig.image,
+        accConfig.image ?? "",
       );
 
       const spin = spinner(`Starting ${accName}...`);
@@ -88,7 +88,7 @@ export const appsAccessoryStartCommand = defineCommand<StartArgs>({
           imageName,
           imageNamespace,
           imageTag,
-          imageRegistryId: "",
+          imageRegistryId: accConfig.registry ?? "",
           environmentVariables: accConfig.env
             ? Object.entries(accConfig.env).map(([k, v]) => ({
                 name: k,

@@ -240,16 +240,16 @@ bunny db tokens invalidate --force
 
 ### `bunny apps`
 
-Manage apps (Magic Containers). Apps are multi-container deployments where all containers share a localhost network. Configuration is stored in a `bunny.toml` file; the API is the source of truth.
+Manage apps (Magic Containers). Apps are multi-container deployments where all containers share a localhost network. Configuration is stored in a `bunny.toml` file which is committed to your repo. The app ID is written back to the toml on first deploy, so cloning the repo gives you everything you need.
 
 ```bash
-# Create a new app (interactive)
+# Scaffold a new bunny.toml (interactive)
 bunny apps init
 
-# Link to an existing app
-bunny apps link
+# Deploy (creates the app on first run, builds from Dockerfile if configured)
+bunny apps deploy
 
-# Deploy a new image
+# Deploy a pre-built image
 bunny apps deploy --image ghcr.io/myorg/api:v1.2
 
 # Sync remote config to local bunny.toml
@@ -261,7 +261,7 @@ bunny apps push
 
 #### `bunny apps init`
 
-Create a new app. Prompts for name, runtime, image, and regions. Scaffolds `bunny.toml` and `.bunny/app.json`.
+Scaffold a new `bunny.toml` config file. Prompts for name, runtime, and regions. If a `Dockerfile` is detected in the current directory, offers to use it for build-and-deploy and prompts for a container registry. Otherwise prompts for a container image.
 
 ```bash
 bunny apps init
@@ -270,18 +270,9 @@ bunny apps init --name my-api --runtime shared --image nginx:latest
 
 | Flag        | Description                           |
 | ----------- | ------------------------------------- |
-| `--name`    | App name                              |
+| `--name`    | App name (defaults to directory name) |
 | `--runtime` | Runtime type: `shared` or `reserved`  |
 | `--image`   | Primary container image               |
-
-#### `bunny apps link`
-
-Link the current directory to an existing app. Creates `bunny.toml` and `.bunny/app.json`.
-
-```bash
-bunny apps link
-bunny apps link --id <app-id>
-```
 
 #### `bunny apps list`
 
@@ -298,24 +289,24 @@ Show app details including status, regions, scaling, cost, and containers.
 
 ```bash
 bunny apps show
-bunny apps show <app-id>
+bunny apps show --id <app-id>
 ```
 
 #### `bunny apps deploy`
 
-Deploy an app. Optionally update the primary container image before deploying.
+Deploy an app. If `bunny.toml` has no `id`, the app is created on Bunny first. If `dockerfile` is set in the container config, the image is built and pushed automatically (prompts for a registry if not configured). Use `--image` to skip the build and deploy a pre-built image.
 
 ```bash
-# Prompt for image
+# Build from Dockerfile + deploy
 bunny apps deploy
 
-# Deploy a specific image
+# Deploy a pre-built image
 bunny apps deploy --image ghcr.io/myorg/api:v1.2
 ```
 
-| Flag      | Description                       |
-| --------- | --------------------------------- |
-| `--image` | Container image to deploy         |
+| Flag      | Description                                          |
+| --------- | ---------------------------------------------------- |
+| `--image` | Container image to deploy (skips Dockerfile build)   |
 
 #### `bunny apps pull` / `bunny apps push`
 

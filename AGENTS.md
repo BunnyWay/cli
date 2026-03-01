@@ -45,6 +45,7 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 | `zod`           | Schema validation for config files and CLI input               |
 | `@libsql/client`| libSQL/Turso database client (used by `db shell`)              |
 | `openapi-fetch` | Type-safe HTTP client generated from OpenAPI specs             |
+| `smol-toml`     | TOML v1 parser/serializer for `bunny.toml` config files        |
 
 ### Dev dependencies
 
@@ -113,14 +114,13 @@ bunny-cli/
 │   ├── commands/
 │   │   ├── apps/
 │   │   │   ├── index.ts                  # defineNamespace("apps", ...) — registers all app commands
-│   │   │   ├── constants.ts              # APP_MANIFEST, AppManifest, status/runtime labels
-│   │   │   ├── resolve-app.ts            # resolveAppId(), resolveContainerId(), manifest helpers
-│   │   │   ├── toml.ts                   # bunny.toml parse/write/convert (BunnyToml, apiToToml, tomlToApi)
-│   │   │   ├── init.ts                   # Create new app + scaffold bunny.toml
-│   │   │   ├── link.ts                   # Link directory to existing app
+│   │   │   ├── constants.ts              # Status/runtime label maps
+│   │   │   ├── toml.ts                   # bunny.toml parse/write/convert (BunnyToml, apiToToml, tomlToApi, resolveAppId, resolveContainerId)
+│   │   │   ├── docker.ts                 # Docker helpers (build, push, login, generateTag, promptRegistry)
+│   │   │   ├── init.ts                   # Scaffold bunny.toml (detects Dockerfile, prompts for registry)
 │   │   │   ├── list.ts                   # List all apps
 │   │   │   ├── show.ts                   # Show app details and overview
-│   │   │   ├── deploy.ts                 # Deploy app (update image + deploy)
+│   │   │   ├── deploy.ts                 # Deploy app (build from Dockerfile or use --image)
 │   │   │   ├── undeploy.ts               # Undeploy app
 │   │   │   ├── restart.ts                # Restart app
 │   │   │   ├── delete.ts                 # Delete app
@@ -587,16 +587,15 @@ bunny
 │       └── delete <name>                   Delete a named profile
 ├── apps
 │   ├── init            [--name] [--runtime] [--image]
-│   │                                       Create a new app with bunny.toml
-│   ├── link            [--id]              Link directory to an existing app
+│   │                                       Scaffold bunny.toml (detects Dockerfile)
 │   ├── list            (alias: ls)         List all apps
-│   ├── show            [id]                Show app details and overview
-│   ├── deploy          [id] [--image]      Deploy an app
-│   ├── undeploy        [id] [--force]      Undeploy an app
-│   ├── restart         [id]                Restart an app
-│   ├── delete          [id] [--force]      Delete an app
-│   ├── pull            [id] [--force]      Sync remote config to bunny.toml
-│   ├── push            [id] [--dry-run]    Apply bunny.toml to remote
+│   ├── show            [--id]              Show app details and overview
+│   ├── deploy          [--image]           Build + deploy (or deploy pre-built image)
+│   ├── undeploy        [--id] [--force]    Undeploy an app
+│   ├── restart         [--id]              Restart an app
+│   ├── delete          [--id] [--force]    Delete an app
+│   ├── pull            [--id] [--force]    Sync remote config to bunny.toml
+│   ├── push            [--id] [--dry-run]  Apply bunny.toml to remote
 │   ├── accessory
 │   │   ├── list        [--id]              List accessory containers
 │   │   ├── start       <name|all> [--id]   Start accessory from bunny.toml
