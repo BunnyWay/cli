@@ -1,0 +1,17 @@
+apis:
+  core:
+    root: ./specs/core.json
+    x-openapi-ts:
+      output: ./src/generated/core.d.ts
+  compute:
+    root: ./specs/compute.json
+    x-openapi-ts:
+      output: ./src/generated/compute.d.ts
+  magic-containers:
+    root: ./specs/magic-containers.json
+    x-openapi-ts:
+      output: ./src/generated/magic-containers.d.ts
+  database:
+    root: ./specs/database.json
+    x-openapi-ts:
+      output: ./src/generated/database.d.ts

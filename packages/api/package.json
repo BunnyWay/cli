@@ -1,0 +1,20 @@
+{
+  "name": "@bunny.net/api",
+  "version": "0.1.0",
+  "type": "module",
+  "module": "src/index.ts",
+  "scripts": {
+    "generate": "openapi-typescript",
+    "update-specs": "bun run scripts/update-specs.ts && bun run generate"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./generated/*": "./src/generated/*"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.17.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.13.0"
+  }
+}
