@@ -4,22 +4,21 @@ import { ConfigFileSchema, type ConfigFile } from "./schema.ts";
 import { findConfigFile, getConfigWritePath } from "./paths.ts";
 import { logger } from "../core/logger.ts";
 
-const DEFAULT_API_URL = "https://api.bunny.net";
-
 export interface ResolvedConfig {
   apiKey: string;
-  apiUrl: string;
+  /** Custom API base URL. Only set when explicitly overridden via env or profile config. */
+  apiUrl?: string;
   profile: string;
 }
 
 export function resolveConfig(profile: string, apiKeyOverride?: string): ResolvedConfig {
-  const envApiUrl = process.env.BUNNYNET_API_URL;
+  const envApiUrl = process.env.BUNNYNET_API_URL || undefined;
 
   if (apiKeyOverride) {
     logger.debug("API key loaded from --api-key flag", true);
     return {
       apiKey: apiKeyOverride,
-      apiUrl: envApiUrl || DEFAULT_API_URL,
+      apiUrl: envApiUrl,
       profile: "",
     };
   }
@@ -30,7 +29,7 @@ export function resolveConfig(profile: string, apiKeyOverride?: string): Resolve
     logger.debug("API key loaded from BUNNYNET_API_KEY", true);
     return {
       apiKey: envApiKey,
-      apiUrl: envApiUrl || DEFAULT_API_URL,
+      apiUrl: envApiUrl,
       profile: "",
     };
   }
@@ -40,13 +39,13 @@ export function resolveConfig(profile: string, apiKeyOverride?: string): Resolve
     const p = file.profiles[profile];
     return {
       apiKey: p.api_key,
-      apiUrl: p.api_url || DEFAULT_API_URL,
+      apiUrl: envApiUrl ?? p.api_url,
       profile,
     };
   }
 
   if (profile === "default") {
-    return { apiKey: "", apiUrl: DEFAULT_API_URL, profile };
+    return { apiKey: "", apiUrl: envApiUrl, profile };
   }
 
   throw new Error(`Profile "${profile}" not found`);

@@ -39,7 +39,7 @@ export const whoamiCommand = defineCommand({
     }
 
     logger.debug(`Profile: ${config.profile || "(none)"}`, verbose);
-    logger.debug(`API URL: ${config.apiUrl}`, verbose);
+    logger.debug(`API URL: ${config.apiUrl ?? "(default)"}`, verbose);
 
     const client = createCoreClient(clientOptions(config, verbose));
 

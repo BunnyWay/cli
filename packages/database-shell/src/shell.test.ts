@@ -1,4 +1,4 @@
-import { test, expect, describe, beforeEach, afterEach, mock } from "bun:test";
+import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -6,6 +6,7 @@ import {
   formatValue,
   formatValueRaw,
   printResultSet,
+  csvEscape,
   isSensitiveColumn,
   columnMaskType,
   maskEmail,
@@ -14,8 +15,8 @@ import {
   saveHistory,
   splitStatements,
   type PrintMode,
-} from "./shell.ts";
-import { csvEscape } from "../../core/format.ts";
+  type ShellLogger,
+} from "./index.ts";
 import type { ResultSet } from "@libsql/client";
 
 // --- helpers ---
@@ -35,16 +36,15 @@ function makeResultSet(
   };
 }
 
-function captureLog(fn: () => void): string[] {
-  const lines: string[] = [];
-  const original = console.log;
-  console.log = (...args: any[]) => lines.push(args.map(String).join(" "));
-  try {
-    fn();
-  } finally {
-    console.log = original;
-  }
-  return lines;
+/** Create a logger that captures output into the given array. */
+function captureLogger(lines: string[]): ShellLogger {
+  return {
+    log: (msg?: string) => lines.push(msg ?? ""),
+    error: (msg: string) => lines.push(msg),
+    warn: (msg: string) => lines.push(msg),
+    dim: (msg: string) => lines.push(msg),
+    success: (msg: string) => lines.push(msg),
+  };
 }
 
 // --- formatValue ---
@@ -112,8 +112,10 @@ describe("csvEscape", () => {
 
 describe("printResultSet", () => {
   test("json mode outputs JSON array of objects", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(["id", "name"], [[1, "Alice"], [2, "Bob"]]);
-    const lines = captureLog(() => printResultSet(rs, "json"));
+    printResultSet(rs, "json", true, log);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed).toEqual([
       { id: 1, name: "Alice" },
@@ -122,47 +124,61 @@ describe("printResultSet", () => {
   });
 
   test("json mode with empty result", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(["id"], []);
-    const lines = captureLog(() => printResultSet(rs, "json"));
+    printResultSet(rs, "json", true, log);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed).toEqual([]);
   });
 
   test("csv mode outputs header and rows", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(["id", "name"], [[1, "Alice"], [2, "Bob"]]);
-    const lines = captureLog(() => printResultSet(rs, "csv"));
+    printResultSet(rs, "csv", true, log);
     expect(lines[0]).toBe("id,name");
     expect(lines[1]).toBe("1,Alice");
     expect(lines[2]).toBe("2,Bob");
   });
 
   test("csv mode escapes values with commas", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(["value"], [["hello,world"]]);
-    const lines = captureLog(() => printResultSet(rs, "csv"));
+    printResultSet(rs, "csv", true, log);
     expect(lines[1]).toBe('"hello,world"');
   });
 
   test("csv mode shows NULL for null values", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(["value"], [[null]]);
-    const lines = captureLog(() => printResultSet(rs, "csv"));
+    printResultSet(rs, "csv", true, log);
     expect(lines[1]).toBe("NULL");
   });
 
   test("no columns with rowsAffected shows affected message", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet([], [], 5);
-    const lines = captureLog(() => printResultSet(rs, "default"));
+    printResultSet(rs, "default", true, log);
     expect(lines[0]).toBe("Rows affected: 5");
   });
 
   test("no columns with zero rowsAffected shows nothing", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet([], [], 0);
-    const lines = captureLog(() => printResultSet(rs, "default"));
+    printResultSet(rs, "default", true, log);
     expect(lines).toHaveLength(0);
   });
 
   test("table mode produces output with headers", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(["id", "name"], [[1, "Alice"]]);
-    const lines = captureLog(() => printResultSet(rs, "table"));
+    printResultSet(rs, "table", true, log);
     const output = lines.join("\n");
     expect(output).toContain("id");
     expect(output).toContain("name");
@@ -170,8 +186,10 @@ describe("printResultSet", () => {
   });
 
   test("default mode produces output without box borders", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(["id", "name"], [[1, "Alice"]]);
-    const lines = captureLog(() => printResultSet(rs, "default"));
+    printResultSet(rs, "default", true, log);
     const output = lines.join("\n");
     expect(output).toContain("Alice");
     // default mode should not have the box-drawing borders that table mode has
@@ -362,11 +380,13 @@ describe("maskEmail", () => {
 
 describe("printResultSet masking", () => {
   test("json mode masks sensitive columns", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(
       ["id", "name", "password_hash"],
       [[1, "Alice", "abc123"]],
     );
-    const lines = captureLog(() => printResultSet(rs, "json", true));
+    printResultSet(rs, "json", true, log);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed[0].id).toBe(1);
     expect(parsed[0].name).toBe("Alice");
@@ -374,110 +394,132 @@ describe("printResultSet masking", () => {
   });
 
   test("json mode shows values when unmasked", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(
       ["id", "password_hash"],
       [[1, "abc123"]],
     );
-    const lines = captureLog(() => printResultSet(rs, "json", false));
+    printResultSet(rs, "json", false, log);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed[0].password_hash).toBe("abc123");
   });
 
   test("csv mode masks sensitive columns", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(
       ["id", "secret_key"],
       [[1, "mysecret"]],
     );
-    const lines = captureLog(() => printResultSet(rs, "csv", true));
+    printResultSet(rs, "csv", true, log);
     expect(lines[0]).toBe("id,secret_key");
     expect(lines[1]).toBe("1,********");
   });
 
   test("csv mode shows values when unmasked", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(
       ["id", "secret_key"],
       [[1, "mysecret"]],
     );
-    const lines = captureLog(() => printResultSet(rs, "csv", false));
+    printResultSet(rs, "csv", false, log);
     expect(lines[1]).toBe("1,mysecret");
   });
 
   test("table mode masks sensitive columns", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(
       ["id", "api_key"],
       [[1, "sk-abc123"]],
     );
-    const lines = captureLog(() => printResultSet(rs, "table", true));
+    printResultSet(rs, "table", true, log);
     const output = lines.join("\n");
     expect(output).not.toContain("sk-abc123");
   });
 
   test("default mode masks sensitive columns", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(
       ["id", "password"],
       [[1, "hunter2"]],
     );
-    const lines = captureLog(() => printResultSet(rs, "default", true));
+    printResultSet(rs, "default", true, log);
     const output = lines.join("\n");
     expect(output).not.toContain("hunter2");
   });
 
   test("null values are not masked", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(
       ["id", "password"],
       [[1, null]],
     );
-    const lines = captureLog(() => printResultSet(rs, "json", true));
+    printResultSet(rs, "json", true, log);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed[0].password).toBeNull();
   });
 
   test("non-sensitive columns are never masked", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(
       ["id", "name", "status"],
       [[1, "Alice", "active"]],
     );
-    const lines = captureLog(() => printResultSet(rs, "json", true));
+    printResultSet(rs, "json", true, log);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed[0].name).toBe("Alice");
     expect(parsed[0].status).toBe("active");
   });
 
   test("json mode partially masks email columns", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(
       ["id", "email"],
       [[1, "alice@example.com"]],
     );
-    const lines = captureLog(() => printResultSet(rs, "json", true));
+    printResultSet(rs, "json", true, log);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed[0].email).toBe("a••••e@example.com");
   });
 
   test("csv mode partially masks email columns", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(
       ["id", "email"],
       [[1, "alice@example.com"]],
     );
-    const lines = captureLog(() => printResultSet(rs, "csv", true));
+    printResultSet(rs, "csv", true, log);
     expect(lines[1]).toBe("1,a••••e@example.com");
   });
 
   test("email columns show full value when unmasked", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(
       ["id", "email"],
       [[1, "alice@example.com"]],
     );
-    const lines = captureLog(() => printResultSet(rs, "json", false));
+    printResultSet(rs, "json", false, log);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed[0].email).toBe("alice@example.com");
   });
 
   test("null email values are not masked", () => {
+    const lines: string[] = [];
+    const log = captureLogger(lines);
     const rs = makeResultSet(
       ["id", "email"],
       [[1, null]],
     );
-    const lines = captureLog(() => printResultSet(rs, "json", true));
+    printResultSet(rs, "json", true, log);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed[0].email).toBeNull();
   });
@@ -509,7 +551,8 @@ describe("splitStatements", () => {
   });
 
   test("handles multi-line statements", () => {
-    const sql = "CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name TEXT\n);\nINSERT INTO users VALUES (1, 'Alice');";
+    const sql =
+      "CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name TEXT\n);\nINSERT INTO users VALUES (1, 'Alice');";
     expect(splitStatements(sql)).toEqual([
       "CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name TEXT\n)",
       "INSERT INTO users VALUES (1, 'Alice')",
@@ -531,13 +574,14 @@ describe("splitStatements", () => {
   });
 
   test("handles escaped quotes inside strings", () => {
-    expect(splitStatements("INSERT INTO t VALUES ('O''Brien; Jr.');")).toEqual([
-      "INSERT INTO t VALUES ('O''Brien; Jr.')",
-    ]);
+    expect(
+      splitStatements("INSERT INTO t VALUES ('O''Brien; Jr.');"),
+    ).toEqual(["INSERT INTO t VALUES ('O''Brien; Jr.')"]);
   });
 
   test("handles multiple statements with embedded semicolons", () => {
-    const sql = "INSERT INTO t VALUES ('x;y');\nSELECT * FROM t WHERE name = 'a;b';";
+    const sql =
+      "INSERT INTO t VALUES ('x;y');\nSELECT * FROM t WHERE name = 'a;b';";
     expect(splitStatements(sql)).toEqual([
       "INSERT INTO t VALUES ('x;y')",
       "SELECT * FROM t WHERE name = 'a;b'",
@@ -545,7 +589,8 @@ describe("splitStatements", () => {
   });
 
   test("skips -- line comments", () => {
-    const sql = "-- create table\nCREATE TABLE t (id INT);\n-- insert data\nINSERT INTO t VALUES (1);";
+    const sql =
+      "-- create table\nCREATE TABLE t (id INT);\n-- insert data\nINSERT INTO t VALUES (1);";
     expect(splitStatements(sql)).toEqual([
       "CREATE TABLE t (id INT)",
       "INSERT INTO t VALUES (1)",

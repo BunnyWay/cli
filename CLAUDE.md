@@ -26,10 +26,11 @@ test("example", () => {
 
 ## Monorepo structure
 
-This is a Bun workspace monorepo with two packages:
+This is a Bun workspace monorepo with three packages:
 
 - `packages/api/` (`@bunny.net/api`) — standalone API client SDK, zero CLI deps
-- `packages/cli/` (`@bunny.net/cli`) — the CLI, depends on `@bunny.net/api`
+- `packages/database-shell/` (`@bunny.net/database-shell`) — standalone SQL shell engine (REPL, formatting, masking)
+- `packages/cli/` (`@bunny.net/cli`) — the CLI, depends on both
 
 ## Project conventions
 

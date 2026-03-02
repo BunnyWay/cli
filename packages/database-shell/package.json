@@ -1,0 +1,14 @@
+{
+  "name": "@bunny.net/database-shell",
+  "version": "0.1.0",
+  "type": "module",
+  "module": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.0",
+    "chalk": "^5.6.2",
+    "cli-table3": "^0.6.5"
+  }
+}

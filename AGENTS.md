@@ -69,10 +69,11 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 
 ## Project Structure
 
-This is a Bun workspace monorepo with two packages:
+This is a Bun workspace monorepo with three packages:
 
 - **`@bunny.net/api`** (`packages/api/`) — Standalone, type-safe API client SDK for bunny.net. Zero CLI dependencies. Publishable to npm.
-- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/api`.
+- **`@bunny.net/database-shell`** (`packages/database-shell/`) — Standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history.
+- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/api` and `@bunny.net/database-shell`.
 
 ```
 bunny-cli/
@@ -101,6 +102,19 @@ bunny-cli/
 │   │           ├── compute.d.ts
 │   │           ├── database.d.ts
 │   │           └── magic-containers.d.ts
+│   │
+│   ├── database-shell/                   # @bunny.net/database-shell package
+│   │   ├── package.json
+│   │   ├── tsconfig.json
+│   │   └── src/
+│   │       ├── index.ts                  # Barrel export: startShell, executeQuery, executeFile, types
+│   │       ├── shell.ts                  # startShell() REPL engine, executeQuery(), executeFile()
+│   │       ├── dot-commands.ts           # .tables, .schema, .dump, .count, .size, etc.
+│   │       ├── format.ts                 # printResultSet(), masking, csvEscape
+│   │       ├── parser.ts                 # splitStatements() SQL parsing
+│   │       ├── history.ts               # Shell history persistence
+│   │       ├── types.ts                  # ShellLogger, ShellOptions, PrintMode
+│   │       └── shell.test.ts            # Tests for shell utilities
 │   │
 │   └── cli/                              # @bunny.net/cli package
 │       ├── package.json
@@ -190,8 +204,7 @@ bunny-cli/
 │           │   │   ├── list.ts           # List all databases
 │           │   │   ├── quickstart.ts     # Generate quickstart guide for connecting to a database
 │           │   │   ├── resolve-db.ts     # Helper: resolve database ID from flag, .env, or interactive prompt
-│           │   │   ├── shell.ts          # Interactive SQL shell (REPL, dot-commands, masking, history)
-│           │   │   ├── shell.test.ts     # Tests for shell utilities (formatting, masking, history)
+│           │   │   ├── shell.ts          # Thin wrapper: credential resolution + delegates to @bunny.net/database-shell
 │           │   │   ├── usage.ts          # Show database usage statistics
 │           │   │   └── tokens/
 │           │   │       ├── index.ts      # defineNamespace("tokens", ...) — registers token commands
@@ -215,7 +228,7 @@ bunny-cli/
 
 ### Conventions
 
-- **Monorepo with Bun workspaces.** `packages/api/` is the standalone API client SDK; `packages/cli/` is the CLI.
+- **Monorepo with Bun workspaces.** `packages/api/` is the standalone API client SDK; `packages/database-shell/` is the standalone SQL shell engine; `packages/cli/` is the CLI.
 - **API clients use `ClientOptions`** — an options object with `apiKey`, `baseUrl`, `verbose`, `userAgent`, and `onDebug`. The CLI provides a `clientOptions(config, verbose)` helper to build this from `ResolvedConfig`.
 - **One command per file.** Each file in `commands/` exports a single command or namespace.
 - **Commands are grouped by domain** in subdirectories (`config/`, `db/`, `scripts/`).
@@ -916,36 +929,35 @@ The database shell is an interactive SQL REPL that connects to a bunny.net datab
 
 ### Architecture
 
-The shell is implemented in `packages/cli/src/commands/db/shell.ts` as a single `defineCommand()`. Key components:
+The shell is split across two packages:
 
-- **Credential resolution** — Checks `--url`/`--token` flags, then `BUNNY_DATABASE_URL`/`BUNNY_DATABASE_AUTH_TOKEN` from `.env`, then resolves via the API.
-- **REPL loop** — Uses `node:readline` with multi-line SQL support (accumulates lines until `;` terminator).
-- **Dot-commands** — `.tables`, `.schema`, `.describe`, `.indexes`, `.count`, `.size`, `.dump`, `.read`, `.mode`, `.timing`, `.mask`, `.unmask`, `.clear-history`, `.help`, `.quit`.
-- **Output modes** — `default` (borderless aligned), `table` (bordered), `json`, `csv`, `markdown` (GFM pipe tables). Controlled by `--mode` flag or `.mode` command. The global `--output` flag maps to the corresponding shell mode; explicit `--mode` takes priority.
-- **Sensitive column masking** — Two-tier system: `"full"` mask for passwords/secrets/tokens (`********`) and `"email"` mask for email columns (`a••••e@example.com`). Controlled by `--unmask` flag or `.mask`/`.unmask` commands.
-- **History persistence** — Stored at `~/.config/bunny/shell_history` (respects `XDG_CONFIG_HOME`). Max 1000 entries. Loaded on start, saved on close.
-- **Query timing** — Client-side `performance.now()` measurement, toggled with `.timing`.
+- **`@bunny.net/database-shell`** (`packages/database-shell/`) — Framework-agnostic shell engine. Contains the REPL, dot-commands, result formatting, masking, history, and SQL parsing. Accepts a `@libsql/client` `Client` instance and an optional `ShellLogger` interface for output.
+- **`@bunny.net/cli`** (`packages/cli/src/commands/db/shell.ts`) — Thin CLI wrapper. Handles credential resolution (API client, `.env` lookup, interactive prompts), yargs command definition, and delegates to the shell package.
 
-### REPL state
+**Shell engine components** (in `packages/database-shell/src/`):
+
+- **REPL** (`shell.ts`) — `startShell()`, `executeQuery()`, `executeFile()`. Uses `node:readline` with multi-line SQL support.
+- **Dot-commands** (`dot-commands.ts`) — `.tables`, `.schema`, `.describe`, `.indexes`, `.count`, `.size`, `.dump`, `.read`, `.mode`, `.timing`, `.mask`, `.unmask`, `.clear-history`, `.help`, `.quit`.
+- **Formatting** (`format.ts`) — `printResultSet()` with 5 output modes: `default`, `table`, `json`, `csv`, `markdown`. Sensitive column masking (full mask for passwords/secrets, email mask for email columns).
+- **History** (`history.ts`) — Stored at `~/.config/bunny/shell_history` (respects `XDG_CONFIG_HOME`). Max 1000 entries.
+- **SQL parsing** (`parser.ts`) — `splitStatements()` for `.sql` file execution.
+
+**Dependency injection** — The shell engine accepts a `ShellLogger` interface instead of importing the CLI logger directly:
 
 ```typescript
-{
-  mode: PrintMode;
-  masked: boolean;
-  timing: boolean;
+interface ShellLogger {
+  log(msg?: string): void;
+  error(msg: string): void;
+  warn(msg: string): void;
+  dim(msg: string): void;
+  success(msg: string): void;
 }
 ```
 
-### Exported internals (for testing)
-
-The following functions are exported with `/** @internal */` comments for use in `shell.test.ts`:
-
-- `formatValue`, `formatValueRaw` — Value formatting for display
-- `printResultSet` — Result rendering across all 5 modes
-- `isSensitiveColumn`, `columnMaskType`, `maskEmail` — Masking detection and application
-- `getHistoryPath`, `loadHistory`, `saveHistory` — History persistence
-- `splitStatements` — SQL file parsing (split on `;`, trim, filter empties)
-- `PrintMode` type
+**CLI wrapper** (`packages/cli/src/commands/db/shell.ts`) provides:
+- Credential resolution (--url/--token flags → .env → API lookup)
+- `shellLogger()` adapter that wraps the CLI `logger`
+- `createClient()` call and delegation to `startShell()`/`executeQuery()`/`executeFile()`
 
 ### Read quota protection
 
