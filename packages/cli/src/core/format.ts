@@ -134,3 +134,26 @@ export function formatKeyValue(
     format,
   );
 }
+
+/** Render an ASCII progress bar with color coding (green/yellow/red). */
+export function progressBar(fraction: number, width = 20): string {
+  const clamped = Math.max(0, Math.min(1, fraction));
+  const filled = Math.round(clamped * width);
+  const empty = width - filled;
+  const bar = "█".repeat(filled) + "░".repeat(empty);
+
+  if (fraction > 0.9) return chalk.red(bar);
+  if (fraction > 0.7) return chalk.yellow(bar);
+  return chalk.green(bar);
+}
+
+/** Format a byte-like size string (e.g. "25600000") into human-readable. */
+export function formatSize(sizeStr: string): string {
+  const bytes = parseFloat(sizeStr);
+  if (isNaN(bytes) || bytes === 0) return "0 B";
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const value = bytes / Math.pow(1024, i);
+  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`;
+}

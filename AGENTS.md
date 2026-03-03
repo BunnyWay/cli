@@ -205,7 +205,9 @@ bunny-cli/
 │           │   ├── db/
 │           │   │   ├── index.ts          # defineNamespace("db", ...) — registers all database commands
 │           │   │   ├── create.ts         # Create a new database (interactive region selection or flags)
+│           │   │   ├── delete.ts         # Delete a database (double confirmation or --force)
 │           │   │   ├── list.ts           # List all databases
+│           │   │   ├── show.ts          # Show database details (regions, size, status)
 │           │   │   ├── quickstart.ts     # Generate quickstart guide for connecting to a database
 │           │   │   ├── resolve-db.ts     # Helper: resolve database ID from flag, .env, or interactive prompt
 │           │   │   ├── shell.ts          # Thin wrapper: credential resolution + delegates to @bunny.net/database-shell

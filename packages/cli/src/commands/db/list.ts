@@ -8,6 +8,8 @@ import type { components } from "@bunny.net/api/generated/database.d.ts";
 import { clientOptions } from "../../core/client-options.ts";
 
 type Database = components["schemas"]["Database2"];
+type DBLiveStatus = components["schemas"]["DBLiveStatus"];
+type Region = components["schemas"]["Region"];
 
 const COMMAND = "list";
 const ALIASES = ["ls"] as const;
@@ -17,7 +19,7 @@ const DESCRIPTION = "List all databases.";
  * List all databases associated with the current account.
  *
  * Results are sorted alphabetically by name and rendered as a table (ID, Name,
- * Size, URL).
+ * Status, Primary Region, Size).
  *
  * @example
  * ```bash
@@ -54,6 +56,28 @@ export const dbListCommand = defineCommand({
       page++;
     }
 
+    // Fetch live status and region config in parallel
+    let liveMetrics: Record<string, DBLiveStatus> = {};
+    const regionNames = new Map<string, string>();
+
+    if (allDatabases.length > 0) {
+      const [liveRes, configRes] = await Promise.all([
+        client.POST("/v1/live/live_db", {
+          body: { db_ids: allDatabases.map((db) => db.id) },
+        }),
+        client.GET("/v1/config", { params: {} }),
+      ]);
+      liveMetrics = liveRes.data?.live_metrics ?? {};
+
+      const allRegions: Region[] = [
+        ...(configRes.data?.primary_regions ?? []),
+        ...(configRes.data?.replica_regions ?? []),
+      ];
+      for (const r of allRegions) {
+        regionNames.set(r.id, r.name);
+      }
+    }
+
     spin.stop();
 
     const databases = allDatabases.sort((a, b) =>
@@ -72,8 +96,17 @@ export const dbListCommand = defineCommand({
 
     logger.log(
       formatTable(
-        ["ID", "Name", "Size", "URL"],
-        databases.map((db) => [db.id, db.name, db.current_size, db.url]),
+        ["ID", "Name", "Status", "Primary Region", "Size"],
+        databases.map((db) => {
+          const live = liveMetrics[db.id];
+          const status = live?.state === "Live" ? "Active" : "Idle";
+          const regionCode =
+            live?.state === "Live" ? live.metadata.main : null;
+          const primary = regionCode
+            ? regionNames.get(regionCode) ?? regionCode
+            : "—";
+          return [db.id, db.name, status, primary, db.current_size];
+        }),
         output,
       ),
     );

@@ -117,12 +117,35 @@ bunny db create --name mydb --primary FR,DE --replicas UK,NY
 
 #### `bunny db list`
 
-List all databases.
+List all databases. Shows ID, name, status, primary region, and size.
 
 ```bash
 bunny db list
 bunny db list --output json
 ```
+
+#### `bunny db show`
+
+Show details for a single database.
+
+```bash
+bunny db show <database-id>
+bunny db show
+bunny db show --output json
+```
+
+#### `bunny db delete`
+
+Permanently delete a database. Requires double confirmation (or `--force` to skip).
+
+```bash
+bunny db delete <database-id>
+bunny db delete --force
+```
+
+| Flag      | Description              |
+| --------- | ------------------------ |
+| `--force` | Skip confirmation prompts |
 
 #### `bunny db usage`
 
