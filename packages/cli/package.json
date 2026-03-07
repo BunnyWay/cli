@@ -1,12 +1,14 @@
 {
   "name": "@bunny.net/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "module": "src/index.ts",
   "bin": {
     "bunny": "./bin/bunny.js"
   },
-  "files": ["bin"],
+  "files": [
+    "bin"
+  ],
   "devDependencies": {
     "@types/prompts": "^2.4.9",
     "@types/yargs": "^17.0.35"
@@ -26,10 +28,10 @@
     "zod": "^4.3.6"
   },
   "optionalDependencies": {
-    "@bunny.net/cli-linux-x64": "0.1.0",
-    "@bunny.net/cli-linux-arm64": "0.1.0",
-    "@bunny.net/cli-darwin-x64": "0.1.0",
-    "@bunny.net/cli-darwin-arm64": "0.1.0",
-    "@bunny.net/cli-windows-x64": "0.1.0"
+    "@bunny.net/cli-linux-x64": "0.2.0",
+    "@bunny.net/cli-linux-arm64": "0.2.0",
+    "@bunny.net/cli-darwin-x64": "0.2.0",
+    "@bunny.net/cli-darwin-arm64": "0.2.0",
+    "@bunny.net/cli-windows-x64": "0.2.0"
   }
 }

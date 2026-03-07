@@ -1,8 +1,14 @@
 {
   "name": "@bunny.net/cli-linux-arm64",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "bunny.net CLI binary for Linux arm64",
-  "os": ["linux"],
-  "cpu": ["arm64"],
-  "files": ["bunny"]
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bunny"
+  ]
 }
