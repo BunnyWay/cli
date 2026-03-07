@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/app-config",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "type": "module",
   "module": "src/index.ts",
   "exports": {

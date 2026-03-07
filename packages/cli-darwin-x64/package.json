@@ -1,8 +1,11 @@
 {
   "name": "@bunny.net/cli-darwin-x64",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "bunny.net CLI binary for macOS x64",
   "os": ["darwin"],
   "cpu": ["x64"],
-  "files": ["bunny"]
+  "files": ["bunny"],
+  "publishConfig": {
+    "access": "public"
+  }
 }

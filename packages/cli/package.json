@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/cli",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "type": "module",
   "module": "src/index.ts",
   "bin": {
@@ -31,5 +31,8 @@
     "@bunny.net/cli-darwin-x64": "0.1.0",
     "@bunny.net/cli-darwin-arm64": "0.1.0",
     "@bunny.net/cli-windows-x64": "0.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
