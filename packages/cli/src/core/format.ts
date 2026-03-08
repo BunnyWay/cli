@@ -157,3 +157,24 @@ export function formatSize(sizeStr: string): string {
   const value = bytes / Math.pow(1024, i);
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`;
 }
+
+/** Parse a human-readable size string (e.g. "49.2 KB") into bytes. */
+export function parseSizeToBytes(sizeStr: string): number {
+  const match = sizeStr.trim().match(/^([\d.]+)\s*(B|KB|MB|GB|TB)$/i);
+  if (!match) {
+    const n = parseFloat(sizeStr);
+    return isNaN(n) ? 0 : n;
+  }
+
+  const value = parseFloat(match[1]!);
+  const unit = match[2]!.toUpperCase();
+  const multipliers: Record<string, number> = {
+    B: 1,
+    KB: 1024,
+    MB: 1024 ** 2,
+    GB: 1024 ** 3,
+    TB: 1024 ** 4,
+  };
+
+  return value * (multipliers[unit] ?? 1);
+}

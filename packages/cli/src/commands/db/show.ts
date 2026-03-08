@@ -5,7 +5,7 @@ import { resolveDbId } from "./resolve-db.ts";
 import { spinner } from "../../core/ui.ts";
 import { logger } from "../../core/logger.ts";
 import { UserError } from "../../core/errors.ts";
-import { formatKeyValue, formatSize, progressBar } from "../../core/format.ts";
+import { formatKeyValue, parseSizeToBytes, progressBar } from "../../core/format.ts";
 import type { components } from "@bunny.net/api/generated/database.d.ts";
 import { ARG_DATABASE_ID } from "./constants.ts";
 import { clientOptions } from "../../core/client-options.ts";
@@ -100,11 +100,11 @@ export const dbShowCommand = defineCommand<ShowArgs>({
         ? live.metadata.replicas.map(formatRegion).join(", ")
         : "None";
 
-    const sizeBytes = parseFloat(db.current_size);
-    const maxBytes = parseFloat(db.size_max);
+    const sizeBytes = parseSizeToBytes(db.current_size);
+    const maxBytes = parseSizeToBytes(db.size_max);
     const sizeFraction = maxBytes > 0 ? sizeBytes / maxBytes : 0;
     const sizePercent = Math.round(sizeFraction * 100);
-    const sizePlain = `${formatSize(db.current_size)} / ${formatSize(db.size_max)} (${sizePercent}%)`;
+    const sizePlain = `${db.current_size} / ${db.size_max} (${sizePercent}%)`;
 
     const entries = [
       { key: "ID", value: db.id },
@@ -114,7 +114,7 @@ export const dbShowCommand = defineCommand<ShowArgs>({
       {
         key: "Size",
         value: output === "text"
-          ? `${formatSize(db.current_size)} / ${formatSize(db.size_max)}  ${progressBar(sizeFraction)}  ${sizePercent}%`
+          ? `${db.current_size} / ${db.size_max}  ${progressBar(sizeFraction)}  ${sizePercent}%`
           : sizePlain,
       },
       { key: "Storage Region", value: db.storage_region },
