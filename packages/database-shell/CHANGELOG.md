@@ -1,5 +1,15 @@
 # @bunny.net/database-shell
 
+## 0.1.2
+
+### Patch Changes
+
+- [`4f2f729`](https://github.com/BunnyWay/cli/commit/4f2f72906c07e865019d262614f1be6d0cd81856) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix compiled binary startup crash and optimize builds
+
+  - Switch to @libsql/client/web to eliminate native addon dependency that crashed compiled binaries
+  - Lazy-load database imports to prevent startup failures for non-db commands
+  - Add --minify and --sourcemap flags for smaller, more debuggable production builds
+
 ## 0.1.1
 
 ### Patch Changes

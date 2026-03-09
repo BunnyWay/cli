@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/cli-windows-x64",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "bunny.net CLI binary for Windows x64",
   "os": [
     "win32"
