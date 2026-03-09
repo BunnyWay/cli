@@ -14,7 +14,7 @@
     },
     "packages/api": {
       "name": "@bunny.net/api",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "openapi-fetch": "^0.17.0",
       },
@@ -24,7 +24,7 @@
     },
     "packages/app-config": {
       "name": "@bunny.net/app-config",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "zod": "^4.3.6",
       },
@@ -34,7 +34,7 @@
     },
     "packages/cli": {
       "name": "@bunny.net/cli",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "bin": {
         "bunny": "./bin/bunny.js",
       },
@@ -66,35 +66,62 @@
     },
     "packages/cli-darwin-arm64": {
       "name": "@bunny.net/cli-darwin-arm64",
-      "version": "0.1.0",
+      "version": "0.0.0",
     },
     "packages/cli-darwin-x64": {
       "name": "@bunny.net/cli-darwin-x64",
-      "version": "0.1.0",
+      "version": "0.0.0",
     },
     "packages/cli-linux-arm64": {
       "name": "@bunny.net/cli-linux-arm64",
-      "version": "0.1.0",
+      "version": "0.0.0",
     },
     "packages/cli-linux-x64": {
       "name": "@bunny.net/cli-linux-x64",
-      "version": "0.1.0",
+      "version": "0.0.0",
     },
     "packages/cli-windows-x64": {
       "name": "@bunny.net/cli-windows-x64",
-      "version": "0.1.0",
+      "version": "0.0.0",
     },
     "packages/database-shell": {
       "name": "@bunny.net/database-shell",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "bin": {
-        "bsql": "./src/cli.ts",
+        "bsql": "./bin/bsql.js",
       },
       "dependencies": {
         "@libsql/client": "^0.17.0",
         "chalk": "^5.6.2",
         "cli-table3": "^0.6.5",
       },
+      "optionalDependencies": {
+        "@bunny.net/database-shell-darwin-arm64": "0.0.0",
+        "@bunny.net/database-shell-darwin-x64": "0.0.0",
+        "@bunny.net/database-shell-linux-arm64": "0.0.0",
+        "@bunny.net/database-shell-linux-x64": "0.0.0",
+        "@bunny.net/database-shell-windows-x64": "0.0.0",
+      },
+    },
+    "packages/database-shell-darwin-arm64": {
+      "name": "@bunny.net/database-shell-darwin-arm64",
+      "version": "0.0.0",
+    },
+    "packages/database-shell-darwin-x64": {
+      "name": "@bunny.net/database-shell-darwin-x64",
+      "version": "0.0.0",
+    },
+    "packages/database-shell-linux-arm64": {
+      "name": "@bunny.net/database-shell-linux-arm64",
+      "version": "0.0.0",
+    },
+    "packages/database-shell-linux-x64": {
+      "name": "@bunny.net/database-shell-linux-x64",
+      "version": "0.0.0",
+    },
+    "packages/database-shell-windows-x64": {
+      "name": "@bunny.net/database-shell-windows-x64",
+      "version": "0.0.0",
     },
   },
   "packages": {
@@ -121,6 +148,16 @@
     "@bunny.net/cli-windows-x64": ["@bunny.net/cli-windows-x64@workspace:packages/cli-windows-x64"],
 
     "@bunny.net/database-shell": ["@bunny.net/database-shell@workspace:packages/database-shell"],
+
+    "@bunny.net/database-shell-darwin-arm64": ["@bunny.net/database-shell-darwin-arm64@workspace:packages/database-shell-darwin-arm64"],
+
+    "@bunny.net/database-shell-darwin-x64": ["@bunny.net/database-shell-darwin-x64@workspace:packages/database-shell-darwin-x64"],
+
+    "@bunny.net/database-shell-linux-arm64": ["@bunny.net/database-shell-linux-arm64@workspace:packages/database-shell-linux-arm64"],
+
+    "@bunny.net/database-shell-linux-x64": ["@bunny.net/database-shell-linux-x64@workspace:packages/database-shell-linux-x64"],
+
+    "@bunny.net/database-shell-windows-x64": ["@bunny.net/database-shell-windows-x64@workspace:packages/database-shell-windows-x64"],
 
     "@changesets/apply-release-plan": ["@changesets/apply-release-plan@7.1.0", "", { "dependencies": { "@changesets/config": "^3.1.3", "@changesets/get-version-range-type": "^0.4.0", "@changesets/git": "^3.0.4", "@changesets/should-skip-package": "^0.1.2", "@changesets/types": "^6.1.0", "@manypkg/get-packages": "^1.1.3", "detect-indent": "^6.0.0", "fs-extra": "^7.0.1", "lodash.startcase": "^4.4.0", "outdent": "^0.5.0", "prettier": "^2.7.1", "resolve-from": "^5.0.0", "semver": "^7.5.3" } }, "sha512-yq8ML3YS7koKQ/9bk1PqO0HMzApIFNwjlwCnwFEXMzNe8NpzeeYYKCmnhWJGkN8g7E51MnWaSbqRcTcdIxUgnQ=="],
 

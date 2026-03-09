@@ -4,7 +4,7 @@
   "type": "module",
   "module": "src/index.ts",
   "bin": {
-    "bunny": "./bin/bunny.js"
+    "bunny": "./bin/bunny.cjs"
   },
   "files": ["bin"],
   "devDependencies": {

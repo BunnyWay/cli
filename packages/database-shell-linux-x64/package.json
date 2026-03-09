@@ -1,0 +1,11 @@
+{
+  "name": "@bunny.net/database-shell-linux-x64",
+  "version": "0.0.0",
+  "description": "bunny.net database shell binary for Linux x64",
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "files": ["bsql"],
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -31,16 +31,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   version:
-    name: Check version
+    name: Check versions
     runs-on: ubuntu-latest
     needs: changesets
     if: needs.changesets.outputs.hasChangesets == 'false'
     outputs:
-      cli-version: ${{ steps.check.outputs.version }}
+      cli-version: ${{ steps.check-cli.outputs.version }}
+      database-shell-version: ${{ steps.check-database-shell.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - name: Check CLI version
-        id: check
+        id: check-cli
         run: |
           VERSION=$(node -p "require('./packages/cli/package.json').version")
           PUBLISHED=$(npm view @bunny.net/cli version 2>/dev/null || echo "0.0.0")
@@ -50,8 +51,19 @@ jobs:
           else
             echo "No version change: $VERSION"
           fi
+      - name: Check database-shell version
+        id: check-database-shell
+        run: |
+          VERSION=$(node -p "require('./packages/database-shell/package.json').version")
+          PUBLISHED=$(npm view @bunny.net/database-shell version 2>/dev/null || echo "0.0.0")
+          if [ "$VERSION" != "$PUBLISHED" ]; then
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "New version detected: $VERSION (published: $PUBLISHED)"
+          else
+            echo "No version change: $VERSION"
+          fi
 
-  build-binaries:
+  build-cli-binaries:
     name: Build ${{ matrix.npm-pkg }}
     needs: version
     if: needs.version.outputs.cli-version
@@ -99,12 +111,60 @@ jobs:
           path: packages/${{ matrix.npm-pkg }}/
           if-no-files-found: error
 
-  publish:
-    name: Publish
+  build-database-shell-binaries:
+    name: Build ${{ matrix.npm-pkg }}
+    needs: version
+    if: needs.version.outputs.database-shell-version
+    strategy:
+      matrix:
+        include:
+          - target: bun-linux-x64
+            os: ubuntu-latest
+            npm-pkg: database-shell-linux-x64
+            binary: bsql
+          - target: bun-linux-arm64
+            os: ubuntu-latest
+            npm-pkg: database-shell-linux-arm64
+            binary: bsql
+          - target: bun-darwin-x64
+            os: macos-latest
+            npm-pkg: database-shell-darwin-x64
+            binary: bsql
+          - target: bun-darwin-arm64
+            os: macos-latest
+            npm-pkg: database-shell-darwin-arm64
+            binary: bsql
+          - target: bun-windows-x64
+            os: ubuntu-latest
+            npm-pkg: database-shell-windows-x64
+            binary: bsql.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+
+      - name: Build binary
+        run: bun build packages/database-shell/src/cli.ts --compile --target=${{ matrix.target }} --outfile ${{ matrix.binary }}
+
+      - name: Prepare npm package
+        run: cp ${{ matrix.binary }} packages/${{ matrix.npm-pkg }}/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.npm-pkg }}
+          path: packages/${{ matrix.npm-pkg }}/
+          if-no-files-found: error
+
+  publish-cli:
+    name: Publish CLI
     runs-on: ubuntu-latest
     needs:
       - version
-      - build-binaries
+      - build-cli-binaries
     steps:
       - uses: actions/checkout@v4
 
@@ -159,3 +219,45 @@ jobs:
             npm-artifacts/cli-darwin-arm64/bunny
             npm-artifacts/cli-windows-x64/bunny.exe
           fail_on_unmatched_files: true
+
+  publish-database-shell:
+    name: Publish database-shell
+    runs-on: ubuntu-latest
+    needs:
+      - version
+      - build-database-shell-binaries
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: npm-artifacts
+
+      - name: Copy binaries into npm packages
+        run: |
+          for pkg in database-shell-linux-x64 database-shell-linux-arm64 database-shell-darwin-x64 database-shell-darwin-arm64 database-shell-windows-x64; do
+            cp -r npm-artifacts/$pkg/* packages/$pkg/
+          done
+
+      - name: Publish platform packages
+        run: |
+          for pkg in database-shell-linux-x64 database-shell-linux-arm64 database-shell-darwin-x64 database-shell-darwin-arm64 database-shell-windows-x64; do
+            cd packages/$pkg
+            npm publish --access public
+            cd ../..
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @bunny.net/database-shell
+        run: |
+          cd packages/database-shell
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

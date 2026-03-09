@@ -13,6 +13,14 @@
       "@bunny.net/cli-darwin-x64",
       "@bunny.net/cli-darwin-arm64",
       "@bunny.net/cli-windows-x64"
+    ],
+    [
+      "@bunny.net/database-shell",
+      "@bunny.net/database-shell-linux-x64",
+      "@bunny.net/database-shell-linux-arm64",
+      "@bunny.net/database-shell-darwin-x64",
+      "@bunny.net/database-shell-darwin-arm64",
+      "@bunny.net/database-shell-windows-x64"
     ]
   ],
   "linked": [],
