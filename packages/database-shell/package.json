@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/database-shell",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "module": "src/index.ts",
   "bin": {
@@ -18,11 +18,11 @@
     "cli-table3": "^0.6.5"
   },
   "optionalDependencies": {
-    "@bunny.net/database-shell-linux-x64": "0.1.0",
-    "@bunny.net/database-shell-linux-arm64": "0.1.0",
-    "@bunny.net/database-shell-darwin-x64": "0.1.0",
-    "@bunny.net/database-shell-darwin-arm64": "0.1.0",
-    "@bunny.net/database-shell-windows-x64": "0.1.0"
+    "@bunny.net/database-shell-linux-x64": "0.1.1",
+    "@bunny.net/database-shell-linux-arm64": "0.1.1",
+    "@bunny.net/database-shell-darwin-x64": "0.1.1",
+    "@bunny.net/database-shell-darwin-arm64": "0.1.1",
+    "@bunny.net/database-shell-windows-x64": "0.1.1"
   },
   "publishConfig": {
     "access": "public"
