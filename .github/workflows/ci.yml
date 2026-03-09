@@ -15,6 +15,6 @@ jobs:
       - run: bun run typecheck
       - run: bun test
       - name: Build CLI binary
-        run: bun build packages/cli/src/index.ts --compile --outfile bunny
+        run: bun build packages/cli/src/index.ts --compile --minify --sourcemap --outfile bunny
       - name: Build database-shell binary
-        run: bun build packages/database-shell/src/cli.ts --compile --outfile bsql
+        run: bun build packages/database-shell/src/cli.ts --compile --minify --sourcemap --outfile bsql

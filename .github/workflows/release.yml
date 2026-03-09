@@ -99,7 +99,7 @@ jobs:
       - run: bun install
 
       - name: Build binary
-        run: bun build packages/cli/src/index.ts --compile --target=${{ matrix.target }} --outfile ${{ matrix.binary }}
+        run: bun build packages/cli/src/index.ts --compile --minify --sourcemap --target=${{ matrix.target }} --outfile ${{ matrix.binary }}
 
       - name: Prepare npm package
         run: cp ${{ matrix.binary }} packages/${{ matrix.npm-pkg }}/
@@ -147,7 +147,7 @@ jobs:
       - run: bun install
 
       - name: Build binary
-        run: bun build packages/database-shell/src/cli.ts --compile --target=${{ matrix.target }} --outfile ${{ matrix.binary }}
+        run: bun build packages/database-shell/src/cli.ts --compile --minify --sourcemap --target=${{ matrix.target }} --outfile ${{ matrix.binary }}
 
       - name: Prepare npm package
         run: cp ${{ matrix.binary }} packages/${{ matrix.npm-pkg }}/
