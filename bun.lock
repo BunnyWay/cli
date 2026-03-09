@@ -34,15 +34,17 @@
     },
     "packages/cli": {
       "name": "@bunny.net/cli",
-      "version": "0.0.0",
+      "version": "0.1.1",
       "bin": {
-        "bunny": "./bin/bunny.js",
+        "bunny": "./bin/bunny.cjs",
       },
-      "dependencies": {
+      "devDependencies": {
         "@bunny.net/api": "workspace:*",
         "@bunny.net/app-config": "workspace:*",
         "@bunny.net/database-shell": "workspace:*",
         "@libsql/client": "^0.17.0",
+        "@types/prompts": "^2.4.9",
+        "@types/yargs": "^17.0.35",
         "chalk": "^5.6.2",
         "cli-table3": "^0.6.5",
         "jsonc-parser": "^3.3.1",
@@ -52,43 +54,39 @@
         "yargs": "^18.0.0",
         "zod": "^4.3.6",
       },
-      "devDependencies": {
-        "@types/prompts": "^2.4.9",
-        "@types/yargs": "^17.0.35",
-      },
       "optionalDependencies": {
-        "@bunny.net/cli-darwin-arm64": "0.1.0",
-        "@bunny.net/cli-darwin-x64": "0.1.0",
-        "@bunny.net/cli-linux-arm64": "0.1.0",
-        "@bunny.net/cli-linux-x64": "0.1.0",
-        "@bunny.net/cli-windows-x64": "0.1.0",
+        "@bunny.net/cli-darwin-arm64": "0.1.1",
+        "@bunny.net/cli-darwin-x64": "0.1.1",
+        "@bunny.net/cli-linux-arm64": "0.1.1",
+        "@bunny.net/cli-linux-x64": "0.1.1",
+        "@bunny.net/cli-windows-x64": "0.1.1",
       },
     },
     "packages/cli-darwin-arm64": {
       "name": "@bunny.net/cli-darwin-arm64",
-      "version": "0.0.0",
+      "version": "0.1.1",
     },
     "packages/cli-darwin-x64": {
       "name": "@bunny.net/cli-darwin-x64",
-      "version": "0.0.0",
+      "version": "0.1.1",
     },
     "packages/cli-linux-arm64": {
       "name": "@bunny.net/cli-linux-arm64",
-      "version": "0.0.0",
+      "version": "0.1.1",
     },
     "packages/cli-linux-x64": {
       "name": "@bunny.net/cli-linux-x64",
-      "version": "0.0.0",
+      "version": "0.1.1",
     },
     "packages/cli-windows-x64": {
       "name": "@bunny.net/cli-windows-x64",
-      "version": "0.0.0",
+      "version": "0.1.1",
     },
     "packages/database-shell": {
       "name": "@bunny.net/database-shell",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
-        "bsql": "./bin/bsql.js",
+        "bsql": "./bin/bsql.cjs",
       },
       "dependencies": {
         "@libsql/client": "^0.17.0",
@@ -96,32 +94,32 @@
         "cli-table3": "^0.6.5",
       },
       "optionalDependencies": {
-        "@bunny.net/database-shell-darwin-arm64": "0.0.0",
-        "@bunny.net/database-shell-darwin-x64": "0.0.0",
-        "@bunny.net/database-shell-linux-arm64": "0.0.0",
-        "@bunny.net/database-shell-linux-x64": "0.0.0",
-        "@bunny.net/database-shell-windows-x64": "0.0.0",
+        "@bunny.net/database-shell-darwin-arm64": "0.1.0",
+        "@bunny.net/database-shell-darwin-x64": "0.1.0",
+        "@bunny.net/database-shell-linux-arm64": "0.1.0",
+        "@bunny.net/database-shell-linux-x64": "0.1.0",
+        "@bunny.net/database-shell-windows-x64": "0.1.0",
       },
     },
     "packages/database-shell-darwin-arm64": {
       "name": "@bunny.net/database-shell-darwin-arm64",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
     "packages/database-shell-darwin-x64": {
       "name": "@bunny.net/database-shell-darwin-x64",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
     "packages/database-shell-linux-arm64": {
       "name": "@bunny.net/database-shell-linux-arm64",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
     "packages/database-shell-linux-x64": {
       "name": "@bunny.net/database-shell-linux-x64",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
     "packages/database-shell-windows-x64": {
       "name": "@bunny.net/database-shell-windows-x64",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
   },
   "packages": {
