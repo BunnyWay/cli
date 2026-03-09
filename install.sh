@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-REPO="jamie-at-bunny/bunny-cli"
+REPO="bunnyWay/cli"
 INSTALL_DIR="${BUNNY_INSTALL_DIR:-/usr/local/bin}"
 
 get_os() {
