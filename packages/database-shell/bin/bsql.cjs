@@ -45,5 +45,9 @@ if (!existsSync(binPath)) {
 try {
   execFileSync(binPath, process.argv.slice(2), { stdio: "inherit" });
 } catch (err) {
-  process.exit(err.status ?? 1);
+  if (err.status != null) {
+    process.exit(err.status);
+  }
+  console.error(`Failed to execute bsql binary: ${err.message}`);
+  process.exit(1);
 }

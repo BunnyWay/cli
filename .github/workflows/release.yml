@@ -102,7 +102,9 @@ jobs:
         run: bun build packages/cli/src/index.ts --compile --minify --sourcemap --target=${{ matrix.target }} --outfile ${{ matrix.binary }}
 
       - name: Prepare npm package
-        run: cp ${{ matrix.binary }} packages/${{ matrix.npm-pkg }}/
+        run: |
+          chmod +x ${{ matrix.binary }}
+          cp ${{ matrix.binary }} packages/${{ matrix.npm-pkg }}/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -150,7 +152,9 @@ jobs:
         run: bun build packages/database-shell/src/cli.ts --compile --minify --sourcemap --target=${{ matrix.target }} --outfile ${{ matrix.binary }}
 
       - name: Prepare npm package
-        run: cp ${{ matrix.binary }} packages/${{ matrix.npm-pkg }}/
+        run: |
+          chmod +x ${{ matrix.binary }}
+          cp ${{ matrix.binary }} packages/${{ matrix.npm-pkg }}/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
