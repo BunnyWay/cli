@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.1.2
+
+### Patch Changes
+
+- [`b8bb433`](https://github.com/BunnyWay/cli/commit/b8bb433bb396d4c220983915a50555a477335c06) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix npm install by moving build-time dependencies to devDependencies (they are compiled into the binary)
+
 ## 0.1.1
 
 ### Patch Changes
