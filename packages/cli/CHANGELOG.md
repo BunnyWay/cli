@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.1.5
+
+### Patch Changes
+
+- [`d375663`](https://github.com/BunnyWay/cli/commit/d375663b03ddab19a0459e53e97bb9dbb5b65726) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix npm-published binaries not being executable, causing silent failures when running via npx
+
 ## 0.1.4
 
 ### Patch Changes
