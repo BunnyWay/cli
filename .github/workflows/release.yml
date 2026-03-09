@@ -208,16 +208,24 @@ jobs:
           name: v${{ needs.version.outputs.cli-version }}
           generate_release_notes: true
 
+      - name: Rename binaries for release
+        run: |
+          mv npm-artifacts/cli-linux-x64/bunny npm-artifacts/cli-linux-x64/bunny-linux-x64
+          mv npm-artifacts/cli-linux-arm64/bunny npm-artifacts/cli-linux-arm64/bunny-linux-arm64
+          mv npm-artifacts/cli-darwin-x64/bunny npm-artifacts/cli-darwin-x64/bunny-darwin-x64
+          mv npm-artifacts/cli-darwin-arm64/bunny npm-artifacts/cli-darwin-arm64/bunny-darwin-arm64
+          mv npm-artifacts/cli-windows-x64/bunny.exe npm-artifacts/cli-windows-x64/bunny-windows-x64.exe
+
       - name: Upload binaries to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.version.outputs.cli-version }}
           files: |
-            npm-artifacts/cli-linux-x64/bunny
-            npm-artifacts/cli-linux-arm64/bunny
-            npm-artifacts/cli-darwin-x64/bunny
-            npm-artifacts/cli-darwin-arm64/bunny
-            npm-artifacts/cli-windows-x64/bunny.exe
+            npm-artifacts/cli-linux-x64/bunny-linux-x64
+            npm-artifacts/cli-linux-arm64/bunny-linux-arm64
+            npm-artifacts/cli-darwin-x64/bunny-darwin-x64
+            npm-artifacts/cli-darwin-arm64/bunny-darwin-arm64
+            npm-artifacts/cli-windows-x64/bunny-windows-x64.exe
           fail_on_unmatched_files: true
 
   publish-database-shell:

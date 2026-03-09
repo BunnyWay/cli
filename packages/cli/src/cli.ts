@@ -30,7 +30,7 @@ const experimentalCommands: CommandModule[] = [appsNamespace];
 
 let instance = yargs(hideBin(process.argv))
   .scriptName("bunny")
-  .version(VERSION)
+  .version(`${VERSION} ${process.platform}-${process.arch}`)
   .usage("$0 <command> [options]")
 
   .option("profile", {
