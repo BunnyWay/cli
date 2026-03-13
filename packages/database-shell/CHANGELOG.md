@@ -1,5 +1,15 @@
 # @bunny.net/database-shell
 
+## 0.2.0
+
+### Minor Changes
+
+- [#13](https://github.com/BunnyWay/cli/pull/13) [`a9b8fa9`](https://github.com/BunnyWay/cli/commit/a9b8fa904c621648aa4c416770633ed99e8645c5) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add saved views (queries) to the database shell and CLI
+
+### Patch Changes
+
+- [#15](https://github.com/BunnyWay/cli/pull/15) [`dc4c51a`](https://github.com/BunnyWay/cli/commit/dc4c51af6e968bb5a517fcde2befc32dcf8ba5b2) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix dot-commands failing when arguments include a trailing semicolon (e.g. `.count users;`)
+
 ## 0.1.4
 
 ### Patch Changes

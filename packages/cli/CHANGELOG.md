@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.2.0
+
+### Minor Changes
+
+- [#13](https://github.com/BunnyWay/cli/pull/13) [`a9b8fa9`](https://github.com/BunnyWay/cli/commit/a9b8fa904c621648aa4c416770633ed99e8645c5) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add saved views (queries) to the database shell and CLI
+
 ## 0.1.6
 
 ### Patch Changes
