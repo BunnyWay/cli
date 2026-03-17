@@ -163,7 +163,11 @@ export const dbTokensInvalidateCommand = defineCommand<{
     const shouldCreate = force
       ? !!regenerate
       : await confirm("Generate a new token?");
-    if (!shouldCreate) return;
+    if (!shouldCreate) {
+      logger.warn("All tokens have been invalidated. No valid tokens remain.");
+      logger.dim(`  Run 'bunny db tokens create ${databaseId}' to generate a new one.`);
+      return;
+    }
 
     const spin3 = spinner("Generating token...");
     spin3.start();
