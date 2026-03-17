@@ -208,6 +208,7 @@ export const dbTokensCreateCommand = defineCommand<{
     });
 
     logger.success("Token generated.");
+    logger.dim("  Existing tokens for this database remain valid.");
     logger.log();
     logger.log(formatKeyValue(entries, output));
     logger.log();
