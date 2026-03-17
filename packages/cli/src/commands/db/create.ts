@@ -309,5 +309,8 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     logger.success(`Database created.`);
     logger.log();
     logger.log(formatKeyValue(entries, output));
+    logger.log();
+    logger.dim(`  Get started:  bunny db quickstart ${data.db_id}`);
+    logger.dim(`  Open shell:   bunny db shell ${data.db_id}`);
   },
 });
