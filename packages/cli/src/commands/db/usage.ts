@@ -6,7 +6,7 @@ import { resolveDbId } from "./resolve-db.ts";
 import { spinner } from "../../core/ui.ts";
 import { logger } from "../../core/logger.ts";
 import { UserError } from "../../core/errors.ts";
-import { formatDate, formatKeyValue, formatSize, progressBar } from "../../core/format.ts";
+import { formatDate, formatKeyValue, parseSizeToBytes, progressBar } from "../../core/format.ts";
 import { ARG_DATABASE_ID } from "./constants.ts";
 import { clientOptions } from "../../core/client-options.ts";
 
@@ -197,11 +197,11 @@ export const dbUsageCommand = defineCommand<UsageArgs>({
       }
     }
 
-    // Storage from database details
-    const currentSize = db?.current_size ?? "0";
-    const maxSize = db?.size_max ?? "0";
-    const sizeBytes = parseFloat(currentSize);
-    const maxBytes = parseFloat(maxSize);
+    // Storage from database details (current_size/size_max are human-readable strings like "20.5 KB")
+    const currentSize = db?.current_size ?? "0 B";
+    const maxSize = db?.size_max ?? "0 B";
+    const sizeBytes = parseSizeToBytes(currentSize);
+    const maxBytes = parseSizeToBytes(maxSize);
     const sizeFraction = maxBytes > 0 ? sizeBytes / maxBytes : 0;
     const sizePercent = Math.round(sizeFraction * 100);
 
@@ -218,8 +218,10 @@ export const dbUsageCommand = defineCommand<UsageArgs>({
             queries,
             avg_latency_ms: Math.round(avgLatency * 100) / 100,
             storage: {
-              current: currentSize,
-              max: maxSize,
+              current: sizeBytes,
+              max: maxBytes,
+              current_formatted: currentSize,
+              max_formatted: maxSize,
               percent: sizePercent,
             },
           },
@@ -232,7 +234,7 @@ export const dbUsageCommand = defineCommand<UsageArgs>({
 
     const label = db?.name ? `${db.name} (${databaseId})` : databaseId;
     const range = `${formatDate(fromDate)} – ${formatDate(toDate)}`;
-    const storagePlain = `${formatSize(currentSize)} / ${formatSize(maxSize)} (${sizePercent}%)`;
+    const storagePlain = `${currentSize} / ${maxSize} (${sizePercent}%)`;
 
     const entries = [
       { key: "Rows read", value: formatNumber(rowsRead) },
@@ -240,7 +242,7 @@ export const dbUsageCommand = defineCommand<UsageArgs>({
       { key: "Queries", value: formatNumber(queries) },
       { key: "Avg latency", value: `${avgLatency.toFixed(1)}ms` },
       { key: "Storage", value: output === "text"
-        ? `${formatSize(currentSize)} / ${formatSize(maxSize)}  ${progressBar(sizeFraction)}  ${sizePercent}%`
+        ? `${currentSize} / ${maxSize}  ${progressBar(sizeFraction)}  ${sizePercent}%`
         : storagePlain,
       },
     ];
