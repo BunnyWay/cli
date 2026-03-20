@@ -1,5 +1,23 @@
 # @bunny.net/cli
 
+## 0.2.1
+
+### Patch Changes
+
+- [#20](https://github.com/BunnyWay/cli/pull/20) [`4eabd29`](https://github.com/BunnyWay/cli/commit/4eabd291e0259ea76ba81ae5a2fca082c89908f4) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix database size formatting of bytes
+
+- [#27](https://github.com/BunnyWay/cli/pull/27) [`eed0cc6`](https://github.com/BunnyWay/cli/commit/eed0cc6d1e1a16b84283d39ad7fff29f779cd1b7) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - use custom fetch client for database shell
+
+- [#25](https://github.com/BunnyWay/cli/pull/25) [`c445698`](https://github.com/BunnyWay/cli/commit/c445698460125968bcccae79a9fe4d2d6159abb6) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - show notice when last region is removed that there are no other replicas
+
+- [#22](https://github.com/BunnyWay/cli/pull/22) [`689830f`](https://github.com/BunnyWay/cli/commit/689830faf454e648b6be89d5196de90b3a1263e4) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - ask for confirmation when removing a database region
+
+- [#24](https://github.com/BunnyWay/cli/pull/24) [`0568cf2`](https://github.com/BunnyWay/cli/commit/0568cf226867ed6c844f8aa5359324f0f7787c4e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - add prompt when creating a database token that previous ones remain valid
+
+- [#23](https://github.com/BunnyWay/cli/pull/23) [`2add08f`](https://github.com/BunnyWay/cli/commit/2add08f3a0d7d69cf744dddfcbcfab1761fa15af) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - add get started and shell instructions on successfull database creation
+
+- [#26](https://github.com/BunnyWay/cli/pull/26) [`340d501`](https://github.com/BunnyWay/cli/commit/340d5012d1b5671a7b187535e5bd805937180718) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - warn when no new tokens created after invalidation
+
 ## 0.2.0
 
 ### Minor Changes

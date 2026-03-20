@@ -1,5 +1,11 @@
 # @bunny.net/database-shell
 
+## 0.2.2
+
+### Patch Changes
+
+- [#27](https://github.com/BunnyWay/cli/pull/27) [`eed0cc6`](https://github.com/BunnyWay/cli/commit/eed0cc6d1e1a16b84283d39ad7fff29f779cd1b7) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - use custom fetch client for database shell
+
 ## 0.2.1
 
 ### Patch Changes
