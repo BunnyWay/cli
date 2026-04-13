@@ -15,42 +15,35 @@ interface UpdateCache {
   checkedAt: number;
 }
 
-/** Call at startup — prints a notice if a newer version was found on the last check. */
-export function notifyIfUpdateAvailable(): void {
+async function fetchLatestVersion(): Promise<string | null> {
   try {
-    if (!existsSync(CACHE_FILE)) return;
-    const cache: UpdateCache = JSON.parse(readFileSync(CACHE_FILE, "utf-8"));
-    if (cache.latest !== VERSION && isNewer(cache.latest, VERSION)) {
-      console.error(
-        `\n  Update available: ${VERSION} → ${cache.latest}` +
-          `\n  Run: curl -fsSL https://github.com/BunnyWay/cli/raw/main/install.sh | sh\n`,
-      );
-    }
-  } catch {}
+    const resp = await fetch(
+      "https://api.github.com/repos/BunnyWay/cli/releases/latest",
+    );
+    if (!resp.ok) return null;
+    const { tag_name } = (await resp.json()) as { tag_name: string };
+    return tag_name.replace(/^v/, "");
+  } catch {
+    return null;
+  }
 }
 
-/** Call after a command completes — spawns a detached fetch so the CLI exits immediately. */
-export function scheduleUpdateCheck(): void {
+function readCache(): UpdateCache | null {
   try {
-    if (existsSync(CACHE_FILE)) {
-      const cache: UpdateCache = JSON.parse(readFileSync(CACHE_FILE, "utf-8"));
-      if (Date.now() - cache.checkedAt < CHECK_INTERVAL) return;
-    }
+    if (!existsSync(CACHE_FILE)) return null;
+    return JSON.parse(readFileSync(CACHE_FILE, "utf-8"));
+  } catch {
+    return null;
+  }
+}
 
-    const script = `
-const resp = await fetch("https://api.github.com/repos/BunnyWay/cli/releases/latest");
-if (!resp.ok) process.exit(0);
-const { tag_name } = await resp.json();
-const latest = tag_name.replace(/^v/, "");
-const fs = require("fs");
-fs.mkdirSync(${JSON.stringify(CACHE_DIR)}, { recursive: true });
-fs.writeFileSync(${JSON.stringify(CACHE_FILE)}, JSON.stringify({ latest, checkedAt: Date.now() }));
-`;
-
-    const child = Bun.spawn(["bun", "-e", script], {
-      stdio: ["ignore", "ignore", "ignore"],
-    });
-    child.unref();
+function writeCache(latest: string): void {
+  try {
+    mkdirSync(CACHE_DIR, { recursive: true });
+    writeFileSync(
+      CACHE_FILE,
+      JSON.stringify({ latest, checkedAt: Date.now() }),
+    );
   } catch {}
 }
 
@@ -62,4 +55,39 @@ function isNewer(latest: string, current: string): boolean {
     if ((a[i] ?? 0) < (b[i] ?? 0)) return false;
   }
   return false;
+}
+
+/** Check for updates (throttled to once per 4 hours). Prints a notice to stderr if outdated. */
+export async function checkForUpdate(): Promise<void> {
+  try {
+    const cache = readCache();
+    if (cache && Date.now() - cache.checkedAt < CHECK_INTERVAL) {
+      if (isNewer(cache.latest, VERSION)) {
+        printUpdateNotice(cache.latest);
+      }
+      return;
+    }
+
+    const latest = await fetchLatestVersion();
+    if (!latest) return;
+    writeCache(latest);
+
+    if (isNewer(latest, VERSION)) {
+      printUpdateNotice(latest);
+    }
+  } catch {}
+}
+
+/** Always fetch fresh and return the latest version string (used by --version). */
+export async function getLatestVersion(): Promise<string | null> {
+  const latest = await fetchLatestVersion();
+  if (latest) writeCache(latest);
+  return latest;
+}
+
+function printUpdateNotice(latest: string): void {
+  console.error(
+    `\n  Update available: ${VERSION} → ${latest}` +
+      `\n  Run: curl -fsSL https://github.com/BunnyWay/cli/raw/main/install.sh | sh\n`,
+  );
 }

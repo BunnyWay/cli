@@ -12,6 +12,7 @@ import { scriptsNamespace } from "./commands/scripts/index.ts";
 import { docsCommand } from "./commands/docs.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { logger } from "./core/logger.ts";
+import { getLatestVersion } from "./core/update-check.ts";
 import { VERSION } from "./core/version.ts";
 
 const commands: CommandModule[] = [
@@ -30,7 +31,12 @@ const experimentalCommands: CommandModule[] = [appsNamespace];
 
 let instance = yargs(hideBin(process.argv))
   .scriptName("bunny")
-  .version(`${VERSION} ${process.platform}-${process.arch}`)
+  .version(false)
+  .option("version", {
+    type: "boolean",
+    describe: "Show version number",
+    global: false,
+  })
   .usage("$0 <command> [options]")
 
   .option("profile", {
@@ -70,7 +76,19 @@ export const cli = instance
     "$0",
     false as never,
     () => {},
-    () => {
+    async (argv) => {
+      if (argv.version) {
+        console.log(`${VERSION} ${process.platform}-${process.arch}`);
+        const latest = await getLatestVersion();
+        if (latest && latest !== VERSION) {
+          console.log(
+            `\nUpdate available: ${VERSION} → ${latest}` +
+              `\nRun: curl -fsSL https://github.com/BunnyWay/cli/raw/main/install.sh | sh`,
+          );
+        }
+        return;
+      }
+
       const bunny = chalk.hex("#FF6600");
       // const art = `
 // ${bunny("             =@@@.")}
