@@ -11,6 +11,7 @@ import { registriesNamespace } from "./commands/registries/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
 import { docsCommand } from "./commands/docs.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
+import { apiCommand } from "./commands/api.ts";
 import { logger } from "./core/logger.ts";
 import { getLatestVersion } from "./core/update-check.ts";
 import { VERSION } from "./core/version.ts";
@@ -24,6 +25,7 @@ const commands: CommandModule[] = [
   registriesNamespace,
   configNamespace,
   docsCommand,
+  apiCommand,
 ];
 
 // Experimental commands — registered but hidden from help and landing page

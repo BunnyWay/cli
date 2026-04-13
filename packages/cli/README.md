@@ -404,6 +404,39 @@ bunny scripts show <script-id>
 bunny scripts show
 ```
 
+### `bunny api`
+
+Make a raw authenticated HTTP request to any bunny.net API endpoint. Auth is handled automatically via your configured API key.
+
+```bash
+# List pull zones
+bunny api GET /pullzone
+
+# Get a specific pull zone
+bunny api GET /pullzone/12345
+
+# List databases
+bunny api GET /database/v2/databases
+
+# Create a database with a JSON body
+bunny api POST /database/v2/databases --body '{"name":"test","storage_region":"DE","primary_regions":["DE"]}'
+
+# Delete a DNS zone
+bunny api DELETE /dnszone/12345
+
+# Pipe body from stdin
+echo '{"name":"test"}' | bunny api POST /database/v2/databases
+
+# Show request/response details
+bunny api GET /pullzone --verbose
+```
+
+| Flag     | Alias | Description        |
+| -------- | ----- | ------------------ |
+| `--body` | `-b`  | JSON request body  |
+
+The method is case-insensitive (`get` and `GET` both work). Paths are relative to `https://api.bunny.net` — use `/database/...` for the Database API and `/mc/...` for Magic Containers.
+
 ## Global Options
 
 | Flag        | Alias | Description                                                  | Default   |
