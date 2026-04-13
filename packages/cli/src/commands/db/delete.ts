@@ -6,8 +6,9 @@ import { resolveDbId } from "./resolve-db.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import { logger } from "../../core/logger.ts";
 import { UserError } from "../../core/errors.ts";
-import { ARG_DATABASE_ID } from "./constants.ts";
+import { ARG_DATABASE_ID, ENV_DATABASE_URL, ENV_DATABASE_AUTH_TOKEN } from "./constants.ts";
 import { clientOptions } from "../../core/client-options.ts";
+import { readEnvValue, removeEnvValue } from "../../utils/env-file.ts";
 
 const COMMAND = `delete [${ARG_DATABASE_ID}]`;
 const DESCRIPTION = "Delete a database.";
@@ -137,5 +138,25 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
     }
 
     logger.success(`Database "${db.name}" (${databaseId}) deleted.`);
+
+    // Offer to clean up .env if it references the deleted database
+    const envUrl = readEnvValue(ENV_DATABASE_URL);
+    if (envUrl && db.url && envUrl.value === db.url) {
+      const shouldClean = await confirm(
+        `Remove ${ENV_DATABASE_URL} from ${envUrl.envPath}?`,
+        { force },
+      );
+
+      if (shouldClean) {
+        removeEnvValue(ENV_DATABASE_URL, envUrl.envPath);
+        const envToken = readEnvValue(ENV_DATABASE_AUTH_TOKEN);
+        if (envToken && envToken.envPath === envUrl.envPath) {
+          removeEnvValue(ENV_DATABASE_AUTH_TOKEN, envToken.envPath);
+          logger.success(`Removed ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} from ${envUrl.envPath}`);
+        } else {
+          logger.success(`Removed ${ENV_DATABASE_URL} from ${envUrl.envPath}`);
+        }
+      }
+    }
   },
 });
