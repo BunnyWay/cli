@@ -46,24 +46,27 @@ URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}"
 
 echo "Installing bunny ${VERSION} (${OS}/${ARCH})..."
 
+TMPFILE=$(mktemp)
+trap 'rm -f "$TMPFILE"' EXIT
+
 # Download
 if command -v curl > /dev/null 2>&1; then
-  curl -fsSL "$URL" -o bunny
+  curl -fsSL "$URL" -o "$TMPFILE"
 elif command -v wget > /dev/null 2>&1; then
-  wget -qO bunny "$URL"
+  wget -qO "$TMPFILE" "$URL"
 else
   echo "Error: curl or wget is required."
   exit 1
 fi
 
-chmod +x bunny
+chmod +x "$TMPFILE"
 
 # Install
 if [ -w "$INSTALL_DIR" ]; then
-  mv bunny "${INSTALL_DIR}/bunny"
+  mv "$TMPFILE" "${INSTALL_DIR}/bunny"
 else
   echo "Installing to ${INSTALL_DIR} (requires sudo)..."
-  sudo mv bunny "${INSTALL_DIR}/bunny"
+  sudo mv "$TMPFILE" "${INSTALL_DIR}/bunny"
 fi
 
 echo "bunny ${VERSION} installed to ${INSTALL_DIR}/bunny"

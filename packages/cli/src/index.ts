@@ -1,5 +1,11 @@
 #!/usr/bin/env bun
 
 import { cli } from "./cli.ts";
+import {
+  notifyIfUpdateAvailable,
+  scheduleUpdateCheck,
+} from "./core/update-check.ts";
 
-cli.parse();
+notifyIfUpdateAvailable();
+await cli.parse();
+scheduleUpdateCheck();
