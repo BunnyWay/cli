@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.2.4
+
+### Patch Changes
+
+- [`0abadc3`](https://github.com/BunnyWay/cli/commit/0abadc3d5027ae717dc918b43866fc5b0543cf01) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix macOS binary killed on launch by pinning Bun to v1.3.11 (v1.3.12 produces unsigned binaries)
+
 ## 0.2.3
 
 ### Patch Changes

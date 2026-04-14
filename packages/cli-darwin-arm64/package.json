@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/cli-darwin-arm64",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "bunny.net CLI binary for macOS arm64",
   "os": [
     "darwin"
