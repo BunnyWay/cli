@@ -1,5 +1,17 @@
 # @bunny.net/cli
 
+## 0.2.2
+
+### Patch Changes
+
+- [#28](https://github.com/BunnyWay/cli/pull/28) [`0e0e2ff`](https://github.com/BunnyWay/cli/commit/0e0e2ff419caf9218f6f5ee0b957b218d93f7f26) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add automatic update check that notifies users when a new CLI version is available
+
+- [#32](https://github.com/BunnyWay/cli/pull/32) [`49dcf66`](https://github.com/BunnyWay/cli/commit/49dcf66ca8bb2740da9ec08abbbfa33bc0018d25) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add raw API command for making authenticated HTTP requests to any bunny.net endpoint
+
+- [#31](https://github.com/BunnyWay/cli/pull/31) [`8343f16`](https://github.com/BunnyWay/cli/commit/8343f1683a9e3626b836979ebe693e76c58cb1ce) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Clean up .env credentials when deleting a database that matches the local environment
+
+- [#30](https://github.com/BunnyWay/cli/pull/30) [`ac9cb05`](https://github.com/BunnyWay/cli/commit/ac9cb0501b423d38459180eea6163fc3ceb4df83) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Prompt to create an auth token and save to .env after interactive database creation
+
 ## 0.2.1
 
 ### Patch Changes
