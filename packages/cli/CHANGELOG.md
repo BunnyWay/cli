@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.2.3
+
+### Patch Changes
+
+- [`4f4a84d`](https://github.com/BunnyWay/cli/commit/4f4a84dc0b0be1a302a03c2aa238c1259e2835ca) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix macOS binary killed on launch by ad-hoc signing darwin binaries during CI build
+
 ## 0.2.2
 
 ### Patch Changes
