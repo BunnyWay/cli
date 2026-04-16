@@ -26,5 +26,5 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "exclude": ["packages/database-studio/client"]
+  "exclude": ["packages/database-studio/client", "packages/account-dashboard/client"]
 }

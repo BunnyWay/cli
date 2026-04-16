@@ -20,13 +20,12 @@ const commands: CommandModule[] = [
   whoamiCommand,
   dbNamespace,
   scriptsNamespace,
-  registriesNamespace,
   configNamespace,
   docsCommand,
 ];
 
 // Experimental commands — registered but hidden from help and landing page
-const experimentalCommands: CommandModule[] = [appsNamespace];
+const experimentalCommands: CommandModule[] = [appsNamespace, registriesNamespace];
 
 let instance = yargs(hideBin(process.argv))
   .scriptName("bunny")

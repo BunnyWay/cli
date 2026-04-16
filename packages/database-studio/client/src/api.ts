@@ -70,16 +70,27 @@ export interface FilterCondition {
   value: string;
 }
 
+export type FilterMode = "and" | "or";
+
 export async function fetchTableRows(
   name: string,
   page = 1,
   limit = 50,
   filters: FilterCondition[] = [],
+  sort?: { column: string; order: "asc" | "desc" },
+  filterMode: FilterMode = "and",
 ): Promise<RowsResponse> {
   const start = performance.now();
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (filters.length > 0) {
     params.set("filters", JSON.stringify(filters));
+    if (filterMode === "or") {
+      params.set("filterMode", "or");
+    }
+  }
+  if (sort) {
+    params.set("sort", sort.column);
+    params.set("order", sort.order);
   }
   const data = await fetchJson<Omit<RowsResponse, "responseTime">>(
     `/api/tables/${encodeURIComponent(name)}/rows?${params}`,

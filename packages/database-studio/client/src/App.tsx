@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { LoadingScreen } from "@/components/LoadingScreen.tsx";
 import { TableView } from "@/components/TableView.tsx";
 import { type TableSummary, fetchTables } from "@/api.ts";
 import { cn } from "@/lib/utils";
@@ -76,26 +77,17 @@ export function App() {
     });
   }
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <p className="text-muted-foreground">Connecting to database...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <p className="text-destructive">Error: {error}</p>
-      </div>
-    );
+  if (loading || error) {
+    return <LoadingScreen error={error} />;
   }
 
   const unopenedTables = tables.filter((t) => !openTabs.includes(t.name));
 
+  const hasOpenTabs = openTabs.length > 0;
+
   return (
     <div className="flex h-screen flex-col">
+      {hasOpenTabs && (
       <header className="flex h-10 shrink-0 items-center border-b bg-sidebar">
         <div className="flex h-full w-10 shrink-0 items-center justify-center border-r text-muted-foreground">
           <svg
@@ -180,17 +172,39 @@ export function App() {
           </div>
         )}
       </header>
+      )}
       <main className="flex-1 overflow-hidden">
         {activeTab ? (
           <TableView tableName={activeTab} onSelectTable={openTable} />
         ) : (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-muted-foreground">
-              Click <Plus className="inline h-4 w-4" /> to open a table
-            </p>
+          <div className="flex h-full items-center justify-center p-8">
+            <div className="w-full max-w-sm">
+              <h2 className="mb-1 text-sm font-medium text-foreground">Tables</h2>
+              <p className="mb-4 text-xs text-muted-foreground">
+                {tables.length} table{tables.length !== 1 ? "s" : ""} found
+              </p>
+              <div className="rounded-lg border">
+                {tables.map((table, i) => (
+                  <button
+                    key={table.name}
+                    onClick={() => openTable(table.name)}
+                    className={cn(
+                      "flex w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-accent",
+                      i > 0 && "border-t",
+                    )}
+                  >
+                    <span className="font-mono text-sm">{table.name}</span>
+                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                      {table.rowCount.toLocaleString()} rows
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </main>
     </div>
   );
 }
+

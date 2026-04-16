@@ -5,7 +5,7 @@ import { registryRemoveCommand } from "./remove.ts";
 
 export const registriesNamespace: CommandModule = {
   command: "registries",
-  describe: "Manage container registries.",
+  describe: false as never,
   builder: (yargs) => {
     yargs.command(registryAddCommand);
     yargs.command(registryListCommand);

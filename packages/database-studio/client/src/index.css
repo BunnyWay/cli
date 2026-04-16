@@ -114,6 +114,25 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(240%); }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.sweep-bar {
+  animation: sweep 1.6s ease-in-out infinite alternate;
+}
+
+.step-reveal {
+  opacity: 0;
+  animation: fade-in-up 0.4s ease-out forwards;
+}
+
 @layer base {
   * {
     @apply border-border;

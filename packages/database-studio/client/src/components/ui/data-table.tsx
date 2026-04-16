@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   type ColumnDef,
   type SortingState,
+  type VisibilityState,
   flexRender,
   getCoreRowModel,
-  getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 
@@ -16,9 +16,32 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowDown, ArrowUp, ArrowUpDown, Eye, Maximize2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Copy, Eye, Maximize2 } from "lucide-react";
 
-function TruncatedCell({ children, onExpand }: { children: React.ReactNode; onExpand?: () => void }) {
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function copy(e: React.MouseEvent) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  return (
+    <button
+      onClick={copy}
+      className="shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted"
+    >
+      {copied
+        ? <Check className="h-3 w-3 text-green-500" />
+        : <Copy className="h-3 w-3 text-muted-foreground" />}
+    </button>
+  );
+}
+
+function TruncatedCell({ children, rawValue, onExpand }: { children: React.ReactNode; rawValue?: string; onExpand?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [truncated, setTruncated] = useState(false);
 
@@ -33,6 +56,7 @@ function TruncatedCell({ children, onExpand }: { children: React.ReactNode; onEx
       <div ref={ref} className="min-w-0 flex-1 truncate">
         {children}
       </div>
+      {rawValue != null && <CopyButton value={rawValue} />}
       {truncated && onExpand && (
         <button
           onClick={(e) => { e.stopPropagation(); onExpand(); }}
@@ -48,23 +72,38 @@ function TruncatedCell({ children, onExpand }: { children: React.ReactNode; onEx
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  sorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
+  columnVisibility?: VisibilityState;
+  onColumnVisibilityChange?: (visibility: VisibilityState) => void;
   onInspectRow?: (row: TData) => void;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  sorting: externalSorting,
+  onSortingChange: externalOnSortingChange,
+  columnVisibility = {},
+  onColumnVisibilityChange,
   onInspectRow,
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const sorting = externalSorting ?? [];
 
   const table = useReactTable({
     data,
     columns,
-    state: { sorting },
-    onSortingChange: setSorting,
+    state: { sorting, columnVisibility },
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      externalOnSortingChange?.(next);
+    },
+    onColumnVisibilityChange: (updater) => {
+      const next = typeof updater === "function" ? updater(columnVisibility) : updater;
+      onColumnVisibilityChange?.(next);
+    },
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    manualSorting: true,
   });
 
   const colCount = columns.length + (onInspectRow ? 1 : 0);
@@ -120,16 +159,20 @@ export function DataTable<TData, TValue>({
                   </button>
                 </TableCell>
               )}
-              {row.getVisibleCells().map((cell) => (
-                <TableCell
-                  key={cell.id}
-                  className="max-w-xs border-r border-border/50 font-mono text-xs last:border-r-0"
-                >
-                  <TruncatedCell onExpand={onInspectRow ? () => onInspectRow(row.original) : undefined}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TruncatedCell>
-                </TableCell>
-              ))}
+              {row.getVisibleCells().map((cell) => {
+                const raw = cell.getValue();
+                const rawStr = raw === null || raw === undefined ? undefined : String(raw);
+                return (
+                  <TableCell
+                    key={cell.id}
+                    className="max-w-xs border-r border-border/50 font-mono text-xs last:border-r-0"
+                  >
+                    <TruncatedCell rawValue={rawStr} onExpand={onInspectRow ? () => onInspectRow(row.original) : undefined}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TruncatedCell>
+                  </TableCell>
+                );
+              })}
             </TableRow>
           ))
         ) : (

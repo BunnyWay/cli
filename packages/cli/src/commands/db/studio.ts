@@ -16,6 +16,7 @@ const ARG_PORT = "port";
 const ARG_URL = "url";
 const ARG_TOKEN = "token";
 const ARG_NO_OPEN = "no-open";
+const ARG_DEV = "dev";
 
 /**
  * Resolve database credentials — same pattern as shell.ts.
@@ -83,6 +84,7 @@ export const dbStudioCommand = defineCommand<{
   [ARG_URL]?: string;
   [ARG_TOKEN]?: string;
   [ARG_NO_OPEN]?: boolean;
+  [ARG_DEV]?: boolean;
 }>({
   command: COMMAND,
   describe: DESCRIPTION,
@@ -116,6 +118,11 @@ export const dbStudioCommand = defineCommand<{
         type: "boolean",
         default: false,
         describe: "Don't automatically open the browser",
+      })
+      .option(ARG_DEV, {
+        type: "boolean",
+        default: false,
+        hidden: true,
       }),
 
   handler: async ({
@@ -124,6 +131,7 @@ export const dbStudioCommand = defineCommand<{
     [ARG_URL]: urlArg,
     [ARG_TOKEN]: tokenArg,
     [ARG_NO_OPEN]: noOpen,
+    [ARG_DEV]: dev,
     profile,
     verbose,
     apiKey,
@@ -147,6 +155,7 @@ export const dbStudioCommand = defineCommand<{
       client,
       port: port ?? 4488,
       open: !noOpen,
+      dev,
       logger: {
         log: (msg: string) => logger.log(msg),
         error: (msg: string) => logger.error(msg),

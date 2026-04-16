@@ -5,6 +5,7 @@ export interface StudioOptions {
   client: Client;
   port?: number;
   open?: boolean;
+  dev?: boolean;
   logger?: {
     log(msg: string): void;
     error(msg: string): void;
@@ -71,7 +72,7 @@ function parseFilters(url: URL): Filter[] {
   }
 }
 
-function buildWhereClause(filters: Filter[]): { sql: string; args: (string | null)[] } {
+function buildWhereClause(filters: Filter[], mode: "and" | "or" = "and"): { sql: string; args: (string | null)[] } {
   if (filters.length === 0) return { sql: "", args: [] };
   const conditions: string[] = [];
   const args: (string | null)[] = [];
@@ -85,7 +86,8 @@ function buildWhereClause(filters: Filter[]): { sql: string; args: (string | nul
       args.push(f.value);
     }
   }
-  return { sql: ` WHERE ${conditions.join(" AND ")}`, args };
+  const conjunction = mode === "or" ? " OR " : " AND ";
+  return { sql: ` WHERE ${conditions.join(conjunction)}`, args };
 }
 
 function createApiHandler(client: Client) {
@@ -139,7 +141,7 @@ function createApiHandler(client: Client) {
       return json({ columns, foreignKeys, indexes });
     }
 
-    // GET /api/tables/:name/rows?page=1&limit=50
+    // GET /api/tables/:name/rows?page=1&limit=50&sort=col&order=asc
     const rowsMatch = pathname.match(/^\/api\/tables\/([^/]+)\/rows$/);
     if (rowsMatch) {
       const tableName = decodeURIComponent(rowsMatch[1]!);
@@ -151,11 +153,16 @@ function createApiHandler(client: Client) {
       const offset = (page - 1) * limit;
 
       const filters = parseFilters(url);
-      const where = buildWhereClause(filters);
+      const filterMode = url.searchParams.get("filterMode") === "or" ? "or" as const : "and" as const;
+      const where = buildWhereClause(filters, filterMode);
+
+      const sortCol = url.searchParams.get("sort");
+      const sortOrder = url.searchParams.get("order")?.toUpperCase() === "DESC" ? "DESC" : "ASC";
+      const orderBy = sortCol && isValidIdentifier(sortCol) ? ` ORDER BY "${sortCol}" ${sortOrder}` : "";
 
       const [dataResult, countResult] = await Promise.all([
         client.execute({
-          sql: `SELECT * FROM "${tableName}"${where.sql} LIMIT ${limit} OFFSET ${offset}`,
+          sql: `SELECT * FROM "${tableName}"${where.sql}${orderBy} LIMIT ${limit} OFFSET ${offset}`,
           args: where.args,
         }),
         client.execute({
@@ -233,9 +240,10 @@ function createApiHandler(client: Client) {
 }
 
 export async function startStudio(options: StudioOptions): Promise<void> {
-  const { client, port = 4488, open = true, logger = console } = options;
+  const { client, port = 4488, open = true, dev = false, logger = console } = options;
 
   const distDir = join(import.meta.dir, "..", "dist", "client");
+  const clientDir = join(import.meta.dir, "..", "client");
   const handleApi = createApiHandler(client);
 
   let server: ReturnType<typeof Bun.serve>;
@@ -261,20 +269,22 @@ export async function startStudio(options: StudioOptions): Promise<void> {
         }
       }
 
-      // Static file serving for the built client
-      try {
-        let filePath = join(distDir, pathname === "/" ? "index.html" : pathname);
-        let file = Bun.file(filePath);
-        if (await file.exists()) {
-          return new Response(file);
+      if (!dev) {
+        // Static file serving for the built client
+        try {
+          let filePath = join(distDir, pathname === "/" ? "index.html" : pathname);
+          let file = Bun.file(filePath);
+          if (await file.exists()) {
+            return new Response(file);
+          }
+          // SPA fallback — serve index.html for client-side routing
+          file = Bun.file(join(distDir, "index.html"));
+          if (await file.exists()) {
+            return new Response(file);
+          }
+        } catch {
+          // fall through
         }
-        // SPA fallback — serve index.html for client-side routing
-        file = Bun.file(join(distDir, "index.html"));
-        if (await file.exists()) {
-          return new Response(file);
-        }
-      } catch {
-        // fall through
       }
 
       return new Response("Not Found", { status: 404 });
@@ -289,12 +299,29 @@ export async function startStudio(options: StudioOptions): Promise<void> {
     throw err;
   }
 
-  const url = `http://localhost:${server.port}`;
-  logger.log(`Studio running at ${url}`);
+  // In dev mode, spawn Vite dev server — it proxies /api back to this server
+  let viteProc: ReturnType<typeof Bun.spawn> | undefined;
+  let browserUrl: string;
+
+  if (dev) {
+    viteProc = Bun.spawn(["bunx", "--bun", "vite"], {
+      cwd: clientDir,
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    // Give Vite a moment to bind its port
+    await new Promise((r) => setTimeout(r, 1000));
+    browserUrl = "http://localhost:5173";
+    logger.log(`Studio API running at http://localhost:${server.port}`);
+    logger.log(`Studio dev server at ${browserUrl}`);
+  } else {
+    browserUrl = `http://localhost:${server.port}`;
+    logger.log(`Studio running at ${browserUrl}`);
+  }
 
   if (open) {
     const proc = Bun.spawn(
-      process.platform === "darwin" ? ["open", url] : ["xdg-open", url],
+      process.platform === "darwin" ? ["open", browserUrl] : ["xdg-open", browserUrl],
       { stdout: "ignore", stderr: "ignore" },
     );
     await proc.exited;
@@ -303,10 +330,12 @@ export async function startStudio(options: StudioOptions): Promise<void> {
   // Keep the process alive until interrupted
   await new Promise<void>((resolve) => {
     process.on("SIGINT", () => {
+      viteProc?.kill();
       server.stop();
       resolve();
     });
     process.on("SIGTERM", () => {
+      viteProc?.kill();
       server.stop();
       resolve();
     });
