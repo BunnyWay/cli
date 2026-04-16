@@ -14,6 +14,8 @@ jobs:
       - run: bun run api:generate
       - run: bun run typecheck
       - run: bun test
+      - name: Build database studio
+        run: bun run --filter @bunny.net/database-studio build:client
       - name: Build CLI binary
         run: bun build packages/cli/src/index.ts --compile --minify --sourcemap --outfile bunny
       - name: Build database-shell binary

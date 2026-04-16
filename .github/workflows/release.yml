@@ -100,6 +100,9 @@ jobs:
           bun-version: "1.3.11"
       - run: bun install
 
+      - name: Build database studio
+        run: bun run --filter @bunny.net/database-studio build:client
+
       - name: Build binary
         run: bun build packages/cli/src/index.ts --compile --minify --sourcemap --target=${{ matrix.target }} --outfile ${{ matrix.binary }}
 

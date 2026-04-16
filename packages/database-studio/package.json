@@ -10,7 +10,7 @@
   "scripts": {
     "dev:client": "cd client && bunx --bun vite",
     "dev:server": "bun src/dev-server.ts",
-    "build:client": "cd client && bunx --bun vite build --outDir ../dist/client && cd .. && bun scripts/generate-manifest.ts"
+    "build:client": "cd client && bunx --bun vite build --outDir ../dist/client"
   },
   "dependencies": {
     "@libsql/client": "^0.17.0"
