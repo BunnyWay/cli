@@ -1,5 +1,16 @@
 # @bunny.net/database-studio
 
+## 0.0.5
+
+### Patch Changes
+
+- [`72759e7`](https://github.com/BunnyWay/cli/commit/72759e772dc5ca2810e59eb6ba8d5703633de398) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - embed studio assets in compiled CLI binary
+
+  The database studio UI was returning "Not Found" when launched from
+  the compiled binary because the static files weren't embedded in
+  the executable. Studio assets are now bundled via Bun's file
+  embedding at compile time.
+
 ## 0.0.4
 
 ### Patch Changes
