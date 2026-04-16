@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.2.6
+
+### Patch Changes
+
+- [`53b31a0`](https://github.com/BunnyWay/cli/commit/53b31a0732e6215d5b24df31351a62f9de3192aa) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - rebuild database studio
+
 ## 0.2.5
 
 ### Patch Changes
