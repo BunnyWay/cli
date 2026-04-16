@@ -1,5 +1,11 @@
 # @bunny.net/database-studio
 
+## 0.0.4
+
+### Patch Changes
+
+- [`b0ba799`](https://github.com/BunnyWay/cli/commit/b0ba799143c161f464c2dfc27bbe1c31f625f849) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix build step
+
 ## 0.0.3
 
 ### Patch Changes
