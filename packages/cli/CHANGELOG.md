@@ -1,5 +1,13 @@
 # @bunny.net/cli
 
+## 0.2.5
+
+### Patch Changes
+
+- [#16](https://github.com/BunnyWay/cli/pull/16) [`989ddd9`](https://github.com/BunnyWay/cli/commit/989ddd93b36cf158662cdb5a4f28c03032b994b4) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Hide `registries` command from help output and landing page (moved to experimental commands)
+
+- [#35](https://github.com/BunnyWay/cli/pull/35) [`55d7928`](https://github.com/BunnyWay/cli/commit/55d7928a035d2624a9ba31049d1570674c3f7553) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Strip API key from browser history after login callback
+
 ## 0.2.4
 
 ### Patch Changes

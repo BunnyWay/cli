@@ -1,5 +1,7 @@
 # @bunny.net/cli-linux-arm64
 
+## 0.2.5
+
 ## 0.2.4
 
 ## 0.2.3
