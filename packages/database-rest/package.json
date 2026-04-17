@@ -1,0 +1,19 @@
+{
+  "name": "@bunny.net/database-rest",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "module": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run dev.ts",
+    "test": "bun test",
+    "typecheck": "bun run tsc --noEmit"
+  },
+  "dependencies": {
+    "@bunny.net/database-openapi": "workspace:*",
+    "@libsql/client": "^0.17.0"
+  }
+}

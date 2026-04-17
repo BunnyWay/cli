@@ -1,0 +1,17 @@
+{
+  "name": "@bunny.net/database-openapi",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "module": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bun run tsc --noEmit"
+  },
+  "devDependencies": {
+    "@seriousme/openapi-schema-validator": "^2.9.0"
+  }
+}
