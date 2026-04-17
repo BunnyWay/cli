@@ -40,9 +40,9 @@ function json(data: unknown, status = 200) {
   });
 }
 
-/** Validate a table/column name to prevent SQL injection (only allow alphanumeric, underscores). */
-function isValidIdentifier(name: string): boolean {
-  return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name);
+/** Safely quote a SQL identifier (table/column name). SQLite supports any identifier when wrapped in double quotes; internal `"` are escaped by doubling. */
+function quoteIdentifier(name: string): string {
+  return `"${name.replace(/"/g, '""')}"`;
 }
 
 const VALID_OPERATORS = new Set([
@@ -65,7 +65,7 @@ function parseFilters(url: URL): Filter[] {
       (f: any) =>
         typeof f.column === "string" &&
         typeof f.operator === "string" &&
-        isValidIdentifier(f.column) &&
+        f.column.length > 0 &&
         VALID_OPERATORS.has(f.operator),
     );
   } catch {
@@ -78,12 +78,13 @@ function buildWhereClause(filters: Filter[], mode: "and" | "or" = "and"): { sql:
   const conditions: string[] = [];
   const args: (string | null)[] = [];
   for (const f of filters) {
+    const col = quoteIdentifier(f.column);
     if (f.operator === "IS NULL") {
-      conditions.push(`"${f.column}" IS NULL`);
+      conditions.push(`${col} IS NULL`);
     } else if (f.operator === "IS NOT NULL") {
-      conditions.push(`"${f.column}" IS NOT NULL`);
+      conditions.push(`${col} IS NOT NULL`);
     } else {
-      conditions.push(`"${f.column}" ${f.operator} ?`);
+      conditions.push(`${col} ${f.operator} ?`);
       args.push(f.value);
     }
   }
@@ -101,7 +102,7 @@ function createApiHandler(client: Client) {
       const tables = [];
       for (const row of result.rows) {
         const name = row.name as string;
-        const countResult = await client.execute(`SELECT COUNT(*) as count FROM "${name}"`);
+        const countResult = await client.execute(`SELECT COUNT(*) as count FROM ${quoteIdentifier(name)}`);
         tables.push({
           name,
           rowCount: Number(countResult.rows[0]?.count ?? 0),
@@ -114,9 +115,9 @@ function createApiHandler(client: Client) {
     const schemaMatch = pathname.match(/^\/api\/tables\/([^/]+)\/schema$/);
     if (schemaMatch) {
       const tableName = decodeURIComponent(schemaMatch[1]!);
-      if (!isValidIdentifier(tableName)) return json({ error: "Invalid table name" }, 400);
+      const quotedTable = quoteIdentifier(tableName);
 
-      const result = await client.execute(`PRAGMA table_info("${tableName}")`);
+      const result = await client.execute(`PRAGMA table_info(${quotedTable})`);
       const columns = result.rows.map((row) => ({
         cid: row.cid,
         name: row.name,
@@ -126,14 +127,14 @@ function createApiHandler(client: Client) {
         primaryKey: row.pk,
       }));
 
-      const fkResult = await client.execute(`PRAGMA foreign_key_list("${tableName}")`);
+      const fkResult = await client.execute(`PRAGMA foreign_key_list(${quotedTable})`);
       const foreignKeys = fkResult.rows.map((row) => ({
         from: row.from,
         table: row.table,
         to: row.to,
       }));
 
-      const indexResult = await client.execute(`PRAGMA index_list("${tableName}")`);
+      const indexResult = await client.execute(`PRAGMA index_list(${quotedTable})`);
       const indexes = indexResult.rows.map((row) => ({
         name: row.name,
         unique: row.unique,
@@ -146,7 +147,7 @@ function createApiHandler(client: Client) {
     const rowsMatch = pathname.match(/^\/api\/tables\/([^/]+)\/rows$/);
     if (rowsMatch) {
       const tableName = decodeURIComponent(rowsMatch[1]!);
-      if (!isValidIdentifier(tableName)) return json({ error: "Invalid table name" }, 400);
+      const quotedTable = quoteIdentifier(tableName);
 
       const url = new URL(req.url);
       const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
@@ -159,15 +160,15 @@ function createApiHandler(client: Client) {
 
       const sortCol = url.searchParams.get("sort");
       const sortOrder = url.searchParams.get("order")?.toUpperCase() === "DESC" ? "DESC" : "ASC";
-      const orderBy = sortCol && isValidIdentifier(sortCol) ? ` ORDER BY "${sortCol}" ${sortOrder}` : "";
+      const orderBy = sortCol ? ` ORDER BY ${quoteIdentifier(sortCol)} ${sortOrder}` : "";
 
       const [dataResult, countResult] = await Promise.all([
         client.execute({
-          sql: `SELECT * FROM "${tableName}"${where.sql}${orderBy} LIMIT ${limit} OFFSET ${offset}`,
+          sql: `SELECT * FROM ${quotedTable}${where.sql}${orderBy} LIMIT ${limit} OFFSET ${offset}`,
           args: where.args,
         }),
         client.execute({
-          sql: `SELECT COUNT(*) as count FROM "${tableName}"${where.sql}`,
+          sql: `SELECT COUNT(*) as count FROM ${quotedTable}${where.sql}`,
           args: where.args,
         }),
       ]);
@@ -192,20 +193,15 @@ function createApiHandler(client: Client) {
     const lookupMatch = pathname.match(/^\/api\/tables\/([^/]+)\/lookup$/);
     if (lookupMatch) {
       const tableName = decodeURIComponent(lookupMatch[1]!);
-      if (!isValidIdentifier(tableName)) return json({ error: "Invalid table name" }, 400);
+      const quotedTable = quoteIdentifier(tableName);
 
       const url = new URL(req.url);
       const column = url.searchParams.get("column");
       const value = url.searchParams.get("value");
       if (!column) return json({ error: "Missing column parameter" }, 400);
 
-      // Validate column name
-      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(column)) {
-        return json({ error: "Invalid column name" }, 400);
-      }
-
       const result = await client.execute({
-        sql: `SELECT * FROM "${tableName}" WHERE "${column}" = ? LIMIT 1`,
+        sql: `SELECT * FROM ${quotedTable} WHERE ${quoteIdentifier(column)} = ? LIMIT 1`,
         args: [value ?? null],
       });
 
@@ -214,14 +210,14 @@ function createApiHandler(client: Client) {
       }
 
       // Also fetch schema for column types
-      const schemaResult = await client.execute(`PRAGMA table_info("${tableName}")`);
+      const schemaResult = await client.execute(`PRAGMA table_info(${quotedTable})`);
       const columns = schemaResult.columns;
       const schemaColumns = schemaResult.rows.map((row) => ({
         name: row.name,
         type: row.type,
       }));
 
-      const fkResult = await client.execute(`PRAGMA foreign_key_list("${tableName}")`);
+      const fkResult = await client.execute(`PRAGMA foreign_key_list(${quotedTable})`);
       const foreignKeys = fkResult.rows.map((row) => ({
         from: row.from,
         table: row.table,
