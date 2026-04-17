@@ -1,6 +1,9 @@
 export interface TableSummary {
   name: string;
-  rowCount: number;
+  /** `null` when the server failed to count rows for this table. */
+  rowCount: number | null;
+  /** Server-reported error when the row count failed. */
+  error?: string;
 }
 
 export interface ColumnSchema {
@@ -35,7 +38,17 @@ const BASE = "";
 
 async function fetchJson<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    // Prefer the server's error message (`{ error: "..." }`) over the bare status.
+    let message = `API error: ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body && typeof body.error === "string") message = body.error;
+    } catch {
+      // Body wasn't JSON — fall back to the status-based message.
+    }
+    throw new Error(message);
+  }
   return res.json();
 }
 

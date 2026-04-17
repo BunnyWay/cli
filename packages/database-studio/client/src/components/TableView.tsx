@@ -27,6 +27,7 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
   const [schema, setSchema] = useState<TableSchema | null>(null);
   const [data, setData] = useState<RowsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"data" | "schema">("data");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
@@ -78,25 +79,37 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
     setColumnVisibility({});
     setColumnsOpen(false);
     setLoading(true);
+    setError(null);
+    setSchema(null);
+    setData(null);
     Promise.all([fetchTableSchema(tableName), fetchTableRows(tableName, 1, limit, [], sort, filterMode)])
       .then(([s, d]) => {
         setSchema(s);
         setData(d);
       })
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }, [tableName]);
 
   useEffect(() => {
     setLoading(true);
     fetchTableRows(tableName, page, limit, appliedFilters, sort, filterMode)
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }, [page, limit, tableName, filtersParam, filterModeParam, sortParam, orderParam]);
 
   function refresh() {
     setLoading(true);
     fetchTableRows(tableName, page, limit, appliedFilters, sort, filterMode)
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }
 
@@ -140,6 +153,20 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
     return (
       <div className="flex h-full items-center justify-center">
         <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
+        <p className="text-sm font-medium text-destructive">
+          Failed to load "{tableName}"
+        </p>
+        <p className="max-w-lg font-mono text-xs text-muted-foreground">{error}</p>
+        <Button size="sm" variant="outline" className="mt-2" onClick={refresh}>
+          Retry
+        </Button>
       </div>
     );
   }
@@ -272,6 +299,12 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
           )}
         </div>
       </div>
+
+      {error && data && (
+        <div className="shrink-0 border-b bg-destructive/10 px-4 py-1.5 text-xs text-destructive">
+          Failed to refresh: <span className="font-mono">{error}</span>
+        </div>
+      )}
 
       {filtersOpen && tab === "data" && schema && (
         <FilterBar

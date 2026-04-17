@@ -159,10 +159,16 @@ export function App() {
                         key={table.name}
                         onClick={() => { openTable(table.name); setSearch(""); }}
                         className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent"
+                        title={table.error ?? undefined}
                       >
                         <span className="font-mono text-xs">{table.name}</span>
-                        <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                          {table.rowCount.toLocaleString()}
+                        <span
+                          className={cn(
+                            "font-mono text-[10px] tabular-nums",
+                            table.error ? "text-destructive" : "text-muted-foreground",
+                          )}
+                        >
+                          {table.rowCount == null ? "—" : table.rowCount.toLocaleString()}
                         </span>
                       </button>
                     ))}
@@ -188,14 +194,22 @@ export function App() {
                   <button
                     key={table.name}
                     onClick={() => openTable(table.name)}
+                    title={table.error ?? undefined}
                     className={cn(
                       "flex w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-accent",
                       i > 0 && "border-t",
                     )}
                   >
                     <span className="font-mono text-sm">{table.name}</span>
-                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                      {table.rowCount.toLocaleString()} rows
+                    <span
+                      className={cn(
+                        "font-mono text-xs tabular-nums",
+                        table.error ? "text-destructive" : "text-muted-foreground",
+                      )}
+                    >
+                      {table.error
+                        ? "error"
+                        : `${(table.rowCount ?? 0).toLocaleString()} rows`}
                     </span>
                   </button>
                 ))}

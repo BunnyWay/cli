@@ -102,11 +102,21 @@ function createApiHandler(client: Client) {
       const tables = [];
       for (const row of result.rows) {
         const name = row.name as string;
-        const countResult = await client.execute(`SELECT COUNT(*) as count FROM ${quoteIdentifier(name)}`);
-        tables.push({
-          name,
-          rowCount: Number(countResult.rows[0]?.count ?? 0),
-        });
+        try {
+          const countResult = await client.execute(`SELECT COUNT(*) as count FROM ${quoteIdentifier(name)}`);
+          tables.push({
+            name,
+            rowCount: Number(countResult.rows[0]?.count ?? 0),
+          });
+        } catch (err: any) {
+          // A single broken table (e.g. corrupt index, missing attached db)
+          // shouldn't prevent the sidebar from listing the rest.
+          tables.push({
+            name,
+            rowCount: null,
+            error: err?.message ?? String(err),
+          });
+        }
       }
       return json(tables);
     }
