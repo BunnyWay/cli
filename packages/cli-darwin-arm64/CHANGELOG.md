@@ -1,5 +1,7 @@
 # @bunny.net/cli-darwin-arm64
 
+## 0.2.8
+
 ## 0.2.7
 
 ## 0.2.6

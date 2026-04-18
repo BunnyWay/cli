@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/cli",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "type": "module",
   "module": "src/index.ts",
   "bin": {
@@ -27,11 +27,11 @@
     "zod": "^4.3.6"
   },
   "optionalDependencies": {
-    "@bunny.net/cli-linux-x64": "0.2.7",
-    "@bunny.net/cli-linux-arm64": "0.2.7",
-    "@bunny.net/cli-darwin-x64": "0.2.7",
-    "@bunny.net/cli-darwin-arm64": "0.2.7",
-    "@bunny.net/cli-windows-x64": "0.2.7"
+    "@bunny.net/cli-linux-x64": "0.2.8",
+    "@bunny.net/cli-linux-arm64": "0.2.8",
+    "@bunny.net/cli-darwin-x64": "0.2.8",
+    "@bunny.net/cli-darwin-arm64": "0.2.8",
+    "@bunny.net/cli-windows-x64": "0.2.8"
   },
   "publishConfig": {
     "access": "public"

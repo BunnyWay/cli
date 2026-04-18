@@ -1,5 +1,42 @@
 # @bunny.net/database-studio
 
+## 0.1.0
+
+### Minor Changes
+
+- [#43](https://github.com/BunnyWay/cli/pull/43) [`8537d2c`](https://github.com/BunnyWay/cli/commit/8537d2cfd3d7fe8c9ba9bd75fcd43c40490e3642) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Refactor studio to use `@bunny.net/database-rest` and `@bunny.net/database-adapter-libsql`
+
+  Replaces the hand-rolled API handler with the shared REST package. The studio
+  now introspects the database at startup and delegates all API routes to
+  `createRestHandler`. The frontend reads table and schema info from the OpenAPI
+  spec served at the root endpoint.
+
+### Patch Changes
+
+- [#40](https://github.com/BunnyWay/cli/pull/40) [`1b77eea`](https://github.com/BunnyWay/cli/commit/1b77eeae362f442c1a3f920d70456c0911b69294) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix `db studio` for table and column names containing spaces
+
+  The studio API rejected any identifier that didn't match
+  `[a-zA-Z_][a-zA-Z0-9_]*`, returning a 400 "Invalid table name" for
+  tables or columns with spaces. Replaced the validation with safe
+  double-quote identifier escaping so any SQLite-valid name works.
+
+- [#42](https://github.com/BunnyWay/cli/pull/42) [`3cd013d`](https://github.com/BunnyWay/cli/commit/3cd013dc0b3cfad3d49e0327ee81d181b6b8720f) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - improve `db studio` error handling
+
+  A single broken table used to cause cascading UI problems:
+
+  - `/api/tables` would 500 if any one table's row count failed, locking
+    users out of the sidebar entirely. The endpoint now isolates per-table
+    errors and returns a `null` row count for just the broken table.
+  - The client's `fetch` wrapper now surfaces the server's `error` body in
+    the thrown message instead of a bare `API error: 500`.
+  - `TableView` now shows an error screen with a Retry button when a table
+    fails to load, instead of silently rendering an empty half-initialized
+    view. Refresh failures keep stale data visible with an inline banner.
+
+- Updated dependencies [[`8537d2c`](https://github.com/BunnyWay/cli/commit/8537d2cfd3d7fe8c9ba9bd75fcd43c40490e3642), [`8537d2c`](https://github.com/BunnyWay/cli/commit/8537d2cfd3d7fe8c9ba9bd75fcd43c40490e3642)]:
+  - @bunny.net/database-adapter-libsql@0.1.0
+  - @bunny.net/database-rest@0.1.0
+
 ## 0.0.5
 
 ### Patch Changes
