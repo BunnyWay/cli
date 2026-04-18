@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - install.sh
+  workflow_dispatch:
 
 jobs:
   upload:
