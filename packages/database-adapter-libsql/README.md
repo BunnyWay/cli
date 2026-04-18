@@ -21,7 +21,7 @@ const client = createClient({
 });
 
 const schema = await introspect({ client });
-const executor = createLibSQLExecutor(client);
+const executor = createLibSQLExecutor({ client });
 const handler = createRestHandler(executor, schema);
 
 Bun.serve({ port: 8080, fetch: handler });
@@ -29,7 +29,7 @@ Bun.serve({ port: 8080, fetch: handler });
 
 ## API
 
-### `createLibSQLExecutor(client): DatabaseExecutor`
+### `createLibSQLExecutor({ client }): DatabaseExecutor`
 
 Wraps a `@libsql/client` `Client` as a `DatabaseExecutor` for use with `createRestHandler`.
 
@@ -38,7 +38,7 @@ import { createClient } from "@libsql/client";
 import { createLibSQLExecutor } from "@bunny.net/database-adapter-libsql";
 
 const client = createClient({ url: ":memory:" });
-const executor = createLibSQLExecutor(client);
+const executor = createLibSQLExecutor({ client });
 ```
 
 ### `introspect({ client, version? }): Promise<DatabaseSchema>`

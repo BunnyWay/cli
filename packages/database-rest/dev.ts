@@ -30,7 +30,7 @@ await client.executeMultiple(`
 `);
 
 const schema = await introspect({ client });
-const executor = createLibSQLExecutor(client);
+const executor = createLibSQLExecutor({ client });
 const handler = createRestHandler(executor, schema);
 
 const port = Number(process.env.PORT) || 8080;
