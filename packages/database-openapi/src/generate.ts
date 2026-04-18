@@ -418,25 +418,22 @@ const generateDeleteByPkOperation = (table: TableDefinition, pkName: string, pkP
   },
 });
 
-const generateSingleResourcePathItem = (table: TableDefinition): PathItem | null => {
-  if (table.primaryKey.length !== 1) return null;
+const generateSingleResourcePathItem = (table: TableDefinition, columnName: string): PathItem | null => {
+  const column = table.columns.find((c) => c.name === columnName);
+  if (!column) return null;
 
-  const pkName = table.primaryKey[0]!;
-  const pkColumn = table.columns.find((c) => c.name === pkName);
-  if (!pkColumn) return null;
-
-  const pkParam: ParameterObject = {
-    name: pkName,
+  const param: ParameterObject = {
+    name: columnName,
     in: "path",
     required: true,
-    description: `${capitalize(table.name)} ${pkName}`,
-    schema: columnTypeToSchema({ ...pkColumn, nullable: false }),
+    description: `${capitalize(table.name)} ${columnName}`,
+    schema: columnTypeToSchema({ ...column, nullable: false }),
   };
 
   return {
-    get: generateGetByPkOperation(table, pkName, pkParam),
-    patch: generateUpdateByPkOperation(table, pkName, pkParam),
-    delete: generateDeleteByPkOperation(table, pkName, pkParam),
+    get: generateGetByPkOperation(table, columnName, param),
+    patch: generateUpdateByPkOperation(table, columnName, param),
+    delete: generateDeleteByPkOperation(table, columnName, param),
   };
 };
 
@@ -462,10 +459,20 @@ export const generateOpenAPISpec = (
   for (const [tableName, table] of Object.entries(schema.tables)) {
     paths[`/${tableName}`] = generatePathItem(table);
 
-    const singlePath = generateSingleResourcePathItem(table);
-    if (singlePath) {
-      const pkName = table.primaryKey[0]!;
-      paths[`/${tableName}/{${pkName}}`] = singlePath;
+    // Single-resource path by PK
+    if (table.primaryKey.length === 1) {
+      const pkPath = generateSingleResourcePathItem(table, table.primaryKey[0]!);
+      if (pkPath) {
+        paths[`/${tableName}/{${table.primaryKey[0]!}}`] = pkPath;
+      }
+    }
+
+    // Lookup paths by unique columns
+    for (const uniqueCol of table.uniqueColumns) {
+      const uniquePath = generateSingleResourcePathItem(table, uniqueCol);
+      if (uniquePath) {
+        paths[`/${tableName}/by-${uniqueCol}/{${uniqueCol}}`] = uniquePath;
+      }
     }
 
     schemas[tableName] = tableToSchema(table);

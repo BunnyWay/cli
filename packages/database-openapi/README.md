@@ -56,7 +56,13 @@ This produces a complete OpenAPI 3.0.3 spec with:
 - `PATCH /{table}/{pk}` - update one row by primary key
 - `DELETE /{table}/{pk}` - delete one row by primary key
 
-Tables with composite primary keys or no primary key only get collection endpoints.
+**Unique column lookup endpoints** (`/{table}/by-{column}/{value}`) - generated for columns with a unique index:
+
+- `GET /{table}/by-{column}/{value}` - get one row by unique column
+- `PATCH /{table}/by-{column}/{value}` - update one row by unique column
+- `DELETE /{table}/by-{column}/{value}` - delete one row by unique column
+
+Tables with composite primary keys or no primary key only get collection endpoints. Compound unique indexes (e.g. `UNIQUE(user_id, role)`) are captured in `indexes` but only single-column unique indexes generate lookup routes.
 
 The generated spec also includes:
 
@@ -127,6 +133,7 @@ import type {
   ColumnDefinition,
   ColumnType,
   ForeignKey,
+  IndexDefinition,
   GenerateOptions,
 } from "@bunny.net/database-openapi";
 ```
@@ -149,6 +156,8 @@ interface TableDefinition {
   columns: ColumnDefinition[];
   primaryKey: string[];
   foreignKeys: ForeignKey[];
+  indexes: IndexDefinition[];
+  uniqueColumns: string[];
 }
 ```
 
@@ -171,6 +180,16 @@ interface ForeignKey {
   column: string;
   referencesTable: string;
   referencesColumn: string;
+}
+```
+
+### `IndexDefinition`
+
+```ts
+interface IndexDefinition {
+  name: string;
+  columns: string[];
+  unique: boolean;
 }
 ```
 

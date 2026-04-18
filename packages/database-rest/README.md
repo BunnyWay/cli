@@ -1,6 +1,6 @@
 # @bunny.net/database-rest
 
-A PostgREST-like REST API for libSQL databases. Introspects your database schema, serves a full CRUD API with filtering, sorting, and pagination, and generates an OpenAPI spec at the root endpoint.
+A PostgREST-like REST API handler for databases. Serves a full CRUD API with filtering, sorting, pagination, and an OpenAPI spec at the root endpoint. Database-agnostic - bring your own adapter.
 
 ## Install
 
@@ -12,7 +12,8 @@ bun add @bunny.net/database-rest
 
 ```ts
 import { createClient } from "@libsql/client";
-import { introspect, createRestHandler } from "@bunny.net/database-rest";
+import { createLibSQLExecutor, introspect } from "@bunny.net/database-adapter-libsql";
+import { createRestHandler } from "@bunny.net/database-rest";
 
 const client = createClient({ url: ":memory:" });
 
@@ -22,40 +23,46 @@ await client.executeMultiple(`
 `);
 
 const schema = await introspect({ client });
-const handler = createRestHandler(client, schema);
+const executor = createLibSQLExecutor(client);
+const handler = createRestHandler(executor, schema);
 
 Bun.serve({ port: 8080, fetch: handler });
 ```
 
-## API
+## Architecture
 
-### `introspect({ client, version? }): Promise<DatabaseSchema>`
+`database-rest` is database-agnostic. It generates SQL and expects an executor to run it:
 
-Connects to a libSQL database, runs `PRAGMA table_info` / `PRAGMA foreign_key_list` for each table, and returns a `DatabaseSchema` object (from `@bunny.net/database-openapi`).
-
-Filters out internal tables (`sqlite_*`, `_litestream_*`, `libsql_*`).
-
-```ts
-import { createClient } from "@libsql/client";
-import { introspect } from "@bunny.net/database-rest";
-
-const client = createClient({
-  url: "libsql://your-db.turso.io",
-  authToken: "your-token",
-});
-
-const schema = await introspect({ client });
-
-// Or with a custom version
-const schema = await introspect({ client, version: "2.0.0" });
+```
+database-openapi          - schema types + OpenAPI spec generation
+database-rest             - routing, query parsing, SQL building, handler
+database-adapter-libsql   - executor + introspection for Bunny Database (libSQL)
 ```
 
-### `createRestHandler(client, schema, options?): (req: Request) => Promise<Response>`
-
-Returns a standard `Request → Response` handler. Works with `Bun.serve`, Edge Scripts, or any framework that uses the Web API `Request`/`Response` types.
+The `DatabaseExecutor` interface is simple:
 
 ```ts
-const handler = createRestHandler(client, schema, {
+interface DatabaseExecutor {
+  execute(
+    sql: string,
+    args: (string | number | boolean | null)[]
+  ): Promise<{
+    columns: string[];
+    rows: Record<string, unknown>[];
+  }>;
+}
+```
+
+Any database that can run parameterized SQL and return rows can implement this.
+
+## API
+
+### `createRestHandler(executor, schema, options?): (req: Request) => Promise<Response>`
+
+Returns a standard `Request -> Response` handler. Works with `Bun.serve`, Edge Scripts, or any framework that uses the Web API `Request`/`Response` types.
+
+```ts
+const handler = createRestHandler(executor, schema, {
   basePath: "/api",
   openapi: {
     title: "My API",
@@ -83,7 +90,7 @@ Bun.serve({ port: 8080, fetch: handler });
 GET /
 ```
 
-Returns the full OpenAPI 3.0.3 spec as JSON, generated from the introspected schema via `@bunny.net/database-openapi`.
+Returns the full OpenAPI 3.0.3 spec as JSON, generated from the schema via `@bunny.net/database-openapi`.
 
 ### Collection endpoints (`/{table}`)
 
@@ -182,6 +189,25 @@ curl -X DELETE /users/1
 
 Returns `404` if the row doesn't exist.
 
+### Unique column lookup endpoints (`/{table}/by-{column}/{value}`)
+
+Generated for columns with a unique index (excluding the primary key). Supports GET, PATCH, and DELETE.
+
+```bash
+# Get by unique column
+curl /users/by-email/alice@example.com
+
+# Update by unique column
+curl -X PATCH /users/by-email/alice@example.com \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Alice Smith"}'
+
+# Delete by unique column
+curl -X DELETE /users/by-email/alice@example.com
+```
+
+Returns `404` if the row doesn't exist or if the column isn't a unique index. Compound unique indexes (e.g. `UNIQUE(user_id, role)`) are available in the schema's `indexes` but only single-column unique indexes generate lookup routes.
+
 ## Response format
 
 **Collection (list):**
@@ -221,7 +247,7 @@ Returns `404` if the row doesn't exist.
 - All queries use **parameterized SQL** - no string interpolation of user input
 - Table and column names are quoted with `"identifier"` escaping
 - Collection `PATCH` and `DELETE` **require at least one filter** - no accidental mass operations
-- Only tables discovered during introspection are routable - unknown table names return `404`
+- Only tables in the schema are routable - unknown table names return `404`
 - Single-resource endpoints return `404` when the row doesn't exist
 
 ## Generating a client SDK

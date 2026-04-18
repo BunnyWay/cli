@@ -83,19 +83,30 @@
       "name": "@bunny.net/cli-windows-x64",
       "version": "0.2.7",
     },
+    "packages/database-adapter-libsql": {
+      "name": "@bunny.net/database-adapter-libsql",
+      "version": "0.0.0",
+      "dependencies": {
+        "@bunny.net/database-openapi": "workspace:*",
+        "@bunny.net/database-rest": "workspace:*",
+        "@libsql/client": "^0.17.0",
+      },
+    },
     "packages/database-openapi": {
       "name": "@bunny.net/database-openapi",
-      "version": "0.0.1",
+      "version": "0.0.0",
       "devDependencies": {
         "@seriousme/openapi-schema-validator": "^2.9.0",
       },
     },
     "packages/database-rest": {
       "name": "@bunny.net/database-rest",
-      "version": "0.0.1",
+      "version": "0.0.0",
       "dependencies": {
         "@bunny.net/database-openapi": "workspace:*",
-        "@libsql/client": "^0.17.0",
+      },
+      "devDependencies": {
+        "@bunny.net/database-adapter-libsql": "workspace:*",
       },
     },
     "packages/database-shell": {
@@ -223,6 +234,8 @@
     "@bunny.net/cli-linux-x64": ["@bunny.net/cli-linux-x64@workspace:packages/cli-linux-x64"],
 
     "@bunny.net/cli-windows-x64": ["@bunny.net/cli-windows-x64@workspace:packages/cli-windows-x64"],
+
+    "@bunny.net/database-adapter-libsql": ["@bunny.net/database-adapter-libsql@workspace:packages/database-adapter-libsql"],
 
     "@bunny.net/database-openapi": ["@bunny.net/database-openapi@workspace:packages/database-openapi"],
 

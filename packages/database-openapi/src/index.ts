@@ -6,5 +6,6 @@ export type {
   DatabaseSchema,
   ForeignKey,
   GenerateOptions,
+  IndexDefinition,
   TableDefinition,
 } from "./types.ts";

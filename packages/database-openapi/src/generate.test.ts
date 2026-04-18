@@ -14,6 +14,10 @@ const usersTable = {
   ],
   primaryKey: ["id"],
   foreignKeys: [],
+  indexes: [
+    { name: "idx_users_email", columns: ["email"], unique: true },
+  ],
+  uniqueColumns: ["email"],
 };
 
 const postsTable = {
@@ -29,6 +33,8 @@ const postsTable = {
   foreignKeys: [
     { column: "user_id", referencesTable: "users", referencesColumn: "id" },
   ],
+  indexes: [],
+  uniqueColumns: [],
 };
 
 const schema: DatabaseSchema = {
@@ -69,14 +75,15 @@ describe("generateOpenAPISpec", () => {
     expect(spec.info.version).toBe("1.0.0");
   });
 
-  test("generates collection and single-resource paths per table", () => {
+  test("generates collection, single-resource, and unique column paths", () => {
     const spec = generateOpenAPISpec(schema);
 
     expect(spec.paths["/users"]).toBeDefined();
     expect(spec.paths["/users/{id}"]).toBeDefined();
+    expect(spec.paths["/users/by-email/{email}"]).toBeDefined();
     expect(spec.paths["/posts"]).toBeDefined();
     expect(spec.paths["/posts/{id}"]).toBeDefined();
-    expect(Object.keys(spec.paths)).toHaveLength(4);
+    expect(Object.keys(spec.paths)).toHaveLength(5);
   });
 
   test("generates GET, POST, PATCH, DELETE for each table", () => {
@@ -203,6 +210,8 @@ describe("generateOpenAPISpec", () => {
           ],
           primaryKey: ["id"],
           foreignKeys: [],
+          indexes: [],
+          uniqueColumns: [],
         },
       },
       version: "1.0.0",
@@ -227,6 +236,8 @@ describe("generateOpenAPISpec", () => {
           ],
           primaryKey: ["id"],
           foreignKeys: [],
+          indexes: [],
+          uniqueColumns: [],
         },
       },
       version: "1.0.0",
@@ -328,6 +339,35 @@ describe("generateOpenAPISpec", () => {
     expect(userById.delete!.operationId).toBe("deleteUsersById");
   });
 
+  test("unique column paths have GET, PATCH, DELETE", () => {
+    const spec = generateOpenAPISpec(schema);
+    const byEmail = spec.paths["/users/by-email/{email}"]!;
+
+    expect(byEmail.get).toBeDefined();
+    expect(byEmail.patch).toBeDefined();
+    expect(byEmail.delete).toBeDefined();
+    expect(byEmail.post).toBeUndefined();
+  });
+
+  test("unique column path param uses correct type", () => {
+    const spec = generateOpenAPISpec(schema);
+    const get = spec.paths["/users/by-email/{email}"]!.get!;
+    const pathParam = get.parameters![0] as { name: string; in: string; schema: { type: string } };
+
+    expect(pathParam.name).toBe("email");
+    expect(pathParam.in).toBe("path");
+    expect(pathParam.schema.type).toBe("string");
+  });
+
+  test("unique column operationIds use column name", () => {
+    const spec = generateOpenAPISpec(schema);
+    const byEmail = spec.paths["/users/by-email/{email}"]!;
+
+    expect(byEmail.get!.operationId).toBe("getUsersByEmail");
+    expect(byEmail.patch!.operationId).toBe("updateUsersByEmail");
+    expect(byEmail.delete!.operationId).toBe("deleteUsersByEmail");
+  });
+
   test("skips single-resource path for tables without PK", () => {
     const noPkSchema: DatabaseSchema = {
       tables: {
@@ -339,6 +379,8 @@ describe("generateOpenAPISpec", () => {
           ],
           primaryKey: [],
           foreignKeys: [],
+          indexes: [],
+          uniqueColumns: [],
         },
       },
       version: "1.0.0",
@@ -361,6 +403,8 @@ describe("generateOpenAPISpec", () => {
           ],
           primaryKey: ["user_id", "role_id"],
           foreignKeys: [],
+          indexes: [],
+          uniqueColumns: [],
         },
       },
       version: "1.0.0",
@@ -474,6 +518,8 @@ describe("generateOpenAPISpec", () => {
           ],
           primaryKey: ["id"],
           foreignKeys: [],
+          indexes: [],
+          uniqueColumns: [],
         },
       },
       version: "1.0.0",
@@ -515,6 +561,8 @@ describe("generateOpenAPISpec", () => {
           ],
           primaryKey: ["id"],
           foreignKeys: [],
+          indexes: [],
+          uniqueColumns: [],
         },
       },
       version: "1.0.0",

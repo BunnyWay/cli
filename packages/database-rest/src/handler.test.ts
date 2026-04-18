@@ -2,14 +2,27 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createClient, type Client } from "@libsql/client";
 import type { DatabaseSchema } from "@bunny.net/database-openapi";
 import { createRestHandler } from "./handler.ts";
-import { introspect } from "./introspect.ts";
+import type { DatabaseExecutor } from "./executor.ts";
+
+// Minimal executor for testing - mirrors what an adapter would do
+const createTestExecutor = (client: Client): DatabaseExecutor => ({
+  execute: async (sql, args) => {
+    const result = await client.execute({ sql, args });
+    return {
+      columns: result.columns,
+      rows: result.rows as Record<string, unknown>[],
+    };
+  },
+});
 
 let client: Client;
+let executor: DatabaseExecutor;
 let schema: DatabaseSchema;
 let handler: (req: Request) => Promise<Response>;
 
 beforeAll(async () => {
   client = createClient({ url: ":memory:" });
+  executor = createTestExecutor(client);
 
   await client.executeMultiple(`
     CREATE TABLE users (
@@ -32,15 +45,47 @@ beforeAll(async () => {
     INSERT INTO posts (title, body, user_id) VALUES ('Second', NULL, 2);
   `);
 
-  schema = await introspect({ client });
-  handler = createRestHandler(client, schema);
+  // Inline schema for testing - no introspection dependency needed
+  schema = {
+    tables: {
+      users: {
+        name: "users",
+        columns: [
+          { name: "id", type: "INTEGER", nullable: false, primaryKey: true },
+          { name: "name", type: "TEXT", nullable: false, primaryKey: false },
+          { name: "email", type: "TEXT", nullable: false, primaryKey: false },
+          { name: "age", type: "INTEGER", nullable: true, primaryKey: false },
+        ],
+        primaryKey: ["id"],
+        foreignKeys: [],
+        indexes: [{ name: "idx_users_email", columns: ["email"], unique: true }],
+        uniqueColumns: ["email"],
+      },
+      posts: {
+        name: "posts",
+        columns: [
+          { name: "id", type: "INTEGER", nullable: false, primaryKey: true },
+          { name: "title", type: "TEXT", nullable: false, primaryKey: false },
+          { name: "body", type: "TEXT", nullable: true, primaryKey: false },
+          { name: "user_id", type: "INTEGER", nullable: false, primaryKey: false },
+        ],
+        primaryKey: ["id"],
+        foreignKeys: [{ column: "user_id", referencesTable: "users", referencesColumn: "id" }],
+        indexes: [],
+        uniqueColumns: [],
+      },
+    },
+    version: "1.0.0",
+  };
+
+  handler = createRestHandler(executor, schema);
 });
 
 afterAll(() => {
   client.close();
 });
 
-function req(method: string, path: string, body?: unknown): Request {
+const req = (method: string, path: string, body?: unknown): Request => {
   const url = `http://localhost${path}`;
   const init: RequestInit = { method };
   if (body !== undefined) {
@@ -48,12 +93,10 @@ function req(method: string, path: string, body?: unknown): Request {
     init.body = JSON.stringify(body);
   }
   return new Request(url, init);
-}
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function jsonBody(res: Response): Promise<any> {
-  return res.json();
-}
+const jsonBody = async (res: Response): Promise<any> => res.json();
 
 describe("GET / (OpenAPI spec)", () => {
   test("returns OpenAPI spec", async () => {
@@ -206,7 +249,6 @@ describe("PATCH /:table", () => {
 
 describe("DELETE /:table", () => {
   test("deletes matching rows", async () => {
-    // Insert a row to delete
     await handler(
       req("POST", "/users", { name: "ToDelete", email: "del@example.com" }),
     );
@@ -218,7 +260,6 @@ describe("DELETE /:table", () => {
     expect(body.data).toHaveLength(1);
     expect(body.data[0].name).toBe("ToDelete");
 
-    // Verify it's gone
     const check = await handler(req("GET", "/users?name=eq.ToDelete"));
     const checkBody = await jsonBody(check);
     expect(checkBody.data).toHaveLength(0);
@@ -233,9 +274,79 @@ describe("DELETE /:table", () => {
   });
 });
 
+describe("GET /:table/by-:column/:value", () => {
+  test("returns a single row by unique column", async () => {
+    const res = await handler(req("GET", "/users/by-email/alice@example.com"));
+    expect(res.status).toBe(200);
+
+    const body = await jsonBody(res);
+    expect(body.data.name).toBe("Alice");
+    expect(Array.isArray(body.data)).toBe(false);
+  });
+
+  test("supports select on unique column lookup", async () => {
+    const res = await handler(req("GET", "/users/by-email/alice@example.com?select=id,name"));
+    const body = await jsonBody(res);
+
+    expect(Object.keys(body.data)).toEqual(["id", "name"]);
+  });
+
+  test("returns 404 for non-existent value", async () => {
+    const res = await handler(req("GET", "/users/by-email/nobody@example.com"));
+    expect(res.status).toBe(404);
+  });
+
+  test("returns 404 for non-unique column", async () => {
+    const res = await handler(req("GET", "/users/by-name/Alice"));
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("PATCH /:table/by-:column/:value", () => {
+  test("updates a single row by unique column", async () => {
+    const res = await handler(
+      req("PATCH", "/users/by-email/bob@example.com", { age: 27 }),
+    );
+    expect(res.status).toBe(200);
+
+    const body = await jsonBody(res);
+    expect(body.data.age).toBe(27);
+    expect(body.data.name).toBe("Bob");
+  });
+
+  test("returns 404 for non-existent value", async () => {
+    const res = await handler(
+      req("PATCH", "/users/by-email/nobody@example.com", { age: 99 }),
+    );
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("DELETE /:table/by-:column/:value", () => {
+  test("deletes a single row by unique column", async () => {
+    await handler(
+      req("POST", "/users", { name: "UniqueDelete", email: "unique-del@example.com" }),
+    );
+
+    const res = await handler(req("DELETE", "/users/by-email/unique-del@example.com"));
+    expect(res.status).toBe(200);
+
+    const body = await jsonBody(res);
+    expect(body.data.name).toBe("UniqueDelete");
+
+    const check = await handler(req("GET", "/users/by-email/unique-del@example.com"));
+    expect(check.status).toBe(404);
+  });
+
+  test("returns 404 for non-existent value", async () => {
+    const res = await handler(req("DELETE", "/users/by-email/nobody@example.com"));
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("basePath option", () => {
   test("strips base path before routing", async () => {
-    const apiHandler = createRestHandler(client, schema, { basePath: "/api" });
+    const apiHandler = createRestHandler(executor, schema, { basePath: "/api" });
 
     const specRes = await apiHandler(req("GET", "/api/"));
     expect(specRes.status).toBe(200);
@@ -249,7 +360,7 @@ describe("basePath option", () => {
   });
 
   test("returns 404 for paths without base", async () => {
-    const apiHandler = createRestHandler(client, schema, { basePath: "/api" });
+    const apiHandler = createRestHandler(executor, schema, { basePath: "/api" });
 
     const res = await apiHandler(req("GET", "/users"));
     expect(res.status).toBe(404);
@@ -263,7 +374,6 @@ describe("GET /:table/:id", () => {
 
     const body = await jsonBody(res);
     expect(body.data.name).toBe("Alice");
-    // Single object, not array
     expect(Array.isArray(body.data)).toBe(false);
   });
 
@@ -316,12 +426,10 @@ describe("PATCH /:table/:id", () => {
 
 describe("DELETE /:table/:id", () => {
   test("deletes a single row by PK", async () => {
-    // Insert a row to delete
     await handler(
       req("POST", "/users", { name: "Temp", email: "temp@example.com" }),
     );
 
-    // Find the row
     const findRes = await handler(req("GET", "/users?name=eq.Temp"));
     const findBody = await jsonBody(findRes);
     const id = findBody.data[0].id;
@@ -333,7 +441,6 @@ describe("DELETE /:table/:id", () => {
     expect(body.data.name).toBe("Temp");
     expect(Array.isArray(body.data)).toBe(false);
 
-    // Verify it's gone
     const check = await handler(req("GET", `/users/${id}`));
     expect(check.status).toBe(404);
   });

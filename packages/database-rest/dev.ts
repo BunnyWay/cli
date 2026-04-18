@@ -1,5 +1,6 @@
 import { createClient } from "@libsql/client";
-import { introspect, createRestHandler } from "./src/index.ts";
+import { createLibSQLExecutor, introspect } from "@bunny.net/database-adapter-libsql";
+import { createRestHandler } from "./src/index.ts";
 
 const client = createClient({ url: ":memory:" });
 
@@ -29,7 +30,8 @@ await client.executeMultiple(`
 `);
 
 const schema = await introspect({ client });
-const handler = createRestHandler(client, schema);
+const executor = createLibSQLExecutor(client);
+const handler = createRestHandler(executor, schema);
 
 const port = Number(process.env.PORT) || 8080;
 const server = Bun.serve({ port, fetch: handler });

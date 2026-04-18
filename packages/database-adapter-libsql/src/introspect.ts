@@ -4,10 +4,11 @@ import type {
   ColumnType,
   DatabaseSchema,
   ForeignKey,
+  IndexDefinition,
   TableDefinition,
 } from "@bunny.net/database-openapi";
 
-function mapColumnType(sqliteType: string): ColumnType {
+const mapColumnType = (sqliteType: string): ColumnType => {
   const upper = sqliteType.toUpperCase();
 
   if (upper.includes("INT")) return "INTEGER";
@@ -20,9 +21,9 @@ function mapColumnType(sqliteType: string): ColumnType {
   if (upper.includes("DATE") || upper.includes("TIME")) return "DATETIME";
 
   return "TEXT";
-}
+};
 
-async function getTables(client: Client): Promise<string[]> {
+const getTables = async (client: Client): Promise<string[]> => {
   const result = await client.execute(`
     SELECT name FROM sqlite_master
     WHERE type='table'
@@ -33,12 +34,12 @@ async function getTables(client: Client): Promise<string[]> {
   `);
 
   return result.rows.map((row) => row.name as string);
-}
+};
 
-async function getColumns(
+const getColumns = async (
   client: Client,
   tableName: string,
-): Promise<ColumnDefinition[]> {
+): Promise<ColumnDefinition[]> => {
   const result = await client.execute(`PRAGMA table_info("${tableName.replace(/"/g, '""')}")`);
 
   return result.rows.map((row) => ({
@@ -48,12 +49,12 @@ async function getColumns(
     primaryKey: row.pk === 1,
     defaultValue: row.dflt_value as string | number | null,
   }));
-}
+};
 
-async function getForeignKeys(
+const getForeignKeys = async (
   client: Client,
   tableName: string,
-): Promise<ForeignKey[]> {
+): Promise<ForeignKey[]> => {
   const result = await client.execute(
     `PRAGMA foreign_key_list("${tableName.replace(/"/g, '""')}")`,
   );
@@ -63,23 +64,52 @@ async function getForeignKeys(
     referencesTable: row.table as string,
     referencesColumn: row.to as string,
   }));
-}
+};
 
-async function introspectTable(
+const getIndexes = async (
   client: Client,
   tableName: string,
-): Promise<TableDefinition> {
+): Promise<IndexDefinition[]> => {
+  const quotedTable = `"${tableName.replace(/"/g, '""')}"`;
+  const indexList = await client.execute(`PRAGMA index_list(${quotedTable})`);
+  const indexes: IndexDefinition[] = [];
+
+  for (const row of indexList.rows) {
+    const indexName = row.name as string;
+    const unique = row.unique === 1;
+    const indexInfo = await client.execute(`PRAGMA index_info("${indexName.replace(/"/g, '""')}")`);
+    const columns = indexInfo.rows.map((r) => r.name as string);
+
+    indexes.push({ name: indexName, columns, unique });
+  }
+
+  return indexes;
+};
+
+const introspectTable = async (
+  client: Client,
+  tableName: string,
+): Promise<TableDefinition> => {
   const columns = await getColumns(client, tableName);
   const foreignKeys = await getForeignKeys(client, tableName);
+  const indexes = await getIndexes(client, tableName);
   const primaryKey = columns.filter((c) => c.primaryKey).map((c) => c.name);
+
+  // Unique columns: single-column unique indexes, excluding the PK
+  const pkSet = new Set(primaryKey);
+  const uniqueColumns = indexes
+    .filter((idx) => idx.unique && idx.columns.length === 1 && !pkSet.has(idx.columns[0]!))
+    .map((idx) => idx.columns[0]!);
 
   return {
     name: tableName,
     columns,
     primaryKey,
     foreignKeys,
+    indexes,
+    uniqueColumns,
   };
-}
+};
 
 export interface IntrospectOptions {
   client: Client;

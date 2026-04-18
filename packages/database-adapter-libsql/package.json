@@ -1,5 +1,5 @@
 {
-  "name": "@bunny.net/database-rest",
+  "name": "@bunny.net/database-adapter-libsql",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,14 +8,12 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "dev": "bun run dev.ts",
     "test": "bun test",
     "typecheck": "bun run tsc --noEmit"
   },
   "dependencies": {
-    "@bunny.net/database-openapi": "workspace:*"
-  },
-  "devDependencies": {
-    "@bunny.net/database-adapter-libsql": "workspace:*"
+    "@bunny.net/database-openapi": "workspace:*",
+    "@bunny.net/database-rest": "workspace:*",
+    "@libsql/client": "^0.17.0"
   }
 }

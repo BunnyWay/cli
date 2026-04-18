@@ -20,11 +20,19 @@ export interface ForeignKey {
   referencesColumn: string;
 }
 
+export interface IndexDefinition {
+  name: string;
+  columns: string[];
+  unique: boolean;
+}
+
 export interface TableDefinition {
   name: string;
   columns: ColumnDefinition[];
   primaryKey: string[];
   foreignKeys: ForeignKey[];
+  indexes: IndexDefinition[];
+  uniqueColumns: string[];
 }
 
 export interface DatabaseSchema {

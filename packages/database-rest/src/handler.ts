@@ -1,6 +1,6 @@
-import type { Client } from "@libsql/client";
 import type { DatabaseSchema, GenerateOptions } from "@bunny.net/database-openapi";
 import { generateOpenAPISpec } from "@bunny.net/database-openapi";
+import type { DatabaseExecutor } from "./executor.ts";
 import { parseQueryParams } from "./parser.ts";
 import {
   buildCountQuery,
@@ -17,62 +17,100 @@ export interface RestHandlerOptions {
   openapi?: GenerateOptions;
 }
 
-function json(data: unknown, status = 200, headers?: Record<string, string>) {
-  return new Response(JSON.stringify(data), {
+const json = (data: unknown, status = 200, headers?: Record<string, string>) =>
+  new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json", ...headers },
   });
-}
 
-function errorResponse(message: string, status: number, code?: string) {
-  return json({ message, ...(code ? { code } : {}) }, status);
-}
+const errorResponse = (message: string, status: number, code?: string) =>
+  json({ message, ...(code ? { code } : {}) }, status);
 
-interface ParsedRoute {
+interface CollectionRoute {
+  kind: "collection";
   table: string;
-  pkValue?: string;
 }
 
-function parseRoute(pathname: string, tableNames: Set<string>): ParsedRoute | null {
+interface SingleResourceRoute {
+  kind: "single";
+  table: string;
+  column: string;
+  value: string;
+}
+
+type ParsedRoute = CollectionRoute | SingleResourceRoute;
+
+const parseRoute = (pathname: string, tableNames: Set<string>): ParsedRoute | null => {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) return null;
 
   const table = segments[0]!;
   if (!tableNames.has(table)) return null;
 
+  // /{table}
   if (segments.length === 1) {
-    return { table };
+    return { kind: "collection", table };
   }
 
+  // /{table}/by-{column}/{value}
+  if (segments.length === 3 && segments[1]!.startsWith("by-")) {
+    const column = segments[1]!.slice(3);
+    return { kind: "single", table, column, value: decodeURIComponent(segments[2]!) };
+  }
+
+  // /{table}/{pkValue}
   if (segments.length === 2) {
-    return { table, pkValue: decodeURIComponent(segments[1]!) };
+    return { kind: "single", table, column: "__pk__", value: decodeURIComponent(segments[1]!) };
   }
 
   return null;
-}
+};
 
-export function createRestHandler(
-  client: Client,
+const parsePathValue = (raw: string): string | number => {
+  const num = Number(raw);
+  if (!isNaN(num) && raw.trim() !== "") {
+    return num;
+  }
+  return raw;
+};
+
+export const createRestHandler = (
+  executor: DatabaseExecutor,
   schema: DatabaseSchema,
   options: RestHandlerOptions = {},
-) {
+) => {
   const { basePath = "" } = options;
   const spec = generateOpenAPISpec(schema, options.openapi);
   const tableNames = new Set(Object.keys(schema.tables));
 
-  // Build a map of table -> single PK column name (only for single-column PKs)
+  // Build lookup maps for single-resource routing
   const tablePkColumn = new Map<string, string>();
+  const tableUniqueColumns = new Map<string, Set<string>>();
+
   for (const [name, table] of Object.entries(schema.tables)) {
     if (table.primaryKey.length === 1) {
       tablePkColumn.set(name, table.primaryKey[0]!);
     }
+    if (table.uniqueColumns.length > 0) {
+      tableUniqueColumns.set(name, new Set(table.uniqueColumns));
+    }
   }
+
+  const resolveSingleColumn = (route: SingleResourceRoute): string | null => {
+    if (route.column === "__pk__") {
+      return tablePkColumn.get(route.table) ?? null;
+    }
+    const unique = tableUniqueColumns.get(route.table);
+    if (unique?.has(route.column)) {
+      return route.column;
+    }
+    return null;
+  };
 
   return async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
     let pathname = url.pathname;
 
-    // Strip base path - reject requests that don't match
     if (basePath) {
       if (!pathname.startsWith(basePath)) {
         return errorResponse("Not found", 404, "NOT_FOUND");
@@ -80,7 +118,6 @@ export function createRestHandler(
       pathname = pathname.slice(basePath.length) || "/";
     }
 
-    // GET / - serve OpenAPI spec
     if (pathname === "/" && req.method === "GET") {
       return json(spec);
     }
@@ -92,35 +129,33 @@ export function createRestHandler(
     }
 
     try {
-      // Single-resource routes: /{table}/{pkValue}
-      if (route.pkValue !== undefined) {
-        const pkColumn = tablePkColumn.get(route.table);
-        if (!pkColumn) {
-          return errorResponse("Table does not have a single-column primary key", 400, "BAD_REQUEST");
+      if (route.kind === "single") {
+        const column = resolveSingleColumn(route);
+        if (!column) {
+          return errorResponse("Not found", 404, "NOT_FOUND");
         }
 
         switch (req.method) {
           case "GET":
-            return await handleGetOne(client, route.table, pkColumn, route.pkValue, url);
+            return await handleGetOne(executor, route.table, column, route.value, url);
           case "PATCH":
-            return await handlePatchOne(client, route.table, pkColumn, route.pkValue, req);
+            return await handlePatchOne(executor, route.table, column, route.value, req);
           case "DELETE":
-            return await handleDeleteOne(client, route.table, pkColumn, route.pkValue);
+            return await handleDeleteOne(executor, route.table, column, route.value);
           default:
             return errorResponse("Method not allowed", 405, "METHOD_NOT_ALLOWED");
         }
       }
 
-      // Collection routes: /{table}
       switch (req.method) {
         case "GET":
-          return await handleGet(client, route.table, url);
+          return await handleGet(executor, route.table, url);
         case "POST":
-          return await handlePost(client, route.table, req);
+          return await handlePost(executor, route.table, req);
         case "PATCH":
-          return await handlePatch(client, route.table, url, req);
+          return await handlePatch(executor, route.table, url, req);
         case "DELETE":
-          return await handleDelete(client, route.table, url);
+          return await handleDelete(executor, route.table, url);
         default:
           return errorResponse("Method not allowed", 405, "METHOD_NOT_ALLOWED");
       }
@@ -129,20 +164,22 @@ export function createRestHandler(
       return errorResponse(message, 500, "INTERNAL_ERROR");
     }
   };
-}
+};
 
-async function handleGet(
-  client: Client,
+// Collection handlers
+
+const handleGet = async (
+  executor: DatabaseExecutor,
   table: string,
   url: URL,
-): Promise<Response> {
+): Promise<Response> => {
   const query = parseQueryParams(url);
   const selectQuery = buildSelectQuery(table, query);
   const countQuery = buildCountQuery(table, query);
 
   const [dataResult, countResult] = await Promise.all([
-    client.execute({ sql: selectQuery.sql, args: selectQuery.args }),
-    client.execute({ sql: countQuery.sql, args: countQuery.args }),
+    executor.execute(selectQuery.sql, selectQuery.args),
+    executor.execute(countQuery.sql, countQuery.args),
   ]);
 
   const totalCount = Number(countResult.rows[0]?.count ?? 0);
@@ -155,13 +192,13 @@ async function handleGet(
       "Content-Range": `items ${query.offset ?? 0}-${(query.offset ?? 0) + dataResult.rows.length - 1}/${totalCount}`,
     },
   );
-}
+};
 
-async function handlePost(
-  client: Client,
+const handlePost = async (
+  executor: DatabaseExecutor,
   table: string,
   req: Request,
-): Promise<Response> {
+): Promise<Response> => {
   const body = await req.json();
 
   if (body === null || typeof body !== "object") {
@@ -180,22 +217,19 @@ async function handlePost(
       return errorResponse("Each row must be a JSON object", 400, "BAD_REQUEST");
     }
     const insertQuery = buildInsertQuery(table, row as Record<string, unknown>);
-    const result = await client.execute({
-      sql: insertQuery.sql,
-      args: insertQuery.args,
-    });
+    const result = await executor.execute(insertQuery.sql, insertQuery.args);
     results.push(...result.rows);
   }
 
   return json({ data: results }, 201);
-}
+};
 
-async function handlePatch(
-  client: Client,
+const handlePatch = async (
+  executor: DatabaseExecutor,
   table: string,
   url: URL,
   req: Request,
-): Promise<Response> {
+): Promise<Response> => {
   const query = parseQueryParams(url);
   const body = await req.json();
 
@@ -216,19 +250,16 @@ async function handlePatch(
     body as Record<string, unknown>,
     query.filters,
   );
-  const result = await client.execute({
-    sql: updateQuery.sql,
-    args: updateQuery.args,
-  });
+  const result = await executor.execute(updateQuery.sql, updateQuery.args);
 
   return json({ data: result.rows });
-}
+};
 
-async function handleDelete(
-  client: Client,
+const handleDelete = async (
+  executor: DatabaseExecutor,
   table: string,
   url: URL,
-): Promise<Response> {
+): Promise<Response> => {
   const query = parseQueryParams(url);
 
   if (query.filters.length === 0) {
@@ -236,23 +267,20 @@ async function handleDelete(
   }
 
   const deleteQuery = buildDeleteQuery(table, query.filters);
-  const result = await client.execute({
-    sql: deleteQuery.sql,
-    args: deleteQuery.args,
-  });
+  const result = await executor.execute(deleteQuery.sql, deleteQuery.args);
 
   return json({ data: result.rows });
-}
+};
 
 // Single-resource handlers
 
-async function handleGetOne(
-  client: Client,
+const handleGetOne = async (
+  executor: DatabaseExecutor,
   table: string,
   pkColumn: string,
   pkValue: string,
   url: URL,
-): Promise<Response> {
+): Promise<Response> => {
   const query = parseQueryParams(url);
   const selectQuery = buildSelectQuery(table, {
     select: query.select,
@@ -261,25 +289,22 @@ async function handleGetOne(
     limit: 1,
   });
 
-  const result = await client.execute({
-    sql: selectQuery.sql,
-    args: selectQuery.args,
-  });
+  const result = await executor.execute(selectQuery.sql, selectQuery.args);
 
   if (result.rows.length === 0) {
     return errorResponse("Row not found", 404, "NOT_FOUND");
   }
 
   return json({ data: result.rows[0] });
-}
+};
 
-async function handlePatchOne(
-  client: Client,
+const handlePatchOne = async (
+  executor: DatabaseExecutor,
   table: string,
   pkColumn: string,
   pkValue: string,
   req: Request,
-): Promise<Response> {
+): Promise<Response> => {
   const body = await req.json();
 
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
@@ -295,43 +320,29 @@ async function handlePatchOne(
     body as Record<string, unknown>,
     [{ column: pkColumn, operator: "eq", value: parsePathValue(pkValue) }],
   );
-  const result = await client.execute({
-    sql: updateQuery.sql,
-    args: updateQuery.args,
-  });
+  const result = await executor.execute(updateQuery.sql, updateQuery.args);
 
   if (result.rows.length === 0) {
     return errorResponse("Row not found", 404, "NOT_FOUND");
   }
 
   return json({ data: result.rows[0] });
-}
+};
 
-async function handleDeleteOne(
-  client: Client,
+const handleDeleteOne = async (
+  executor: DatabaseExecutor,
   table: string,
   pkColumn: string,
   pkValue: string,
-): Promise<Response> {
+): Promise<Response> => {
   const deleteQuery = buildDeleteQuery(table, [
     { column: pkColumn, operator: "eq", value: parsePathValue(pkValue) },
   ]);
-  const result = await client.execute({
-    sql: deleteQuery.sql,
-    args: deleteQuery.args,
-  });
+  const result = await executor.execute(deleteQuery.sql, deleteQuery.args);
 
   if (result.rows.length === 0) {
     return errorResponse("Row not found", 404, "NOT_FOUND");
   }
 
   return json({ data: result.rows[0] });
-}
-
-function parsePathValue(raw: string): string | number {
-  const num = Number(raw);
-  if (!isNaN(num) && raw.trim() !== "") {
-    return num;
-  }
-  return raw;
-}
+};

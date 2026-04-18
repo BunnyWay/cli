@@ -1,7 +1,6 @@
-export { introspect } from "./introspect.ts";
-export type { IntrospectOptions } from "./introspect.ts";
 export { createRestHandler } from "./handler.ts";
 export type { RestHandlerOptions } from "./handler.ts";
+export type { DatabaseExecutor, ExecuteResult } from "./executor.ts";
 export {
   parseQueryParams,
   parseTableFromPath,
