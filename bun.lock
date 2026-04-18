@@ -152,6 +152,8 @@
       "name": "@bunny.net/database-studio",
       "version": "0.0.5",
       "dependencies": {
+        "@bunny.net/database-adapter-libsql": "workspace:*",
+        "@bunny.net/database-rest": "workspace:*",
         "@libsql/client": "^0.17.0",
       },
       "devDependencies": {

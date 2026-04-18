@@ -41,7 +41,7 @@ interface SingleResourceRoute {
 type ParsedRoute = CollectionRoute | SingleResourceRoute;
 
 const parseRoute = (pathname: string, tableNames: Set<string>): ParsedRoute | null => {
-  const segments = pathname.split("/").filter(Boolean);
+  const segments = pathname.split("/").filter(Boolean).map(decodeURIComponent);
   if (segments.length === 0) return null;
 
   const table = segments[0]!;
@@ -55,12 +55,12 @@ const parseRoute = (pathname: string, tableNames: Set<string>): ParsedRoute | nu
   // /{table}/by-{column}/{value}
   if (segments.length === 3 && segments[1]!.startsWith("by-")) {
     const column = segments[1]!.slice(3);
-    return { kind: "single", table, column, value: decodeURIComponent(segments[2]!) };
+    return { kind: "single", table, column, value: segments[2]! };
   }
 
   // /{table}/{pkValue}
   if (segments.length === 2) {
-    return { kind: "single", table, column: "__pk__", value: decodeURIComponent(segments[1]!) };
+    return { kind: "single", table, column: "__pk__", value: segments[1]! };
   }
 
   return null;

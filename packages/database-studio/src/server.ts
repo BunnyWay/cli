@@ -1,5 +1,7 @@
 import { join } from "node:path";
 import type { Client } from "@libsql/client";
+import { createLibSQLExecutor, introspect } from "@bunny.net/database-adapter-libsql";
+import { createRestHandler } from "@bunny.net/database-rest";
 import { assets } from "./client-manifest.ts";
 
 export interface StudioOptions {
@@ -13,301 +15,90 @@ export interface StudioOptions {
   };
 }
 
-interface TableInfo {
-  name: string;
-  type: string;
-}
-
-interface ColumnInfo {
-  cid: number;
-  name: string;
-  type: string;
-  notnull: number;
-  dflt_value: string | null;
-  pk: number;
-}
-
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-  });
-}
-
-/** Safely quote a SQL identifier (table/column name). SQLite supports any identifier when wrapped in double quotes; internal `"` are escaped by doubling. */
-function quoteIdentifier(name: string): string {
-  return `"${name.replace(/"/g, '""')}"`;
-}
-
-const VALID_OPERATORS = new Set([
-  "=", "!=", ">", "<", ">=", "<=", "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL",
-]);
-
-interface Filter {
-  column: string;
-  operator: string;
-  value: string;
-}
-
-function parseFilters(url: URL): Filter[] {
-  const raw = url.searchParams.get("filters");
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (f: any) =>
-        typeof f.column === "string" &&
-        typeof f.operator === "string" &&
-        f.column.length > 0 &&
-        VALID_OPERATORS.has(f.operator),
-    );
-  } catch {
-    return [];
+const addCors = (res: Response): Response => {
+  for (const [key, value] of Object.entries(CORS_HEADERS)) {
+    res.headers.set(key, value);
   }
-}
-
-function buildWhereClause(filters: Filter[], mode: "and" | "or" = "and"): { sql: string; args: (string | null)[] } {
-  if (filters.length === 0) return { sql: "", args: [] };
-  const conditions: string[] = [];
-  const args: (string | null)[] = [];
-  for (const f of filters) {
-    const col = quoteIdentifier(f.column);
-    if (f.operator === "IS NULL") {
-      conditions.push(`${col} IS NULL`);
-    } else if (f.operator === "IS NOT NULL") {
-      conditions.push(`${col} IS NOT NULL`);
-    } else {
-      conditions.push(`${col} ${f.operator} ?`);
-      args.push(f.value);
-    }
-  }
-  const conjunction = mode === "or" ? " OR " : " AND ";
-  return { sql: ` WHERE ${conditions.join(conjunction)}`, args };
-}
-
-function createApiHandler(client: Client) {
-  return async (req: Request, pathname: string): Promise<Response | null> => {
-    // GET /api/tables
-    if (pathname === "/api/tables") {
-      const result = await client.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_litestream_%' AND name NOT LIKE 'libsql_%' ORDER BY name",
-      );
-      const tables = [];
-      for (const row of result.rows) {
-        const name = row.name as string;
-        try {
-          const countResult = await client.execute(`SELECT COUNT(*) as count FROM ${quoteIdentifier(name)}`);
-          tables.push({
-            name,
-            rowCount: Number(countResult.rows[0]?.count ?? 0),
-          });
-        } catch (err: any) {
-          // A single broken table (e.g. corrupt index, missing attached db)
-          // shouldn't prevent the sidebar from listing the rest.
-          tables.push({
-            name,
-            rowCount: null,
-            error: err?.message ?? String(err),
-          });
-        }
-      }
-      return json(tables);
-    }
-
-    // GET /api/tables/:name/schema
-    const schemaMatch = pathname.match(/^\/api\/tables\/([^/]+)\/schema$/);
-    if (schemaMatch) {
-      const tableName = decodeURIComponent(schemaMatch[1]!);
-      const quotedTable = quoteIdentifier(tableName);
-
-      const result = await client.execute(`PRAGMA table_info(${quotedTable})`);
-      const columns = result.rows.map((row) => ({
-        cid: row.cid,
-        name: row.name,
-        type: row.type,
-        notnull: row.notnull,
-        defaultValue: row.dflt_value,
-        primaryKey: row.pk,
-      }));
-
-      const fkResult = await client.execute(`PRAGMA foreign_key_list(${quotedTable})`);
-      const foreignKeys = fkResult.rows.map((row) => ({
-        from: row.from,
-        table: row.table,
-        to: row.to,
-      }));
-
-      const indexResult = await client.execute(`PRAGMA index_list(${quotedTable})`);
-      const indexes = indexResult.rows.map((row) => ({
-        name: row.name,
-        unique: row.unique,
-      }));
-
-      return json({ columns, foreignKeys, indexes });
-    }
-
-    // GET /api/tables/:name/rows?page=1&limit=50&sort=col&order=asc
-    const rowsMatch = pathname.match(/^\/api\/tables\/([^/]+)\/rows$/);
-    if (rowsMatch) {
-      const tableName = decodeURIComponent(rowsMatch[1]!);
-      const quotedTable = quoteIdentifier(tableName);
-
-      const url = new URL(req.url);
-      const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
-      const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? 50)));
-      const offset = (page - 1) * limit;
-
-      const filters = parseFilters(url);
-      const filterMode = url.searchParams.get("filterMode") === "or" ? "or" as const : "and" as const;
-      const where = buildWhereClause(filters, filterMode);
-
-      const sortCol = url.searchParams.get("sort");
-      const sortOrder = url.searchParams.get("order")?.toUpperCase() === "DESC" ? "DESC" : "ASC";
-      const orderBy = sortCol ? ` ORDER BY ${quoteIdentifier(sortCol)} ${sortOrder}` : "";
-
-      const [dataResult, countResult] = await Promise.all([
-        client.execute({
-          sql: `SELECT * FROM ${quotedTable}${where.sql}${orderBy} LIMIT ${limit} OFFSET ${offset}`,
-          args: where.args,
-        }),
-        client.execute({
-          sql: `SELECT COUNT(*) as count FROM ${quotedTable}${where.sql}`,
-          args: where.args,
-        }),
-      ]);
-
-      const totalRows = Number(countResult.rows[0]?.count ?? 0);
-      const columns = dataResult.columns;
-      const rows = dataResult.rows;
-
-      return json({
-        columns,
-        rows,
-        pagination: {
-          page,
-          limit,
-          totalRows,
-          totalPages: Math.ceil(totalRows / limit),
-        },
-      });
-    }
-
-    // GET /api/tables/:name/lookup?column=col&value=val
-    const lookupMatch = pathname.match(/^\/api\/tables\/([^/]+)\/lookup$/);
-    if (lookupMatch) {
-      const tableName = decodeURIComponent(lookupMatch[1]!);
-      const quotedTable = quoteIdentifier(tableName);
-
-      const url = new URL(req.url);
-      const column = url.searchParams.get("column");
-      const value = url.searchParams.get("value");
-      if (!column) return json({ error: "Missing column parameter" }, 400);
-
-      const result = await client.execute({
-        sql: `SELECT * FROM ${quotedTable} WHERE ${quoteIdentifier(column)} = ? LIMIT 1`,
-        args: [value ?? null],
-      });
-
-      if (result.rows.length === 0) {
-        return json({ error: "Row not found" }, 404);
-      }
-
-      // Also fetch schema for column types
-      const schemaResult = await client.execute(`PRAGMA table_info(${quotedTable})`);
-      const columns = schemaResult.columns;
-      const schemaColumns = schemaResult.rows.map((row) => ({
-        name: row.name,
-        type: row.type,
-      }));
-
-      const fkResult = await client.execute(`PRAGMA foreign_key_list(${quotedTable})`);
-      const foreignKeys = fkResult.rows.map((row) => ({
-        from: row.from,
-        table: row.table,
-        to: row.to,
-      }));
-
-      return json({
-        row: result.rows[0],
-        columns: result.columns,
-        schema: schemaColumns,
-        foreignKeys,
-      });
-    }
-
-    return null;
-  };
-}
+  return res;
+};
 
 export async function startStudio(options: StudioOptions): Promise<void> {
   const { client, port = 4488, open = true, dev = false, logger = console } = options;
 
   const clientDir = join(import.meta.dir, "..", "client");
   const distDir = join(import.meta.dir, "..", "dist", "client");
-  const handleApi = createApiHandler(client);
+
+  const schema = await introspect({ client });
+  const executor = createLibSQLExecutor({ client });
+  const handleRest = createRestHandler(executor, schema, { basePath: "/api" });
 
   let server: ReturnType<typeof Bun.serve>;
   try {
     server = Bun.serve({
-    port,
-    async fetch(req) {
-      const url = new URL(req.url);
-      const pathname = url.pathname;
+      port,
+      async fetch(req) {
+        const url = new URL(req.url);
+        const pathname = url.pathname;
 
-      // CORS preflight
-      if (req.method === "OPTIONS") {
-        return new Response(null, { headers: CORS_HEADERS });
-      }
-
-      // API routes
-      if (pathname.startsWith("/api/")) {
-        try {
-          const response = await handleApi(req, pathname);
-          if (response) return response;
-        } catch (err: any) {
-          return json({ error: err.message }, 500);
-        }
-      }
-
-      if (!dev) {
-        const lookup = pathname === "/" ? "/index.html" : pathname;
-
-        // Try embedded manifest first (works in compiled binary)
-        const assetPath = assets[lookup];
-        if (assetPath) return new Response(Bun.file(assetPath));
-
-        // Fall back to filesystem (works in source mode without manifest)
-        try {
-          const filePath = join(distDir, lookup);
-          const file = Bun.file(filePath);
-          if (await file.exists()) return new Response(file);
-        } catch {
-          // fall through
+        // CORS preflight
+        if (req.method === "OPTIONS") {
+          return new Response(null, { headers: CORS_HEADERS });
         }
 
-        // SPA fallback — serve index.html
-        const indexAsset = assets["/index.html"];
-        if (indexAsset) return new Response(Bun.file(indexAsset));
-        try {
-          const indexFile = Bun.file(join(distDir, "index.html"));
-          if (await indexFile.exists()) return new Response(indexFile);
-        } catch {
-          // fall through
+        // API routes - delegate to REST handler
+        if (pathname.startsWith("/api")) {
+          try {
+            return addCors(await handleRest(req));
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            return addCors(
+              new Response(JSON.stringify({ message }), {
+                status: 500,
+                headers: { "Content-Type": "application/json" },
+              }),
+            );
+          }
         }
-      }
 
-      return new Response("Not Found", { status: 404 });
-    },
-  });
-  } catch (err: any) {
-    if (err?.code === "EADDRINUSE") {
+        if (!dev) {
+          const lookup = pathname === "/" ? "/index.html" : pathname;
+
+          // Try embedded manifest first (works in compiled binary)
+          const assetPath = assets[lookup];
+          if (assetPath) return new Response(Bun.file(assetPath));
+
+          // Fall back to filesystem (works in source mode without manifest)
+          try {
+            const filePath = join(distDir, lookup);
+            const file = Bun.file(filePath);
+            if (await file.exists()) return new Response(file);
+          } catch {
+            // fall through
+          }
+
+          // SPA fallback - serve index.html
+          const indexAsset = assets["/index.html"];
+          if (indexAsset) return new Response(Bun.file(indexAsset));
+          try {
+            const indexFile = Bun.file(join(distDir, "index.html"));
+            if (await indexFile.exists()) return new Response(indexFile);
+          } catch {
+            // fall through
+          }
+        }
+
+        return new Response("Not Found", { status: 404 });
+      },
+    });
+  } catch (err: unknown) {
+    const code = (err as { code?: string })?.code;
+    if (code === "EADDRINUSE") {
       throw new Error(
         `Port ${port} is already in use. Try a different port with --port <number>.`,
       );
@@ -315,7 +106,7 @@ export async function startStudio(options: StudioOptions): Promise<void> {
     throw err;
   }
 
-  // In dev mode, spawn Vite dev server — it proxies /api back to this server
+  // In dev mode, spawn Vite dev server - it proxies /api back to this server
   let viteProc: ReturnType<typeof Bun.spawn> | undefined;
   let browserUrl: string;
 

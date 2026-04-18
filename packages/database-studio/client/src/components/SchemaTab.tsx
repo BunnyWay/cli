@@ -67,15 +67,15 @@ export function SchemaTab({ schema, onSelectTable }: { schema: TableSchema | nul
             <TableBody>
               {schema.foreignKeys.map((fk, i) => (
                 <TableRow key={i}>
-                  <TableCell className="font-mono text-xs">{fk.from as string}</TableCell>
+                  <TableCell className="font-mono text-xs">{fk.from}</TableCell>
                   <TableCell className="font-mono text-xs">
                     <button
-                      onClick={() => onSelectTable(fk.table as string)}
+                      onClick={() => onSelectTable(fk.table)}
                       className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                     >
-                      {fk.table as string}
+                      {fk.table}
                     </button>
-                    .{fk.to as string}
+                    .{fk.to}
                   </TableCell>
                 </TableRow>
               ))}
@@ -98,8 +98,8 @@ export function SchemaTab({ schema, onSelectTable }: { schema: TableSchema | nul
             </TableHeader>
             <TableBody>
               {schema.indexes.map((idx) => (
-                <TableRow key={idx.name as string}>
-                  <TableCell className="font-mono text-xs">{idx.name as string}</TableCell>
+                <TableRow key={idx.name}>
+                  <TableCell className="font-mono text-xs">{idx.name}</TableCell>
                   <TableCell className="text-xs">
                     {idx.unique ? (
                       <Badge variant="outline" className="text-[10px]">UNIQUE</Badge>

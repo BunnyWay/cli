@@ -43,6 +43,13 @@ beforeAll(async () => {
     );
     INSERT INTO posts (title, body, user_id) VALUES ('Hello', 'World', 1);
     INSERT INTO posts (title, body, user_id) VALUES ('Second', NULL, 2);
+
+    CREATE TABLE "user roles" (
+      id INTEGER PRIMARY KEY,
+      role TEXT NOT NULL
+    );
+    INSERT INTO "user roles" (role) VALUES ('admin');
+    INSERT INTO "user roles" (role) VALUES ('editor');
   `);
 
   // Inline schema for testing - no introspection dependency needed
@@ -71,6 +78,17 @@ beforeAll(async () => {
         ],
         primaryKey: ["id"],
         foreignKeys: [{ column: "user_id", referencesTable: "users", referencesColumn: "id" }],
+        indexes: [],
+        uniqueColumns: [],
+      },
+      "user roles": {
+        name: "user roles",
+        columns: [
+          { name: "id", type: "INTEGER", nullable: false, primaryKey: true },
+          { name: "role", type: "TEXT", nullable: false, primaryKey: false },
+        ],
+        primaryKey: ["id"],
+        foreignKeys: [],
         indexes: [],
         uniqueColumns: [],
       },
@@ -448,6 +466,49 @@ describe("DELETE /:table/:id", () => {
   test("returns 404 for non-existent row", async () => {
     const res = await handler(req("DELETE", "/users/9999"));
     expect(res.status).toBe(404);
+  });
+});
+
+describe("tables with spaces in names", () => {
+  test("GET collection with encoded table name", async () => {
+    const res = await handler(req("GET", "/user%20roles"));
+    expect(res.status).toBe(200);
+
+    const body = await jsonBody(res);
+    expect(body.data).toHaveLength(2);
+  });
+
+  test("GET single resource with encoded table name", async () => {
+    const res = await handler(req("GET", "/user%20roles/1"));
+    expect(res.status).toBe(200);
+
+    const body = await jsonBody(res);
+    expect(body.data.role).toBe("admin");
+  });
+
+  test("POST with encoded table name", async () => {
+    const res = await handler(
+      req("POST", "/user%20roles", { role: "viewer" }),
+    );
+    expect(res.status).toBe(201);
+
+    const body = await jsonBody(res);
+    expect(body.data[0].role).toBe("viewer");
+  });
+
+  test("PATCH single resource with encoded table name", async () => {
+    const res = await handler(
+      req("PATCH", "/user%20roles/1", { role: "superadmin" }),
+    );
+    expect(res.status).toBe(200);
+
+    const body = await jsonBody(res);
+    expect(body.data.role).toBe("superadmin");
+  });
+
+  test("DELETE single resource with encoded table name", async () => {
+    const res = await handler(req("DELETE", "/user%20roles/3"));
+    expect(res.status).toBe(200);
   });
 });
 

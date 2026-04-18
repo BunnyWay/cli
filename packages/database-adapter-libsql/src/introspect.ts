@@ -111,19 +111,55 @@ const introspectTable = async (
   };
 };
 
+export const DEFAULT_EXCLUDE_PATTERNS = [
+  "__*",
+  "_prisma_migrations",
+  "_sqlx_migrations",
+  "__diesel_schema_migrations",
+  "__drizzle_migrations",
+  "schema_migrations",
+  "ar_internal_metadata",
+  "_cf_KV",
+];
+
+const matchesPattern = (name: string, pattern: string): boolean => {
+  if (pattern.endsWith("*")) {
+    return name.startsWith(pattern.slice(0, -1));
+  }
+  return name === pattern;
+};
+
+const shouldInclude = (
+  name: string,
+  exclude: string[],
+  include?: string[],
+): boolean => {
+  if (include) {
+    return include.some((p) => matchesPattern(name, p));
+  }
+  return !exclude.some((p) => matchesPattern(name, p));
+};
+
 export interface IntrospectOptions {
   client: Client;
   version?: string;
+  /** Glob patterns for tables to exclude. Supports trailing `*` wildcards. Defaults to common migration/internal tables. Pass `[]` to show everything. */
+  exclude?: string[];
+  /** If set, only tables matching these patterns are included. Overrides `exclude`. Supports trailing `*` wildcards. */
+  include?: string[];
 }
 
 export const introspect = async ({
   client,
   version = "1.0.0",
+  exclude = DEFAULT_EXCLUDE_PATTERNS,
+  include,
 }: IntrospectOptions): Promise<DatabaseSchema> => {
-  const tableNames = await getTables(client);
+  const allTables = await getTables(client);
+  const filteredTables = allTables.filter((name) => shouldInclude(name, exclude, include));
   const tables: Record<string, TableDefinition> = {};
 
-  for (const tableName of tableNames) {
+  for (const tableName of filteredTables) {
     tables[tableName] = await introspectTable(client, tableName);
   }
 
