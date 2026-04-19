@@ -306,6 +306,34 @@ bunny db shell --url libsql://... --token ey...
 
 **Sensitive column masking**: Columns matching patterns like `password`, `secret`, `api_key`, `auth_token`, `ssn`, etc. are masked by default (`********`). Email columns are partially masked (`a••••e@example.com`). Use `.unmask` or `--unmask` to reveal values.
 
+#### `bunny db studio`
+
+Open a read-only table viewer in your browser. Spins up a local server, generates a short-lived auth token if needed, and opens the studio UI.
+
+```bash
+# Auto-detect database (link, .env, or interactive)
+bunny db studio
+
+# Specific database
+bunny db studio <database-id>
+
+# Custom port
+bunny db studio --port 3000
+
+# Don't auto-open the browser
+bunny db studio --no-open
+
+# Use explicit credentials (skips API lookup)
+bunny db studio --url libsql://... --token ey...
+```
+
+| Flag        | Description                                      |
+| ----------- | ------------------------------------------------ |
+| `--port`    | Port for the local studio server (default 4488) |
+| `--url`     | Database URL (skips API lookup)                  |
+| `--token`   | Auth token (skips token generation)              |
+| `--no-open` | Don't automatically open the browser             |
+
 #### `bunny db tokens create`
 
 Generate an auth token for a database. The database ID can be provided as a positional argument or auto-detected from `BUNNY_DATABASE_URL` in a `.env` file.
