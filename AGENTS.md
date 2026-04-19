@@ -211,10 +211,11 @@ bunny-cli/
 │           │   │   ├── create.ts         # Create a new database (interactive region selection or flags)
 │           │   │   ├── delete.ts         # Delete a database (double confirmation or --force)
 │           │   │   ├── docs.ts           # Open database documentation in browser
+│           │   │   ├── link.ts           # Link directory to a database (.bunny/database.json)
 │           │   │   ├── list.ts           # List all databases
 │           │   │   ├── quickstart.ts     # Generate quickstart guide for connecting to a database
 │           │   │   ├── region-choices.ts # Shared: grouped region prompt choices by continent
-│           │   │   ├── resolve-db.ts     # Helper: resolve database ID from flag, .env, or interactive prompt
+│           │   │   ├── resolve-db.ts     # Helper: resolve database ID from flag, manifest, .env, or interactive prompt
 │           │   │   ├── shell.ts          # Thin wrapper: credential resolution + delegates to @bunny.net/database-shell
 │           │   │   ├── show.ts           # Show database details (regions, size, status)
 │           │   │   ├── usage.ts          # Show database usage statistics
@@ -988,31 +989,32 @@ The manifest system is generic. To add a new resource type (e.g. containers):
 2. Use `resolveManifestId(CONTAINER_MANIFEST, id, "container")` in commands.
 3. Create a `link` command that saves the manifest via `saveManifest()`.
 
-### Database ID resolution from `.env`
+### Database ID resolution
 
-Database token commands (`db tokens create`, `db tokens invalidate`) can auto-resolve the database ID from a `BUNNY_DATABASE_URL` environment variable found in a `.env` file. This is implemented in `packages/cli/src/commands/db/resolve-db.ts`.
+`db` commands that target a specific database (`db show`, `db shell`, `db studio`, `db usage`, `db tokens create`, `db tokens invalidate`, `db regions *`, `db delete`, etc.) auto-resolve the database ID via `resolveDbId()` in `packages/cli/src/commands/db/resolve-db.ts`. Returns `{ id, source }` where `source` is `"argument" | "manifest" | "env" | "prompt"` so callers can surface a hint about where the ID came from.
 
 **Resolution order:**
 
 1. Explicit positional argument — `bunny db tokens create db_01KCHBG8...`
-2. `BUNNY_DATABASE_URL` in `.env` — walks up the directory tree, parses the URL, matches it against the database list via API
-3. Interactive prompt — fetches all databases and presents a select menu
-4. If no databases exist — `UserError` with hint to run `bunny db create`
+2. `.bunny/database.json` manifest — written by `bunny db link`, read via `loadManifest<DatabaseManifest>(DATABASE_MANIFEST)`
+3. `BUNNY_DATABASE_URL` in `.env` — walks up the directory tree, parses the URL, matches it against the database list via API
+4. Interactive prompt — fetches all databases and presents a select menu
+5. If no databases exist — `UserError` with hint to run `bunny db create`
 
-The URL (e.g. `libsql://...bunnydb.net/`) does not directly contain the `db_id`. The resolver fetches the database list and matches by URL to find the corresponding `db_id`.
+The URL (e.g. `libsql://...bunnydb.net/`) does not directly contain the `db_id`. The resolver fetches the database list and matches by URL to find the corresponding `db_id`. The manifest stores the `db_id` directly so no list lookup is needed for that path.
 
-This pattern is separate from the `.bunny/` manifest system because databases are typically consumed via environment variables (e.g. in a `.env` file alongside an ORM), not linked to directories.
+The manifest path mirrors `bunny scripts link` — both write to `.bunny/<resource>.json` via the same generic `saveManifest<T>()` helper in `packages/cli/src/core/manifest.ts`.
 
 ### `bunny.jsonc` (app config)
 
 The `.bunny/` manifest and `bunny.jsonc` serve different purposes:
 
-| Concern   | `.bunny/script.json`                 | `bunny.jsonc`                                       |
-| --------- | ------------------------------------ | --------------------------------------------------- |
-| Purpose   | Link directory to remote resource ID | App config: name, containers, regions               |
-| Author    | Machine (written by `link` command)  | Human (edited by developer) + machine (init, pull)  |
-| Committed | No (gitignored)                      | Yes                                                 |
-| Shared    | No (per-developer)                   | Yes (team-wide)                                     |
+| Concern   | `.bunny/script.json`, `.bunny/database.json` | `bunny.jsonc`                                       |
+| --------- | -------------------------------------------- | --------------------------------------------------- |
+| Purpose   | Link directory to remote resource ID         | App config: name, containers, regions               |
+| Author    | Machine (written by `link` command)          | Human (edited by developer) + machine (init, pull)  |
+| Committed | No (gitignored)                              | Yes                                                 |
+| Shared    | No (per-developer)                           | Yes (team-wide)                                     |
 
 `bunny.jsonc` supports a `$schema` property for editor autocompletion, pointing to the JSON Schema generated by `@bunny.net/app-config`:
 

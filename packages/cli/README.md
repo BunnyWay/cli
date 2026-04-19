@@ -90,7 +90,12 @@ bunny config profile delete staging
 
 Manage databases.
 
-Most `db` commands accept an optional `<database-id>` positional argument. When omitted, the CLI walks up the directory tree looking for a `.env` file containing `BUNNY_DATABASE_URL` and matches it against your database list to auto-detect the database.
+Most `db` commands accept an optional `<database-id>` positional argument. When omitted, the CLI resolves the target in this order:
+
+1. Explicit `<database-id>` argument
+2. `.bunny/database.json` manifest written by `bunny db link`
+3. `BUNNY_DATABASE_URL` in a `.env` file (walked up from the current directory) matched against your database list
+4. Interactive selection prompt
 
 For `db shell`, the CLI also reads `BUNNY_DATABASE_AUTH_TOKEN` from `.env` to skip token generation. Both variables can be set by `db quickstart`.
 
@@ -133,6 +138,18 @@ Show details for a single database.
 bunny db show <database-id>
 bunny db show
 bunny db show --output json
+```
+
+#### `bunny db link`
+
+Link the current directory to a database. Saves `{ id, name }` to `.bunny/database.json` so subsequent `db` commands resolve the target without `BUNNY_DATABASE_URL` in `.env`. With no argument, lists all databases for interactive selection.
+
+```bash
+# Interactive selection
+bunny db link
+
+# Direct link by ID
+bunny db link <database-id>
 ```
 
 #### `bunny db delete`

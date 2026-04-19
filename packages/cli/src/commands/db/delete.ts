@@ -94,6 +94,8 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
 
     if (source === "env") {
       logger.dim(`Database: ${db.name} (${databaseId}, from .env)`);
+    } else if (source === "manifest") {
+      logger.dim(`Database: ${db.name} (${databaseId}, from .bunny/database.json)`);
     }
 
     // First confirmation

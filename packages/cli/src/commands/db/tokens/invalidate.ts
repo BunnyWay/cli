@@ -112,6 +112,8 @@ export const dbTokensInvalidateCommand = defineCommand<{
 
     if (source === "env") {
       logger.dim(`Database: ${databaseId} (from .env)`);
+    } else if (source === "manifest") {
+      logger.dim(`Database: ${databaseId} (from .bunny/database.json)`);
     }
 
     // Confirm before the destructive operation

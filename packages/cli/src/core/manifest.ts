@@ -37,20 +37,20 @@ export function manifestDir(filename: string): string {
 }
 
 /** Load a manifest from `.bunny/<filename>`. Returns empty data if the file doesn't exist. */
-export function loadManifest(filename: string): ManifestData {
+export function loadManifest<T extends object = ManifestData>(filename: string): Partial<T> {
   const path = manifestPath(filename);
 
   if (!existsSync(path)) return {};
 
   try {
-    return JSON.parse(readFileSync(path, "utf-8"));
+    return JSON.parse(readFileSync(path, "utf-8")) as Partial<T>;
   } catch {
     return {};
   }
 }
 
 /** Save a manifest to `.bunny/<filename>`. Creates the directory if needed. */
-export function saveManifest(filename: string, data: ManifestData): void {
+export function saveManifest<T extends object = ManifestData>(filename: string, data: T): void {
   const dir = manifestDir(filename);
   mkdirSync(dir, { recursive: true });
   writeFileSync(
@@ -61,7 +61,7 @@ export function saveManifest(filename: string, data: ManifestData): void {
 }
 
 /** Save a manifest to `.bunny/<filename>` within a specific root directory. */
-export function saveManifestAt(root: string, filename: string, data: ManifestData): void {
+export function saveManifestAt<T extends object = ManifestData>(root: string, filename: string, data: T): void {
   const dir = join(root, MANIFEST_DIR);
   mkdirSync(dir, { recursive: true });
   writeFileSync(

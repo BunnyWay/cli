@@ -158,6 +158,8 @@ export const dbTokensCreateCommand = defineCommand<{
 
     if (source === "env") {
       logger.dim(`Database: ${databaseId} (from .env)`);
+    } else if (source === "manifest") {
+      logger.dim(`Database: ${databaseId} (from .bunny/database.json)`);
     }
 
     const spin = spinner("Generating token...");
@@ -201,6 +203,8 @@ export const dbTokensCreateCommand = defineCommand<{
     ];
     if (source === "env") {
       entries.push({ key: "DB", value: `${databaseId} (from .env)` });
+    } else if (source === "manifest") {
+      entries.push({ key: "DB", value: `${databaseId} (from .bunny/database.json)` });
     }
     entries.push({
       key: "Expires",
