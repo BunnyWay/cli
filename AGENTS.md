@@ -211,10 +211,11 @@ bunny-cli/
 │           │   │   ├── create.ts         # Create a new database (interactive region selection or flags)
 │           │   │   ├── delete.ts         # Delete a database (double confirmation or --force)
 │           │   │   ├── docs.ts           # Open database documentation in browser
+│           │   │   ├── link.ts           # Link directory to a database (.bunny/database.json)
 │           │   │   ├── list.ts           # List all databases
 │           │   │   ├── quickstart.ts     # Generate quickstart guide for connecting to a database
 │           │   │   ├── region-choices.ts # Shared: grouped region prompt choices by continent
-│           │   │   ├── resolve-db.ts     # Helper: resolve database ID from flag, .env, or interactive prompt
+│           │   │   ├── resolve-db.ts     # Helper: resolve database ID from flag, manifest, .env, or interactive prompt
 │           │   │   ├── shell.ts          # Thin wrapper: credential resolution + delegates to @bunny.net/database-shell
 │           │   │   ├── show.ts           # Show database details (regions, size, status)
 │           │   │   ├── usage.ts          # Show database usage statistics
@@ -659,13 +660,13 @@ npm install -g @bunny.net/cli
 
 Uses the platform-specific package pattern (like esbuild/turbo). The main `@bunny.net/cli` package contains a JS shim (`packages/cli/bin/bunny.js`) that delegates to the correct platform binary. Platform packages:
 
-| Package | Platform |
-| --- | --- |
-| `@bunny.net/cli-linux-x64` | Linux x64 |
-| `@bunny.net/cli-linux-arm64` | Linux arm64 |
-| `@bunny.net/cli-darwin-x64` | macOS x64 |
+| Package                       | Platform                    |
+| ----------------------------- | --------------------------- |
+| `@bunny.net/cli-linux-x64`    | Linux x64                   |
+| `@bunny.net/cli-linux-arm64`  | Linux arm64                 |
+| `@bunny.net/cli-darwin-x64`   | macOS x64                   |
 | `@bunny.net/cli-darwin-arm64` | macOS arm64 (Apple Silicon) |
-| `@bunny.net/cli-windows-x64` | Windows x64 |
+| `@bunny.net/cli-windows-x64`  | Windows x64                 |
 
 Platform packages live in `packages/` alongside the other workspace packages. They are versioned in lockstep with `@bunny.net/cli` via the `fixed` array in `.changeset/config.json`. They contain only a `package.json` and the compiled binary, published by CI.
 
@@ -988,31 +989,37 @@ The manifest system is generic. To add a new resource type (e.g. containers):
 2. Use `resolveManifestId(CONTAINER_MANIFEST, id, "container")` in commands.
 3. Create a `link` command that saves the manifest via `saveManifest()`.
 
-### Database ID resolution from `.env`
+### Database ID resolution
 
-Database token commands (`db tokens create`, `db tokens invalidate`) can auto-resolve the database ID from a `BUNNY_DATABASE_URL` environment variable found in a `.env` file. This is implemented in `packages/cli/src/commands/db/resolve-db.ts`.
+`db` commands that target a specific database (`db show`, `db shell`, `db studio`, `db usage`, `db tokens create`, `db tokens invalidate`, `db regions *`, `db delete`, etc.) auto-resolve the database ID via `resolveDbId()` in `packages/cli/src/commands/db/resolve-db.ts`. Returns `{ id, source }` where `source` is `"argument" | "manifest" | "env" | "prompt"` so callers can surface a hint about where the ID came from.
 
 **Resolution order:**
 
 1. Explicit positional argument — `bunny db tokens create db_01KCHBG8...`
-2. `BUNNY_DATABASE_URL` in `.env` — walks up the directory tree, parses the URL, matches it against the database list via API
-3. Interactive prompt — fetches all databases and presents a select menu
-4. If no databases exist — `UserError` with hint to run `bunny db create`
+2. `.bunny/database.json` manifest — written by `bunny db link`, read via `loadManifest<DatabaseManifest>(DATABASE_MANIFEST)`
+3. `BUNNY_DATABASE_URL` in `.env` — walks up the directory tree, parses the URL, matches it against the database list via API
+4. Interactive prompt — fetches all databases and presents a select menu
+5. If no databases exist — `UserError` with hint to run `bunny db create`
 
-The URL (e.g. `libsql://...bunnydb.net/`) does not directly contain the `db_id`. The resolver fetches the database list and matches by URL to find the corresponding `db_id`.
+The URL (e.g. `libsql://...bunnydb.net/`) does not directly contain the `db_id`. The resolver fetches the database list and matches by URL to find the corresponding `db_id`. The manifest stores the `db_id` directly so no list lookup is needed for that path.
 
-This pattern is separate from the `.bunny/` manifest system because databases are typically consumed via environment variables (e.g. in a `.env` file alongside an ORM), not linked to directories.
+The manifest path mirrors `bunny scripts link` — both write to `.bunny/<resource>.json` via the same generic `saveManifest<T>()` helper in `packages/cli/src/core/manifest.ts`.
+
+**Lifecycle integration:**
+
+- `bunny db create` — after creating the database, prompts "Link this directory to <name>?" and (on yes) writes the manifest. If a link already exists it shows what will be replaced. The follow-up flow (link → token → save-env) exposes three flags for non-interactive control: `--link`/`--no-link`, `--token`/`--no-token`, `--save-env`/`--no-save-env`. When a flag is provided the prompt is skipped; in `--output json` mode prompts are suppressed entirely so flags become the only way to opt in. The JSON output then includes `linked`, `token`, and `saved_to_env` fields reflecting what happened.
+- `bunny db delete` — after deleting the database, if `.bunny/database.json` points at the deleted ID it is removed silently via `removeManifest()` (no prompt — a manifest pointing at a deleted DB is unambiguously stale).
 
 ### `bunny.jsonc` (app config)
 
 The `.bunny/` manifest and `bunny.jsonc` serve different purposes:
 
-| Concern   | `.bunny/script.json`                 | `bunny.jsonc`                                       |
-| --------- | ------------------------------------ | --------------------------------------------------- |
-| Purpose   | Link directory to remote resource ID | App config: name, containers, regions               |
-| Author    | Machine (written by `link` command)  | Human (edited by developer) + machine (init, pull)  |
-| Committed | No (gitignored)                      | Yes                                                 |
-| Shared    | No (per-developer)                   | Yes (team-wide)                                     |
+| Concern   | `.bunny/script.json`, `.bunny/database.json` | `bunny.jsonc`                                      |
+| --------- | -------------------------------------------- | -------------------------------------------------- |
+| Purpose   | Link directory to remote resource ID         | App config: name, containers, regions              |
+| Author    | Machine (written by `link` command)          | Human (edited by developer) + machine (init, pull) |
+| Committed | No (gitignored)                              | Yes                                                |
+| Shared    | No (per-developer)                           | Yes (team-wide)                                    |
 
 `bunny.jsonc` supports a `$schema` property for editor autocompletion, pointing to the JSON Schema generated by `@bunny.net/app-config`:
 
@@ -1022,9 +1029,9 @@ The `.bunny/` manifest and `bunny.jsonc` serve different purposes:
   "app": {
     "name": "my-app",
     "containers": {
-      "web": { "image": "nginx:latest" }
-    }
-  }
+      "web": { "image": "nginx:latest" },
+    },
+  },
 }
 ```
 
@@ -1069,6 +1076,7 @@ interface ShellLogger {
 ```
 
 **CLI wrapper** (`packages/cli/src/commands/db/shell.ts`) provides:
+
 - Credential resolution (--url/--token flags → .env → API lookup)
 - `shellLogger()` adapter that wraps the CLI `logger`
 - `createClient()` call and delegation to `startShell()`/`executeQuery()`/`executeFile()`

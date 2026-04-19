@@ -172,25 +172,27 @@ export function App() {
         {activeTab ? (
           <TableView tableName={activeTab} onSelectTable={openTable} />
         ) : (
-          <div className="flex h-full items-center justify-center p-8">
-            <div className="w-full max-w-sm">
-              <h2 className="mb-1 text-sm font-medium text-foreground">Tables</h2>
-              <p className="mb-4 text-xs text-muted-foreground">
-                {tables.length} table{tables.length !== 1 ? "s" : ""} found
-              </p>
-              <div className="rounded-lg border">
-                {tables.map((table, i) => (
-                  <button
-                    key={table.name}
-                    onClick={() => openTable(table.name)}
-                    className={cn(
-                      "flex w-full items-center px-3 py-2 text-left transition-colors hover:bg-accent",
-                      i > 0 && "border-t",
-                    )}
-                  >
-                    <span className="font-mono text-sm">{table.name}</span>
-                  </button>
-                ))}
+          <div className="h-full overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-8">
+              <div className="w-full max-w-sm">
+                <h2 className="mb-1 text-sm font-medium text-foreground">Tables</h2>
+                <p className="mb-4 text-xs text-muted-foreground">
+                  {tables.length} table{tables.length !== 1 ? "s" : ""} found
+                </p>
+                <div className="rounded-lg border">
+                  {tables.map((table, i) => (
+                    <button
+                      key={table.name}
+                      onClick={() => openTable(table.name)}
+                      className={cn(
+                        "flex w-full items-center px-3 py-2 text-left transition-colors hover:bg-accent",
+                        i > 0 && "border-t",
+                      )}
+                    >
+                      <span className="font-mono text-sm">{table.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

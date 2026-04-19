@@ -10,7 +10,8 @@ import type { components } from "@bunny.net/api/generated/database.d.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { groupedRegionChoices } from "./region-choices.ts";
 import { readEnvValue, writeEnvValue } from "../../utils/env-file.ts";
-import { ENV_DATABASE_URL, ENV_DATABASE_AUTH_TOKEN } from "./constants.ts";
+import { loadManifest, saveManifest } from "../../core/manifest.ts";
+import { DATABASE_MANIFEST, ENV_DATABASE_URL, ENV_DATABASE_AUTH_TOKEN, type DatabaseManifest } from "./constants.ts";
 
 type PossibleRegion = components["schemas"]["PossibleRegion"];
 
@@ -33,12 +34,18 @@ const ARG_NAME = "name";
 const ARG_PRIMARY = "primary";
 const ARG_REPLICAS = "replicas";
 const ARG_STORAGE_REGION = "storage-region";
+const ARG_LINK = "link";
+const ARG_TOKEN = "token";
+const ARG_SAVE_ENV = "save-env";
 
 interface CreateArgs {
   [ARG_NAME]?: string;
   [ARG_PRIMARY]?: string;
   [ARG_REPLICAS]?: string;
   [ARG_STORAGE_REGION]?: string;
+  [ARG_LINK]?: boolean;
+  [ARG_TOKEN]?: boolean;
+  [ARG_SAVE_ENV]?: boolean;
 }
 
 /**
@@ -90,6 +97,21 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       .option(ARG_STORAGE_REGION, {
         type: "string",
         describe: "Override auto-detected storage region",
+      })
+      .option(ARG_LINK, {
+        type: "boolean",
+        describe:
+          "Link this directory to the new database (skips prompt). Use --no-link to skip without prompting.",
+      })
+      .option(ARG_TOKEN, {
+        type: "boolean",
+        describe:
+          "Generate a full-access auth token (skips prompt). Use --no-token to skip without prompting.",
+      })
+      .option(ARG_SAVE_ENV, {
+        type: "boolean",
+        describe:
+          "Save BUNNY_DATABASE_URL and BUNNY_DATABASE_AUTH_TOKEN to .env (skips prompt). No effect without --token.",
       }),
 
   handler: async (args) => {
@@ -284,37 +306,61 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     createSpin.stop();
 
     const db = dbDetails?.db;
+    const isInteractive = output !== "json";
 
-    if (output === "json") {
-      logger.log(
-        JSON.stringify(
-          {
-            db_id: data.db_id,
-            name: db?.name ?? name,
-            url: db?.url ?? null,
-          },
-          null,
-          2,
-        ),
-      );
-      return;
+    if (isInteractive) {
+      const entries = [
+        { key: "ID", value: data.db_id },
+        { key: "Name", value: db?.name ?? name ?? "" },
+      ];
+      if (db?.url) {
+        entries.push({ key: "URL", value: db.url });
+      }
+
+      logger.success(`Database created.`);
+      logger.log();
+      logger.log(formatKeyValue(entries, output));
+      logger.log();
     }
 
-    const entries = [
-      { key: "ID", value: data.db_id },
-      { key: "Name", value: db?.name ?? name ?? "" },
-    ];
-    if (db?.url) {
-      entries.push({ key: "URL", value: db.url });
+    // Offer to link the current directory to the new database
+    const existingLink = loadManifest<DatabaseManifest>(DATABASE_MANIFEST);
+    const linkPrompt = existingLink.id
+      ? `Link this directory to "${db?.name ?? name}"? (replaces existing link to ${existingLink.name ?? existingLink.id})`
+      : `Link this directory to "${db?.name ?? name}"?`;
+
+    let shouldLink: boolean;
+    if (args[ARG_LINK] !== undefined) {
+      shouldLink = args[ARG_LINK]!;
+    } else if (isInteractive) {
+      shouldLink = await confirm(linkPrompt, { force: false });
+    } else {
+      shouldLink = false;
     }
 
-    logger.success(`Database created.`);
-    logger.log();
-    logger.log(formatKeyValue(entries, output));
-    logger.log();
+    if (shouldLink) {
+      saveManifest<DatabaseManifest>(DATABASE_MANIFEST, {
+        id: data.db_id,
+        name: db?.name ?? name,
+      });
+      if (isInteractive) {
+        logger.success(`Linked .bunny/database.json → ${data.db_id}.`);
+        logger.log();
+      }
+    }
 
     // Offer to create an auth token
-    const shouldCreateToken = await confirm("Create an auth token?", { force: false });
+    let shouldCreateToken: boolean;
+    if (args[ARG_TOKEN] !== undefined) {
+      shouldCreateToken = args[ARG_TOKEN]!;
+    } else if (isInteractive) {
+      shouldCreateToken = await confirm("Create an auth token?", { force: false });
+    } else {
+      shouldCreateToken = false;
+    }
+
+    let token: string | null = null;
+    let savedToEnv = false;
 
     if (shouldCreateToken) {
       const tokenSpin = spinner("Generating token...");
@@ -327,31 +373,38 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
 
       tokenSpin.stop();
 
-      const token = tokenData?.token;
+      token = tokenData?.token ?? null;
 
       if (token) {
-        const tokenEntries = [
-          { key: "Token", value: token },
-          { key: "Access", value: "full-access" },
-          { key: "Expires", value: "never" },
-        ];
-
-        logger.success("Token generated.");
-        logger.log();
-        logger.log(formatKeyValue(tokenEntries, output));
-        logger.log();
+        if (isInteractive) {
+          const tokenEntries = [
+            { key: "Token", value: token },
+            { key: "Access", value: "full-access" },
+            { key: "Expires", value: "never" },
+          ];
+          logger.success("Token generated.");
+          logger.log();
+          logger.log(formatKeyValue(tokenEntries, output));
+          logger.log();
+        }
 
         // Offer to save to .env
         const existingToken = readEnvValue(ENV_DATABASE_AUTH_TOKEN);
-        let shouldWrite = false;
+        let shouldWrite: boolean;
 
-        if (existingToken) {
-          shouldWrite = await confirm(
-            `${ENV_DATABASE_AUTH_TOKEN} already exists in ${existingToken.envPath} — overwrite?`,
-            { force: false },
-          );
+        if (args[ARG_SAVE_ENV] !== undefined) {
+          shouldWrite = args[ARG_SAVE_ENV]!;
+        } else if (isInteractive) {
+          if (existingToken) {
+            shouldWrite = await confirm(
+              `${ENV_DATABASE_AUTH_TOKEN} already exists in ${existingToken.envPath} — overwrite?`,
+              { force: false },
+            );
+          } else {
+            shouldWrite = await confirm(`Save to .env?`, { force: false });
+          }
         } else {
-          shouldWrite = await confirm(`Save to .env?`, { force: false });
+          shouldWrite = false;
         }
 
         if (shouldWrite) {
@@ -360,15 +413,35 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
 
           if (db?.url && !readEnvValue(ENV_DATABASE_URL)) {
             writeEnvValue(ENV_DATABASE_URL, db.url, envPath);
-            logger.success(`Saved ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} to .env`);
-          } else {
+            if (isInteractive) {
+              logger.success(`Saved ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} to .env`);
+            }
+          } else if (isInteractive) {
             logger.success(`Saved ${ENV_DATABASE_AUTH_TOKEN} to .env`);
           }
+          savedToEnv = true;
         }
       }
-    } else {
+    } else if (isInteractive) {
       logger.dim(`  Get started:  bunny db quickstart ${data.db_id}`);
       logger.dim(`  Open shell:   bunny db shell ${data.db_id}`);
+    }
+
+    if (output === "json") {
+      logger.log(
+        JSON.stringify(
+          {
+            db_id: data.db_id,
+            name: db?.name ?? name,
+            url: db?.url ?? null,
+            linked: shouldLink,
+            token,
+            saved_to_env: savedToEnv,
+          },
+          null,
+          2,
+        ),
+      );
     }
   },
 });

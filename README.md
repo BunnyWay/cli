@@ -4,15 +4,15 @@ Monorepo for the [bunny.net](https://bunny.net) CLI and supporting packages.
 
 ## Packages
 
-| Package | Name | Description |
-| ------- | ---- | ----------- |
-| [`packages/cli/`](packages/cli/) | `@bunny.net/cli` | Command-line interface for bunny.net |
-| [`packages/api/`](packages/api/) | `@bunny.net/api` | Standalone, type-safe API client SDK |
-| [`packages/app-config/`](packages/app-config/) | `@bunny.net/app-config` | Shared Zod schemas, types, and JSON Schema for `bunny.jsonc` |
-| [`packages/database-shell/`](packages/database-shell/) | `@bunny.net/database-shell` | Standalone interactive SQL shell for libSQL databases |
-| [`packages/database-openapi/`](packages/database-openapi/) | `@bunny.net/database-openapi` | Generate OpenAPI 3.0 specs from a database schema |
-| [`packages/database-rest/`](packages/database-rest/) | `@bunny.net/database-rest` | PostgREST-like REST API handler (database-agnostic) |
-| [`packages/database-adapter-libsql/`](packages/database-adapter-libsql/) | `@bunny.net/database-adapter-libsql` | Bunny Database adapter for database-rest |
+| Package                                                                  | Name                                 | Description                                                  |
+| ------------------------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------ |
+| [`packages/cli/`](packages/cli/)                                         | `@bunny.net/cli`                     | Command-line interface for bunny.net                         |
+| [`packages/api/`](packages/api/)                                         | `@bunny.net/api`                     | Standalone, type-safe API client SDK                         |
+| [`packages/app-config/`](packages/app-config/)                           | `@bunny.net/app-config`              | Shared Zod schemas, types, and JSON Schema for `bunny.jsonc` |
+| [`packages/database-shell/`](packages/database-shell/)                   | `@bunny.net/database-shell`          | Standalone interactive SQL shell for libSQL databases        |
+| [`packages/database-openapi/`](packages/database-openapi/)               | `@bunny.net/database-openapi`        | Generate OpenAPI 3.0 specs from a database schema            |
+| [`packages/database-rest/`](packages/database-rest/)                     | `@bunny.net/database-rest`           | PostgREST-like REST API handler (database-agnostic)          |
+| [`packages/database-adapter-libsql/`](packages/database-adapter-libsql/) | `@bunny.net/database-adapter-libsql` | Bunny Database adapter for database-rest                     |
 
 See each package's README for usage and API documentation.
 

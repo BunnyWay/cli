@@ -1,6 +1,13 @@
 # Database Commands
 
-All database commands live under `bunny db`. Most accept an optional `DB_ID` positional argument — if omitted, the ID is auto-detected from `BUNNY_DATABASE_URL` in `.env`.
+All database commands live under `bunny db`. Most accept an optional `DB_ID` positional argument. When omitted, the ID is resolved in this order:
+
+1. Explicit `DB_ID` argument
+2. `.bunny/database.json` manifest (written by `bunny db link` or accepted during `bunny db create`)
+3. `BUNNY_DATABASE_URL` in `.env` (walked up from the current directory and matched against your database list)
+4. Interactive prompt
+
+Commands that show a "from ..." hint (e.g. `db delete`, `db tokens create`, `db tokens invalidate`, `db usage`) report which source resolved the ID so you can spot the wrong target before acting.
 
 ## `bunny db list` — List all databases
 
@@ -17,20 +24,24 @@ Fetches all databases with pagination, live metrics, and region configuration. D
 ## `bunny db create` — Create a new database
 
 ```bash
-bunny db create                                          # interactive mode
-bunny db create --name my-app --primary FR,DE            # non-interactive
-bunny db create --name my-app --primary FR --replicas UK # with replicas
-bunny db create --name my-app --primary FR --output json # JSON output
+bunny db create                                                                   # interactive mode
+bunny db create --name my-app --primary FR,DE                                     # non-interactive
+bunny db create --name my-app --primary FR --replicas UK                          # with replicas
+bunny db create --name my-app --primary FR --output json                          # JSON output (no follow-ups)
+bunny db create --name my-app --primary FR --link --token --save-env --output json # fully non-interactive (CI)
 ```
 
 ### Flags
 
-| Flag               | Description                                        |
-| ------------------ | -------------------------------------------------- |
-| `--name`           | Database name (prompted if omitted)                |
-| `--primary`        | Comma-separated primary region IDs (e.g., `FR,DE`) |
-| `--replicas`       | Comma-separated replica region IDs (e.g., `UK,NY`) |
-| `--storage-region` | Override auto-detected storage region              |
+| Flag               | Description                                                                              |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| `--name`           | Database name (prompted if omitted)                                                      |
+| `--primary`        | Comma-separated primary region IDs (e.g., `FR,DE`)                                       |
+| `--replicas`       | Comma-separated replica region IDs (e.g., `UK,NY`)                                       |
+| `--storage-region` | Override auto-detected storage region                                                    |
+| `--link`           | Link the current directory to the new database (skips prompt). Use `--no-link` to skip.  |
+| `--token`          | Generate a full-access auth token (skips prompt). Use `--no-token` to skip.              |
+| `--save-env`       | Save `BUNNY_DATABASE_URL` and `BUNNY_DATABASE_AUTH_TOKEN` to `.env`. Requires `--token`. |
 
 ### Interactive mode
 
@@ -42,8 +53,28 @@ When `--name` and `--primary` are not both provided, the command enters interact
    - **Single region** — probes for one optimal region
    - **Manual** — multi-select chooser grouped by continent
 3. Creates the database
-4. Offers to generate an auth token
-5. Offers to save `BUNNY_DATABASE_URL` and `BUNNY_DATABASE_AUTH_TOKEN` to `.env`
+4. Offers to link the current directory (writes `.bunny/database.json`). If a link already exists for another database, the prompt notes what will be replaced.
+5. Offers to generate an auth token
+6. Offers to save `BUNNY_DATABASE_URL` and `BUNNY_DATABASE_AUTH_TOKEN` to `.env`
+
+For each of the three follow-up prompts (link, token, save-env), the matching flag overrides the prompt — `--link`/`--no-link`, `--token`/`--no-token`, `--save-env`/`--no-save-env`.
+
+### Non-interactive mode (`--output json`)
+
+In `--output json` mode, prompts are suppressed entirely — flags are the only way to opt in to linking, token creation, and `.env` writes. The JSON output gains `linked`, `token`, and `saved_to_env` fields reflecting what happened:
+
+```json
+{
+  "db_id": "db_01KCHBG8C5KSFGG0VRNFQ7EK7X",
+  "name": "my-app",
+  "url": "libsql://...bunnydb.net/",
+  "linked": true,
+  "token": "ey...",
+  "saved_to_env": true
+}
+```
+
+`token` is `null` when `--token` was not passed (or `--no-token` was). `saved_to_env` is always `false` without a token.
 
 ---
 
@@ -56,6 +87,20 @@ bunny db show --output json
 ```
 
 Displays: ID, Name, URL, Status (Active/Idle), Size (with progress bar), Storage Region, Primary Regions, Replica Regions.
+
+---
+
+## `bunny db link` — Link the current directory to a database
+
+```bash
+bunny db link                                        # interactive selection
+bunny db link db_01KCHBG8C5KSFGG0VRNFQ7EK7X         # explicit ID
+bunny db link --output json
+```
+
+Writes `{ id, name }` to `.bunny/database.json` so subsequent `db` commands resolve the target without `BUNNY_DATABASE_URL` in `.env`. The manifest is gitignored — it's per-developer state, not shared.
+
+`bunny db create` offers to write this for the new database. `bunny db delete` removes it automatically when it points at the deleted database.
 
 ---
 
@@ -77,7 +122,7 @@ bunny db delete --force --output json
 
 1. First prompt: "Delete database [name] ([id])? This cannot be undone."
 2. Second prompt: Type the database name to verify (skipped with `--force`)
-3. After deletion: offers to clean up `.env` references
+3. After deletion: removes `.bunny/database.json` automatically when it points at the deleted database (silent — a manifest pointing at a deleted DB is unambiguously stale), then offers to clean up `.env` references
 
 ---
 
@@ -135,6 +180,27 @@ bunny db shell --url libsql://... --token ey...      # explicit credentials
 ### REPL dot-commands
 
 In interactive mode, the shell supports dot-commands like `.tables`, `.schema`, `.fk`, etc.
+
+---
+
+## `bunny db studio` — Read-only table viewer
+
+```bash
+bunny db studio                                      # auto-detect database
+bunny db studio db_01KCHBG8C5KSFGG0VRNFQ7EK7X       # specific database
+bunny db studio --port 3000                          # custom port
+bunny db studio --no-open                            # don't auto-open browser
+bunny db studio --url libsql://... --token ey...     # explicit credentials
+```
+
+| Flag        | Default | Description                                     |
+| ----------- | ------- | ----------------------------------------------- |
+| `--port`    | `4488`  | Port for the local studio server                |
+| `--url`     |         | Database URL (skips API lookup)                 |
+| `--token`   |         | Auth token (skips token generation)             |
+| `--no-open` | `false` | Don't automatically open the browser            |
+
+Spins up a local server, generates a short-lived auth token if needed, and opens a browser-based read-only table viewer. Long-running until interrupted (Ctrl+C). Credential resolution mirrors `db shell`: `--url`/`--token` flags > `.env` vars > API lookup.
 
 ---
 

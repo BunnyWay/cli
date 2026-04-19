@@ -154,10 +154,13 @@ export const dbTokensCreateCommand = defineCommand<{
     const authorization = readOnly ? "read-only" : "full-access";
     const expiresAt = expiry ? parseExpiry(expiry) : null;
 
-    const { id: databaseId, source } = await resolveDbId(client, databaseIdArg);
+    const { id: databaseId, name: databaseName, source } = await resolveDbId(client, databaseIdArg);
 
+    const dbLabel = databaseName ? `${databaseName} (${databaseId})` : databaseId;
     if (source === "env") {
-      logger.dim(`Database: ${databaseId} (from .env)`);
+      logger.dim(`Database: ${dbLabel} (from .env)`);
+    } else if (source === "manifest") {
+      logger.dim(`Database: ${dbLabel} (from .bunny/database.json)`);
     }
 
     const spin = spinner("Generating token...");
@@ -200,7 +203,9 @@ export const dbTokensCreateCommand = defineCommand<{
       { key: "Access", value: authorization },
     ];
     if (source === "env") {
-      entries.push({ key: "DB", value: `${databaseId} (from .env)` });
+      entries.push({ key: "DB", value: `${dbLabel} (from .env)` });
+    } else if (source === "manifest") {
+      entries.push({ key: "DB", value: `${dbLabel} (from .bunny/database.json)` });
     }
     entries.push({
       key: "Expires",

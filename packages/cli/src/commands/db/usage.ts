@@ -251,6 +251,8 @@ export const dbUsageCommand = defineCommand<UsageArgs>({
     logger.dim(`  ${range}`);
     if (source === "env") {
       logger.dim("  Resolved from .env");
+    } else if (source === "manifest") {
+      logger.dim("  Resolved from .bunny/database.json");
     }
     logger.log();
     logger.log(formatKeyValue(entries, output));
