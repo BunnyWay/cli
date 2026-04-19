@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createClient, type Client } from "@libsql/client";
 import type { DatabaseSchema } from "@bunny.net/database-openapi";
-import { createRestHandler } from "./handler.ts";
+import { type Client, createClient } from "@libsql/client";
 import type { DatabaseExecutor } from "./executor.ts";
+import { createRestHandler } from "./handler.ts";
 
 // Minimal executor for testing - mirrors what an adapter would do
 const createTestExecutor = (client: Client): DatabaseExecutor => ({
@@ -65,7 +65,9 @@ beforeAll(async () => {
         ],
         primaryKey: ["id"],
         foreignKeys: [],
-        indexes: [{ name: "idx_users_email", columns: ["email"], unique: true }],
+        indexes: [
+          { name: "idx_users_email", columns: ["email"], unique: true },
+        ],
         uniqueColumns: ["email"],
       },
       posts: {
@@ -74,10 +76,21 @@ beforeAll(async () => {
           { name: "id", type: "INTEGER", nullable: false, primaryKey: true },
           { name: "title", type: "TEXT", nullable: false, primaryKey: false },
           { name: "body", type: "TEXT", nullable: true, primaryKey: false },
-          { name: "user_id", type: "INTEGER", nullable: false, primaryKey: false },
+          {
+            name: "user_id",
+            type: "INTEGER",
+            nullable: false,
+            primaryKey: false,
+          },
         ],
         primaryKey: ["id"],
-        foreignKeys: [{ column: "user_id", referencesTable: "users", referencesColumn: "id" }],
+        foreignKeys: [
+          {
+            column: "user_id",
+            referencesTable: "users",
+            referencesColumn: "id",
+          },
+        ],
         indexes: [],
         uniqueColumns: [],
       },
@@ -185,7 +198,9 @@ describe("GET /:table", () => {
   });
 
   test("limit and offset", async () => {
-    const res = await handler(req("GET", "/users?order=id.asc&limit=1&offset=1"));
+    const res = await handler(
+      req("GET", "/users?order=id.asc&limit=1&offset=1"),
+    );
     const body = await jsonBody(res);
 
     expect(body.data).toHaveLength(1);
@@ -205,7 +220,11 @@ describe("GET /:table", () => {
 describe("POST /:table", () => {
   test("inserts a single row", async () => {
     const res = await handler(
-      req("POST", "/users", { name: "Dave", email: "dave@example.com", age: 40 }),
+      req("POST", "/users", {
+        name: "Dave",
+        email: "dave@example.com",
+        age: 40,
+      }),
     );
     expect(res.status).toBe(201);
 
@@ -303,7 +322,9 @@ describe("GET /:table/by-:column/:value", () => {
   });
 
   test("supports select on unique column lookup", async () => {
-    const res = await handler(req("GET", "/users/by-email/alice@example.com?select=id,name"));
+    const res = await handler(
+      req("GET", "/users/by-email/alice@example.com?select=id,name"),
+    );
     const body = await jsonBody(res);
 
     expect(Object.keys(body.data)).toEqual(["id", "name"]);
@@ -343,28 +364,39 @@ describe("PATCH /:table/by-:column/:value", () => {
 describe("DELETE /:table/by-:column/:value", () => {
   test("deletes a single row by unique column", async () => {
     await handler(
-      req("POST", "/users", { name: "UniqueDelete", email: "unique-del@example.com" }),
+      req("POST", "/users", {
+        name: "UniqueDelete",
+        email: "unique-del@example.com",
+      }),
     );
 
-    const res = await handler(req("DELETE", "/users/by-email/unique-del@example.com"));
+    const res = await handler(
+      req("DELETE", "/users/by-email/unique-del@example.com"),
+    );
     expect(res.status).toBe(200);
 
     const body = await jsonBody(res);
     expect(body.data.name).toBe("UniqueDelete");
 
-    const check = await handler(req("GET", "/users/by-email/unique-del@example.com"));
+    const check = await handler(
+      req("GET", "/users/by-email/unique-del@example.com"),
+    );
     expect(check.status).toBe(404);
   });
 
   test("returns 404 for non-existent value", async () => {
-    const res = await handler(req("DELETE", "/users/by-email/nobody@example.com"));
+    const res = await handler(
+      req("DELETE", "/users/by-email/nobody@example.com"),
+    );
     expect(res.status).toBe(404);
   });
 });
 
 describe("basePath option", () => {
   test("strips base path before routing", async () => {
-    const apiHandler = createRestHandler(executor, schema, { basePath: "/api" });
+    const apiHandler = createRestHandler(executor, schema, {
+      basePath: "/api",
+    });
 
     const specRes = await apiHandler(req("GET", "/api/"));
     expect(specRes.status).toBe(200);
@@ -378,7 +410,9 @@ describe("basePath option", () => {
   });
 
   test("returns 404 for paths without base", async () => {
-    const apiHandler = createRestHandler(executor, schema, { basePath: "/api" });
+    const apiHandler = createRestHandler(executor, schema, {
+      basePath: "/api",
+    });
 
     const res = await apiHandler(req("GET", "/users"));
     expect(res.status).toBe(404);
@@ -418,9 +452,7 @@ describe("GET /:table/:id", () => {
 
 describe("PATCH /:table/:id", () => {
   test("updates a single row by PK", async () => {
-    const res = await handler(
-      req("PATCH", "/users/2", { age: 26 }),
-    );
+    const res = await handler(req("PATCH", "/users/2", { age: 26 }));
     expect(res.status).toBe(200);
 
     const body = await jsonBody(res);
@@ -430,9 +462,7 @@ describe("PATCH /:table/:id", () => {
   });
 
   test("returns 404 for non-existent row", async () => {
-    const res = await handler(
-      req("PATCH", "/users/9999", { name: "Nobody" }),
-    );
+    const res = await handler(req("PATCH", "/users/9999", { name: "Nobody" }));
     expect(res.status).toBe(404);
   });
 
@@ -487,9 +517,7 @@ describe("tables with spaces in names", () => {
   });
 
   test("POST with encoded table name", async () => {
-    const res = await handler(
-      req("POST", "/user%20roles", { role: "viewer" }),
-    );
+    const res = await handler(req("POST", "/user%20roles", { role: "viewer" }));
     expect(res.status).toBe(201);
 
     const body = await jsonBody(res);

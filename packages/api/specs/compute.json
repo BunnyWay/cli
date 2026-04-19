@@ -25,9 +25,7 @@
   "paths": {
     "/compute/script/{id}/code": {
       "get": {
-        "tags": [
-          "Code"
-        ],
+        "tags": ["Code"],
         "summary": "Get Code",
         "operationId": "GetEdgeScriptCodeEndpoint_GetCode",
         "parameters": [
@@ -90,9 +88,7 @@
         ]
       },
       "post": {
-        "tags": [
-          "Code"
-        ],
+        "tags": ["Code"],
         "summary": "Set Code",
         "operationId": "UploadEdgeScriptCodeEndpoint_SetCode",
         "parameters": [
@@ -162,9 +158,7 @@
     },
     "/compute/script/{id}": {
       "delete": {
-        "tags": [
-          "Edge Script"
-        ],
+        "tags": ["Edge Script"],
         "summary": "Delete Edge Script",
         "operationId": "DeleteEdgeScriptEndpoint_Delete",
         "parameters": [
@@ -240,9 +234,7 @@
         ]
       },
       "get": {
-        "tags": [
-          "Edge Script"
-        ],
+        "tags": ["Edge Script"],
         "summary": "Get Edge Script",
         "operationId": "GetEdgeScriptByIdEndpoint_GetEdgeScriptById",
         "parameters": [
@@ -305,9 +297,7 @@
         ]
       },
       "post": {
-        "tags": [
-          "Edge Script"
-        ],
+        "tags": ["Edge Script"],
         "summary": "Update Edge Script",
         "operationId": "UpdateEdgeScriptEndpoint_Update",
         "parameters": [
@@ -385,9 +375,7 @@
     },
     "/compute/script/{id}/statistics": {
       "get": {
-        "tags": [
-          "Edge Script"
-        ],
+        "tags": ["Edge Script"],
         "summary": "Get Edge Script Statistics",
         "operationId": "EdgeScriptStatisticsEndpoint_GetEdgeScriptStatisticsEndpoint",
         "parameters": [
@@ -494,9 +482,7 @@
     },
     "/compute/script": {
       "get": {
-        "tags": [
-          "Edge Script"
-        ],
+        "tags": ["Edge Script"],
         "summary": "List Edge Scripts",
         "operationId": "ListEdgeScriptsEndpoint_ListEdgeScriptsByAccount",
         "parameters": [
@@ -615,9 +601,7 @@
         ]
       },
       "post": {
-        "tags": [
-          "Edge Script"
-        ],
+        "tags": ["Edge Script"],
         "summary": "Add Edge Script",
         "operationId": "CreateEdgeScriptEndpoint_AddScript",
         "requestBody": {
@@ -688,9 +672,7 @@
     },
     "/compute/script/{id}/deploymentKey/rotate": {
       "post": {
-        "tags": [
-          "Edge Script"
-        ],
+        "tags": ["Edge Script"],
         "summary": "Rotate Deployment Key",
         "operationId": "RotateEdgeScriptDeploymentKeyEndpoint_RotateEdgeScriptDeploymentKey",
         "parameters": [
@@ -748,9 +730,7 @@
     },
     "/compute/script/{id}/variables/add": {
       "post": {
-        "tags": [
-          "Variable"
-        ],
+        "tags": ["Variable"],
         "summary": "Add Variable",
         "operationId": "AddEdgeScriptVariableEndpoint_AddEdgeScriptVariable",
         "parameters": [
@@ -828,9 +808,7 @@
     },
     "/compute/script/{id}/variables/{variableId}": {
       "delete": {
-        "tags": [
-          "Variable"
-        ],
+        "tags": ["Variable"],
         "summary": "Delete Variable",
         "operationId": "DeleteEdgeScriptVariableEndpoint_DeleteVariable",
         "parameters": [
@@ -907,9 +885,7 @@
         ]
       },
       "get": {
-        "tags": [
-          "Variable"
-        ],
+        "tags": ["Variable"],
         "summary": "Get Variable",
         "operationId": "GetEdgeScriptVariableEndpoint_GetVariable",
         "parameters": [
@@ -983,9 +959,7 @@
         ]
       },
       "post": {
-        "tags": [
-          "Variable"
-        ],
+        "tags": ["Variable"],
         "summary": "Update Variable",
         "operationId": "UpdateEdgeScriptVariableEndpoint_UpdateVariable",
         "parameters": [
@@ -1074,9 +1048,7 @@
     },
     "/compute/script/{id}/variables": {
       "put": {
-        "tags": [
-          "Variable"
-        ],
+        "tags": ["Variable"],
         "summary": "Upsert Variable",
         "operationId": "UpsertEdgeScriptVariableEndpoint_UpsertEdgeScriptVariable",
         "parameters": [
@@ -1164,9 +1136,7 @@
     },
     "/compute/script/{id}/secrets": {
       "post": {
-        "tags": [
-          "Secret"
-        ],
+        "tags": ["Secret"],
         "summary": "Add Secret",
         "operationId": "AddEdgeScriptSecretEndpoint_AddEdgeScriptSecret",
         "parameters": [
@@ -1252,9 +1222,7 @@
         ]
       },
       "get": {
-        "tags": [
-          "Secret"
-        ],
+        "tags": ["Secret"],
         "summary": "List Secrets",
         "operationId": "ListEdgeScriptSecretsEndpoint_ListEdgeScriptSecrets",
         "parameters": [
@@ -1314,9 +1282,7 @@
         ]
       },
       "put": {
-        "tags": [
-          "Secret"
-        ],
+        "tags": ["Secret"],
         "summary": "Upsert Secret",
         "operationId": "UpsertEdgeScriptSecretEndpoint_UpsertEdgeScriptSecret",
         "parameters": [
@@ -1407,9 +1373,7 @@
     },
     "/compute/script/{id}/secrets/{secretId}": {
       "delete": {
-        "tags": [
-          "Secret"
-        ],
+        "tags": ["Secret"],
         "summary": "Delete Secret",
         "operationId": "DeleteEdgeScriptSecretEndpoint_DeleteSecret",
         "parameters": [
@@ -1486,9 +1450,7 @@
         ]
       },
       "post": {
-        "tags": [
-          "Secret"
-        ],
+        "tags": ["Secret"],
         "summary": "Update Secret",
         "operationId": "UpdateEdgeScriptSecretEndpoint_UpdateEdgeScriptSecret",
         "parameters": [
@@ -1587,9 +1549,7 @@
     },
     "/compute/script/{id}/releases/active": {
       "get": {
-        "tags": [
-          "Release"
-        ],
+        "tags": ["Release"],
         "summary": "Get Active Release",
         "operationId": "GetEdgeScriptActiveReleaseEndpoint_GetCurrentlyActiveReleaseEndpoint",
         "parameters": [
@@ -1654,9 +1614,7 @@
     },
     "/compute/script/{id}/releases": {
       "get": {
-        "tags": [
-          "Release"
-        ],
+        "tags": ["Release"],
         "summary": "Get Releases",
         "operationId": "GetEdgeScriptReleaseEndpoint_GetReleases",
         "parameters": [
@@ -1745,9 +1703,7 @@
     },
     "/compute/script/{id}/publish": {
       "post": {
-        "tags": [
-          "Release"
-        ],
+        "tags": ["Release"],
         "summary": "Publish Release",
         "operationId": "PublishEdgeScriptReleaseEndpoint_Publish",
         "parameters": [
@@ -1831,9 +1787,7 @@
     },
     "/compute/script/{id}/publish/{uuid}": {
       "post": {
-        "tags": [
-          "Release"
-        ],
+        "tags": ["Release"],
         "summary": "Publish Release",
         "operationId": "PublishEdgeScriptReleaseEndpoint_Publish2",
         "parameters": [
@@ -2083,16 +2037,8 @@
       "EdgeScriptTypes": {
         "type": "integer",
         "description": "0 = DNS\n1 = CDN\n2 = Middleware",
-        "x-enumNames": [
-          "DNS",
-          "CDN",
-          "Middleware"
-        ],
-        "enum": [
-          0,
-          1,
-          2
-        ]
+        "x-enumNames": ["DNS", "CDN", "Middleware"],
+        "enum": [0, 1, 2]
       },
       "EdgeScriptVariableModel": {
         "type": "object",
@@ -2233,16 +2179,8 @@
       "EdgeScriptTypes2": {
         "type": "integer",
         "description": "0 = DNS\n1 = CDN\n2 = Middleware",
-        "x-enumNames": [
-          "DNS",
-          "CDN",
-          "Middleware"
-        ],
-        "enum": [
-          0,
-          1,
-          2
-        ]
+        "x-enumNames": ["DNS", "CDN", "Middleware"],
+        "enum": [0, 1, 2]
       },
       "UpdateEdgeScriptModel": {
         "type": "object",
@@ -2261,10 +2199,7 @@
       "AddEdgeScriptVariableModel": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "Name",
-          "Required"
-        ],
+        "required": ["Name", "Required"],
         "properties": {
           "Name": {
             "type": "string",
@@ -2299,9 +2234,7 @@
       "UpsertEdgeScriptVariableModel": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "Name"
-        ],
+        "required": ["Name"],
         "properties": {
           "Name": {
             "type": "string",
@@ -2340,9 +2273,7 @@
       "EdgeScriptAddSecretModel": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "Name"
-        ],
+        "required": ["Name"],
         "properties": {
           "Name": {
             "type": "string",
@@ -2448,14 +2379,8 @@
       "EdgeScriptReleaseStatus": {
         "type": "integer",
         "description": "0 = Archived\n1 = Live",
-        "x-enumNames": [
-          "Archived",
-          "Live"
-        ],
-        "enum": [
-          0,
-          1
-        ]
+        "x-enumNames": ["Archived", "Live"],
+        "enum": [0, 1]
       },
       "PaginationListModelOfEdgeScriptReleaseModel": {
         "type": "object",

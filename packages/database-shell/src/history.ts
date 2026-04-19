@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 
 export const HISTORY_MAX = 1000;
 
@@ -24,5 +24,5 @@ export function saveHistory(lines: string[]): void {
   const path = getHistoryPath();
   const dir = dirname(path);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(path, lines.slice(-HISTORY_MAX).join("\n") + "\n", "utf-8");
+  writeFileSync(path, `${lines.slice(-HISTORY_MAX).join("\n")}\n`, "utf-8");
 }

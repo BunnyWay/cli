@@ -1,12 +1,12 @@
-import prompts from "prompts";
 import { createMcClient } from "@bunny.net/api";
+import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { spinner } from "../../../core/ui.ts";
 import { resolveAppId, resolveContainerId } from "../config.ts";
-import { clientOptions } from "../../../core/client-options.ts";
 
 const COMMAND = "add";
 const DESCRIPTION = "Add an endpoint to a container.";
@@ -138,19 +138,20 @@ export const appsEndpointsAddCommand = defineCommand<AddArgs>({
       };
     }
 
-    await client.POST(
-      "/apps/{appId}/containers/{containerId}/endpoints",
-      {
-        params: { path: { appId, containerId } },
-        body: body as any,
-      },
-    );
+    await client.POST("/apps/{appId}/containers/{containerId}/endpoints", {
+      params: { path: { appId, containerId } },
+      body: body as any,
+    });
 
     spin.stop();
 
     if (output === "json") {
       logger.log(
-        JSON.stringify({ type: endpointType, containerPort: cPort, publicPort: pPort }),
+        JSON.stringify({
+          type: endpointType,
+          containerPort: cPort,
+          publicPort: pPort,
+        }),
       );
       return;
     }

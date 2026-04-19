@@ -1,14 +1,14 @@
-import { randomBytes } from "crypto";
-import { defineCommand } from "../../core/define-command.ts";
+import { randomBytes } from "node:crypto";
+import { createCoreClient } from "@bunny.net/api";
 import {
   profileExists,
-  setProfile,
   resolveConfig,
+  setProfile,
 } from "../../config/index.ts";
-import { createCoreClient } from "@bunny.net/api";
-import { confirm, openBrowser, spinner } from "../../core/ui.ts";
-import { logger } from "../../core/logger.ts";
 import { clientOptions } from "../../core/client-options.ts";
+import { defineCommand } from "../../core/define-command.ts";
+import { logger } from "../../core/logger.ts";
+import { confirm, openBrowser, spinner } from "../../core/ui.ts";
 
 const DASHBOARD_URL =
   process.env.BUNNYNET_DASHBOARD_URL ?? "https://dash.bunny.net";
@@ -118,7 +118,7 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
     openBrowser(authUrl);
     logger.info("Waiting for authentication...");
 
-    let timeoutId: ReturnType<typeof setTimeout>;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, rej) => {
       timeoutId = setTimeout(
         () => rej(new Error("Authentication timed out after 5 minutes")),
@@ -157,7 +157,7 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
       logger.error(`Authentication failed: ${err.message}`);
       process.exit(1);
     } finally {
-      clearTimeout(timeoutId!);
+      clearTimeout(timeoutId);
       server.stop(true);
     }
   },

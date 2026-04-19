@@ -1,15 +1,21 @@
-import prompts from "prompts";
-import { defineCommand } from "../../core/define-command.ts";
-import { resolveConfig } from "../../config/index.ts";
 import { createDbClient } from "@bunny.net/api";
-import { resolveDbId } from "./resolve-db.ts";
-import { confirm, spinner } from "../../core/ui.ts";
-import { logger } from "../../core/logger.ts";
-import { UserError } from "../../core/errors.ts";
-import { ARG_DATABASE_ID, DATABASE_MANIFEST, ENV_DATABASE_URL, ENV_DATABASE_AUTH_TOKEN, type DatabaseManifest } from "./constants.ts";
+import prompts from "prompts";
+import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
+import { defineCommand } from "../../core/define-command.ts";
+import { UserError } from "../../core/errors.ts";
+import { logger } from "../../core/logger.ts";
 import { loadManifest, removeManifest } from "../../core/manifest.ts";
+import { confirm, spinner } from "../../core/ui.ts";
 import { readEnvValue, removeEnvValue } from "../../utils/env-file.ts";
+import {
+  ARG_DATABASE_ID,
+  DATABASE_MANIFEST,
+  type DatabaseManifest,
+  ENV_DATABASE_AUTH_TOKEN,
+  ENV_DATABASE_URL,
+} from "./constants.ts";
+import { resolveDbId } from "./resolve-db.ts";
 
 const COMMAND = `delete [${ARG_DATABASE_ID}]`;
 const DESCRIPTION = "Delete a database.";
@@ -50,7 +56,10 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
   examples: [
     ["$0 db delete db_01KCH…", "Interactive — double confirmation"],
     ["$0 db delete db_01KCH… --force", "Skip confirmation prompts"],
-    ["$0 db delete db_01KCH… --force --output json", "JSON output for scripting"],
+    [
+      "$0 db delete db_01KCH… --force --output json",
+      "JSON output for scripting",
+    ],
   ],
 
   builder: (yargs) =>
@@ -96,7 +105,9 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
     if (source === "env") {
       logger.dim(`Database: ${db.name} (${databaseId}, from .env)`);
     } else if (source === "manifest") {
-      logger.dim(`Database: ${db.name} (${databaseId}, from .bunny/database.json)`);
+      logger.dim(
+        `Database: ${db.name} (${databaseId}, from .bunny/database.json)`,
+      );
     }
 
     // First confirmation
@@ -134,9 +145,7 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
     deleteSpin.stop();
 
     if (output === "json") {
-      logger.log(
-        JSON.stringify({ db_id: databaseId, deleted: true }, null, 2),
-      );
+      logger.log(JSON.stringify({ db_id: databaseId, deleted: true }, null, 2));
       return;
     }
 
@@ -162,7 +171,9 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
         const envToken = readEnvValue(ENV_DATABASE_AUTH_TOKEN);
         if (envToken && envToken.envPath === envUrl.envPath) {
           removeEnvValue(ENV_DATABASE_AUTH_TOKEN, envToken.envPath);
-          logger.success(`Removed ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} from ${envUrl.envPath}`);
+          logger.success(
+            `Removed ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} from ${envUrl.envPath}`,
+          );
         } else {
           logger.success(`Removed ${ENV_DATABASE_URL} from ${envUrl.envPath}`);
         }

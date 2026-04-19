@@ -19,9 +19,29 @@ export interface Template {
 
 export const TEMPLATES: Template[] = [
   // Standalone
-  { name: "Empty", description: "An empty Edge Script project", repo: "https://github.com/BunnyWay/es-empty-script", scriptType: 1 },
-  { name: "Return JSON", description: "A script that returns JSON responses", repo: "https://github.com/BunnyWay/es-return-json", scriptType: 1 },
+  {
+    name: "Empty",
+    description: "An empty Edge Script project",
+    repo: "https://github.com/BunnyWay/es-empty-script",
+    scriptType: 1,
+  },
+  {
+    name: "Return JSON",
+    description: "A script that returns JSON responses",
+    repo: "https://github.com/BunnyWay/es-return-json",
+    scriptType: 1,
+  },
   // Middleware
-  { name: "Empty", description: "An empty Edge Script project", repo: "https://github.com/BunnyWay/es-empty-script", scriptType: 2 },
-  { name: "Simple Middleware", description: "A simple middleware example", repo: "https://github.com/BunnyWay/es-simple-middleware", scriptType: 2 },
+  {
+    name: "Empty",
+    description: "An empty Edge Script project",
+    repo: "https://github.com/BunnyWay/es-empty-script",
+    scriptType: 2,
+  },
+  {
+    name: "Simple Middleware",
+    description: "A simple middleware example",
+    repo: "https://github.com/BunnyWay/es-simple-middleware",
+    scriptType: 2,
+  },
 ];

@@ -4,5 +4,8 @@ export interface ExecuteResult {
 }
 
 export interface DatabaseExecutor {
-  execute(sql: string, args: (string | number | boolean | null)[]): Promise<ExecuteResult>;
+  execute(
+    sql: string,
+    args: (string | number | boolean | null)[],
+  ): Promise<ExecuteResult>;
 }

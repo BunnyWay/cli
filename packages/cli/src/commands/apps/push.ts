@@ -1,10 +1,10 @@
 import { createMcClient } from "@bunny.net/api";
 import { resolveConfig } from "../../config/index.ts";
+import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
-import { resolveAppId, loadConfig, configToPatchRequest } from "./config.ts";
-import { clientOptions } from "../../core/client-options.ts";
+import { configToPatchRequest, loadConfig, resolveAppId } from "./config.ts";
 
 const COMMAND = "push";
 const DESCRIPTION = "Apply local bunny.jsonc config to remote app.";
@@ -23,13 +23,7 @@ export const appsPushCommand = defineCommand<PushArgs>({
       describe: "Show what would change without applying",
     }),
 
-  handler: async ({
-    "dry-run": dryRun,
-    profile,
-    output,
-    verbose,
-    apiKey,
-  }) => {
+  handler: async ({ "dry-run": dryRun, profile, output, verbose, apiKey }) => {
     const appId = resolveAppId();
     const toml = loadConfig();
     const config = resolveConfig(profile, apiKey);
@@ -67,9 +61,7 @@ export const appsPushCommand = defineCommand<PushArgs>({
       const containerCount = patchRequest.containerTemplates?.length ?? 0;
       const existingCount = existingApp.containerTemplates.length;
       if (containerCount !== existingCount) {
-        logger.log(
-          `  Containers: ${existingCount} → ${containerCount}`,
-        );
+        logger.log(`  Containers: ${existingCount} → ${containerCount}`);
       }
 
       const volumeCount = patchRequest.volumes?.length ?? 0;

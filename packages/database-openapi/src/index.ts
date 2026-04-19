@@ -1,5 +1,11 @@
+export type {
+  OpenAPISpec,
+  OperationObject,
+  ParameterObject,
+  PathItem,
+  SchemaObject,
+} from "./generate.ts";
 export { generateOpenAPISpec } from "./generate.ts";
-export type { OpenAPISpec, SchemaObject, ParameterObject, OperationObject, PathItem } from "./generate.ts";
 export type {
   ColumnDefinition,
   ColumnType,

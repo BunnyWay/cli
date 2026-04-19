@@ -1,14 +1,14 @@
-import { existsSync } from "fs";
-import { resolve } from "path";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { createComputeClient } from "@bunny.net/api";
 import { resolveConfig } from "../../config/index.ts";
+import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { resolveManifestId } from "../../core/manifest.ts";
 import { spinner } from "../../core/ui.ts";
 import { SCRIPT_MANIFEST } from "./constants.ts";
-import { clientOptions } from "../../core/client-options.ts";
 
 const COMMAND = "deploy <file> [id]";
 const DESCRIPTION = "Deploy code to an Edge Script.";
@@ -50,7 +50,10 @@ export const scriptsDeployCommand = defineCommand<DeployArgs>({
   describe: DESCRIPTION,
   examples: [
     ["$0 scripts deploy dist/index.js", "Deploy and publish"],
-    ["$0 scripts deploy dist/index.js --skip-publish", "Deploy without publishing"],
+    [
+      "$0 scripts deploy dist/index.js --skip-publish",
+      "Deploy without publishing",
+    ],
     ["$0 scripts deploy dist/index.js 12345", "Deploy to a specific script"],
   ],
 
@@ -126,8 +129,7 @@ export const scriptsDeployCommand = defineCommand<DeployArgs>({
       params: { path: { id } },
     });
 
-    const hostname =
-      script?.LinkedPullZones?.[0]?.DefaultHostname ?? undefined;
+    const hostname = script?.LinkedPullZones?.[0]?.DefaultHostname ?? undefined;
     if (hostname && published) {
       logger.info(`Live at: ${hostname}`);
     }

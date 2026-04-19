@@ -1,16 +1,16 @@
-import prompts from "prompts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { resolveConfig } from "../../../config/index.ts";
 import { createDbClient } from "@bunny.net/api";
-import { resolveDbId } from "../resolve-db.ts";
-import { spinner } from "../../../core/ui.ts";
-import { logger } from "../../../core/logger.ts";
+import type { components } from "@bunny.net/api/generated/database.d.ts";
+import prompts from "prompts";
+import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
+import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { formatTable } from "../../../core/format.ts";
-import type { components } from "@bunny.net/api/generated/database.d.ts";
+import { logger } from "../../../core/logger.ts";
+import { spinner } from "../../../core/ui.ts";
 import { ARG_DATABASE_ID } from "../constants.ts";
-import { clientOptions } from "../../../core/client-options.ts";
 import { groupedRegionChoices } from "../region-choices.ts";
+import { resolveDbId } from "../resolve-db.ts";
 
 type PossibleRegion = components["schemas"]["PossibleRegion"];
 type Region = components["schemas"]["Region"];
@@ -119,10 +119,14 @@ export const dbRegionsAddCommand = defineCommand<AddArgs>({
     if (primaryArg || replicasArg) {
       // Non-interactive path
       if (primaryArg) {
-        newPrimary = primaryArg.split(",").map((s) => s.trim()) as PossibleRegion[];
+        newPrimary = primaryArg
+          .split(",")
+          .map((s) => s.trim()) as PossibleRegion[];
       }
       if (replicasArg) {
-        newReplicas = replicasArg.split(",").map((s) => s.trim()) as PossibleRegion[];
+        newReplicas = replicasArg
+          .split(",")
+          .map((s) => s.trim()) as PossibleRegion[];
       }
     } else {
       // Interactive path — show only regions not already configured
@@ -195,10 +199,7 @@ export const dbRegionsAddCommand = defineCommand<AddArgs>({
 
     // Build region name lookup
     const regionNames = new Map<string, string>();
-    const allRegions: Region[] = [
-      ...availablePrimary,
-      ...availableReplicas,
-    ];
+    const allRegions: Region[] = [...availablePrimary, ...availableReplicas];
     for (const r of allRegions) {
       regionNames.set(r.id, r.name);
     }

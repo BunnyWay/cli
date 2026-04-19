@@ -1,5 +1,5 @@
-import { test, expect, describe } from "bun:test";
-import { csvEscape, formatTable, formatKeyValue } from "./format.ts";
+import { describe, expect, test } from "bun:test";
+import { csvEscape, formatKeyValue, formatTable } from "./format.ts";
 
 // --- csvEscape ---
 

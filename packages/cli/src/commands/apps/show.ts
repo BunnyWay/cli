@@ -1,12 +1,12 @@
 import { createMcClient } from "@bunny.net/api";
 import { resolveConfig } from "../../config/index.ts";
+import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { formatKeyValue, formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
-import { STATUS_LABELS } from "./constants.ts";
 import { resolveAppId } from "./config.ts";
-import { clientOptions } from "../../core/client-options.ts";
+import { STATUS_LABELS } from "./constants.ts";
 
 const COMMAND = "show";
 const DESCRIPTION = "Show app details.";

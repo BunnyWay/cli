@@ -1,5 +1,11 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from "fs";
-import { join, dirname, resolve } from "path";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { UserError } from "./errors.ts";
 
 const MANIFEST_DIR = ".bunny";
@@ -37,7 +43,9 @@ export function manifestDir(filename: string): string {
 }
 
 /** Load a manifest from `.bunny/<filename>`. Returns empty data if the file doesn't exist. */
-export function loadManifest<T extends object = ManifestData>(filename: string): Partial<T> {
+export function loadManifest<T extends object = ManifestData>(
+  filename: string,
+): Partial<T> {
   const path = manifestPath(filename);
 
   if (!existsSync(path)) return {};
@@ -50,14 +58,15 @@ export function loadManifest<T extends object = ManifestData>(filename: string):
 }
 
 /** Save a manifest to `.bunny/<filename>`. Creates the directory if needed. */
-export function saveManifest<T extends object = ManifestData>(filename: string, data: T): void {
+export function saveManifest<T extends object = ManifestData>(
+  filename: string,
+  data: T,
+): void {
   const dir = manifestDir(filename);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    join(dir, filename),
-    JSON.stringify(data, null, 2) + "\n",
-    { mode: 0o600 },
-  );
+  writeFileSync(join(dir, filename), `${JSON.stringify(data, null, 2)}\n`, {
+    mode: 0o600,
+  });
 }
 
 /** Remove `.bunny/<filename>` if it exists. No-op if the file is missing. */
@@ -69,14 +78,16 @@ export function removeManifest(filename: string): void {
 }
 
 /** Save a manifest to `.bunny/<filename>` within a specific root directory. */
-export function saveManifestAt<T extends object = ManifestData>(root: string, filename: string, data: T): void {
+export function saveManifestAt<T extends object = ManifestData>(
+  root: string,
+  filename: string,
+  data: T,
+): void {
   const dir = join(root, MANIFEST_DIR);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    join(dir, filename),
-    JSON.stringify(data, null, 2) + "\n",
-    { mode: 0o600 },
-  );
+  writeFileSync(join(dir, filename), `${JSON.stringify(data, null, 2)}\n`, {
+    mode: 0o600,
+  });
 }
 
 /**

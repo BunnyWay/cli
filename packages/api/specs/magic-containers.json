@@ -13,9 +13,7 @@
   "paths": {
     "/apps/{appId}/deploy": {
       "post": {
-        "tags": [
-          "Applications"
-        ],
+        "tags": ["Applications"],
         "summary": "Deploy Application",
         "description": "Deploys an application, making it active and running.",
         "operationId": "DeployApplication",
@@ -78,9 +76,7 @@
     },
     "/apps/{appId}/undeploy": {
       "post": {
-        "tags": [
-          "Applications"
-        ],
+        "tags": ["Applications"],
         "summary": "Undeploy Application",
         "description": "Undeploys an application, stopping all running instances.",
         "operationId": "UndeployApplication",
@@ -143,9 +139,7 @@
     },
     "/apps/{appId}/statistics": {
       "get": {
-        "tags": [
-          "Applications"
-        ],
+        "tags": ["Applications"],
         "summary": "Get Application Statistics",
         "description": "Retrieves historical statistics for an application including CPU, RAM, traffic, latency, and volume usage over a specified time period.",
         "operationId": "GetApplicationStatistics",
@@ -243,9 +237,7 @@
     },
     "/apps/{appId}/overview": {
       "get": {
-        "tags": [
-          "Applications"
-        ],
+        "tags": ["Applications"],
         "summary": "Get Application Overview",
         "description": "Retrieves comprehensive status overview for an application including latency, CPU/RAM usage, active instances, regions, and cost information.",
         "operationId": "GetApplicationOverview",
@@ -298,9 +290,7 @@
     },
     "/apps": {
       "post": {
-        "tags": [
-          "Applications"
-        ],
+        "tags": ["Applications"],
         "summary": "Add Application",
         "description": "Creates a new application with the specified configuration including containers, volumes, region settings, and autoscaling.",
         "operationId": "AddApplication",
@@ -397,9 +387,7 @@
         }
       },
       "get": {
-        "tags": [
-          "Applications"
-        ],
+        "tags": ["Applications"],
         "summary": "List Applications",
         "description": "Lists all applications for the authenticated user with their current status.",
         "operationId": "ListApplications",
@@ -469,9 +457,7 @@
     },
     "/apps/{appId}": {
       "patch": {
-        "tags": [
-          "Applications"
-        ],
+        "tags": ["Applications"],
         "summary": "Patch Application",
         "description": "Partially updates an existing application using JSON Merge Patch semantics. Only provided fields will be updated; existing fields not included in the request will remain unchanged. For arrays (containers, volumes, endpoints), items with matching IDs will be updated, items without IDs will be added as new, and items not included will be deleted.",
         "operationId": "PatchApplication",
@@ -580,9 +566,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Applications"
-        ],
+        "tags": ["Applications"],
         "summary": "Update Application",
         "description": "Updates an existing application with full replacement of all configuration fields.",
         "operationId": "UpdateApplication",
@@ -691,9 +675,7 @@
         }
       },
       "get": {
-        "tags": [
-          "Applications"
-        ],
+        "tags": ["Applications"],
         "summary": "Get application",
         "operationId": "GetApplication",
         "parameters": [
@@ -750,9 +732,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Applications"
-        ],
+        "tags": ["Applications"],
         "summary": "Delete Application",
         "description": "Deletes an application and all its associated resources including deployments, services, and volumes.",
         "operationId": "DeleteApplication",
@@ -805,9 +785,7 @@
     },
     "/apps/{appId}/restart": {
       "post": {
-        "tags": [
-          "Applications"
-        ],
+        "tags": ["Applications"],
         "summary": "Restart Application",
         "description": "Triggers a restart of all pods for the specified application.",
         "operationId": "RestartApplication",
@@ -870,9 +848,7 @@
     },
     "/apps/{appId}/autoscaling": {
       "get": {
-        "tags": [
-          "AutoscalingSettings"
-        ],
+        "tags": ["AutoscalingSettings"],
         "summary": "Get Application Autoscaling",
         "description": "Retrieves the current autoscaling settings for an application, including minimum and maximum replica counts.",
         "operationId": "GetApplicationAutoscaling",
@@ -931,9 +907,7 @@
         }
       },
       "put": {
-        "tags": [
-          "AutoscalingSettings"
-        ],
+        "tags": ["AutoscalingSettings"],
         "summary": "Update Application Autoscaling",
         "description": "Updates the autoscaling settings for an application, including minimum and maximum replica counts.",
         "operationId": "UpdateApplicationAutoscaling",
@@ -1037,9 +1011,7 @@
     },
     "/registries": {
       "get": {
-        "tags": [
-          "ContainerRegistries"
-        ],
+        "tags": ["ContainerRegistries"],
         "summary": "List Container Registries",
         "description": "Lists all container registries configured for the authenticated user.",
         "operationId": "ListContainerRegistries",
@@ -1077,9 +1049,7 @@
         }
       },
       "post": {
-        "tags": [
-          "ContainerRegistries"
-        ],
+        "tags": ["ContainerRegistries"],
         "summary": "Add container registry",
         "description": "Add a container registry for user.",
         "operationId": "AddContainerRegistry",
@@ -1148,9 +1118,7 @@
     },
     "/registries/public-images/search": {
       "post": {
-        "tags": [
-          "ContainerRegistries"
-        ],
+        "tags": ["ContainerRegistries"],
         "summary": "Search Public Container Images",
         "description": "Searches for public container images in a registry by prefix.",
         "operationId": "SearchForPublicContainerImages",
@@ -1222,9 +1190,7 @@
     },
     "/registries/images": {
       "post": {
-        "tags": [
-          "ContainerRegistries"
-        ],
+        "tags": ["ContainerRegistries"],
         "summary": "List Container Images",
         "description": "Lists all container images available in a private registry.",
         "operationId": "ListContainerImages",
@@ -1296,9 +1262,7 @@
     },
     "/registries/{registryId}": {
       "put": {
-        "tags": [
-          "ContainerRegistries"
-        ],
+        "tags": ["ContainerRegistries"],
         "summary": "Update Container Registry",
         "description": "Updates an existing container registry configuration including credentials.",
         "operationId": "UpdateContainerRegistry",
@@ -1386,9 +1350,7 @@
         }
       },
       "get": {
-        "tags": [
-          "ContainerRegistries"
-        ],
+        "tags": ["ContainerRegistries"],
         "summary": "Get Container Registry",
         "description": "Retrieves a specific container registry by its ID.",
         "operationId": "GetContainerRegistry",
@@ -1447,9 +1409,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "ContainerRegistries"
-        ],
+        "tags": ["ContainerRegistries"],
         "summary": "Delete Container Registry",
         "description": "Deletes a container registry. Returns an error if the registry is currently in use by any applications.",
         "operationId": "DeleteContainerRegistry",
@@ -1510,9 +1470,7 @@
     },
     "/registries/tags": {
       "post": {
-        "tags": [
-          "ContainerRegistries"
-        ],
+        "tags": ["ContainerRegistries"],
         "summary": "List Container Image Tags",
         "description": "Lists all available tags for a specific container image.",
         "operationId": "ListContainerImageTags",
@@ -1584,9 +1542,7 @@
     },
     "/registries/digest": {
       "post": {
-        "tags": [
-          "ContainerRegistries"
-        ],
+        "tags": ["ContainerRegistries"],
         "summary": "Get Container Image Digest",
         "description": "Retrieves the digest information for a specific container image tag.",
         "operationId": "GetContainerImageTagDigest",
@@ -1655,9 +1611,7 @@
     },
     "/registries/config-suggestions": {
       "post": {
-        "tags": [
-          "ContainerRegistries"
-        ],
+        "tags": ["ContainerRegistries"],
         "summary": "Get Container Config Suggestions",
         "description": "Gets recommended configuration for a container image including endpoint configurations and environment variables.",
         "operationId": "GetContainerConfigSuggestions",
@@ -1726,9 +1680,7 @@
     },
     "/apps/{appId}/containers/{containerId}/env": {
       "put": {
-        "tags": [
-          "Containers"
-        ],
+        "tags": ["Containers"],
         "summary": "Set Container Environment Variables",
         "description": "Replaces all environment variables for a container template. All existing environment variables will be removed and replaced with the provided set.",
         "operationId": "SetContainerEnvironmentVariables",
@@ -1847,9 +1799,7 @@
     },
     "/apps/{appId}/containers/{containerId}": {
       "patch": {
-        "tags": [
-          "Containers"
-        ],
+        "tags": ["Containers"],
         "summary": "Patch Container Template",
         "description": "Partially updates a container template within an application. Only provided fields will be updated; existing fields not included in the request will remain unchanged.",
         "operationId": "PatchApplicationContainerTemplate",
@@ -1957,9 +1907,7 @@
         }
       },
       "get": {
-        "tags": [
-          "Containers"
-        ],
+        "tags": ["Containers"],
         "summary": "Get Container Template",
         "description": "Gets a container template within an application.",
         "operationId": "GetApplicationContainerTemplate",
@@ -2027,9 +1975,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Containers"
-        ],
+        "tags": ["Containers"],
         "summary": "Delete Container Template",
         "description": "Deletes a container template from an application.",
         "operationId": "DeleteApplicationContainerTemplate",
@@ -2112,9 +2058,7 @@
     },
     "/apps/{appId}/containers": {
       "post": {
-        "tags": [
-          "Containers"
-        ],
+        "tags": ["Containers"],
         "summary": "Add Container Template",
         "description": "Adds a new container template to an application.",
         "operationId": "AddApplicationContainerTemplate",
@@ -2215,9 +2159,7 @@
     },
     "/apps/{appId}/endpoints/{endpointId}": {
       "put": {
-        "tags": [
-          "Endpoints"
-        ],
+        "tags": ["Endpoints"],
         "summary": "Update Application Endpoint",
         "description": "Update an existing endpoint for given application",
         "operationId": "UpdateApplicationEndpoint",
@@ -2329,9 +2271,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Endpoints"
-        ],
+        "tags": ["Endpoints"],
         "summary": "Delete application endpoint",
         "description": "Delete endpoint of a container for given application.",
         "operationId": "DeleteApplicationEndpoint",
@@ -2405,9 +2345,7 @@
     },
     "/apps/{appId}/endpoints": {
       "get": {
-        "tags": [
-          "Endpoints"
-        ],
+        "tags": ["Endpoints"],
         "summary": "List application endpoints",
         "description": "List endpoints from all containers for given application",
         "operationId": "ListApplicationEndpoints",
@@ -2468,9 +2406,7 @@
     },
     "/apps/{appId}/containers/{containerId}/endpoints": {
       "post": {
-        "tags": [
-          "Endpoints"
-        ],
+        "tags": ["Endpoints"],
         "summary": "Add application endpoint",
         "description": "Add CDN or Anycast endpoint to a container of given application.",
         "operationId": "AddApplicationEndpoint",
@@ -2590,9 +2526,7 @@
     },
     "/limits": {
       "get": {
-        "tags": [
-          "Limits"
-        ],
+        "tags": ["Limits"],
         "summary": "Get User Limits",
         "description": "Retrieves the current resource limits and usage for the authenticated user, including application counts and instance limits.",
         "operationId": "GetLimits",
@@ -2642,9 +2576,7 @@
     },
     "/nodes": {
       "get": {
-        "tags": [
-          "Nodes"
-        ],
+        "tags": ["Nodes"],
         "summary": "List Nodes",
         "description": "Lists all node IP addresses in the Magic Containers network.",
         "operationId": "ListNodes",
@@ -2704,9 +2636,7 @@
     },
     "/apps/{appId}/pods/{podId}/recreate": {
       "post": {
-        "tags": [
-          "Pods"
-        ],
+        "tags": ["Pods"],
         "summary": "Recreate Pod",
         "description": "Recreate a pod, deleting previous one.",
         "operationId": "RecreatePod",
@@ -2788,9 +2718,7 @@
     },
     "/regions": {
       "get": {
-        "tags": [
-          "Regions"
-        ],
+        "tags": ["Regions"],
         "summary": "List Regions",
         "description": "Lists all available regions where applications can be deployed, including their anycast support and capacity status.",
         "operationId": "ListRegions",
@@ -2860,9 +2788,7 @@
     },
     "/regions/optimal": {
       "get": {
-        "tags": [
-          "Regions"
-        ],
+        "tags": ["Regions"],
         "summary": "Get Optimal Base Region",
         "description": "Returns the optimal base region for deployment based on the user's CDN server token location.",
         "operationId": "GetOptimalBaseRegion",
@@ -2911,9 +2837,7 @@
     },
     "/apps/{appId}/region-settings": {
       "get": {
-        "tags": [
-          "RegionSettings"
-        ],
+        "tags": ["RegionSettings"],
         "summary": "Get Application Region Settings",
         "description": "Retrieves the current region settings for an application, including allowed regions, required regions, and maximum allowed regions.",
         "operationId": "GetApplicationRegionSettings",
@@ -2972,9 +2896,7 @@
         }
       },
       "put": {
-        "tags": [
-          "RegionSettings"
-        ],
+        "tags": ["RegionSettings"],
         "summary": "Update Application Region Settings",
         "description": "Updates the region settings for an application, including allowed regions, required regions, and maximum allowed regions.",
         "operationId": "UpdateApplicationRegionSettings",
@@ -3078,9 +3000,7 @@
     },
     "/apps/{appId}/volumes/{volumeId}": {
       "patch": {
-        "tags": [
-          "Volumes"
-        ],
+        "tags": ["Volumes"],
         "summary": "Update Volume",
         "description": "Partially updates a volume template's configuration including name and size. Only provided fields will be updated.",
         "operationId": "UpdateVolume",
@@ -3176,9 +3096,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Volumes"
-        ],
+        "tags": ["Volumes"],
         "summary": "Delete All Volume Instances",
         "description": "Deletes all volume instances for a volume template. All instances must be detached before deletion.",
         "operationId": "DeleteAllVolumeInstances",
@@ -3257,9 +3175,7 @@
     },
     "/apps/{appId}/volumes": {
       "get": {
-        "tags": [
-          "Volumes"
-        ],
+        "tags": ["Volumes"],
         "summary": "List Volumes",
         "description": "Lists all volume templates and their instances for an application, including usage statistics.",
         "operationId": "ListVolumes",
@@ -3309,9 +3225,7 @@
     },
     "/apps/{appId}/volumes/{volumeId}/detach": {
       "post": {
-        "tags": [
-          "Volumes"
-        ],
+        "tags": ["Volumes"],
         "summary": "Detach Volume",
         "description": "Detaches a volume template from all application containers.",
         "operationId": "DetachVolume",
@@ -3380,9 +3294,7 @@
     },
     "/apps/{appId}/volumes/{volumeId}/instances/{instanceId}": {
       "delete": {
-        "tags": [
-          "Volumes"
-        ],
+        "tags": ["Volumes"],
         "summary": "Delete Volume Instance",
         "description": "Deletes a specific volume instance. The volume must be detached before deletion.",
         "operationId": "DeleteVolumeInstance",
@@ -3462,9 +3374,7 @@
     },
     "/log/forwarding": {
       "get": {
-        "tags": [
-          "Log Forwarding"
-        ],
+        "tags": ["Log Forwarding"],
         "summary": "List log-forwarding configurations",
         "description": "Get a list of all log-forwarding configurations for the authenticated user.",
         "responses": {
@@ -3487,9 +3397,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Log Forwarding"
-        ],
+        "tags": ["Log Forwarding"],
         "summary": "Create log forwarding configuration",
         "description": "Create a new log forwarding configuration.",
         "requestBody": {
@@ -3527,9 +3435,7 @@
     },
     "/log/forwarding/{appId}": {
       "get": {
-        "tags": [
-          "Log Forwarding"
-        ],
+        "tags": ["Log Forwarding"],
         "summary": "Get log-forwarding configuration",
         "description": "Get a specific log-forwarding configuration by ID.",
         "parameters": [
@@ -3566,9 +3472,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Log Forwarding"
-        ],
+        "tags": ["Log Forwarding"],
         "summary": "Update log-forwarding configuration",
         "description": "Update an existing log-forwarding configuration.",
         "parameters": [
@@ -3618,9 +3522,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Log Forwarding"
-        ],
+        "tags": ["Log Forwarding"],
         "summary": "Delete log-forwarding configuration",
         "description": "Delete a log-forwarding configuration.",
         "parameters": [
@@ -3654,12 +3556,7 @@
   "components": {
     "schemas": {
       "AddApplicationRequest": {
-        "required": [
-          "autoScaling",
-          "name",
-          "regionSettings",
-          "runtimeType"
-        ],
+        "required": ["autoScaling", "name", "regionSettings", "runtimeType"],
         "type": "object",
         "properties": {
           "name": {
@@ -3785,10 +3682,7 @@
         "additionalProperties": false
       },
       "AnycastEndpointRequest": {
-        "required": [
-          "portMappings",
-          "type"
-        ],
+        "required": ["portMappings", "type"],
         "type": "object",
         "properties": {
           "type": {
@@ -3805,9 +3699,7 @@
         "additionalProperties": false
       },
       "AnycastIpProtocolVersion": {
-        "enum": [
-          "IPv4"
-        ],
+        "enum": ["IPv4"],
         "type": "string"
       },
       "AppListItem": {
@@ -3897,10 +3789,7 @@
         "description": "Application model"
       },
       "ApplicationRuntimeType": {
-        "enum": [
-          "Shared",
-          "Reserved"
-        ],
+        "enum": ["Shared", "Reserved"],
         "type": "string"
       },
       "ApplicationStatus": {
@@ -3915,10 +3804,7 @@
         "type": "string"
       },
       "AutoscalingSettings": {
-        "required": [
-          "max",
-          "min"
-        ],
+        "required": ["max", "min"],
         "type": "object",
         "properties": {
           "min": {
@@ -4107,12 +3993,7 @@
         "additionalProperties": false
       },
       "ContainerInstance": {
-        "required": [
-          "id",
-          "nodeIpAddress",
-          "podId",
-          "templateId"
-        ],
+        "required": ["id", "nodeIpAddress", "podId", "templateId"],
         "type": "object",
         "properties": {
           "id": {
@@ -4135,9 +4016,7 @@
         "additionalProperties": false
       },
       "ContainerPortMappingRequest": {
-        "required": [
-          "containerPort"
-        ],
+        "required": ["containerPort"],
         "type": "object",
         "properties": {
           "containerPort": {
@@ -4286,9 +4165,7 @@
         "additionalProperties": false
       },
       "ContainerRegistryRequest": {
-        "required": [
-          "displayName"
-        ],
+        "required": ["displayName"],
         "type": "object",
         "properties": {
           "displayName": {
@@ -4384,11 +4261,7 @@
         "additionalProperties": false
       },
       "ContainerStatus": {
-        "enum": [
-          "NotStarted",
-          "Started",
-          "Ready"
-        ],
+        "enum": ["NotStarted", "Started", "Ready"],
         "type": "string"
       },
       "ContainerTemplate": {
@@ -4479,10 +4352,7 @@
         "description": "Container template model"
       },
       "ContainerVolumeMount": {
-        "required": [
-          "mountPath",
-          "name"
-        ],
+        "required": ["mountPath", "name"],
         "type": "object",
         "properties": {
           "name": {
@@ -4497,14 +4367,7 @@
         "additionalProperties": false
       },
       "CreateLogForwardingRequest": {
-        "required": [
-          "app",
-          "type",
-          "endpoint",
-          "port",
-          "format",
-          "enabled"
-        ],
+        "required": ["app", "type", "endpoint", "port", "format", "enabled"],
         "type": "object",
         "properties": {
           "app": {
@@ -4512,10 +4375,7 @@
             "description": "App unique identifier"
           },
           "type": {
-            "enum": [
-              "SyslogUdp",
-              "SyslogTcp"
-            ],
+            "enum": ["SyslogUdp", "SyslogTcp"],
             "type": "string",
             "description": "Log endpoint type"
           },
@@ -4532,10 +4392,7 @@
             "description": "Token passed as field of syslog"
           },
           "format": {
-            "enum": [
-              "SyslogRfc3164",
-              "SyslogRfc5424"
-            ],
+            "enum": ["SyslogRfc3164", "SyslogRfc5424"],
             "type": "string",
             "description": "Which Syslog RFC will be used"
           },
@@ -4546,10 +4403,7 @@
         }
       },
       "Credentials": {
-        "required": [
-          "password",
-          "userName"
-        ],
+        "required": ["password", "userName"],
         "type": "object",
         "properties": {
           "userName": {
@@ -4567,11 +4421,7 @@
         "description": "Password credentials for container registry"
       },
       "DataGranularity": {
-        "enum": [
-          "Daily",
-          "Hourly",
-          "Minute"
-        ],
+        "enum": ["Daily", "Hourly", "Minute"],
         "type": "string"
       },
       "DeleteAllVolumeInstancesResponse": {
@@ -4596,13 +4446,7 @@
         "additionalProperties": false
       },
       "DeploymentStatus": {
-        "enum": [
-          "Unknown",
-          "Active",
-          "Progressing",
-          "Inactive",
-          "Failing"
-        ],
+        "enum": ["Unknown", "Active", "Progressing", "Inactive", "Failing"],
         "type": "string"
       },
       "DetachVolumeResponse": {
@@ -4615,11 +4459,7 @@
         "additionalProperties": false
       },
       "DisplayEndpoint": {
-        "required": [
-          "address",
-          "id",
-          "type"
-        ],
+        "required": ["address", "id", "type"],
         "type": "object",
         "properties": {
           "id": {
@@ -4652,10 +4492,7 @@
         "description": "Status grade model"
       },
       "EndpointInternalIp": {
-        "required": [
-          "address",
-          "region"
-        ],
+        "required": ["address", "region"],
         "type": "object",
         "properties": {
           "address": {
@@ -4741,11 +4578,7 @@
         "description": "Endpoint list item model"
       },
       "EndpointPortMapping": {
-        "required": [
-          "containerPort",
-          "exposedPort",
-          "protocols"
-        ],
+        "required": ["containerPort", "exposedPort", "protocols"],
         "type": "object",
         "properties": {
           "containerPort": {
@@ -4766,9 +4599,7 @@
         "additionalProperties": false
       },
       "EndpointRequest": {
-        "required": [
-          "displayName"
-        ],
+        "required": ["displayName"],
         "type": "object",
         "properties": {
           "displayName": {
@@ -4786,11 +4617,7 @@
         "additionalProperties": false
       },
       "EndpointStickySession": {
-        "required": [
-          "cookieName",
-          "enabled",
-          "sessionHeaders"
-        ],
+        "required": ["cookieName", "enabled", "sessionHeaders"],
         "type": "object",
         "properties": {
           "enabled": {
@@ -4810,17 +4637,11 @@
         "additionalProperties": false
       },
       "EndpointType": {
-        "enum": [
-          "CDN",
-          "Anycast",
-          "PublicIp"
-        ],
+        "enum": ["CDN", "Anycast", "PublicIp"],
         "type": "string"
       },
       "EnvironmentVariable": {
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "type": "object",
         "properties": {
           "name": {
@@ -4893,12 +4714,7 @@
         "description": "RFC 7807 Problem Details response model."
       },
       "GetContainerConfigSuggestionsRequest": {
-        "required": [
-          "imageName",
-          "imageNamespace",
-          "registryId",
-          "tag"
-        ],
+        "required": ["imageName", "imageNamespace", "registryId", "tag"],
         "type": "object",
         "properties": {
           "registryId": {
@@ -4925,12 +4741,7 @@
         "additionalProperties": false
       },
       "GetContainerImageDigestByTagRequest": {
-        "required": [
-          "imageName",
-          "imageNamespace",
-          "registryId",
-          "tag"
-        ],
+        "required": ["imageName", "imageNamespace", "registryId", "tag"],
         "type": "object",
         "properties": {
           "registryId": {
@@ -4957,11 +4768,7 @@
         "additionalProperties": false
       },
       "Grade": {
-        "enum": [
-          "CouldBeBetter",
-          "NotBad",
-          "DoingGreat"
-        ],
+        "enum": ["CouldBeBetter", "NotBad", "DoingGreat"],
         "type": "string"
       },
       "GrpcProbe": {
@@ -5093,10 +4900,7 @@
         "type": "string"
       },
       "ImagePullPolicy": {
-        "enum": [
-          "Always",
-          "IfNotPresent"
-        ],
+        "enum": ["Always", "IfNotPresent"],
         "type": "string"
       },
       "ImageTagInfo": {
@@ -5152,11 +4956,7 @@
         "description": "List applications response"
       },
       "ListContainerImageTagsRequest": {
-        "required": [
-          "imageName",
-          "imageNamespace",
-          "registryId"
-        ],
+        "required": ["imageName", "imageNamespace", "registryId"],
         "type": "object",
         "properties": {
           "registryId": {
@@ -5178,9 +4978,7 @@
         "additionalProperties": false
       },
       "ListContainerImagesRequest": {
-        "required": [
-          "registryId"
-        ],
+        "required": ["registryId"],
         "type": "object",
         "properties": {
           "registryId": {
@@ -5346,10 +5144,7 @@
             "description": "Product unique identifier"
           },
           "type": {
-            "enum": [
-              "SyslogUdp",
-              "SyslogTcp"
-            ],
+            "enum": ["SyslogUdp", "SyslogTcp"],
             "type": "string",
             "description": "Log endpoint type"
           },
@@ -5371,10 +5166,7 @@
             "description": "Token passed as field of syslog"
           },
           "format": {
-            "enum": [
-              "SyslogRfc3164",
-              "SyslogRfc5424"
-            ],
+            "enum": ["SyslogRfc3164", "SyslogRfc5424"],
             "type": "string",
             "description": "Which Syslog RFC will be used"
           },
@@ -5737,12 +5529,7 @@
         "additionalProperties": false
       },
       "PodStatus": {
-        "enum": [
-          "NotScheduled",
-          "Scheduled",
-          "Ready",
-          "Deleting"
-        ],
+        "enum": ["NotScheduled", "Scheduled", "Ready", "Deleting"],
         "type": "string"
       },
       "ProblemDetails": {
@@ -5770,14 +5557,10 @@
             "nullable": true
           }
         },
-        "additionalProperties": { }
+        "additionalProperties": {}
       },
       "Protocol": {
-        "enum": [
-          "Tcp",
-          "Udp",
-          "Sctp"
-        ],
+        "enum": ["Tcp", "Udp", "Sctp"],
         "type": "string"
       },
       "Region": {
@@ -5803,17 +5586,11 @@
         "description": "Region model"
       },
       "RegionProvisioningType": {
-        "enum": [
-          "Static",
-          "Dynamic"
-        ],
+        "enum": ["Static", "Dynamic"],
         "type": "string"
       },
       "RegionSettings": {
-        "required": [
-          "allowedRegionIds",
-          "requiredRegionIds"
-        ],
+        "required": ["allowedRegionIds", "requiredRegionIds"],
         "type": "object",
         "properties": {
           "allowedRegionIds": {
@@ -5822,11 +5599,7 @@
             "items": {
               "type": "string"
             },
-            "example": [
-              "DE",
-              "UK",
-              "US"
-            ]
+            "example": ["DE", "UK", "US"]
           },
           "requiredRegionIds": {
             "uniqueItems": true,
@@ -5834,9 +5607,7 @@
             "items": {
               "type": "string"
             },
-            "example": [
-              "DE"
-            ]
+            "example": ["DE"]
           },
           "maxAllowedRegions": {
             "type": "integer",
@@ -5852,18 +5623,11 @@
         "description": "Region settings model"
       },
       "RegistryType": {
-        "enum": [
-          "DockerHub",
-          "GitHub"
-        ],
+        "enum": ["DockerHub", "GitHub"],
         "type": "string"
       },
       "RemoveContainerRegistryResponseStatus": {
-        "enum": [
-          "NotFound",
-          "InUse",
-          "Removed"
-        ],
+        "enum": ["NotFound", "InUse", "Removed"],
         "type": "string"
       },
       "RemoveContainerRegistryResult": {
@@ -5938,10 +5702,7 @@
         "type": "string"
       },
       "SearchPublicContainerImagesRequest": {
-        "required": [
-          "prefix",
-          "registryId"
-        ],
+        "required": ["prefix", "registryId"],
         "type": "object",
         "properties": {
           "registryId": {
@@ -6061,9 +5822,7 @@
         "additionalProperties": false
       },
       "StickySessionSettings": {
-        "required": [
-          "sessionHeaders"
-        ],
+        "required": ["sessionHeaders"],
         "type": "object",
         "properties": {
           "enabled": {
@@ -6113,11 +5872,7 @@
               "type": "string"
             },
             "nullable": true,
-            "example": [
-              "DE",
-              "UK",
-              "US"
-            ]
+            "example": ["DE", "UK", "US"]
           },
           "requiredRegionIds": {
             "type": "array",
@@ -6125,9 +5880,7 @@
               "type": "string"
             },
             "nullable": true,
-            "example": [
-              "DE"
-            ]
+            "example": ["DE"]
           },
           "maxAllowedRegions": {
             "type": "integer",
@@ -6287,10 +6040,7 @@
         "description": "Volume instance model"
       },
       "VolumeMountRequest": {
-        "required": [
-          "mountPath",
-          "name"
-        ],
+        "required": ["mountPath", "name"],
         "type": "object",
         "properties": {
           "name": {
@@ -6307,10 +6057,7 @@
         "additionalProperties": false
       },
       "VolumeRequest": {
-        "required": [
-          "name",
-          "size"
-        ],
+        "required": ["name", "size"],
         "type": "object",
         "properties": {
           "name": {
@@ -6343,10 +6090,7 @@
         "type": "string"
       },
       "VolumeTemplate": {
-        "required": [
-          "name",
-          "size"
-        ],
+        "required": ["name", "size"],
         "type": "object",
         "properties": {
           "name": {
@@ -6373,7 +6117,7 @@
   },
   "security": [
     {
-      "AccessKey": [ ]
+      "AccessKey": []
     }
   ]
 }

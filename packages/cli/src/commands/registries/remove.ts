@@ -1,10 +1,10 @@
 import { createMcClient } from "@bunny.net/api";
 import { resolveConfig } from "../../config/index.ts";
+import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { confirm, spinner } from "../../core/ui.ts";
-import { clientOptions } from "../../core/client-options.ts";
 
 const COMMAND = "remove <registry-id>";
 const DESCRIPTION = "Remove a container registry.";
@@ -53,12 +53,9 @@ export const registryRemoveCommand = defineCommand<RemoveArgs>({
     const spin = spinner("Removing registry...");
     spin.start();
 
-    const { data: result } = await client.DELETE(
-      "/registries/{registryId}",
-      {
-        params: { path: { registryId } },
-      },
-    );
+    const { data: result } = await client.DELETE("/registries/{registryId}", {
+      params: { path: { registryId } },
+    });
 
     spin.stop();
 

@@ -1,24 +1,24 @@
 import { createMcClient } from "@bunny.net/api";
 import { resolveConfig } from "../../config/index.ts";
+import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
 import {
-  ensureDockerAvailable,
-  buildImage,
-  pushImage,
-  generateTag,
-  promptRegistry,
-} from "./docker.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import {
-  loadConfig,
-  saveConfig,
-  parseImageRef,
   configToAddRequest,
   configToPatchRequest,
+  loadConfig,
+  parseImageRef,
+  saveConfig,
 } from "./config.ts";
+import {
+  buildImage,
+  ensureDockerAvailable,
+  generateTag,
+  promptRegistry,
+  pushImage,
+} from "./docker.ts";
 
 const COMMAND = "deploy";
 const DESCRIPTION = "Deploy an app.";
@@ -60,7 +60,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       if (!registry) {
         const registryId = await promptRegistry(client);
         if (!registryId) {
-          throw new UserError("A registry is required to build and push images.");
+          throw new UserError(
+            "A registry is required to build and push images.",
+          );
         }
         registry = registryId;
         if (primaryContainer) {
@@ -156,7 +158,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         throw new UserError("App has no containers.");
       }
 
-      const { imageName, imageNamespace, imageTag } = parseImageRef(deployImage);
+      const { imageName, imageNamespace, imageTag } =
+        parseImageRef(deployImage);
 
       const updateSpin = spinner("Updating container image...");
       updateSpin.start();

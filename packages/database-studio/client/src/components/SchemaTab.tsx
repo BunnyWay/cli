@@ -1,5 +1,6 @@
-import { type TableSchema } from "@/api.ts";
+import type { TableSchema } from "@/api.ts";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -9,7 +10,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export function SchemaTab({ schema, onSelectTable }: { schema: TableSchema | null; onSelectTable: (name: string) => void }) {
+export function SchemaTab({
+  schema,
+  onSelectTable,
+}: {
+  schema: TableSchema | null;
+  onSelectTable: (name: string) => void;
+}) {
   if (!schema) return null;
 
   return (
@@ -44,7 +51,9 @@ export function SchemaTab({ schema, onSelectTable }: { schema: TableSchema | nul
               </TableCell>
               <TableCell className="text-xs">
                 {col.primaryKey ? (
-                  <Badge variant="outline" className="text-[10px]">PK</Badge>
+                  <Badge variant="outline" className="text-[10px]">
+                    PK
+                  </Badge>
                 ) : null}
               </TableCell>
             </TableRow>
@@ -65,16 +74,17 @@ export function SchemaTab({ schema, onSelectTable }: { schema: TableSchema | nul
               </TableRow>
             </TableHeader>
             <TableBody>
-              {schema.foreignKeys.map((fk, i) => (
-                <TableRow key={i}>
+              {schema.foreignKeys.map((fk) => (
+                <TableRow key={`${fk.from}->${fk.table}.${fk.to}`}>
                   <TableCell className="font-mono text-xs">{fk.from}</TableCell>
                   <TableCell className="font-mono text-xs">
-                    <button
+                    <Button
+                      variant="link"
                       onClick={() => onSelectTable(fk.table)}
-                      className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                      className="h-auto p-0 font-mono text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:no-underline"
                     >
                       {fk.table}
-                    </button>
+                    </Button>
                     .{fk.to}
                   </TableCell>
                 </TableRow>
@@ -99,10 +109,14 @@ export function SchemaTab({ schema, onSelectTable }: { schema: TableSchema | nul
             <TableBody>
               {schema.indexes.map((idx) => (
                 <TableRow key={idx.name}>
-                  <TableCell className="font-mono text-xs">{idx.name}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {idx.name}
+                  </TableCell>
                   <TableCell className="text-xs">
                     {idx.unique ? (
-                      <Badge variant="outline" className="text-[10px]">UNIQUE</Badge>
+                      <Badge variant="outline" className="text-[10px]">
+                        UNIQUE
+                      </Badge>
                     ) : null}
                   </TableCell>
                 </TableRow>

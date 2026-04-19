@@ -1,7 +1,7 @@
-import { defineCommand } from "../core/define-command.ts";
 import { resolveConfig } from "../config/index.ts";
-import { logger } from "../core/logger.ts";
+import { defineCommand } from "../core/define-command.ts";
 import { UserError } from "../core/errors.ts";
+import { logger } from "../core/logger.ts";
 import { VERSION } from "../core/version.ts";
 
 const BASE_URL = "https://api.bunny.net";
@@ -47,7 +47,10 @@ export const apiCommand = defineCommand<ApiArgs>({
   examples: [
     ["$0 api GET /pullzone", "List pull zones"],
     ["$0 api GET /database/v2/databases", "List databases"],
-    ["$0 api POST /database/v2/databases --body '{\"name\":\"test\"}'", "Create with JSON body"],
+    [
+      '$0 api POST /database/v2/databases --body \'{"name":"test"}\'',
+      "Create with JSON body",
+    ],
   ],
 
   builder: (yargs) =>
@@ -67,7 +70,15 @@ export const apiCommand = defineCommand<ApiArgs>({
         describe: "JSON request body",
       }),
 
-  handler: async ({ method: rawMethod, path, body: bodyFlag, profile, output, verbose, apiKey }) => {
+  handler: async ({
+    method: rawMethod,
+    path,
+    body: bodyFlag,
+    profile,
+    output,
+    verbose,
+    apiKey,
+  }) => {
     const method = rawMethod.toUpperCase();
     if (!VALID_METHODS.includes(method as any)) {
       throw new UserError(
@@ -85,7 +96,10 @@ export const apiCommand = defineCommand<ApiArgs>({
 
     const config = resolveConfig(profile, apiKey);
     if (!config.apiKey) {
-      throw new UserError("Not logged in.", 'Run "bunny login" to authenticate.');
+      throw new UserError(
+        "Not logged in.",
+        'Run "bunny login" to authenticate.',
+      );
     }
 
     const baseUrl = config.apiUrl ?? BASE_URL;
@@ -107,7 +121,10 @@ export const apiCommand = defineCommand<ApiArgs>({
       try {
         JSON.parse(requestBody);
       } catch {
-        throw new UserError("Invalid JSON body.", "Ensure --body contains valid JSON.");
+        throw new UserError(
+          "Invalid JSON body.",
+          "Ensure --body contains valid JSON.",
+        );
       }
     }
 
@@ -145,7 +162,10 @@ export const apiCommand = defineCommand<ApiArgs>({
     } catch {
       // Not JSON — output raw
       if (!res.ok) {
-        throw new UserError(`${res.status} ${res.statusText}`, text || undefined);
+        throw new UserError(
+          `${res.status} ${res.statusText}`,
+          text || undefined,
+        );
       }
       if (text) logger.log(text);
       return;
@@ -153,11 +173,17 @@ export const apiCommand = defineCommand<ApiArgs>({
 
     if (!res.ok) {
       if (output === "json") {
-        logger.log(JSON.stringify({ error: parsed, status: res.status }, null, 2));
+        logger.log(
+          JSON.stringify({ error: parsed, status: res.status }, null, 2),
+        );
       } else {
-        const msg = typeof parsed === "object" && parsed !== null
-          ? (parsed as any).detail ?? (parsed as any).Message ?? (parsed as any).title ?? `${res.status} ${res.statusText}`
-          : `${res.status} ${res.statusText}`;
+        const msg =
+          typeof parsed === "object" && parsed !== null
+            ? ((parsed as any).detail ??
+              (parsed as any).Message ??
+              (parsed as any).title ??
+              `${res.status} ${res.statusText}`)
+            : `${res.status} ${res.statusText}`;
         throw new UserError(msg);
       }
       process.exit(1);

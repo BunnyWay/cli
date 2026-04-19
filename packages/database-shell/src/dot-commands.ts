@@ -1,15 +1,23 @@
 import type * as readline from "node:readline";
 import type { Client } from "@libsql/client";
-import { printResultSet, SENSITIVE_SUBSTRINGS, SENSITIVE_PREFIXES, EMAIL_SUBSTRINGS } from "./format.ts";
+import {
+  EMAIL_SUBSTRINGS,
+  printResultSet,
+  SENSITIVE_PREFIXES,
+  SENSITIVE_SUBSTRINGS,
+} from "./format.ts";
 import { saveHistory } from "./history.ts";
-import { saveView, loadView, deleteView, listViews, isValidViewName } from "./views.ts";
 import type { PrintMode, ShellLogger } from "./types.ts";
+import {
+  deleteView,
+  isValidViewName,
+  listViews,
+  loadView,
+  saveView,
+} from "./views.ts";
 
 /** Prompt the user with a yes/no question via the REPL interface. */
-function askConfirm(
-  rl: readline.Interface,
-  message: string,
-): Promise<boolean> {
+function askConfirm(rl: readline.Interface, message: string): Promise<boolean> {
   return new Promise((resolve) => {
     rl.question(`${message} (y/N) `, (answer) => {
       resolve(answer.trim().toLowerCase() === "y");
@@ -31,7 +39,9 @@ async function confirmReadQuota(
 }
 
 function printMaskedPatterns(logger: ShellLogger, indent = "  "): void {
-  logger.dim(`${indent}Full mask: ${[...SENSITIVE_PREFIXES.map((p) => p + "*"), ...SENSITIVE_SUBSTRINGS].join(", ")}`);
+  logger.dim(
+    `${indent}Full mask: ${[...SENSITIVE_PREFIXES.map((p) => `${p}*`), ...SENSITIVE_SUBSTRINGS].join(", ")}`,
+  );
   logger.dim(`${indent}Email mask: ${EMAIL_SUBSTRINGS.join(", ")}`);
 }
 
@@ -55,7 +65,7 @@ export async function executeDotCommand(
   logger: ShellLogger,
 ): Promise<"quit" | "handled" | "unknown"> {
   const parts = command.trim().replace(/;+$/, "").split(/\s+/);
-  const cmd = parts[0]!.toLowerCase();
+  const cmd = parts[0]?.toLowerCase();
   const PRINT_MODES: PrintMode[] = [
     "default",
     "table",
@@ -88,7 +98,7 @@ export async function executeDotCommand(
         printResultSet(result, state.mode, state.masked, logger);
       } else {
         for (const row of result.rows) {
-          if (row[0]) logger.log(String(row[0]) + ";");
+          if (row[0]) logger.log(`${String(row[0])};`);
         }
       }
       return "handled";
@@ -164,7 +174,7 @@ export async function executeDotCommand(
           `SELECT sql FROM sqlite_master WHERE name='${escaped}'`,
         );
         if (schema.rows[0]?.[0]) {
-          logger.log(String(schema.rows[0][0]) + ";");
+          logger.log(`${String(schema.rows[0][0])};`);
         }
 
         const data = await client.execute(
@@ -219,12 +229,7 @@ export async function executeDotCommand(
         logger.error(`Table not found: ${tableName}`);
         return "handled";
       }
-      if (
-        !(await askConfirm(
-          rl,
-          `Delete all rows from "${tableName}"?`,
-        ))
-      )
+      if (!(await askConfirm(rl, `Delete all rows from "${tableName}"?`)))
         return "handled";
 
       const result = await client.execute(
@@ -263,12 +268,8 @@ export async function executeDotCommand(
           const type = String(col[1] || "");
           const pk = col[2] ? " [PK]" : "";
           const fk = fks.rows.find((f) => String(f[0]) === name);
-          const fkLabel = fk
-            ? ` → ${String(fk[1])}.${String(fk[2])}`
-            : "";
-          logger.log(
-            `    ${name} ${type}${pk}${fkLabel}`,
-          );
+          const fkLabel = fk ? ` → ${String(fk[1])}.${String(fk[2])}` : "";
+          logger.log(`    ${name} ${type}${pk}${fkLabel}`);
         }
         logger.log();
       }
@@ -368,7 +369,9 @@ export async function executeDotCommand(
 
     case ".save": {
       if (!state.viewsDir) {
-        logger.error("Views require a database ID. Connect to a specific database to use views.");
+        logger.error(
+          "Views require a database ID. Connect to a specific database to use views.",
+        );
         return "handled";
       }
       const name = parts[1];
@@ -377,7 +380,9 @@ export async function executeDotCommand(
         return "handled";
       }
       if (!isValidViewName(name)) {
-        logger.error("View name must be alphanumeric, hyphens, or underscores.");
+        logger.error(
+          "View name must be alphanumeric, hyphens, or underscores.",
+        );
         return "handled";
       }
       if (!state.lastStatement) {
@@ -391,7 +396,9 @@ export async function executeDotCommand(
 
     case ".view": {
       if (!state.viewsDir) {
-        logger.error("Views require a database ID. Connect to a specific database to use views.");
+        logger.error(
+          "Views require a database ID. Connect to a specific database to use views.",
+        );
         return "handled";
       }
       const name = parts[1];
@@ -421,7 +428,9 @@ export async function executeDotCommand(
 
     case ".views": {
       if (!state.viewsDir) {
-        logger.error("Views require a database ID. Connect to a specific database to use views.");
+        logger.error(
+          "Views require a database ID. Connect to a specific database to use views.",
+        );
         return "handled";
       }
       const views = listViews(state.viewsDir);
@@ -430,7 +439,8 @@ export async function executeDotCommand(
       } else {
         for (const name of views) {
           const sql = loadView(state.viewsDir, name);
-          const preview = sql && sql.length > 60 ? sql.slice(0, 60) + "..." : sql;
+          const preview =
+            sql && sql.length > 60 ? `${sql.slice(0, 60)}...` : sql;
           logger.log(`  ${name}  ${preview ? `— ${preview}` : ""}`);
         }
       }
@@ -439,7 +449,9 @@ export async function executeDotCommand(
 
     case ".unsave": {
       if (!state.viewsDir) {
-        logger.error("Views require a database ID. Connect to a specific database to use views.");
+        logger.error(
+          "Views require a database ID. Connect to a specific database to use views.",
+        );
         return "handled";
       }
       const name = parts[1];
@@ -474,7 +486,9 @@ export async function executeDotCommand(
       logger.log();
       logger.log("  Data");
       logger.log("    .count TABLE      Count rows in a table");
-      logger.log("    .size TABLE       Show table stats (rows, columns, indexes)");
+      logger.log(
+        "    .size TABLE       Show table stats (rows, columns, indexes)",
+      );
       logger.log("    .truncate TABLE   Delete all rows from a table");
       logger.log("    .dump [TABLE]     Dump schema and data as SQL");
       logger.log("    .read FILE        Execute SQL statements from a file");

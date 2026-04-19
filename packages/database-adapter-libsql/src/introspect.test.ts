@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createClient, type Client } from "@libsql/client";
-import { introspect, DEFAULT_EXCLUDE_PATTERNS } from "./introspect.ts";
+import { type Client, createClient } from "@libsql/client";
+import { DEFAULT_EXCLUDE_PATTERNS, introspect } from "./introspect.ts";
 
 let client: Client;
 
@@ -105,16 +105,16 @@ describe("introspect", () => {
 
   test("introspects columns, PKs, FKs, and indexes", async () => {
     const schema = await introspect({ client });
-    const users = schema.tables["users"]!;
+    const users = schema.tables.users!;
 
     expect(users.columns).toHaveLength(3);
     expect(users.primaryKey).toEqual(["id"]);
     expect(users.uniqueColumns).toContain("email");
 
-    const posts = schema.tables["posts"]!;
+    const posts = schema.tables.posts!;
     expect(posts.foreignKeys).toHaveLength(1);
-    expect(posts.foreignKeys[0]!.column).toBe("user_id");
-    expect(posts.foreignKeys[0]!.referencesTable).toBe("users");
+    expect(posts.foreignKeys[0]?.column).toBe("user_id");
+    expect(posts.foreignKeys[0]?.referencesTable).toBe("users");
   });
 
   test("uses custom version", async () => {

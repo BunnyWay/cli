@@ -91,7 +91,10 @@ const NAME_EXAMPLES: [RegExp, unknown][] = [
   [/^user_?name$/i, "johndoe"],
   [/^phone|mobile|tel$/i, "+1-555-0123"],
   [/^(url|website|homepage|link)$/i, "https://example.com"],
-  [/^(image|photo|avatar|icon|logo|thumbnail)(_url)?$/i, "https://example.com/image.png"],
+  [
+    /^(image|photo|avatar|icon|logo|thumbnail)(_url)?$/i,
+    "https://example.com/image.png",
+  ],
   [/^(title|subject|headline)$/i, "Hello World"],
   [/^(description|summary|bio|about)$/i, "A short description"],
   [/^(body|content|text|message)$/i, "Lorem ipsum dolor sit amet"],
@@ -124,7 +127,10 @@ const columnExample = (column: ColumnDefinition): unknown | undefined => {
     }
   }
 
-  if (/_(at|date|time|on)$/.test(name) || /^(date|time|timestamp)$/i.test(name)) {
+  if (
+    /_(at|date|time|on)$/.test(name) ||
+    /^(date|time|timestamp)$/i.test(name)
+  ) {
     return "2024-01-01T00:00:00Z";
   }
 
@@ -172,7 +178,6 @@ const columnTypeToSchema = (column: ColumnDefinition): SchemaObject => {
       base.type = "string";
       base.format = "binary";
       break;
-    case "TEXT":
     default:
       base.type = "string";
       break;
@@ -196,7 +201,11 @@ const tableToSchema = (table: TableDefinition): SchemaObject => {
 
   for (const column of table.columns) {
     properties[column.name] = columnTypeToSchema(column);
-    if (!column.nullable && column.defaultValue === undefined && !column.primaryKey) {
+    if (
+      !column.nullable &&
+      column.defaultValue === undefined &&
+      !column.primaryKey
+    ) {
       required.push(column.name);
     }
   }
@@ -280,7 +289,10 @@ const COMMON_PARAM_REFS: ReferenceObject[] = [
 const capitalize = (str: string): string =>
   str.charAt(0).toUpperCase() + str.slice(1);
 
-const listResponse = (table: TableDefinition, description: string): ResponseObject => ({
+const listResponse = (
+  table: TableDefinition,
+  description: string,
+): ResponseObject => ({
   description,
   content: {
     "application/json": {
@@ -297,7 +309,10 @@ const listResponse = (table: TableDefinition, description: string): ResponseObje
   },
 });
 
-const singleResponse = (table: TableDefinition, description: string): ResponseObject => ({
+const singleResponse = (
+  table: TableDefinition,
+  description: string,
+): ResponseObject => ({
   description,
   content: {
     "application/json": {
@@ -320,7 +335,10 @@ const updateBody = (table: TableDefinition): RequestBodyObject => ({
   },
 });
 
-const generateListOperation = (table: TableDefinition, filterParams: ParameterObject[]): OperationObject => ({
+const generateListOperation = (
+  table: TableDefinition,
+  filterParams: ParameterObject[],
+): OperationObject => ({
   summary: `List ${table.name}`,
   operationId: `get${capitalize(table.name)}`,
   tags: [table.name],
@@ -358,7 +376,10 @@ const generateCreateOperation = (table: TableDefinition): OperationObject => ({
   },
 });
 
-const generateBulkUpdateOperation = (table: TableDefinition, filterParams: ParameterObject[]): OperationObject => ({
+const generateBulkUpdateOperation = (
+  table: TableDefinition,
+  filterParams: ParameterObject[],
+): OperationObject => ({
   summary: `Update ${table.name}`,
   operationId: `update${capitalize(table.name)}`,
   tags: [table.name],
@@ -371,7 +392,10 @@ const generateBulkUpdateOperation = (table: TableDefinition, filterParams: Param
   },
 });
 
-const generateBulkDeleteOperation = (table: TableDefinition, filterParams: ParameterObject[]): OperationObject => ({
+const generateBulkDeleteOperation = (
+  table: TableDefinition,
+  filterParams: ParameterObject[],
+): OperationObject => ({
   summary: `Delete ${table.name}`,
   operationId: `delete${capitalize(table.name)}`,
   tags: [table.name],
@@ -383,7 +407,11 @@ const generateBulkDeleteOperation = (table: TableDefinition, filterParams: Param
   },
 });
 
-const generateGetByPkOperation = (table: TableDefinition, pkName: string, pkParam: ParameterObject): OperationObject => ({
+const generateGetByPkOperation = (
+  table: TableDefinition,
+  pkName: string,
+  pkParam: ParameterObject,
+): OperationObject => ({
   summary: `Get ${table.name} by ${pkName}`,
   operationId: `get${capitalize(table.name)}By${capitalize(pkName)}`,
   tags: [table.name],
@@ -394,7 +422,11 @@ const generateGetByPkOperation = (table: TableDefinition, pkName: string, pkPara
   },
 });
 
-const generateUpdateByPkOperation = (table: TableDefinition, pkName: string, pkParam: ParameterObject): OperationObject => ({
+const generateUpdateByPkOperation = (
+  table: TableDefinition,
+  pkName: string,
+  pkParam: ParameterObject,
+): OperationObject => ({
   summary: `Update ${table.name} by ${pkName}`,
   operationId: `update${capitalize(table.name)}By${capitalize(pkName)}`,
   tags: [table.name],
@@ -407,7 +439,11 @@ const generateUpdateByPkOperation = (table: TableDefinition, pkName: string, pkP
   },
 });
 
-const generateDeleteByPkOperation = (table: TableDefinition, pkName: string, pkParam: ParameterObject): OperationObject => ({
+const generateDeleteByPkOperation = (
+  table: TableDefinition,
+  pkName: string,
+  pkParam: ParameterObject,
+): OperationObject => ({
   summary: `Delete ${table.name} by ${pkName}`,
   operationId: `delete${capitalize(table.name)}By${capitalize(pkName)}`,
   tags: [table.name],
@@ -418,7 +454,10 @@ const generateDeleteByPkOperation = (table: TableDefinition, pkName: string, pkP
   },
 });
 
-const generateSingleResourcePathItem = (table: TableDefinition, columnName: string): PathItem | null => {
+const generateSingleResourcePathItem = (
+  table: TableDefinition,
+  columnName: string,
+): PathItem | null => {
   const column = table.columns.find((c) => c.name === columnName);
   if (!column) return null;
 
@@ -460,10 +499,11 @@ export const generateOpenAPISpec = (
     paths[`/${tableName}`] = generatePathItem(table);
 
     // Single-resource path by PK
-    if (table.primaryKey.length === 1) {
-      const pkPath = generateSingleResourcePathItem(table, table.primaryKey[0]!);
+    const [pkCol] = table.primaryKey;
+    if (table.primaryKey.length === 1 && pkCol) {
+      const pkPath = generateSingleResourcePathItem(table, pkCol);
       if (pkPath) {
-        paths[`/${tableName}/{${table.primaryKey[0]!}}`] = pkPath;
+        paths[`/${tableName}/{${pkCol}}`] = pkPath;
       }
     }
 
@@ -484,7 +524,7 @@ export const generateOpenAPISpec = (
     });
   }
 
-  schemas["Error"] = {
+  schemas.Error = {
     type: "object",
     properties: {
       message: { type: "string", example: "Something went wrong" },
@@ -498,7 +538,8 @@ export const generateOpenAPISpec = (
     info: {
       title: options.title ?? "Database REST API",
       version: options.version ?? schema.version,
-      description: options.description ?? "Auto-generated REST API for your database",
+      description:
+        options.description ?? "Auto-generated REST API for your database",
     },
     ...(tags.length > 0 ? { tags } : {}),
     paths,

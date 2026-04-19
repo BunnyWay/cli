@@ -1,13 +1,6 @@
-export { createRestHandler } from "./handler.ts";
-export type { RestHandlerOptions } from "./handler.ts";
 export type { DatabaseExecutor, ExecuteResult } from "./executor.ts";
-export {
-  parseQueryParams,
-  parseTableFromPath,
-  parseSelect,
-  parseOrder,
-  parseFilterValue,
-} from "./parser.ts";
+export type { RestHandlerOptions } from "./handler.ts";
+export { createRestHandler } from "./handler.ts";
 export type {
   FilterCondition,
   FilterOperator,
@@ -16,9 +9,16 @@ export type {
   SortDirection,
 } from "./parser.ts";
 export {
-  buildSelectQuery,
+  parseFilterValue,
+  parseOrder,
+  parseQueryParams,
+  parseSelect,
+  parseTableFromPath,
+} from "./parser.ts";
+export {
   buildCountQuery,
-  buildInsertQuery,
-  buildUpdateQuery,
   buildDeleteQuery,
+  buildInsertQuery,
+  buildSelectQuery,
+  buildUpdateQuery,
 } from "./sql.ts";

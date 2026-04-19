@@ -1,21 +1,20 @@
-import type { components } from "@bunny.net/api/generated/compute.d.ts";
 import { createComputeClient } from "@bunny.net/api";
+import type { components } from "@bunny.net/api/generated/compute.d.ts";
+import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { resolveManifestId } from "../../../core/manifest.ts";
 import { spinner } from "../../../core/ui.ts";
 import { SCRIPT_MANIFEST } from "../constants.ts";
-import prompts from "prompts";
-import { clientOptions } from "../../../core/client-options.ts";
 
 type EdgeScriptVariable = components["schemas"]["EdgeScriptVariableModel"];
 type EdgeScriptSecret = components["schemas"]["EdgeScriptSecretModel"];
 
 const COMMAND = "set [name] [value]";
-const DESCRIPTION =
-  "Set an environment variable or secret for an Edge Script.";
+const DESCRIPTION = "Set an environment variable or secret for an Edge Script.";
 
 const ARG_NAME = "name";
 const ARG_NAME_DESCRIPTION = "Variable name (will be uppercased)";
@@ -60,8 +59,8 @@ export const scriptsEnvSetCommand = defineCommand<SetArgs>({
   command: COMMAND,
   describe: DESCRIPTION,
   examples: [
-    ["$0 scripts env set MY_VAR \"hello\"", "Set a plain variable"],
-    ["$0 scripts env set API_KEY \"sk-…\" --secret", "Set a secret"],
+    ['$0 scripts env set MY_VAR "hello"', "Set a plain variable"],
+    ['$0 scripts env set API_KEY "sk-…" --secret', "Set a secret"],
     ["$0 scripts env set", "Interactive mode"],
   ],
 

@@ -15,7 +15,8 @@ export function parseImageRef(ref: string): {
 
   const parts = imagePath.split("/");
   const name = parts.pop() ?? imagePath;
-  const namespace = parts.length > 1 ? parts.slice(1).join("/") : parts[0] ?? "";
+  const namespace =
+    parts.length > 1 ? parts.slice(1).join("/") : (parts[0] ?? "");
 
   return { imageName: name, imageNamespace: namespace, imageTag: tag };
 }

@@ -1,20 +1,21 @@
-import { useCallback, useMemo, useRef, useState } from "react";
-import { type ColumnDef, type SortingState, type VisibilityState } from "@tanstack/react-table";
-import {
-  type RowsResponse,
-  type TableSchema,
-  fetchRowLookup,
-} from "@/api.ts";
-import { Badge } from "@/components/ui/badge";
-import { DataTable } from "@/components/ui/data-table";
+import type {
+  ColumnDef,
+  SortingState,
+  VisibilityState,
+} from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { fetchRowLookup, type RowsResponse, type TableSchema } from "@/api.ts";
 import { FadeScrollArea } from "@/components/FadeScrollArea";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetDescription,
 } from "@/components/ui/sheet";
 
 type RowRecord = Record<string, unknown>;
@@ -41,13 +42,21 @@ function CellValue({ value }: { value: unknown }) {
 }
 
 interface SheetEntry {
+  id: string;
   tableName: string;
   row: Record<string, unknown>;
   columnTypes: Map<string, string>;
   foreignKeys: Map<string, { table: string; to: string }>;
 }
 
-export function DataTab({ data, schema, sorting, onSortingChange, columnVisibility, onColumnVisibilityChange }: {
+export function DataTab({
+  data,
+  schema,
+  sorting,
+  onSortingChange,
+  columnVisibility,
+  onColumnVisibilityChange,
+}: {
   data: RowsResponse | null;
   schema: TableSchema | null;
   sorting: SortingState;
@@ -64,38 +73,64 @@ export function DataTab({ data, schema, sorting, onSortingChange, columnVisibili
 
   const primaryKeys = useMemo(() => {
     if (!schema) return new Set<string>();
-    return new Set(schema.columns.filter((c) => c.primaryKey).map((c) => c.name));
+    return new Set(
+      schema.columns.filter((c) => c.primaryKey).map((c) => c.name),
+    );
   }, [schema]);
 
   const foreignKeys = useMemo(() => {
     if (!schema) return new Map<string, { table: string; to: string }>();
-    return new Map(schema.foreignKeys.map((fk) => [fk.from, { table: fk.table, to: fk.to }]));
+    return new Map(
+      schema.foreignKeys.map((fk) => [fk.from, { table: fk.table, to: fk.to }]),
+    );
   }, [schema]);
 
-  function openRow(row: RowRecord, tableName: string, types: Map<string, string>, fks: Map<string, { table: string; to: string }>) {
-    setSheetStack((prev) => [...prev, { tableName, row, columnTypes: types, foreignKeys: fks }]);
+  function openRow(
+    row: RowRecord,
+    tableName: string,
+    types: Map<string, string>,
+    fks: Map<string, { table: string; to: string }>,
+  ) {
+    setSheetStack((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        tableName,
+        row,
+        columnTypes: types,
+        foreignKeys: fks,
+      },
+    ]);
   }
 
   function closeSheet(index: number) {
     setSheetStack((prev) => prev.slice(0, index));
   }
 
-  const followFkRef = useRef<(fk: { table: string; to: string }, value: unknown) => void>();
+  const followFkRef =
+    useRef<(fk: { table: string; to: string }, value: unknown) => void>();
   followFkRef.current = async (fk, value) => {
     if (value === null || value === undefined) return;
     try {
       const result = await fetchRowLookup(fk.table, fk.to, String(value));
-      const types = new Map(result.schema.map((c) => [c.name, c.type || "ANY"]));
-      const fks = new Map(result.foreignKeys.map((f) => [f.from, { table: f.table, to: f.to }]));
+      const types = new Map(
+        result.schema.map((c) => [c.name, c.type || "ANY"]),
+      );
+      const fks = new Map(
+        result.foreignKeys.map((f) => [f.from, { table: f.table, to: f.to }]),
+      );
       openRow(result.row as RowRecord, fk.table, types, fks);
     } catch {
       // Row not found or error — ignore
     }
   };
 
-  const followFk = useCallback((fk: { table: string; to: string }, value: unknown) => {
-    followFkRef.current?.(fk, value);
-  }, []);
+  const followFk = useCallback(
+    (fk: { table: string; to: string }, value: unknown) => {
+      followFkRef.current?.(fk, value);
+    },
+    [],
+  );
 
   const columns = useMemo<ColumnDef<RowRecord>[]>(() => {
     if (!data) return [];
@@ -108,28 +143,48 @@ export function DataTab({ data, schema, sorting, onSortingChange, columnVisibili
         header: () => (
           <div className="flex items-center gap-1.5">
             <span>{col}</span>
-            {isPk && <Badge variant="outline" className="font-mono text-[10px] font-normal">PK</Badge>}
-            {fk && <Badge variant="outline" className="font-mono text-[10px] font-normal">FK</Badge>}
-            <Badge variant="secondary" className="font-mono text-[10px] font-normal">{colType}</Badge>
+            {isPk && (
+              <Badge
+                variant="outline"
+                className="font-mono text-[10px] font-normal"
+              >
+                PK
+              </Badge>
+            )}
+            {fk && (
+              <Badge
+                variant="outline"
+                className="font-mono text-[10px] font-normal"
+              >
+                FK
+              </Badge>
+            )}
+            <Badge
+              variant="secondary"
+              className="font-mono text-[10px] font-normal"
+            >
+              {colType}
+            </Badge>
           </div>
         ),
         cell: ({ getValue }) => {
           const value = getValue();
           if (fk && value !== null && value !== undefined) {
             return (
-              <button
+              <Button
+                variant="link"
                 onClick={() => followFk(fk, value)}
-                className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                className="h-auto p-0 text-muted-foreground underline-offset-4 hover:text-foreground hover:no-underline"
               >
                 <CellValue value={value} />
-              </button>
+              </Button>
             );
           }
           return <CellValue value={value} />;
         },
       };
     });
-  }, [data?.columns, foreignKeys, columnTypes, primaryKeys, followFk]);
+  }, [data?.columns, foreignKeys, columnTypes, primaryKeys, followFk, data]);
 
   if (!data) return null;
 
@@ -148,10 +203,12 @@ export function DataTab({ data, schema, sorting, onSortingChange, columnVisibili
       </div>
       {sheetStack.map((entry, i) => (
         <Sheet
-          key={i}
+          key={entry.id}
           open
           modal={false}
-          onOpenChange={(open) => { if (!open) closeSheet(i); }}
+          onOpenChange={(open) => {
+            if (!open) closeSheet(i);
+          }}
         >
           <SheetContent
             hideOverlay={i > 0}
@@ -172,7 +229,9 @@ export function DataTab({ data, schema, sorting, onSortingChange, columnVisibili
               <SheetTitle className="font-mono text-sm">
                 {entry.tableName ? `${entry.tableName}` : "Row Detail"}
               </SheetTitle>
-              <SheetDescription className="sr-only">Field values for the selected row</SheetDescription>
+              <SheetDescription className="sr-only">
+                Field values for the selected row
+              </SheetDescription>
             </SheetHeader>
             <FadeScrollArea className="flex-1">
               <div className="space-y-3 px-6 pb-6 pt-4">
@@ -181,13 +240,21 @@ export function DataTab({ data, schema, sorting, onSortingChange, columnVisibili
                   return (
                     <div key={key} className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-medium">{key}</span>
+                        <span className="font-mono text-xs font-medium">
+                          {key}
+                        </span>
                         {fk && (
-                          <Badge variant="outline" className="font-mono text-[10px]">
+                          <Badge
+                            variant="outline"
+                            className="font-mono text-[10px]"
+                          >
                             FK → {fk.table}.{fk.to}
                           </Badge>
                         )}
-                        <Badge variant="secondary" className="ml-auto font-mono text-[10px]">
+                        <Badge
+                          variant="secondary"
+                          className="ml-auto font-mono text-[10px]"
+                        >
                           {entry.columnTypes.get(key) ?? "ANY"}
                         </Badge>
                       </div>
@@ -196,13 +263,15 @@ export function DataTab({ data, schema, sorting, onSortingChange, columnVisibili
                           <CellValue value={value} />
                         </div>
                         {fk && value !== null && value !== undefined && (
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => followFk(fk, value)}
-                            className="shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            className="size-auto shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                             title={`View ${fk.table} record`}
                           >
                             <ExternalLink className="h-3.5 w-3.5" />
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>

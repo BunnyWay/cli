@@ -1,4 +1,7 @@
-import type { DatabaseSchema, GenerateOptions } from "@bunny.net/database-openapi";
+import type {
+  DatabaseSchema,
+  GenerateOptions,
+} from "@bunny.net/database-openapi";
 import { generateOpenAPISpec } from "@bunny.net/database-openapi";
 import type { DatabaseExecutor } from "./executor.ts";
 import { parseQueryParams } from "./parser.ts";
@@ -40,12 +43,13 @@ interface SingleResourceRoute {
 
 type ParsedRoute = CollectionRoute | SingleResourceRoute;
 
-const parseRoute = (pathname: string, tableNames: Set<string>): ParsedRoute | null => {
+const parseRoute = (
+  pathname: string,
+  tableNames: Set<string>,
+): ParsedRoute | null => {
   const segments = pathname.split("/").filter(Boolean).map(decodeURIComponent);
-  if (segments.length === 0) return null;
-
-  const table = segments[0]!;
-  if (!tableNames.has(table)) return null;
+  const [table, second, third] = segments;
+  if (!table || !tableNames.has(table)) return null;
 
   // /{table}
   if (segments.length === 1) {
@@ -53,14 +57,14 @@ const parseRoute = (pathname: string, tableNames: Set<string>): ParsedRoute | nu
   }
 
   // /{table}/by-{column}/{value}
-  if (segments.length === 3 && segments[1]!.startsWith("by-")) {
-    const column = segments[1]!.slice(3);
-    return { kind: "single", table, column, value: segments[2]! };
+  if (segments.length === 3 && second?.startsWith("by-") && third) {
+    const column = second.slice(3);
+    return { kind: "single", table, column, value: third };
   }
 
   // /{table}/{pkValue}
-  if (segments.length === 2) {
-    return { kind: "single", table, column: "__pk__", value: segments[1]! };
+  if (segments.length === 2 && second) {
+    return { kind: "single", table, column: "__pk__", value: second };
   }
 
   return null;
@@ -68,7 +72,7 @@ const parseRoute = (pathname: string, tableNames: Set<string>): ParsedRoute | nu
 
 const parsePathValue = (raw: string): string | number => {
   const num = Number(raw);
-  if (!isNaN(num) && raw.trim() !== "") {
+  if (!Number.isNaN(num) && raw.trim() !== "") {
     return num;
   }
   return raw;
@@ -88,8 +92,9 @@ export const createRestHandler = (
   const tableUniqueColumns = new Map<string, Set<string>>();
 
   for (const [name, table] of Object.entries(schema.tables)) {
-    if (table.primaryKey.length === 1) {
-      tablePkColumn.set(name, table.primaryKey[0]!);
+    const [pkCol] = table.primaryKey;
+    if (table.primaryKey.length === 1 && pkCol) {
+      tablePkColumn.set(name, pkCol);
     }
     if (table.uniqueColumns.length > 0) {
       tableUniqueColumns.set(name, new Set(table.uniqueColumns));
@@ -137,13 +142,34 @@ export const createRestHandler = (
 
         switch (req.method) {
           case "GET":
-            return await handleGetOne(executor, route.table, column, route.value, url);
+            return await handleGetOne(
+              executor,
+              route.table,
+              column,
+              route.value,
+              url,
+            );
           case "PATCH":
-            return await handlePatchOne(executor, route.table, column, route.value, req);
+            return await handlePatchOne(
+              executor,
+              route.table,
+              column,
+              route.value,
+              req,
+            );
           case "DELETE":
-            return await handleDeleteOne(executor, route.table, column, route.value);
+            return await handleDeleteOne(
+              executor,
+              route.table,
+              column,
+              route.value,
+            );
           default:
-            return errorResponse("Method not allowed", 405, "METHOD_NOT_ALLOWED");
+            return errorResponse(
+              "Method not allowed",
+              405,
+              "METHOD_NOT_ALLOWED",
+            );
         }
       }
 
@@ -184,14 +210,10 @@ const handleGet = async (
 
   const totalCount = Number(countResult.rows[0]?.count ?? 0);
 
-  return json(
-    { data: dataResult.rows },
-    200,
-    {
-      "X-Total-Count": String(totalCount),
-      "Content-Range": `items ${query.offset ?? 0}-${(query.offset ?? 0) + dataResult.rows.length - 1}/${totalCount}`,
-    },
-  );
+  return json({ data: dataResult.rows }, 200, {
+    "X-Total-Count": String(totalCount),
+    "Content-Range": `items ${query.offset ?? 0}-${(query.offset ?? 0) + dataResult.rows.length - 1}/${totalCount}`,
+  });
 };
 
 const handlePost = async (
@@ -202,7 +224,11 @@ const handlePost = async (
   const body = await req.json();
 
   if (body === null || typeof body !== "object") {
-    return errorResponse("Request body must be a JSON object or array", 400, "BAD_REQUEST");
+    return errorResponse(
+      "Request body must be a JSON object or array",
+      400,
+      "BAD_REQUEST",
+    );
   }
 
   const rows = Array.isArray(body) ? body : [body];
@@ -214,7 +240,11 @@ const handlePost = async (
   const results = [];
   for (const row of rows) {
     if (typeof row !== "object" || row === null || Array.isArray(row)) {
-      return errorResponse("Each row must be a JSON object", 400, "BAD_REQUEST");
+      return errorResponse(
+        "Each row must be a JSON object",
+        400,
+        "BAD_REQUEST",
+      );
     }
     const insertQuery = buildInsertQuery(table, row as Record<string, unknown>);
     const result = await executor.execute(insertQuery.sql, insertQuery.args);
@@ -234,7 +264,11 @@ const handlePatch = async (
   const body = await req.json();
 
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    return errorResponse("Request body must be a JSON object", 400, "BAD_REQUEST");
+    return errorResponse(
+      "Request body must be a JSON object",
+      400,
+      "BAD_REQUEST",
+    );
   }
 
   if (Object.keys(body as Record<string, unknown>).length === 0) {
@@ -242,7 +276,11 @@ const handlePatch = async (
   }
 
   if (query.filters.length === 0) {
-    return errorResponse("Filters are required for update operations", 400, "BAD_REQUEST");
+    return errorResponse(
+      "Filters are required for update operations",
+      400,
+      "BAD_REQUEST",
+    );
   }
 
   const updateQuery = buildUpdateQuery(
@@ -263,7 +301,11 @@ const handleDelete = async (
   const query = parseQueryParams(url);
 
   if (query.filters.length === 0) {
-    return errorResponse("Filters are required for delete operations", 400, "BAD_REQUEST");
+    return errorResponse(
+      "Filters are required for delete operations",
+      400,
+      "BAD_REQUEST",
+    );
   }
 
   const deleteQuery = buildDeleteQuery(table, query.filters);
@@ -284,7 +326,9 @@ const handleGetOne = async (
   const query = parseQueryParams(url);
   const selectQuery = buildSelectQuery(table, {
     select: query.select,
-    filters: [{ column: pkColumn, operator: "eq", value: parsePathValue(pkValue) }],
+    filters: [
+      { column: pkColumn, operator: "eq", value: parsePathValue(pkValue) },
+    ],
     order: [],
     limit: 1,
   });
@@ -308,18 +352,20 @@ const handlePatchOne = async (
   const body = await req.json();
 
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    return errorResponse("Request body must be a JSON object", 400, "BAD_REQUEST");
+    return errorResponse(
+      "Request body must be a JSON object",
+      400,
+      "BAD_REQUEST",
+    );
   }
 
   if (Object.keys(body as Record<string, unknown>).length === 0) {
     return errorResponse("Request body must not be empty", 400, "BAD_REQUEST");
   }
 
-  const updateQuery = buildUpdateQuery(
-    table,
-    body as Record<string, unknown>,
-    [{ column: pkColumn, operator: "eq", value: parsePathValue(pkValue) }],
-  );
+  const updateQuery = buildUpdateQuery(table, body as Record<string, unknown>, [
+    { column: pkColumn, operator: "eq", value: parsePathValue(pkValue) },
+  ]);
   const result = await executor.execute(updateQuery.sql, updateQuery.args);
 
   if (result.rows.length === 0) {

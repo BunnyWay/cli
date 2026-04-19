@@ -1,14 +1,14 @@
-import type { components } from "@bunny.net/api/generated/compute.d.ts";
 import { createComputeClient } from "@bunny.net/api";
+import type { components } from "@bunny.net/api/generated/compute.d.ts";
+import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { resolveManifestId } from "../../../core/manifest.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
 import { SCRIPT_MANIFEST } from "../constants.ts";
-import prompts from "prompts";
-import { clientOptions } from "../../../core/client-options.ts";
 
 type EdgeScriptVariable = components["schemas"]["EdgeScriptVariableModel"];
 type EdgeScriptSecret = components["schemas"]["EdgeScriptSecretModel"];
@@ -156,7 +156,7 @@ export const scriptsEnvRemoveCommand = defineCommand<RemoveArgs>({
     }
 
     const entry = entries.find(
-      (e) => e.name.toUpperCase() === name!.toUpperCase(),
+      (e) => e.name.toUpperCase() === name?.toUpperCase(),
     );
     if (!entry) {
       throw new UserError(`No variable or secret named "${name}" found.`);

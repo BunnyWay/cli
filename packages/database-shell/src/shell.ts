@@ -1,14 +1,14 @@
-import * as readline from "node:readline";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import chalk from "chalk";
+import * as readline from "node:readline";
 import type { Client } from "@libsql/client";
-import { printResultSet } from "./format.ts";
-import { splitStatements } from "./parser.ts";
-import { loadHistory, saveHistory, HISTORY_MAX } from "./history.ts";
+import chalk from "chalk";
 import { executeDotCommand } from "./dot-commands.ts";
+import { printResultSet } from "./format.ts";
+import { HISTORY_MAX, loadHistory, saveHistory } from "./history.ts";
+import { splitStatements } from "./parser.ts";
+import type { ExecuteOptions, ShellLogger, ShellOptions } from "./types.ts";
 import { getDefaultViewsDir } from "./views.ts";
-import type { ShellLogger, ShellOptions, ExecuteOptions } from "./types.ts";
 
 const PROMPT = chalk.blue.bold("→  ");
 const PROMPT_CONTINUE = chalk.blue.bold("... ");
@@ -20,7 +20,7 @@ function defaultLogger(): ShellLogger {
     error: (msg: string) => console.error(msg),
     warn: (msg: string) => console.warn(msg),
     dim: (msg: string) => console.log(chalk.dim(msg)),
-    success: (msg: string) => console.log(chalk.green("✓") + " " + msg),
+    success: (msg: string) => console.log(`${chalk.green("✓")} ${msg}`),
   };
 }
 
@@ -108,8 +108,9 @@ export async function startShell(options: ShellOptions): Promise<void> {
     throw new Error("Interactive shell requires a TTY.");
   }
 
-  const viewsDir = options.viewsDir
-    ?? (options.databaseId ? getDefaultViewsDir(options.databaseId) : null);
+  const viewsDir =
+    options.viewsDir ??
+    (options.databaseId ? getDefaultViewsDir(options.databaseId) : null);
 
   const state = {
     mode: options.mode ?? "default",
@@ -130,7 +131,7 @@ export async function startShell(options: ShellOptions): Promise<void> {
   });
 
   logger.log();
-  logger.log(chalk.green("✓") + " Connected to database");
+  logger.log(`${chalk.green("✓")} Connected to database`);
   logger.dim("  Type .help for commands, .quit to exit.");
   logger.log();
   rl.prompt();

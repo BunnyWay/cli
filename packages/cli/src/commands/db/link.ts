@@ -1,14 +1,18 @@
+import { createDbClient } from "@bunny.net/api";
 import type { components } from "@bunny.net/api/generated/database.d.ts";
 import prompts from "prompts";
-import { defineCommand } from "../../core/define-command.ts";
 import { resolveConfig } from "../../config/index.ts";
-import { createDbClient } from "@bunny.net/api";
-import { spinner } from "../../core/ui.ts";
+import { clientOptions } from "../../core/client-options.ts";
+import { defineCommand } from "../../core/define-command.ts";
+import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifest } from "../../core/manifest.ts";
-import { UserError } from "../../core/errors.ts";
-import { ARG_DATABASE_ID, DATABASE_MANIFEST, type DatabaseManifest } from "./constants.ts";
-import { clientOptions } from "../../core/client-options.ts";
+import { spinner } from "../../core/ui.ts";
+import {
+  ARG_DATABASE_ID,
+  DATABASE_MANIFEST,
+  type DatabaseManifest,
+} from "./constants.ts";
 
 type Database = Pick<components["schemas"]["Database2"], "id" | "name">;
 
@@ -48,7 +52,13 @@ export const dbLinkCommand = defineCommand<LinkArgs>({
     ["$0 db link db_01KCHBG8C5KSFGG0VRNFQ7EK7X", "Direct link by ID"],
   ],
 
-  handler: async ({ [ARG_DATABASE_ID]: databaseIdArg, profile, output, verbose, apiKey }) => {
+  handler: async ({
+    [ARG_DATABASE_ID]: databaseIdArg,
+    profile,
+    output,
+    verbose,
+    apiKey,
+  }) => {
     const config = resolveConfig(profile, apiKey);
     const client = createDbClient(clientOptions(config, verbose));
 

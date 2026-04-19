@@ -1,6 +1,6 @@
-import { existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 export function getConfigCandidates(): string[] {
   const home = homedir();
@@ -27,6 +27,6 @@ export function findConfigFile(): string | null {
 }
 
 export function getConfigWritePath(): string {
-  const candidates = getConfigCandidates();
-  return findConfigFile() ?? candidates[0]!;
+  const [first = join(homedir(), ".bunnynet.json")] = getConfigCandidates();
+  return findConfigFile() ?? first;
 }

@@ -1,6 +1,12 @@
 #!/usr/bin/env bun
 
-import { createShellClient, startShell, executeQuery, executeFile, PRINT_MODES } from "./index.ts";
+import {
+  createShellClient,
+  executeFile,
+  executeQuery,
+  PRINT_MODES,
+  startShell,
+} from "./index.ts";
 import type { PrintMode } from "./types.ts";
 
 function printUsage() {
@@ -44,7 +50,9 @@ function parseArgs(args: string[]) {
       if (PRINT_MODES.includes(m as PrintMode)) {
         mode = m as PrintMode;
       } else {
-        console.error(`Unknown mode: ${m}. Valid modes: ${PRINT_MODES.join(", ")}`);
+        console.error(
+          `Unknown mode: ${m}. Valid modes: ${PRINT_MODES.join(", ")}`,
+        );
         process.exit(1);
       }
     } else if (arg === "--unmask") {

@@ -1,11 +1,11 @@
-import { defineCommand } from "../../core/define-command.ts";
-import { resolveConfig } from "../../config/index.ts";
 import { createDbClient } from "@bunny.net/api";
-import { spinner } from "../../core/ui.ts";
-import { logger } from "../../core/logger.ts";
-import { formatTable } from "../../core/format.ts";
 import type { components } from "@bunny.net/api/generated/database.d.ts";
+import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
+import { defineCommand } from "../../core/define-command.ts";
+import { formatTable } from "../../core/format.ts";
+import { logger } from "../../core/logger.ts";
+import { spinner } from "../../core/ui.ts";
 
 type Database = components["schemas"]["Database2"];
 type DBLiveStatus = components["schemas"]["DBLiveStatus"];
@@ -84,9 +84,7 @@ export const dbListCommand = defineCommand({
 
     spin.stop();
 
-    const databases = allDatabases.sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
+    const databases = allDatabases.sort((a, b) => a.name.localeCompare(b.name));
 
     if (output === "json") {
       logger.log(JSON.stringify(databases, null, 2));
@@ -104,10 +102,9 @@ export const dbListCommand = defineCommand({
         databases.map((db) => {
           const live = liveMetrics[db.id];
           const status = live?.state === "Live" ? "Active" : "Idle";
-          const regionCode =
-            live?.state === "Live" ? live.metadata.main : null;
+          const regionCode = live?.state === "Live" ? live.metadata.main : null;
           const primary = regionCode
-            ? regionNames.get(regionCode) ?? regionCode
+            ? (regionNames.get(regionCode) ?? regionCode)
             : "—";
           return [db.id, db.name, status, primary, db.current_size];
         }),

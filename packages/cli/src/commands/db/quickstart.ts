@@ -1,15 +1,15 @@
+import { createDbClient } from "@bunny.net/api";
 import chalk from "chalk";
 import prompts from "prompts";
-import { defineCommand } from "../../core/define-command.ts";
 import { resolveConfig } from "../../config/index.ts";
-import { createDbClient } from "@bunny.net/api";
-import { resolveDbId } from "./resolve-db.ts";
-import { spinner } from "../../core/ui.ts";
-import { logger } from "../../core/logger.ts";
+import { clientOptions } from "../../core/client-options.ts";
+import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
+import { logger } from "../../core/logger.ts";
+import { spinner } from "../../core/ui.ts";
 import { readEnvValue } from "../../utils/env-file.ts";
 import { ARG_DATABASE_ID } from "./constants.ts";
-import { clientOptions } from "../../core/client-options.ts";
+import { resolveDbId } from "./resolve-db.ts";
 
 const COMMAND = `quickstart [${ARG_DATABASE_ID}]`;
 const DESCRIPTION = "Get started with a database in your project.";
@@ -162,7 +162,10 @@ export const dbQuickstartCommand = defineCommand<{
   examples: [
     ["$0 db quickstart", "Interactive — prompts for language"],
     ["$0 db quickstart --lang typescript", "Non-interactive"],
-    ["$0 db quickstart --lang go --url libsql://… --token ey…", "Skip API lookup"],
+    [
+      "$0 db quickstart --lang go --url libsql://… --token ey…",
+      "Skip API lookup",
+    ],
     ["$0 db quickstart --output json", "JSON output for tooling"],
   ],
 

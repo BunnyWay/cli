@@ -1,6 +1,10 @@
 import type { components } from "@bunny.net/api/generated/magic-containers.d.ts";
-import type { BunnyAppConfig, ContainerConfig, EndpointConfig } from "./schema.ts";
 import { parseImageRef } from "./parse-image-ref.ts";
+import type {
+  BunnyAppConfig,
+  ContainerConfig,
+  EndpointConfig,
+} from "./schema.ts";
 
 type Application = components["schemas"]["Application"];
 type ContainerTemplate = components["schemas"]["ContainerTemplate"];
@@ -55,11 +59,12 @@ function containerTemplateToConfig(ct: ContainerTemplate): ContainerConfig {
 
 /** Convert an API Application response to BunnyAppConfig. */
 export function apiToConfig(app: Application): BunnyAppConfig {
-  const volumeSizeMap = new Map(
-    app.volumes.map((v) => [v.name, v.size]),
-  );
+  const volumeSizeMap = new Map(app.volumes.map((v) => [v.name, v.size]));
 
-  const containers: Record<string, ReturnType<typeof containerTemplateToConfig>> = {};
+  const containers: Record<
+    string,
+    ReturnType<typeof containerTemplateToConfig>
+  > = {};
   for (const ct of app.containerTemplates) {
     const c = containerTemplateToConfig(ct);
     if (c.volumes) {
@@ -183,7 +188,9 @@ function collectVolumes(
 }
 
 /** Convert BunnyAppConfig to an AddApplicationRequest for creating a new app. */
-export function configToAddRequest(config: BunnyAppConfig): AddApplicationRequest {
+export function configToAddRequest(
+  config: BunnyAppConfig,
+): AddApplicationRequest {
   const containers: ContainerRequest[] = [];
   const volumes: VolumeRequest[] = [];
   const seenVolumes = new Set<string>();
@@ -217,8 +224,7 @@ export function configToPatchRequest(
 
   // Match containers by name to preserve existing IDs
   const entries = Object.entries(config.app.containers);
-  for (let i = 0; i < entries.length; i++) {
-    const [name, c] = entries[i]!;
+  for (const [i, [name, c]] of entries.entries()) {
     // First container matches first existing template (primary); rest match by name
     const existing =
       i === 0

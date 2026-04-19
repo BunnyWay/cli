@@ -1,17 +1,16 @@
-import prompts from "prompts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { resolveConfig } from "../../../config/index.ts";
 import { createDbClient } from "@bunny.net/api";
-import { resolveDbId } from "../resolve-db.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
-import { logger } from "../../../core/logger.ts";
+import type { components } from "@bunny.net/api/generated/database.d.ts";
+import prompts from "prompts";
+import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
+import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { formatTable } from "../../../core/format.ts";
-import type { components } from "@bunny.net/api/generated/database.d.ts";
+import { logger } from "../../../core/logger.ts";
+import { confirm, spinner } from "../../../core/ui.ts";
 import { ARG_DATABASE_ID } from "../constants.ts";
-import { clientOptions } from "../../../core/client-options.ts";
+import { resolveDbId } from "../resolve-db.ts";
 
-type PossibleRegion = components["schemas"]["PossibleRegion"];
 type Region = components["schemas"]["Region"];
 
 const COMMAND = `remove [${ARG_DATABASE_ID}]`;
@@ -189,13 +188,8 @@ export const dbRegionsRemoveCommand = defineCommand<RemoveArgs>({
       );
     }
 
-    if (
-      db.replicas_regions.length > 0 &&
-      updatedReplicas.length === 0
-    ) {
-      logger.warn(
-        "This will remove all read replicas from your database.",
-      );
+    if (db.replicas_regions.length > 0 && updatedReplicas.length === 0) {
+      logger.warn("This will remove all read replicas from your database.");
     }
 
     const parts: string[] = [];

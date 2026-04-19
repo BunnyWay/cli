@@ -17,7 +17,7 @@ const pkg = PLATFORMS[platform];
 
 if (!pkg) {
   console.error(
-    `Unsupported platform: ${platform}\nSupported: ${Object.keys(PLATFORMS).join(", ")}`
+    `Unsupported platform: ${platform}\nSupported: ${Object.keys(PLATFORMS).join(", ")}`,
   );
   process.exit(1);
 }
@@ -26,13 +26,16 @@ const binName = process.platform === "win32" ? "bsql.exe" : "bsql";
 
 let binPath;
 try {
-  binPath = path.join(path.dirname(require.resolve(`${pkg}/package.json`)), binName);
+  binPath = path.join(
+    path.dirname(require.resolve(`${pkg}/package.json`)),
+    binName,
+  );
 } catch {
   console.error(
     `Could not find the bsql binary for your platform (${platform}).\n` +
       `Expected package: ${pkg}\n\n` +
       `This usually means the optional dependency was not installed.\n` +
-      `Try reinstalling: npm install @bunny.net/database-shell`
+      `Try reinstalling: npm install @bunny.net/database-shell`,
   );
   process.exit(1);
 }

@@ -8,15 +8,29 @@ const usersTable = {
   columns: [
     { name: "id", type: "INTEGER" as const, nullable: false, primaryKey: true },
     { name: "name", type: "TEXT" as const, nullable: false, primaryKey: false },
-    { name: "email", type: "TEXT" as const, nullable: false, primaryKey: false },
-    { name: "age", type: "INTEGER" as const, nullable: true, primaryKey: false },
-    { name: "created_at", type: "DATETIME" as const, nullable: false, primaryKey: false, defaultValue: "CURRENT_TIMESTAMP" },
+    {
+      name: "email",
+      type: "TEXT" as const,
+      nullable: false,
+      primaryKey: false,
+    },
+    {
+      name: "age",
+      type: "INTEGER" as const,
+      nullable: true,
+      primaryKey: false,
+    },
+    {
+      name: "created_at",
+      type: "DATETIME" as const,
+      nullable: false,
+      primaryKey: false,
+      defaultValue: "CURRENT_TIMESTAMP",
+    },
   ],
   primaryKey: ["id"],
   foreignKeys: [],
-  indexes: [
-    { name: "idx_users_email", columns: ["email"], unique: true },
-  ],
+  indexes: [{ name: "idx_users_email", columns: ["email"], unique: true }],
   uniqueColumns: ["email"],
 };
 
@@ -24,10 +38,26 @@ const postsTable = {
   name: "posts",
   columns: [
     { name: "id", type: "INTEGER" as const, nullable: false, primaryKey: true },
-    { name: "title", type: "TEXT" as const, nullable: false, primaryKey: false },
+    {
+      name: "title",
+      type: "TEXT" as const,
+      nullable: false,
+      primaryKey: false,
+    },
     { name: "body", type: "TEXT" as const, nullable: true, primaryKey: false },
-    { name: "user_id", type: "INTEGER" as const, nullable: false, primaryKey: false },
-    { name: "published", type: "BOOLEAN" as const, nullable: false, primaryKey: false, defaultValue: 0 },
+    {
+      name: "user_id",
+      type: "INTEGER" as const,
+      nullable: false,
+      primaryKey: false,
+    },
+    {
+      name: "published",
+      type: "BOOLEAN" as const,
+      nullable: false,
+      primaryKey: false,
+      defaultValue: 0,
+    },
   ],
   primaryKey: ["id"],
   foreignKeys: [
@@ -130,28 +160,45 @@ describe("generateOpenAPISpec", () => {
   test("generates three schema variants per table", () => {
     const spec = generateOpenAPISpec(schema);
 
-    expect(spec.components.schemas["users"]).toBeDefined();
-    expect(spec.components.schemas["usersInsert"]).toBeDefined();
-    expect(spec.components.schemas["usersUpdate"]).toBeDefined();
-    expect(spec.components.schemas["posts"]).toBeDefined();
-    expect(spec.components.schemas["postsInsert"]).toBeDefined();
-    expect(spec.components.schemas["postsUpdate"]).toBeDefined();
+    expect(spec.components.schemas.users).toBeDefined();
+    expect(spec.components.schemas.usersInsert).toBeDefined();
+    expect(spec.components.schemas.usersUpdate).toBeDefined();
+    expect(spec.components.schemas.posts).toBeDefined();
+    expect(spec.components.schemas.postsInsert).toBeDefined();
+    expect(spec.components.schemas.postsUpdate).toBeDefined();
   });
 
   test("base schema includes all columns with examples", () => {
     const spec = generateOpenAPISpec(schema);
-    const usersSchema = spec.components.schemas["users"]!;
+    const usersSchema = spec.components.schemas.users!;
 
-    expect(usersSchema.properties!["id"]).toEqual({ type: "integer", example: 1 });
-    expect(usersSchema.properties!["name"]).toEqual({ type: "string", example: "John Doe" });
-    expect(usersSchema.properties!["email"]).toEqual({ type: "string", example: "user@example.com" });
-    expect(usersSchema.properties!["age"]).toEqual({ type: "integer", nullable: true, example: 25 });
-    expect(usersSchema.properties!["created_at"]).toEqual({ type: "string", format: "date-time", example: "2024-01-01T00:00:00Z" });
+    expect(usersSchema.properties?.id).toEqual({
+      type: "integer",
+      example: 1,
+    });
+    expect(usersSchema.properties?.name).toEqual({
+      type: "string",
+      example: "John Doe",
+    });
+    expect(usersSchema.properties?.email).toEqual({
+      type: "string",
+      example: "user@example.com",
+    });
+    expect(usersSchema.properties?.age).toEqual({
+      type: "integer",
+      nullable: true,
+      example: 25,
+    });
+    expect(usersSchema.properties?.created_at).toEqual({
+      type: "string",
+      format: "date-time",
+      example: "2024-01-01T00:00:00Z",
+    });
   });
 
   test("base schema required excludes PKs, nullable, and columns with defaults", () => {
     const spec = generateOpenAPISpec(schema);
-    const usersSchema = spec.components.schemas["users"]!;
+    const usersSchema = spec.components.schemas.users!;
 
     // name and email are required (not nullable, no default, not PK)
     expect(usersSchema.required).toContain("name");
@@ -164,16 +211,16 @@ describe("generateOpenAPISpec", () => {
 
   test("insert schema skips auto-increment INTEGER PKs", () => {
     const spec = generateOpenAPISpec(schema);
-    const insertSchema = spec.components.schemas["usersInsert"]!;
+    const insertSchema = spec.components.schemas.usersInsert!;
 
-    expect(insertSchema.properties!["id"]).toBeUndefined();
-    expect(insertSchema.properties!["name"]).toBeDefined();
-    expect(insertSchema.properties!["email"]).toBeDefined();
+    expect(insertSchema.properties?.id).toBeUndefined();
+    expect(insertSchema.properties?.name).toBeDefined();
+    expect(insertSchema.properties?.email).toBeDefined();
   });
 
   test("insert schema marks non-nullable columns without defaults as required", () => {
     const spec = generateOpenAPISpec(schema);
-    const insertSchema = spec.components.schemas["usersInsert"]!;
+    const insertSchema = spec.components.schemas.usersInsert!;
 
     expect(insertSchema.required).toContain("name");
     expect(insertSchema.required).toContain("email");
@@ -182,21 +229,34 @@ describe("generateOpenAPISpec", () => {
 
   test("update schema excludes PKs and has no required fields", () => {
     const spec = generateOpenAPISpec(schema);
-    const updateSchema = spec.components.schemas["usersUpdate"]!;
+    const updateSchema = spec.components.schemas.usersUpdate!;
 
-    expect(updateSchema.properties!["id"]).toBeUndefined();
-    expect(updateSchema.properties!["name"]).toBeDefined();
+    expect(updateSchema.properties?.id).toBeUndefined();
+    expect(updateSchema.properties?.name).toBeDefined();
     expect(updateSchema.required).toBeUndefined();
   });
 
   test("maps column types correctly with examples", () => {
     const spec = generateOpenAPISpec(schema);
-    const postsSchema = spec.components.schemas["posts"]!;
+    const postsSchema = spec.components.schemas.posts!;
 
-    expect(postsSchema.properties!["id"]).toEqual({ type: "integer", example: 1 });
-    expect(postsSchema.properties!["title"]).toEqual({ type: "string", example: "Hello World" });
-    expect(postsSchema.properties!["body"]).toEqual({ type: "string", nullable: true, example: "Lorem ipsum dolor sit amet" });
-    expect(postsSchema.properties!["published"]).toEqual({ type: "boolean", example: true });
+    expect(postsSchema.properties?.id).toEqual({
+      type: "integer",
+      example: 1,
+    });
+    expect(postsSchema.properties?.title).toEqual({
+      type: "string",
+      example: "Hello World",
+    });
+    expect(postsSchema.properties?.body).toEqual({
+      type: "string",
+      nullable: true,
+      example: "Lorem ipsum dolor sit amet",
+    });
+    expect(postsSchema.properties?.published).toEqual({
+      type: "boolean",
+      example: true,
+    });
   });
 
   test("maps REAL to number with double format", () => {
@@ -218,7 +278,7 @@ describe("generateOpenAPISpec", () => {
     };
 
     const spec = generateOpenAPISpec(realSchema);
-    expect(spec.components.schemas["measurements"]!.properties!["value"]).toEqual({
+    expect(spec.components.schemas.measurements?.properties?.value).toEqual({
       type: "number",
       format: "double",
       example: 1.5,
@@ -244,7 +304,7 @@ describe("generateOpenAPISpec", () => {
     };
 
     const spec = generateOpenAPISpec(blobSchema);
-    expect(spec.components.schemas["files"]!.properties!["data"]).toEqual({
+    expect(spec.components.schemas.files?.properties?.data).toEqual({
       type: "string",
       format: "binary",
     });
@@ -265,17 +325,17 @@ describe("generateOpenAPISpec", () => {
   test("operationIds are capitalized table names", () => {
     const spec = generateOpenAPISpec(schema);
 
-    expect(spec.paths["/users"]!.get!.operationId).toBe("getUsers");
-    expect(spec.paths["/users"]!.post!.operationId).toBe("createUsers");
-    expect(spec.paths["/users"]!.patch!.operationId).toBe("updateUsers");
-    expect(spec.paths["/users"]!.delete!.operationId).toBe("deleteUsers");
+    expect(spec.paths["/users"]?.get?.operationId).toBe("getUsers");
+    expect(spec.paths["/users"]?.post?.operationId).toBe("createUsers");
+    expect(spec.paths["/users"]?.patch?.operationId).toBe("updateUsers");
+    expect(spec.paths["/users"]?.delete?.operationId).toBe("deleteUsers");
   });
 
   test("operation tags match table names", () => {
     const spec = generateOpenAPISpec(schema);
 
-    expect(spec.paths["/users"]!.get!.tags).toEqual(["users"]);
-    expect(spec.paths["/posts"]!.post!.tags).toEqual(["posts"]);
+    expect(spec.paths["/users"]?.get?.tags).toEqual(["users"]);
+    expect(spec.paths["/posts"]?.post?.tags).toEqual(["posts"]);
   });
 
   test("single-resource path has GET, PATCH, DELETE but no POST", () => {
@@ -293,11 +353,17 @@ describe("generateOpenAPISpec", () => {
     const get = spec.paths["/users/{id}"]!.get!;
 
     expect(get.parameters).toHaveLength(2);
-    const pathParam = get.parameters![0] as { name: string; in: string; required: boolean };
+    const pathParam = get.parameters?.[0] as {
+      name: string;
+      in: string;
+      required: boolean;
+    };
     expect(pathParam.name).toBe("id");
     expect(pathParam.in).toBe("path");
     expect(pathParam.required).toBe(true);
-    expect(get.parameters![1]).toEqual({ $ref: "#/components/parameters/select" });
+    expect(get.parameters?.[1]).toEqual({
+      $ref: "#/components/parameters/select",
+    });
   });
 
   test("single-resource PATCH has path param and request body", () => {
@@ -305,7 +371,7 @@ describe("generateOpenAPISpec", () => {
     const patch = spec.paths["/users/{id}"]!.patch!;
 
     expect(patch.parameters).toHaveLength(1);
-    const pathParam = patch.parameters![0] as { name: string; in: string };
+    const pathParam = patch.parameters?.[0] as { name: string; in: string };
     expect(pathParam.name).toBe("id");
     expect(pathParam.in).toBe("path");
     expect(patch.requestBody).toBeDefined();
@@ -316,7 +382,7 @@ describe("generateOpenAPISpec", () => {
     const del = spec.paths["/users/{id}"]!.delete!;
 
     expect(del.parameters).toHaveLength(1);
-    const pathParam = del.parameters![0] as { name: string; in: string };
+    const pathParam = del.parameters?.[0] as { name: string; in: string };
     expect(pathParam.name).toBe("id");
     expect(pathParam.in).toBe("path");
   });
@@ -324,19 +390,22 @@ describe("generateOpenAPISpec", () => {
   test("single-resource responses return single object, not array", () => {
     const spec = generateOpenAPISpec(schema);
     const get = spec.paths["/users/{id}"]!.get!;
-    const dataSchema = get.responses["200"]!.content!["application/json"].schema;
+    const dataSchema =
+      get.responses["200"]!.content!["application/json"].schema;
 
-    expect(dataSchema.properties!["data"]!.$ref).toBe("#/components/schemas/users");
-    expect(dataSchema.properties!["data"]!.type).toBeUndefined();
+    expect(dataSchema.properties?.data?.$ref).toBe(
+      "#/components/schemas/users",
+    );
+    expect(dataSchema.properties?.data?.type).toBeUndefined();
   });
 
   test("single-resource operationIds include PK name", () => {
     const spec = generateOpenAPISpec(schema);
     const userById = spec.paths["/users/{id}"]!;
 
-    expect(userById.get!.operationId).toBe("getUsersById");
-    expect(userById.patch!.operationId).toBe("updateUsersById");
-    expect(userById.delete!.operationId).toBe("deleteUsersById");
+    expect(userById.get?.operationId).toBe("getUsersById");
+    expect(userById.patch?.operationId).toBe("updateUsersById");
+    expect(userById.delete?.operationId).toBe("deleteUsersById");
   });
 
   test("unique column paths have GET, PATCH, DELETE", () => {
@@ -352,7 +421,11 @@ describe("generateOpenAPISpec", () => {
   test("unique column path param uses correct type", () => {
     const spec = generateOpenAPISpec(schema);
     const get = spec.paths["/users/by-email/{email}"]!.get!;
-    const pathParam = get.parameters![0] as { name: string; in: string; schema: { type: string } };
+    const pathParam = get.parameters?.[0] as {
+      name: string;
+      in: string;
+      schema: { type: string };
+    };
 
     expect(pathParam.name).toBe("email");
     expect(pathParam.in).toBe("path");
@@ -363,9 +436,9 @@ describe("generateOpenAPISpec", () => {
     const spec = generateOpenAPISpec(schema);
     const byEmail = spec.paths["/users/by-email/{email}"]!;
 
-    expect(byEmail.get!.operationId).toBe("getUsersByEmail");
-    expect(byEmail.patch!.operationId).toBe("updateUsersByEmail");
-    expect(byEmail.delete!.operationId).toBe("deleteUsersByEmail");
+    expect(byEmail.get?.operationId).toBe("getUsersByEmail");
+    expect(byEmail.patch?.operationId).toBe("updateUsersByEmail");
+    expect(byEmail.delete?.operationId).toBe("deleteUsersByEmail");
   });
 
   test("skips single-resource path for tables without PK", () => {
@@ -374,7 +447,12 @@ describe("generateOpenAPISpec", () => {
         logs: {
           name: "logs",
           columns: [
-            { name: "message", type: "TEXT", nullable: false, primaryKey: false },
+            {
+              name: "message",
+              type: "TEXT",
+              nullable: false,
+              primaryKey: false,
+            },
             { name: "level", type: "TEXT", nullable: false, primaryKey: false },
           ],
           primaryKey: [],
@@ -398,8 +476,18 @@ describe("generateOpenAPISpec", () => {
         user_roles: {
           name: "user_roles",
           columns: [
-            { name: "user_id", type: "INTEGER", nullable: false, primaryKey: true },
-            { name: "role_id", type: "INTEGER", nullable: false, primaryKey: true },
+            {
+              name: "user_id",
+              type: "INTEGER",
+              nullable: false,
+              primaryKey: true,
+            },
+            {
+              name: "role_id",
+              type: "INTEGER",
+              nullable: false,
+              primaryKey: true,
+            },
           ],
           primaryKey: ["user_id", "role_id"],
           foreignKeys: [],
@@ -417,11 +505,17 @@ describe("generateOpenAPISpec", () => {
 
   test("includes Error schema in components", () => {
     const spec = generateOpenAPISpec(schema);
-    const errorSchema = spec.components.schemas["Error"]!;
+    const errorSchema = spec.components.schemas.Error!;
 
     expect(errorSchema.type).toBe("object");
-    expect(errorSchema.properties!["message"]).toEqual({ type: "string", example: "Something went wrong" });
-    expect(errorSchema.properties!["code"]).toEqual({ type: "string", example: "BAD_REQUEST" });
+    expect(errorSchema.properties?.message).toEqual({
+      type: "string",
+      example: "Something went wrong",
+    });
+    expect(errorSchema.properties?.code).toEqual({
+      type: "string",
+      example: "BAD_REQUEST",
+    });
     expect(errorSchema.required).toEqual(["message"]);
   });
 
@@ -430,9 +524,9 @@ describe("generateOpenAPISpec", () => {
     const get = spec.paths["/users"]!.get!;
 
     expect(get.responses["400"]).toBeDefined();
-    expect(get.responses["400"]!.description).toBe("Bad request");
+    expect(get.responses["400"]?.description).toBe("Bad request");
     expect(get.responses["404"]).toBeDefined();
-    expect(get.responses["404"]!.description).toBe("Not found");
+    expect(get.responses["404"]?.description).toBe("Not found");
   });
 
   test("POST responses include 400 but not 404", () => {
@@ -457,7 +551,8 @@ describe("generateOpenAPISpec", () => {
   test("error responses reference the Error schema", () => {
     const spec = generateOpenAPISpec(schema);
     const get = spec.paths["/users"]!.get!;
-    const errorContent = get.responses["400"]!.content!["application/json"].schema;
+    const errorContent =
+      get.responses["400"]!.content!["application/json"].schema;
 
     expect(errorContent.$ref).toBe("#/components/schemas/Error");
   });
@@ -474,7 +569,9 @@ describe("generateOpenAPISpec", () => {
   test("produces a valid OpenAPI 3.0 spec", async () => {
     const spec = generateOpenAPISpec(schema);
     const validator = new Validator();
-    const result = await validator.validate(spec as unknown as Record<string, unknown>);
+    const result = await validator.validate(
+      spec as unknown as Record<string, unknown>,
+    );
 
     expect(result.valid).toBe(true);
     expect(result.errors).toBeUndefined();
@@ -488,7 +585,9 @@ describe("generateOpenAPISpec", () => {
 
     const spec = generateOpenAPISpec(emptySchema);
     const validator = new Validator();
-    const result = await validator.validate(spec as unknown as Record<string, unknown>);
+    const result = await validator.validate(
+      spec as unknown as Record<string, unknown>,
+    );
 
     expect(result.valid).toBe(true);
   });
@@ -501,20 +600,65 @@ describe("generateOpenAPISpec", () => {
           columns: [
             { name: "id", type: "INTEGER", nullable: false, primaryKey: true },
             { name: "email", type: "TEXT", nullable: false, primaryKey: false },
-            { name: "username", type: "TEXT", nullable: false, primaryKey: false },
-            { name: "first_name", type: "TEXT", nullable: false, primaryKey: false },
-            { name: "last_name", type: "TEXT", nullable: false, primaryKey: false },
+            {
+              name: "username",
+              type: "TEXT",
+              nullable: false,
+              primaryKey: false,
+            },
+            {
+              name: "first_name",
+              type: "TEXT",
+              nullable: false,
+              primaryKey: false,
+            },
+            {
+              name: "last_name",
+              type: "TEXT",
+              nullable: false,
+              primaryKey: false,
+            },
             { name: "phone", type: "TEXT", nullable: true, primaryKey: false },
-            { name: "avatar_url", type: "TEXT", nullable: true, primaryKey: false },
+            {
+              name: "avatar_url",
+              type: "TEXT",
+              nullable: true,
+              primaryKey: false,
+            },
             { name: "bio", type: "TEXT", nullable: true, primaryKey: false },
             { name: "city", type: "TEXT", nullable: true, primaryKey: false },
-            { name: "country", type: "TEXT", nullable: true, primaryKey: false },
-            { name: "latitude", type: "REAL", nullable: true, primaryKey: false },
-            { name: "longitude", type: "REAL", nullable: true, primaryKey: false },
+            {
+              name: "country",
+              type: "TEXT",
+              nullable: true,
+              primaryKey: false,
+            },
+            {
+              name: "latitude",
+              type: "REAL",
+              nullable: true,
+              primaryKey: false,
+            },
+            {
+              name: "longitude",
+              type: "REAL",
+              nullable: true,
+              primaryKey: false,
+            },
             { name: "price", type: "REAL", nullable: true, primaryKey: false },
             { name: "slug", type: "TEXT", nullable: false, primaryKey: false },
-            { name: "team_id", type: "INTEGER", nullable: false, primaryKey: false },
-            { name: "updated_at", type: "DATETIME", nullable: false, primaryKey: false },
+            {
+              name: "team_id",
+              type: "INTEGER",
+              nullable: false,
+              primaryKey: false,
+            },
+            {
+              name: "updated_at",
+              type: "DATETIME",
+              nullable: false,
+              primaryKey: false,
+            },
           ],
           primaryKey: ["id"],
           foreignKeys: [],
@@ -526,23 +670,23 @@ describe("generateOpenAPISpec", () => {
     };
 
     const spec = generateOpenAPISpec(namedSchema);
-    const props = spec.components.schemas["profiles"]!.properties!;
+    const props = spec.components.schemas.profiles!.properties!;
 
-    expect(props["email"]!.example).toBe("user@example.com");
-    expect(props["username"]!.example).toBe("johndoe");
-    expect(props["first_name"]!.example).toBe("John");
-    expect(props["last_name"]!.example).toBe("Doe");
-    expect(props["phone"]!.example).toBe("+1-555-0123");
-    expect(props["avatar_url"]!.example).toBe("https://example.com/image.png");
-    expect(props["bio"]!.example).toBe("A short description");
-    expect(props["city"]!.example).toBe("San Francisco");
-    expect(props["country"]!.example).toBe("US");
-    expect(props["latitude"]!.example).toBe(37.7749);
-    expect(props["longitude"]!.example).toBe(-122.4194);
-    expect(props["price"]!.example).toBe(9.99);
-    expect(props["slug"]!.example).toBe("hello-world");
-    expect(props["team_id"]!.example).toBe(1);
-    expect(props["updated_at"]!.example).toBe("2024-01-01T00:00:00Z");
+    expect(props.email?.example).toBe("user@example.com");
+    expect(props.username?.example).toBe("johndoe");
+    expect(props.first_name?.example).toBe("John");
+    expect(props.last_name?.example).toBe("Doe");
+    expect(props.phone?.example).toBe("+1-555-0123");
+    expect(props.avatar_url?.example).toBe("https://example.com/image.png");
+    expect(props.bio?.example).toBe("A short description");
+    expect(props.city?.example).toBe("San Francisco");
+    expect(props.country?.example).toBe("US");
+    expect(props.latitude?.example).toBe(37.7749);
+    expect(props.longitude?.example).toBe(-122.4194);
+    expect(props.price?.example).toBe(9.99);
+    expect(props.slug?.example).toBe("hello-world");
+    expect(props.team_id?.example).toBe(1);
+    expect(props.updated_at?.example).toBe("2024-01-01T00:00:00Z");
   });
 
   test("type-based fallback examples for unknown column names", () => {
@@ -553,10 +697,25 @@ describe("generateOpenAPISpec", () => {
           columns: [
             { name: "id", type: "INTEGER", nullable: false, primaryKey: true },
             { name: "foo", type: "TEXT", nullable: false, primaryKey: false },
-            { name: "bar", type: "INTEGER", nullable: false, primaryKey: false },
+            {
+              name: "bar",
+              type: "INTEGER",
+              nullable: false,
+              primaryKey: false,
+            },
             { name: "baz", type: "REAL", nullable: false, primaryKey: false },
-            { name: "qux", type: "BOOLEAN", nullable: false, primaryKey: false },
-            { name: "quux", type: "DATETIME", nullable: false, primaryKey: false },
+            {
+              name: "qux",
+              type: "BOOLEAN",
+              nullable: false,
+              primaryKey: false,
+            },
+            {
+              name: "quux",
+              type: "DATETIME",
+              nullable: false,
+              primaryKey: false,
+            },
             { name: "corge", type: "BLOB", nullable: false, primaryKey: false },
           ],
           primaryKey: ["id"],
@@ -569,14 +728,14 @@ describe("generateOpenAPISpec", () => {
     };
 
     const spec = generateOpenAPISpec(unknownSchema);
-    const props = spec.components.schemas["things"]!.properties!;
+    const props = spec.components.schemas.things!.properties!;
 
-    expect(props["foo"]!.example).toBe("string");
-    expect(props["bar"]!.example).toBe(1);
-    expect(props["baz"]!.example).toBe(1.5);
-    expect(props["qux"]!.example).toBe(true);
-    expect(props["quux"]!.example).toBe("2024-01-01T00:00:00Z");
-    expect(props["corge"]!.example).toBeUndefined();
+    expect(props.foo?.example).toBe("string");
+    expect(props.bar?.example).toBe(1);
+    expect(props.baz?.example).toBe(1.5);
+    expect(props.qux?.example).toBe(true);
+    expect(props.quux?.example).toBe("2024-01-01T00:00:00Z");
+    expect(props.corge?.example).toBeUndefined();
   });
 
   test("PATCH and DELETE have only filter params, no common param $refs", () => {
@@ -595,8 +754,12 @@ describe("generateOpenAPISpec", () => {
     }
 
     // Has column filter params
-    const patchNames = patch.parameters!.map((p) => (p as { name: string }).name);
-    const deleteNames = del.parameters!.map((p) => (p as { name: string }).name);
+    const patchNames = patch.parameters?.map(
+      (p) => (p as { name: string }).name,
+    );
+    const deleteNames = del.parameters?.map(
+      (p) => (p as { name: string }).name,
+    );
     expect(patchNames).toContain("id");
     expect(deleteNames).toContain("id");
   });

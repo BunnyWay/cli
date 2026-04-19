@@ -18,7 +18,9 @@ const { values } = parseArgs({
 });
 
 if (!values.url) {
-  console.error("Usage: bun run dev:server --url <DATABASE_URL> [--token <TOKEN>] [--port <PORT>]");
+  console.error(
+    "Usage: bun run dev:server --url <DATABASE_URL> [--token <TOKEN>] [--port <PORT>]",
+  );
   process.exit(1);
 }
 

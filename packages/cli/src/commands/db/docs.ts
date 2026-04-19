@@ -1,6 +1,6 @@
 import { defineCommand } from "../../core/define-command.ts";
-import { openBrowser } from "../../core/ui.ts";
 import { logger } from "../../core/logger.ts";
+import { openBrowser } from "../../core/ui.ts";
 import { DOCS_BASE_URL } from "../docs.ts";
 
 const COMMAND = "docs";
@@ -18,9 +18,7 @@ const URL = `${DOCS_BASE_URL}/database`;
 export const dbDocsCommand = defineCommand({
   command: COMMAND,
   describe: DESCRIPTION,
-  examples: [
-    ["$0 db docs", "Open database documentation"],
-  ],
+  examples: [["$0 db docs", "Open database documentation"]],
 
   handler: async () => {
     logger.info(`Opening ${URL}`);

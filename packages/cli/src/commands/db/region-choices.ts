@@ -23,7 +23,7 @@ export function groupedRegionChoices(
   for (const r of regions) {
     const group = r.group ?? "Other";
     if (!byGroup.has(group)) byGroup.set(group, []);
-    byGroup.get(group)!.push(r);
+    byGroup.get(group)?.push(r);
   }
 
   const choices: {

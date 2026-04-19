@@ -24,10 +24,7 @@
               "type": "number"
             }
           },
-          "required": [
-            "min",
-            "max"
-          ],
+          "required": ["min", "max"],
           "additionalProperties": false
         },
         "regions": {
@@ -88,11 +85,7 @@
                     "properties": {
                       "type": {
                         "type": "string",
-                        "enum": [
-                          "http",
-                          "tcp",
-                          "grpc"
-                        ]
+                        "enum": ["http", "tcp", "grpc"]
                       },
                       "path": {
                         "type": "string"
@@ -101,9 +94,7 @@
                         "type": "number"
                       }
                     },
-                    "required": [
-                      "type"
-                    ],
+                    "required": ["type"],
                     "additionalProperties": false
                   },
                   "liveness": {
@@ -111,11 +102,7 @@
                     "properties": {
                       "type": {
                         "type": "string",
-                        "enum": [
-                          "http",
-                          "tcp",
-                          "grpc"
-                        ]
+                        "enum": ["http", "tcp", "grpc"]
                       },
                       "path": {
                         "type": "string"
@@ -124,9 +111,7 @@
                         "type": "number"
                       }
                     },
-                    "required": [
-                      "type"
-                    ],
+                    "required": ["type"],
                     "additionalProperties": false
                   },
                   "startup": {
@@ -134,11 +119,7 @@
                     "properties": {
                       "type": {
                         "type": "string",
-                        "enum": [
-                          "http",
-                          "tcp",
-                          "grpc"
-                        ]
+                        "enum": ["http", "tcp", "grpc"]
                       },
                       "path": {
                         "type": "string"
@@ -147,9 +128,7 @@
                         "type": "number"
                       }
                     },
-                    "required": [
-                      "type"
-                    ],
+                    "required": ["type"],
                     "additionalProperties": false
                   }
                 },
@@ -162,10 +141,7 @@
                   "properties": {
                     "type": {
                       "type": "string",
-                      "enum": [
-                        "cdn",
-                        "anycast"
-                      ]
+                      "enum": ["cdn", "anycast"]
                     },
                     "ssl": {
                       "type": "boolean"
@@ -182,17 +158,12 @@
                             "type": "number"
                           }
                         },
-                        "required": [
-                          "public",
-                          "container"
-                        ],
+                        "required": ["public", "container"],
                         "additionalProperties": false
                       }
                     }
                   },
-                  "required": [
-                    "type"
-                  ],
+                  "required": ["type"],
                   "additionalProperties": false
                 }
               },
@@ -211,11 +182,7 @@
                       "type": "number"
                     }
                   },
-                  "required": [
-                    "name",
-                    "mount",
-                    "size"
-                  ],
+                  "required": ["name", "mount", "size"],
                   "additionalProperties": false
                 }
               }
@@ -224,15 +191,10 @@
           }
         }
       },
-      "required": [
-        "name",
-        "containers"
-      ],
+      "required": ["name", "containers"],
       "additionalProperties": false
     }
   },
-  "required": [
-    "app"
-  ],
+  "required": ["app"],
   "additionalProperties": false
 }

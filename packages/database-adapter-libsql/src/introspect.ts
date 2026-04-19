@@ -1,4 +1,3 @@
-import type { Client } from "@libsql/client";
 import type {
   ColumnDefinition,
   ColumnType,
@@ -7,15 +6,24 @@ import type {
   IndexDefinition,
   TableDefinition,
 } from "@bunny.net/database-openapi";
+import type { Client } from "@libsql/client";
 
 const mapColumnType = (sqliteType: string): ColumnType => {
   const upper = sqliteType.toUpperCase();
 
   if (upper.includes("INT")) return "INTEGER";
-  if (upper.includes("CHAR") || upper.includes("CLOB") || upper.includes("TEXT"))
+  if (
+    upper.includes("CHAR") ||
+    upper.includes("CLOB") ||
+    upper.includes("TEXT")
+  )
     return "TEXT";
   if (upper.includes("BLOB") || upper === "") return "BLOB";
-  if (upper.includes("REAL") || upper.includes("FLOA") || upper.includes("DOUB"))
+  if (
+    upper.includes("REAL") ||
+    upper.includes("FLOA") ||
+    upper.includes("DOUB")
+  )
     return "REAL";
   if (upper.includes("BOOL")) return "BOOLEAN";
   if (upper.includes("DATE") || upper.includes("TIME")) return "DATETIME";
@@ -40,7 +48,9 @@ const getColumns = async (
   client: Client,
   tableName: string,
 ): Promise<ColumnDefinition[]> => {
-  const result = await client.execute(`PRAGMA table_info("${tableName.replace(/"/g, '""')}")`);
+  const result = await client.execute(
+    `PRAGMA table_info("${tableName.replace(/"/g, '""')}")`,
+  );
 
   return result.rows.map((row) => ({
     name: row.name as string,
@@ -77,7 +87,9 @@ const getIndexes = async (
   for (const row of indexList.rows) {
     const indexName = row.name as string;
     const unique = row.unique === 1;
-    const indexInfo = await client.execute(`PRAGMA index_info("${indexName.replace(/"/g, '""')}")`);
+    const indexInfo = await client.execute(
+      `PRAGMA index_info("${indexName.replace(/"/g, '""')}")`,
+    );
     const columns = indexInfo.rows.map((r) => r.name as string);
 
     indexes.push({ name: indexName, columns, unique });
@@ -97,9 +109,11 @@ const introspectTable = async (
 
   // Unique columns: single-column unique indexes, excluding the PK
   const pkSet = new Set(primaryKey);
-  const uniqueColumns = indexes
-    .filter((idx) => idx.unique && idx.columns.length === 1 && !pkSet.has(idx.columns[0]!))
-    .map((idx) => idx.columns[0]!);
+  const uniqueColumns = indexes.flatMap((idx) => {
+    if (!idx.unique || idx.columns.length !== 1) return [];
+    const [col] = idx.columns;
+    return col && !pkSet.has(col) ? [col] : [];
+  });
 
   return {
     name: tableName,
@@ -156,7 +170,9 @@ export const introspect = async ({
   include,
 }: IntrospectOptions): Promise<DatabaseSchema> => {
   const allTables = await getTables(client);
-  const filteredTables = allTables.filter((name) => shouldInclude(name, exclude, include));
+  const filteredTables = allTables.filter((name) =>
+    shouldInclude(name, exclude, include),
+  );
   const tables: Record<string, TableDefinition> = {};
 
   for (const tableName of filteredTables) {

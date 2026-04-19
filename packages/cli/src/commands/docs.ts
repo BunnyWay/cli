@@ -1,6 +1,6 @@
 import { defineCommand } from "../core/define-command.ts";
-import { openBrowser } from "../core/ui.ts";
 import { logger } from "../core/logger.ts";
+import { openBrowser } from "../core/ui.ts";
 
 export const DOCS_BASE_URL = "https://docs.bunny.net";
 
@@ -18,9 +18,7 @@ const DESCRIPTION = "Open bunny.net documentation in the browser.";
 export const docsCommand = defineCommand({
   command: COMMAND,
   describe: DESCRIPTION,
-  examples: [
-    ["$0 docs", "Open bunny.net documentation"],
-  ],
+  examples: [["$0 docs", "Open bunny.net documentation"]],
 
   handler: async () => {
     logger.info(`Opening ${DOCS_BASE_URL}`);

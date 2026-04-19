@@ -28,7 +28,7 @@ export function LoadingScreen({ error }: { error: string | null }) {
           <div className="mb-10 space-y-2.5">
             {LOADING_STEPS.map((step, i) => (
               <div
-                key={i}
+                key={step.label}
                 className="step-reveal flex items-baseline gap-3"
                 style={{ animationDelay: `${0.3 + i * 0.8}s` }}
               >

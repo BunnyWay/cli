@@ -1,13 +1,13 @@
-import type { components } from "@bunny.net/api/generated/compute.d.ts";
 import { createComputeClient } from "@bunny.net/api";
+import type { components } from "@bunny.net/api/generated/compute.d.ts";
 import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { resolveManifestId } from "../../../core/manifest.ts";
 import { spinner } from "../../../core/ui.ts";
 import { SCRIPT_MANIFEST } from "../constants.ts";
-import { clientOptions } from "../../../core/client-options.ts";
 
 type EdgeScriptVariable = components["schemas"]["EdgeScriptVariableModel"];
 type EdgeScriptSecret = components["schemas"]["EdgeScriptSecretModel"];

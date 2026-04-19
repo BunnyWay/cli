@@ -1,17 +1,22 @@
-import prompts from "prompts";
-import { defineCommand } from "../../core/define-command.ts";
-import { resolveConfig } from "../../config/index.ts";
 import { createDbClient } from "@bunny.net/api";
-import { confirm, spinner } from "../../core/ui.ts";
-import { logger } from "../../core/logger.ts";
+import type { components } from "@bunny.net/api/generated/database.d.ts";
+import prompts from "prompts";
+import { resolveConfig } from "../../config/index.ts";
+import { clientOptions } from "../../core/client-options.ts";
+import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { formatKeyValue } from "../../core/format.ts";
-import type { components } from "@bunny.net/api/generated/database.d.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { groupedRegionChoices } from "./region-choices.ts";
-import { readEnvValue, writeEnvValue } from "../../utils/env-file.ts";
+import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
-import { DATABASE_MANIFEST, ENV_DATABASE_URL, ENV_DATABASE_AUTH_TOKEN, type DatabaseManifest } from "./constants.ts";
+import { confirm, spinner } from "../../core/ui.ts";
+import { readEnvValue, writeEnvValue } from "../../utils/env-file.ts";
+import {
+  DATABASE_MANIFEST,
+  type DatabaseManifest,
+  ENV_DATABASE_AUTH_TOKEN,
+  ENV_DATABASE_URL,
+} from "./constants.ts";
+import { groupedRegionChoices } from "./region-choices.ts";
 
 type PossibleRegion = components["schemas"]["PossibleRegion"];
 
@@ -76,8 +81,14 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
   describe: DESCRIPTION,
   examples: [
     ["$0 db create", "Interactive — prompts for name and regions"],
-    ["$0 db create --name my-app --primary FR,DE --replicas UK", "Non-interactive with explicit regions"],
-    ["$0 db create --name my-app --primary FR --output json", "JSON output for scripting"],
+    [
+      "$0 db create --name my-app --primary FR,DE --replicas UK",
+      "Non-interactive with explicit regions",
+    ],
+    [
+      "$0 db create --name my-app --primary FR --output json",
+      "JSON output for scripting",
+    ],
   ],
 
   builder: (yargs) =>
@@ -155,7 +166,9 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
 
     // Non-interactive path: flags provided
     if (args.primary) {
-      primaryRegions = args.primary.split(",").map((s) => s.trim()) as PossibleRegion[];
+      primaryRegions = args.primary
+        .split(",")
+        .map((s) => s.trim()) as PossibleRegion[];
       replicasRegions = args.replicas
         ? (args.replicas.split(",").map((s) => s.trim()) as PossibleRegion[])
         : [];
@@ -198,8 +211,11 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
           optSpin.stop();
 
           if (optimal?.primary_regions?.length) {
-            primaryRegions = optimal.primary_regions.map((r) => r.id as PossibleRegion);
-            replicasRegions = optimal.replica_regions?.map((r) => r.id as PossibleRegion) ?? [];
+            primaryRegions = optimal.primary_regions.map(
+              (r) => r.id as PossibleRegion,
+            );
+            replicasRegions =
+              optimal.replica_regions?.map((r) => r.id as PossibleRegion) ?? [];
             storageRegion = optimal.storage_region?.id;
           } else {
             // Fallback if optimal returned empty
@@ -219,9 +235,12 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         const cdnToken = await getCdnServerToken();
         let preselected: PossibleRegion | undefined;
         if (cdnToken) {
-          const { data: optimal } = await client.GET("/v1/config/optimal_single", {
-            params: { query: { cdn_server_token: cdnToken } },
-          });
+          const { data: optimal } = await client.GET(
+            "/v1/config/optimal_single",
+            {
+              params: { query: { cdn_server_token: cdnToken } },
+            },
+          );
           preselected = optimal?.region?.id as PossibleRegion | undefined;
           if (optimal?.storage_region?.id) {
             storageRegion = optimal.storage_region.id;
@@ -229,13 +248,18 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         }
         optSpin.stop();
 
-        const choices = groupedRegionChoices(availablePrimary, preselected ? new Set([preselected]) : undefined);
+        const choices = groupedRegionChoices(
+          availablePrimary,
+          preselected ? new Set([preselected]) : undefined,
+        );
         const { value: location } = await prompts({
           type: "select",
           name: "value",
           message: "Database location:",
           choices,
-          initial: preselected ? choices.findIndex((c: any) => c.value === preselected) : 0,
+          initial: preselected
+            ? choices.findIndex((c: any) => c.value === preselected)
+            : 0,
         });
         if (!location) throw new UserError("Location is required.");
 
@@ -329,9 +353,10 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       ? `Link this directory to "${db?.name ?? name}"? (replaces existing link to ${existingLink.name ?? existingLink.id})`
       : `Link this directory to "${db?.name ?? name}"?`;
 
+    const linkArg = args[ARG_LINK];
     let shouldLink: boolean;
-    if (args[ARG_LINK] !== undefined) {
-      shouldLink = args[ARG_LINK]!;
+    if (linkArg !== undefined) {
+      shouldLink = linkArg;
     } else if (isInteractive) {
       shouldLink = await confirm(linkPrompt, { force: false });
     } else {
@@ -350,11 +375,14 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     }
 
     // Offer to create an auth token
+    const tokenArg = args[ARG_TOKEN];
     let shouldCreateToken: boolean;
-    if (args[ARG_TOKEN] !== undefined) {
-      shouldCreateToken = args[ARG_TOKEN]!;
+    if (tokenArg !== undefined) {
+      shouldCreateToken = tokenArg;
     } else if (isInteractive) {
-      shouldCreateToken = await confirm("Create an auth token?", { force: false });
+      shouldCreateToken = await confirm("Create an auth token?", {
+        force: false,
+      });
     } else {
       shouldCreateToken = false;
     }
@@ -366,10 +394,13 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       const tokenSpin = spinner("Generating token...");
       tokenSpin.start();
 
-      const { data: tokenData } = await client.PUT("/v2/databases/{db_id}/auth/generate", {
-        params: { path: { db_id: data.db_id } },
-        body: { authorization: "full-access", expires_at: null },
-      });
+      const { data: tokenData } = await client.PUT(
+        "/v2/databases/{db_id}/auth/generate",
+        {
+          params: { path: { db_id: data.db_id } },
+          body: { authorization: "full-access", expires_at: null },
+        },
+      );
 
       tokenSpin.stop();
 
@@ -392,8 +423,9 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         const existingToken = readEnvValue(ENV_DATABASE_AUTH_TOKEN);
         let shouldWrite: boolean;
 
-        if (args[ARG_SAVE_ENV] !== undefined) {
-          shouldWrite = args[ARG_SAVE_ENV]!;
+        const saveEnvArg = args[ARG_SAVE_ENV];
+        if (saveEnvArg !== undefined) {
+          shouldWrite = saveEnvArg;
         } else if (isInteractive) {
           if (existingToken) {
             shouldWrite = await confirm(
@@ -414,7 +446,9 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
           if (db?.url && !readEnvValue(ENV_DATABASE_URL)) {
             writeEnvValue(ENV_DATABASE_URL, db.url, envPath);
             if (isInteractive) {
-              logger.success(`Saved ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} to .env`);
+              logger.success(
+                `Saved ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} to .env`,
+              );
             }
           } else if (isInteractive) {
             logger.success(`Saved ${ENV_DATABASE_AUTH_TOKEN} to .env`);

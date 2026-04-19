@@ -1,5 +1,8 @@
+import {
+  createLibSQLExecutor,
+  introspect,
+} from "@bunny.net/database-adapter-libsql";
 import { createClient } from "@libsql/client";
-import { createLibSQLExecutor, introspect } from "@bunny.net/database-adapter-libsql";
 import { createRestHandler } from "./src/index.ts";
 
 const client = createClient({ url: ":memory:" });
@@ -48,11 +51,17 @@ console.log(`  curl ${base}/users?order=name.desc         # Order`);
 console.log(`  curl ${base}/users?limit=1&offset=1        # Paginate`);
 console.log(`  curl ${base}/posts?published=eq.1          # Filter posts`);
 console.log(`  curl ${base}/users/1                       # Get user by ID`);
-console.log(`  curl ${base}/users/1?select=id,name        # Get user by ID with select`);
+console.log(
+  `  curl ${base}/users/1?select=id,name        # Get user by ID with select`,
+);
 console.log(`  curl -X POST ${base}/users \\`);
 console.log(`    -H 'Content-Type: application/json' \\`);
-console.log(`    -d '{"name":"Dave","email":"dave@example.com"}'          # Insert`);
+console.log(
+  `    -d '{"name":"Dave","email":"dave@example.com"}'          # Insert`,
+);
 console.log(`  curl -X PATCH ${base}/users/1 \\`);
 console.log(`    -H 'Content-Type: application/json' \\`);
-console.log(`    -d '{"age":31}'                                         # Update by ID`);
+console.log(
+  `    -d '{"age":31}'                                         # Update by ID`,
+);
 console.log(`  curl -X DELETE ${base}/users/4             # Delete by ID`);

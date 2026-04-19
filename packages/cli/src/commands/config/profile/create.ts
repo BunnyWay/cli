@@ -1,8 +1,8 @@
-import { defineCommand } from "../../../core/define-command.ts";
-import { readPassword } from "../../../core/ui.ts";
-import { setProfile } from "../../../config/index.ts";
-import { logger } from "../../../core/logger.ts";
 import chalk from "chalk";
+import { setProfile } from "../../../config/index.ts";
+import { defineCommand } from "../../../core/define-command.ts";
+import { logger } from "../../../core/logger.ts";
+import { readPassword } from "../../../core/ui.ts";
 
 export const profileCreateCommand = defineCommand<{ "api-key"?: string }>({
   command: "create <name>",
@@ -21,8 +21,8 @@ export const profileCreateCommand = defineCommand<{ "api-key"?: string }>({
 
     if (!apiKey) {
       logger.log(
-        "The API key for your bunny.net account. It can be obtained at "
-        + chalk.underline("https://dash.bunny.net/account/api-key"),
+        "The API key for your bunny.net account. It can be obtained at " +
+          chalk.underline("https://dash.bunny.net/account/api-key"),
       );
       logger.log();
 

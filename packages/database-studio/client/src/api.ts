@@ -60,8 +60,9 @@ const fetchSpec = async (): Promise<OpenAPISpec> => {
   if (cachedSpec) return cachedSpec;
   const res = await fetch(`${BASE}/api/`);
   if (!res.ok) throw new Error(`Failed to load API spec: ${res.status}`);
-  cachedSpec = await res.json();
-  return cachedSpec!;
+  const spec: OpenAPISpec = await res.json();
+  cachedSpec = spec;
+  return spec;
 };
 
 export const fetchTables = async (): Promise<TableSummary[]> => {
@@ -71,8 +72,8 @@ export const fetchTables = async (): Promise<TableSummary[]> => {
   for (const path of Object.keys(spec.paths)) {
     // Match /{tableName} but not /{tableName}/{id} or /{tableName}/by-*
     const match = path.match(/^\/([^/]+)$/);
-    if (match) {
-      tables.push({ name: match[1]! });
+    if (match?.[1]) {
+      tables.push({ name: match[1] });
     }
   }
   return tables.sort((a, b) => a.name.localeCompare(b.name));
@@ -144,9 +145,9 @@ export const fetchRowLookup = async (
   if (!res.ok) throw new Error(`Lookup failed: ${res.status}`);
   const body = await res.json();
   const rows = body.data as Record<string, unknown>[];
-  if (rows.length === 0) throw new Error("Row not found");
+  const [row] = rows;
+  if (!row) throw new Error("Row not found");
 
-  const row = rows[0]!;
   const tableSchema = await fetchTableSchema(table);
 
   return {
@@ -240,7 +241,7 @@ export const fetchTableRows = async (
   const body = await res.json();
   const totalRows = Number(res.headers.get("X-Total-Count") ?? 0);
   const rows = body.data as Record<string, unknown>[];
-  const columns = rows.length > 0 ? Object.keys(rows[0]!) : [];
+  const columns = rows[0] ? Object.keys(rows[0]) : [];
 
   return {
     columns,

@@ -1,13 +1,21 @@
-import { useEffect, useRef, useState } from "react";
 import {
   type ColumnDef,
-  type SortingState,
-  type VisibilityState,
   flexRender,
   getCoreRowModel,
+  type SortingState,
   useReactTable,
+  type VisibilityState,
 } from "@tanstack/react-table";
-
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  Copy,
+  Eye,
+  Maximize2,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
   Table,
   TableBody,
@@ -16,7 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Copy, Eye, Maximize2 } from "lucide-react";
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
@@ -34,14 +41,24 @@ function CopyButton({ value }: { value: string }) {
       onClick={copy}
       className="shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted"
     >
-      {copied
-        ? <Check className="h-3 w-3 text-green-500" />
-        : <Copy className="h-3 w-3 text-muted-foreground" />}
+      {copied ? (
+        <Check className="h-3 w-3 text-green-500" />
+      ) : (
+        <Copy className="h-3 w-3 text-muted-foreground" />
+      )}
     </button>
   );
 }
 
-function TruncatedCell({ children, rawValue, onExpand }: { children: React.ReactNode; rawValue?: string; onExpand?: () => void }) {
+function TruncatedCell({
+  children,
+  rawValue,
+  onExpand,
+}: {
+  children: React.ReactNode;
+  rawValue?: string;
+  onExpand?: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [truncated, setTruncated] = useState(false);
 
@@ -59,7 +76,10 @@ function TruncatedCell({ children, rawValue, onExpand }: { children: React.React
       {rawValue != null && <CopyButton value={rawValue} />}
       {truncated && onExpand && (
         <button
-          onClick={(e) => { e.stopPropagation(); onExpand(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onExpand();
+          }}
           className="shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted"
         >
           <Maximize2 className="h-3 w-3 text-muted-foreground" />
@@ -99,7 +119,8 @@ export function DataTable<TData, TValue>({
       externalOnSortingChange?.(next);
     },
     onColumnVisibilityChange: (updater) => {
-      const next = typeof updater === "function" ? updater(columnVisibility) : updater;
+      const next =
+        typeof updater === "function" ? updater(columnVisibility) : updater;
       onColumnVisibilityChange?.(next);
     },
     getCoreRowModel: getCoreRowModel(),
@@ -121,24 +142,36 @@ export function DataTable<TData, TValue>({
                 <TableHead
                   key={header.id}
                   className="border-r border-border/50 font-mono text-xs last:border-r-0"
-                  onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                  style={{ minWidth: 150, ...(canSort ? { cursor: "pointer", userSelect: "none" } : undefined) }}
+                  onClick={
+                    canSort
+                      ? header.column.getToggleSortingHandler()
+                      : undefined
+                  }
+                  style={{
+                    minWidth: 150,
+                    ...(canSort
+                      ? { cursor: "pointer", userSelect: "none" }
+                      : undefined),
+                  }}
                 >
-                  {header.isPlaceholder
-                    ? null
-                    : (
-                      <div className="flex items-center gap-1">
-                        <span className="flex-1">{flexRender(
+                  {header.isPlaceholder ? null : (
+                    <div className="flex items-center gap-1">
+                      <span className="flex-1">
+                        {flexRender(
                           header.column.columnDef.header,
                           header.getContext(),
-                        )}</span>
-                        {canSort && (
-                          sorted === "asc" ? <ArrowUp className="ml-auto h-3 w-3 shrink-0 text-foreground" />
-                          : sorted === "desc" ? <ArrowDown className="ml-auto h-3 w-3 shrink-0 text-foreground" />
-                          : <ArrowUpDown className="ml-auto h-3 w-3 shrink-0 text-muted-foreground/50" />
                         )}
-                      </div>
-                    )}
+                      </span>
+                      {canSort &&
+                        (sorted === "asc" ? (
+                          <ArrowUp className="ml-auto h-3 w-3 shrink-0 text-foreground" />
+                        ) : sorted === "desc" ? (
+                          <ArrowDown className="ml-auto h-3 w-3 shrink-0 text-foreground" />
+                        ) : (
+                          <ArrowUpDown className="ml-auto h-3 w-3 shrink-0 text-muted-foreground/50" />
+                        ))}
+                    </div>
+                  )}
                 </TableHead>
               );
             })}
@@ -161,14 +194,25 @@ export function DataTable<TData, TValue>({
               )}
               {row.getVisibleCells().map((cell) => {
                 const raw = cell.getValue();
-                const rawStr = raw === null || raw === undefined ? undefined : String(raw);
+                const rawStr =
+                  raw === null || raw === undefined ? undefined : String(raw);
                 return (
                   <TableCell
                     key={cell.id}
                     className="max-w-xs border-r border-border/50 font-mono text-xs last:border-r-0"
                   >
-                    <TruncatedCell rawValue={rawStr} onExpand={onInspectRow ? () => onInspectRow(row.original) : undefined}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    <TruncatedCell
+                      rawValue={rawStr}
+                      onExpand={
+                        onInspectRow
+                          ? () => onInspectRow(row.original)
+                          : undefined
+                      }
+                    >
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
                     </TruncatedCell>
                   </TableCell>
                 );
@@ -177,7 +221,10 @@ export function DataTable<TData, TValue>({
           ))
         ) : (
           <TableRow>
-            <TableCell colSpan={columns.length + (onInspectRow ? 1 : 0)} className="h-24 text-center">
+            <TableCell
+              colSpan={columns.length + (onInspectRow ? 1 : 0)}
+              className="h-24 text-center"
+            >
               No results.
             </TableCell>
           </TableRow>

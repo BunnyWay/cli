@@ -8,7 +8,8 @@ export function splitStatements(sql: string): string[] {
   let inString = false;
 
   for (let i = 0; i < sql.length; i++) {
-    const ch = sql[i]!;
+    const ch = sql[i];
+    if (ch === undefined) break;
 
     // Handle -- line comments (only outside strings)
     if (!inString && ch === "-" && sql[i + 1] === "-") {

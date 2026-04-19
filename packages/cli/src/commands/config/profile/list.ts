@@ -1,7 +1,7 @@
-import { defineCommand } from "../../../core/define-command.ts";
 import { loadConfigFile } from "../../../config/index.ts";
-import { logger } from "../../../core/logger.ts";
+import { defineCommand } from "../../../core/define-command.ts";
 import { formatTable } from "../../../core/format.ts";
+import { logger } from "../../../core/logger.ts";
 
 export const profileListCommand = defineCommand({
   command: "list",
@@ -28,9 +28,8 @@ export const profileListCommand = defineCommand({
         ["Name", "API Key"],
         names.map((name) => {
           const key = profiles[name]?.api_key ?? "";
-          const masked = key.length > 8
-            ? key.slice(0, 4) + "…" + key.slice(-4)
-            : "••••";
+          const masked =
+            key.length > 8 ? `${key.slice(0, 4)}…${key.slice(-4)}` : "••••";
           return [name, masked];
         }),
         output,

@@ -2,16 +2,16 @@ import chalk from "chalk";
 import type { CommandModule } from "yargs";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import { apiCommand } from "./commands/api.ts";
 import { appsNamespace } from "./commands/apps/index.ts";
 import { authLoginCommand } from "./commands/auth/login.ts";
 import { authLogoutCommand } from "./commands/auth/logout.ts";
 import { configNamespace } from "./commands/config/index.ts";
 import { dbNamespace } from "./commands/db/index.ts";
+import { docsCommand } from "./commands/docs.ts";
 import { registriesNamespace } from "./commands/registries/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
-import { docsCommand } from "./commands/docs.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
-import { apiCommand } from "./commands/api.ts";
 import { logger } from "./core/logger.ts";
 import { getLatestVersion } from "./core/update-check.ts";
 import { VERSION } from "./core/version.ts";
@@ -28,7 +28,10 @@ const commands: CommandModule[] = [
 ];
 
 // Experimental commands — registered but hidden from help and landing page
-const experimentalCommands: CommandModule[] = [appsNamespace, registriesNamespace];
+const experimentalCommands: CommandModule[] = [
+  appsNamespace,
+  registriesNamespace,
+];
 
 let instance = yargs(hideBin(process.argv))
   .scriptName("bunny")
@@ -92,18 +95,18 @@ export const cli = instance
 
       const bunny = chalk.hex("#FF6600");
       // const art = `
-// ${bunny("             =@@@.")}
-// ${bunny("            .#@@*..--:..   .....   ............:-:..  ......:--.. .....    .....")}
-// ${bunny("         -@@@@@@@@@@@@@@=. .@@@.   .#@@*.+@@@@@@@@@%. :@@@@@@@@@@=.@@@=   .%@@*.")}
-// ${bunny("    ..  ............-#@@@=.+@@%.   .%@@=.#@@@*::*@@@+.-@@@%+:=%@@%.*@@@. .#@@*.")}
-// ${bunny('   =@@..@@@@@@@#.    .#@@#.%@@*    :@@@:.@@@.   .%@@+.+@@@.   =@@%.-@@@-.#@@#.')}
-// ${bunny('    ..     .#@@+.    .%@@+:@@@=    +@@#.=@@%.   :@@@-.#@@+.  .*@@#..%@@*#@@*.')}
-// ${bunny("           :@@@%.   :%@@%.:@@@=  .:@@@+.#@@*    =@@@..@@@.   .%@@+. -@@@@@#.")}
-// ${bunny("           -@@@@@@@@@@@+. .%@@@@@@@@@@-.%@@=   .#@@*.=@@%.   :@@@:  .%@@@*.")}
-// ${bunny("           -++-:*@@%+:.    .=@@@%=-%%#.:*##:   .*##:.*%%+    -##*.  .#@@*.")}
-// ${bunny("                                                                   .%@@*.")}
-// ${bunny("                                                                  .%@@*.")}
-// `;
+      // ${bunny("             =@@@.")}
+      // ${bunny("            .#@@*..--:..   .....   ............:-:..  ......:--.. .....    .....")}
+      // ${bunny("         -@@@@@@@@@@@@@@=. .@@@.   .#@@*.+@@@@@@@@@%. :@@@@@@@@@@=.@@@=   .%@@*.")}
+      // ${bunny("    ..  ............-#@@@=.+@@%.   .%@@=.#@@@*::*@@@+.-@@@%+:=%@@%.*@@@. .#@@*.")}
+      // ${bunny('   =@@..@@@@@@@#.    .#@@#.%@@*    :@@@:.@@@.   .%@@+.+@@@.   =@@%.-@@@-.#@@#.')}
+      // ${bunny('    ..     .#@@+.    .%@@+:@@@=    +@@#.=@@%.   :@@@-.#@@+.  .*@@#..%@@*#@@*.')}
+      // ${bunny("           :@@@%.   :%@@%.:@@@=  .:@@@+.#@@*    =@@@..@@@.   .%@@+. -@@@@@#.")}
+      // ${bunny("           -@@@@@@@@@@@+. .%@@@@@@@@@@-.%@@=   .#@@*.=@@%.   :@@@:  .%@@@*.")}
+      // ${bunny("           -++-:*@@%+:.    .=@@@%=-%%#.:*##:   .*##:.*%%+    -##*.  .#@@*.")}
+      // ${bunny("                                                                   .%@@*.")}
+      // ${bunny("                                                                  .%@@*.")}
+      // `;
       // console.log(art);
       console.log();
       logger.dim(`  ${chalk.bold("bunny")} ${chalk.dim(`v${VERSION}`)}`);
@@ -111,19 +114,27 @@ export const cli = instance
 
       console.log(bunny.bold("  Commands:\n"));
       for (const cmd of commands) {
-        const name = Array.isArray(cmd.command)
-          ? cmd.command[0]
-          : cmd.command;
+        const name = Array.isArray(cmd.command) ? cmd.command[0] : cmd.command;
         if (!name) continue;
-        logger.dim(`    ${chalk.reset.bold(name.split(" ")[0].padEnd(12))}${cmd.describe}`);
+        logger.dim(
+          `    ${chalk.reset.bold(name.split(" ")[0].padEnd(12))}${cmd.describe}`,
+        );
       }
 
       console.log();
       console.log(bunny.bold("  Global Options:\n"));
-      logger.dim(`    ${chalk.reset.bold("-p, --profile".padEnd(22))}Configuration profile to use ${chalk.dim("(default: \"default\")")}`);
-      logger.dim(`    ${chalk.reset.bold("-o, --output".padEnd(22))}Output format: text, json, table, csv, markdown ${chalk.dim("(default: \"text\")")}`);
-      logger.dim(`    ${chalk.reset.bold("--api-key".padEnd(22))}API key (takes priority over profile and environment)`);
-      logger.dim(`    ${chalk.reset.bold("-v, --verbose".padEnd(22))}Enable verbose output`);
+      logger.dim(
+        `    ${chalk.reset.bold("-p, --profile".padEnd(22))}Configuration profile to use ${chalk.dim('(default: "default")')}`,
+      );
+      logger.dim(
+        `    ${chalk.reset.bold("-o, --output".padEnd(22))}Output format: text, json, table, csv, markdown ${chalk.dim('(default: "text")')}`,
+      );
+      logger.dim(
+        `    ${chalk.reset.bold("--api-key".padEnd(22))}API key (takes priority over profile and environment)`,
+      );
+      logger.dim(
+        `    ${chalk.reset.bold("-v, --verbose".padEnd(22))}Enable verbose output`,
+      );
 
       console.log();
       const examples = [
@@ -135,7 +146,7 @@ export const cli = instance
       console.log(bunny.bold("  Examples:\n"));
       for (const [desc, cmd] of examples) {
         logger.dim(`  ${chalk.dim("–")} ${desc}\n`);
-        console.log(`    ${bunny("$ " + cmd)}\n`);
+        console.log(`    ${bunny(`$ ${cmd}`)}\n`);
       }
 
       console.log();

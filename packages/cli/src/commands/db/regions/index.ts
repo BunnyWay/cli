@@ -7,5 +7,10 @@ import { dbRegionsUpdateCommand } from "./update.ts";
 export const dbRegionsNamespace = defineNamespace(
   "regions",
   "Manage database regions.",
-  [dbRegionsAddCommand, dbRegionsListCommand, dbRegionsRemoveCommand, dbRegionsUpdateCommand],
+  [
+    dbRegionsAddCommand,
+    dbRegionsListCommand,
+    dbRegionsRemoveCommand,
+    dbRegionsUpdateCommand,
+  ],
 );

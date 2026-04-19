@@ -29,7 +29,9 @@ const CORE_BASE_URL = "https://api.bunny.net";
 
 /** Create a type-safe client for the Bunny Core API (CDN, DNS, storage zones, billing). */
 export function createCoreClient(options: ClientOptions) {
-  const client = createClient<paths & CustomPaths>({ baseUrl: options.baseUrl ?? CORE_BASE_URL });
+  const client = createClient<paths & CustomPaths>({
+    baseUrl: options.baseUrl ?? CORE_BASE_URL,
+  });
   client.use(authMiddleware(options));
   return client;
 }

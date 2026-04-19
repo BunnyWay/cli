@@ -1,14 +1,24 @@
+import type { ResultSet } from "@libsql/client";
 import chalk from "chalk";
 import Table from "cli-table3";
-import type { ResultSet } from "@libsql/client";
 import type { PrintMode, ShellLogger } from "./types.ts";
 
 // ─── Sensitive column masking ────────────────────────────────────────
 
 export const SENSITIVE_SUBSTRINGS = [
-  "password", "passwd", "secret", "_hash", "_token",
-  "auth_token", "api_key", "apikey", "access_key",
-  "private_key", "credit_card", "creditcard", "ssn",
+  "password",
+  "passwd",
+  "secret",
+  "_hash",
+  "_token",
+  "auth_token",
+  "api_key",
+  "apikey",
+  "access_key",
+  "private_key",
+  "credit_card",
+  "creditcard",
+  "ssn",
 ];
 export const SENSITIVE_PREFIXES = ["encrypted_", "hashed_"];
 export const EMAIL_SUBSTRINGS = ["email", "e_mail"];
@@ -37,8 +47,8 @@ export function maskEmail(value: string): string {
   if (at < 1) return MASK_RAW;
   const local = value.slice(0, at);
   const domain = value.slice(at);
-  if (local.length === 1) return local[0] + "••••" + domain;
-  return local[0] + "••••" + local[local.length - 1] + domain;
+  if (local.length === 1) return `${local[0]}••••${domain}`;
+  return `${local[0]}••••${local[local.length - 1]}${domain}`;
 }
 
 // ─── Value formatting ────────────────────────────────────────────────
@@ -95,12 +105,13 @@ export function printResultSet(
   if (mode === "json") {
     const rows = result.rows.map((row) => {
       const obj: Record<string, unknown> = {};
-      for (let i = 0; i < result.columns.length; i++) {
+      for (const [i, col] of result.columns.entries()) {
         const val = row[i];
-        if (val === null || masks[i] === "none") {
-          obj[result.columns[i]!] = val;
+        const mask = masks[i] ?? "none";
+        if (val === null || mask === "none") {
+          obj[col] = val;
         } else {
-          obj[result.columns[i]!] = applyMaskRaw(val, masks[i]!);
+          obj[col] = applyMaskRaw(val, mask);
         }
       }
       return obj;
@@ -122,8 +133,9 @@ export function printResultSet(
       logger.log(
         result.columns
           .map((_, i) => {
-            if (masks[i] !== "none" && row[i] !== null)
-              return csvEscape(applyMaskRaw(row[i], masks[i]!));
+            const mask = masks[i] ?? "none";
+            if (mask !== "none" && row[i] !== null)
+              return csvEscape(applyMaskRaw(row[i], mask));
             return csvEscape(formatValueRaw(row[i]));
           })
           .join(","),
@@ -138,8 +150,9 @@ export function printResultSet(
     logger.log(`| ${result.columns.map(() => "---").join(" | ")} |`);
     for (const row of result.rows) {
       const cells = result.columns.map((_, i) => {
-        if (masks[i] !== "none" && row[i] !== null)
-          return mdEscape(applyMaskRaw(row[i], masks[i]!));
+        const mask = masks[i] ?? "none";
+        if (mask !== "none" && row[i] !== null)
+          return mdEscape(applyMaskRaw(row[i], mask));
         return mdEscape(formatValueRaw(row[i]));
       });
       logger.log(`| ${cells.join(" | ")} |`);
@@ -151,7 +164,9 @@ export function printResultSet(
     const noColorStyle = chalk.level === 0 ? { head: [], border: [] } : {};
     const table = new Table({ head: result.columns, style: noColorStyle });
     for (const row of result.rows) {
-      table.push(result.columns.map((_, i) => applyMask(row[i], masks[i]!)));
+      table.push(
+        result.columns.map((_, i) => applyMask(row[i], masks[i] ?? "none")),
+      );
     }
     logger.log(table.toString());
     return;
@@ -180,7 +195,9 @@ export function printResultSet(
     style: { head: [], border: [], "padding-left": 0, "padding-right": 0 },
   });
   for (const row of result.rows) {
-    table.push(result.columns.map((_, i) => applyMask(row[i], masks[i]!)));
+    table.push(
+      result.columns.map((_, i) => applyMask(row[i], masks[i] ?? "none")),
+    );
   }
   logger.log(table.toString());
 }

@@ -1,21 +1,21 @@
-import { defineCommand } from "../../../core/define-command.ts";
-import { resolveConfig } from "../../../config/index.ts";
 import { createDbClient } from "@bunny.net/api";
-import { resolveDbId } from "../resolve-db.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
+import { defineCommand } from "../../../core/define-command.ts";
+import { formatKeyValue } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
+import { confirm, spinner } from "../../../core/ui.ts";
 import {
   readEnvValue,
   removeEnvValue,
   writeEnvValue,
 } from "../../../utils/env-file.ts";
-import { formatKeyValue } from "../../../core/format.ts";
-import { clientOptions } from "../../../core/client-options.ts";
 import {
   ARG_DATABASE_ID,
-  ENV_DATABASE_URL,
   ENV_DATABASE_AUTH_TOKEN,
+  ENV_DATABASE_URL,
 } from "../constants.ts";
+import { resolveDbId } from "../resolve-db.ts";
 
 const COMMAND = `invalidate [${ARG_DATABASE_ID}]`;
 const DESCRIPTION = "Invalidate all auth tokens for a database.";
@@ -68,7 +68,10 @@ export const dbTokensInvalidateCommand = defineCommand<{
   examples: [
     ["$0 db tokens invalidate", "Interactive — prompts for confirmation"],
     ["$0 db tokens invalidate --force", "Skip all prompts"],
-    ["$0 db tokens invalidate --force --regenerate --save-env", "Non-interactive with replacement"],
+    [
+      "$0 db tokens invalidate --force --regenerate --save-env",
+      "Non-interactive with replacement",
+    ],
   ],
 
   builder: (yargs) =>
@@ -108,9 +111,15 @@ export const dbTokensInvalidateCommand = defineCommand<{
     const client = createDbClient(clientOptions(config, verbose));
 
     // Resolve the target database — explicit ID, .env, or interactive prompt
-    const { id: databaseId, name: databaseName, source } = await resolveDbId(client, databaseIdArg);
+    const {
+      id: databaseId,
+      name: databaseName,
+      source,
+    } = await resolveDbId(client, databaseIdArg);
 
-    const dbLabel = databaseName ? `${databaseName} (${databaseId})` : databaseId;
+    const dbLabel = databaseName
+      ? `${databaseName} (${databaseId})`
+      : databaseId;
     if (source === "env") {
       logger.dim(`Database: ${dbLabel} (from .env)`);
     } else if (source === "manifest") {
@@ -168,7 +177,9 @@ export const dbTokensInvalidateCommand = defineCommand<{
       : await confirm("Generate a new token?");
     if (!shouldCreate) {
       logger.warn("All tokens have been invalidated. No valid tokens remain.");
-      logger.dim(`  Run 'bunny db tokens create ${databaseId}' to generate a new one.`);
+      logger.dim(
+        `  Run 'bunny db tokens create ${databaseId}' to generate a new one.`,
+      );
       return;
     }
 

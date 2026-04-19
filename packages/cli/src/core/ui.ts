@@ -1,5 +1,5 @@
-import prompts from "prompts";
 import ora from "ora";
+import prompts from "prompts";
 
 /**
  * Masked password input. Returns an empty string if the user cancels.

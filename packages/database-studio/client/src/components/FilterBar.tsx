@@ -1,5 +1,6 @@
+import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { type FilterCondition, type FilterMode } from "@/api.ts";
+import type { FilterCondition, FilterMode } from "@/api.ts";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
 
 const OPERATORS = [
   { value: "=", label: "=" },
@@ -33,12 +33,30 @@ export interface FilterBarProps {
   filterRowCount: number;
   onFilterRowCountChange: (count: number) => void;
   filterMode: FilterMode;
-  onApply: (refs: Map<number, { column: string; operator: string; valueRef: HTMLInputElement | null }>, mode?: FilterMode) => void;
+  onApply: (
+    refs: Map<
+      number,
+      { column: string; operator: string; valueRef: HTMLInputElement | null }
+    >,
+    mode?: FilterMode,
+  ) => void;
 }
 
-export function FilterBar({ columns, appliedFilters, filterRowCount, onFilterRowCountChange, filterMode, onApply }: FilterBarProps) {
+export function FilterBar({
+  columns,
+  appliedFilters,
+  filterRowCount,
+  onFilterRowCountChange,
+  filterMode,
+  onApply,
+}: FilterBarProps) {
   // Store refs for each filter row's select/input values
-  const rowRefs = useRef<Map<number, { column: string; operator: string; valueRef: HTMLInputElement | null }>>(new Map());
+  const rowRefs = useRef<
+    Map<
+      number,
+      { column: string; operator: string; valueRef: HTMLInputElement | null }
+    >
+  >(new Map());
 
   // Initialize refs from applied filters
   useEffect(() => {
@@ -69,7 +87,10 @@ export function FilterBar({ columns, appliedFilters, filterRowCount, onFilterRow
   function removeRow(index: number) {
     rowRefs.current.delete(index);
     const remaining = indices.filter((i) => i !== index);
-    const newRefs = new Map<number, { column: string; operator: string; valueRef: HTMLInputElement | null }>();
+    const newRefs = new Map<
+      number,
+      { column: string; operator: string; valueRef: HTMLInputElement | null }
+    >();
     remaining.forEach((oldIdx, newIdx) => {
       const ref = rowRefs.current.get(oldIdx);
       if (ref) newRefs.set(newIdx, ref);
@@ -94,12 +115,17 @@ export function FilterBar({ columns, appliedFilters, filterRowCount, onFilterRow
       {indices.map((i) => {
         const applied = appliedFilters[i];
         const ref = rowRefs.current.get(i);
-        const defaultColumn = ref?.column ?? applied?.column ?? columns[0]?.name ?? "";
+        const defaultColumn =
+          ref?.column ?? applied?.column ?? columns[0]?.name ?? "";
         const defaultOperator = ref?.operator ?? applied?.operator ?? "=";
         const defaultValue = applied?.value ?? "";
 
         if (!rowRefs.current.has(i)) {
-          rowRefs.current.set(i, { column: defaultColumn, operator: defaultOperator, valueRef: null });
+          rowRefs.current.set(i, {
+            column: defaultColumn,
+            operator: defaultOperator,
+            valueRef: null,
+          });
         }
 
         return (
@@ -116,7 +142,11 @@ export function FilterBar({ columns, appliedFilters, filterRowCount, onFilterRow
               </SelectTrigger>
               <SelectContent>
                 {columns.map((col) => (
-                  <SelectItem key={col.name} value={col.name} className="font-mono text-xs">
+                  <SelectItem
+                    key={col.name}
+                    value={col.name}
+                    className="font-mono text-xs"
+                  >
                     {col.name}
                   </SelectItem>
                 ))}
@@ -134,7 +164,11 @@ export function FilterBar({ columns, appliedFilters, filterRowCount, onFilterRow
               </SelectTrigger>
               <SelectContent>
                 {OPERATORS.map((op) => (
-                  <SelectItem key={op.value} value={op.value} className="font-mono text-xs">
+                  <SelectItem
+                    key={op.value}
+                    value={op.value}
+                    className="font-mono text-xs"
+                  >
                     {op.label}
                   </SelectItem>
                 ))}
@@ -146,7 +180,9 @@ export function FilterBar({ columns, appliedFilters, filterRowCount, onFilterRow
                 if (r) r.valueRef = el;
               }}
               defaultValue={defaultValue}
-              onKeyDown={(e) => { if (e.key === "Enter") apply(); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") apply();
+              }}
               placeholder="Value..."
               className="h-7 w-40 font-mono text-xs"
             />
@@ -162,7 +198,12 @@ export function FilterBar({ columns, appliedFilters, filterRowCount, onFilterRow
         );
       })}
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" className="h-6 text-xs gap-1" onClick={addRow}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 text-xs gap-1"
+          onClick={addRow}
+        >
           <Plus className="h-3 w-3" />
           Add filter
         </Button>
@@ -188,10 +229,20 @@ export function FilterBar({ columns, appliedFilters, filterRowCount, onFilterRow
                 </Button>
               </ButtonGroup>
             )}
-            <Button variant="secondary" size="sm" className="h-6 text-xs" onClick={apply}>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-6 text-xs"
+              onClick={apply}
+            >
               Apply
             </Button>
-            <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={clearAll}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-xs text-muted-foreground"
+              onClick={clearAll}
+            >
               Clear all
             </Button>
           </>

@@ -127,10 +127,7 @@ export function buildSelectQuery(
   return { sql, args: where.args };
 }
 
-export function buildCountQuery(
-  table: string,
-  query: ParsedQuery,
-): CountQuery {
+export function buildCountQuery(table: string, query: ParsedQuery): CountQuery {
   const where = buildWhere(query.filters);
   return {
     sql: `SELECT COUNT(*) as count FROM ${quoteIdentifier(table)}${where.sql}`,

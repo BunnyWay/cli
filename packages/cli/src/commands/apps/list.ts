@@ -1,11 +1,11 @@
 import { createMcClient } from "@bunny.net/api";
 import { resolveConfig } from "../../config/index.ts";
+import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
 import { STATUS_LABELS } from "./constants.ts";
-import { clientOptions } from "../../core/client-options.ts";
 
 const COMMAND = "list";
 const DESCRIPTION = "List all apps.";
@@ -41,7 +41,9 @@ export const appsListCommand = defineCommand({
     const rows = apps.map((app) => [
       app.id ?? "",
       app.name ?? "",
-      STATUS_LABELS[(app.status as keyof typeof STATUS_LABELS) ?? "Unknown"] ?? app.status ?? "",
+      STATUS_LABELS[(app.status as keyof typeof STATUS_LABELS) ?? "Unknown"] ??
+        app.status ??
+        "",
       app.displayEndpoint?.address ?? "",
     ]);
 

@@ -1,14 +1,18 @@
-import chalk from "chalk";
-import { defineCommand } from "../../core/define-command.ts";
-import { resolveConfig } from "../../config/index.ts";
 import { createDbClient } from "@bunny.net/api";
-import { resolveDbId } from "./resolve-db.ts";
-import { spinner } from "../../core/ui.ts";
-import { logger } from "../../core/logger.ts";
-import { UserError } from "../../core/errors.ts";
-import { formatDate, formatKeyValue, parseSizeToBytes, progressBar } from "../../core/format.ts";
-import { ARG_DATABASE_ID } from "./constants.ts";
+import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
+import { defineCommand } from "../../core/define-command.ts";
+import { UserError } from "../../core/errors.ts";
+import {
+  formatDate,
+  formatKeyValue,
+  parseSizeToBytes,
+  progressBar,
+} from "../../core/format.ts";
+import { logger } from "../../core/logger.ts";
+import { spinner } from "../../core/ui.ts";
+import { ARG_DATABASE_ID } from "./constants.ts";
+import { resolveDbId } from "./resolve-db.ts";
 
 const COMMAND = `usage [${ARG_DATABASE_ID}]`;
 const DESCRIPTION = "Show usage statistics for a database.";
@@ -50,7 +54,6 @@ function sumDatapoints(data: (string | number)[][]): number {
 function formatNumber(n: number): string {
   return n.toLocaleString();
 }
-
 
 interface UsageArgs {
   [ARG_DATABASE_ID]?: string;
@@ -135,11 +138,11 @@ export const dbUsageCommand = defineCommand<UsageArgs>({
 
     if (fromArg) {
       fromDate = new Date(fromArg);
-      if (isNaN(fromDate.getTime())) {
+      if (Number.isNaN(fromDate.getTime())) {
         throw new UserError(`Invalid --from date: "${fromArg}"`);
       }
       toDate = toArg ? new Date(toArg) : now;
-      if (isNaN(toDate.getTime())) {
+      if (Number.isNaN(toDate.getTime())) {
         throw new UserError(`Invalid --to date: "${toArg}"`);
       }
     } else {
@@ -187,9 +190,7 @@ export const dbUsageCommand = defineCommand<UsageArgs>({
     let avgLatency = 0;
     if (latencyEntries.length > 0) {
       const allLatencyPoints = latencyEntries.flatMap((r) => r.data);
-      const nonZero = allLatencyPoints.filter(
-        (point) => Number(point[1]) > 0,
-      );
+      const nonZero = allLatencyPoints.filter((point) => Number(point[1]) > 0);
       if (nonZero.length > 0) {
         avgLatency =
           nonZero.reduce((sum, point) => sum + Number(point[1]), 0) /
@@ -241,9 +242,12 @@ export const dbUsageCommand = defineCommand<UsageArgs>({
       { key: "Rows written", value: formatNumber(rowsWritten) },
       { key: "Queries", value: formatNumber(queries) },
       { key: "Avg latency", value: `${avgLatency.toFixed(1)}ms` },
-      { key: "Storage", value: output === "text"
-        ? `${currentSize} / ${maxSize}  ${progressBar(sizeFraction)}  ${sizePercent}%`
-        : storagePlain,
+      {
+        key: "Storage",
+        value:
+          output === "text"
+            ? `${currentSize} / ${maxSize}  ${progressBar(sizeFraction)}  ${sizePercent}%`
+            : storagePlain,
       },
     ];
 

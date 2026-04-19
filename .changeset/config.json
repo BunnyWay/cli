@@ -1,9 +1,6 @@
 {
   "$schema": "https://cdn.hopjs.net/npm/@changesets/config@3.1.3/schema.json",
-  "changelog": [
-    "@changesets/changelog-github",
-    { "repo": "bunnyWay/cli" }
-  ],
+  "changelog": ["@changesets/changelog-github", { "repo": "bunnyWay/cli" }],
   "commit": false,
   "fixed": [
     [

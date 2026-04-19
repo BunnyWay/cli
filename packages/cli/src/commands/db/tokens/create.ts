@@ -1,14 +1,18 @@
-import { defineCommand } from "../../../core/define-command.ts";
-import { resolveConfig } from "../../../config/index.ts";
 import { createDbClient } from "@bunny.net/api";
-import { resolveDbId } from "../resolve-db.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
-import { logger } from "../../../core/logger.ts";
-import { UserError } from "../../../core/errors.ts";
-import { readEnvValue, writeEnvValue } from "../../../utils/env-file.ts";
-import { formatKeyValue } from "../../../core/format.ts";
-import { ARG_DATABASE_ID, ENV_DATABASE_URL, ENV_DATABASE_AUTH_TOKEN } from "../constants.ts";
+import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
+import { defineCommand } from "../../../core/define-command.ts";
+import { UserError } from "../../../core/errors.ts";
+import { formatKeyValue } from "../../../core/format.ts";
+import { logger } from "../../../core/logger.ts";
+import { confirm, spinner } from "../../../core/ui.ts";
+import { readEnvValue, writeEnvValue } from "../../../utils/env-file.ts";
+import {
+  ARG_DATABASE_ID,
+  ENV_DATABASE_AUTH_TOKEN,
+  ENV_DATABASE_URL,
+} from "../constants.ts";
+import { resolveDbId } from "../resolve-db.ts";
 
 const COMMAND = `create [${ARG_DATABASE_ID}]`;
 const DESCRIPTION = "Generate an auth token for a database.";
@@ -27,8 +31,9 @@ const ARG_FORCE_ALIAS = "f";
 function parseExpiry(value: string): string {
   const match = value.match(/^(\d+)([hdwmy])$/i);
   if (match) {
-    const amount = parseInt(match[1]!, 10);
-    const unit = match[2]!.toLowerCase();
+    const [, amountStr, unitStr] = match;
+    const amount = parseInt(amountStr ?? "0", 10);
+    const unit = unitStr?.toLowerCase();
     const date = new Date();
 
     switch (unit) {
@@ -54,7 +59,7 @@ function parseExpiry(value: string): string {
 
   // Try parsing as a date directly
   const parsed = new Date(value);
-  if (isNaN(parsed.getTime())) {
+  if (Number.isNaN(parsed.getTime())) {
     throw new UserError(
       `Invalid expiry value: "${value}"`,
       "Use a duration (e.g. 30d, 12h, 1y) or an RFC 3339 date.",
@@ -103,7 +108,10 @@ export const dbTokensCreateCommand = defineCommand<{
   describe: DESCRIPTION,
   examples: [
     ["$0 db tokens create", "Interactive — full-access token"],
-    ["$0 db tokens create --read-only --expiry 30d", "Read-only with 30-day expiry"],
+    [
+      "$0 db tokens create --read-only --expiry 30d",
+      "Read-only with 30-day expiry",
+    ],
     ["$0 db tokens create --no-save", "Skip .env prompt"],
     ["$0 db tokens create --output json", "JSON output for scripting"],
   ],
@@ -154,9 +162,15 @@ export const dbTokensCreateCommand = defineCommand<{
     const authorization = readOnly ? "read-only" : "full-access";
     const expiresAt = expiry ? parseExpiry(expiry) : null;
 
-    const { id: databaseId, name: databaseName, source } = await resolveDbId(client, databaseIdArg);
+    const {
+      id: databaseId,
+      name: databaseName,
+      source,
+    } = await resolveDbId(client, databaseIdArg);
 
-    const dbLabel = databaseName ? `${databaseName} (${databaseId})` : databaseId;
+    const dbLabel = databaseName
+      ? `${databaseName} (${databaseId})`
+      : databaseId;
     if (source === "env") {
       logger.dim(`Database: ${dbLabel} (from .env)`);
     } else if (source === "manifest") {
@@ -205,7 +219,10 @@ export const dbTokensCreateCommand = defineCommand<{
     if (source === "env") {
       entries.push({ key: "DB", value: `${dbLabel} (from .env)` });
     } else if (source === "manifest") {
-      entries.push({ key: "DB", value: `${dbLabel} (from .bunny/database.json)` });
+      entries.push({
+        key: "DB",
+        value: `${dbLabel} (from .bunny/database.json)`,
+      });
     }
     entries.push({
       key: "Expires",
@@ -230,7 +247,9 @@ export const dbTokensCreateCommand = defineCommand<{
         { force },
       );
     } else {
-      shouldWrite = await confirm(`Save ${ENV_DATABASE_AUTH_TOKEN} to .env?`, { force });
+      shouldWrite = await confirm(`Save ${ENV_DATABASE_AUTH_TOKEN} to .env?`, {
+        force,
+      });
     }
 
     if (shouldWrite) {
@@ -239,7 +258,9 @@ export const dbTokensCreateCommand = defineCommand<{
 
       if (dbUrl && !readEnvValue(ENV_DATABASE_URL)) {
         writeEnvValue(ENV_DATABASE_URL, dbUrl, envPath);
-        logger.success(`Saved ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} to .env`);
+        logger.success(
+          `Saved ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} to .env`,
+        );
       } else {
         logger.success(`Saved ${ENV_DATABASE_AUTH_TOKEN} to .env`);
       }

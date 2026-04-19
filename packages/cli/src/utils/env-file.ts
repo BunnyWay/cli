@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from "fs";
-import { join, dirname, resolve } from "path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 
 /**
  * Walk up the directory tree from cwd looking for a `.env` file.
@@ -36,7 +36,7 @@ export function readEnvValue(
         "m",
       );
       const match = content.match(regex);
-      if (match) return { value: match[1]!, envPath };
+      if (match?.[1]) return { value: match[1], envPath };
     }
 
     const parent = dirname(dir);
@@ -60,7 +60,7 @@ export function writeEnvValue(
   const line = `${key}=${value}`;
 
   if (!existsSync(target)) {
-    writeFileSync(target, line + "\n", "utf-8");
+    writeFileSync(target, `${line}\n`, "utf-8");
     return target;
   }
 
@@ -71,7 +71,7 @@ export function writeEnvValue(
     writeFileSync(target, content.replace(regex, line), "utf-8");
   } else {
     const separator = content.endsWith("\n") || content === "" ? "" : "\n";
-    writeFileSync(target, content + separator + line + "\n", "utf-8");
+    writeFileSync(target, `${content + separator + line}\n`, "utf-8");
   }
 
   return target;

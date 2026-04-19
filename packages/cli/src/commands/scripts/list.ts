@@ -1,11 +1,11 @@
-import { defineCommand } from "../../core/define-command.ts";
-import { resolveConfig } from "../../config/index.ts";
 import { createComputeClient } from "@bunny.net/api";
-import { spinner } from "../../core/ui.ts";
-import { logger } from "../../core/logger.ts";
-import { formatTable } from "../../core/format.ts";
-import { SCRIPT_TYPE_LABELS } from "./constants.ts";
+import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
+import { defineCommand } from "../../core/define-command.ts";
+import { formatTable } from "../../core/format.ts";
+import { logger } from "../../core/logger.ts";
+import { spinner } from "../../core/ui.ts";
+import { SCRIPT_TYPE_LABELS } from "./constants.ts";
 
 const COMMAND = "list";
 const DESCRIPTION = "List all Edge Scripts.";

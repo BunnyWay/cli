@@ -5,11 +5,8 @@ const jsonSchema = z.toJSONSchema(BunnyAppConfigSchema, {
   target: "draft-2020-12",
 });
 
-const output = JSON.stringify(jsonSchema, null, 2) + "\n";
+const output = `${JSON.stringify(jsonSchema, null, 2)}\n`;
 
-await Bun.write(
-  new URL("../generated/schema.json", import.meta.url),
-  output,
-);
+await Bun.write(new URL("../generated/schema.json", import.meta.url), output);
 
 console.log("Generated schema.json");

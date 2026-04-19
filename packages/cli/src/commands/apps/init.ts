@@ -1,16 +1,16 @@
-import { existsSync } from "fs";
-import { basename, join, resolve } from "path";
-import prompts from "prompts";
+import { existsSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 import { createMcClient } from "@bunny.net/api";
+import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
+import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
-import { promptRegistry } from "./docker.ts";
-import { saveConfig, configExists } from "./config.ts";
 import type { BunnyAppConfig, ContainerConfig } from "./config.ts";
-import { clientOptions } from "../../core/client-options.ts";
+import { configExists, saveConfig } from "./config.ts";
+import { promptRegistry } from "./docker.ts";
 
 const COMMAND = "init";
 const DESCRIPTION = "Initialize a new app config.";
@@ -84,7 +84,10 @@ export const appsInitCommand = defineCommand<InitArgs>({
 
       if (useDockerfile) {
         const registryId = await promptRegistry(client);
-        if (!registryId) throw new UserError("A registry is required to build and push images.");
+        if (!registryId)
+          throw new UserError(
+            "A registry is required to build and push images.",
+          );
         container = { dockerfile: "Dockerfile", registry: registryId };
       } else {
         const { value } = await prompts({
@@ -116,7 +119,10 @@ export const appsInitCommand = defineCommand<InitArgs>({
     spin.stop();
 
     const availableRegions = regionsResult.data?.items ?? [];
-    const regionsWithCapacity = availableRegions.filter((r) => r.hasCapacity);
+    const regionsWithCapacity = availableRegions.filter(
+      (r): r is typeof r & { id: string } =>
+        r.hasCapacity === true && typeof r.id === "string",
+    );
 
     let selectedRegions: string[] = [];
     if (regionsWithCapacity.length > 0) {
@@ -126,14 +132,15 @@ export const appsInitCommand = defineCommand<InitArgs>({
         message: "Select regions:",
         choices: regionsWithCapacity.map((r) => ({
           title: `${r.name} (${r.id})`,
-          value: r.id!,
+          value: r.id,
         })),
         min: 1,
       });
       selectedRegions = value ?? [];
     }
 
-    if (selectedRegions.length === 0) {
+    const [primaryRegion] = selectedRegions;
+    if (!primaryRegion) {
       throw new UserError("At least one region must be selected.");
     }
 
@@ -143,7 +150,7 @@ export const appsInitCommand = defineCommand<InitArgs>({
         scaling: { min: 1, max: 1 },
         regions: {
           allowed: selectedRegions,
-          required: [selectedRegions[0]!],
+          required: [primaryRegion],
         },
         containers: { [name]: container },
       },

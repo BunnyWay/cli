@@ -7,7 +7,10 @@
  */
 export class UserError extends Error {
   isUserError = true;
-  constructor(message: string, public hint?: string) {
+  constructor(
+    message: string,
+    public hint?: string,
+  ) {
     super(message);
     this.name = "UserError";
   }

@@ -1,7 +1,10 @@
 import { join } from "node:path";
-import type { Client } from "@libsql/client";
-import { createLibSQLExecutor, introspect } from "@bunny.net/database-adapter-libsql";
+import {
+  createLibSQLExecutor,
+  introspect,
+} from "@bunny.net/database-adapter-libsql";
 import { createRestHandler } from "@bunny.net/database-rest";
+import type { Client } from "@libsql/client";
 import { assets } from "./client-manifest.ts";
 
 export interface StudioOptions {
@@ -29,7 +32,13 @@ const addCors = (res: Response): Response => {
 };
 
 export async function startStudio(options: StudioOptions): Promise<void> {
-  const { client, port = 4488, open = true, dev = false, logger = console } = options;
+  const {
+    client,
+    port = 4488,
+    open = true,
+    dev = false,
+    logger = console,
+  } = options;
 
   const clientDir = join(import.meta.dir, "..", "client");
   const distDir = join(import.meta.dir, "..", "dist", "client");
@@ -129,7 +138,9 @@ export async function startStudio(options: StudioOptions): Promise<void> {
 
   if (open) {
     const proc = Bun.spawn(
-      process.platform === "darwin" ? ["open", browserUrl] : ["xdg-open", browserUrl],
+      process.platform === "darwin"
+        ? ["open", browserUrl]
+        : ["xdg-open", browserUrl],
       { stdout: "ignore", stderr: "ignore" },
     );
     await proc.exited;

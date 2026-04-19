@@ -1,22 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
-import { type SortingState, type VisibilityState } from "@tanstack/react-table";
+import type { SortingState, VisibilityState } from "@tanstack/react-table";
 import {
-  type RowsResponse,
-  type TableSchema,
+  ChevronLeft,
+  ChevronRight,
+  Columns3,
+  Filter,
+  RefreshCw,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
   type FilterCondition,
   type FilterMode,
   fetchTableRows,
   fetchTableSchema,
+  type RowsResponse,
+  type TableSchema,
 } from "@/api.ts";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { useUrlParam, setUrlParams } from "@/hooks/use-url-state";
-import { ChevronLeft, ChevronRight, Columns3, Filter, RefreshCw } from "lucide-react";
-import { DataTab } from "@/components/DataTab";
-import { SchemaTab } from "@/components/SchemaTab";
-import { FilterBar, NULLARY_OPERATORS } from "@/components/FilterBar";
 import { ColumnToggleMenu } from "@/components/ColumnToggleMenu";
+import { DataTab } from "@/components/DataTab";
+import { FilterBar, NULLARY_OPERATORS } from "@/components/FilterBar";
+import { SchemaTab } from "@/components/SchemaTab";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { setUrlParams, useUrlParam } from "@/hooks/use-url-state";
 
 interface TableViewProps {
   tableName: string;
@@ -55,7 +61,10 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
 
   const sort = useMemo(() => {
     if (!sortParam) return undefined;
-    return { column: sortParam, order: (orderParam === "desc" ? "desc" : "asc") as "asc" | "desc" };
+    return {
+      column: sortParam,
+      order: (orderParam === "desc" ? "desc" : "asc") as "asc" | "desc",
+    };
   }, [sortParam, orderParam]);
 
   const appliedFilters: FilterCondition[] = useMemo(() => {
@@ -72,7 +81,7 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
   useEffect(() => {
     setFilterRowCount(appliedFilters.length);
     if (appliedFilters.length > 0) setFiltersOpen(true);
-  }, [tableName]);
+  }, [appliedFilters.length]);
 
   useEffect(() => {
     setTab("data");
@@ -82,14 +91,17 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
     setError(null);
     setSchema(null);
     setData(null);
-    Promise.all([fetchTableSchema(tableName), fetchTableRows(tableName, 1, limit, [], sort, filterMode)])
+    Promise.all([
+      fetchTableSchema(tableName),
+      fetchTableRows(tableName, 1, limit, [], sort, filterMode),
+    ])
       .then(([s, d]) => {
         setSchema(s);
         setData(d);
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
-  }, [tableName]);
+  }, [tableName, limit, filterMode, sort]);
 
   useEffect(() => {
     setLoading(true);
@@ -100,7 +112,7 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
-  }, [page, limit, tableName, filtersParam, filterModeParam, sortParam, orderParam]);
+  }, [page, limit, tableName, filterMode, sort, appliedFilters]);
 
   function refresh() {
     setLoading(true);
@@ -133,7 +145,13 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
     }
   }
 
-  function applyFiltersFromRefs(filterRefs: Map<number, { column: string; operator: string; valueRef: HTMLInputElement | null }>, mode?: FilterMode) {
+  function applyFiltersFromRefs(
+    filterRefs: Map<
+      number,
+      { column: string; operator: string; valueRef: HTMLInputElement | null }
+    >,
+    mode?: FilterMode,
+  ) {
     const filters: FilterCondition[] = [];
     for (const [, ref] of filterRefs) {
       const value = ref.valueRef?.value ?? "";
@@ -163,7 +181,9 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
         <p className="text-sm font-medium text-destructive">
           Failed to load "{tableName}"
         </p>
-        <p className="max-w-lg font-mono text-xs text-muted-foreground">{error}</p>
+        <p className="max-w-lg font-mono text-xs text-muted-foreground">
+          {error}
+        </p>
         <Button size="sm" variant="outline" className="mt-2" onClick={refresh}>
           Retry
         </Button>
@@ -202,7 +222,10 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
                 <Filter className="h-3 w-3" />
                 Filter
                 {appliedFilters.length > 0 && (
-                  <Badge variant="outline" className="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
+                  <Badge
+                    variant="outline"
+                    className="ml-0.5 h-4 min-w-4 px-1 text-[10px]"
+                  >
                     {appliedFilters.length}
                   </Badge>
                 )}
@@ -217,7 +240,10 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
                   <Columns3 className="h-3 w-3" />
                   Columns
                   {Object.values(columnVisibility).some((v) => !v) && (
-                    <Badge variant="outline" className="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
+                    <Badge
+                      variant="outline"
+                      className="ml-0.5 h-4 min-w-4 px-1 text-[10px]"
+                    >
                       {Object.values(columnVisibility).filter((v) => !v).length}
                     </Badge>
                   )}
@@ -245,7 +271,9 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
                 disabled={loading}
                 onClick={refresh}
               >
-                <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+                <RefreshCw
+                  className={`h-3 w-3 ${loading ? "animate-spin" : ""}`}
+                />
               </Button>
 
               {data.responseTime != null && (
@@ -254,19 +282,29 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
                 </span>
               )}
 
-              <Badge variant="outline" className="mr-2 font-mono text-[10px] tabular-nums">
+              <Badge
+                variant="outline"
+                className="mr-2 font-mono text-[10px] tabular-nums"
+              >
                 {data.pagination.totalRows.toLocaleString()} rows
               </Badge>
 
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <label
+                htmlFor="page-limit"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground"
+              >
                 Limit
                 <Input
+                  id="page-limit"
                   type="number"
                   min={1}
                   max={100}
                   value={limit}
                   onChange={(e) => {
-                    const v = Math.min(100, Math.max(1, Number(e.target.value) || 1));
+                    const v = Math.min(
+                      100,
+                      Math.max(1, Number(e.target.value) || 1),
+                    );
                     setLimit(v);
                   }}
                   className="h-6 w-14 px-1.5 text-center font-mono text-xs tabular-nums"
@@ -318,7 +356,14 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
       )}
 
       {tab === "data" ? (
-        <DataTab data={data} schema={schema} sorting={sortState} onSortingChange={setSorting} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} />
+        <DataTab
+          data={data}
+          schema={schema}
+          sorting={sortState}
+          onSortingChange={setSorting}
+          columnVisibility={columnVisibility}
+          onColumnVisibilityChange={setColumnVisibility}
+        />
       ) : (
         <SchemaTab schema={schema} onSelectTable={onSelectTable} />
       )}

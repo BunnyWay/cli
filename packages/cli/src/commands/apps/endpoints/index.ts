@@ -6,5 +6,9 @@ import { appsEndpointsRemoveCommand } from "./remove.ts";
 export const appsEndpointsNamespace = defineNamespace(
   "endpoints",
   "Manage app endpoints.",
-  [appsEndpointsAddCommand, appsEndpointsListCommand, appsEndpointsRemoveCommand],
+  [
+    appsEndpointsAddCommand,
+    appsEndpointsListCommand,
+    appsEndpointsRemoveCommand,
+  ],
 );

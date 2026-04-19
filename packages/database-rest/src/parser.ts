@@ -97,14 +97,15 @@ export function parseFilterValue(
 
 function parseInValues(raw: string): (string | number)[] {
   const match = raw.match(/^\((.+)\)$/);
-  if (!match) {
+  const [, inner] = match ?? [];
+  if (!inner) {
     return [raw];
   }
 
-  return match[1]!.split(",").map((v) => {
+  return inner.split(",").map((v) => {
     const trimmed = v.trim();
     const num = Number(trimmed);
-    return isNaN(num) ? trimmed : num;
+    return Number.isNaN(num) ? trimmed : num;
   });
 }
 
@@ -118,7 +119,7 @@ function parseIsValue(raw: string): boolean | null {
 
 function parseValue(raw: string): string | number {
   const num = Number(raw);
-  if (!isNaN(num) && raw.trim() !== "") {
+  if (!Number.isNaN(num) && raw.trim() !== "") {
     return num;
   }
   return raw;
@@ -132,11 +133,12 @@ export function parseOrder(orderParam: string | null): OrderClause[] {
   return orderParam
     .split(",")
     .map((part) => {
-      const segments = part.trim().split(".");
-      const column = segments[0]!;
+      const [column = "", second, ...rest] = part.trim().split(".");
       const direction: SortDirection =
-        segments[1]?.toLowerCase() === "desc" ? "desc" : "asc";
-      const nullsFirst = segments.some((s) => s.toLowerCase() === "nullsfirst");
+        second?.toLowerCase() === "desc" ? "desc" : "asc";
+      const nullsFirst = [second, ...rest].some(
+        (s) => s?.toLowerCase() === "nullsfirst",
+      );
 
       return { column, direction, nullsFirst };
     })
@@ -179,8 +181,5 @@ export function parseQueryParams(url: URL): ParsedQuery {
 
 export function parseTableFromPath(pathname: string): string | null {
   const segments = pathname.split("/").filter(Boolean);
-  if (segments.length === 0) {
-    return null;
-  }
-  return segments[segments.length - 1]!;
+  return segments[segments.length - 1] ?? null;
 }

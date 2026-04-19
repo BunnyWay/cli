@@ -1,16 +1,16 @@
-import type { components } from "@bunny.net/api/generated/compute.d.ts";
-import { existsSync } from "fs";
-import { resolve, basename } from "path";
-import prompts from "prompts";
-import { defineCommand } from "../../core/define-command.ts";
-import { resolveConfig } from "../../config/index.ts";
+import { existsSync } from "node:fs";
+import { basename, resolve } from "node:path";
 import { createComputeClient } from "@bunny.net/api";
-import { confirm, spinner } from "../../core/ui.ts";
-import { logger } from "../../core/logger.ts";
-import { UserError } from "../../core/errors.ts";
-import { saveManifestAt } from "../../core/manifest.ts";
-import { SCRIPT_MANIFEST, TEMPLATES, type Template } from "./constants.ts";
+import type { components } from "@bunny.net/api/generated/compute.d.ts";
+import prompts from "prompts";
+import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
+import { defineCommand } from "../../core/define-command.ts";
+import { UserError } from "../../core/errors.ts";
+import { logger } from "../../core/logger.ts";
+import { saveManifestAt } from "../../core/manifest.ts";
+import { confirm, spinner } from "../../core/ui.ts";
+import { SCRIPT_MANIFEST, TEMPLATES, type Template } from "./constants.ts";
 
 type EdgeScript = components["schemas"]["EdgeScriptModel"];
 type EdgeScriptTypes = components["schemas"]["EdgeScriptTypes"];
@@ -79,7 +79,10 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
   describe: DESCRIPTION,
   examples: [
     ["$0 scripts init", "Interactive wizard"],
-    ["$0 scripts init --name my-script --type standalone --template Empty --deploy-method cli", "Non-interactive"],
+    [
+      "$0 scripts init --name my-script --type standalone --template Empty --deploy-method cli",
+      "Non-interactive",
+    ],
   ],
 
   builder: (yargs) =>
@@ -163,9 +166,10 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
       scriptType = value;
     }
     if (!scriptType) throw new UserError("Script type is required.");
+    const finalScriptType: EdgeScriptTypes = scriptType;
 
     // Step 3: Template
-    const filtered = TEMPLATES.filter((t) => t.scriptType === scriptType);
+    const filtered = TEMPLATES.filter((t) => t.scriptType === finalScriptType);
     let selected: Template | undefined;
 
     if (args[ARG_TEMPLATE_REPO]) {
@@ -176,11 +180,11 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
         name: "Custom",
         description: "Custom template repository",
         repo: args[ARG_TEMPLATE_REPO],
-        scriptType: scriptType!,
+        scriptType: finalScriptType,
       };
     } else if (args[ARG_TEMPLATE]) {
       selected = filtered.find(
-        (t) => t.name.toLowerCase() === args[ARG_TEMPLATE]!.toLowerCase(),
+        (t) => t.name.toLowerCase() === args[ARG_TEMPLATE]?.toLowerCase(),
       );
       if (!selected) {
         throw new UserError(

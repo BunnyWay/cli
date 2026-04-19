@@ -1,14 +1,14 @@
+import { createComputeClient } from "@bunny.net/api";
 import type { components } from "@bunny.net/api/generated/compute.d.ts";
 import prompts from "prompts";
-import { defineCommand } from "../../core/define-command.ts";
 import { resolveConfig } from "../../config/index.ts";
-import { createComputeClient } from "@bunny.net/api";
-import { confirm, spinner } from "../../core/ui.ts";
-import { logger } from "../../core/logger.ts";
-import { UserError } from "../../core/errors.ts";
-import { resolveManifestId } from "../../core/manifest.ts";
-import { SCRIPT_MANIFEST } from "./constants.ts";
 import { clientOptions } from "../../core/client-options.ts";
+import { defineCommand } from "../../core/define-command.ts";
+import { UserError } from "../../core/errors.ts";
+import { logger } from "../../core/logger.ts";
+import { resolveManifestId } from "../../core/manifest.ts";
+import { confirm, spinner } from "../../core/ui.ts";
+import { SCRIPT_MANIFEST } from "./constants.ts";
 
 type EdgeScript = components["schemas"]["EdgeScriptModel"];
 

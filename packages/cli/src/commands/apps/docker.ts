@@ -1,5 +1,5 @@
-import prompts from "prompts";
 import type { createMcClient } from "@bunny.net/api";
+import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
@@ -10,10 +10,13 @@ export type McClient = ReturnType<typeof createMcClient>;
  * Ensure the Docker CLI is available on the system.
  */
 export async function ensureDockerAvailable(): Promise<void> {
-  const proc = Bun.spawn(["docker", "version", "--format", "{{.Client.Version}}"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const proc = Bun.spawn(
+    ["docker", "version", "--format", "{{.Client.Version}}"],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
   const exitCode = await proc.exited;
 
   if (exitCode !== 0) {
@@ -107,7 +110,7 @@ export async function dockerLogin(
   const proc = Bun.spawn(
     ["docker", "login", hostname, "-u", username, "--password-stdin"],
     {
-      stdin: new Response(password).body!,
+      stdin: new Response(password),
       stdout: "pipe",
       stderr: "pipe",
     },
@@ -130,9 +133,7 @@ const ADD_NEW_REGISTRY = "__add_new__";
  * Prompt the user to select a container registry (or add a new one).
  * Returns the registry ID as a string, or null if cancelled.
  */
-export async function promptRegistry(
-  client: McClient,
-): Promise<string | null> {
+export async function promptRegistry(client: McClient): Promise<string | null> {
   const regSpin = spinner("Fetching registries...");
   regSpin.start();
 

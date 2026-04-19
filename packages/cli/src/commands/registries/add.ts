@@ -1,11 +1,11 @@
-import prompts from "prompts";
 import { createMcClient } from "@bunny.net/api";
+import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
+import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
-import { clientOptions } from "../../core/client-options.ts";
 
 const COMMAND = "add";
 const DESCRIPTION = "Add a container registry.";
@@ -42,7 +42,7 @@ export const registryAddCommand = defineCommand<AddArgs>({
 
   handler: async ({
     name: rawName,
-    server,
+    server: _server,
     username: rawUsername,
     password: rawPassword,
     profile,
@@ -106,7 +106,9 @@ export const registryAddCommand = defineCommand<AddArgs>({
     if (result?.status === "Saved") {
       logger.success(`Registry "${displayName}" added (ID: ${result.id}).`);
     } else {
-      logger.error(`Failed to add registry: ${result?.error ?? "unknown error"}`);
+      logger.error(
+        `Failed to add registry: ${result?.error ?? "unknown error"}`,
+      );
     }
   },
 });

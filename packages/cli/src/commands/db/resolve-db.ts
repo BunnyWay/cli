@@ -1,5 +1,5 @@
-import type { components } from "@bunny.net/api/generated/database.d.ts";
 import type { createDbClient } from "@bunny.net/api";
+import type { components } from "@bunny.net/api/generated/database.d.ts";
 
 type Database = Pick<components["schemas"]["Database2"], "id" | "name" | "url">;
 
@@ -9,12 +9,17 @@ export interface ResolvedDb {
   name?: Database["name"];
   source: "argument" | "manifest" | "env" | "prompt";
 }
+
 import prompts from "prompts";
-import { readEnvValue } from "../../utils/env-file.ts";
-import { spinner } from "../../core/ui.ts";
 import { UserError } from "../../core/errors.ts";
 import { loadManifest } from "../../core/manifest.ts";
-import { DATABASE_MANIFEST, ENV_DATABASE_URL, type DatabaseManifest } from "./constants.ts";
+import { spinner } from "../../core/ui.ts";
+import { readEnvValue } from "../../utils/env-file.ts";
+import {
+  DATABASE_MANIFEST,
+  type DatabaseManifest,
+  ENV_DATABASE_URL,
+} from "./constants.ts";
 
 /**
  * Walk up the directory tree looking for a `.env` file containing a database URL.
@@ -43,7 +48,8 @@ export async function resolveDbId(
   if (databaseId) return { id: databaseId, source: "argument" };
 
   const manifest = loadManifest<DatabaseManifest>(DATABASE_MANIFEST);
-  if (manifest.id) return { id: manifest.id, name: manifest.name, source: "manifest" };
+  if (manifest.id)
+    return { id: manifest.id, name: manifest.name, source: "manifest" };
 
   const url = findDbUrlFromEnv();
 

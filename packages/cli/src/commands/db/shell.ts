@@ -1,16 +1,20 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { defineCommand } from "../../core/define-command.ts";
-import { resolveConfig } from "../../config/index.ts";
 import { createDbClient } from "@bunny.net/api";
-import { resolveDbId } from "./resolve-db.ts";
-import { spinner } from "../../core/ui.ts";
-import { logger } from "../../core/logger.ts";
-import { UserError } from "../../core/errors.ts";
-import { readEnvValue } from "../../utils/env-file.ts";
-import { ARG_DATABASE_ID, ENV_DATABASE_URL, ENV_DATABASE_AUTH_TOKEN } from "./constants.ts";
-import { clientOptions } from "../../core/client-options.ts";
 import type { PrintMode, ShellLogger } from "@bunny.net/database-shell";
+import { resolveConfig } from "../../config/index.ts";
+import { clientOptions } from "../../core/client-options.ts";
+import { defineCommand } from "../../core/define-command.ts";
+import { UserError } from "../../core/errors.ts";
+import { logger } from "../../core/logger.ts";
+import { spinner } from "../../core/ui.ts";
+import { readEnvValue } from "../../utils/env-file.ts";
+import {
+  ARG_DATABASE_ID,
+  ENV_DATABASE_AUTH_TOKEN,
+  ENV_DATABASE_URL,
+} from "./constants.ts";
+import { resolveDbId } from "./resolve-db.ts";
 
 const COMMAND = `shell [${ARG_DATABASE_ID}] [query]`;
 const DESCRIPTION = "Open an interactive SQL shell for a database.";
@@ -116,7 +120,7 @@ export const dbShellCommand = defineCommand<{
   describe: DESCRIPTION,
   examples: [
     ["$0 db shell", "Interactive REPL (auto-detect from .env)"],
-    ["$0 db shell -e \"SELECT 1\"", "Execute a query and exit"],
+    ['$0 db shell -e "SELECT 1"', "Execute a query and exit"],
     ["$0 db shell --mode json", "JSON output mode"],
   ],
 
@@ -158,7 +162,8 @@ export const dbShellCommand = defineCommand<{
       })
       .option(ARG_VIEWS_DIR, {
         type: "string",
-        describe: "Directory for saved views (default: ~/.config/bunny/views/<db-id>/)",
+        describe:
+          "Directory for saved views (default: ~/.config/bunny/views/<db-id>/)",
       }),
 
   handler: async ({
@@ -175,7 +180,8 @@ export const dbShellCommand = defineCommand<{
     verbose,
     apiKey,
   }) => {
-    const { createShellClient, startShell, executeQuery, executeFile } = await import("@bunny.net/database-shell");
+    const { createShellClient, startShell, executeQuery, executeFile } =
+      await import("@bunny.net/database-shell");
 
     // If database-id doesn't look like a database ID, treat it as the query
     let databaseId = databaseIdArg;
@@ -194,7 +200,11 @@ export const dbShellCommand = defineCommand<{
     const initialMode: PrintMode =
       (modeArg as PrintMode) ?? OUTPUT_TO_MODE[output] ?? "default";
 
-    const { url, token, databaseId: resolvedDbId } = await resolveCredentials(
+    const {
+      url,
+      token,
+      databaseId: resolvedDbId,
+    } = await resolveCredentials(
       urlArg,
       tokenArg,
       databaseId,

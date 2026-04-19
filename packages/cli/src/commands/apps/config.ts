@@ -1,11 +1,11 @@
-import { existsSync, readFileSync, writeFileSync } from "fs";
-import { join, dirname, resolve } from "path";
-import { parse as parseJsonc } from "jsonc-parser";
-import {
-  BunnyAppConfigSchema,
-  type BunnyAppConfig,
-} from "@bunny.net/app-config";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import type { components } from "@bunny.net/api/generated/magic-containers.d.ts";
+import {
+  type BunnyAppConfig,
+  BunnyAppConfigSchema,
+} from "@bunny.net/app-config";
+import { parse as parseJsonc } from "jsonc-parser";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 
@@ -53,13 +53,12 @@ export function loadConfig(): BunnyAppConfig {
     logger.warn(
       "bunny.toml is deprecated. Run `bunny apps pull` to regenerate as bunny.jsonc.",
     );
-    return BunnyAppConfigSchema.parse(parseToml(readFileSync(tomlPath, "utf-8")));
+    return BunnyAppConfigSchema.parse(
+      parseToml(readFileSync(tomlPath, "utf-8")),
+    );
   }
 
-  throw new UserError(
-    "No bunny.jsonc found.",
-    "Run `bunny apps init` first.",
-  );
+  throw new UserError("No bunny.jsonc found.", "Run `bunny apps init` first.");
 }
 
 /** Write bunny.jsonc to the given directory (or cwd). */
@@ -74,7 +73,7 @@ export function saveConfig(data: BunnyAppConfig, dir?: string): void {
     ...rest,
   };
 
-  writeFileSync(path, JSON.stringify(output, null, 2) + "\n");
+  writeFileSync(path, `${JSON.stringify(output, null, 2)}\n`);
 }
 
 /** Check if bunny.jsonc (or legacy bunny.toml) exists in cwd or ancestor. */

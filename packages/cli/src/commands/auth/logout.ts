@@ -1,8 +1,8 @@
+import { deleteProfile, profileExists } from "../../config/index.ts";
 import { defineCommand } from "../../core/define-command.ts";
-import { profileExists, deleteProfile } from "../../config/index.ts";
-import { confirm } from "../../core/ui.ts";
-import { logger } from "../../core/logger.ts";
 import { UserError } from "../../core/errors.ts";
+import { logger } from "../../core/logger.ts";
+import { confirm } from "../../core/ui.ts";
 
 export const authLogoutCommand = defineCommand<{ force: boolean }>({
   command: "logout",

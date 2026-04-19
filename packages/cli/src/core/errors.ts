@@ -1,4 +1,5 @@
-export { UserError, ApiError } from "@bunny.net/api";
+export { ApiError, UserError } from "@bunny.net/api";
+
 import { UserError } from "@bunny.net/api";
 
 /**

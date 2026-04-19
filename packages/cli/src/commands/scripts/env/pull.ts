@@ -1,14 +1,14 @@
-import { existsSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
-import type { components } from "@bunny.net/api/generated/compute.d.ts";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { createComputeClient } from "@bunny.net/api";
+import type { components } from "@bunny.net/api/generated/compute.d.ts";
 import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
 import { manifestDir, resolveManifestId } from "../../../core/manifest.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
 import { SCRIPT_MANIFEST } from "../constants.ts";
-import { clientOptions } from "../../../core/client-options.ts";
 
 type EdgeScriptVariable = components["schemas"]["EdgeScriptVariableModel"];
 
@@ -125,13 +125,9 @@ export const scriptsEnvPullCommand = defineCommand<PullArgs>({
       }
     }
 
-    const content =
-      variables
-        .map(
-          (v: EdgeScriptVariable) =>
-            `${v.Name ?? ""}=${v.DefaultValue ?? ""}`,
-        )
-        .join("\n") + "\n";
+    const content = `${variables
+      .map((v: EdgeScriptVariable) => `${v.Name ?? ""}=${v.DefaultValue ?? ""}`)
+      .join("\n")}\n`;
 
     mkdirSync(dir, { recursive: true });
     writeFileSync(envPath, content, { mode: 0o600 });

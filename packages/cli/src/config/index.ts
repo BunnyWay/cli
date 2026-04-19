@@ -1,8 +1,8 @@
-import { readFileSync, writeFileSync, mkdirSync } from "fs";
-import { dirname } from "path";
-import { ConfigFileSchema, type ConfigFile } from "./schema.ts";
-import { findConfigFile, getConfigWritePath } from "./paths.ts";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { logger } from "../core/logger.ts";
+import { findConfigFile, getConfigWritePath } from "./paths.ts";
+import { type ConfigFile, ConfigFileSchema } from "./schema.ts";
 
 export interface ResolvedConfig {
   apiKey: string;
@@ -11,7 +11,10 @@ export interface ResolvedConfig {
   profile: string;
 }
 
-export function resolveConfig(profile: string, apiKeyOverride?: string): ResolvedConfig {
+export function resolveConfig(
+  profile: string,
+  apiKeyOverride?: string,
+): ResolvedConfig {
   const envApiUrl = process.env.BUNNYNET_API_URL || undefined;
 
   if (apiKeyOverride) {
@@ -35,7 +38,7 @@ export function resolveConfig(profile: string, apiKeyOverride?: string): Resolve
   }
 
   const file = loadConfigFile();
-  if (file && file.profiles[profile]) {
+  if (file?.profiles[profile]) {
     const p = file.profiles[profile];
     return {
       apiKey: p.api_key,
@@ -67,7 +70,7 @@ export function loadConfigFile(): ConfigFile | null {
 function saveConfigFile(data: ConfigFile, filePath?: string): void {
   const target = filePath ?? getConfigWritePath();
   mkdirSync(dirname(target), { recursive: true });
-  writeFileSync(target, JSON.stringify(data, null, 2) + "\n", { mode: 0o660 });
+  writeFileSync(target, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o660 });
 }
 
 export function setProfile(profile: string, apiKey: string): void {

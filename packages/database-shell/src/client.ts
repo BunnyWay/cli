@@ -1,4 +1,4 @@
-import { createClient, type Client } from "@libsql/client/web";
+import { type Client, createClient } from "@libsql/client/web";
 import pkg from "../package.json";
 
 const USER_AGENT = `${pkg.name}/${pkg.version}`;
@@ -16,7 +16,9 @@ export function createShellClient(opts: {
     fetch: (input: string | Request | URL, init?: RequestInit) => {
       const headers = new Headers(init?.headers);
       if (input instanceof Request) {
-        input.headers.forEach((v, k) => headers.set(k, v));
+        input.headers.forEach((v, k) => {
+          headers.set(k, v);
+        });
       }
       headers.set("User-Agent", USER_AGENT);
       return fetch(input, { ...init, headers });

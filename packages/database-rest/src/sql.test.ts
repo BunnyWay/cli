@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { ParsedQuery } from "./parser.ts";
 import {
   buildCountQuery,
   buildDeleteQuery,
@@ -6,7 +7,6 @@ import {
   buildSelectQuery,
   buildUpdateQuery,
 } from "./sql.ts";
-import type { ParsedQuery } from "./parser.ts";
 
 describe("buildSelectQuery", () => {
   test("builds simple select all", () => {
@@ -99,9 +99,7 @@ describe("buildSelectQuery", () => {
     };
 
     const result = buildSelectQuery("users", query);
-    expect(result.sql).toBe(
-      'SELECT * FROM "users" WHERE "deleted_at" IS NULL',
-    );
+    expect(result.sql).toBe('SELECT * FROM "users" WHERE "deleted_at" IS NULL');
     expect(result.args).toEqual([]);
   });
 
@@ -113,9 +111,7 @@ describe("buildSelectQuery", () => {
     };
 
     const result = buildSelectQuery("users", query);
-    expect(result.sql).toBe(
-      'SELECT * FROM "users" WHERE "role" IN (?, ?)',
-    );
+    expect(result.sql).toBe('SELECT * FROM "users" WHERE "role" IN (?, ?)');
     expect(result.args).toEqual(["admin", "mod"]);
   });
 
@@ -127,9 +123,7 @@ describe("buildSelectQuery", () => {
     };
 
     const result = buildSelectQuery("users", query);
-    expect(result.sql).toBe(
-      'SELECT * FROM "users" WHERE "name" LIKE ?',
-    );
+    expect(result.sql).toBe('SELECT * FROM "users" WHERE "name" LIKE ?');
     expect(result.args).toEqual(["%John%"]);
   });
 
@@ -226,11 +220,9 @@ describe("buildInsertQuery", () => {
 
 describe("buildUpdateQuery", () => {
   test("builds update with filter", () => {
-    const result = buildUpdateQuery(
-      "users",
-      { name: "Jane" },
-      [{ column: "id", operator: "eq", value: 1 }],
-    );
+    const result = buildUpdateQuery("users", { name: "Jane" }, [
+      { column: "id", operator: "eq", value: 1 },
+    ]);
 
     expect(result.sql).toBe(
       'UPDATE "users" SET "name" = ? WHERE "id" = ? RETURNING *',
@@ -261,9 +253,7 @@ describe("buildDeleteQuery", () => {
       { column: "id", operator: "eq", value: 1 },
     ]);
 
-    expect(result.sql).toBe(
-      'DELETE FROM "users" WHERE "id" = ? RETURNING *',
-    );
+    expect(result.sql).toBe('DELETE FROM "users" WHERE "id" = ? RETURNING *');
     expect(result.args).toEqual([1]);
   });
 

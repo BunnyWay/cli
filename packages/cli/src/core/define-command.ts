@@ -1,8 +1,8 @@
-import type { CommandModule, Argv } from "yargs";
-import type { GlobalArgs } from "./types.ts";
+import type { Argv, CommandModule } from "yargs";
 import { logger } from "./logger.ts";
+import type { GlobalArgs } from "./types.ts";
 
-interface CommandDef<A = {}> {
+interface CommandDef<A = Record<string, never>> {
   command: string;
   aliases?: readonly string[];
   describe: string;
@@ -77,7 +77,8 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
           if (isApi) {
             payload.status = err.status;
             if (err.field) payload.field = err.field;
-            if (err.validationErrors?.length) payload.validationErrors = err.validationErrors;
+            if (err.validationErrors?.length)
+              payload.validationErrors = err.validationErrors;
           }
           console.log(JSON.stringify(payload));
           process.exit(isUser ? 1 : 2);

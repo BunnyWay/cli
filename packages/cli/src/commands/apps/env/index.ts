@@ -7,5 +7,10 @@ import { appsEnvSetCommand } from "./set.ts";
 export const appsEnvNamespace = defineNamespace(
   "env",
   "Manage environment variables.",
-  [appsEnvListCommand, appsEnvPullCommand, appsEnvRemoveCommand, appsEnvSetCommand],
+  [
+    appsEnvListCommand,
+    appsEnvPullCommand,
+    appsEnvRemoveCommand,
+    appsEnvSetCommand,
+  ],
 );

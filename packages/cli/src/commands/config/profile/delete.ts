@@ -1,5 +1,5 @@
-import { defineCommand } from "../../../core/define-command.ts";
 import { deleteProfile } from "../../../config/index.ts";
+import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
 
 export const profileDeleteCommand = defineCommand({

@@ -23,16 +23,20 @@ const STATUS_MESSAGES: Record<number, string> = {
  * Extract a normalized error from a parsed response body.
  * Each entry handles one API error format — first match wins.
  */
-const extractors: Array<(body: any) => { message: string; field?: string; validationErrors?: any[] } | null> = [
+const extractors: Array<
+  (
+    body: any,
+  ) => { message: string; field?: string; validationErrors?: any[] } | null
+> = [
   // RFC 7807 ErrorDetails (Magic Containers)
-  (b) => b?.detail || b?.title
-    ? { message: b.detail || b.title, validationErrors: b.errors }
-    : null,
+  (b) =>
+    b?.detail || b?.title
+      ? { message: b.detail || b.title, validationErrors: b.errors }
+      : null,
 
   // ApiErrorData (Core / Compute)
-  (b) => b?.Message
-    ? { message: b.Message, field: b.Field ?? undefined }
-    : null,
+  (b) =>
+    b?.Message ? { message: b.Message, field: b.Field ?? undefined } : null,
 ];
 
 /**
@@ -52,7 +56,12 @@ const extractors: Array<(body: any) => { message: string; field?: string; valida
  * a failed request throws before it reaches handler code.
  */
 export function authMiddleware(options: ClientOptions): Middleware {
-  const { apiKey, verbose = false, userAgent = "bunnynet-api", onDebug } = options;
+  const {
+    apiKey,
+    verbose = false,
+    userAgent = "bunnynet-api",
+    onDebug,
+  } = options;
   const debug = verbose && onDebug ? onDebug : undefined;
 
   return {
@@ -92,13 +101,17 @@ export function authMiddleware(options: ClientOptions): Middleware {
         // No JSON body (Core/Compute return empty bodies for 401/404/500)
       }
 
-      const extracted = body && extractors.reduce<ReturnType<(typeof extractors)[0]>>(
-        (found, fn) => found ?? fn(body),
-        null,
-      );
+      const extracted =
+        body &&
+        extractors.reduce<ReturnType<(typeof extractors)[0]>>(
+          (found, fn) => found ?? fn(body),
+          null,
+        );
 
       throw new ApiError(
-        extracted?.message ?? STATUS_MESSAGES[response.status] ?? `API request failed (${response.status}).`,
+        extracted?.message ??
+          STATUS_MESSAGES[response.status] ??
+          `API request failed (${response.status}).`,
         response.status,
         extracted?.field,
         extracted?.validationErrors,
