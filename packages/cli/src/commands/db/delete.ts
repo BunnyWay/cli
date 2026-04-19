@@ -6,8 +6,9 @@ import { resolveDbId } from "./resolve-db.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import { logger } from "../../core/logger.ts";
 import { UserError } from "../../core/errors.ts";
-import { ARG_DATABASE_ID, ENV_DATABASE_URL, ENV_DATABASE_AUTH_TOKEN } from "./constants.ts";
+import { ARG_DATABASE_ID, DATABASE_MANIFEST, ENV_DATABASE_URL, ENV_DATABASE_AUTH_TOKEN, type DatabaseManifest } from "./constants.ts";
 import { clientOptions } from "../../core/client-options.ts";
+import { loadManifest, removeManifest } from "../../core/manifest.ts";
 import { readEnvValue, removeEnvValue } from "../../utils/env-file.ts";
 
 const COMMAND = `delete [${ARG_DATABASE_ID}]`;
@@ -140,6 +141,13 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
     }
 
     logger.success(`Database "${db.name}" (${databaseId}) deleted.`);
+
+    // Clean up the .bunny/database.json manifest if it pointed at this DB
+    const manifest = loadManifest<DatabaseManifest>(DATABASE_MANIFEST);
+    if (manifest.id === databaseId) {
+      removeManifest(DATABASE_MANIFEST);
+      logger.dim(`Removed stale .bunny/database.json.`);
+    }
 
     // Offer to clean up .env if it references the deleted database
     const envUrl = readEnvValue(ENV_DATABASE_URL);

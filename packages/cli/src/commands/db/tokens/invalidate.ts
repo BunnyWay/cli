@@ -108,12 +108,13 @@ export const dbTokensInvalidateCommand = defineCommand<{
     const client = createDbClient(clientOptions(config, verbose));
 
     // Resolve the target database — explicit ID, .env, or interactive prompt
-    const { id: databaseId, source } = await resolveDbId(client, databaseIdArg);
+    const { id: databaseId, name: databaseName, source } = await resolveDbId(client, databaseIdArg);
 
+    const dbLabel = databaseName ? `${databaseName} (${databaseId})` : databaseId;
     if (source === "env") {
-      logger.dim(`Database: ${databaseId} (from .env)`);
+      logger.dim(`Database: ${dbLabel} (from .env)`);
     } else if (source === "manifest") {
-      logger.dim(`Database: ${databaseId} (from .bunny/database.json)`);
+      logger.dim(`Database: ${dbLabel} (from .bunny/database.json)`);
     }
 
     // Confirm before the destructive operation

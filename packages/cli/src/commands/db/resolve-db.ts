@@ -2,6 +2,13 @@ import type { components } from "@bunny.net/api/generated/database.d.ts";
 import type { createDbClient } from "@bunny.net/api";
 
 type Database = Pick<components["schemas"]["Database2"], "id" | "name" | "url">;
+
+export interface ResolvedDb {
+  id: Database["id"];
+  /** Database name when known from the manifest, env lookup, or prompt selection. */
+  name?: Database["name"];
+  source: "argument" | "manifest" | "env" | "prompt";
+}
 import prompts from "prompts";
 import { readEnvValue } from "../../utils/env-file.ts";
 import { spinner } from "../../core/ui.ts";
@@ -32,11 +39,11 @@ export function findDbUrlFromEnv(): string | undefined {
 export async function resolveDbId(
   client: ReturnType<typeof createDbClient>,
   databaseId: Database["id"] | undefined,
-): Promise<{ id: Database["id"]; source: "argument" | "manifest" | "env" | "prompt" }> {
+): Promise<ResolvedDb> {
   if (databaseId) return { id: databaseId, source: "argument" };
 
   const manifest = loadManifest<DatabaseManifest>(DATABASE_MANIFEST);
-  if (manifest.id) return { id: manifest.id, source: "manifest" };
+  if (manifest.id) return { id: manifest.id, name: manifest.name, source: "manifest" };
 
   const url = findDbUrlFromEnv();
 
@@ -68,7 +75,7 @@ export async function resolveDbId(
         `No database found matching ${ENV_DATABASE_URL}: ${url}`,
       );
     }
-    return { id: match.id, source: "env" };
+    return { id: match.id, name: match.name, source: "env" };
   }
 
   // No .env URL — prompt user to select
@@ -85,7 +92,7 @@ export async function resolveDbId(
     message: "Select a database:",
     choices: allDatabases.map((db) => ({
       title: `${db.name} (${db.id})`,
-      value: db.id,
+      value: db,
     })),
   });
 
@@ -93,5 +100,5 @@ export async function resolveDbId(
     process.exit(1);
   }
 
-  return { id: selected, source: "prompt" };
+  return { id: selected.id, name: selected.name, source: "prompt" };
 }

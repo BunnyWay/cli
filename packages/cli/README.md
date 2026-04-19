@@ -101,7 +101,7 @@ For `db shell`, the CLI also reads `BUNNY_DATABASE_AUTH_TOKEN` from `.env` to sk
 
 #### `bunny db create`
 
-Create a new database. Interactively prompts for name and region selection (automatic, single region, or manual) when flags are omitted.
+Create a new database. Interactively prompts for name and region selection (automatic, single region, or manual) when flags are omitted. After creation, prompts to link the directory, generate an auth token, and save credentials to `.env`.
 
 ```bash
 # Interactive — prompts for name and region mode
@@ -112,14 +112,22 @@ bunny db create --name mydb --primary FR
 
 # Multi-region with replicas
 bunny db create --name mydb --primary FR,DE --replicas UK,NY
+
+# Fully non-interactive (CI / scripts)
+bunny db create --name mydb --primary FR --link --token --save-env --output json
 ```
 
-| Flag               | Description                                               |
-| ------------------ | --------------------------------------------------------- |
-| `--name`           | Database name                                             |
-| `--primary`        | Comma-separated primary region IDs (e.g. `FR` or `FR,DE`) |
-| `--replicas`       | Comma-separated replica region IDs (e.g. `UK,NY`)         |
-| `--storage-region` | Override auto-detected storage region                     |
+| Flag               | Description                                                                              |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| `--name`           | Database name                                                                            |
+| `--primary`        | Comma-separated primary region IDs (e.g. `FR` or `FR,DE`)                                |
+| `--replicas`       | Comma-separated replica region IDs (e.g. `UK,NY`)                                        |
+| `--storage-region` | Override auto-detected storage region                                                    |
+| `--link`           | Link the current directory to the new database (skips prompt). Use `--no-link` to skip.  |
+| `--token`          | Generate a full-access auth token (skips prompt). Use `--no-token` to skip.              |
+| `--save-env`       | Save `BUNNY_DATABASE_URL` and `BUNNY_DATABASE_AUTH_TOKEN` to `.env`. Requires `--token`. |
+
+In `--output json` mode, prompts are suppressed entirely — flags are the only way to opt in to linking, token creation, and `.env` writes. The JSON output gains `linked`, `token`, and `saved_to_env` fields reflecting what happened.
 
 #### `bunny db list`
 
@@ -151,6 +159,8 @@ bunny db link
 # Direct link by ID
 bunny db link <database-id>
 ```
+
+`bunny db create` offers to link the new database, and `bunny db delete` removes a stale link automatically when it points at the deleted database.
 
 #### `bunny db delete`
 

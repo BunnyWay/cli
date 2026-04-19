@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { UserError } from "./errors.ts";
 
@@ -58,6 +58,14 @@ export function saveManifest<T extends object = ManifestData>(filename: string, 
     JSON.stringify(data, null, 2) + "\n",
     { mode: 0o600 },
   );
+}
+
+/** Remove `.bunny/<filename>` if it exists. No-op if the file is missing. */
+export function removeManifest(filename: string): void {
+  const path = manifestPath(filename);
+  if (existsSync(path)) {
+    unlinkSync(path);
+  }
 }
 
 /** Save a manifest to `.bunny/<filename>` within a specific root directory. */
