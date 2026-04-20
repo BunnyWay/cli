@@ -35,7 +35,7 @@ bunny db create
 Authenticate with bunny.net via the browser.
 
 ```bash
-# Browser-based OAuth login
+# Browser-based login
 bunny login
 
 # Login to a specific profile

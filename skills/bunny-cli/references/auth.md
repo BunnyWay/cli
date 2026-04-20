@@ -1,6 +1,6 @@
 # Authentication
 
-## `bunny login` — Browser-based OAuth login
+## `bunny login` — Browser-based login
 
 Opens a browser to authenticate with bunny.net and stores the API key in a local profile.
 
@@ -14,7 +14,7 @@ bunny login --force        # overwrite existing profile without confirmation
 
 1. Starts a local HTTP server on a random port
 2. Opens `https://dash.bunny.net/auth/login` in the default browser
-3. Waits up to 5 minutes for the OAuth callback
+3. Waits up to 5 minutes for the auth callback
 4. Extracts the API key and saves it to the profile
 5. Fetches user details and prints a welcome message
 

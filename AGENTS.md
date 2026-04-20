@@ -8,7 +8,7 @@ This document describes the architecture, conventions, and implementation detail
 
 The Bunny CLI (`bunny`) is a command-line interface for interacting with bunny.net services (magic containers, edge scripting, databases). It is written in TypeScript, runs on the Bun runtime, and follows patterns inspired by Cobra (Go).
 
-The CLI supports profile-based authentication, browser-based OAuth login, and a modular command structure built on `yargs`.
+The CLI supports profile-based authentication, browser-based login, and a modular command structure built on `yargs`.
 
 ---
 
@@ -194,7 +194,7 @@ bunny-cli/
 │           │   │       ├── list.ts       # List available regions
 │           │   │       └── show.ts       # Show app region settings
 │           │   ├── auth/
-│           │   │   ├── login.ts          # Browser-based OAuth login via Bun.serve() callback (top-level: bunny login)
+│           │   │   ├── login.ts          # Browser-based login via Bun.serve() callback (top-level: bunny login)
 │           │   │   └── logout.ts         # Profile removal with --force confirmation bypass (top-level: bunny logout)
 │           │   ├── config/
 │           │   │   ├── index.ts          # defineNamespace("config", ...) — registers init, show, profile
@@ -437,7 +437,7 @@ If the requested profile does not exist and is not `"default"`, `resolveConfig()
 
 ### Browser login flow (`bunny login`)
 
-This is an OAuth-style flow using a local HTTP callback server. It is a direct port of the Go CLI's implementation.
+This is an browser-based auth flow using a local HTTP callback server. It is a direct port of the Go CLI's implementation.
 
 **Flow:**
 
@@ -691,7 +691,7 @@ Tests and type-checking run on every pull request via `.github/workflows/ci.yml`
 
 ```
 bunny
-├── login              [--force]            Authenticate via browser OAuth flow
+├── login              [--force]            Authenticate via browser
 ├── logout             [--force]            Remove stored authentication profile
 ├── whoami                                  Show authenticated account (name, email, profile)
 ├── config
