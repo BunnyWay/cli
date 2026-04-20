@@ -39,7 +39,7 @@ export const whoamiCommand = defineCommand({
     if (!config.apiKey) {
       throw new UserError(
         "Not logged in.",
-        'Run "bunny auth login" to authenticate.',
+        'Run "bunny login" to authenticate.',
       );
     }
 
@@ -58,7 +58,7 @@ export const whoamiCommand = defineCommand({
     if (error || !data) {
       throw new UserError(
         "Authentication failed.",
-        'Your API key may be invalid or expired. Run "bunny auth login" to re-authenticate.',
+        'Your API key may be invalid or expired. Run "bunny login" to re-authenticate.',
       );
     }
 

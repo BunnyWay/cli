@@ -9,7 +9,7 @@ The Bunny CLI (`bunny`) manages bunny.net resources from the command line. Use `
 
 ## Critical: Authentication
 
-Commands require an API key. Authenticate first with `bunny auth login`, which opens a browser-based OAuth flow and stores the key in a local profile. Alternatively, set `BUNNYNET_API_KEY` as an environment variable or pass `--api-key` directly.
+Commands require an API key. Authenticate first with `bunny login`, which opens a browser-based OAuth flow and stores the key in a local profile. Alternatively, set `BUNNYNET_API_KEY` as an environment variable or pass `--api-key` directly.
 
 Config is stored in (first match wins):
 
@@ -24,7 +24,7 @@ Config is stored in (first match wins):
 
 ```bash
 # authenticate
-bunny auth login
+bunny login
 
 # make a raw API request
 bunny api GET /pullzone
@@ -67,6 +67,6 @@ Available on every command:
 
 ## Anti-Patterns
 
-- **Forgetting to authenticate**: Run `bunny auth login` first. Without it, commands fail with a missing API key error. Use `bunny api GET /user` to verify.
-- **Hardcoding API keys in scripts**: Use `BUNNYNET_API_KEY` env var or `--api-key` flag instead of embedding keys. Better yet, use `bunny auth login` profiles.
+- **Forgetting to authenticate**: Run `bunny login` first. Without it, commands fail with a missing API key error. Use `bunny api GET /user` to verify.
+- **Hardcoding API keys in scripts**: Use `BUNNYNET_API_KEY` env var or `--api-key` flag instead of embedding keys. Better yet, use `bunny login` profiles.
 - **Forgetting `--force` in CI/CD**: Interactive prompts block in non-TTY environments. Use `--force` to skip confirmations in automated pipelines.
