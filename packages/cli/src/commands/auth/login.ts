@@ -78,13 +78,27 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
       reject,
     } = Promise.withResolvers<string>();
 
+    // The callback URL carries the API key in a query string, so every
+    // response here sets Cache-Control: no-store to keep the browser from
+    // persisting it to disk cache.
+    const NO_STORE = { "Cache-Control": "no-store" };
+
     const server = Bun.serve({
       port: 0,
       hostname: "127.0.0.1",
       fetch(req) {
         const url = new URL(req.url);
         if (url.pathname !== "/callback") {
-          return new Response("Not found", { status: 404 });
+          return new Response("Not found", {
+            status: 404,
+            headers: NO_STORE,
+          });
+        }
+        if (req.method !== "GET") {
+          return new Response("Method Not Allowed", {
+            status: 405,
+            headers: { ...NO_STORE, Allow: "GET" },
+          });
         }
 
         const returnedState = url.searchParams.get("state");
@@ -92,17 +106,23 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
 
         if (returnedState !== state) {
           reject(new Error("State mismatch: possible CSRF attack"));
-          return new Response("Invalid state parameter.", { status: 400 });
+          return new Response("Invalid state parameter.", {
+            status: 400,
+            headers: NO_STORE,
+          });
         }
 
         if (!apiKey) {
           reject(new Error("No apiKey in callback"));
-          return new Response("Missing API key.", { status: 400 });
+          return new Response("Missing API key.", {
+            status: 400,
+            headers: NO_STORE,
+          });
         }
 
         resolve(apiKey);
         return new Response(SUCCESS_HTML, {
-          headers: { "Content-Type": "text/html" },
+          headers: { ...NO_STORE, "Content-Type": "text/html" },
         });
       },
     });

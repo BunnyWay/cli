@@ -4,7 +4,7 @@ import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { confirm, spinner } from "../../core/ui.ts";
 import { readEnvValue } from "../../utils/env-file.ts";
 import {
   ARG_DATABASE_ID,
@@ -21,6 +21,10 @@ const ARG_URL = "url";
 const ARG_TOKEN = "token";
 const ARG_NO_OPEN = "no-open";
 const ARG_DEV = "dev";
+const ARG_FORCE = "force";
+const ARG_FORCE_ALIAS = "f";
+
+const TOKEN_TTL_MINUTES = 30;
 
 /**
  * Resolve database credentials — same pattern as shell.ts.
@@ -60,10 +64,13 @@ async function resolveCredentials(
 
   if (!token) {
     spin.text = "Generating token...";
+    const expiresAt = new Date(
+      Date.now() + TOKEN_TTL_MINUTES * 60 * 1000,
+    ).toISOString();
     fetches.push(
       apiClient.PUT("/v2/databases/{db_id}/auth/generate", {
         params: { path: { db_id: databaseId } },
-        body: { authorization: "full-access", expires_at: null },
+        body: { authorization: "full-access", expires_at: expiresAt },
       }),
     );
   }
@@ -89,6 +96,7 @@ export const dbStudioCommand = defineCommand<{
   [ARG_TOKEN]?: string;
   [ARG_NO_OPEN]?: boolean;
   [ARG_DEV]?: boolean;
+  [ARG_FORCE]?: boolean;
 }>({
   command: COMMAND,
   describe: DESCRIPTION,
@@ -127,6 +135,12 @@ export const dbStudioCommand = defineCommand<{
         type: "boolean",
         default: false,
         hidden: true,
+      })
+      .option(ARG_FORCE, {
+        alias: ARG_FORCE_ALIAS,
+        type: "boolean",
+        default: false,
+        describe: "Skip confirmation prompts",
       }),
 
   handler: async ({
@@ -136,10 +150,30 @@ export const dbStudioCommand = defineCommand<{
     [ARG_TOKEN]: tokenArg,
     [ARG_NO_OPEN]: noOpen,
     [ARG_DEV]: dev,
+    [ARG_FORCE]: force,
     profile,
     verbose,
     apiKey,
   }) => {
+    logger.warn("db studio will:");
+    logger.log(
+      `  - Create a full-access token scoped to this database that expires in ${TOKEN_TTL_MINUTES} minutes.`,
+    );
+    logger.log(
+      "  - Load that token into a browser tab running on http://localhost.",
+    );
+    logger.log(
+      "  - Power the UI with additional reads (table previews, row counts, pagination),",
+    );
+    logger.log("    which counts against your read quota.");
+    logger.log("");
+
+    const confirmed = await confirm("Continue?", { force });
+    if (!confirmed) {
+      logger.log("Cancelled.");
+      return;
+    }
+
     const { createClient } = await import("@libsql/client/web");
     const { startStudio } = await import("@bunny.net/database-studio");
 
