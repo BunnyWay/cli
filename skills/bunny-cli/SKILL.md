@@ -58,12 +58,12 @@ Available on every command:
 
 ## Environment Variables
 
-| Variable                 | Description                                                      |
-| ------------------------ | ---------------------------------------------------------------- |
-| `BUNNYNET_API_KEY`       | API key (overrides profile)                                      |
-| `BUNNYNET_API_URL`       | API base URL (default: `https://api.bunny.net`)                  |
-| `BUNNYNET_DASHBOARD_URL` | Dashboard URL for browser-base auth flow (default: `https://dash.bunny.net`) |
-| `NO_COLOR`               | Disable colored output                                           |
+| Variable                 | Description                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `BUNNYNET_API_KEY`       | API key (overrides profile)                                                   |
+| `BUNNYNET_API_URL`       | API base URL (default: `https://api.bunny.net`)                               |
+| `BUNNYNET_DASHBOARD_URL` | Dashboard URL for browser-based auth flow (default: `https://dash.bunny.net`) |
+| `NO_COLOR`               | Disable colored output                                                        |
 
 ## Anti-Patterns
 
