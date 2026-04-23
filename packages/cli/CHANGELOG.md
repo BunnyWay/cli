@@ -1,5 +1,32 @@
 # @bunny.net/cli
 
+## 0.3.0
+
+### Minor Changes
+
+- [#44](https://github.com/BunnyWay/cli/pull/44) [`87d76e1`](https://github.com/BunnyWay/cli/commit/87d76e131a85a1419f0ebc05abb400e396c1fc5a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add `bunny db link` and lifecycle integration for `.bunny/database.json`
+
+  - New `bunny db link [database-id]` command that writes `{ id, name }` to `.bunny/database.json`. Subsequent `db` commands resolve the target without needing `BUNNY_DATABASE_URL` in `.env`.
+  - Database ID resolution order is now: explicit argument → `.bunny/database.json` → `BUNNY_DATABASE_URL` in `.env` → interactive prompt. The resolver also returns the database name when known, so commands like `db tokens create` can show `Database: <name> (<id>) (from ...)` without an extra API call.
+  - `bunny db create` now offers to link the new database to the current directory, generate an auth token, and save credentials to `.env`. Three new flags make these phases non-interactive: `--link`/`--no-link`, `--token`/`--no-token`, `--save-env`/`--no-save-env`. In `--output json` mode, prompts are suppressed entirely — flags are the only way to opt in. The JSON output gains `linked`, `token`, and `saved_to_env` fields.
+  - `bunny db delete` now removes `.bunny/database.json` automatically when it points at the deleted database, so subsequent commands don't try to resolve a dead ID.
+
+### Patch Changes
+
+- [#49](https://github.com/BunnyWay/cli/pull/49) [`61e1518`](https://github.com/BunnyWay/cli/commit/61e1518df6e24dcfc62ac5ef4c299b53a9275ebf) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Harden `bunny db studio` against LAN, cross-origin, and credential-persistence attacks
+
+  - The studio HTTP server now binds to `127.0.0.1` instead of every interface, so LAN peers, container bridges, and VPC siblings can no longer reach it.
+  - `Access-Control-Allow-Origin: *` and the `OPTIONS` preflight branch were removed. The SPA is same-origin (Vite proxies `/api` in dev; prod serves the SPA and API from the same port), so no cross-origin grant is needed. Evil pages loaded in another tab can no longer read the API.
+  - Added a Host header allowlist (`localhost`, `127.0.0.1`, `[::1]`). Requests with any other Host are rejected with `403`, which blocks DNS-rebinding even if the server is reachable via a non-loopback address.
+  - The API is now gated behind a per-startup session token. The auto-opened URL carries `?token=…` once; the client exchanges it for an HttpOnly, SameSite=Strict cookie via `POST /api/auth` and scrubs the token from the URL. Every other `/api/*` request requires the cookie (timing-safe compare) or returns `401`.
+  - `db studio` now prints a warning and prompts for confirmation before starting, explaining that a full-access libsql token will be minted and loaded into a browser tab. A `--force`/`-f` flag skips the prompt for CI and agents.
+  - The libsql token minted on each run now expires after 30 minutes instead of never. This bounds the blast radius if the token ever leaves the developer's machine.
+
+- [#49](https://github.com/BunnyWay/cli/pull/49) [`61e1518`](https://github.com/BunnyWay/cli/commit/61e1518df6e24dcfc62ac5ef4c299b53a9275ebf) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Harden the `bunny login` loopback callback server
+
+  - Every response (success and error) now sets `Cache-Control: no-store`, so browsers don't persist the `?state=…&apiKey=…` URL to disk cache.
+  - Non-`GET` requests to `/callback` now return `405 Method Not Allowed` with an `Allow: GET` header instead of falling through and attempting to read query parameters.
+
 ## 0.2.8
 
 ### Patch Changes

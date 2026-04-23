@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/cli-linux-arm64",
-  "version": "0.2.8",
+  "version": "0.3.0",
   "description": "bunny.net CLI binary for Linux arm64",
   "os": [
     "linux"
