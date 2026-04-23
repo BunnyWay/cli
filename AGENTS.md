@@ -235,6 +235,7 @@ bunny-cli/
 │           │   │   ├── add.ts            # Add registry with credentials
 │           │   │   └── remove.ts         # Remove registry
 │           │   ├── docs.ts               # Open bunny.net documentation in browser (top-level: bunny docs)
+│           │   ├── open.ts               # Open bunny.net dashboard in browser (top-level: bunny open)
 │           │   └── scripts/
 │           │       ├── index.ts          # defineNamespace("scripts", ...) — registers all script commands
 │           │       ├── constants.ts      # SCRIPT_MANIFEST, SCRIPT_TYPE_LABELS
@@ -773,6 +774,7 @@ bunny
 │   ├── list            (alias: ls)         List all Edge Scripts
 │   └── show            [id]                Show Edge Script details (uses linked script if omitted)
 ├── docs                                    Open bunny.net documentation in browser
+├── open               [--print]            Open bunny.net dashboard in browser (or print URL)
 ├── --profile, -p       <string>            Profile to use (default: "default")
 ├── --verbose, -v       <boolean>           Enable verbose output
 ├── --output, -o        <text|json|table|csv|markdown>  Output format (default: "text")

@@ -67,6 +67,20 @@ bunny whoami --output json
 bunny whoami --profile staging
 ```
 
+### `bunny open`
+
+Open the bunny.net dashboard in your default browser. Uses `BUNNYNET_DASHBOARD_URL` if set, otherwise `https://dash.bunny.net`.
+
+```bash
+bunny open
+
+# Print the URL instead of opening it
+bunny open --print
+
+# Print as JSON
+bunny open --print --output json
+```
+
 ### `bunny config`
 
 Manage CLI configuration and profiles.
