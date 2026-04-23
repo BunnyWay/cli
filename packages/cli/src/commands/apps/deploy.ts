@@ -1,4 +1,5 @@
 import { createMcClient } from "@bunny.net/api";
+import type { components } from "@bunny.net/api/generated/magic-containers.d.ts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -23,6 +24,8 @@ import {
 const COMMAND = "deploy";
 const DESCRIPTION = "Deploy an app.";
 
+type Application = components["schemas"]["Application"];
+
 interface DeployArgs {
   image?: string;
 }
@@ -45,18 +48,13 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     let appId = toml.app.id;
     let deployImage = image;
 
-    // Get the primary (first) container from the containers map
-    const containerEntries = Object.entries(toml.app.containers);
-    const primaryContainer = containerEntries[0]?.[1];
-
-    // Build from Dockerfile if configured and no --image override
+    const primaryContainer = Object.values(toml.app.containers)[0];
     const dockerfile = primaryContainer?.dockerfile;
     let registry = primaryContainer?.registry;
 
-    if (dockerfile && !image) {
+    if (dockerfile && primaryContainer && !image) {
       await ensureDockerAvailable();
 
-      // Prompt for registry if not set
       if (!registry) {
         const registryId = await promptRegistry(client);
         if (!registryId) {
@@ -65,9 +63,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
           );
         }
         registry = registryId;
-        if (primaryContainer) {
-          primaryContainer.registry = registry;
-        }
+        primaryContainer.registry = registry;
         saveConfig(toml);
       }
 
@@ -100,7 +96,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       deployImage = imageRef;
     }
 
-    // If no id, create the app on MC first
+    let app: Application | undefined;
+
     if (!appId) {
       const createSpin = spinner("Creating app...");
       createSpin.start();
@@ -121,7 +118,6 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
       logger.success(`App "${toml.app.name}" created (${appId}).`);
     } else {
-      // Existing app — push config changes before deploying
       const pushSpin = spinner("Pushing config...");
       pushSpin.start();
 
@@ -140,20 +136,24 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       });
 
       pushSpin.stop();
+      app = existingApp;
     }
 
-    // If we have an image to deploy (from build or --image), update the primary container
     if (deployImage) {
-      const fetchSpin = spinner("Fetching app...");
-      fetchSpin.start();
+      if (!app) {
+        const fetchSpin = spinner("Fetching app...");
+        fetchSpin.start();
 
-      const { data: app } = await client.GET("/apps/{appId}", {
-        params: { path: { appId } },
-      });
+        const { data: fetched } = await client.GET("/apps/{appId}", {
+          params: { path: { appId } },
+        });
 
-      fetchSpin.stop();
+        fetchSpin.stop();
+        app = fetched;
+      }
 
-      const containerId = app?.containerTemplates?.[0]?.id;
+      const existingTemplate = app?.containerTemplates?.[0];
+      const containerId = existingTemplate?.id;
       if (!containerId) {
         throw new UserError("App has no containers.");
       }
@@ -171,7 +171,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
           imageName,
           imageNamespace,
           imageTag,
-          imageRegistryId: registry ?? "",
+          imageRegistryId: registry ?? existingTemplate.imageRegistryId ?? "",
         },
       });
 

@@ -11,6 +11,7 @@ import { spinner } from "../../core/ui.ts";
 import type { BunnyAppConfig, ContainerConfig } from "./config.ts";
 import { configExists, saveConfig } from "./config.ts";
 import { promptRegistry } from "./docker.ts";
+import { detectProject, writeDockerfile } from "./scaffold.ts";
 
 const COMMAND = "init";
 const DESCRIPTION = "Initialize a new app config.";
@@ -101,13 +102,38 @@ export const appsInitCommand = defineCommand<InitArgs>({
     } else if (rawImage) {
       container = { image: rawImage };
     } else {
-      const { value } = await prompts({
-        type: "text",
-        name: "value",
-        message: "Primary container image (e.g. nginx:latest):",
-      });
-      if (!value) throw new UserError("Container image is required.");
-      container = { image: value };
+      const detected = detectProject(process.cwd());
+      let shouldScaffold = false;
+
+      if (detected) {
+        const { scaffold } = await prompts({
+          type: "confirm",
+          name: "scaffold",
+          message: `No Dockerfile found. Scaffold one for ${detected.label}?`,
+          initial: true,
+        });
+        shouldScaffold = scaffold === true;
+      }
+
+      if (detected && shouldScaffold) {
+        writeDockerfile(process.cwd(), detected.type);
+        logger.success("Dockerfile written.");
+
+        const registryId = await promptRegistry(client);
+        if (!registryId)
+          throw new UserError(
+            "A registry is required to build and push images.",
+          );
+        container = { dockerfile: "Dockerfile", registry: registryId };
+      } else {
+        const { value } = await prompts({
+          type: "text",
+          name: "value",
+          message: "Primary container image (e.g. nginx:latest):",
+        });
+        if (!value) throw new UserError("Container image is required.");
+        container = { image: value };
+      }
     }
 
     // Fetch available regions for selection
