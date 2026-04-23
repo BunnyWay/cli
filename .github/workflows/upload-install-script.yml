@@ -12,7 +12,7 @@ jobs:
     name: Upload to Bunny Storage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Upload install.sh
         env:
           BUNNYNET_STORAGE_ENDPOINT: ${{ vars.BUNNYNET_STORAGE_ENDPOINT }}
@@ -32,8 +32,8 @@ jobs:
           BUNNYNET_API_KEY: ${{ secrets.BUNNYNET_API_KEY }}
           BUNNYNET_INSTALL_URL: ${{ vars.BUNNYNET_INSTALL_URL }}
         run: |
+          ENCODED_URL=$(jq -rn --arg u "$BUNNYNET_INSTALL_URL" '$u|@uri')
           curl --fail --show-error --silent \
             -X POST \
             -H "AccessKey: ${BUNNYNET_API_KEY}" \
-            --data-urlencode "url=${BUNNYNET_INSTALL_URL}" \
-            -G "https://api.bunny.net/purge"
+            "https://api.bunny.net/purge?url=${ENCODED_URL}"
