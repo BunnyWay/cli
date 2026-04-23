@@ -1,18 +1,15 @@
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import { createComputeClient } from "@bunny.net/api";
 import type { components } from "@bunny.net/api/generated/compute.d.ts";
 import prompts from "prompts";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifestAt } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import { SCRIPT_MANIFEST, TEMPLATES, type Template } from "./constants.ts";
+import { createScript } from "./create.ts";
 
-type EdgeScript = components["schemas"]["EdgeScriptModel"];
 type EdgeScriptTypes = components["schemas"]["EdgeScriptTypes"];
 
 const COMMAND = "init";
@@ -372,7 +369,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
 
     // Step 9: Create script on bunny.net + link
     let deployResult:
-      | (Pick<EdgeScript, "Id" | "Name"> & { hostname?: string })
+      | { id: number; name: string; hostname?: string }
       | undefined;
 
     const deployPrompt =
@@ -388,39 +385,29 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
           : false;
 
     if (shouldDeploy) {
-      const config = resolveConfig(profile, apiKey);
-      const client = createComputeClient(clientOptions(config, verbose));
-      const scriptName = basename(dirPath);
+      try {
+        const created = await createScript({
+          profile,
+          apiKey,
+          verbose,
+          name: basename(dirPath),
+          scriptType: finalScriptType,
+          createLinkedPullZone: true,
+        });
 
-      const createSpin = spinner(`Creating script "${scriptName}"...`);
-      createSpin.start();
-
-      const { data: script } = await client.POST("/compute/script", {
-        body: {
-          Name: scriptName,
-          ScriptType: scriptType,
-          CreateLinkedPullZone: true,
-        },
-      });
-
-      createSpin.stop();
-
-      if (!script) {
-        logger.warn("Could not create script on bunny.net.");
-      } else {
-        logger.success(`Created script "${script.Name}" (ID: ${script.Id}).`);
+        logger.success(`Created script "${created.name}" (ID: ${created.id}).`);
 
         // Update manifest with remote ID
         saveManifestAt(dirPath, SCRIPT_MANIFEST, {
-          id: script.Id,
-          name: script.Name ?? undefined,
+          id: created.id,
+          name: created.name,
           scriptType,
         });
 
         deployResult = {
-          Id: script.Id,
-          Name: script.Name,
-          hostname: script.LinkedPullZones?.[0]?.DefaultHostname ?? undefined,
+          id: created.id,
+          name: created.name,
+          hostname: created.hostname,
         };
 
         if (deployResult.hostname) {
@@ -432,8 +419,17 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
           logger.info(
             "Before pushing to GitHub, add this secret to your repo:",
           );
-          logger.dim(`  SCRIPT_ID = ${script.Id}`);
+          logger.dim(`  SCRIPT_ID = ${created.id}`);
         }
+      } catch (err: any) {
+        logger.warn(
+          err?.message
+            ? `Could not create script on bunny.net: ${err.message}`
+            : "Could not create script on bunny.net.",
+        );
+        logger.dim(
+          "  Run `bunny scripts create` from the project directory to retry.",
+        );
       }
     }
 
@@ -451,8 +447,8 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
             deployMethod,
             ...(deployResult && {
               script: {
-                id: deployResult.Id,
-                name: deployResult.Name,
+                id: deployResult.id,
+                name: deployResult.name,
                 hostname: deployResult.hostname,
               },
             }),

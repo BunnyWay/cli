@@ -238,9 +238,10 @@ bunny-cli/
 │           │   └── scripts/
 │           │       ├── index.ts          # defineNamespace("scripts", ...) — registers all script commands
 │           │       ├── constants.ts      # SCRIPT_MANIFEST, SCRIPT_TYPE_LABELS
+│           │       ├── create.ts         # Create a remote Edge Script (exports shared `createScript` helper)
 │           │       ├── deploy.ts         # Deploy code to an Edge Script (publishes by default)
 │           │       ├── docs.ts           # Open Edge Script documentation in browser
-│           │       ├── init.ts           # Scaffold a new Edge Script project from a template
+│           │       ├── init.ts           # Scaffold a new Edge Script project from a template (calls `createScript`)
 │           │       ├── link.ts           # Link directory to a remote Edge Script (.bunny/script.json)
 │           │       ├── list.ts           # List all Edge Scripts (Standalone + Middleware)
 │           │       ├── show.ts           # Show Edge Script details (supports manifest fallback)
@@ -759,6 +760,8 @@ bunny
 ├── scripts
 │   ├── init            [--name] [--type] [--template] [--deploy-method] [--deploy] [--skip-git] [--skip-install]
 │   │                                       Create a new Edge Script project from a template
+│   ├── create          [name] [--type] [--pull-zone] [--pull-zone-name] [--link]
+│   │                                       Create a remote Edge Script (use after init when --deploy was skipped)
 │   ├── deploy          <file> [id] [--skip-publish]
 │   │                                       Deploy code to an Edge Script (publishes by default)
 │   ├── deployments
