@@ -9,7 +9,7 @@ import { UserError } from "../../core/errors.ts";
 import { formatKeyValue } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
-import { confirm, spinner } from "../../core/ui.ts";
+import { confirm, openBrowser, spinner } from "../../core/ui.ts";
 import { SCRIPT_MANIFEST } from "./constants.ts";
 
 type EdgeScriptTypes = components["schemas"]["EdgeScriptTypes"];
@@ -263,6 +263,22 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
     }
 
     logger.log();
-    logger.dim(`  Deploy:  bunny scripts deploy <file>`);
+
+    if (created.hostname && isInteractive) {
+      const shouldOpen = await confirm("Open script in browser?");
+      if (shouldOpen) {
+        const url = created.hostname.startsWith("http")
+          ? created.hostname
+          : `https://${created.hostname}`;
+        logger.dim(`  Opening ${url}`);
+        openBrowser(url);
+      } else {
+        logger.dim(
+          "  Make changes locally, then run `bunny scripts deploy <file>` to publish.",
+        );
+      }
+    } else {
+      logger.dim(`  Deploy:  bunny scripts deploy <file>`);
+    }
   },
 });

@@ -6,7 +6,7 @@ import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifestAt } from "../../core/manifest.ts";
-import { confirm, spinner } from "../../core/ui.ts";
+import { confirm, openBrowser, spinner } from "../../core/ui.ts";
 import { SCRIPT_MANIFEST, TEMPLATES, type Template } from "./constants.ts";
 import { createScript } from "./create.ts";
 
@@ -410,7 +410,24 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
           hostname: created.hostname,
         };
 
-        if (deployResult.hostname) {
+        if (
+          deployResult.hostname &&
+          output !== "json" &&
+          process.stdout.isTTY
+        ) {
+          const shouldOpen = await confirm("Open script in browser?");
+          if (shouldOpen) {
+            const url = deployResult.hostname.startsWith("http")
+              ? deployResult.hostname
+              : `https://${deployResult.hostname}`;
+            logger.dim(`  Opening ${url}`);
+            openBrowser(url);
+          } else {
+            logger.dim(
+              "  Make changes locally, then run `bunny scripts deploy <file>` to publish.",
+            );
+          }
+        } else if (deployResult.hostname) {
           logger.dim(`  URL: ${deployResult.hostname}`);
         }
 
