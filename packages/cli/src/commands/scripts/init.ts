@@ -25,7 +25,9 @@ const ARG_TYPE_DESCRIPTION = "Script type";
 const ARG_TEMPLATE = "template";
 const ARG_TEMPLATE_DESCRIPTION = "Template name";
 const ARG_TEMPLATE_REPO = "template-repo";
-const ARG_TEMPLATE_REPO_DESCRIPTION = "Git repository URL to use as template";
+const ARG_TEMPLATE_REPO_ALIAS = "repo";
+const ARG_TEMPLATE_REPO_DESCRIPTION =
+  "Git repository URL or GitHub owner/repo shorthand to use as template";
 const ARG_DEPLOY = "deploy";
 const ARG_DEPLOY_DESCRIPTION = "Deploy after creation";
 const ARG_DEPLOY_METHOD = "deploy-method";
@@ -49,6 +51,12 @@ interface InitArgs {
   [ARG_SKIP_INSTALL]?: boolean;
 }
 
+const GITHUB_SHORTHAND = /^[\w.-]+\/[\w.-]+$/;
+
+function resolveTemplateRepo(input: string): string {
+  return GITHUB_SHORTHAND.test(input) ? `https://github.com/${input}` : input;
+}
+
 /**
  * Create a new Edge Script project from a template.
  *
@@ -70,8 +78,11 @@ interface InitArgs {
  * # Skip dependency installation
  * bunny scripts init --name my-script --skip-install
  *
- * # Use a custom template repo
+ * # Use a custom template repo (full URL)
  * bunny scripts init --name my-script --type standalone --template-repo https://github.com/user/my-template
+ *
+ * # Use a custom template repo (GitHub owner/repo shorthand)
+ * bunny scripts init --repo user/my-template
  * ```
  */
 export const scriptsInitCommand = defineCommand<InitArgs>({
@@ -102,6 +113,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
       })
       .option(ARG_TEMPLATE_REPO, {
         type: "string",
+        alias: ARG_TEMPLATE_REPO_ALIAS,
         describe: ARG_TEMPLATE_REPO_DESCRIPTION,
       })
       .option(ARG_DEPLOY, {
@@ -150,6 +162,9 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
     let scriptType: EdgeScriptTypes | undefined;
     if (args[ARG_TYPE]) {
       scriptType = args[ARG_TYPE] === "standalone" ? 1 : 2;
+    } else if (args[ARG_TEMPLATE_REPO]) {
+      // Custom template repo implies the user knows what they're doing — default to standalone
+      scriptType = 1;
     } else {
       const { value } = await prompts({
         type: "select",
@@ -179,7 +194,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
       selected = {
         name: "Custom",
         description: "Custom template repository",
-        repo: args[ARG_TEMPLATE_REPO],
+        repo: resolveTemplateRepo(args[ARG_TEMPLATE_REPO]),
         scriptType: finalScriptType,
       };
     } else if (args[ARG_TEMPLATE]) {
