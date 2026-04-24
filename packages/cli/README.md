@@ -434,6 +434,28 @@ When choosing **GitHub Actions**, git is initialized automatically, GitHub-speci
 
 When choosing **CLI**, the `.github/` and `.changeset/` directories are removed from the template and git initialization is skipped.
 
+#### `bunny scripts create`
+
+Create a new Edge Script on bunny.net (without scaffolding a project). Use this when you have an existing project — for example, you ran `bunny scripts init` without `--deploy` — and need a remote script before running `bunny scripts deploy`.
+
+```bash
+# Create using current directory name + link .bunny/script.json
+bunny scripts create
+
+# Explicit name and type
+bunny scripts create my-script --type middleware
+
+# Skip pull zone creation and directory linking
+bunny scripts create my-script --no-pull-zone --no-link
+```
+
+| Flag               | Description                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| `--type`           | Script type: `standalone` or `middleware` (defaults to manifest, prompts if interactive)    |
+| `--pull-zone`      | Create a linked pull zone (default: true). Use `--no-pull-zone` to skip.                   |
+| `--pull-zone-name` | Name for the linked pull zone                                                              |
+| `--link`           | Link this directory to the new script (default: true). Use `--no-link` to skip.            |
+
 #### `bunny scripts deploy`
 
 Deploy code to an Edge Script. Uploads code and publishes by default.
