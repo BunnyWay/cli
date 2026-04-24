@@ -9,6 +9,7 @@ import { authLogoutCommand } from "./commands/auth/logout.ts";
 import { configNamespace } from "./commands/config/index.ts";
 import { dbNamespace } from "./commands/db/index.ts";
 import { docsCommand } from "./commands/docs.ts";
+import { openCommand } from "./commands/open.ts";
 import { registriesNamespace } from "./commands/registries/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
@@ -24,6 +25,7 @@ const commands: CommandModule[] = [
   scriptsNamespace,
   configNamespace,
   docsCommand,
+  openCommand,
   apiCommand,
 ];
 
