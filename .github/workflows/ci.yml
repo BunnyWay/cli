@@ -21,3 +21,7 @@ jobs:
         run: bun build packages/cli/src/index.ts --compile --minify --sourcemap --outfile bunny
       - name: Build database-shell binary
         run: bun build packages/database-shell/src/cli.ts --compile --minify --sourcemap --outfile bsql
+      - name: Lint install.sh (POSIX shellcheck)
+        run: shellcheck -s sh install.sh
+      - name: Bash syntax check install.sh
+        run: bash -n install.sh
