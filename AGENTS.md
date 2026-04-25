@@ -652,7 +652,7 @@ The CLI is distributed through three channels:
 curl -fsSL https://cli.bunny.net/install.sh | sh
 ```
 
-Downloads the prebuilt binary for the current platform from GitHub Releases and installs to `/usr/local/bin`. Supports `BUNNY_INSTALL_DIR` env var for custom paths. Script is at `install.sh` in the repo root.
+Downloads the prebuilt binary for the current platform from GitHub Releases and installs to `~/.bunny/bin`. Supports `BUNNY_INSTALL_DIR` env var for custom paths (e.g. `BUNNY_INSTALL_DIR=/usr/local/bin`). On macOS the script clears the quarantine xattr and ad-hoc codesigns the binary so Gatekeeper allows execution. Uses GitHub's `releases/latest/download` redirect to avoid the api.github.com rate limit. Script is at `install.sh` in the repo root.
 
 **2. npm (platform-specific binary packages)**
 
