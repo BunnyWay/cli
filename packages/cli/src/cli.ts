@@ -97,8 +97,7 @@ export const cli = instance
 
       const bunny = chalk.hex("#fb8827");
       const art = `
-                                                                                                                                                                                                                  
-                 @@@@@                                                                                                              
+                  @@@@                                                                                                              
                  @@@@                                                                                                               
                  @@@@                                                                                                               
                @@@@@@  @@@@@@@     @@@@      @@@@@  @@@@ @@@@@@@@    @@@@ @@@@@@@@  @@@@@      @@@@                                 
@@ -113,7 +112,6 @@ export const cli = instance
                                                                                       @@@@@                                         
                                                                                      @@@@@                                          
                                                                                     @@@@@                                           
-
       `;
       if ((process.stdout.columns ?? 0) >= 135) {
         console.log(art);
