@@ -85,9 +85,17 @@ export async function getLatestVersion(): Promise<string | null> {
   return latest;
 }
 
+function updateCommand(): string {
+  const path = process.execPath;
+  if (path.includes("@bunny.net/cli-") || path.includes("@bunny.net\\cli-")) {
+    return "npm install -g @bunny.net/cli";
+  }
+  return "curl -fsSL https://cli.bunny.net/install.sh | sh";
+}
+
 function printUpdateNotice(latest: string): void {
   console.error(
     `\n  Update available: ${VERSION} → ${latest}` +
-      `\n  Run: npm install -g @bunny.net/cli\n`,
+      `\n  Run: ${updateCommand()}\n`,
   );
 }
