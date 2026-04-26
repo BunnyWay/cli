@@ -14,7 +14,6 @@ import { registriesNamespace } from "./commands/registries/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { logger } from "./core/logger.ts";
-import { getLatestVersion } from "./core/update-check.ts";
 import { VERSION } from "./core/version.ts";
 
 const commands: CommandModule[] = [
@@ -37,12 +36,7 @@ const experimentalCommands: CommandModule[] = [
 
 let instance = yargs(hideBin(process.argv))
   .scriptName("bunny")
-  .version(false)
-  .option("version", {
-    type: "boolean",
-    describe: "Show version number",
-    global: false,
-  })
+  .version(`${VERSION} ${process.platform}-${process.arch}`)
   .usage("$0 <command> [options]")
 
   .option("profile", {
@@ -82,19 +76,7 @@ export const cli = instance
     "$0",
     false as never,
     () => {},
-    async (argv) => {
-      if (argv.version) {
-        console.log(`${VERSION} ${process.platform}-${process.arch}`);
-        const latest = await getLatestVersion();
-        if (latest && latest !== VERSION) {
-          console.log(
-            `\nUpdate available: ${VERSION} → ${latest}` +
-              `\nRun: npm install -g @bunny.net/cli`,
-          );
-        }
-        return;
-      }
-
+    () => {
       const bunny = chalk.hex("#fb8827");
       const art = `
                   @@@@                                                                                                              
