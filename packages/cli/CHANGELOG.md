@@ -1,5 +1,41 @@
 # @bunny.net/cli
 
+## 0.4.0
+
+### Minor Changes
+
+- [#51](https://github.com/BunnyWay/cli/pull/51) [`c1896be`](https://github.com/BunnyWay/cli/commit/c1896be35be7808cde1c076a0a89bce54fa15a76) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add `bunny open` command to open the bunny.net dashboard in the default browser. Use `--print` to print the URL instead.
+
+- [#50](https://github.com/BunnyWay/cli/pull/50) [`2bcf964`](https://github.com/BunnyWay/cli/commit/2bcf96435193bf2bb119c804302a1978cbb252f2) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add `bunny scripts create` command
+
+  - New `bunny scripts create [name]` command for creating an Edge Script on bunny.net without scaffolding a project. Useful when you already have a project (e.g. ran `bunny scripts init` without `--deploy`) and need a remote script before running `bunny scripts deploy`.
+  - Defaults the script name to the current directory name, creates a linked pull zone, and links the directory via `.bunny/script.json`.
+  - Flags: `--type` (`standalone` or `middleware`), `--pull-zone`/`--no-pull-zone`, `--pull-zone-name`, `--link`/`--no-link`.
+  - Refactored `scripts init` to share the underlying `createScript()` helper.
+
+- [#53](https://github.com/BunnyWay/cli/pull/53) [`44b4788`](https://github.com/BunnyWay/cli/commit/44b4788381be351eb922ceb8bf17ea7dfe5d4832) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add `--repo` alias for `--template-repo` on `bunny scripts init` and accept GitHub `owner/repo` shorthand. When a custom template repo is given without `--type`, the script type now defaults to `standalone`.
+
+  After a script is created by `bunny scripts create` (and `bunny scripts init --deploy`), the CLI now prompts to open the linked pull zone hostname in the browser. Declining shows a reminder to make local changes and run `bunny scripts deploy <file>`.
+
+### Patch Changes
+
+- [#58](https://github.com/BunnyWay/cli/pull/58) [`db5b128`](https://github.com/BunnyWay/cli/commit/db5b128fac0bd87d6694141b7b475c4a65447f66) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - The "update available" notice now suggests the right command for how bunny was install
+
+- [#55](https://github.com/BunnyWay/cli/pull/55) [`ccfb7c1`](https://github.com/BunnyWay/cli/commit/ccfb7c100ba97e4f1bbb6c9b1912a5430fe89f85) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Improve the `install.sh` shell installer:
+
+  - Default install directory is now `~/.bunny/bin` (no sudo required). Set `BUNNY_INSTALL_DIR=/usr/local/bin` to keep the previous behaviour.
+  - On macOS, the installer now clears the `com.apple.quarantine` xattr and ad-hoc codesigns the binary so Gatekeeper allows execution on first run (fixes "killed: 9" on Apple Silicon).
+  - Resolving the latest version no longer calls `api.github.com` (rate-limited to 60 req/hr); it uses GitHub's `releases/latest/download` redirect instead.
+  - The script now warns if a legacy `bunny` binary is still present at `/usr/local/bin/bunny`, since depending on PATH order it may shadow the new install. Remove it with `sudo rm /usr/local/bin/bunny`.
+
+- [#57](https://github.com/BunnyWay/cli/pull/57) [`f22b6cb`](https://github.com/BunnyWay/cli/commit/f22b6cb4a5278021544cff3c7962d2a4310f8874) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix `bunny --version` failing with "Unknown argument: version". The
+  update-check work in a previous release switched yargs to `.version(false)`
+  plus a manual `--version` option, which interacts badly with strict mode.
+  The `--version` flag is now intercepted before yargs parses, so the latest
+  version is still fetched and an upgrade hint shown when outdated.
+
+- [#56](https://github.com/BunnyWay/cli/pull/56) [`72cf2a8`](https://github.com/BunnyWay/cli/commit/72cf2a818a432a16d1807c19420d685c864a41dd) Thanks [@nocanoa](https://github.com/nocanoa)! - Added bunny.net ASCII art.
+
 ## 0.3.0
 
 ### Minor Changes
