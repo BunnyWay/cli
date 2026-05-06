@@ -167,14 +167,14 @@ export const apiCommand = defineCommand<ApiArgs>({
           text || undefined,
         );
       }
-      if (text) logger.log(text);
+      if (text) await writeStdout(`${text}\n`);
       return;
     }
 
     if (!res.ok) {
       if (output === "json") {
-        logger.log(
-          JSON.stringify({ error: parsed, status: res.status }, null, 2),
+        await writeStdout(
+          `${JSON.stringify({ error: parsed, status: res.status }, null, 2)}\n`,
         );
       } else {
         const msg =
@@ -189,6 +189,17 @@ export const apiCommand = defineCommand<ApiArgs>({
       process.exit(1);
     }
 
-    logger.log(JSON.stringify(parsed, null, 2));
+    await writeStdout(`${JSON.stringify(parsed, null, 2)}\n`);
   },
 });
+
+/**
+ * Await the write callback so large payloads piped to another process aren't
+ * truncated — console.log to a POSIX pipe is async (with no way to wait for
+ * it), and the runtime can exit before the buffer drains.
+ */
+function writeStdout(data: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    process.stdout.write(data, (err) => (err ? reject(err) : resolve()));
+  });
+}
