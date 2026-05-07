@@ -72,15 +72,15 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 
 This is a Bun workspace monorepo with four packages:
 
-- **`@bunny.net/api`** (`packages/api/`) — Standalone, type-safe API client SDK for bunny.net. Zero CLI dependencies. Publishable to npm.
+- **`@bunny.net/openapi-client`** (`packages/openapi-client/`) — Standalone, type-safe OpenAPI client for bunny.net, generated from OpenAPI specs. Zero CLI dependencies. Publishable to npm.
 - **`@bunny.net/app-config`** (`packages/app-config/`) — Shared app configuration schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. Used by the CLI and potentially other tools.
 - **`@bunny.net/database-shell`** (`packages/database-shell/`) — Standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
-- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/api`, `@bunny.net/app-config`, and `@bunny.net/database-shell`.
+- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/app-config`, and `@bunny.net/database-shell`.
 
 ```
 bunny-cli/
 ├── packages/
-│   ├── api/                              # @bunny.net/api package
+│   ├── openapi-client/                   # @bunny.net/openapi-client package
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   ├── redocly.yaml                  # Multi-spec config for openapi-typescript
@@ -144,7 +144,7 @@ bunny-cli/
 │           │   ├── client-options.ts     # clientOptions() helper — builds ClientOptions from ResolvedConfig
 │           │   ├── define-command.ts     # Command factory (see "Command Pattern" below)
 │           │   ├── define-namespace.ts   # Namespace/group factory for subcommand trees
-│           │   ├── errors.ts             # Re-exports UserError/ApiError from @bunny.net/api + ConfigError
+│           │   ├── errors.ts             # Re-exports UserError/ApiError from @bunny.net/openapi-client + ConfigError
 │           │   ├── format.ts             # Shared table/key-value rendering (text, table, csv, markdown)
 │           │   ├── format.test.ts        # Tests for format utilities
 │           │   ├── logger.ts             # Chalk-based structured logger
@@ -266,7 +266,7 @@ bunny-cli/
 
 ### Conventions
 
-- **Monorepo with Bun workspaces.** `packages/api/` is the standalone API client SDK; `packages/app-config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/cli/` is the CLI.
+- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/app-config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/cli/` is the CLI.
 - **API clients use `ClientOptions`** — an options object with `apiKey`, `baseUrl`, `verbose`, `userAgent`, and `onDebug`. The CLI provides a `clientOptions(config, verbose)` helper to build this from `ResolvedConfig`.
 - **One command per file.** Each file in `commands/` exports a single command or namespace.
 - **Commands are grouped by domain** in subdirectories (`config/`, `db/`, `scripts/`).
@@ -275,8 +275,8 @@ bunny-cli/
 - **Top-level commands** (`login`, `logout`, `whoami`) are registered directly in `cli.ts` without a namespace.
 - **Shared internal code lives in `packages/cli/src/core/`** — command factories, errors, logger, format utilities, UI helpers, and shared types. Keep this flat (no nested subdirectories).
 - **Config logic lives in `packages/cli/src/config/`** — schema, file resolution, and profile management.
-- **Error classes are split.** `UserError` and `ApiError` live in `@bunny.net/api` (the SDK needs them). `ConfigError` lives in the CLI and extends `UserError`. The CLI's `errors.ts` re-exports `UserError` and `ApiError` from `@bunny.net/api`.
-- **Import API clients from `@bunny.net/api`**, not relative paths. Import generated types from `@bunny.net/api/generated/<spec>.d.ts`.
+- **Error classes are split.** `UserError` and `ApiError` live in `@bunny.net/openapi-client` (the SDK needs them). `ConfigError` lives in the CLI and extends `UserError`. The CLI's `errors.ts` re-exports `UserError` and `ApiError` from `@bunny.net/openapi-client`.
+- **Import API clients from `@bunny.net/openapi-client`**, not relative paths. Import generated types from `@bunny.net/openapi-client/generated/<spec>.d.ts`.
 
 ---
 
@@ -508,7 +508,7 @@ Creates an `ora` spinner. Automatically silenced in non-TTY environments (`isSil
 
 ### API error normalization
 
-The Bunny APIs use two different error response formats. The shared `authMiddleware()` in `packages/api/src/middleware.ts` normalizes both into `ApiError` via an `onResponse` handler, so command code never deals with raw HTTP errors.
+The Bunny APIs use two different error response formats. The shared `authMiddleware()` in `packages/openapi-client/src/middleware.ts` normalizes both into `ApiError` via an `onResponse` handler, so command code never deals with raw HTTP errors.
 
 | API              | Error schema              | Fields                                                                              |
 | ---------------- | ------------------------- | ----------------------------------------------------------------------------------- |
@@ -803,7 +803,7 @@ API calls use `openapi-fetch` with types generated from OpenAPI specs by `openap
 | Database                 | `createDbClient()`      | `https://api.bunny.net/database` | Account `AccessKey` |
 | Magic Containers         | `createMcClient()`      | `https://api.bunny.net/mc`       | Account `AccessKey` |
 
-All clients accept a `ClientOptions` object and inject `AccessKey` and `User-Agent` headers via shared `authMiddleware()` in `packages/api/src/middleware.ts`.
+All clients accept a `ClientOptions` object and inject `AccessKey` and `User-Agent` headers via shared `authMiddleware()` in `packages/openapi-client/src/middleware.ts`.
 
 ### ClientOptions
 
@@ -823,7 +823,7 @@ The CLI provides a `clientOptions()` helper (`packages/cli/src/core/client-optio
 
 ### Undocumented endpoints (`CustomPaths`)
 
-Some Bunny API endpoints are not included in the public OpenAPI specs. These are typed manually via a `CustomPaths` type in `packages/api/src/core-client.ts`, which is intersected with the generated `paths`:
+Some Bunny API endpoints are not included in the public OpenAPI specs. These are typed manually via a `CustomPaths` type in `packages/openapi-client/src/core-client.ts`, which is intersected with the generated `paths`:
 
 ```typescript
 const client = createClient<paths & CustomPaths>({ baseUrl });
@@ -847,29 +847,29 @@ Only fall back to `string`, `any`, or `number` when no generated type exists (e.
 
 ### OpenAPI specs
 
-Specs are committed as JSON files in `packages/api/specs/`. Generated types go to `packages/api/src/generated/` (gitignored). The `redocly.yaml` config and `openapi-typescript` devDependency live in the `@bunny.net/api` package.
+Specs are committed as JSON files in `packages/openapi-client/specs/`. Generated types go to `packages/openapi-client/src/generated/` (gitignored). The `redocly.yaml` config and `openapi-typescript` devDependency live in the `@bunny.net/openapi-client` package.
 
 | Spec file                                  | Source URL                                                    |
 | ------------------------------------------ | ------------------------------------------------------------- |
-| `packages/api/specs/core.json`             | `https://core-api-public-docs.b-cdn.net/docs/v3/public.json`  |
-| `packages/api/specs/compute.json`          | `https://core-api-public-docs.b-cdn.net/docs/v3/compute.json` |
-| `packages/api/specs/database.json`         | `https://api.bunny.net/database/docs/private/api.json`        |
-| `packages/api/specs/magic-containers.json` | `https://api-mc.opsbunny.net/docs/public/swagger.json`        |
+| `packages/openapi-client/specs/core.json`             | `https://core-api-public-docs.b-cdn.net/docs/v3/public.json`  |
+| `packages/openapi-client/specs/compute.json`          | `https://core-api-public-docs.b-cdn.net/docs/v3/compute.json` |
+| `packages/openapi-client/specs/database.json`         | `https://api.bunny.net/database/docs/private/api.json`        |
+| `packages/openapi-client/specs/magic-containers.json` | `https://api-mc.opsbunny.net/docs/public/swagger.json`        |
 
 To regenerate types after updating specs:
 
 ```bash
-bun run api:generate          # from root (delegates to @bunny.net/api)
+bun run openapi:generate          # from root (delegates to @bunny.net/openapi-client)
 # or
-cd packages/api && bun run generate
+cd packages/openapi-client && bun run generate
 ```
 
-This reads `packages/api/redocly.yaml` and outputs `.d.ts` files to `packages/api/src/generated/`.
+This reads `packages/openapi-client/redocly.yaml` and outputs `.d.ts` files to `packages/openapi-client/src/generated/`.
 
 ### Usage in commands
 
 ```typescript
-import { createCoreClient } from "@bunny.net/api";
+import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 
@@ -885,10 +885,10 @@ handler: async ({ profile, apiKey, verbose }) => {
 
 ### Adding a new API
 
-1. Add the spec JSON to `packages/api/specs/`.
-2. Add an entry to `packages/api/redocly.yaml`.
-3. Run `bun run api:generate`.
-4. Create a client factory in `packages/api/src/` following the existing pattern and export it from `packages/api/src/index.ts`.
+1. Add the spec JSON to `packages/openapi-client/specs/`.
+2. Add an entry to `packages/openapi-client/redocly.yaml`.
+3. Run `bun run openapi:generate`.
+4. Create a client factory in `packages/openapi-client/src/` following the existing pattern and export it from `packages/openapi-client/src/index.ts`.
 
 ---
 

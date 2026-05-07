@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { createCoreClient } from "@bunny.net/api";
+import { createCoreClient } from "@bunny.net/openapi-client";
 import {
   profileExists,
   resolveConfig,

@@ -1,10 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { components } from "@bunny.net/api/generated/magic-containers.d.ts";
 import {
   type BunnyAppConfig,
   BunnyAppConfigSchema,
 } from "@bunny.net/app-config";
+import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import { parse as parseJsonc } from "jsonc-parser";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";

@@ -1,6 +1,6 @@
 /**
  * Downloads the latest OpenAPI specs from Bunny's public endpoints
- * into the local specs/ directory. Run via `bun run api:update`.
+ * into the local specs/ directory. Run via `bun run openapi:update`.
  */
 
 const specs = [
@@ -40,4 +40,4 @@ await Promise.all(
   }),
 );
 
-console.log("\nDone. Run `bun run api:generate` to regenerate types.");
+console.log("\nDone. Run `bun run openapi:generate` to regenerate types.");

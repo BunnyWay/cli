@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { createComputeClient } from "@bunny.net/api";
-import type { components } from "@bunny.net/api/generated/compute.d.ts";
+import { createComputeClient } from "@bunny.net/openapi-client";
+import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";

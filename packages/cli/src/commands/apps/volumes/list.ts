@@ -1,4 +1,4 @@
-import { createMcClient } from "@bunny.net/api";
+import { createMcClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";

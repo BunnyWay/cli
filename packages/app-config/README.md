@@ -8,7 +8,7 @@ Shared Zod schemas, inferred types, JSON Schema, and API conversion functions fo
 bun add @bunny.net/app-config
 ```
 
-Requires `@bunny.net/api` as a peer dependency (for API type definitions used by conversion functions).
+Requires `@bunny.net/openapi-client` as a peer dependency (for API type definitions used by conversion functions).
 
 ## Example `bunny.jsonc`
 

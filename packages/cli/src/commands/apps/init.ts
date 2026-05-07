@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { createMcClient } from "@bunny.net/api";
+import { createMcClient } from "@bunny.net/openapi-client";
 import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";

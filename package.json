@@ -12,8 +12,8 @@
     "typecheck": "bun run tsc --noEmit",
     "lint": "biome check --write .",
     "lint:ci": "biome ci",
-    "api:generate": "bun run --filter @bunny.net/api generate",
-    "api:update": "bun run --filter @bunny.net/api update-specs",
+    "openapi:generate": "bun run --filter @bunny.net/openapi-client generate",
+    "openapi:update": "bun run --filter @bunny.net/openapi-client update-specs",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "changeset publish"

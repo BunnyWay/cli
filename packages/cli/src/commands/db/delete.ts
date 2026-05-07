@@ -1,4 +1,4 @@
-import { createDbClient } from "@bunny.net/api";
+import { createDbClient } from "@bunny.net/openapi-client";
 import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";

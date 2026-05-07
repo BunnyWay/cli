@@ -1,4 +1,4 @@
-import type { components } from "@bunny.net/api/generated/compute.d.ts";
+import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 
 type EdgeScriptTypes = components["schemas"]["EdgeScriptTypes"];
 

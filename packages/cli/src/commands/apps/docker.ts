@@ -1,4 +1,4 @@
-import type { createMcClient } from "@bunny.net/api";
+import type { createMcClient } from "@bunny.net/openapi-client";
 import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";

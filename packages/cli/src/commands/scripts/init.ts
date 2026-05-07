@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import type { components } from "@bunny.net/api/generated/compute.d.ts";
+import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 import prompts from "prompts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";

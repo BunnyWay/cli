@@ -1,6 +1,6 @@
-export { ApiError, UserError } from "@bunny.net/api";
+export { ApiError, UserError } from "@bunny.net/openapi-client";
 
-import { UserError } from "@bunny.net/api";
+import { UserError } from "@bunny.net/openapi-client";
 
 /**
  * Configuration-related error. Extends {@link UserError} with a hint

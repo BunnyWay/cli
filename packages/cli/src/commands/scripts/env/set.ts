@@ -1,5 +1,5 @@
-import { createComputeClient } from "@bunny.net/api";
-import type { components } from "@bunny.net/api/generated/compute.d.ts";
+import { createComputeClient } from "@bunny.net/openapi-client";
+import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";

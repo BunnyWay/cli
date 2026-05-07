@@ -1,4 +1,4 @@
-import type { components } from "@bunny.net/api/generated/database.d.ts";
+import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
 
 type PossibleRegion = components["schemas"]["PossibleRegion"];
 type Region = components["schemas"]["Region"];

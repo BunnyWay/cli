@@ -7,7 +7,7 @@ Monorepo for the [bunny.net](https://bunny.net) CLI and supporting packages.
 | Package                                                                  | Name                                 | Description                                                  |
 | ------------------------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------ |
 | [`packages/cli/`](packages/cli/)                                         | `@bunny.net/cli`                     | Command-line interface for bunny.net                         |
-| [`packages/api/`](packages/api/)                                         | `@bunny.net/api`                     | Standalone, type-safe API client SDK                         |
+| [`packages/openapi-client/`](packages/openapi-client/)                   | `@bunny.net/openapi-client`          | Standalone, type-safe OpenAPI client for bunny.net           |
 | [`packages/app-config/`](packages/app-config/)                           | `@bunny.net/app-config`              | Shared Zod schemas, types, and JSON Schema for `bunny.jsonc` |
 | [`packages/database-shell/`](packages/database-shell/)                   | `@bunny.net/database-shell`          | Standalone interactive SQL shell for libSQL databases        |
 | [`packages/database-openapi/`](packages/database-openapi/)               | `@bunny.net/database-openapi`        | Generate OpenAPI 3.0 specs from a database schema            |
@@ -57,10 +57,10 @@ bun test
 bun run build
 
 # Update OpenAPI specs and regenerate types
-bun run api:update
+bun run openapi:update
 
 # Regenerate types from existing specs
-bun run api:generate
+bun run openapi:generate
 ```
 
 ### Changesets

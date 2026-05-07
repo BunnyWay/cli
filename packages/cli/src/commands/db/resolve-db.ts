@@ -1,5 +1,5 @@
-import type { createDbClient } from "@bunny.net/api";
-import type { components } from "@bunny.net/api/generated/database.d.ts";
+import type { createDbClient } from "@bunny.net/openapi-client";
+import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
 
 type Database = Pick<components["schemas"]["Database2"], "id" | "name" | "url">;
 

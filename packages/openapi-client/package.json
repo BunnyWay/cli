@@ -1,5 +1,5 @@
 {
-  "name": "@bunny.net/api",
+  "name": "@bunny.net/openapi-client",
   "version": "0.0.0",
   "type": "module",
   "module": "src/index.ts",
@@ -10,6 +10,13 @@
   "exports": {
     ".": "./src/index.ts",
     "./generated/*": "./src/generated/*"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "openapi-fetch": "^0.17.0"

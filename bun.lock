@@ -13,16 +13,6 @@
         "typescript": "^5",
       },
     },
-    "packages/api": {
-      "name": "@bunny.net/api",
-      "version": "0.0.0",
-      "dependencies": {
-        "openapi-fetch": "^0.17.0",
-      },
-      "devDependencies": {
-        "openapi-typescript": "^7.13.0",
-      },
-    },
     "packages/app-config": {
       "name": "@bunny.net/app-config",
       "version": "0.0.0",
@@ -30,20 +20,20 @@
         "zod": "^4.3.6",
       },
       "peerDependencies": {
-        "@bunny.net/api": "workspace:*",
+        "@bunny.net/openapi-client": "workspace:*",
       },
     },
     "packages/cli": {
       "name": "@bunny.net/cli",
-      "version": "0.2.8",
+      "version": "0.4.0",
       "bin": {
         "bunny": "./bin/bunny.cjs",
       },
       "devDependencies": {
-        "@bunny.net/api": "workspace:*",
         "@bunny.net/app-config": "workspace:*",
         "@bunny.net/database-shell": "workspace:*",
         "@bunny.net/database-studio": "workspace:*",
+        "@bunny.net/openapi-client": "workspace:*",
         "@libsql/client": "^0.17.0",
         "@types/prompts": "^2.4.9",
         "@types/yargs": "^17.0.35",
@@ -57,32 +47,32 @@
         "zod": "^4.3.6",
       },
       "optionalDependencies": {
-        "@bunny.net/cli-darwin-arm64": "0.1.6",
-        "@bunny.net/cli-darwin-x64": "0.1.6",
-        "@bunny.net/cli-linux-arm64": "0.1.6",
-        "@bunny.net/cli-linux-x64": "0.1.6",
-        "@bunny.net/cli-windows-x64": "0.1.6",
+        "@bunny.net/cli-darwin-arm64": "0.4.0",
+        "@bunny.net/cli-darwin-x64": "0.4.0",
+        "@bunny.net/cli-linux-arm64": "0.4.0",
+        "@bunny.net/cli-linux-x64": "0.4.0",
+        "@bunny.net/cli-windows-x64": "0.4.0",
       },
     },
     "packages/cli-darwin-arm64": {
       "name": "@bunny.net/cli-darwin-arm64",
-      "version": "0.2.8",
+      "version": "0.4.0",
     },
     "packages/cli-darwin-x64": {
       "name": "@bunny.net/cli-darwin-x64",
-      "version": "0.2.8",
+      "version": "0.4.0",
     },
     "packages/cli-linux-arm64": {
       "name": "@bunny.net/cli-linux-arm64",
-      "version": "0.2.8",
+      "version": "0.4.0",
     },
     "packages/cli-linux-x64": {
       "name": "@bunny.net/cli-linux-x64",
-      "version": "0.2.8",
+      "version": "0.4.0",
     },
     "packages/cli-windows-x64": {
       "name": "@bunny.net/cli-windows-x64",
-      "version": "0.2.8",
+      "version": "0.4.0",
     },
     "packages/database-adapter-libsql": {
       "name": "@bunny.net/database-adapter-libsql",
@@ -122,11 +112,11 @@
         "cli-table3": "^0.6.5",
       },
       "optionalDependencies": {
-        "@bunny.net/database-shell-darwin-arm64": "0.1.4",
-        "@bunny.net/database-shell-darwin-x64": "0.1.4",
-        "@bunny.net/database-shell-linux-arm64": "0.1.4",
-        "@bunny.net/database-shell-linux-x64": "0.1.4",
-        "@bunny.net/database-shell-windows-x64": "0.1.4",
+        "@bunny.net/database-shell-darwin-arm64": "0.2.2",
+        "@bunny.net/database-shell-darwin-x64": "0.2.2",
+        "@bunny.net/database-shell-linux-arm64": "0.2.2",
+        "@bunny.net/database-shell-linux-x64": "0.2.2",
+        "@bunny.net/database-shell-windows-x64": "0.2.2",
       },
     },
     "packages/database-shell-darwin-arm64": {
@@ -151,7 +141,7 @@
     },
     "packages/database-studio": {
       "name": "@bunny.net/database-studio",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@bunny.net/database-adapter-libsql": "workspace:*",
         "@bunny.net/database-rest": "workspace:*",
@@ -178,6 +168,16 @@
         "tw-animate-css": "^1.4.0",
         "typescript": "^5",
         "vite": "^6.0.0",
+      },
+    },
+    "packages/openapi-client": {
+      "name": "@bunny.net/openapi-client",
+      "version": "0.0.0",
+      "dependencies": {
+        "openapi-fetch": "^0.17.0",
+      },
+      "devDependencies": {
+        "openapi-typescript": "^7.13.0",
       },
     },
   },
@@ -240,8 +240,6 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.4.12", "", { "os": "win32", "cpu": "x64" }, "sha512-yMckRzTyZ83hkk8iDFWswqSdU8tvZxspJKnYNh7JZr/zhZNOlzH13k4ecboU6MurKExCe2HUkH75pGI/O2JwGA=="],
 
-    "@bunny.net/api": ["@bunny.net/api@workspace:packages/api"],
-
     "@bunny.net/app-config": ["@bunny.net/app-config@workspace:packages/app-config"],
 
     "@bunny.net/cli": ["@bunny.net/cli@workspace:packages/cli"],
@@ -275,6 +273,8 @@
     "@bunny.net/database-shell-windows-x64": ["@bunny.net/database-shell-windows-x64@workspace:packages/database-shell-windows-x64"],
 
     "@bunny.net/database-studio": ["@bunny.net/database-studio@workspace:packages/database-studio"],
+
+    "@bunny.net/openapi-client": ["@bunny.net/openapi-client@workspace:packages/openapi-client"],
 
     "@changesets/apply-release-plan": ["@changesets/apply-release-plan@7.1.0", "", { "dependencies": { "@changesets/config": "^3.1.3", "@changesets/get-version-range-type": "^0.4.0", "@changesets/git": "^3.0.4", "@changesets/should-skip-package": "^0.1.2", "@changesets/types": "^6.1.0", "@manypkg/get-packages": "^1.1.3", "detect-indent": "^6.0.0", "fs-extra": "^7.0.1", "lodash.startcase": "^4.4.0", "outdent": "^0.5.0", "prettier": "^2.7.1", "resolve-from": "^5.0.0", "semver": "^7.5.3" } }, "sha512-yq8ML3YS7koKQ/9bk1PqO0HMzApIFNwjlwCnwFEXMzNe8NpzeeYYKCmnhWJGkN8g7E51MnWaSbqRcTcdIxUgnQ=="],
 
@@ -1018,7 +1018,7 @@
 
     "yargs": ["yargs@18.0.0", "", { "dependencies": { "cliui": "^9.0.1", "escalade": "^3.1.1", "get-caller-file": "^2.0.5", "string-width": "^7.2.0", "y18n": "^5.0.5", "yargs-parser": "^22.0.0" } }, "sha512-4UEqdc2RYGHZc7Doyqkrqiln3p9X2DZVxaGbwhn2pi7MrRagKaOcIKe8L3OxYcbhXLgLFUS3zAYuQjKBQgmuNg=="],
 
-    "yargs-parser": ["yargs-parser@21.1.1", "", {}, "sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw=="],
+    "yargs-parser": ["yargs-parser@22.0.0", "", {}, "sha512-rwu/ClNdSMpkSrUb+d6BRsSkLUq1fmfsY6TOpYzTwvwkg1/NRG85KBy3kq++A8LKQwX6lsu+aWad+2khvuXrqw=="],
 
     "yoctocolors": ["yoctocolors@2.1.2", "", {}, "sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug=="],
 
@@ -1068,6 +1068,8 @@
 
     "micromatch/picomatch": ["picomatch@2.3.1", "", {}, "sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA=="],
 
+    "openapi-typescript/yargs-parser": ["yargs-parser@21.1.1", "", {}, "sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw=="],
+
     "ora/string-width": ["string-width@8.2.0", "", { "dependencies": { "get-east-asian-width": "^1.5.0", "strip-ansi": "^7.1.2" } }, "sha512-6hJPQ8N0V0P3SNmP6h2J99RLuzrWz2gvT7VnK5tKvrNqJoyS9W4/Fb8mo31UiPvy00z7DQXkP2hnKBVav76thw=="],
 
     "read-yaml-file/js-yaml": ["js-yaml@3.14.2", "", { "dependencies": { "argparse": "^1.0.7", "esprima": "^4.0.0" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-PMSmkqxr106Xa156c2M265Z+FTrPl+oxd/rgOQy2tijQeK5TxQ43psO1ZCwhVOSdnn+RzkzlRz/eY4BgJBYVpg=="],
@@ -1077,8 +1079,6 @@
     "wrap-ansi/strip-ansi": ["strip-ansi@7.1.2", "", { "dependencies": { "ansi-regex": "^6.0.1" } }, "sha512-gmBGslpoQJtgnMAvOVqGZpEz9dyoKTCzy2nfz/n8aIFhN/jCE/rCmcxabB6jOOHV+0WNnylOxaxBQPSvcWklhA=="],
 
     "yargs/string-width": ["string-width@7.2.0", "", { "dependencies": { "emoji-regex": "^10.3.0", "get-east-asian-width": "^1.0.0", "strip-ansi": "^7.1.0" } }, "sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ=="],
-
-    "yargs/yargs-parser": ["yargs-parser@22.0.0", "", {}, "sha512-rwu/ClNdSMpkSrUb+d6BRsSkLUq1fmfsY6TOpYzTwvwkg1/NRG85KBy3kq++A8LKQwX6lsu+aWad+2khvuXrqw=="],
 
     "cliui/string-width/emoji-regex": ["emoji-regex@10.6.0", "", {}, "sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A=="],
 

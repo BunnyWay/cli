@@ -28,7 +28,7 @@ test("example", () => {
 
 This is a Bun workspace monorepo with four packages:
 
-- `packages/api/` (`@bunny.net/api`) — standalone API client SDK, zero CLI deps
+- `packages/openapi-client/` (`@bunny.net/openapi-client`) — standalone, type-safe OpenAPI client, zero CLI deps
 - `packages/app-config/` (`@bunny.net/app-config`) — shared Zod schemas, types, and JSON Schema for `bunny.jsonc`
 - `packages/database-shell/` (`@bunny.net/database-shell`) — standalone SQL shell engine (REPL, formatting, masking)
 - `packages/cli/` (`@bunny.net/cli`) — the CLI, depends on all three
@@ -43,7 +43,7 @@ This is a Bun workspace monorepo with four packages:
 - Handle `--output json` first in every handler, then pass `output` to format functions.
 - Use `logger` from `packages/cli/src/core/logger.ts` for all user-facing output.
 - Throw `UserError` for expected errors.
-- Import API clients from `@bunny.net/api`, not relative paths. Import generated types from `@bunny.net/api/generated/<spec>.d.ts`.
+- Import API clients from `@bunny.net/openapi-client`, not relative paths. Import generated types from `@bunny.net/openapi-client/generated/<spec>.d.ts`.
 - Use `clientOptions(config, verbose)` from `packages/cli/src/core/client-options.ts` when creating API clients in command handlers.
 - Database commands use v2 API endpoints (`/v2/databases/...`).
 - Apps (Magic Containers) commands use `bunny.jsonc` as the single source of truth. App ID is stored in the config (no separate manifest file). Use `resolveAppId()` and `resolveContainerId()` from `packages/cli/src/commands/apps/config.ts`. Types and conversion functions come from `@bunny.net/app-config`.

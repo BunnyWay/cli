@@ -1,17 +1,17 @@
-# @bunny.net/api
+# @bunny.net/openapi-client
 
-Standalone, type-safe API client SDK for [bunny.net](https://bunny.net). Zero CLI dependencies.
+Standalone, type-safe OpenAPI client for [bunny.net](https://bunny.net). Zero CLI dependencies. Built on `openapi-fetch` with types generated from bunny.net's OpenAPI specs.
 
 ## Installation
 
 ```bash
-bun add @bunny.net/api
+bun add @bunny.net/openapi-client
 ```
 
 ## Usage
 
 ```typescript
-import { createCoreClient } from "@bunny.net/api";
+import { createCoreClient } from "@bunny.net/openapi-client";
 
 const client = createCoreClient({ apiKey: "bny_xxxxxxxxxxxx" });
 
@@ -47,7 +47,7 @@ interface ClientOptions {
 Non-OK responses are automatically converted to `ApiError` by the built-in middleware. You never need to check status codes manually.
 
 ```typescript
-import { ApiError, UserError } from "@bunny.net/api";
+import { ApiError, UserError } from "@bunny.net/openapi-client";
 
 try {
   await client.GET("/pullzone/{id}", { params: { path: { id: 999 } } });
@@ -66,21 +66,21 @@ try {
 TypeScript types are generated from OpenAPI specs via `openapi-typescript`. Access them through the `generated` export:
 
 ```typescript
-import type { components } from "@bunny.net/api/generated/core.d.ts";
+import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 
 type PullZone = components["schemas"]["PullZone"];
 ```
 
 Available type modules:
-- `@bunny.net/api/generated/core.d.ts`
-- `@bunny.net/api/generated/compute.d.ts`
-- `@bunny.net/api/generated/database.d.ts`
-- `@bunny.net/api/generated/magic-containers.d.ts`
+- `@bunny.net/openapi-client/generated/core.d.ts`
+- `@bunny.net/openapi-client/generated/compute.d.ts`
+- `@bunny.net/openapi-client/generated/database.d.ts`
+- `@bunny.net/openapi-client/generated/magic-containers.d.ts`
 
 ## Updating Specs
 
 ```bash
-cd packages/api
+cd packages/openapi-client
 bun run update-specs    # Downloads latest specs + regenerates types
 bun run generate        # Regenerate types from existing specs
 ```

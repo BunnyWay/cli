@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { createDbClient } from "@bunny.net/api";
 import type { PrintMode, ShellLogger } from "@bunny.net/database-shell";
+import { createDbClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";

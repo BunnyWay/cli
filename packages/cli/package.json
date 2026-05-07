@@ -10,7 +10,7 @@
     "bin"
   ],
   "devDependencies": {
-    "@bunny.net/api": "workspace:*",
+    "@bunny.net/openapi-client": "workspace:*",
     "@bunny.net/app-config": "workspace:*",
     "@bunny.net/database-shell": "workspace:*",
     "@bunny.net/database-studio": "workspace:*",
