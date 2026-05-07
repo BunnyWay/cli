@@ -252,7 +252,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
     spin.start();
 
     const clone = Bun.spawn(
-      ["git", "clone", "--depth", "1", selected.repo, dirPath],
+      ["git", "clone", "--depth", "1", "--", selected.repo, dirPath],
       { stdout: "ignore", stderr: "pipe" },
     );
     const cloneExit = await clone.exited;
