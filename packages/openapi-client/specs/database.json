@@ -8,7 +8,7 @@
       "url": "https://bunny.net/",
       "email": "support@bunny.net"
     },
-    "version": "0.0.122"
+    "version": "0.0.130"
   },
   "servers": [{ "url": "https://api.bunny.net/database" }],
   "paths": {
@@ -3117,11 +3117,25 @@
           },
           "size_max": {
             "description": "The current size limit of the Database",
-            "type": "string"
+            "type": "string",
+            "deprecated": true
           },
           "current_size": {
             "description": "The current size Database",
-            "type": "string"
+            "type": "string",
+            "deprecated": true
+          },
+          "size_max_bytes": {
+            "description": "The current size limit of the Database in bytes",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "current_size_bytes": {
+            "description": "The current size Database in bytes",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
           },
           "storage_region": {
             "description": "The current Storage Region used to store your databases.",
@@ -3146,6 +3160,8 @@
           "block_writes",
           "size_max",
           "current_size",
+          "size_max_bytes",
+          "current_size_bytes",
           "storage_region",
           "primary_regions",
           "replicas_regions"

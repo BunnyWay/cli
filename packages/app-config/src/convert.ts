@@ -162,7 +162,7 @@ function endpointConfigToRequest(ep: EndpointConfig): EndpointRequest {
     };
   } else if (ep.type === "anycast") {
     req.anycast = {
-      type: "IPv4",
+      type: "iPv4",
       portMappings: (ep.ports ?? []).map((p) => ({
         containerPort: p.container,
         exposedPort: p.public,
@@ -202,7 +202,7 @@ export function configToAddRequest(
 
   return {
     name: config.app.name,
-    runtimeType: "Shared",
+    runtimeType: "shared",
     autoScaling: config.app.scaling ?? { min: 1, max: 1 },
     regionSettings: {
       allowedRegionIds: config.app.regions?.allowed ?? [],
@@ -236,7 +236,7 @@ export function configToPatchRequest(
 
   return {
     name: config.app.name,
-    runtimeType: "Shared",
+    runtimeType: "shared",
     autoScaling: config.app.scaling ?? { min: 1, max: 1 },
     regionSettings: {
       allowedRegionIds: config.app.regions?.allowed ?? [],

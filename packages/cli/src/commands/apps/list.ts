@@ -41,7 +41,7 @@ export const appsListCommand = defineCommand({
     const rows = apps.map((app) => [
       app.id ?? "",
       app.name ?? "",
-      STATUS_LABELS[(app.status as keyof typeof STATUS_LABELS) ?? "Unknown"] ??
+      STATUS_LABELS[(app.status as keyof typeof STATUS_LABELS) ?? "unknown"] ??
         app.status ??
         "",
       app.displayEndpoint?.address ?? "",

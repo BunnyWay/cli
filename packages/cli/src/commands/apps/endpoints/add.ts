@@ -133,7 +133,7 @@ export const appsEndpointsAddCommand = defineCommand<AddArgs>({
       };
     } else {
       body.anycast = {
-        type: "IPv4",
+        type: "iPv4",
         portMappings: [{ containerPort: cPort, exposedPort: pPort }],
       };
     }

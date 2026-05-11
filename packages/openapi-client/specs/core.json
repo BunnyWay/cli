@@ -655,11 +655,12 @@
       "get": {
         "tags": ["Pull Zone"],
         "summary": "List Pull Zones",
-        "operationId": "PullZonePublic_Index",
+        "operationId": "PullZonePublic_IndexAll",
         "parameters": [
           {
             "name": "page",
             "in": "query",
+            "description": "The page number to return. When set to 0 (default), all items are returned as a plain array. When set to a value greater than 0, items are returned in a paginated response object.",
             "schema": {
               "type": "integer",
               "format": "int32",
@@ -704,11 +705,14 @@
         ],
         "responses": {
           "200": {
-            "description": "The list of all the pull zones on the account",
+            "description": "The list of all the pull zones on the account. When the page parameter is set to a value greater than 0, the response will be a paginated object with Items, CurrentPage, TotalItems and HasMoreItems properties instead of a plain array.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginationListModelOfPullZoneModel"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PullZoneModel"
+                  }
                 }
               }
             }
@@ -765,7 +769,7 @@
       "get": {
         "tags": ["Pull Zone"],
         "summary": "Get Pull Zone",
-        "operationId": "PullZonePublic_Index2",
+        "operationId": "PullZonePublic_Index",
         "parameters": [
           {
             "name": "id",
@@ -1366,6 +1370,97 @@
           },
           "400": {
             "description": "Failed configuring the certificate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorData"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The hostname was not found in the account"
+          },
+          "401": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/pullzone/requestExternalDnsCertificate": {
+      "post": {
+        "tags": ["Pull Zone"],
+        "summary": "Request External DNS Certificate",
+        "operationId": "PullZonePublic_RequestExternalDnsCertificate",
+        "requestBody": {
+          "x-name": "req",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalDnsCertificateRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "The TXT record details for DNS verification",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "The request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorData"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The hostname was not found in the account"
+          },
+          "401": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/pullzone/completeExternalDnsCertificate": {
+      "post": {
+        "tags": ["Pull Zone"],
+        "summary": "Complete External DNS Certificate",
+        "operationId": "PullZonePublic_CompleteExternalDnsCertificate",
+        "requestBody": {
+          "x-name": "req",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalDnsCertificateRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "The certificate was successfully loaded"
+          },
+          "400": {
+            "description": "The verification failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -2252,11 +2347,12 @@
       "get": {
         "tags": ["Storage Zone"],
         "summary": "List Storage Zones",
-        "operationId": "StorageZonePublic_Index",
+        "operationId": "StorageZonePublic_IndexAll",
         "parameters": [
           {
             "name": "page",
             "in": "query",
+            "description": "The page number to return. When set to 0 (default), all items are returned as a plain array. When set to a value greater than 0, items are returned in a paginated response object.",
             "schema": {
               "type": "integer",
               "format": "int32",
@@ -2300,11 +2396,14 @@
         ],
         "responses": {
           "200": {
-            "description": "The list of storage zones on the account",
+            "description": "The list of storage zones on the account. When the page parameter is set to a value greater than 0, the response will be a paginated object with Items, CurrentPage, TotalItems and HasMoreItems properties instead of a plain array.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginationListModelOfStorageZoneModel"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StorageZoneModel"
+                  }
                 }
               }
             }
@@ -2409,7 +2508,7 @@
       "get": {
         "tags": ["Storage Zone"],
         "summary": "Get Storage Zone",
-        "operationId": "StorageZonePublic_Index2",
+        "operationId": "StorageZonePublic_Index",
         "parameters": [
           {
             "name": "id",
@@ -2612,10 +2711,77 @@
       }
     },
     "/videolibrary": {
+      "post": {
+        "tags": ["Stream Video Library"],
+        "summary": "Add Video Library",
+        "operationId": "AddVideoLibraryEndpoint_AddVideoLibrary",
+        "requestBody": {
+          "x-name": "videoLibraryModel",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VideoLibraryCreateModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "201": {
+            "description": "The added video library",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoLibraryModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Failed to add video library",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorData"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          }
+        ]
+      },
       "get": {
         "tags": ["Stream Video Library"],
         "summary": "List Video Libraries",
-        "operationId": "VideoLibraryPublic_Index",
+        "operationId": "ListVideoLibrariesEndpoint_ListVideoLibraries",
         "parameters": [
           {
             "name": "page",
@@ -2654,7 +2820,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The list of Video Libraries on the account",
+            "description": "The list of Video Libraries on the account. When the page parameter is set to a value greater than 0, the response will be a paginated object with Items, CurrentPage, TotalItems and HasMoreItems properties instead of a plain array.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2669,57 +2835,90 @@
           "500": {
             "description": "Internal Server Error"
           }
-        }
-      },
-      "post": {
-        "tags": ["Stream Video Library"],
-        "summary": "Add Video Library",
-        "operationId": "VideoLibraryPublic_Add",
-        "requestBody": {
-          "x-name": "videoLibraryModel",
-          "content": {
-            "application/json": {
-              "schema": {
-                "nullable": true,
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/VideoLibraryCreateModel"
-                  }
-                ]
-              }
-            }
-          },
-          "x-position": 1
         },
-        "responses": {
-          "200": {
-            "description": "The added video library",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VideoLibraryModel"
-                }
-              }
-            }
+        "security": [
+          {
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
           },
-          "400": {
-            "description": "Failed to add video library",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorData"
-                }
-              }
-            }
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
           }
-        }
+        ]
       }
     },
     "/videolibrary/{id}": {
+      "delete": {
+        "tags": ["Stream Video Library"],
+        "summary": "Delete Video Library",
+        "operationId": "DeleteVideoLibraryEndpoint_DeleteVideoLibrary",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the Video Library that should be deleted",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The requested video library has been successfully deleted"
+          },
+          "404": {
+            "description": "The Video Library with the requested ID does not exist"
+          },
+          "401": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          }
+        ]
+      },
       "get": {
         "tags": ["Stream Video Library"],
         "summary": "Get Video Library",
-        "operationId": "VideoLibraryPublic_Index2",
+        "operationId": "GetVideoLibraryEndpoint_GetVideoLibrary",
         "parameters": [
           {
             "name": "id",
@@ -2745,25 +2944,72 @@
             }
           },
           "404": {
-            "description": "The Video Library with the requested ID does not exist"
+            "description": "The Video Library with the requested ID does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorData"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Video Library is not accessible for the authenticated account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorData"
+                }
+              }
+            }
           },
           "401": {
-            "description": "The request authorization failed"
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorData"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal Server Error"
           }
-        }
+        },
+        "security": [
+          {
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          }
+        ]
       },
       "post": {
         "tags": ["Stream Video Library"],
         "summary": "Update Video Library",
-        "operationId": "VideoLibraryPublic_Update",
+        "operationId": "UpdateVideoLibraryEndpoint_UpdateVideoLibrary",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "The ID of the Video Library to update",
             "schema": {
               "type": "integer",
               "format": "int64"
@@ -2776,20 +3022,16 @@
           "content": {
             "application/json": {
               "schema": {
-                "nullable": true,
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/VideoLibraryUpdateModel"
-                  }
-                ]
+                "$ref": "#/components/schemas/VideoLibraryUpdateModel"
               }
             }
           },
+          "required": true,
           "x-position": 2
         },
         "responses": {
-          "204": {
-            "description": "The requested video library has been successfuly deleted",
+          "200": {
+            "description": "The updated video library",
             "content": {
               "application/json": {
                 "schema": {
@@ -2801,66 +3043,62 @@
           "404": {
             "description": "The Video Library with the requested ID does not exist"
           },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorData"
+                }
+              }
+            }
+          },
           "401": {
             "description": "The request authorization failed"
           },
           "500": {
             "description": "Internal Server Error"
           }
-        }
-      },
-      "delete": {
-        "tags": ["Stream Video Library"],
-        "summary": "Delete Video Library",
-        "operationId": "VideoLibraryPublic_Delete",
-        "parameters": [
+        },
+        "security": [
           {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The ID of the Video Library that should be deleted",
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "x-position": 1
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
           }
-        ],
-        "responses": {
-          "204": {
-            "description": "The requested video library has been successfuly deleted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VideoLibraryModel"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The Video Library with the requested ID does not exist"
-          },
-          "401": {
-            "description": "The request authorization failed"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
+        ]
       }
     },
     "/videolibrary/languages": {
       "get": {
         "tags": ["Stream Video Library"],
         "summary": "Get Languages",
-        "operationId": "VideoLibraryPublic_Index3",
+        "operationId": "GetVideoLibraryLanguagesEndpoint_GetVideoLibraryLanguages",
         "responses": {
           "200": {
             "description": "A list of language information objects",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VideoLibraryModel"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VideoLibraryLanguage"
+                  }
                 }
               }
             }
@@ -2871,48 +3109,36 @@
           "500": {
             "description": "Internal Server Error"
           }
-        }
-      }
-    },
-    "/videolibrary/resetApiKey": {
-      "post": {
-        "tags": ["Stream Video Library"],
-        "summary": "Reset API Key",
-        "operationId": "VideoLibraryPublic_ResetPassword",
-        "parameters": [
+        },
+        "security": [
           {
-            "name": "id",
-            "in": "query",
-            "required": true,
-            "description": "The ID of the video library that should have the API key reset",
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "x-position": 1
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
           }
-        ],
-        "responses": {
-          "204": {
-            "description": "The API key has been successfully changed"
-          },
-          "401": {
-            "description": "The request authorization failed"
-          },
-          "404": {
-            "description": "The Video Library with the requested ID does not exist"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
+        ]
       }
     },
     "/videolibrary/{id}/resetApiKey": {
       "post": {
         "tags": ["Stream Video Library"],
         "summary": "Reset API Key",
-        "operationId": "VideoLibraryPublic_ResetPassword2",
+        "operationId": "ResetVideoLibraryApiKeyEndpoint_ResetVideoLibraryApiKey",
         "parameters": [
           {
             "name": "id",
@@ -2939,48 +3165,36 @@
           "500": {
             "description": "Internal Server Error"
           }
-        }
-      }
-    },
-    "/videolibrary/resetReadOnlyApiKey": {
-      "post": {
-        "tags": ["Stream Video Library"],
-        "summary": "Reset Read Only API Key",
-        "operationId": "VideoLibraryPublic_ResetReadOnlyApiKey",
-        "parameters": [
+        },
+        "security": [
           {
-            "name": "id",
-            "in": "query",
-            "required": true,
-            "description": "The ID of the video library that should have the read only API key reset",
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "x-position": 1
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
           }
-        ],
-        "responses": {
-          "204": {
-            "description": "The Read Only API key has been successfully changed"
-          },
-          "401": {
-            "description": "The request authorization failed"
-          },
-          "404": {
-            "description": "The Video Library with the requested ID does not exist"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
+        ]
       }
     },
     "/videolibrary/{id}/resetReadOnlyApiKey": {
       "post": {
         "tags": ["Stream Video Library"],
         "summary": "Reset Read Only API Key",
-        "operationId": "VideoLibraryPublic_ResetReadOnlyApiKey2",
+        "operationId": "ResetVideoLibraryReadOnlyApiKeyEndpoint_ResetVideoLibraryReadOnlyApiKey",
         "parameters": [
           {
             "name": "id",
@@ -3007,14 +3221,36 @@
           "500": {
             "description": "Internal Server Error"
           }
-        }
+        },
+        "security": [
+          {
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          }
+        ]
       }
     },
     "/videolibrary/{id}/watermark": {
       "put": {
         "tags": ["Stream Video Library"],
         "summary": "Add Watermark",
-        "operationId": "VideoLibraryPublic_AddWatermark",
+        "operationId": "AddWatermarkEndpoint_AddWatermark",
         "parameters": [
           {
             "name": "id",
@@ -3030,7 +3266,7 @@
         ],
         "responses": {
           "204": {
-            "description": "The watermark has been successfuly uploaded"
+            "description": "The watermark has been successfully uploaded"
           },
           "404": {
             "description": "The Video Library with the requested ID does not exist"
@@ -3044,12 +3280,34 @@
           "500": {
             "description": "Internal Server Error"
           }
-        }
+        },
+        "security": [
+          {
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          }
+        ]
       },
       "delete": {
         "tags": ["Stream Video Library"],
         "summary": "Delete Watermark",
-        "operationId": "VideoLibraryPublic_DeleteWatermark",
+        "operationId": "DeleteWatermarkEndpoint_DeleteWatermark",
         "parameters": [
           {
             "name": "id",
@@ -3065,20 +3323,10 @@
         ],
         "responses": {
           "204": {
-            "description": "The watermark has been successfuly deleted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VideoLibraryModel"
-                }
-              }
-            }
+            "description": "The watermark has been successfully deleted"
           },
           "404": {
             "description": "The Video Library with the requested ID does not exist"
-          },
-          "413": {
-            "description": "The uploaded file was too large"
           },
           "401": {
             "description": "The request authorization failed"
@@ -3086,14 +3334,36 @@
           "500": {
             "description": "Internal Server Error"
           }
-        }
+        },
+        "security": [
+          {
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          }
+        ]
       }
     },
     "/videolibrary/{id}/addAllowedReferrer": {
       "post": {
         "tags": ["Stream Video Library"],
         "summary": "Add Allowed Referer",
-        "operationId": "VideoLibraryPublic_AddAllowedReferrer",
+        "operationId": "AddAllowedReferrerEndpoint_AddAllowedReferrer",
         "parameters": [
           {
             "name": "id",
@@ -3121,8 +3391,8 @@
           "x-position": 2
         },
         "responses": {
-          "204": {
-            "description": "The allowed referer was successfuly added"
+          "200": {
+            "description": "The allowed referer was successfully added"
           },
           "404": {
             "description": "The Video Library with the requested ID was not found"
@@ -3143,71 +3413,36 @@
           "500": {
             "description": "Internal Server Error"
           }
-        }
+        },
+        "security": [
+          {
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          }
+        ]
       }
     },
     "/videolibrary/{id}/removeAllowedReferrer": {
       "post": {
         "tags": ["Stream Video Library"],
         "summary": "Remove Allowed Referer",
-        "operationId": "VideoLibraryPublic_RemoveAllowedReferrer",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The ID of the requested Video Library",
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "x-position": 1
-          }
-        ],
-        "requestBody": {
-          "x-name": "model",
-          "description": "Request model",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddBlockedReferrerRequestModel"
-              }
-            }
-          },
-          "required": true,
-          "x-position": 2
-        },
-        "responses": {
-          "204": {
-            "description": "The allowed referer was successfuly removed"
-          },
-          "404": {
-            "description": "The Pull Zone with the requested ID was not found"
-          },
-          "400": {
-            "description": "Failed to remove allowed referer",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorData"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "The request authorization failed"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/videolibrary/{id}/addBlockedReferrer": {
-      "post": {
-        "tags": ["Stream Video Library"],
-        "summary": "Add Blocked Referer",
-        "operationId": "VideoLibraryPublic_AddBlockedReferrer",
+        "operationId": "RemoveAllowedReferrerEndpoint_RemoveAllowedReferrer",
         "parameters": [
           {
             "name": "id",
@@ -3235,8 +3470,8 @@
           "x-position": 2
         },
         "responses": {
-          "204": {
-            "description": "The allowed referer was successfuly removed"
+          "200": {
+            "description": "The allowed referer was successfully removed"
           },
           "404": {
             "description": "The Video Library with the requested ID was not found"
@@ -3257,14 +3492,115 @@
           "500": {
             "description": "Internal Server Error"
           }
-        }
+        },
+        "security": [
+          {
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          }
+        ]
+      }
+    },
+    "/videolibrary/{id}/addBlockedReferrer": {
+      "post": {
+        "tags": ["Stream Video Library"],
+        "summary": "Add Blocked Referer",
+        "operationId": "AddBlockedReferrerEndpoint_AddBlockedReferrer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the requested Video Library",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "description": "Request model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddBlockedReferrerRequestModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "The blocked referer was successfully added"
+          },
+          "404": {
+            "description": "The Video Library with the requested ID was not found"
+          },
+          "400": {
+            "description": "Failed to add blocked referer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorData"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          }
+        ]
       }
     },
     "/videolibrary/{id}/removeBlockedReferrer": {
       "post": {
         "tags": ["Stream Video Library"],
         "summary": "Remove Blocked Referer",
-        "operationId": "VideoLibraryPublic_RemoveBlockedReferrer",
+        "operationId": "RemoveBlockedReferrerEndpoint_RemoveBlockedReferrer",
         "parameters": [
           {
             "name": "id",
@@ -3292,11 +3628,11 @@
           "x-position": 2
         },
         "responses": {
-          "204": {
-            "description": "The blocked referer was successfuly removed"
+          "200": {
+            "description": "The blocked referer was successfully removed"
           },
           "404": {
-            "description": "The Pull Zone with the requested ID was not found"
+            "description": "The Video Library with the requested ID was not found"
           },
           "400": {
             "description": "Failed to remove blocked referer",
@@ -3314,7 +3650,29 @@
           "500": {
             "description": "Internal Server Error"
           }
-        }
+        },
+        "security": [
+          {
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStream",
+              "SubuserStream",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          }
+        ]
       }
     },
     "/videolibrary/{id}/transcribing/statistics": {
@@ -3917,6 +4275,56 @@
         ]
       }
     },
+    "/storagezone/regions": {
+      "get": {
+        "tags": ["Storage Zone"],
+        "summary": "Get Storage Zone Regions",
+        "operationId": "GetStoragezoneRegionsEndpoint_GetStorageZoneRegions",
+        "responses": {
+          "200": {
+            "description": "A list of available storage zone regions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StorageRegionModel"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": [
+              "User",
+              "UserApi",
+              "SubuserAPIStorage",
+              "SubuserStorage",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          },
+          {
+            "bearer": [
+              "User",
+              "UserApi",
+              "SubuserAPIStorage",
+              "SubuserStorage",
+              "SubuserManage",
+              "SubuserAPIManage"
+            ]
+          }
+        ]
+      }
+    },
     "/storagezone/{id}/statistics": {
       "get": {
         "tags": ["Storage Zone"],
@@ -4076,6 +4484,16 @@
             "x-position": 6
           },
           {
+            "name": "exactRange",
+            "in": "query",
+            "description": "(Optional) If true and hourly=true, the exact hour components of dateFrom and dateTo will be preserved instead of rounding to full-day boundaries.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 7
+          },
+          {
             "name": "loadOriginResponseTimes",
             "in": "query",
             "description": "Load Origin Response Times",
@@ -4083,7 +4501,7 @@
               "type": "boolean",
               "default": false
             },
-            "x-position": 7
+            "x-position": 8
           },
           {
             "name": "loadOriginTraffic",
@@ -4093,7 +4511,7 @@
               "type": "boolean",
               "default": false
             },
-            "x-position": 8
+            "x-position": 9
           },
           {
             "name": "loadRequestsServed",
@@ -4103,7 +4521,7 @@
               "type": "boolean",
               "default": false
             },
-            "x-position": 9
+            "x-position": 10
           },
           {
             "name": "loadBandwidthUsed",
@@ -4113,7 +4531,7 @@
               "type": "boolean",
               "default": false
             },
-            "x-position": 10
+            "x-position": 11
           },
           {
             "name": "loadOriginShieldBandwidth",
@@ -4123,7 +4541,7 @@
               "type": "boolean",
               "default": false
             },
-            "x-position": 11
+            "x-position": 12
           },
           {
             "name": "loadGeographicTrafficDistribution",
@@ -4133,7 +4551,7 @@
               "type": "boolean",
               "default": false
             },
-            "x-position": 12
+            "x-position": 13
           },
           {
             "name": "loadUserBalanceHistory",
@@ -4143,7 +4561,7 @@
               "type": "boolean",
               "default": false
             },
-            "x-position": 13
+            "x-position": 14
           }
         ],
         "responses": {
@@ -4256,98 +4674,6 @@
           },
           {
             "bearer": ["User", "UserApi", "SubuserManage", "SubuserAPIManage"]
-          }
-        ]
-      }
-    },
-    "/v3.0/pricing-packages/{pricingPackageId}": {
-      "get": {
-        "tags": ["Pricing Packages"],
-        "summary": "Get Pricing Package",
-        "description": "Get a pricing package by ID",
-        "operationId": "GetPricingPackageEndpoint_GetPricingPackage",
-        "parameters": [
-          {
-            "name": "pricingPackageId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "x-position": 1
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Pricing package was successfully retrieved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PricingPackageModel"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Pricing package not found"
-          },
-          "401": {
-            "description": "User is unauthorized"
-          },
-          "500": {
-            "description": "Unexpected server error"
-          }
-        },
-        "security": [
-          {
-            "AccessKey": []
-          },
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/v3.0/pricing-packages": {
-      "get": {
-        "tags": ["Pricing Packages"],
-        "summary": "List Pricing Packages",
-        "description": "List pricing packages by type",
-        "operationId": "ListPricingPackagesEndpoint_ListPricingPackages",
-        "parameters": [
-          {
-            "name": "type",
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/PricingPackageType2"
-            },
-            "x-position": 1
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Pricing packages were successfully retrieved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListPricingPackagesResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "User is unauthorized"
-          },
-          "500": {
-            "description": "Unexpected server error"
-          }
-        },
-        "security": [
-          {
-            "AccessKey": []
-          },
-          {
-            "bearer": []
           }
         ]
       }
@@ -5756,30 +6082,6 @@
           }
         }
       },
-      "PaginationListModelOfPullZoneModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "Items": {
-            "type": "array",
-            "nullable": true,
-            "items": {
-              "$ref": "#/components/schemas/PullZoneModel"
-            }
-          },
-          "CurrentPage": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "TotalItems": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "HasMoreItems": {
-            "type": "boolean"
-          }
-        }
-      },
       "PullZoneModel": {
         "type": "object",
         "additionalProperties": false,
@@ -6590,6 +6892,10 @@
             "type": "integer",
             "description": "The maximum global simultaneous WebSocket connections allowed for this Pull Zone.",
             "format": "int32"
+          },
+          "EnableExtendedLogging": {
+            "type": "boolean",
+            "description": "Determines if extended logging with additional details is enabled for this Pull Zone."
           }
         }
       },
@@ -6745,7 +7051,7 @@
       },
       "EdgeRuleActionType": {
         "type": "integer",
-        "description": "0 = ForceSSL\n1 = Redirect\n2 = OriginUrl\n3 = OverrideCacheTime\n4 = BlockRequest\n5 = SetResponseHeader\n6 = SetRequestHeader\n7 = ForceDownload\n8 = DisableTokenAuthentication\n9 = EnableTokenAuthentication\n10 = OverrideCacheTimePublic\n11 = IgnoreQueryString\n12 = DisableOptimizer\n13 = ForceCompression\n14 = SetStatusCode\n15 = BypassPermaCache\n16 = OverrideBrowserCacheTime\n17 = OriginStorage\n18 = SetNetworkRateLimit\n19 = SetConnectionLimit\n20 = SetRequestsPerSecondLimit\n21 = RunEdgeScript\n22 = OriginMagicContainers\n23 = DisableWAF\n24 = RetryOrigin\n25 = OverrideBrowserCacheResponseHeader\n26 = RemoveBrowserCacheResponseHeader\n27 = DisableShieldChallenge\n28 = DisableShield\n29 = DisableShieldBotDetection",
+        "description": "0 = ForceSSL\n1 = Redirect\n2 = OriginUrl\n3 = OverrideCacheTime\n4 = BlockRequest\n5 = SetResponseHeader\n6 = SetRequestHeader\n7 = ForceDownload\n8 = DisableTokenAuthentication\n9 = EnableTokenAuthentication\n10 = OverrideCacheTimePublic\n11 = IgnoreQueryString\n12 = DisableOptimizer\n13 = ForceCompression\n14 = SetStatusCode\n15 = BypassPermaCache\n16 = OverrideBrowserCacheTime\n17 = OriginStorage\n18 = SetNetworkRateLimit\n19 = SetConnectionLimit\n20 = SetRequestsPerSecondLimit\n21 = RunEdgeScript\n22 = OriginMagicContainers\n23 = DisableWAF\n24 = RetryOrigin\n25 = OverrideBrowserCacheResponseHeader\n26 = RemoveBrowserCacheResponseHeader\n27 = DisableShieldChallenge\n28 = DisableShield\n29 = DisableShieldBotDetection\n30 = BypassAwsS3Authentication\n31 = DisableShieldAccessLists\n32 = DisableShieldRateLimiting\n33 = EnableRequestCoalescing\n34 = DisableRequestCoalescing",
         "x-enumNames": [
           "ForceSSL",
           "Redirect",
@@ -6776,11 +7082,16 @@
           "RemoveBrowserCacheResponseHeader",
           "DisableShieldChallenge",
           "DisableShield",
-          "DisableShieldBotDetection"
+          "DisableShieldBotDetection",
+          "BypassAwsS3Authentication",
+          "DisableShieldAccessLists",
+          "DisableShieldRateLimiting",
+          "EnableRequestCoalescing",
+          "DisableRequestCoalescing"
         ],
         "enum": [
           0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-          20, 21, 22, 23, 24, 25, 26, 27, 28, 29
+          20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34
         ]
       },
       "Trigger": {
@@ -7804,7 +8115,7 @@
           },
           "OptimizerEnableUpscaling": {
             "type": "boolean",
-            "description": "Determines if Optimizer should automatically upscale images",
+            "description": "Determines if Optimizer is allowed to upscale images",
             "nullable": true
           },
           "EnableWebSockets": {
@@ -7970,6 +8281,17 @@
           },
           "KeyType": {
             "$ref": "#/components/schemas/PrivateKeyType"
+          }
+        }
+      },
+      "ExternalDnsCertificateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["Hostname"],
+        "properties": {
+          "Hostname": {
+            "type": "string",
+            "minLength": 1
           }
         }
       },
@@ -8806,7 +9128,7 @@
           },
           "OptimizerEnableUpscaling": {
             "type": "boolean",
-            "description": "Determines if Optimizer should automatically upscale images",
+            "description": "Determines if Optimizer is allowed to upscale images",
             "nullable": true
           },
           "EnableWebSockets": {
@@ -9011,30 +9333,6 @@
           }
         }
       },
-      "PaginationListModelOfStorageZoneModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "Items": {
-            "type": "array",
-            "nullable": true,
-            "items": {
-              "$ref": "#/components/schemas/StorageZoneModel"
-            }
-          },
-          "CurrentPage": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "TotalItems": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "HasMoreItems": {
-            "type": "boolean"
-          }
-        }
-      },
       "StorageZoneModel": {
         "type": "object",
         "additionalProperties": false,
@@ -9229,30 +9527,6 @@
             "type": "boolean",
             "description": "Rewrite 404 status code to 200 for URLs without extension",
             "nullable": true
-          }
-        }
-      },
-      "PaginationListModelOfVideoLibraryModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "Items": {
-            "type": "array",
-            "nullable": true,
-            "items": {
-              "$ref": "#/components/schemas/VideoLibraryModel"
-            }
-          },
-          "CurrentPage": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "TotalItems": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "HasMoreItems": {
-            "type": "boolean"
           }
         }
       },
@@ -9662,6 +9936,10 @@
           "ExposeVideoMetadata": {
             "type": "boolean",
             "description": "Marks whether video metadata in form of schema meta tags and LD+JSON should be exposed."
+          },
+          "EnableCompactControls": {
+            "type": "boolean",
+            "description": "Marks whether compact controls should be enabled for the player."
           }
         }
       },
@@ -9762,6 +10040,93 @@
             "type": "integer",
             "description": "(Optional) Sets player version used for this library",
             "format": "int32",
+            "nullable": true
+          },
+          "EncodingTier": {
+            "description": "(Optional) Defines encoding tier. Premium is a paid tier that offers prioritized encoding and extra codec support.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EncodingTier"
+              }
+            ]
+          },
+          "JitEncodingEnabled": {
+            "type": "boolean",
+            "description": "(Optional) Determines whether JIT encoding should be used for the library. Supported in premium encoding only.",
+            "nullable": true
+          },
+          "OutputCodecs": {
+            "type": "string",
+            "description": "(Optional) Specifies which video codecs are used for encoding, provided as a comma-separated (CSV) string. Free encoding tier supports only x264. A premium encoding tier adds support for vp9, hevc, and av1.",
+            "nullable": true
+          },
+          "EnabledResolutions": {
+            "type": "string",
+            "description": "(Optional) Sets the enabled resolutions for the transcoding. At least one resolution should be enabled. Possible values: 240p, 360p, 480p, 720p, 1080p, 1440p, 2160p",
+            "nullable": true
+          },
+          "BlockNoneReferrer": {
+            "type": "boolean",
+            "description": "(Optional) Determines if requests without a referer should be blocked.",
+            "nullable": true
+          },
+          "EnableMP4Fallback": {
+            "type": "boolean",
+            "description": "(Optional) Determines if MP4 fallback should be enabled for this library.",
+            "nullable": true
+          },
+          "KeepOriginalFiles": {
+            "type": "boolean",
+            "description": "(Optional) Determines if the original file should be kept after the video is processed.",
+            "nullable": true
+          },
+          "AllowDirectPlay": {
+            "type": "boolean",
+            "description": "(Optional) Determines if direct play URLs should be enabled for the library",
+            "nullable": true
+          },
+          "EnableMultiAudioTrackSupport": {
+            "type": "boolean",
+            "description": "(Optional) Determines if multiple output audio track support is enabled on video library.",
+            "nullable": true
+          },
+          "EnableTranscribing": {
+            "type": "boolean",
+            "description": "(Optional) Enables automatic audio transcribing for this library.",
+            "nullable": true
+          },
+          "TranscribingCaptionLanguages": {
+            "type": "array",
+            "description": "(Optional) Languages that captions will be automatically transcribed to.",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "EnableTranscribingTitleGeneration": {
+            "type": "boolean",
+            "description": "(Optional) Determines if automatic transcribing title generation is enabled for this library. Enabling any smart generation feature turns on transcribing automatically.",
+            "nullable": true
+          },
+          "EnableTranscribingDescriptionGeneration": {
+            "type": "boolean",
+            "description": "(Optional) Determines if automatic transcribing description generation is enabled for this library. Enabling any smart generation feature turns on transcribing automatically.",
+            "nullable": true
+          },
+          "EnableTranscribingChaptersGeneration": {
+            "type": "boolean",
+            "description": "(Optional) Determines if automatic transcribing chapters generation is enabled for this library. Enabling any smart generation feature turns on transcribing automatically.",
+            "nullable": true
+          },
+          "EnableTranscribingMomentsGeneration": {
+            "type": "boolean",
+            "description": "(Optional) Determines if automatic transcribing moments generation is enabled for this library. Enabling any smart generation feature turns on transcribing automatically.",
+            "nullable": true
+          },
+          "AllowEarlyPlay": {
+            "type": "boolean",
+            "description": "(Optional) Enables Early Play. Enabling this also exposes originals via CDN settings consistent with the video library update API.",
             "nullable": true
           }
         }
@@ -10091,6 +10456,11 @@
             "type": "boolean",
             "description": "(Optional) Marks whether video metadata in form of schema meta tags and LD+JSON should be exposed.",
             "nullable": true
+          },
+          "EnableCompactControls": {
+            "type": "boolean",
+            "description": "(Optional) Marks whether compact controls should be enabled for the player.",
+            "nullable": true
           }
         }
       },
@@ -10139,6 +10509,54 @@
             "type": "string",
             "description": "The hostname that will be removed as a blocked referer",
             "minLength": 1
+          }
+        }
+      },
+      "VideoLibraryLanguage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ShortCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "Name": {
+            "type": "string",
+            "nullable": true
+          },
+          "SupportPlayerTranslation": {
+            "type": "boolean"
+          },
+          "SupportTranscribing": {
+            "type": "boolean"
+          },
+          "TranscribingAccuracy": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "PaginationListModelOfVideoLibraryModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "Items": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/VideoLibraryModel"
+            }
+          },
+          "CurrentPage": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "TotalItems": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "HasMoreItems": {
+            "type": "boolean"
           }
         }
       },
@@ -10276,6 +10694,27 @@
         "description": "",
         "x-enumNames": ["Ascending", "Descending"],
         "enum": ["Ascending", "Descending"]
+      },
+      "StorageRegionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "Id": {
+            "type": "string",
+            "description": "The unique identifier for the storage region",
+            "nullable": true
+          },
+          "Name": {
+            "type": "string",
+            "description": "The name of the storage region",
+            "nullable": true
+          },
+          "Url": {
+            "type": "string",
+            "description": "The storage endpoint URL for this region",
+            "nullable": true
+          }
+        }
       },
       "StorageZoneStatisticsModel": {
         "type": "object",
@@ -10524,93 +10963,6 @@
             "nullable": true
           }
         }
-      },
-      "PricingPackageModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "PricingPackageId": {
-            "type": "string",
-            "nullable": true
-          },
-          "Description": {
-            "type": "string",
-            "nullable": true
-          },
-          "CPUCores": {
-            "type": "number",
-            "format": "decimal"
-          },
-          "MemoryInGB": {
-            "type": "number",
-            "format": "decimal"
-          },
-          "DiskInGB": {
-            "type": "number",
-            "format": "decimal"
-          },
-          "PricePerPackagePerMonth": {
-            "type": "number",
-            "format": "decimal"
-          },
-          "PricePerCPUUnitPerHour": {
-            "type": "number",
-            "format": "decimal"
-          },
-          "PricePerDiskUnit": {
-            "type": "number",
-            "format": "decimal"
-          },
-          "PricePerMemoryUnit": {
-            "type": "number",
-            "format": "decimal"
-          },
-          "PricePerAnycastIpPerMonth": {
-            "type": "number",
-            "format": "decimal"
-          },
-          "PricePerPersistentVolumeGBPerMonth": {
-            "type": "number",
-            "format": "decimal"
-          },
-          "PackageType": {
-            "$ref": "#/components/schemas/PricingPackageType"
-          },
-          "CreatedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "LastUpdatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          }
-        }
-      },
-      "PricingPackageType": {
-        "type": "integer",
-        "description": "1 = Shared\n2 = Reserved",
-        "x-enumNames": ["Shared", "Reserved"],
-        "enum": [1, 2]
-      },
-      "ListPricingPackagesResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "PageItems": {
-            "type": "array",
-            "nullable": true,
-            "items": {
-              "$ref": "#/components/schemas/PricingPackageModel"
-            }
-          }
-        }
-      },
-      "PricingPackageType2": {
-        "type": "integer",
-        "description": "1 = Shared\n2 = Reserved",
-        "x-enumNames": ["Shared", "Reserved"],
-        "enum": [1, 2]
       },
       "DnsZoneRecordScanJobResponse": {
         "type": "object",
@@ -11468,9 +11820,6 @@
     },
     {
       "name": "Pull Zone"
-    },
-    {
-      "name": "Pricing Packages"
     },
     {
       "name": "DNS Zone"

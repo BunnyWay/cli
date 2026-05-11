@@ -199,7 +199,7 @@ export async function promptRegistry(client: McClient): Promise<string | null> {
 
   addSpin.stop();
 
-  if (result?.status !== "Saved" || !result.id) {
+  if (result?.status !== "saved" || !result.id) {
     logger.error(`Failed to add registry: ${result?.error ?? "unknown error"}`);
     return null;
   }

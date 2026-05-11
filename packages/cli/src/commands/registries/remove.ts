@@ -64,7 +64,7 @@ export const registryRemoveCommand = defineCommand<RemoveArgs>({
       return;
     }
 
-    if (result?.status === "InUse") {
+    if (result?.status === "inUse") {
       throw new UserError(
         "Registry is in use by one or more apps.",
         `Apps using this registry: ${result.applications?.join(", ") ?? "unknown"}`,

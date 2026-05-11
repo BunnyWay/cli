@@ -1,8 +1,8 @@
 {
-  "openapi": "3.0.1",
+  "openapi": "3.0.4",
   "info": {
     "title": "Public API",
-    "description": "Public API endpoints for user consumption. Release version: v1.9.7.0",
+    "description": "Public API endpoints for user consumption. Release version: v1.9.19.0",
     "version": "1.0"
   },
   "servers": [
@@ -231,6 +231,59 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/summary": {
+      "get": {
+        "tags": ["Applications"],
+        "summary": "Get Application Usage Summary",
+        "description": "Retrieves usage summary for an application including latency, volume size, monthly cost, and status information.",
+        "operationId": "GetApplicationUsageSummary",
+        "parameters": [
+          {
+            "name": "appId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Application usage summary was successfully retrieved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application is not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "User is unauthorized."
           }
         }
       }
@@ -734,7 +787,7 @@
       "delete": {
         "tags": ["Applications"],
         "summary": "Delete Application",
-        "description": "Deletes an application and all its associated resources including deployments, services, and volumes.",
+        "description": "Marks the application for deletion and enqueues cleanup of all associated resources. Returns immediately; deletion is processed asynchronously.",
         "operationId": "DeleteApplication",
         "parameters": [
           {
@@ -748,7 +801,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Application was successfully deleted."
+            "description": "Application deletion has been accepted and is being processed asynchronously."
           },
           "401": {
             "description": "User is unauthorized.",
@@ -762,6 +815,16 @@
           },
           "403": {
             "description": "User has invalid card or suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application not found.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2634,6 +2697,52 @@
         }
       }
     },
+    "/nodes/plain": {
+      "get": {
+        "tags": ["Nodes"],
+        "summary": "List Node IPs (Plain)",
+        "description": "Lists all node IP addresses in the Magic Containers network as a flat list.",
+        "operationId": "ListNodesPlain",
+        "responses": {
+          "200": {
+            "description": "Node IPs were successfully retrieved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/apps/{appId}/pods/{podId}/recreate": {
       "post": {
         "tags": ["Pods"],
@@ -3699,7 +3808,7 @@
         "additionalProperties": false
       },
       "AnycastIpProtocolVersion": {
-        "enum": ["IPv4"],
+        "enum": ["iPv4"],
         "type": "string"
       },
       "AppListItem": {
@@ -3789,17 +3898,17 @@
         "description": "Application model"
       },
       "ApplicationRuntimeType": {
-        "enum": ["Shared", "Reserved"],
+        "enum": ["shared", "reserved"],
         "type": "string"
       },
       "ApplicationStatus": {
         "enum": [
-          "Unknown",
-          "Active",
-          "Progressing",
-          "Inactive",
-          "Failing",
-          "Suspended"
+          "unknown",
+          "active",
+          "progressing",
+          "inactive",
+          "failing",
+          "suspended"
         ],
         "type": "string"
       },
@@ -4261,7 +4370,7 @@
         "additionalProperties": false
       },
       "ContainerStatus": {
-        "enum": ["NotStarted", "Started", "Ready"],
+        "enum": ["notStarted", "started", "ready"],
         "type": "string"
       },
       "ContainerTemplate": {
@@ -4446,7 +4555,7 @@
         "additionalProperties": false
       },
       "DeploymentStatus": {
-        "enum": ["Unknown", "Active", "Progressing", "Inactive", "Failing"],
+        "enum": ["unknown", "active", "progressing", "inactive", "failing"],
         "type": "string"
       },
       "DetachVolumeResponse": {
@@ -4592,7 +4701,7 @@
           "protocols": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Protocol"
+              "$ref": "#/components/schemas/ProtocolV3"
             }
           }
         },
@@ -4637,7 +4746,7 @@
         "additionalProperties": false
       },
       "EndpointType": {
-        "enum": ["CDN", "Anycast", "PublicIp"],
+        "enum": ["cdn", "anycast", "publicIp"],
         "type": "string"
       },
       "EnvironmentVariable": {
@@ -4708,6 +4817,12 @@
             "description": "Additional validation errors for field-specific issues.",
             "nullable": true,
             "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The application ID, returned as an RFC 7807 extension field when relevant (e.g. partial save errors).\nMatches the \"id\" field from successful create response for consistency.",
+            "nullable": true,
+            "readOnly": true
           }
         },
         "additionalProperties": false,
@@ -4768,7 +4883,7 @@
         "additionalProperties": false
       },
       "Grade": {
-        "enum": ["CouldBeBetter", "NotBad", "DoingGreat"],
+        "enum": ["couldBeBetter", "notBad", "doingGreat"],
         "type": "string"
       },
       "GrpcProbe": {
@@ -4835,72 +4950,72 @@
       },
       "HttpStatusCode": {
         "enum": [
-          "Continue",
-          "SwitchingProtocols",
-          "Processing",
-          "EarlyHints",
-          "OK",
-          "Created",
-          "Accepted",
-          "NonAuthoritativeInformation",
-          "NoContent",
-          "ResetContent",
-          "PartialContent",
-          "MultiStatus",
-          "AlreadyReported",
-          "IMUsed",
-          "MultipleChoices",
-          "MovedPermanently",
-          "Found",
-          "SeeOther",
-          "NotModified",
-          "UseProxy",
-          "Unused",
-          "TemporaryRedirect",
-          "PermanentRedirect",
-          "BadRequest",
-          "Unauthorized",
-          "PaymentRequired",
-          "Forbidden",
-          "NotFound",
-          "MethodNotAllowed",
-          "NotAcceptable",
-          "ProxyAuthenticationRequired",
-          "RequestTimeout",
-          "Conflict",
-          "Gone",
-          "LengthRequired",
-          "PreconditionFailed",
-          "RequestEntityTooLarge",
-          "RequestUriTooLong",
-          "UnsupportedMediaType",
-          "RequestedRangeNotSatisfiable",
-          "ExpectationFailed",
-          "MisdirectedRequest",
-          "UnprocessableEntity",
-          "Locked",
-          "FailedDependency",
-          "UpgradeRequired",
-          "PreconditionRequired",
-          "TooManyRequests",
-          "RequestHeaderFieldsTooLarge",
-          "UnavailableForLegalReasons",
-          "InternalServerError",
-          "NotImplemented",
-          "BadGateway",
-          "ServiceUnavailable",
-          "GatewayTimeout",
-          "HttpVersionNotSupported",
-          "VariantAlsoNegotiates",
-          "InsufficientStorage",
-          "LoopDetected",
-          "NotExtended",
-          "NetworkAuthenticationRequired"
+          "continue",
+          "switchingProtocols",
+          "processing",
+          "earlyHints",
+          "ok",
+          "created",
+          "accepted",
+          "nonAuthoritativeInformation",
+          "noContent",
+          "resetContent",
+          "partialContent",
+          "multiStatus",
+          "alreadyReported",
+          "imUsed",
+          "multipleChoices",
+          "movedPermanently",
+          "found",
+          "seeOther",
+          "notModified",
+          "useProxy",
+          "unused",
+          "temporaryRedirect",
+          "permanentRedirect",
+          "badRequest",
+          "unauthorized",
+          "paymentRequired",
+          "forbidden",
+          "notFound",
+          "methodNotAllowed",
+          "notAcceptable",
+          "proxyAuthenticationRequired",
+          "requestTimeout",
+          "conflict",
+          "gone",
+          "lengthRequired",
+          "preconditionFailed",
+          "requestEntityTooLarge",
+          "requestUriTooLong",
+          "unsupportedMediaType",
+          "requestedRangeNotSatisfiable",
+          "expectationFailed",
+          "misdirectedRequest",
+          "unprocessableEntity",
+          "locked",
+          "failedDependency",
+          "upgradeRequired",
+          "preconditionRequired",
+          "tooManyRequests",
+          "requestHeaderFieldsTooLarge",
+          "unavailableForLegalReasons",
+          "internalServerError",
+          "notImplemented",
+          "badGateway",
+          "serviceUnavailable",
+          "gatewayTimeout",
+          "httpVersionNotSupported",
+          "variantAlsoNegotiates",
+          "insufficientStorage",
+          "loopDetected",
+          "notExtended",
+          "networkAuthenticationRequired"
         ],
         "type": "string"
       },
       "ImagePullPolicy": {
-        "enum": ["Always", "IfNotPresent"],
+        "enum": ["always", "ifNotPresent"],
         "type": "string"
       },
       "ImageTagInfo": {
@@ -5297,6 +5412,11 @@
             "type": "integer",
             "format": "int32",
             "nullable": true
+          },
+          "exitCode": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           }
         },
         "additionalProperties": false,
@@ -5349,6 +5469,21 @@
               "type": "number",
               "format": "double"
             }
+          },
+          "ephemeralStorageUsageBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "ephemeralStorageLimitBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "ephemeralStorageUsageRatio": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
           }
         },
         "additionalProperties": false,
@@ -5529,7 +5664,7 @@
         "additionalProperties": false
       },
       "PodStatus": {
-        "enum": ["NotScheduled", "Scheduled", "Ready", "Deleting"],
+        "enum": ["notScheduled", "scheduled", "ready", "deleting"],
         "type": "string"
       },
       "ProblemDetails": {
@@ -5560,7 +5695,11 @@
         "additionalProperties": {}
       },
       "Protocol": {
-        "enum": ["Tcp", "Udp", "Sctp"],
+        "enum": ["tcp", "udp", "sctp"],
+        "type": "string"
+      },
+      "ProtocolV3": {
+        "enum": ["tcp", "udp", "sctp"],
         "type": "string"
       },
       "Region": {
@@ -5586,7 +5725,7 @@
         "description": "Region model"
       },
       "RegionProvisioningType": {
-        "enum": ["Static", "Dynamic"],
+        "enum": ["static", "dynamic"],
         "type": "string"
       },
       "RegionSettings": {
@@ -5623,11 +5762,11 @@
         "description": "Region settings model"
       },
       "RegistryType": {
-        "enum": ["DockerHub", "GitHub"],
+        "enum": ["dockerHub", "gitHub"],
         "type": "string"
       },
       "RemoveContainerRegistryResponseStatus": {
-        "enum": ["NotFound", "InUse", "Removed"],
+        "enum": ["notFound", "inUse", "removed"],
         "type": "string"
       },
       "RemoveContainerRegistryResult": {
@@ -5693,11 +5832,11 @@
       },
       "SavedContainerRegistryStatus": {
         "enum": [
-          "Saved",
-          "SecretsValidationFailed",
-          "UnknownErrorOccured",
-          "NotFound",
-          "InvalidInput"
+          "saved",
+          "secretsValidationFailed",
+          "unknownErrorOccured",
+          "notFound",
+          "invalidInput"
         ],
         "type": "string"
       },
@@ -5746,7 +5885,8 @@
             "type": "object",
             "additionalProperties": {
               "type": "integer",
-              "format": "int64"
+              "format": "int64",
+              "nullable": true
             }
           },
           "latencyChart": {
@@ -5760,7 +5900,8 @@
             "type": "object",
             "additionalProperties": {
               "type": "integer",
-              "format": "int64"
+              "format": "int64",
+              "nullable": true
             }
           },
           "cpuUsageChart": {
@@ -5912,6 +6053,38 @@
         },
         "additionalProperties": false
       },
+      "UsageSummary": {
+        "type": "object",
+        "properties": {
+          "averageLatency": {
+            "type": "number",
+            "format": "double"
+          },
+          "currentLatency": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalVolumeSizeInGb": {
+            "type": "number",
+            "format": "double"
+          },
+          "monthlyCost": {
+            "type": "number",
+            "format": "double"
+          },
+          "latencyChart": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/ApplicationStatus"
+          }
+        },
+        "additionalProperties": false
+      },
       "UserLimits": {
         "type": "object",
         "properties": {
@@ -5950,6 +6123,7 @@
         "additionalProperties": false
       },
       "ValidationError": {
+        "required": ["message"],
         "type": "object",
         "properties": {
           "field": {
@@ -6050,7 +6224,7 @@
           },
           "mountPath": {
             "minLength": 1,
-            "pattern": "^/(?!.*//)(?!.*\\.\\.)(?!.*\\s)([a-zA-Z0-9._-]+/?)*$",
+            "pattern": "^/(?!.*//)(?!.*\\.\\.)(?!.*\\s)([a-zA-Z0-9._-]+/?)+$",
             "type": "string"
           }
         },
@@ -6077,15 +6251,15 @@
       },
       "VolumeStatus": {
         "enum": [
-          "Unknown",
-          "Attached",
-          "Detached",
-          "Extending",
-          "Deleting",
-          "Creating",
-          "NotScheduled",
-          "Scheduled",
-          "Failed"
+          "unknown",
+          "attached",
+          "detached",
+          "extending",
+          "deleting",
+          "creating",
+          "notScheduled",
+          "scheduled",
+          "failed"
         ],
         "type": "string"
       },

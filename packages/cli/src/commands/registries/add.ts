@@ -103,7 +103,7 @@ export const registryAddCommand = defineCommand<AddArgs>({
       return;
     }
 
-    if (result?.status === "Saved") {
+    if (result?.status === "saved") {
       logger.success(`Registry "${displayName}" added (ID: ${result.id}).`);
     } else {
       logger.error(

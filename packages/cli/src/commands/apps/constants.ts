@@ -3,10 +3,10 @@ import type { components } from "@bunny.net/openapi-client/generated/magic-conta
 type ApplicationStatus = components["schemas"]["ApplicationStatus"];
 
 export const STATUS_LABELS: Record<ApplicationStatus, string> = {
-  Unknown: "Unknown",
-  Active: "Active",
-  Progressing: "Deploying",
-  Inactive: "Inactive",
-  Failing: "Failing",
-  Suspended: "Suspended",
+  unknown: "Unknown",
+  active: "Active",
+  progressing: "Deploying",
+  inactive: "Inactive",
+  failing: "Failing",
+  suspended: "Suspended",
 };
