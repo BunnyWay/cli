@@ -6,6 +6,8 @@ export {
   configToAddRequest,
   configToPatchRequest,
 } from "./convert.ts";
+// Migrations
+export { migrate } from "./migrate.ts";
 // Utilities
 export { parseImageRef } from "./parse-image-ref.ts";
 // Types
@@ -14,12 +16,16 @@ export type {
   ContainerConfig,
   EndpointConfig,
   ProbeConfig,
+  RegionsConfig,
   VolumeConfig,
 } from "./schema.ts";
 export {
   BunnyAppConfigSchema,
   ContainerConfigSchema,
+  CURRENT_VERSION,
   EndpointConfigSchema,
+  normalizeRegions,
   ProbeConfigSchema,
+  RegionsConfigSchema,
   VolumeConfigSchema,
 } from "./schema.ts";

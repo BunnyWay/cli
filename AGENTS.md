@@ -46,7 +46,6 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 | `@libsql/client` | libSQL database client (used by `db shell`)                    |
 | `openapi-fetch`  | Type-safe HTTP client generated from OpenAPI specs             |
 | `jsonc-parser`   | JSONC parser for `bunny.jsonc` config files                    |
-| `smol-toml`      | TOML v1 parser (legacy `bunny.toml` fallback only)             |
 
 ### Dev dependencies
 
@@ -164,11 +163,11 @@ bunny-cli/
 │           │   │   ├── index.ts          # defineNamespace("apps", false) — hidden, registers all app commands
 │           │   │   ├── constants.ts      # Status label maps
 │           │   │   ├── config.ts         # bunny.jsonc file I/O, re-exports from @bunny.net/app-config (resolveAppId, resolveContainerId)
-│           │   │   ├── docker.ts         # Docker helpers (build, push, login, generateTag, promptRegistry)
+│           │   │   ├── docker.ts         # Docker + registry helpers (build, push, dockerLogin, generateTag, promptRegistry, resolveRegistryForImage, getConfigSuggestions, imageHostname)
 │           │   │   ├── init.ts           # Scaffold bunny.jsonc (detects Dockerfile, prompts for registry)
 │           │   │   ├── list.ts           # List all apps
 │           │   │   ├── show.ts           # Show app details and overview
-│           │   │   ├── deploy.ts         # Deploy app (build from Dockerfile or use --image)
+│           │   │   ├── deploy.ts         # Deploy app — positional <image>, --dockerfile, --container <name>, or manifest; first-run walkthrough
 │           │   │   ├── undeploy.ts       # Undeploy app
 │           │   │   ├── restart.ts        # Restart app
 │           │   │   ├── delete.ts         # Delete app
@@ -707,7 +706,8 @@ bunny
 │   │                                       Scaffold bunny.jsonc (detects Dockerfile)
 │   ├── list            (alias: ls)         List all apps
 │   ├── show            [--id]              Show app details and overview
-│   ├── deploy          [--image]           Build + deploy (or deploy pre-built image)
+│   ├── deploy          [image] [--dockerfile] [--context] [--tag] [--registry] [--container] [--no-push]
+│   │                                       Deploy a pre-built image, build from a Dockerfile, or re-deploy from bunny.jsonc
 │   ├── undeploy        [--id] [--force]    Undeploy an app
 │   ├── restart         [--id]              Restart an app
 │   ├── delete          [--id] [--force]    Delete an app
@@ -1031,8 +1031,10 @@ The `.bunny/` manifest and `bunny.jsonc` serve different purposes:
 ```jsonc
 {
   "$schema": "./node_modules/@bunny.net/app-config/generated/schema.json",
+  "version": "2026-05-11",
   "app": {
     "name": "my-app",
+    "regions": ["sfo"],
     "containers": {
       "web": { "image": "nginx:latest" },
     },
@@ -1040,9 +1042,9 @@ The `.bunny/` manifest and `bunny.jsonc` serve different purposes:
 }
 ```
 
-Schemas and types are defined in `@bunny.net/app-config` using Zod. The CLI's `config.ts` handles file I/O (parsing JSONC, validating with Zod, writing with `$schema` injection) and resolution helpers (`resolveAppId`, `resolveContainerId`).
+`version` is an ISO date string. When the CLI loads an older config, `migrate()` in `@bunny.net/app-config` transforms it in memory; the next `saveConfig()` writes the upgraded shape. Each shape change adds a new entry to the `MIGRATIONS` table in `packages/app-config/src/migrate.ts`.
 
-Legacy `bunny.toml` files are still loadable with a deprecation warning.
+Schemas and types are defined in `@bunny.net/app-config` using Zod. The CLI's `config.ts` handles file I/O (parsing JSONC, running migrations, validating with Zod, writing with `$schema` + `version` injection) and resolution helpers (`resolveAppId`, `resolveContainerId`).
 
 ---
 

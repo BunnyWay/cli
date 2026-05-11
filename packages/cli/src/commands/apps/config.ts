@@ -3,6 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import {
   type BunnyAppConfig,
   BunnyAppConfigSchema,
+  migrate,
 } from "@bunny.net/app-config";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import { parse as parseJsonc } from "jsonc-parser";
@@ -12,14 +13,19 @@ import { logger } from "../../core/logger.ts";
 type Application = components["schemas"]["Application"];
 
 const CONFIG_FILENAME = "bunny.jsonc";
-const LEGACY_FILENAME = "bunny.toml";
 
 // Re-export types and conversion functions for convenience
-export type { BunnyAppConfig, ContainerConfig } from "@bunny.net/app-config";
+export type {
+  BunnyAppConfig,
+  ContainerConfig,
+  RegionsConfig,
+} from "@bunny.net/app-config";
 export {
   apiToConfig,
+  CURRENT_VERSION,
   configToAddRequest,
   configToPatchRequest,
+  normalizeRegions,
   parseImageRef,
 } from "@bunny.net/app-config";
 
@@ -30,35 +36,34 @@ function findConfigRoot(): string {
 
   while (true) {
     if (existsSync(join(dir, CONFIG_FILENAME))) return dir;
-    if (existsSync(join(dir, LEGACY_FILENAME))) return dir;
     const parent = dirname(dir);
     if (parent === dir) return process.cwd();
     dir = parent;
   }
 }
 
-/** Load and parse bunny.jsonc from cwd or nearest ancestor. Falls back to legacy bunny.toml. */
+/** Load and parse bunny.jsonc from cwd or nearest ancestor. */
 export function loadConfig(): BunnyAppConfig {
   const root = findConfigRoot();
   const jsoncPath = join(root, CONFIG_FILENAME);
-  const tomlPath = join(root, LEGACY_FILENAME);
 
   if (existsSync(jsoncPath)) {
     const raw = readFileSync(jsoncPath, "utf-8");
-    return BunnyAppConfigSchema.parse(parseJsonc(raw));
-  }
-
-  if (existsSync(tomlPath)) {
-    const { parse: parseToml } = require("smol-toml");
-    logger.warn(
-      "bunny.toml is deprecated. Run `bunny apps pull` to regenerate as bunny.jsonc.",
-    );
-    return BunnyAppConfigSchema.parse(
-      parseToml(readFileSync(tomlPath, "utf-8")),
-    );
+    return parseAndMigrate(parseJsonc(raw));
   }
 
   throw new UserError("No bunny.jsonc found.", "Run `bunny apps init` first.");
+}
+
+/** Apply schema migrations then validate. Logs when a migration ran. */
+function parseAndMigrate(raw: unknown): BunnyAppConfig {
+  const { config, migratedFrom } = migrate(raw);
+  if (migratedFrom) {
+    logger.dim(
+      `Migrated bunny.jsonc from version "${migratedFrom}". Run \`bunny apps push\` to save the new format.`,
+    );
+  }
+  return BunnyAppConfigSchema.parse(config);
 }
 
 /** Write bunny.jsonc to the given directory (or cwd). */
@@ -66,23 +71,21 @@ export function saveConfig(data: BunnyAppConfig, dir?: string): void {
   const target = dir ?? process.cwd();
   const path = join(target, CONFIG_FILENAME);
 
-  // Strip $schema from data before re-inserting to ensure it's always first
-  const { $schema: _, ...rest } = data;
+  // Re-key the object so the file always starts with $schema → version → app.
+  const { $schema: _schema, version, ...rest } = data;
   const output = {
     $schema: "./node_modules/@bunny.net/app-config/generated/schema.json",
+    version,
     ...rest,
   };
 
   writeFileSync(path, `${JSON.stringify(output, null, 2)}\n`);
 }
 
-/** Check if bunny.jsonc (or legacy bunny.toml) exists in cwd or ancestor. */
+/** Check if bunny.jsonc exists in cwd or ancestor. */
 export function configExists(): boolean {
   const root = findConfigRoot();
-  return (
-    existsSync(join(root, CONFIG_FILENAME)) ||
-    existsSync(join(root, LEGACY_FILENAME))
-  );
+  return existsSync(join(root, CONFIG_FILENAME));
 }
 
 // ─── Resolution helpers ─────────────────────────────────────────────

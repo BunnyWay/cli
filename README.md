@@ -41,7 +41,8 @@ bun ny <command>
 # Examples
 bun ny login
 bun ny db list
-bun ny apps deploy
+bun ny apps deploy ghcr.io/me/api:v1.2     # deploy a pre-built image
+bun ny apps deploy --dockerfile             # build ./Dockerfile and deploy
 ```
 
 ### Available Scripts

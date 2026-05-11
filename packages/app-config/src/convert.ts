@@ -1,9 +1,11 @@
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import { parseImageRef } from "./parse-image-ref.ts";
-import type {
-  BunnyAppConfig,
-  ContainerConfig,
-  EndpointConfig,
+import {
+  type BunnyAppConfig,
+  type ContainerConfig,
+  CURRENT_VERSION,
+  type EndpointConfig,
+  normalizeRegions,
 } from "./schema.ts";
 
 type Application = components["schemas"]["Application"];
@@ -76,6 +78,7 @@ export function apiToConfig(app: Application): BunnyAppConfig {
   }
 
   const config: BunnyAppConfig = {
+    version: CURRENT_VERSION,
     app: {
       id: app.id,
       name: app.name,
@@ -90,14 +93,14 @@ export function apiToConfig(app: Application): BunnyAppConfig {
     };
   }
 
-  if (
-    app.regionSettings.allowedRegionIds.length > 0 ||
-    app.regionSettings.requiredRegionIds.length > 0
-  ) {
-    config.app.regions = {
-      allowed: app.regionSettings.allowedRegionIds,
-      required: app.regionSettings.requiredRegionIds,
-    };
+  const allowed = app.regionSettings.allowedRegionIds;
+  const required = app.regionSettings.requiredRegionIds;
+  if (allowed.length > 0 || required.length > 0) {
+    // Collapse to the simple array form when allowed === required.
+    const same =
+      allowed.length === required.length &&
+      allowed.every((id) => required.includes(id));
+    config.app.regions = same ? [...allowed] : { allowed, required };
   }
 
   return config;
@@ -204,10 +207,10 @@ export function configToAddRequest(
     name: config.app.name,
     runtimeType: "shared",
     autoScaling: config.app.scaling ?? { min: 1, max: 1 },
-    regionSettings: {
-      allowedRegionIds: config.app.regions?.allowed ?? [],
-      requiredRegionIds: config.app.regions?.required ?? [],
-    },
+    regionSettings: (() => {
+      const { allowed, required } = normalizeRegions(config.app.regions);
+      return { allowedRegionIds: allowed, requiredRegionIds: required };
+    })(),
     containerTemplates: containers,
     volumes,
   };
@@ -238,10 +241,10 @@ export function configToPatchRequest(
     name: config.app.name,
     runtimeType: "shared",
     autoScaling: config.app.scaling ?? { min: 1, max: 1 },
-    regionSettings: {
-      allowedRegionIds: config.app.regions?.allowed ?? [],
-      requiredRegionIds: config.app.regions?.required ?? [],
-    },
+    regionSettings: (() => {
+      const { allowed, required } = normalizeRegions(config.app.regions);
+      return { allowedRegionIds: allowed, requiredRegionIds: required };
+    })(),
     containerTemplates: containers,
     volumes,
   };

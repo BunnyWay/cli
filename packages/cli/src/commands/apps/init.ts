@@ -9,7 +9,7 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
 import type { BunnyAppConfig, ContainerConfig } from "./config.ts";
-import { configExists, saveConfig } from "./config.ts";
+import { CURRENT_VERSION, configExists, saveConfig } from "./config.ts";
 import { promptRegistry } from "./docker.ts";
 
 const COMMAND = "init";
@@ -83,12 +83,12 @@ export const appsInitCommand = defineCommand<InitArgs>({
       });
 
       if (useDockerfile) {
-        const registryId = await promptRegistry(client);
-        if (!registryId)
+        const resolved = await promptRegistry(client);
+        if (!resolved)
           throw new UserError(
             "A registry is required to build and push images.",
           );
-        container = { dockerfile: "Dockerfile", registry: registryId };
+        container = { dockerfile: "Dockerfile", registry: resolved.id };
       } else {
         const { value } = await prompts({
           type: "text",
@@ -139,19 +139,16 @@ export const appsInitCommand = defineCommand<InitArgs>({
       selectedRegions = value ?? [];
     }
 
-    const [primaryRegion] = selectedRegions;
-    if (!primaryRegion) {
+    if (selectedRegions.length === 0) {
       throw new UserError("At least one region must be selected.");
     }
 
     const toml: BunnyAppConfig = {
+      version: CURRENT_VERSION,
       app: {
         name,
         scaling: { min: 1, max: 1 },
-        regions: {
-          allowed: selectedRegions,
-          required: [primaryRegion],
-        },
+        regions: selectedRegions,
         containers: { [name]: container },
       },
     };
