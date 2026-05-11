@@ -3,7 +3,7 @@ import type { components } from "@bunny.net/openapi-client/generated/database.d.
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
-import { formatTable } from "../../core/format.ts";
+import { formatBytes, formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
 
@@ -106,7 +106,13 @@ export const dbListCommand = defineCommand({
           const primary = regionCode
             ? (regionNames.get(regionCode) ?? regionCode)
             : "—";
-          return [db.id, db.name, status, primary, db.current_size];
+          return [
+            db.id,
+            db.name,
+            status,
+            primary,
+            formatBytes(db.current_size_bytes),
+          ];
         }),
         output,
       ),

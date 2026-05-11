@@ -149,35 +149,15 @@ export function progressBar(fraction: number, width = 20): string {
   return chalk.green(bar);
 }
 
-/** Format a byte-like size string (e.g. "25600000") into human-readable. */
-export function formatSize(sizeStr: string): string {
-  const bytes = parseFloat(sizeStr);
-  if (Number.isNaN(bytes) || bytes === 0) return "0 B";
+/** Format a byte count into a human-readable string (e.g. 25600000 → "24 MB"). */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
 
   const units = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const i = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
   const value = bytes / 1024 ** i;
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`;
-}
-
-/** Parse a human-readable size string (e.g. "49.2 KB") into bytes. */
-export function parseSizeToBytes(sizeStr: string): number {
-  const match = sizeStr.trim().match(/^([\d.]+)\s*(B|KB|MB|GB|TB)$/i);
-  if (!match) {
-    const n = parseFloat(sizeStr);
-    return Number.isNaN(n) ? 0 : n;
-  }
-
-  const [, valueStr, unitStr] = match;
-  const value = parseFloat(valueStr ?? "0");
-  const unit = unitStr?.toUpperCase() ?? "B";
-  const multipliers: Record<string, number> = {
-    B: 1,
-    KB: 1024,
-    MB: 1024 ** 2,
-    GB: 1024 ** 3,
-    TB: 1024 ** 4,
-  };
-
-  return value * (multipliers[unit] ?? 1);
 }

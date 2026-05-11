@@ -4,9 +4,9 @@ import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import {
+  formatBytes,
   formatDate,
   formatKeyValue,
-  parseSizeToBytes,
   progressBar,
 } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
@@ -198,13 +198,12 @@ export const dbUsageCommand = defineCommand<UsageArgs>({
       }
     }
 
-    // Storage from database details (current_size/size_max are human-readable strings like "20.5 KB")
-    const currentSize = db?.current_size ?? "0 B";
-    const maxSize = db?.size_max ?? "0 B";
-    const sizeBytes = parseSizeToBytes(currentSize);
-    const maxBytes = parseSizeToBytes(maxSize);
+    const sizeBytes = db?.current_size_bytes ?? 0;
+    const maxBytes = db?.size_max_bytes ?? 0;
     const sizeFraction = maxBytes > 0 ? sizeBytes / maxBytes : 0;
     const sizePercent = Math.round(sizeFraction * 100);
+    const currentSize = formatBytes(sizeBytes);
+    const maxSize = formatBytes(maxBytes);
 
     if (output === "json") {
       logger.log(
