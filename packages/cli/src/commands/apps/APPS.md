@@ -174,7 +174,7 @@ bunny apps regions show
 
 ## `bunny.jsonc` schema
 
-The config carries a `version` field so we can evolve the shape without breaking existing files. Versions are ISO date strings — when the CLI loads an older config it migrates it in memory and writes the upgraded form on the next save.
+The config carries a `version` field so we can detect and reject older shapes when they no longer match what the CLI expects. Versions are ISO date strings; the CLI throws a clear error if `version` is missing and asks you to regenerate the file via `bunny apps pull`.
 
 A single-container app:
 

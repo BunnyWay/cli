@@ -1042,9 +1042,9 @@ The `.bunny/` manifest and `bunny.jsonc` serve different purposes:
 }
 ```
 
-`version` is an ISO date string. When the CLI loads an older config, `migrate()` in `@bunny.net/app-config` transforms it in memory; the next `saveConfig()` writes the upgraded shape. Each shape change adds a new entry to the `MIGRATIONS` table in `packages/app-config/src/migrate.ts`.
+`version` is an ISO date string. The CLI requires it on load — if a config is missing `version`, `loadConfig` throws a `UserError` with a hint to regenerate via `bunny apps pull`. There is no migration runner yet; when the first breaking shape change ships, that PR introduces one alongside its transform.
 
-Schemas and types are defined in `@bunny.net/app-config` using Zod. The CLI's `config.ts` handles file I/O (parsing JSONC, running migrations, validating with Zod, writing with `$schema` + `version` injection) and resolution helpers (`resolveAppId`, `resolveContainerId`).
+Schemas and types are defined in `@bunny.net/app-config` using Zod. The CLI's `config.ts` handles file I/O (parsing JSONC, validating with Zod, writing with `$schema` + `version` injection) and resolution helpers (`resolveAppId`, `resolveContainerId`).
 
 ---
 

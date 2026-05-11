@@ -6,8 +6,6 @@ export {
   configToAddRequest,
   configToPatchRequest,
 } from "./convert.ts";
-// Migrations
-export { migrate } from "./migrate.ts";
 // Utilities
 export { parseImageRef } from "./parse-image-ref.ts";
 // Types

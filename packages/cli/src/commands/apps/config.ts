@@ -3,12 +3,10 @@ import { dirname, join, resolve } from "node:path";
 import {
   type BunnyAppConfig,
   BunnyAppConfigSchema,
-  migrate,
 } from "@bunny.net/app-config";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import { parse as parseJsonc } from "jsonc-parser";
 import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
 
 type Application = components["schemas"]["Application"];
 
@@ -45,23 +43,21 @@ export function loadConfig(): BunnyAppConfig {
   const root = findConfigRoot();
   const jsoncPath = join(root, CONFIG_FILENAME);
 
-  if (existsSync(jsoncPath)) {
-    const raw = readFileSync(jsoncPath, "utf-8");
-    return parseAndMigrate(parseJsonc(raw));
-  }
-
-  throw new UserError("No bunny.jsonc found.", "Run `bunny apps init` first.");
-}
-
-/** Apply schema migrations then validate. Logs when a migration ran. */
-function parseAndMigrate(raw: unknown): BunnyAppConfig {
-  const { config, migratedFrom } = migrate(raw);
-  if (migratedFrom) {
-    logger.dim(
-      `Migrated bunny.jsonc from version "${migratedFrom}". Run \`bunny apps push\` to save the new format.`,
+  if (!existsSync(jsoncPath)) {
+    throw new UserError(
+      "No bunny.jsonc found.",
+      "Run `bunny apps init` first.",
     );
   }
-  return BunnyAppConfigSchema.parse(config);
+
+  const raw = parseJsonc(readFileSync(jsoncPath, "utf-8"));
+  if (raw && typeof raw === "object" && !("version" in raw)) {
+    throw new UserError(
+      "bunny.jsonc is missing the `version` field.",
+      "Run `bunny apps pull` to regenerate it from the remote app.",
+    );
+  }
+  return BunnyAppConfigSchema.parse(raw);
 }
 
 /** Write bunny.jsonc to the given directory (or cwd). */
