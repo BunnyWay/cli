@@ -10,8 +10,6 @@ import { CURRENT_VERSION } from "./schema.ts";
 type Application = components["schemas"]["Application"];
 type ContainerTemplate = components["schemas"]["ContainerTemplate"];
 
-// ─── Test fixtures ───────────────────────────────────────────────────
-//
 // Building real `Application` objects requires every nested required field;
 // for unit tests we lean on `as Application` after constructing the subset
 // the conversion code actually reads.
@@ -45,8 +43,6 @@ function app(overrides: Partial<Application>): Application {
     ...overrides,
   } as Application;
 }
-
-// ─── apiToConfig ─────────────────────────────────────────────────────
 
 describe("apiToConfig", () => {
   test("emits CURRENT_VERSION and basic app fields", () => {
@@ -229,8 +225,6 @@ describe("apiToConfig", () => {
     expect(result.app.containers.db?.image).toBe("postgres:16");
   });
 });
-
-// ─── configToAddRequest ──────────────────────────────────────────────
 
 describe("configToAddRequest", () => {
   test("parses image ref into name/namespace/tag", () => {
@@ -424,8 +418,6 @@ describe("configToAddRequest", () => {
     });
   });
 });
-
-// ─── configToPatchRequest ────────────────────────────────────────────
 
 describe("configToPatchRequest", () => {
   test("first local container inherits id from first remote template even if names differ", () => {
