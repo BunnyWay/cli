@@ -16,8 +16,6 @@ type PatchApplicationRequest = components["schemas"]["PatchApplicationRequest"];
 type EndpointRequest = components["schemas"]["EndpointRequest"];
 type VolumeRequest = components["schemas"]["VolumeRequest"];
 
-// ─── API → Config conversion ────────────────────────────────────────
-
 function containerTemplateToConfig(ct: ContainerTemplate): ContainerConfig {
   const config: ContainerConfig = {};
 
@@ -105,8 +103,6 @@ export function apiToConfig(app: Application): BunnyAppConfig {
 
   return config;
 }
-
-// ─── Config → API conversion ────────────────────────────────────────
 
 function containerConfigToRequest(
   name: string,

@@ -3,8 +3,6 @@ import chalk from "chalk";
 import Table from "cli-table3";
 import type { PrintMode, ShellLogger } from "./types.ts";
 
-// ─── Sensitive column masking ────────────────────────────────────────
-
 export const SENSITIVE_SUBSTRINGS = [
   "password",
   "passwd",
@@ -51,8 +49,6 @@ export function maskEmail(value: string): string {
   return `${local[0]}••••${local[local.length - 1]}${domain}`;
 }
 
-// ─── Value formatting ────────────────────────────────────────────────
-
 /** Format a value for styled terminal output (NULL shown dimmed). */
 export function formatValue(val: unknown): string {
   if (val === null) return chalk.dim("NULL");
@@ -65,8 +61,6 @@ export function formatValueRaw(val: unknown): string {
   return String(val);
 }
 
-// ─── CSV escape ──────────────────────────────────────────────────────
-
 /** Escape a value for CSV output (handles commas, quotes, newlines). */
 export function csvEscape(value: string): string {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
@@ -74,8 +68,6 @@ export function csvEscape(value: string): string {
   }
   return value;
 }
-
-// ─── Result set printing ─────────────────────────────────────────────
 
 /** Print a result set in the given mode, optionally masking sensitive columns. */
 export function printResultSet(

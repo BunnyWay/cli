@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-// ─── Schema version ──────────────────────────────────────────────────
-//
 // The config file carries a `version` field so we can evolve the shape
 // without breaking existing files. Versions are ISO date strings
 // (lexicographically sortable) — when something changes, bump this and
@@ -15,8 +13,6 @@ const VersionSchema = z
     /^\d{4}-\d{2}-\d{2}$/,
     "version must be an ISO date string (YYYY-MM-DD)",
   );
-
-// ─── Sub-schemas ─────────────────────────────────────────────────────
 
 export const ProbeConfigSchema = z.object({
   type: z.enum(["http", "tcp", "grpc"]),
@@ -76,8 +72,6 @@ export const RegionsConfigSchema = z.union([
   }),
 ]);
 
-// ─── Root schema ─────────────────────────────────────────────────────
-
 export const BunnyAppConfigSchema = z.object({
   $schema: z.string().optional(),
   version: VersionSchema,
@@ -90,16 +84,12 @@ export const BunnyAppConfigSchema = z.object({
   }),
 });
 
-// ─── Inferred types ──────────────────────────────────────────────────
-
 export type BunnyAppConfig = z.infer<typeof BunnyAppConfigSchema>;
 export type ContainerConfig = z.infer<typeof ContainerConfigSchema>;
 export type EndpointConfig = z.infer<typeof EndpointConfigSchema>;
 export type VolumeConfig = z.infer<typeof VolumeConfigSchema>;
 export type ProbeConfig = z.infer<typeof ProbeConfigSchema>;
 export type RegionsConfig = z.infer<typeof RegionsConfigSchema>;
-
-// ─── Helpers ─────────────────────────────────────────────────────────
 
 /**
  * Normalize either regions shape into `{ allowed, required }` for the API.

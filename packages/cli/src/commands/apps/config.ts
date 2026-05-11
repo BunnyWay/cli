@@ -29,8 +29,6 @@ export {
   parseImageRef,
 } from "@bunny.net/app-config";
 
-// ─── File I/O ────────────────────────────────────────────────────────
-
 function findConfigRoot(): string {
   let dir = resolve(process.cwd());
 
@@ -87,8 +85,6 @@ export function configExists(): boolean {
   const root = findConfigRoot();
   return existsSync(join(root, CONFIG_FILENAME));
 }
-
-// ─── Resolution helpers ─────────────────────────────────────────────
 
 /**
  * Resolve an app ID from an explicit value or from bunny.jsonc.

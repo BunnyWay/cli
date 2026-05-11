@@ -113,7 +113,6 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     const cfg = resolveConfig(profile, apiKey);
     const client = createMcClient(clientOptions(cfg, verbose));
 
-    // ─── First-run walkthrough ───────────────────────────────────
     let toml: BunnyAppConfig;
     if (!configExists()) {
       toml = await firstRunWalkthrough(client, {
@@ -131,7 +130,6 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       hasImageOrBuild: Boolean(positionalImage || dockerfileFlag),
     });
 
-    // ─── Decide build vs deploy mode ─────────────────────────────
     const mode = resolveMode({
       positionalImage,
       dockerfileFlag,
@@ -143,7 +141,6 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       args.registry ?? targetContainer.registry;
     let freshCreds: ResolvedRegistry["freshCredentials"];
 
-    // ─── Build path ──────────────────────────────────────────────
     if (mode.kind === "build") {
       await ensureDockerAvailable();
 
@@ -224,7 +221,6 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       saveConfig(toml);
     }
 
-    // ─── Deploy path (pre-built image) ───────────────────────────
     if (mode.kind === "image") {
       const resolved = await resolveRegistryForImage(client, mode.image);
       if (!resolved) {
@@ -240,7 +236,6 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       saveConfig(toml);
     }
 
-    // ─── App create-or-update ────────────────────────────────────
     let appId = toml.app.id;
     if (!appId) {
       const createSpin = spinner("Creating app...");
@@ -280,7 +275,6 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       pushSpin.stop();
     }
 
-    // ─── Update container image (if changed) ─────────────────────
     if (deployImage) {
       const fetchSpin = spinner("Fetching app...");
       fetchSpin.start();
@@ -324,7 +318,6 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       logger.success(`Image updated to ${deployImage}.`);
     }
 
-    // ─── Trigger deploy ──────────────────────────────────────────
     const deploySpin = spinner("Deploying...");
     deploySpin.start();
     await client.POST("/apps/{appId}/deploy", {
@@ -342,8 +335,6 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     logger.success("App deployed.");
   },
 });
-
-// ─── Helpers ─────────────────────────────────────────────────────────
 
 /**
  * yargs returns `--dockerfile` (bare) as an empty string and `--dockerfile foo`
@@ -451,8 +442,6 @@ function resolveBuildContext(
   return dirname(absDockerfile);
 }
 
-// ─── First-run walkthrough ───────────────────────────────────────────
-
 interface WalkthroughInput {
   positionalImage?: string;
   dockerfileFlag?: string;
@@ -504,7 +493,6 @@ async function firstRunWalkthrough(
 
   const mode: "build" | "image" = dockerfilePath ? "build" : "image";
 
-  // ─── Resolve the registry first — we need it for the rest of the walkthrough.
   let registry: ResolvedRegistry | null;
   if (input.registryFlag) {
     registry = { id: input.registryFlag };
@@ -516,7 +504,6 @@ async function firstRunWalkthrough(
   }
   if (!registry) throw new UserError("A registry is required.");
 
-  // ─── Ask for suggestions (only meaningful when we already know the image).
   let suggestions: Awaited<ReturnType<typeof getConfigSuggestions>> | null =
     null;
   if (mode === "image" && imageRef) {
@@ -529,7 +516,6 @@ async function firstRunWalkthrough(
     }
   }
 
-  // ─── App name.
   const defaultName =
     suggestions?.appName?.trim() || basename(resolve(process.cwd()));
   const { value: name } = await prompts({
@@ -540,7 +526,6 @@ async function firstRunWalkthrough(
   });
   if (!name) throw new UserError("App name is required.");
 
-  // ─── Regions.
   const regionsSpin = spinner("Fetching regions...");
   regionsSpin.start();
   const { data: regionsResult } = await client.GET("/regions");
@@ -571,7 +556,6 @@ async function firstRunWalkthrough(
     throw new UserError("At least one region must be selected.");
   }
 
-  // ─── Build the container config.
   const container: ContainerConfig = {
     registry: registry.id,
   };

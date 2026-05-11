@@ -132,8 +132,6 @@ export async function dockerLogin(
   }
 }
 
-// ─── Image ref helpers ───────────────────────────────────────────────
-
 /**
  * Extract the registry hostname from a Docker image reference.
  *
@@ -153,8 +151,6 @@ export function imageHostname(ref: string): string | null {
   }
   return null;
 }
-
-// ─── Registry resolution ─────────────────────────────────────────────
 
 const ADD_NEW_REGISTRY = "__add_new__";
 
@@ -348,8 +344,6 @@ export async function resolveRegistryForImage(
     isPublic: kind === "public",
   });
 }
-
-// ─── Config suggestions ──────────────────────────────────────────────
 
 /**
  * Ask bunny.net for recommended configuration for a given image
