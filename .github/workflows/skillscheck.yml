@@ -10,8 +10,14 @@ concurrency:
 on:
   push:
     branches: [main]
+    paths:
+      - "skills/**"
+      - ".github/workflows/skillscheck.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "skills/**"
+      - ".github/workflows/skillscheck.yml"
 
 jobs:
   skillscheck:
