@@ -17,7 +17,11 @@ import {
 } from "@/api.ts";
 import { ColumnToggleMenu } from "@/components/ColumnToggleMenu";
 import { DataTab } from "@/components/DataTab";
-import { FilterBar, NULLARY_OPERATORS } from "@/components/FilterBar";
+import {
+  FILTER_OPERATORS,
+  FilterBar,
+  NULLARY_OPERATORS,
+} from "@/components/FilterBar";
 import { SchemaTab } from "@/components/SchemaTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,28 +58,48 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
   const page = Math.max(1, Number(pageParam) || 1);
   const limit = Math.min(100, Math.max(1, Number(limitParam) || 50));
 
-  const sortState: SortingState = useMemo(() => {
-    if (!sortParam) return [];
-    return [{ id: sortParam, desc: orderParam === "desc" }];
-  }, [sortParam, orderParam]);
+  const columnNames = useMemo(() => {
+    if (!schema) return null;
+    return new Set(schema.columns.map((c) => c.name));
+  }, [schema]);
 
   const sort = useMemo(() => {
-    if (!sortParam) return undefined;
+    if (!sortParam || !columnNames?.has(sortParam)) {
+      return undefined;
+    }
     return {
       column: sortParam,
       order: (orderParam === "desc" ? "desc" : "asc") as "asc" | "desc",
     };
-  }, [sortParam, orderParam]);
+  }, [sortParam, orderParam, columnNames]);
+
+  const sortState: SortingState = useMemo(() => {
+    if (!sort) return [];
+    return [{ id: sort.column, desc: sort.order === "desc" }];
+  }, [sort]);
 
   const appliedFilters: FilterCondition[] = useMemo(() => {
-    if (!filtersParam) return [];
+    if (!filtersParam || !columnNames) return [];
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(filtersParam);
-      return Array.isArray(parsed) ? parsed : [];
+      parsed = JSON.parse(filtersParam);
     } catch {
       return [];
     }
-  }, [filtersParam]);
+    if (!Array.isArray(parsed)) return [];
+    const validated: FilterCondition[] = [];
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== "object") continue;
+      const { column, operator, value } = entry as Record<string, unknown>;
+      if (typeof column !== "string" || !columnNames.has(column)) continue;
+      if (typeof operator !== "string" || !FILTER_OPERATORS.has(operator)) {
+        continue;
+      }
+      if (typeof value !== "string") continue;
+      validated.push({ column, operator, value });
+    }
+    return validated;
+  }, [filtersParam, columnNames]);
 
   // Sync filter row count from URL on table change
   useEffect(() => {
@@ -91,19 +115,16 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
     setError(null);
     setSchema(null);
     setData(null);
-    Promise.all([
-      fetchTableSchema(tableName),
-      fetchTableRows(tableName, 1, limit, [], sort, filterMode),
-    ])
-      .then(([s, d]) => {
-        setSchema(s);
-        setData(d);
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
-  }, [tableName, limit, filterMode, sort]);
+    fetchTableSchema(tableName)
+      .then((s) => setSchema(s))
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : String(e));
+        setLoading(false);
+      });
+  }, [tableName]);
 
   useEffect(() => {
+    if (!schema) return;
     setLoading(true);
     fetchTableRows(tableName, page, limit, appliedFilters, sort, filterMode)
       .then((d) => {
@@ -112,7 +133,7 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
-  }, [page, limit, tableName, filterMode, sort, appliedFilters]);
+  }, [page, limit, tableName, filterMode, sort, appliedFilters, schema]);
 
   function refresh() {
     setLoading(true);
