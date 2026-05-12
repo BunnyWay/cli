@@ -1,0 +1,124 @@
+[
+  {
+    "id": "django-with-redis-0",
+    "name": "Django with Redis",
+    "description": "A minimal Django key-value API backed by Redis",
+    "images": ["mc-template-django-with-redis", "redis.7-alpine"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-django-with-redis"
+  },
+  {
+    "id": "fastapi-with-redis-0",
+    "name": "FastAPI KV with Redis",
+    "description": "A Python FastAPI backend paired with Redis for high-performance APIs with caching and data storage.",
+    "images": ["mc-template-fastapi-with-redis", "redis.latest"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-fastapi-with-redis"
+  },
+  {
+    "id": "flask-0",
+    "name": "Flask",
+    "description": "A Python Flask template for building lightweight, flexible web applications and REST APIs.",
+    "images": ["mc-template-flask"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-flask"
+  },
+  {
+    "id": "flask-with-redis-0",
+    "name": "Flask with Redis",
+    "description": "A Python Flask backend paired with Redis for simple key-value storage and lightweight APIs.",
+    "images": ["mc-template-flask-with-redis", "redis.7-alpine"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-flask-with-redis"
+  },
+  {
+    "id": "go-api-0",
+    "name": "Go API",
+    "description": "A minimal Go HTTP API template for building high-performance, compiled backend services.",
+    "images": ["mc-template-go-api"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-go-api"
+  },
+  {
+    "id": "go-api-with-redis-0",
+    "name": "Go API with Redis",
+    "description": "A Go API backend paired with Redis for fast caching, session management, and data storage.",
+    "images": ["mc-template-go-api-with-redis", "redis.7-alpine"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-go-api-with-redis"
+  },
+  {
+    "id": "hono-api-0",
+    "name": "Hono API",
+    "description": "A lightweight Hono API template for building fast, minimal HTTP APIs with modern JavaScript.",
+    "images": ["mc-template-hono-api"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-hono-api"
+  },
+  {
+    "id": "hono-api-with-duckdb-0",
+    "name": "Hono API with DuckDB",
+    "description": "A Hono API backend with embedded DuckDB for analytical queries and lightweight data processing.",
+    "images": ["mc-template-hono-api-with-duckdb"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-hono-api-with-duckdb"
+  },
+  {
+    "id": "laravel-with-mariadb-0",
+    "name": "Laravel with MariaDB",
+    "description": "A full-stack PHP Laravel application with a MariaDB database, ready for web apps and APIs.",
+    "images": ["mc-template-laravel-with-mariadb", "mariadb.latest"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-laravel-with-mariadb"
+  },
+  {
+    "id": "minecraft-0",
+    "name": "Minecraft",
+    "description": "A ready-to-run Minecraft server for quickly hosting and managing your own multiplayer world.",
+    "images": ["minecraft-server.latest"]
+  },
+  {
+    "id": "n8n-with-psql-0",
+    "name": "n8n with PostgreSQL",
+    "description": "n8n workflow automation platform with PostgreSQL, deployed to Magic Containers.",
+    "images": ["n8n.latest", "postgres.16-alpine"]
+  },
+  {
+    "id": "nextjs-0",
+    "name": "Next.js",
+    "description": "A Next.js template for building modern React applications with server-side rendering and static generation.",
+    "images": ["mc-template-nextjs"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-nextjs"
+  },
+  {
+    "id": "nextjs-with-psql-0",
+    "name": "Next.js with PostgreSQL",
+    "description": "A full-stack Next.js application connected to PostgreSQL for data-driven web apps.",
+    "images": ["mc-template-nextjs-with-postgres", "postgres.17-alpine"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-nextjs-with-postgres"
+  },
+  {
+    "id": "nuxt-0",
+    "name": "Nuxt",
+    "description": "A Nuxt template for building modern Vue applications with server-side rendering and static generation.",
+    "images": ["mc-template-nuxt"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-nuxt"
+  },
+  {
+    "id": "rails-0",
+    "name": "Rails App",
+    "description": "A Ruby on Rails template for rapidly building full-featured web applications and APIs.",
+    "images": ["mc-template-rails"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-rails"
+  },
+  {
+    "id": "umami-with-psql-0",
+    "name": "Umami Analytics",
+    "description": "A self-hosted Umami analytics setup for simple, privacy-focused website visitor insights.",
+    "images": ["umami.postgresql-latest", "postgres.16-alpine"]
+  },
+  {
+    "id": "vite-react-nginx-0",
+    "name": "Vite + React (Nginx)",
+    "description": "A Vite-powered React frontend served through Nginx for fast, production-ready single-page applications.",
+    "images": ["mc-template-vite-react-nginx"],
+    "repository": "https://github.com/jamie-at-bunny/mc-template-vite-react-nginx"
+  },
+  {
+    "id": "wordpress-0",
+    "name": "WordPress",
+    "description": "A self-hosted WordPress CMS with MariaDB, ready to deploy on Magic Containers.",
+    "images": ["wordpress.apache", "mariadb.latest"]
+  }
+]

@@ -1,0 +1,38 @@
+{
+  "$schema": "../../packages/app-config/generated/schema.json",
+  "version": "2026-05-12",
+  "app": {
+    "name": "Umami Analytics",
+    "scaling": { "min": 1, "max": 1 },
+    "regions": ["DE"],
+    "containers": {
+      "umami": {
+        "image": "docker.io/umamisoftware/umami:postgresql-latest",
+        "env": {
+          "DATABASE_URL": "postgresql://umami:{{generate:db_password}}@localhost:5432/umami",
+          "APP_SECRET": "{{generate:app_secret}}",
+          "DISABLE_TELEMETRY": "1"
+        },
+        "endpoints": [
+          {
+            "type": "cdn",
+            "ssl": false,
+            "ports": [{ "public": 3000, "container": 3000 }]
+          }
+        ]
+      },
+      "postgres": {
+        "image": "docker.io/postgres:16-alpine",
+        "env": {
+          "POSTGRES_USER": "umami",
+          "POSTGRES_PASSWORD": "{{generate:db_password}}",
+          "POSTGRES_DB": "umami",
+          "PGDATA": "/var/lib/postgresql/data/pgdata"
+        },
+        "volumes": [
+          { "name": "pgdata", "mount": "/var/lib/postgresql/data", "size": 1 }
+        ]
+      }
+    }
+  }
+}

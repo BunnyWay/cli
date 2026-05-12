@@ -10,10 +10,15 @@ bun add @bunny.net/database-rest
 
 ## Quick start
 
+> ⚠️ `createRestHandler` does not authenticate requests. It is a CRUD
+> handler factory, not a server. **Always wrap it in an auth check before
+> exposing it to a network.** This package ships `requireAuth()` for the
+> common shared-token case; bring your own for anything more involved.
+
 ```ts
 import { createClient } from "@libsql/client";
 import { createLibSQLExecutor, introspect } from "@bunny.net/database-adapter-libsql";
-import { createRestHandler } from "@bunny.net/database-rest";
+import { createRestHandler, requireAuth } from "@bunny.net/database-rest";
 
 const client = createClient({ url: ":memory:" });
 
@@ -26,8 +31,15 @@ const schema = await introspect({ client });
 const executor = createLibSQLExecutor({ client });
 const handler = createRestHandler(executor, schema);
 
-Bun.serve({ port: 8080, fetch: handler });
+const token = process.env.API_TOKEN ?? crypto.randomUUID();
+const guarded = requireAuth(handler, { token });
+
+Bun.serve({ port: 8080, hostname: "127.0.0.1", fetch: guarded });
 ```
+
+Requests must then carry `Authorization: Bearer <token>`. See
+[`requireAuth()`](#requireauthhandler-options) for the full signature
+(cookies, public routes).
 
 ## Architecture
 
@@ -81,6 +93,53 @@ Bun.serve({ port: 8080, fetch: handler });
 | `openapi.title`   | `string`         | `"Database REST API"` | Title in the OpenAPI spec               |
 | `openapi.version` | `string`         | `schema.version`      | Version in the OpenAPI spec             |
 | `openapi.description` | `string`     | auto-generated        | Description in the OpenAPI spec         |
+
+### `requireAuth(handler, options): (req: Request) => Promise<Response>`
+
+Wraps any request handler with a shared-token check. Validates
+`Authorization: Bearer <token>` using a timing-safe comparison and
+optionally accepts the token via a named cookie. Returns `401` with
+`WWW-Authenticate: Bearer realm="database-rest"` on failure.
+
+```ts
+const guarded = requireAuth(handler, {
+  token: process.env.API_TOKEN!,
+  cookieName: "session",            // optional: also accept token in cookie
+  isPublic: (p) => p === "/auth",   // optional: pathnames to skip auth on
+});
+```
+
+#### Options
+
+| Option       | Type                              | Default | Description                                          |
+| ------------ | --------------------------------- | ------- | ---------------------------------------------------- |
+| `token`      | `string`                          | (required) | Shared secret the request must present.           |
+| `cookieName` | `string`                          | none    | If set, also accept the token from this cookie.      |
+| `isPublic`   | `(pathname: string) => boolean`   | none    | Pathnames for which auth is skipped (e.g. handshake).|
+
+#### Bringing your own auth
+
+`requireAuth` covers the shared-token case. For richer auth (Clerk,
+Auth0, JWT verification, per-row scopes), wrap `createRestHandler`'s
+result yourself; it returns a standard Web `Request → Response` handler,
+so any check that fits in a `fetch` wrapper works:
+
+```ts
+const handler = createRestHandler(executor, schema);
+
+Bun.serve({
+  fetch: async (req) => {
+    const session = await myAuthProvider.authenticate(req);
+    if (!session) return new Response("Unauthorized", { status: 401 });
+    return handler(req);
+  },
+});
+```
+
+The `requireAuth` API is intentionally shaped to grow a verifier-based
+variant (`{ verify: (req) => session | null }`) later without breaking
+existing `{ token }` callers. When there's demand, it lands as an
+additive widening.
 
 ## Endpoints
 
@@ -272,14 +331,17 @@ const { data } = await client.GET("/users", {
 
 ## Development
 
-Run a local dev server with seed data:
+Run the tests:
 
 ```bash
-bun packages/database-rest/dev.ts
+bun test
 ```
 
-Or on a custom port:
+A throwaway playground is available under `examples/` for hacking on the
+handler with curl. It binds to `127.0.0.1` and serves an in-memory SQLite
+seeded with toy data (no auth, not for production):
 
 ```bash
-PORT=3000 bun packages/database-rest/dev.ts
+bun run example
+# or: PORT=3000 bun run example
 ```

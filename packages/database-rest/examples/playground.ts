@@ -1,9 +1,14 @@
+// Loopback-only playground for hacking on @bunny.net/database-rest.
+// In-memory SQLite, seeded with toy data, reset on every start. No auth:
+// the server binds to 127.0.0.1 and the database is throwaway. Not intended
+// for production or for exposing to anything beyond localhost.
+
 import {
   createLibSQLExecutor,
   introspect,
 } from "@bunny.net/database-adapter-libsql";
 import { createClient } from "@libsql/client";
-import { createRestHandler } from "./src/index.ts";
+import { createRestHandler } from "../src/index.ts";
 
 const client = createClient({ url: ":memory:" });
 
@@ -37,12 +42,12 @@ const executor = createLibSQLExecutor({ client });
 const handler = createRestHandler(executor, schema);
 
 const port = Number(process.env.PORT) || 8080;
-const server = Bun.serve({ port, fetch: handler });
+const server = Bun.serve({ port, hostname: "127.0.0.1", fetch: handler });
 
-console.log(`Listening on http://localhost:${server.port}`);
+console.log(`Listening on http://127.0.0.1:${server.port}`);
 console.log();
 console.log("Try:");
-const base = `http://localhost:${server.port}`;
+const base = `http://127.0.0.1:${server.port}`;
 console.log(`  curl ${base}/                              # OpenAPI spec`);
 console.log(`  curl ${base}/users                         # List users`);
 console.log(`  curl ${base}/users?select=id,name          # Select columns`);

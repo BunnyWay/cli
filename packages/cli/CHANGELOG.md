@@ -1,5 +1,24 @@
 # @bunny.net/cli
 
+## 0.4.1
+
+### Patch Changes
+
+- [#65](https://github.com/BunnyWay/cli/pull/65) [`aa2f707`](https://github.com/BunnyWay/cli/commit/aa2f70729b1aba5dc781d762a160c52adbac4628) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny db show`, `bunny db usage`, and `bunny db list` now read the new integer `current_size_bytes` / `size_max_bytes` fields from the database API and format them locally, instead of round-tripping the deprecated pre-formatted string fields through a parser. Storage values are no longer subject to the precision loss from re-parsing `"20.5 KB"`-style strings.
+
+- [#63](https://github.com/BunnyWay/cli/pull/63) [`4be3c3d`](https://github.com/BunnyWay/cli/commit/4be3c3d6841a9e4679fb216e8ee083df873c9224) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Internal: rename `@bunny.net/api` workspace package to `@bunny.net/openapi-client` for clarity. No user-facing CLI changes.
+
+- [#65](https://github.com/BunnyWay/cli/pull/65) [`aa2f707`](https://github.com/BunnyWay/cli/commit/aa2f70729b1aba5dc781d762a160c52adbac4628) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Update OpenAPI specs and align CLI with new enum casing.
+
+  - `database` spec bumped to `0.0.130`: adds `size_max_bytes` / `current_size_bytes`, deprecates the string `size_max` / `current_size`.
+  - `magic-containers` spec bumped to `v1.9.19.0`: adds `/apps/{appId}/summary` and `/nodes/plain` endpoints, `DeleteApplication` is now async, and several enums (`ApplicationStatus`, `ApplicationRuntimeType`, `AddRegistryStatus`, `RemoveRegistryStatus`, `AnycastIpProtocolVersion`) switched to lowercase / camelCase values.
+  - `core` spec: adds External DNS certificate request/complete endpoints and new Stream Video Library / Storage Zone operations; pull-zone and storage-zone list operation IDs renamed (`Index` → `IndexAll`).
+  - `bunny apps list` now correctly maps the lowercase `ApplicationStatus` values (`active`, `progressing`, etc.) to display labels; previously a recent API change caused the column to fall through to the raw status string.
+
+- [#61](https://github.com/BunnyWay/cli/pull/61) [`73a2dd9`](https://github.com/BunnyWay/cli/commit/73a2dd95ae1d367ffd90a2ff65856fcce0ded739) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(scripts): pass `--` separator to `git clone` in `bunny scripts init` so the template repo URL is always treated as a positional argument, hardening against `git` argv injection.
+
+- [#60](https://github.com/BunnyWay/cli/pull/60) [`f9cbdbb`](https://github.com/BunnyWay/cli/commit/f9cbdbb75c259c29d3bfc131a7c0ca93b42bef05) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - bunny api no longer truncates large JSON responses when piping
+
 ## 0.4.0
 
 ### Minor Changes

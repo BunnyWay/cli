@@ -1,0 +1,57 @@
+{
+  "$schema": "../../packages/app-config/generated/schema.json",
+  "version": "2026-05-12",
+  "app": {
+    "name": "WordPress",
+    "scaling": { "min": 1, "max": 1 },
+    "regions": ["DE"],
+    "containers": {
+      "wordpress": {
+        "image": "docker.io/wordpress:apache",
+        "env": {
+          "WORDPRESS_DB_HOST": "127.0.0.1",
+          "WORDPRESS_DB_USER": "wordpress",
+          "WORDPRESS_DB_PASSWORD": "{{generate:db_password}}",
+          "WORDPRESS_DB_NAME": "wordpress",
+          "WORDPRESS_TABLE_PREFIX": "wp_",
+          "WORDPRESS_AUTH_KEY": "{{generate:wp_auth_key}}",
+          "WORDPRESS_SECURE_AUTH_KEY": "{{generate:wp_secure_auth_key}}",
+          "WORDPRESS_LOGGED_IN_KEY": "{{generate:wp_logged_in_key}}",
+          "WORDPRESS_NONCE_KEY": "{{generate:wp_nonce_key}}",
+          "WORDPRESS_AUTH_SALT": "{{generate:wp_auth_salt}}",
+          "WORDPRESS_SECURE_AUTH_SALT": "{{generate:wp_secure_auth_salt}}",
+          "WORDPRESS_LOGGED_IN_SALT": "{{generate:wp_logged_in_salt}}",
+          "WORDPRESS_NONCE_SALT": "{{generate:wp_nonce_salt}}",
+          "WORDPRESS_DEBUG": "0"
+        },
+        "endpoints": [
+          {
+            "type": "cdn",
+            "ssl": false,
+            "ports": [{ "public": 80, "container": 80 }]
+          }
+        ],
+        "volumes": [
+          {
+            "name": "wp-content",
+            "mount": "/var/www/html/wp-content",
+            "size": 10
+          }
+        ]
+      },
+      "mariadb": {
+        "image": "docker.io/mariadb:latest",
+        "env": {
+          "MARIADB_ROOT_PASSWORD": "{{generate:root_password}}",
+          "MARIADB_USER": "wordpress",
+          "MARIADB_PASSWORD": "{{generate:db_password}}",
+          "MARIADB_DATABASE": "wordpress",
+          "MARIADB_AUTO_UPGRADE": "0"
+        },
+        "volumes": [
+          { "name": "mariadb-data", "mount": "/var/lib/mysql", "size": 10 }
+        ]
+      }
+    }
+  }
+}
