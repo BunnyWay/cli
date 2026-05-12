@@ -1,0 +1,32 @@
+{
+  "$schema": "../../packages/app-config/generated/schema.json",
+  "version": "2026-05-12",
+  "app": {
+    "name": "Minecraft",
+    "scaling": { "min": 1, "max": 1 },
+    "regions": ["DE"],
+    "containers": {
+      "world": {
+        "image": "itzg/minecraft-server:latest",
+        "env": {
+          "EULA": "TRUE",
+          "MAX_PLAYERS": "5",
+          "MOTD": "Welcome to the family Minecraft server!",
+          "MEMORY": "12G",
+          "INIT_MEMORY": "1G",
+          "USE_AIKAR_FLAGS": "true",
+          "ALLOW_CHEATS": "true",
+          "OPS": "",
+          "OVERRIDE_OPS": "true"
+        },
+        "endpoints": [
+          {
+            "type": "anycast",
+            "ports": [{ "public": 25565, "container": 25565 }]
+          }
+        ],
+        "volumes": [{ "name": "data", "mount": "/data", "size": 10 }]
+      }
+    }
+  }
+}

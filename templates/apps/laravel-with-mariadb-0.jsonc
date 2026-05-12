@@ -1,0 +1,45 @@
+{
+  "$schema": "../../packages/app-config/generated/schema.json",
+  "version": "2026-05-12",
+  "app": {
+    "name": "Laravel with MariaDB",
+    "scaling": { "min": 1, "max": 1 },
+    "regions": ["DE"],
+    "containers": {
+      "app": {
+        "image": "jamie-at-bunny/mc-template-laravel-with-mariadb",
+        "env": {
+          "DB_CONNECTION": "mariadb",
+          "DB_HOST": "127.0.0.1",
+          "DB_PORT": "3306",
+          "DB_DATABASE": "laravel",
+          "DB_USERNAME": "laravel",
+          "DB_PASSWORD": "{{generate:db_password}}",
+          "APP_ENV": "production",
+          "APP_DEBUG": "true",
+          "APP_KEY": "base64:kJe1hjF984sYIqROb+OgQxjFlKASfQgQzBhc1POP+A0="
+        },
+        "endpoints": [
+          {
+            "type": "cdn",
+            "ssl": false,
+            "ports": [{ "public": 80, "container": 80 }]
+          }
+        ]
+      },
+      "db": {
+        "image": "mariadb:latest",
+        "env": {
+          "MARIADB_ROOT_PASSWORD": "{{generate:root_password}}",
+          "MARIADB_ALLOW_EMPTY_ROOT_PASSWORD": "0",
+          "MARIADB_RANDOM_ROOT_PASSWORD": "0",
+          "MARIADB_USER": "laravel",
+          "MARIADB_PASSWORD": "{{generate:db_password}}",
+          "MARIADB_DATABASE": "laravel",
+          "MARIADB_AUTO_UPGRADE": "0"
+        },
+        "volumes": [{ "name": "mariadb-data", "mount": "/var/lib/mysql", "size": 10 }]
+      }
+    }
+  }
+}

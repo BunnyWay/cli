@@ -1,0 +1,35 @@
+{
+  "$schema": "../../packages/app-config/generated/schema.json",
+  "version": "2026-05-12",
+  "app": {
+    "name": "Next.js with PostgreSQL",
+    "scaling": { "min": 1, "max": 1 },
+    "regions": ["DE"],
+    "containers": {
+      "app": {
+        "image": "jamie-at-bunny/mc-template-nextjs-with-postgres",
+        "env": {
+          "DATABASE_URL": "postgres://postgres:{{generate:db_password}}@localhost:5432/postgres"
+        },
+        "endpoints": [
+          {
+            "type": "cdn",
+            "ssl": false,
+            "ports": [{ "public": 3000, "container": 3000 }]
+          }
+        ]
+      },
+      "db": {
+        "image": "postgres:17-alpine",
+        "env": {
+          "POSTGRES_PASSWORD": "{{generate:db_password}}",
+          "POSTGRES_USER": "postgres",
+          "POSTGRES_DB": "postgres",
+          "POSTGRES_HOST_AUTH_METHOD": "scram-sha-256",
+          "PGDATA": "/var/lib/postgresql/data/pgdata"
+        },
+        "volumes": [{ "name": "data", "mount": "/var/lib/postgresql/data", "size": 1 }]
+      }
+    }
+  }
+}

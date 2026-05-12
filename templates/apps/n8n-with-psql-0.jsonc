@@ -1,0 +1,43 @@
+{
+  "$schema": "../../packages/app-config/generated/schema.json",
+  "version": "2026-05-12",
+  "app": {
+    "name": "n8n",
+    "scaling": { "min": 1, "max": 1 },
+    "regions": ["DE"],
+    "containers": {
+      "n8n": {
+        "image": "n8nio/n8n:latest",
+        "env": {
+          "DB_TYPE": "postgresdb",
+          "DB_POSTGRESDB_DATABASE": "n8n",
+          "DB_POSTGRESDB_HOST": "localhost",
+          "DB_POSTGRESDB_PORT": "5432",
+          "DB_POSTGRESDB_USER": "n8n",
+          "DB_POSTGRESDB_SCHEMA": "public",
+          "DB_POSTGRESDB_PASSWORD": "{{generate:db_password}}",
+          "GENERIC_TIMEZONE": "UTC",
+          "TZ": "UTC"
+        },
+        "endpoints": [
+          {
+            "type": "cdn",
+            "ssl": false,
+            "ports": [{ "public": 5678, "container": 5678 }]
+          }
+        ]
+      },
+      "postgres": {
+        "image": "postgres:16-alpine",
+        "env": {
+          "POSTGRES_PASSWORD": "{{generate:db_password}}",
+          "POSTGRES_USER": "n8n",
+          "POSTGRES_DB": "n8n",
+          "POSTGRES_HOST_AUTH_METHOD": "scram-sha-256",
+          "PGDATA": "/var/lib/postgresql/data/pgdata"
+        },
+        "volumes": [{ "name": "postgres-data", "mount": "/var/lib/postgresql/data", "size": 1 }]
+      }
+    }
+  }
+}

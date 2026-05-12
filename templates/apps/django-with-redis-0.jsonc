@@ -1,0 +1,28 @@
+{
+  "$schema": "../../packages/app-config/generated/schema.json",
+  "version": "2026-05-12",
+  "app": {
+    "name": "Django with Redis",
+    "scaling": { "min": 1, "max": 1 },
+    "regions": ["DE"],
+    "containers": {
+      "app": {
+        "image": "jamie-at-bunny/mc-template-django-with-redis",
+        "env": {
+          "REDIS_URL": "redis://localhost:6379"
+        },
+        "endpoints": [
+          {
+            "type": "cdn",
+            "ssl": false,
+            "ports": [{ "public": 8000, "container": 8000 }]
+          }
+        ]
+      },
+      "db": {
+        "image": "redis:7-alpine",
+        "volumes": [{ "name": "redis-data", "mount": "/data", "size": 5 }]
+      }
+    }
+  }
+}

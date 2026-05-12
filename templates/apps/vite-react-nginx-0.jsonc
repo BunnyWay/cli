@@ -1,0 +1,21 @@
+{
+  "$schema": "../../packages/app-config/generated/schema.json",
+  "version": "2026-05-12",
+  "app": {
+    "name": "Vite + React (Nginx)",
+    "scaling": { "min": 1, "max": 1 },
+    "regions": ["DE"],
+    "containers": {
+      "app": {
+        "image": "jamie-at-bunny/mc-template-vite-react-nginx",
+        "endpoints": [
+          {
+            "type": "cdn",
+            "ssl": false,
+            "ports": [{ "public": 80, "container": 80 }]
+          }
+        ]
+      }
+    }
+  }
+}
