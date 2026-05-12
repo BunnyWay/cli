@@ -30,6 +30,8 @@ const ARG_VIEWS_DIR = "views-dir";
 
 const PRINT_MODES = ["default", "table", "json", "csv", "markdown"];
 
+const TOKEN_TTL_MINUTES = 30;
+
 /** Create a ShellLogger adapter that wraps the CLI logger. */
 function shellLogger(): ShellLogger {
   return {
@@ -56,11 +58,18 @@ async function resolveCredentials(
   profile: string,
   apiKeyOverride?: string,
   verbose = false,
-): Promise<{ url: string; token: string; databaseId: string | undefined }> {
+): Promise<{
+  url: string;
+  token: string;
+  databaseId: string | undefined;
+  tokenGenerated: boolean;
+}> {
   let url = urlArg ?? readEnvValue(ENV_DATABASE_URL)?.value;
   let token = tokenArg ?? readEnvValue(ENV_DATABASE_AUTH_TOKEN)?.value;
 
-  if (url && token) return { url, token, databaseId: databaseIdArg };
+  if (url && token) {
+    return { url, token, databaseId: databaseIdArg, tokenGenerated: false };
+  }
 
   const config = resolveConfig(profile, apiKeyOverride);
   const apiClient = createDbClient(clientOptions(config, verbose));
@@ -71,6 +80,7 @@ async function resolveCredentials(
   spin.start();
 
   const fetches: Promise<any>[] = [];
+  const willGenerateToken = !token;
 
   if (!url) {
     fetches.push(
@@ -82,12 +92,15 @@ async function resolveCredentials(
     fetches.push(Promise.resolve(null));
   }
 
-  if (!token) {
+  if (willGenerateToken) {
     spin.text = "Generating token...";
+    const expiresAt = new Date(
+      Date.now() + TOKEN_TTL_MINUTES * 60 * 1000,
+    ).toISOString();
     fetches.push(
       apiClient.PUT("/v2/databases/{db_id}/auth/generate", {
         params: { path: { db_id: databaseId } },
-        body: { authorization: "full-access", expires_at: null },
+        body: { authorization: "full-access", expires_at: expiresAt },
       }),
     );
   }
@@ -97,13 +110,13 @@ async function resolveCredentials(
   spin.stop();
 
   if (!url && dbResult) url = dbResult.data?.db?.url;
-  if (!token && tokenResult) token = tokenResult.data?.token;
+  if (willGenerateToken && tokenResult) token = tokenResult.data?.token;
 
   if (!url || !token) {
     throw new UserError("Could not resolve database URL or generate token.");
   }
 
-  return { url, token, databaseId };
+  return { url, token, databaseId, tokenGenerated: willGenerateToken };
 }
 
 export const dbShellCommand = defineCommand<{
@@ -204,6 +217,7 @@ export const dbShellCommand = defineCommand<{
       url,
       token,
       databaseId: resolvedDbId,
+      tokenGenerated,
     } = await resolveCredentials(
       urlArg,
       tokenArg,
@@ -212,6 +226,12 @@ export const dbShellCommand = defineCommand<{
       apiKey,
       verbose,
     );
+
+    if (tokenGenerated && output !== "json" && modeArg !== "json") {
+      logger.dim(
+        `Shell session active for ${TOKEN_TTL_MINUTES} minutes. Re-run after that to reconnect.`,
+      );
+    }
 
     const client = createShellClient({ url, authToken: token });
     const log = shellLogger();

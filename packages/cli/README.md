@@ -259,6 +259,8 @@ bunny db quickstart <database-id> --lang bun
 
 Open an interactive SQL shell for a database. Supports multiple output modes, sensitive column masking, persistent history, and a set of dot-commands for quick introspection.
 
+When no `--token` is supplied and `BUNNY_DATABASE_AUTH_TOKEN` is not set, the shell session is active for 30 minutes. Re-run the command to reconnect, or pass `--token` / set `BUNNY_DATABASE_AUTH_TOKEN` to use your own credentials.
+
 ```bash
 # Interactive shell (auto-detects database from .env)
 bunny db shell

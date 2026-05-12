@@ -90,7 +90,6 @@ export const scriptsShowCommand = defineCommand<ShowArgs>({
           },
           { key: "Default Hostname", value: script.DefaultHostname ?? "" },
           { key: "System Hostname", value: script.SystemHostname ?? "" },
-          { key: "Deployment Key", value: script.DeploymentKey ?? "" },
           {
             key: "Current Release",
             value: String(script.CurrentReleaseId ?? "—"),

@@ -11,7 +11,11 @@ export const configShowCommand = defineCommand({
     const cfg = resolveConfig(profile, apiKey);
 
     if (output === "json") {
-      logger.log(JSON.stringify(cfg, null, 2));
+      const { apiKey: rawKey, ...rest } = cfg;
+      const masked = rawKey
+        ? { ...rest, apiKey: `${rawKey.slice(0, 8)}...` }
+        : rest;
+      logger.log(JSON.stringify(masked, null, 2));
       return;
     }
 

@@ -105,7 +105,6 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
         const apiKey = url.searchParams.get("apiKey");
 
         if (returnedState !== state) {
-          reject(new Error("State mismatch: possible CSRF attack"));
           return new Response("Invalid state parameter.", {
             status: 400,
             headers: NO_STORE,
