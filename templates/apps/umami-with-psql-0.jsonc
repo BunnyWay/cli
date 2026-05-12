@@ -29,7 +29,9 @@
           "POSTGRES_DB": "umami",
           "PGDATA": "/var/lib/postgresql/data/pgdata"
         },
-        "volumes": [{ "name": "pgdata", "mount": "/var/lib/postgresql/data", "size": 1 }]
+        "volumes": [
+          { "name": "pgdata", "mount": "/var/lib/postgresql/data", "size": 1 }
+        ]
       }
     }
   }

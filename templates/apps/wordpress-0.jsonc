@@ -31,7 +31,13 @@
             "ports": [{ "public": 80, "container": 80 }]
           }
         ],
-        "volumes": [{ "name": "wp-content", "mount": "/var/www/html/wp-content", "size": 10 }]
+        "volumes": [
+          {
+            "name": "wp-content",
+            "mount": "/var/www/html/wp-content",
+            "size": 10
+          }
+        ]
       },
       "mariadb": {
         "image": "mariadb:latest",
@@ -42,7 +48,9 @@
           "MARIADB_DATABASE": "wordpress",
           "MARIADB_AUTO_UPGRADE": "0"
         },
-        "volumes": [{ "name": "mariadb-data", "mount": "/var/lib/mysql", "size": 10 }]
+        "volumes": [
+          { "name": "mariadb-data", "mount": "/var/lib/mysql", "size": 10 }
+        ]
       }
     }
   }

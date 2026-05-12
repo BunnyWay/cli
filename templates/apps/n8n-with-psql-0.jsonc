@@ -36,7 +36,13 @@
           "POSTGRES_HOST_AUTH_METHOD": "scram-sha-256",
           "PGDATA": "/var/lib/postgresql/data/pgdata"
         },
-        "volumes": [{ "name": "postgres-data", "mount": "/var/lib/postgresql/data", "size": 1 }]
+        "volumes": [
+          {
+            "name": "postgres-data",
+            "mount": "/var/lib/postgresql/data",
+            "size": 1
+          }
+        ]
       }
     }
   }

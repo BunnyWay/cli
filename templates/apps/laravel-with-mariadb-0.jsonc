@@ -38,7 +38,9 @@
           "MARIADB_DATABASE": "laravel",
           "MARIADB_AUTO_UPGRADE": "0"
         },
-        "volumes": [{ "name": "mariadb-data", "mount": "/var/lib/mysql", "size": 10 }]
+        "volumes": [
+          { "name": "mariadb-data", "mount": "/var/lib/mysql", "size": 10 }
+        ]
       }
     }
   }
