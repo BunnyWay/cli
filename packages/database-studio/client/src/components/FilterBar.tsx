@@ -25,8 +25,6 @@ const OPERATORS = [
   { value: "IS NOT NULL", label: "IS NOT NULL" },
 ];
 
-export const FILTER_OPERATORS = new Set(OPERATORS.map((o) => o.value));
-
 export const NULLARY_OPERATORS = new Set(["IS NULL", "IS NOT NULL"]);
 
 export interface FilterBarProps {

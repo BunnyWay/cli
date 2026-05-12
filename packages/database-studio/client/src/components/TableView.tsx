@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  FILTER_OPERATORS,
   type FilterCondition,
   type FilterMode,
   fetchTableRows,
@@ -17,11 +18,7 @@ import {
 } from "@/api.ts";
 import { ColumnToggleMenu } from "@/components/ColumnToggleMenu";
 import { DataTab } from "@/components/DataTab";
-import {
-  FILTER_OPERATORS,
-  FilterBar,
-  NULLARY_OPERATORS,
-} from "@/components/FilterBar";
+import { FilterBar, NULLARY_OPERATORS } from "@/components/FilterBar";
 import { SchemaTab } from "@/components/SchemaTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -108,6 +105,7 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
   }, [appliedFilters.length]);
 
   useEffect(() => {
+    let cancelled = false;
     setTab("data");
     setColumnVisibility({});
     setColumnsOpen(false);
@@ -116,23 +114,41 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
     setSchema(null);
     setData(null);
     fetchTableSchema(tableName)
-      .then((s) => setSchema(s))
+      .then((s) => {
+        if (cancelled) return;
+        setSchema(s);
+      })
       .catch((e) => {
+        if (cancelled) return;
         setError(e instanceof Error ? e.message : String(e));
         setLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [tableName]);
 
   useEffect(() => {
     if (!schema) return;
+    let cancelled = false;
     setLoading(true);
     fetchTableRows(tableName, page, limit, appliedFilters, sort, filterMode)
       .then((d) => {
+        if (cancelled) return;
         setData(d);
         setError(null);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [page, limit, tableName, filterMode, sort, appliedFilters, schema]);
 
   function refresh() {
