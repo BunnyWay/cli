@@ -272,14 +272,17 @@ const { data } = await client.GET("/users", {
 
 ## Development
 
-Run a local dev server with seed data:
+Run the tests:
 
 ```bash
-bun packages/database-rest/dev.ts
+bun test
 ```
 
-Or on a custom port:
+A throwaway playground is available under `examples/` for hacking on the
+handler with curl. It binds to `127.0.0.1` and serves an in-memory SQLite
+seeded with toy data — no auth, not for production:
 
 ```bash
-PORT=3000 bun packages/database-rest/dev.ts
+bun run example
+# or: PORT=3000 bun run example
 ```
