@@ -1,5 +1,12 @@
 # @bunny.net/database-adapter-libsql
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`b74b125`](https://github.com/BunnyWay/cli/commit/b74b12548a6a797f5a1b07b7d55f7528c3f2981b)]:
+  - @bunny.net/database-rest@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes

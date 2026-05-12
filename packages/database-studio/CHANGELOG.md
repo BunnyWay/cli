@@ -1,5 +1,21 @@
 # @bunny.net/database-studio
 
+## 0.1.2
+
+### Patch Changes
+
+- [#68](https://github.com/BunnyWay/cli/pull/68) [`b74b125`](https://github.com/BunnyWay/cli/commit/b74b12548a6a797f5a1b07b7d55f7528c3f2981b) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Harden URL handling in the embedded database studio with thanks to @jedisct1
+
+- [#71](https://github.com/BunnyWay/cli/pull/71) [`fa1f00e`](https://github.com/BunnyWay/cli/commit/fa1f00ebd1152813728f22bd00e47d5d98aab28c) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Harden credential handling across the CLI and database studio: scrub auth tokens from URLs on failure, ignore invalid OAuth callback state, keep `--force` scoped to the remote delete (the `.env` cleanup still confirms), mask the API key in JSON output, expire `db shell` sessions after 30 minutes, and hide the Edge Script deployment key from default output.
+
+  Thanks to @jedisct1.
+
+- [#68](https://github.com/BunnyWay/cli/pull/68) [`b74b125`](https://github.com/BunnyWay/cli/commit/b74b12548a6a797f5a1b07b7d55f7528c3f2981b) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - validate URL filters/sort and encode lookup column with thanks to @jedisct1
+
+- Updated dependencies [[`b74b125`](https://github.com/BunnyWay/cli/commit/b74b12548a6a797f5a1b07b7d55f7528c3f2981b)]:
+  - @bunny.net/database-rest@0.1.1
+  - @bunny.net/database-adapter-libsql@0.1.1
+
 ## 0.1.1
 
 ### Patch Changes
