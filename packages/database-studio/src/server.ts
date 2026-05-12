@@ -4,7 +4,7 @@ import {
   createLibSQLExecutor,
   introspect,
 } from "@bunny.net/database-adapter-libsql";
-import { createRestHandler } from "@bunny.net/database-rest";
+import { createRestHandler, requireAuth } from "@bunny.net/database-rest";
 import type { Client } from "@libsql/client";
 import { assets } from "./client-manifest.ts";
 
@@ -41,24 +41,6 @@ const safeEqual = (a: string, b: string): boolean => {
   return timingSafeEqual(ab, bb);
 };
 
-const extractCookie = (req: Request, name: string): string | null => {
-  const header = req.headers.get("cookie");
-  if (!header) return null;
-  for (const pair of header.split(";")) {
-    const trimmed = pair.trim();
-    const eq = trimmed.indexOf("=");
-    if (eq < 0) continue;
-    if (trimmed.slice(0, eq) === name) return trimmed.slice(eq + 1);
-  }
-  return null;
-};
-
-const unauthorized = (): Response =>
-  new Response(JSON.stringify({ message: "Unauthorized" }), {
-    status: 401,
-    headers: { "Content-Type": "application/json" },
-  });
-
 const handleAuth = async (
   req: Request,
   sessionToken: string,
@@ -77,7 +59,10 @@ const handleAuth = async (
   }
   const provided = (body as { token?: unknown })?.token;
   if (typeof provided !== "string" || !safeEqual(provided, sessionToken)) {
-    return unauthorized();
+    return new Response(JSON.stringify({ message: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
   }
   return new Response(null, {
     status: 204,
@@ -101,11 +86,14 @@ export async function startStudio(options: StudioOptions): Promise<void> {
 
   const schema = await introspect({ client });
   const executor = createLibSQLExecutor({ client });
-  const handleRest = createRestHandler(executor, schema, { basePath: "/api" });
   // Random per-startup token. The auto-opened browser URL carries it once as
   // ?token=…; the client posts it to /api/auth which then sets an HttpOnly
   // cookie that gates every subsequent /api/* request.
   const sessionToken = randomBytes(32).toString("hex");
+  const handleRest = requireAuth(
+    createRestHandler(executor, schema, { basePath: "/api" }),
+    { token: sessionToken, cookieName: AUTH_COOKIE },
+  );
 
   let server: ReturnType<typeof Bun.serve>;
   try {
@@ -125,14 +113,10 @@ export async function startStudio(options: StudioOptions): Promise<void> {
 
         // API routes - delegate to REST handler
         if (pathname.startsWith("/api")) {
-          // /api/auth is the handshake endpoint — public but only succeeds
+          // /api/auth is the handshake endpoint: public but only succeeds
           // with the correct session token.
           if (pathname === "/api/auth") {
             return await handleAuth(req, sessionToken);
-          }
-          const cookie = extractCookie(req, AUTH_COOKIE);
-          if (!cookie || !safeEqual(cookie, sessionToken)) {
-            return unauthorized();
           }
           try {
             return await handleRest(req);

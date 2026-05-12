@@ -1,5 +1,5 @@
 // Loopback-only playground for hacking on @bunny.net/database-rest.
-// In-memory SQLite, seeded with toy data, reset on every start. No auth —
+// In-memory SQLite, seeded with toy data, reset on every start. No auth:
 // the server binds to 127.0.0.1 and the database is throwaway. Not intended
 // for production or for exposing to anything beyond localhost.
 
