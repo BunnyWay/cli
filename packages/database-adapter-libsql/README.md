@@ -1,6 +1,6 @@
 # @bunny.net/database-adapter-libsql
 
-Bunny Database adapter for `@bunny.net/database-rest`. Provides a `DatabaseExecutor` implementation and database introspection for libSQL databases.
+bunny.net Database adapter for `@bunny.net/database-rest`. Provides a `DatabaseExecutor` implementation and database introspection for libSQL databases.
 
 ## Install
 

@@ -48,7 +48,7 @@ Requests must then carry `Authorization: Bearer <token>`. See
 ```
 database-openapi          - schema types + OpenAPI spec generation
 database-rest             - routing, query parsing, SQL building, handler
-database-adapter-libsql   - executor + introspection for Bunny Database (libSQL)
+database-adapter-libsql   - executor + introspection for bunny.net Database (libSQL)
 ```
 
 The `DatabaseExecutor` interface is simple:

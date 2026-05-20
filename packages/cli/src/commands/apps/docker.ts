@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { createMcClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import prompts from "prompts";
@@ -96,10 +99,12 @@ export async function pushImage(tag: string): Promise<void> {
   const exitCode = await proc.exited;
 
   if (exitCode !== 0) {
-    throw new UserError(
-      `Docker push failed (exit code ${exitCode}).`,
-      "Ensure you are logged in to the registry (`docker login <hostname>`).",
-    );
+    const hostname = imageHostname(tag);
+    const hint =
+      hostname === "ghcr.io"
+        ? "Log in with `gh auth token | docker login ghcr.io -u <user> --password-stdin`, or ensure your token has write:packages scope."
+        : `Run \`docker login ${hostname ?? "<hostname>"}\` and try again. Check that your token has push permission.`;
+    throw new UserError(`Docker push failed (exit code ${exitCode}).`, hint);
   }
 }
 
@@ -133,15 +138,160 @@ export async function dockerLogin(
 }
 
 /**
+ * Check `~/.docker/config.json` for an existing credential record for
+ * `hostname`. Looks at both the `auths` map (where Docker Desktop leaves
+ * a `{}` marker even when the real cred lives in a credsStore) and the
+ * `credHelpers` map (per-host helpers).
+ *
+ * Not a guarantee the cred is still valid (tokens expire), but a
+ * strong signal that `docker login` has been run here.
+ *
+ * Takes an optional `configPath` to make the function testable.
+ */
+export function dockerHasCredentials(
+  hostname: string,
+  configPath?: string,
+): boolean {
+  const path = configPath ?? join(homedir(), ".docker", "config.json");
+  if (!existsSync(path)) return false;
+  try {
+    const config = JSON.parse(readFileSync(path, "utf-8")) as {
+      auths?: Record<string, unknown>;
+      credHelpers?: Record<string, string>;
+    };
+    if (config.auths && hostname in config.auths) return true;
+    if (config.credHelpers && hostname in config.credHelpers) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check whether `gh` is on PATH and the user is authenticated.
+ * Used to offer a one-click docker-login flow for ghcr.io.
+ */
+export async function ghIsAuthenticated(): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(["gh", "auth", "status"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return (await proc.exited) === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Log in to a registry using the local `gh` CLI for credentials.
+ *
+ * The user is already authenticated to GitHub, so we read their username
+ * and token via `gh api user` / `gh auth token`, then pipe them through
+ * the normal `docker login` flow. Token never touches stdout/stderr.
+ */
+export async function ghDockerLogin(hostname: string): Promise<void> {
+  const userProc = Bun.spawn(["gh", "api", "user", "--jq", ".login"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if ((await userProc.exited) !== 0) {
+    throw new UserError(
+      "`gh api user` failed.",
+      "Ensure the GitHub CLI is authenticated (`gh auth status`).",
+    );
+  }
+  const username = (await new Response(userProc.stdout).text()).trim();
+
+  const tokenProc = Bun.spawn(["gh", "auth", "token"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if ((await tokenProc.exited) !== 0) {
+    throw new UserError("`gh auth token` failed.");
+  }
+  const token = (await new Response(tokenProc.stdout).text()).trim();
+
+  await dockerLogin(hostname, username, token);
+}
+
+/**
+ * Ensure docker is logged in to `hostname` before a push. If not, offer
+ * a login flow:
+ *
+ * - `ghcr.io` + `gh` authenticated → one-click via GitHub CLI
+ * - any host → fall back to manual username / password prompts
+ *
+ * On success, credentials persist in `~/.docker/config.json` so future
+ * deploys skip this step.
+ */
+export async function ensureRegistryLogin(hostname: string): Promise<void> {
+  if (dockerHasCredentials(hostname)) return;
+
+  logger.warn(`Not logged in to ${hostname}.`);
+
+  if (hostname === "ghcr.io" && (await ghIsAuthenticated())) {
+    const { value } = await prompts({
+      type: "confirm",
+      name: "value",
+      message: "Use the GitHub CLI (`gh`) to log in to ghcr.io?",
+      initial: true,
+    });
+    if (value) {
+      const spin = spinner("Logging in via gh...");
+      spin.start();
+      try {
+        await ghDockerLogin(hostname);
+        spin.stop();
+        logger.success(`Logged in to ${hostname}.`);
+        return;
+      } catch (err) {
+        spin.stop();
+        throw err;
+      }
+    }
+  }
+
+  const { value: username } = await prompts({
+    type: "text",
+    name: "value",
+    message: `Username for ${hostname}:`,
+  });
+  if (!username) throw new UserError(`Login to ${hostname} required.`);
+
+  const { value: password } = await prompts({
+    type: "password",
+    name: "value",
+    message: `Password/Token for ${hostname}:`,
+  });
+  if (!password) throw new UserError(`Login to ${hostname} required.`);
+
+  const spin = spinner(`Logging in to ${hostname}...`);
+  spin.start();
+  try {
+    await dockerLogin(hostname, username, password);
+    spin.stop();
+    logger.success(`Logged in to ${hostname}.`);
+  } catch (err) {
+    spin.stop();
+    throw err;
+  }
+}
+
+/**
  * Extract the registry hostname from a Docker image reference.
  *
  * Returns null if the reference has no explicit hostname (i.e. it's a
  * Docker Hub library or user image like `nginx:latest` or `library/redis`).
+ *
+ * A hostname only exists when the ref has a `/`. Otherwise the first
+ * segment is just `name[:tag]`, not `host[:port]`. Without that check,
+ * `nginx:1.27` would be mis-read as the hostname `nginx:1.27`.
  */
 export function imageHostname(ref: string): string | null {
+  if (!ref.includes("/")) return null;
   const firstSegment = ref.split("/")[0];
   if (!firstSegment) return null;
-  // A hostname segment must contain a dot, a colon (port), or be "localhost".
   if (
     firstSegment.includes(".") ||
     firstSegment.includes(":") ||

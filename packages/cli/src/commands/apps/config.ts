@@ -38,32 +38,43 @@ function findConfigRoot(): string {
   }
 }
 
-/** Load and parse bunny.jsonc from cwd or nearest ancestor. */
-export function loadConfig(): BunnyAppConfig {
-  const root = findConfigRoot();
-  const jsoncPath = join(root, CONFIG_FILENAME);
+/**
+ * Load and parse the app config.
+ *
+ * When `explicitPath` is given (e.g. from `--config <path>`), that file
+ * is loaded verbatim. Otherwise we walk up from cwd looking for
+ * `bunny.jsonc`.
+ */
+export function loadConfig(explicitPath?: string): BunnyAppConfig {
+  const jsoncPath = explicitPath ?? join(findConfigRoot(), CONFIG_FILENAME);
 
   if (!existsSync(jsoncPath)) {
     throw new UserError(
-      "No bunny.jsonc found.",
-      "Run `bunny apps init` first.",
+      `No config file found at ${jsoncPath}.`,
+      "Run `bunny apps init` first, or pass --config <path>.",
     );
   }
 
   const raw = parseJsonc(readFileSync(jsoncPath, "utf-8"));
   if (raw && typeof raw === "object" && !("version" in raw)) {
     throw new UserError(
-      "bunny.jsonc is missing the `version` field.",
+      `${jsoncPath} is missing the \`version\` field.`,
       "Run `bunny apps pull` to regenerate it from the remote app.",
     );
   }
   return BunnyAppConfigSchema.parse(raw);
 }
 
-/** Write bunny.jsonc to the given directory (or cwd). */
-export function saveConfig(data: BunnyAppConfig, dir?: string): void {
-  const target = dir ?? process.cwd();
-  const path = join(target, CONFIG_FILENAME);
+/**
+ * Write the app config.
+ *
+ * When `explicitPath` is given the file is written exactly there;
+ * otherwise we write to `./bunny.jsonc` in the current working
+ * directory. The `--config <path>` flow uses the explicit form so that
+ * deploys can persist `app.id` back to whatever file the caller chose.
+ */
+export function saveConfig(data: BunnyAppConfig, explicitPath?: string): void {
+  const path = explicitPath ?? join(process.cwd(), CONFIG_FILENAME);
 
   // Re-key the object so the file always starts with $schema → version → app.
   const { $schema: _schema, version, ...rest } = data;
@@ -76,8 +87,14 @@ export function saveConfig(data: BunnyAppConfig, dir?: string): void {
   writeFileSync(path, `${JSON.stringify(output, null, 2)}\n`);
 }
 
-/** Check if bunny.jsonc exists in cwd or ancestor. */
-export function configExists(): boolean {
+/**
+ * Check whether an app config exists.
+ *
+ * When `explicitPath` is given we check that exact file; otherwise we
+ * walk up from cwd looking for `bunny.jsonc`.
+ */
+export function configExists(explicitPath?: string): boolean {
+  if (explicitPath) return existsSync(explicitPath);
   const root = findConfigRoot();
   return existsSync(join(root, CONFIG_FILENAME));
 }

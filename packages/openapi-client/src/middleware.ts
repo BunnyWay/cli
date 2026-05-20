@@ -40,12 +40,12 @@ const extractors: Array<
 ];
 
 /**
- * Shared openapi-fetch middleware for all Bunny API clients.
+ * Shared openapi-fetch middleware for all bunny.net API clients.
  *
  * **Request**: Injects `AccessKey` and `User-Agent` headers.
  *
  * **Response**: Intercepts non-OK responses and throws {@link ApiError},
- * normalizing the two different error formats used across Bunny APIs:
+ * normalizing the two different error formats used across bunny.net APIs:
  *
  * - **Core / Compute** use `ApiErrorData` (`{ ErrorKey, Field, Message }`).
  *   Only 400 responses have a JSON body; 401/404/500 are empty.

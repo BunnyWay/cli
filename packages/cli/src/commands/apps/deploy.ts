@@ -1,8 +1,5 @@
-import { existsSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { createMcClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
-import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -12,7 +9,6 @@ import { spinner } from "../../core/ui.ts";
 import {
   type BunnyAppConfig,
   type ContainerConfig,
-  CURRENT_VERSION,
   configExists,
   configToAddRequest,
   configToPatchRequest,
@@ -24,16 +20,14 @@ import {
   buildImage,
   dockerLogin,
   ensureDockerAvailable,
+  ensureRegistryLogin,
   generateTag,
-  getConfigSuggestions,
-  type McClient,
   promptRegistry,
   pushImage,
   type ResolvedRegistry,
   resolveRegistryForImage,
 } from "./docker.ts";
-
-type EndpointRequest = components["schemas"]["EndpointRequest"];
+import { runWalkthrough } from "./walkthrough.ts";
 
 const COMMAND = "deploy [image]";
 const DESCRIPTION = "Deploy an app.";
@@ -46,6 +40,11 @@ interface DeployArgs {
   tag?: string;
   registry?: string;
   container?: string;
+  name?: string;
+  port?: number;
+  command?: string;
+  config?: string;
+  "dry-run"?: boolean;
   "no-push"?: boolean;
 }
 
@@ -59,6 +58,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       "$0 apps deploy --dockerfile apps/api/Dockerfile --context apps/api",
       "Build with explicit context",
     ],
+    ["$0 apps deploy --dry-run", "Preview the would-be config without writing"],
     ["$0 apps deploy", "Re-deploy using config from bunny.jsonc"],
   ],
 
@@ -85,12 +85,37 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       })
       .option("registry", {
         type: "string",
-        describe: "Bunny registry ID to push to (overrides bunny.jsonc)",
+        describe: "bunny.net registry ID to push to (overrides bunny.jsonc)",
       })
       .option("container", {
         type: "string",
         describe:
           "Target container by name (required when bunny.jsonc has multiple containers)",
+      })
+      .option("name", {
+        type: "string",
+        describe:
+          "App name (used during first-run walkthrough; skips the interactive prompt)",
+      })
+      .option("port", {
+        type: "number",
+        describe:
+          "Override the container port (affects generated Dockerfile and endpoint)",
+      })
+      .option("command", {
+        type: "string",
+        describe:
+          "Override the container CMD (passed as a single string, split on whitespace)",
+      })
+      .option("config", {
+        type: "string",
+        describe:
+          "Use this file as the app config (overrides cwd-detected bunny.jsonc). Useful in CI / agent flows where no bunny.jsonc is checked in.",
+      })
+      .option("dry-run", {
+        type: "boolean",
+        describe:
+          "Print the would-be bunny.jsonc and Dockerfile without writing anything or contacting the API to deploy",
       })
       .option("no-push", {
         type: "boolean",
@@ -102,6 +127,14 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     const positionalImage = args.image;
     const dockerfileFlag = normalizeDockerfileFlag(args.dockerfile);
     const noPush = args["no-push"] === true;
+    const dryRun = args["dry-run"] === true;
+
+    // --config takes precedence over the cwd-walk for bunny.jsonc. When
+    // set, we read/write *that exact* path. Useful for agents and CI
+    // that generate ephemeral configs without checking anything in.
+    const configPath = args.config
+      ? resolve(process.cwd(), args.config)
+      : undefined;
 
     if (positionalImage && dockerfileFlag) {
       throw new UserError(
@@ -114,15 +147,31 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     const client = createMcClient(clientOptions(cfg, verbose));
 
     let toml: BunnyAppConfig;
-    if (!configExists()) {
-      toml = await firstRunWalkthrough(client, {
+    if (!configExists(configPath)) {
+      toml = await runWalkthrough(client, {
         positionalImage,
         dockerfileFlag,
         contextFlag: args.context,
         registryFlag: args.registry,
+        portOverride: args.port,
+        commandOverride: args.command,
+        nameOverride: args.name,
+        configPath,
+        dryRun,
       });
     } else {
-      toml = loadConfig();
+      toml = loadConfig(configPath);
+    }
+
+    if (dryRun) {
+      logger.log();
+      logger.dim("--- bunny.jsonc (preview) ---");
+      logger.log(JSON.stringify(toml, null, 2));
+      logger.dim("--- end preview ---");
+      logger.dim(
+        "Dry run complete. No files were written and no API calls were made to deploy.",
+      );
+      return;
     }
 
     const [targetName, targetContainer] = resolveTargetContainer(toml, {
@@ -155,7 +204,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         registryId = resolved.id;
         freshCreds = resolved.freshCredentials;
         targetContainer.registry = registryId;
-        saveConfig(toml);
+        saveConfig(toml, configPath);
       }
 
       const regSpin = spinner("Fetching registry...");
@@ -204,6 +253,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
           loginSpin.stop();
           throw err;
         }
+      } else if (reg.hostName) {
+        // No just-entered credentials, so make sure docker is logged in
+        // before we attempt the push, prompting if not.
+        await ensureRegistryLogin(reg.hostName);
       }
 
       logger.info(`Pushing ${imageRef}...`);
@@ -226,7 +279,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       if (!resolved) {
         throw new UserError(
           "A registry is required to deploy this image.",
-          "Bunny needs a registry record for the image hostname so it can pull the image.",
+          "bunny.net needs a registry record for the image hostname so it can pull the image.",
         );
       }
       registryId = resolved.id;
@@ -275,6 +328,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       pushSpin.stop();
     }
 
+    // Captured pre-deploy so we can surface a rollback hint at the end.
+    let previousImage: string | undefined;
+
     if (deployImage) {
       const fetchSpin = spinner("Fetching app...");
       fetchSpin.start();
@@ -297,6 +353,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
           `Remote containers: ${templates.map((t) => t.name).join(", ") || "(none)"}`,
         );
       }
+
+      previousImage = match.image ?? undefined;
 
       const containerId = match.id;
       const { imageName, imageNamespace, imageTag } =
@@ -327,12 +385,25 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
     if (output === "json") {
       logger.log(
-        JSON.stringify({ id: appId, deployed: true, image: deployImage }),
+        JSON.stringify({
+          id: appId,
+          deployed: true,
+          image: deployImage,
+          previousImage,
+        }),
       );
       return;
     }
 
     logger.success("App deployed.");
+
+    // Rollback hint, only meaningful when there was a previous image
+    // and we just replaced it with a different one.
+    if (previousImage && previousImage !== deployImage) {
+      logger.log();
+      logger.dim(`Previous image: ${previousImage}`);
+      logger.dim(`To rollback:    bunny apps deploy ${previousImage}`);
+    }
   },
 });
 
@@ -440,266 +511,4 @@ function resolveBuildContext(
     ? dockerfile
     : resolve(process.cwd(), dockerfile);
   return dirname(absDockerfile);
-}
-
-interface WalkthroughInput {
-  positionalImage?: string;
-  dockerfileFlag?: string;
-  contextFlag?: string;
-  registryFlag?: string;
-}
-
-async function firstRunWalkthrough(
-  client: McClient,
-  input: WalkthroughInput,
-): Promise<BunnyAppConfig> {
-  logger.info("No bunny.jsonc found — setting up this app.");
-
-  // Decide build vs deploy if neither flag was passed.
-  let imageRef: string | undefined = input.positionalImage;
-  let dockerfilePath: string | undefined = input.dockerfileFlag;
-
-  if (!imageRef && !dockerfilePath) {
-    const hasDockerfile = existsSync(join(process.cwd(), DEFAULT_DOCKERFILE));
-    const { value } = await prompts({
-      type: "select",
-      name: "value",
-      message: "How do you want to deploy?",
-      choices: [
-        ...(hasDockerfile
-          ? [
-              {
-                title: "Build from ./Dockerfile",
-                value: "dockerfile",
-              },
-            ]
-          : []),
-        { title: "Deploy a pre-built image", value: "image" },
-      ],
-    });
-    if (!value) throw new UserError("Setup cancelled.");
-    if (value === "dockerfile") {
-      dockerfilePath = DEFAULT_DOCKERFILE;
-    } else {
-      const { value: ref } = await prompts({
-        type: "text",
-        name: "value",
-        message: "Image ref (e.g. ghcr.io/me/api:v1):",
-      });
-      if (!ref) throw new UserError("Image ref is required.");
-      imageRef = ref;
-    }
-  }
-
-  const mode: "build" | "image" = dockerfilePath ? "build" : "image";
-
-  let registry: ResolvedRegistry | null;
-  if (input.registryFlag) {
-    registry = { id: input.registryFlag };
-  } else if (mode === "image" && imageRef) {
-    registry = await resolveRegistryForImage(client, imageRef);
-  } else {
-    logger.info("Pick a registry to push your image to.");
-    registry = await promptRegistry(client);
-  }
-  if (!registry) throw new UserError("A registry is required.");
-
-  let suggestions: Awaited<ReturnType<typeof getConfigSuggestions>> | null =
-    null;
-  if (mode === "image" && imageRef) {
-    const parsed = parseImageRef(imageRef);
-    suggestions = await getConfigSuggestions(client, registry.id, parsed);
-    if (suggestions?.instructions) {
-      logger.log();
-      logger.dim(suggestions.instructions);
-      logger.log();
-    }
-  }
-
-  const defaultName =
-    suggestions?.appName?.trim() || basename(resolve(process.cwd()));
-  const { value: name } = await prompts({
-    type: "text",
-    name: "value",
-    message: "App name:",
-    initial: defaultName,
-  });
-  if (!name) throw new UserError("App name is required.");
-
-  const regionsSpin = spinner("Fetching regions...");
-  regionsSpin.start();
-  const { data: regionsResult } = await client.GET("/regions");
-  regionsSpin.stop();
-
-  const regionsWithCapacity = (regionsResult?.items ?? []).filter(
-    (r): r is typeof r & { id: string } =>
-      r.hasCapacity === true && typeof r.id === "string",
-  );
-
-  if (regionsWithCapacity.length === 0) {
-    throw new UserError("No regions with capacity are available right now.");
-  }
-
-  const { value: selectedRegions } = await prompts({
-    type: "multiselect",
-    name: "value",
-    message: "Select regions:",
-    choices: regionsWithCapacity.map((r) => ({
-      title: `${r.name} (${r.id})`,
-      value: r.id,
-    })),
-    min: 1,
-  });
-
-  const regions: string[] = selectedRegions ?? [];
-  if (regions.length === 0) {
-    throw new UserError("At least one region must be selected.");
-  }
-
-  const container: ContainerConfig = {
-    registry: registry.id,
-  };
-
-  if (mode === "build" && dockerfilePath) {
-    container.dockerfile = dockerfilePath;
-    if (input.contextFlag) container.context = input.contextFlag;
-  }
-  if (imageRef) {
-    container.image = imageRef;
-  }
-
-  // Apply suggested endpoints.
-  if (suggestions?.endpointSuggestions?.length) {
-    const accepted = await confirmEndpointSuggestions(
-      suggestions.endpointSuggestions,
-    );
-    if (accepted.length > 0) {
-      container.endpoints = accepted.map(endpointRequestToConfig);
-    }
-  }
-
-  // Prompt for suggested env vars (required first; offer optional ones).
-  if (suggestions?.environmentVariablesSuggestions?.length) {
-    const env = await promptSuggestedEnv(
-      suggestions.environmentVariablesSuggestions,
-    );
-    if (Object.keys(env).length > 0) {
-      container.env = env;
-    }
-  }
-
-  const toml: BunnyAppConfig = {
-    version: CURRENT_VERSION,
-    app: {
-      name,
-      scaling: { min: 1, max: 1 },
-      regions,
-      containers: { [name]: container },
-    },
-  };
-
-  saveConfig(toml);
-  logger.success("Wrote bunny.jsonc.");
-  return toml;
-}
-
-async function confirmEndpointSuggestions(
-  endpoints: EndpointRequest[],
-): Promise<EndpointRequest[]> {
-  const accepted: EndpointRequest[] = [];
-  for (const ep of endpoints) {
-    const label = describeEndpoint(ep);
-    const { value } = await prompts({
-      type: "confirm",
-      name: "value",
-      message: `Add suggested endpoint: ${label}?`,
-      initial: true,
-    });
-    if (value) accepted.push(ep);
-  }
-  return accepted;
-}
-
-function describeEndpoint(ep: EndpointRequest): string {
-  if (ep.cdn) {
-    const ports = ep.cdn.portMappings
-      ?.map((p) => `${p.exposedPort}→${p.containerPort}`)
-      .join(", ");
-    return `CDN (${ports ?? "default port"})${ep.cdn.isSslEnabled ? " + SSL" : ""}`;
-  }
-  if (ep.anycast) {
-    const ports = ep.anycast.portMappings
-      .map((p) => `${p.exposedPort}→${p.containerPort}`)
-      .join(", ");
-    return `Anycast (${ports})`;
-  }
-  return ep.displayName ?? "endpoint";
-}
-
-function endpointRequestToConfig(
-  ep: EndpointRequest,
-): NonNullable<ContainerConfig["endpoints"]>[number] {
-  if (ep.cdn) {
-    return {
-      type: "cdn",
-      ssl: ep.cdn.isSslEnabled,
-      ports:
-        ep.cdn.portMappings?.map((p) => ({
-          public: p.exposedPort ?? p.containerPort,
-          container: p.containerPort,
-        })) ?? [],
-    };
-  }
-  if (ep.anycast) {
-    return {
-      type: "anycast",
-      ports: ep.anycast.portMappings.map((p) => ({
-        public: p.exposedPort ?? p.containerPort,
-        container: p.containerPort,
-      })),
-    };
-  }
-  return { type: "cdn" };
-}
-
-async function promptSuggestedEnv(
-  suggestions: components["schemas"]["EnvironmentVariableSuggestion"][],
-): Promise<Record<string, string>> {
-  const env: Record<string, string> = {};
-  const required = suggestions.filter((s) => s.required);
-  const optional = suggestions.filter((s) => !s.required);
-
-  for (const item of required) {
-    if (!item.name) continue;
-    const { value } = await prompts({
-      type: "text",
-      name: "value",
-      message: `${item.name}${item.description ? ` — ${item.description}` : ""}:`,
-      initial: item.defaultValue ?? "",
-    });
-    if (value !== undefined && value !== "") env[item.name] = String(value);
-  }
-
-  if (optional.length > 0) {
-    const { value: confirm } = await prompts({
-      type: "confirm",
-      name: "value",
-      message: `Configure ${optional.length} optional env var${optional.length === 1 ? "" : "s"} now?`,
-      initial: false,
-    });
-    if (confirm) {
-      for (const item of optional) {
-        if (!item.name) continue;
-        const { value } = await prompts({
-          type: "text",
-          name: "value",
-          message: `${item.name}${item.description ? ` — ${item.description}` : ""}:`,
-          initial: item.defaultValue ?? "",
-        });
-        if (value !== undefined && value !== "") env[item.name] = String(value);
-      }
-    }
-  }
-
-  return env;
 }

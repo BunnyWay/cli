@@ -15,7 +15,7 @@
     },
     "packages/app-config": {
       "name": "@bunny.net/app-config",
-      "version": "0.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "zod": "^4.3.6",
       },
@@ -25,7 +25,7 @@
     },
     "packages/cli": {
       "name": "@bunny.net/cli",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "bin": {
         "bunny": "./bin/bunny.cjs",
       },
@@ -42,36 +42,37 @@
         "jsonc-parser": "^3.3.1",
         "ora": "^9.3.0",
         "prompts": "^2.4.2",
+        "yaml": "^2.9.0",
         "yargs": "^18.0.0",
         "zod": "^4.3.6",
       },
       "optionalDependencies": {
-        "@bunny.net/cli-darwin-arm64": "0.4.0",
-        "@bunny.net/cli-darwin-x64": "0.4.0",
-        "@bunny.net/cli-linux-arm64": "0.4.0",
-        "@bunny.net/cli-linux-x64": "0.4.0",
-        "@bunny.net/cli-windows-x64": "0.4.0",
+        "@bunny.net/cli-darwin-arm64": "0.4.1",
+        "@bunny.net/cli-darwin-x64": "0.4.1",
+        "@bunny.net/cli-linux-arm64": "0.4.1",
+        "@bunny.net/cli-linux-x64": "0.4.1",
+        "@bunny.net/cli-windows-x64": "0.4.1",
       },
     },
     "packages/cli-darwin-arm64": {
       "name": "@bunny.net/cli-darwin-arm64",
-      "version": "0.4.0",
+      "version": "0.4.1",
     },
     "packages/cli-darwin-x64": {
       "name": "@bunny.net/cli-darwin-x64",
-      "version": "0.4.0",
+      "version": "0.4.1",
     },
     "packages/cli-linux-arm64": {
       "name": "@bunny.net/cli-linux-arm64",
-      "version": "0.4.0",
+      "version": "0.4.1",
     },
     "packages/cli-linux-x64": {
       "name": "@bunny.net/cli-linux-x64",
-      "version": "0.4.0",
+      "version": "0.4.1",
     },
     "packages/cli-windows-x64": {
       "name": "@bunny.net/cli-windows-x64",
-      "version": "0.4.0",
+      "version": "0.4.1",
     },
     "packages/database-adapter-libsql": {
       "name": "@bunny.net/database-adapter-libsql",
@@ -171,7 +172,7 @@
     },
     "packages/openapi-client": {
       "name": "@bunny.net/openapi-client",
-      "version": "0.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "openapi-fetch": "^0.17.0",
       },
@@ -1009,7 +1010,7 @@
 
     "yallist": ["yallist@3.1.1", "", {}, "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g=="],
 
-    "yaml": ["yaml@2.8.3", "", { "bin": { "yaml": "bin.mjs" } }, "sha512-AvbaCLOO2Otw/lW5bmh9d/WEdcDFdQp2Z2ZUH3pX9U2ihyUY0nvLv7J6TrWowklRGPYbB/IuIMfYgxaCPg5Bpg=="],
+    "yaml": ["yaml@2.9.0", "", { "bin": { "yaml": "bin.mjs" } }, "sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA=="],
 
     "yaml-ast-parser": ["yaml-ast-parser@0.0.43", "", {}, "sha512-2PTINUwsRqSd+s8XxKaJWQlUuEMHJQyEuh2edBbW8KNJz0SJPwUSD2zRWqezFEdN7IzAgeuYHFUCF7o8zRdZ0A=="],
 
@@ -1044,6 +1045,8 @@
     "@radix-ui/react-primitive/@radix-ui/react-slot": ["@radix-ui/react-slot@1.2.3", "", { "dependencies": { "@radix-ui/react-compose-refs": "1.1.2" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-aeNmHnBxbi2St0au6VBVC7JXFlhLlOnvIIlePNniyUNAClzmtAUEY8/pBiK3iHjufOlwA+c20/8jngo7xcrg8A=="],
 
     "@radix-ui/react-select/@radix-ui/react-slot": ["@radix-ui/react-slot@1.2.3", "", { "dependencies": { "@radix-ui/react-compose-refs": "1.1.2" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-aeNmHnBxbi2St0au6VBVC7JXFlhLlOnvIIlePNniyUNAClzmtAUEY8/pBiK3iHjufOlwA+c20/8jngo7xcrg8A=="],
+
+    "@seriousme/openapi-schema-validator/yaml": ["yaml@2.8.3", "", { "bin": { "yaml": "bin.mjs" } }, "sha512-AvbaCLOO2Otw/lW5bmh9d/WEdcDFdQp2Z2ZUH3pX9U2ihyUY0nvLv7J6TrWowklRGPYbB/IuIMfYgxaCPg5Bpg=="],
 
     "@tailwindcss/oxide-wasm32-wasi/@emnapi/core": ["@emnapi/core@1.9.0", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.0", "tslib": "^2.4.0" }, "bundled": true }, "sha512-0DQ98G9ZQZOxfUcQn1waV2yS8aWdZ6kJMbYCJB3oUBecjWYO1fqJ+a1DRfPF3O5JEkwqwP1A9QEN/9mYm2Yd0w=="],
 

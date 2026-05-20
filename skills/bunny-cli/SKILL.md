@@ -1,11 +1,11 @@
 ---
 name: bunny-cli
-description: Manage bunny.net resources from the command line — databases, authentication, and raw API requests. Use when working with bunny.net (pullzones, databases, storage, magic containers), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
+description: Manage bunny.net resources from the command line (databases, authentication, and raw API requests). Use when working with bunny.net (pullzones, databases, storage, Magic Containers), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
 ---
 
-# Bunny CLI Skill
+# bunny.net CLI Skill
 
-The Bunny CLI (`bunny`) manages bunny.net resources from the command line. Use `bunny <command> --help` for full flag details on any command.
+The bunny.net CLI (`bunny`) manages bunny.net resources from the command line. Use `bunny <command> --help` for full flag details on any command.
 
 ## Critical: Authentication
 

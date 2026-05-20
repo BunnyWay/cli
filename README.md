@@ -12,7 +12,7 @@ Monorepo for the [bunny.net](https://bunny.net) CLI and supporting packages.
 | [`packages/database-shell/`](packages/database-shell/)                   | `@bunny.net/database-shell`          | Standalone interactive SQL shell for libSQL databases        |
 | [`packages/database-openapi/`](packages/database-openapi/)               | `@bunny.net/database-openapi`        | Generate OpenAPI 3.0 specs from a database schema            |
 | [`packages/database-rest/`](packages/database-rest/)                     | `@bunny.net/database-rest`           | PostgREST-like REST API handler (database-agnostic)          |
-| [`packages/database-adapter-libsql/`](packages/database-adapter-libsql/) | `@bunny.net/database-adapter-libsql` | Bunny Database adapter for database-rest                     |
+| [`packages/database-adapter-libsql/`](packages/database-adapter-libsql/) | `@bunny.net/database-adapter-libsql` | bunny.net Database adapter for database-rest                 |
 
 See each package's README for usage and API documentation.
 
@@ -43,6 +43,7 @@ bun ny login
 bun ny db list
 bun ny apps deploy ghcr.io/me/api:v1.2     # deploy a pre-built image
 bun ny apps deploy --dockerfile             # build ./Dockerfile and deploy
+bun ny apps deploy                          # first run? Imports docker-compose.yml if present, otherwise walks through Dockerfile or pre-built image setup.
 ```
 
 ### Available Scripts

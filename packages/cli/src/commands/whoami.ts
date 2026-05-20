@@ -12,7 +12,7 @@ const DESCRIPTION = "Show the currently authenticated account.";
 /**
  * Display information about the currently authenticated account.
  *
- * Verifies the configured API key against the Bunny API and shows the
+ * Verifies the configured API key against the bunny.net API and shows the
  * active profile, authentication source, and key roles.
  *
  * @example

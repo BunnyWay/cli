@@ -57,8 +57,8 @@ export const ContainerConfigSchema = z.object({
  *
  *   "regions": ["sfo", "lhr"]
  *
- *   or, for the rare case where you need to distinguish "regions Bunny
- *   is allowed to use" from "regions Bunny must always have running":
+ *   or, for the rare case where you need to distinguish "regions bunny.net
+ *   is allowed to use" from "regions bunny.net must always have running":
  *
  *   "regions": { "allowed": ["sfo", "lhr", "nyc"], "required": ["sfo"] }
  *

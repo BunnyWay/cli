@@ -2,7 +2,7 @@
 
 Standalone, framework-agnostic interactive SQL shell for libSQL databases. Provides a readline-based REPL, dot-commands, multiple output formats, sensitive column masking, and persistent history.
 
-Also powers `bunny db shell` in the [Bunny CLI](https://www.npmjs.com/package/@bunny.net/cli).
+Also powers `bunny db shell` in the [bunny.net CLI](https://www.npmjs.com/package/@bunny.net/cli).
 
 ## Quick Start
 

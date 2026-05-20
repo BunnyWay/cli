@@ -27,7 +27,7 @@ type CustomPaths = {
 
 const CORE_BASE_URL = "https://api.bunny.net";
 
-/** Create a type-safe client for the Bunny Core API (CDN, DNS, storage zones, billing). */
+/** Create a type-safe client for the bunny.net Core API (CDN, DNS, storage zones, billing). */
 export function createCoreClient(options: ClientOptions) {
   const client = createClient<paths & CustomPaths>({
     baseUrl: options.baseUrl ?? CORE_BASE_URL,

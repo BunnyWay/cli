@@ -17,7 +17,7 @@ export class UserError extends Error {
 }
 
 /**
- * Error from a Bunny API HTTP response. Thrown automatically by
+ * Error from a bunny.net API HTTP response. Thrown automatically by
  * {@link authMiddleware} when a response has a non-OK status.
  *
  * Normalizes two different API error formats:

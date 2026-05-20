@@ -1,12 +1,12 @@
-# AGENTS.md — Bunny CLI
+# AGENTS.md: bunny.net CLI
 
-This document describes the architecture, conventions, and implementation details for the Bunny CLI. It serves as the canonical reference for AI agents and contributors working on this codebase.
+This document describes the architecture, conventions, and implementation details for the bunny.net CLI. It serves as the canonical reference for AI agents and contributors working on this codebase.
 
 ---
 
 ## Overview
 
-The Bunny CLI (`bunny`) is a command-line interface for interacting with bunny.net services (magic containers, edge scripting, databases). It is written in TypeScript, runs on the Bun runtime, and follows patterns inspired by Cobra (Go).
+The bunny.net CLI (`bunny`) is a command-line interface for interacting with bunny.net services (Magic Containers, Edge Scripting, databases). It is written in TypeScript, runs on the Bun runtime, and follows patterns inspired by Cobra (Go).
 
 The CLI supports profile-based authentication, browser-based login, and a modular command structure built on `yargs`.
 
@@ -163,22 +163,33 @@ bunny-cli/
 │           │   │   ├── index.ts          # defineNamespace("apps", false) — hidden, registers all app commands
 │           │   │   ├── constants.ts      # Status label maps
 │           │   │   ├── config.ts         # bunny.jsonc file I/O, re-exports from @bunny.net/app-config (resolveAppId, resolveContainerId)
-│           │   │   ├── docker.ts         # Docker + registry helpers (build, push, dockerLogin, generateTag, promptRegistry, resolveRegistryForImage, getConfigSuggestions, imageHostname)
+│           │   │   ├── docker.ts         # Docker + registry helpers (build, push, dockerLogin, ensureRegistryLogin, dockerHasCredentials, ghDockerLogin, generateTag, promptRegistry, resolveRegistryForImage, getConfigSuggestions, imageHostname)
 │           │   │   ├── init.ts           # Scaffold bunny.jsonc (detects Dockerfile, prompts for registry)
 │           │   │   ├── list.ts           # List all apps
 │           │   │   ├── show.ts           # Show app details and overview
-│           │   │   ├── deploy.ts         # Deploy app — positional <image>, --dockerfile, --container <name>, or manifest; first-run walkthrough
+│           │   │   ├── deploy.ts         # Deploy app: positional <image>, --dockerfile, --container, --port, --command, --dry-run, --no-push
 │           │   │   ├── undeploy.ts       # Undeploy app
 │           │   │   ├── restart.ts        # Restart app
 │           │   │   ├── delete.ts         # Delete app
 │           │   │   ├── pull.ts           # Sync API → bunny.jsonc
 │           │   │   ├── push.ts           # Sync bunny.jsonc → API
+│           │   │   ├── walkthrough.ts    # Shared new-app walkthrough used by init and deploy (runWalkthrough, runComposeImport)
+│           │   │   ├── compose/          # docker-compose import: parse, translate, validate
+│           │   │   │   ├── index.ts      # findComposeFile, loadComposeFile, composeToConfig
+│           │   │   │   ├── schema.ts     # Zod schema for compose subset
+│           │   │   │   ├── find.ts       # locate compose.yml / docker-compose.yml
+│           │   │   │   ├── ports.ts      # parsePortMapping (short/long/IP-prefixed forms)
+│           │   │   │   ├── translate.ts  # service → ContainerConfig, warnings, hard errors
+│           │   │   │   └── *.test.ts     # ports, translate, load
 │           │   │   ├── env/
 │           │   │   │   ├── index.ts      # defineNamespace("env", ...)
 │           │   │   │   ├── list.ts       # List env vars per container
 │           │   │   │   ├── set.ts        # Set env var (read-modify-write)
 │           │   │   │   ├── remove.ts     # Remove env var
-│           │   │   │   └── pull.ts       # Pull env vars to .env file
+│           │   │   │   ├── pull.ts       # Pull env vars to .env file
+│           │   │   │   ├── push.ts       # Bulk import .env file to remote (merge or --replace, --dry-run)
+│           │   │   │   ├── parse.ts      # Minimal dotenv parser (no shell expansion)
+│           │   │   │   └── parse.test.ts # parser unit tests
 │           │   │   ├── endpoints/
 │           │   │   │   ├── index.ts      # defineNamespace("endpoints", ...)
 │           │   │   │   ├── list.ts       # List endpoints per container
@@ -507,7 +518,7 @@ Creates an `ora` spinner. Automatically silenced in non-TTY environments (`isSil
 
 ### API error normalization
 
-The Bunny APIs use two different error response formats. The shared `authMiddleware()` in `packages/openapi-client/src/middleware.ts` normalizes both into `ApiError` via an `onResponse` handler, so command code never deals with raw HTTP errors.
+The bunny.net APIs use two different error response formats. The shared `authMiddleware()` in `packages/openapi-client/src/middleware.ts` normalizes both into `ApiError` via an `onResponse` handler, so command code never deals with raw HTTP errors.
 
 | API              | Error schema              | Fields                                                                              |
 | ---------------- | ------------------------- | ----------------------------------------------------------------------------------- |
@@ -702,12 +713,14 @@ bunny
 │       ├── create <name>  (alias: add)     Create a named profile with API key
 │       └── delete <name>                   Delete a named profile
 ├── apps                                    (experimental — hidden from help and landing page)
-│   ├── init            [--name] [--image]
-│   │                                       Scaffold bunny.jsonc (detects Dockerfile)
+│   ├── init            [image] [--name] [--dockerfile] [--registry] [--port] [--command] [--config]
+│   │                                       Scaffold bunny.jsonc via shared walkthrough (no deploy); --config writes to a specific path
 │   ├── list            (alias: ls)         List all apps
 │   ├── show            [--id]              Show app details and overview
-│   ├── deploy          [image] [--dockerfile] [--context] [--tag] [--registry] [--container] [--no-push]
-│   │                                       Deploy a pre-built image, build from a Dockerfile, or re-deploy from bunny.jsonc
+│   ├── deploy          [image] [--name] [--dockerfile] [--context] [--tag] [--registry] [--container] [--port] [--command] [--config] [--dry-run] [--no-push]
+│   │                                       Deploy a pre-built image, build from a Dockerfile, or re-deploy from bunny.jsonc.
+│   │                                       First-run, in order: imports compose.yml if present, else asks for Dockerfile / pre-built image.
+│   │                                       --config <path> uses that file as the source of truth (CI / agent flows); --dry-run skips writes and API.
 │   ├── undeploy        [--id] [--force]    Undeploy an app
 │   ├── restart         [--id]              Restart an app
 │   ├── delete          [--id] [--force]    Delete an app
@@ -717,7 +730,9 @@ bunny
 │   │   ├── list        [--container]       List environment variables
 │   │   ├── set         <key> <value> [--container]  Set environment variable
 │   │   ├── remove      <key> [--container] Remove environment variable
-│   │   └── pull        [--container] [--force]      Pull env vars to .env
+│   │   ├── pull        [--container] [--force]      Pull env vars to .env
+│   │   └── push        [file] [--container] [--replace] [--dry-run]
+│   │                                       Bulk import a .env file (merge by default; --replace drops vars not in file)
 │   ├── endpoints
 │   │   ├── list        [--container]       List endpoints
 │   │   ├── add         [--container] [--type] [--ssl]  Add endpoint
@@ -823,7 +838,7 @@ The CLI provides a `clientOptions()` helper (`packages/cli/src/core/client-optio
 
 ### Undocumented endpoints (`CustomPaths`)
 
-Some Bunny API endpoints are not included in the public OpenAPI specs. These are typed manually via a `CustomPaths` type in `packages/openapi-client/src/core-client.ts`, which is intersected with the generated `paths`:
+Some bunny.net API endpoints are not included in the public OpenAPI specs. These are typed manually via a `CustomPaths` type in `packages/openapi-client/src/core-client.ts`, which is intersected with the generated `paths`:
 
 ```typescript
 const client = createClient<paths & CustomPaths>({ baseUrl });
