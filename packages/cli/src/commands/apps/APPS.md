@@ -23,11 +23,11 @@ bunny apps push
 
 Deploy an app. Three modes, chosen by what you pass:
 
-| You pass…                | What happens                                                                                                      |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `<image>` positional     | Skip build. Resolve a registry record for the image hostname (prompting if needed) and deploy the ref.            |
-| `--dockerfile [path]`    | Build from the Dockerfile (defaults to `./Dockerfile`), push to a registry, then deploy.                          |
-| Neither                  | Consult `bunny.jsonc`. If `dockerfile` is set on the container, build; otherwise re-deploy the pinned `image`.    |
+| You pass…             | What happens                                                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `<image>` positional  | Skip build. Resolve a registry record for the image hostname (prompting if needed) and deploy the ref.         |
+| `--dockerfile [path]` | Build from the Dockerfile (defaults to `./Dockerfile`), push to a registry, then deploy.                       |
+| Neither               | Consult `bunny.jsonc`. If `dockerfile` is set on the container, build; otherwise re-deploy the pinned `image`. |
 
 `<image>` and `--dockerfile` are mutually exclusive.
 
@@ -53,16 +53,16 @@ When you run `bunny apps deploy` in a project containing a `compose.yml` (or `co
 
 What translates cleanly:
 
-| Compose                                 | bunny.jsonc                                                  |
-| --------------------------------------- | ------------------------------------------------------------ |
-| `services.<name>`                       | `app.containers.<name>`                                       |
-| `image:` / `build:`                     | `container.image` / `container.dockerfile` + `container.context` |
-| `command:` (string or array)            | `container.command` (array form)                             |
-| `environment:` (map or array)           | `container.env`                                              |
-| `env_file:` (one or many)               | parsed and merged into `container.env` (env vars in `environment:` override) |
-| `ports:` (`"3000:80"` / object / IP-prefixed) | `container.endpoints[0]` (one CDN endpoint, multiple port mappings) |
-| `volumes:` (named only)                 | `container.volumes`                                          |
-| `healthcheck:`                          | `container.probes.liveness` (HTTP probe if `test` mentions a URL; TCP otherwise) |
+| Compose                                       | bunny.jsonc                                                                      |
+| --------------------------------------------- | -------------------------------------------------------------------------------- |
+| `services.<name>`                             | `app.containers.<name>`                                                          |
+| `image:` / `build:`                           | `container.image` / `container.dockerfile` + `container.context`                 |
+| `command:` (string or array)                  | `container.command` (array form)                                                 |
+| `environment:` (map or array)                 | `container.env`                                                                  |
+| `env_file:` (one or many)                     | parsed and merged into `container.env` (env vars in `environment:` override)     |
+| `ports:` (`"3000:80"` / object / IP-prefixed) | `container.endpoints[0]` (one CDN endpoint, multiple port mappings)              |
+| `volumes:` (named only)                       | `container.volumes`                                                              |
+| `healthcheck:`                                | `container.probes.liveness` (HTTP probe if `test` mentions a URL; TCP otherwise) |
 
 What's ignored (warning is printed, translation proceeds):
 
@@ -85,20 +85,20 @@ For compose files that have just one service, the import overlaps with the Docke
 
 ### Deploy flags
 
-| Flag             | Description                                                                                                       |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `<image>`        | Container image reference to deploy (e.g. `ghcr.io/me/api:v1.2`). Skips build.                                    |
-| `--name`         | App name. Used during the first-run walkthrough; skips the interactive prompt.                                    |
-| `--dockerfile`   | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`.                        |
-| `--context`      | Docker build context directory. Defaults to the directory of the Dockerfile.                                      |
-| `--tag`          | Override the auto-generated `<sha>-<timestamp>` image tag.                                                        |
-| `--registry`     | bunny.net registry ID to push to. Overrides the value stored in `bunny.jsonc`.                                    |
-| `--container`    | Name of the container to update. Required when `bunny.jsonc` has multiple containers and you pass `<image>`/`--dockerfile`. |
-| `--port`         | Override the container port. Retargets any endpoints written to `bunny.jsonc`.                                    |
-| `--command`      | Override the container `CMD`. Passed as a single string, split on whitespace.                                     |
-| `--config`       | Use this file as the app config instead of cwd's `bunny.jsonc`. Useful in CI / agent flows.                       |
-| `--dry-run`      | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.          |
-| `--no-push`      | Build only. Skip pushing the image and skip the deploy.                                                           |
+| Flag           | Description                                                                                                                 |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `<image>`      | Container image reference to deploy (e.g. `ghcr.io/me/api:v1.2`). Skips build.                                              |
+| `--name`       | App name. Used during the first-run walkthrough; skips the interactive prompt.                                              |
+| `--dockerfile` | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`.                                  |
+| `--context`    | Docker build context directory. Defaults to the directory of the Dockerfile.                                                |
+| `--tag`        | Override the auto-generated `<sha>-<timestamp>` image tag.                                                                  |
+| `--registry`   | bunny.net registry ID to push to. Overrides the value stored in `bunny.jsonc`.                                              |
+| `--container`  | Name of the container to update. Required when `bunny.jsonc` has multiple containers and you pass `<image>`/`--dockerfile`. |
+| `--port`       | Override the container port. Retargets any endpoints written to `bunny.jsonc`.                                              |
+| `--command`    | Override the container `CMD`. Passed as a single string, split on whitespace.                                               |
+| `--config`     | Use this file as the app config instead of cwd's `bunny.jsonc`. Useful in CI / agent flows.                                 |
+| `--dry-run`    | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                    |
+| `--no-push`    | Build only. Skip pushing the image and skip the deploy.                                                                     |
 
 ```bash
 # Deploy a pre-built image
@@ -179,15 +179,15 @@ bunny apps init ghcr.io/me/api:v1
 bunny apps init --dockerfile --port 8080
 ```
 
-| Flag           | Description                                                                                              |
-| -------------- | -------------------------------------------------------------------------------------------------------- |
-| `<image>`      | Pre-built image reference. Skips the build-vs-image prompt.                                              |
-| `--name`       | App name (skips the interactive name prompt).                                                            |
-| `--dockerfile` | Build from a Dockerfile. Pass a path or use the bare flag for `./Dockerfile`.                            |
-| `--registry`   | bunny.net registry ID to push to.                                                                        |
-| `--port`       | Override the container port (affects the generated Dockerfile and the CDN endpoint).                     |
-| `--command`    | Override the container CMD (passed as a single string, split on whitespace).                             |
-| `--config`     | Write the config to this path instead of `./bunny.jsonc`.                                                |
+| Flag           | Description                                                                          |
+| -------------- | ------------------------------------------------------------------------------------ |
+| `<image>`      | Pre-built image reference. Skips the build-vs-image prompt.                          |
+| `--name`       | App name (skips the interactive name prompt).                                        |
+| `--dockerfile` | Build from a Dockerfile. Pass a path or use the bare flag for `./Dockerfile`.        |
+| `--registry`   | bunny.net registry ID to push to.                                                    |
+| `--port`       | Override the container port (affects the generated Dockerfile and the CDN endpoint). |
+| `--command`    | Override the container CMD (passed as a single string, split on whitespace).         |
+| `--config`     | Write the config to this path instead of `./bunny.jsonc`.                            |
 
 Most users can skip `init` entirely and run `bunny apps deploy` straight away. Both share the same walkthrough.
 
@@ -251,11 +251,11 @@ bunny apps env push .env.prod --replace
 bunny apps env push --dry-run
 ```
 
-| Flag          | Description                                                                                          |
-| ------------- | ---------------------------------------------------------------------------------------------------- |
-| `--container` | Target container (default: primary)                                                                  |
+| Flag          | Description                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| `--container` | Target container (default: primary)                                                                    |
 | `--replace`   | (`push` only) Drop remote variables that aren't in the file. Default is merge (file overrides remote). |
-| `--dry-run`   | (`push` only) Print the diff (`+ added`, `~ changed`, `- removed`) without writing.                  |
+| `--dry-run`   | (`push` only) Print the diff (`+ added`, `~ changed`, `- removed`) without writing.                    |
 
 ## `bunny apps endpoints`
 
@@ -296,23 +296,23 @@ A single-container app:
   "$schema": "./node_modules/@bunny.net/app-config/generated/schema.json",
   "version": "2026-05-11",
   "app": {
-    "id": "app_xxx",                     // written by the CLI on first deploy
+    "id": "app_xxx", // written by the CLI on first deploy
     "name": "my-api",
-    "regions": ["sfo", "lhr"],           // simple array
+    "regions": ["sfo", "lhr"], // simple array
     "scaling": { "min": 1, "max": 3 },
     "containers": {
       "api": {
-        "image": "ghcr.io/me/api:v1",    // last deployed; rewritten each deploy
-        "registry": "12345",             // bunny registry id
-        "dockerfile": "Dockerfile",      // optional — enables the build path
-        "context": ".",                  // optional — Docker build context
+        "image": "ghcr.io/me/api:v1", // last deployed; rewritten each deploy
+        "registry": "12345", // bunny registry id
+        "dockerfile": "Dockerfile", // optional — enables the build path
+        "context": ".", // optional — Docker build context
         "env": { "PORT": "3000" },
         "endpoints": [
-          { "type": "cdn", "ssl": true, "ports": [{ "public": 443, "container": 3000 }] }
-        ]
-      }
-    }
-  }
+          { "type": "cdn", "ssl": true, "ports": [{ "public": 443, "container": 3000 }] },
+        ],
+      },
+    },
+  },
 }
 ```
 
@@ -328,14 +328,14 @@ A multi-container app — every container is its own entry in `app.containers`. 
       "api": {
         "image": "ghcr.io/me/api:v1",
         "registry": "12345",
-        "env": { "DB_URL": "postgres://db:5432/app" }
+        "env": { "DB_URL": "postgres://db:5432/app" },
       },
       "db": {
         "image": "postgres:16",
-        "env": { "POSTGRES_PASSWORD": "..." }
-      }
-    }
-  }
+        "env": { "POSTGRES_PASSWORD": "..." },
+      },
+    },
+  },
 }
 ```
 

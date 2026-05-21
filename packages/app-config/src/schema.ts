@@ -1,10 +1,5 @@
 import { z } from "zod";
 
-// The config file carries a `version` field so we can evolve the shape
-// without breaking existing files. Versions are ISO date strings
-// (lexicographically sortable) — when something changes, bump this and
-// add a migration in `migrate.ts`.
-
 export const CURRENT_VERSION = "2026-05-11";
 
 const VersionSchema = z

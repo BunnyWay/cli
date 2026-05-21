@@ -1104,7 +1104,7 @@ Schemas and types are defined in `@bunny.net/app-config` using Zod. The CLI's `c
 
 ### Overview
 
-The database shell is an interactive SQL REPL that connects to a bunny.net database via `@libsql/client`. It supports both interactive mode (readline-based REPL) and non-interactive mode (execute a query and exit).
+The database shell is an interactive SQL REPL that connects to a Bunny Database via `@libsql/client`. It supports both interactive mode (readline-based REPL) and non-interactive mode (execute a query and exit).
 
 ### Architecture
 
