@@ -57,7 +57,7 @@ export const scriptsShowCommand = defineCommand<ShowArgs>({
 
   handler: async ({ [ARG_ID]: rawId, profile, output, verbose, apiKey }) => {
     const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
 
     const spin = spinner("Fetching Edge Script...");
@@ -90,7 +90,6 @@ export const scriptsShowCommand = defineCommand<ShowArgs>({
           },
           { key: "Default Hostname", value: script.DefaultHostname ?? "" },
           { key: "System Hostname", value: script.SystemHostname ?? "" },
-          { key: "Deployment Key", value: script.DeploymentKey ?? "" },
           {
             key: "Current Release",
             value: String(script.CurrentReleaseId ?? "—"),

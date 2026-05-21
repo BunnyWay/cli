@@ -81,6 +81,8 @@ export interface SchemaObject {
   oneOf?: SchemaObject[];
   nullable?: boolean;
   example?: unknown;
+  "x-foreign-key"?: { table: string; column: string };
+  "x-indexes"?: Array<{ name: string; columns: string[]; unique: boolean }>;
 }
 
 const NAME_EXAMPLES: [RegExp, unknown][] = [
@@ -199,8 +201,20 @@ const tableToSchema = (table: TableDefinition): SchemaObject => {
   const properties: Record<string, SchemaObject> = {};
   const required: string[] = [];
 
+  const fkByColumn = new Map(
+    table.foreignKeys.map((fk) => [fk.column, fk] as const),
+  );
+
   for (const column of table.columns) {
-    properties[column.name] = columnTypeToSchema(column);
+    const schema = columnTypeToSchema(column);
+    const fk = fkByColumn.get(column.name);
+    if (fk) {
+      schema["x-foreign-key"] = {
+        table: fk.referencesTable,
+        column: fk.referencesColumn,
+      };
+    }
+    properties[column.name] = schema;
     if (
       !column.nullable &&
       column.defaultValue === undefined &&
@@ -214,6 +228,7 @@ const tableToSchema = (table: TableDefinition): SchemaObject => {
     type: "object",
     properties,
     ...(required.length > 0 ? { required } : {}),
+    ...(table.indexes.length > 0 ? { "x-indexes": table.indexes } : {}),
   };
 };
 

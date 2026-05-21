@@ -75,7 +75,7 @@ export const scriptsEnvPullCommand = defineCommand<PullArgs>({
     apiKey,
   }) => {
     const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
 
     const spin = spinner("Fetching environment variables...");

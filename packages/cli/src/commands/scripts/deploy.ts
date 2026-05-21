@@ -91,7 +91,7 @@ export const scriptsDeployCommand = defineCommand<DeployArgs>({
 
     const code = await Bun.file(absPath).text();
 
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
 
     const spin = spinner("Uploading code...");

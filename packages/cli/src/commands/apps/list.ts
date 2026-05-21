@@ -16,7 +16,7 @@ export const appsListCommand = defineCommand({
   aliases: ["ls"],
 
   handler: async ({ profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
     const spin = spinner("Fetching apps...");

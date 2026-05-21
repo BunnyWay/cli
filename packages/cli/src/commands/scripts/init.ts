@@ -298,9 +298,13 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
       existsSync(`${dirPath}/package.json`) &&
       args[ARG_SKIP_INSTALL] !== true
     ) {
-      const shouldInstall = interactive
-        ? await confirm("Install dependencies?")
-        : true;
+      // Always confirm before installing for custom template repos —
+      // a malicious template's lifecycle scripts (preinstall, postinstall)
+      // would otherwise run silently in non-interactive mode.
+      const shouldInstall =
+        interactive || args[ARG_TEMPLATE_REPO]
+          ? await confirm("Install dependencies?")
+          : true;
       if (shouldInstall) {
         const installSpin = spinner("Installing dependencies...");
         installSpin.start();

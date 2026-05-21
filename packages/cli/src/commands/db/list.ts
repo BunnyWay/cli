@@ -40,7 +40,7 @@ export const dbListCommand = defineCommand({
   describe: DESCRIPTION,
 
   handler: async ({ profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createDbClient(clientOptions(config, verbose));
 
     const spin = spinner("Fetching databases...");

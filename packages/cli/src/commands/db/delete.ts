@@ -84,7 +84,7 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
     verbose,
     apiKey,
   }) => {
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createDbClient(clientOptions(config, verbose));
 
     const { id: databaseId, source } = await resolveDbId(client, databaseIdArg);
@@ -163,7 +163,6 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
     if (envUrl && db.url && envUrl.value === db.url) {
       const shouldClean = await confirm(
         `Remove ${ENV_DATABASE_URL} from ${envUrl.envPath}?`,
-        { force },
       );
 
       if (shouldClean) {

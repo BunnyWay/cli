@@ -30,14 +30,14 @@ bsql <url> --token <token> "SELECT * FROM users" --mode json
 bsql <url> --token <token> --unmask
 ```
 
-| Flag              | Description                                          |
-| ----------------- | ---------------------------------------------------- |
-| `--token <token>` | Auth token for the database                          |
-| `--mode <mode>`   | Output mode: `default`, `table`, `json`, `csv`, `markdown` |
-| `--unmask`        | Show sensitive column values unmasked                |
-| `--timing`        | Show query execution timing                          |
+| Flag              | Description                                                           |
+| ----------------- | --------------------------------------------------------------------- |
+| `--token <token>` | Auth token for the database                                           |
+| `--mode <mode>`   | Output mode: `default`, `table`, `json`, `csv`, `markdown`            |
+| `--unmask`        | Show sensitive column values unmasked                                 |
+| `--timing`        | Show query execution timing                                           |
 | `--views-dir`     | Directory for saved views (default: `~/.config/bunny/views/<db-id>/`) |
-| `--help`          | Show help                                            |
+| `--help`          | Show help                                                             |
 
 ## Library Usage
 
@@ -53,7 +53,10 @@ npm add @bunny.net/database-shell
 import { createClient } from "@libsql/client";
 import { startShell } from "@bunny.net/database-shell";
 
-const client = createClient({ url: "libsql://...", authToken: "..." });
+const client = createClient({
+  url: "libsql://...",
+  authToken: "...",
+});
 
 await startShell({ client });
 ```
@@ -64,7 +67,10 @@ await startShell({ client });
 import { createClient } from "@libsql/client";
 import { executeQuery } from "@bunny.net/database-shell";
 
-const client = createClient({ url: "libsql://...", authToken: "..." });
+const client = createClient({
+  url: "libsql://...",
+  authToken: "...",
+});
 
 await executeQuery(client, "SELECT * FROM users", { mode: "json" });
 ```
@@ -75,7 +81,10 @@ await executeQuery(client, "SELECT * FROM users", { mode: "json" });
 import { createClient } from "@libsql/client";
 import { executeFile } from "@bunny.net/database-shell";
 
-const client = createClient({ url: "libsql://...", authToken: "..." });
+const client = createClient({
+  url: "libsql://...",
+  authToken: "...",
+});
 
 await executeFile(client, "seed.sql");
 ```
@@ -86,13 +95,13 @@ await executeFile(client, "seed.sql");
 
 ```typescript
 interface ShellOptions {
-  client: Client;       // @libsql/client instance
-  mode?: PrintMode;     // Output mode (default: "default")
-  masked?: boolean;     // Mask sensitive columns (default: true)
-  timing?: boolean;     // Show query timing (default: false)
+  client: Client; // @libsql/client instance
+  mode?: PrintMode; // Output mode (default: "default")
+  masked?: boolean; // Mask sensitive columns (default: true)
+  timing?: boolean; // Show query timing (default: false)
   logger?: ShellLogger; // Custom logger (default: console)
-  databaseId?: string;  // Scope saved views per database
-  viewsDir?: string;    // Override views storage directory
+  databaseId?: string; // Scope saved views per database
+  viewsDir?: string; // Override views storage directory
 }
 ```
 
@@ -123,13 +132,13 @@ interface ShellLogger {
 
 ## Output Modes
 
-| Mode       | Description                    |
-| ---------- | ------------------------------ |
-| `default`  | Borderless table with headers  |
-| `table`    | Bordered ASCII table           |
-| `json`     | JSON array of row objects      |
-| `csv`      | Comma-separated values         |
-| `markdown` | GitHub-flavored pipe table     |
+| Mode       | Description                   |
+| ---------- | ----------------------------- |
+| `default`  | Borderless table with headers |
+| `table`    | Bordered ASCII table          |
+| `json`     | JSON array of row objects     |
+| `csv`      | Comma-separated values        |
+| `markdown` | GitHub-flavored pipe table    |
 
 ## Dot-Commands
 
@@ -196,13 +205,19 @@ Save frequently used queries as named views so you can recall them later. Views 
 To enable views, pass a `databaseId` when starting the shell:
 
 ```typescript
-await startShell({ client, databaseId: "db_01ABC" });
+await startShell({
+  client,
+  databaseId: "db_01ABC",
+});
 ```
 
 You can also override the storage directory:
 
 ```typescript
-await startShell({ client, viewsDir: "/path/to/my/views" });
+await startShell({
+  client,
+  viewsDir: "/path/to/my/views",
+});
 ```
 
 ## Sensitive Column Masking

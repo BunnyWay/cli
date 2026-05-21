@@ -190,7 +190,7 @@ export function DataTab({
 
   return (
     <>
-      <div className="flex-1 overflow-auto">
+      <div className="flex flex-1 min-h-0 flex-col">
         <DataTable
           columns={columns}
           data={data.rows as RowRecord[]}

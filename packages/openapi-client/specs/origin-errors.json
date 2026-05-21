@@ -1,0 +1,130 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Origin Errors API",
+    "version": "1.0.0",
+    "description": "API for retrieving CDN origin error logs."
+  },
+  "paths": {
+    "/{pullZoneId}/{dateTime}": {
+      "get": {
+        "summary": "Get origin error logs for a specific Pull Zone and date",
+        "description": "Retrieves origin error logs for the given Pull Zone and date.",
+        "parameters": [
+          {
+            "name": "pullZoneId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the Pull Zone."
+          },
+          {
+            "name": "dateTime",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{2}-\\d{2}-\\d{4}$",
+              "example": "10-29-2025"
+            },
+            "description": "The date for which to retrieve logs, formatted as MM-dd-yyyy."
+          }
+        ],
+        "security": [
+          {
+            "AccessKeyAuth": []
+          },
+          {
+            "JWTAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response with log data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "AccessKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "AccessKey",
+        "description": "Send your Access Key in the AccessKey header."
+      },
+      "JWTAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Send the JWT as the entire Authorization header value (no 'Bearer ' prefix)."
+      }
+    },
+    "schemas": {
+      "LogResponse": {
+        "type": "object",
+        "properties": {
+          "logs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LogEntry"
+            }
+          }
+        }
+      },
+      "LogEntry": {
+        "type": "object",
+        "properties": {
+          "logId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "a6a6b755-b6a4-46be-b523-aa82a17d4bc5"
+          },
+          "timestamp": {
+            "type": "integer",
+            "example": 1728952065848
+          },
+          "log": {
+            "type": "string",
+            "example": "{\"RequestUrl\":\"/apikey\",\"PullZoneId\":308006,\"Message\":\"Origin DNS lookup failed...\",\"ErrorCode\":\"dns_lookup\",\"StatusCode\":502}"
+          },
+          "labels": {
+            "type": "object",
+            "properties": {
+              "ErrorCode": {
+                "type": "string",
+                "example": "dns_lookup"
+              },
+              "StatusCode": {
+                "type": "string",
+                "example": "502"
+              },
+              "ServerZone": {
+                "type": "string",
+                "example": "CA"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://cdn-origin-logging.bunny.net"
+    }
+  ]
+}

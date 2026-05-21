@@ -16,7 +16,7 @@ function exchangeToken(): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
     credentials: "same-origin",
-  }).then(() => {
+  }).finally(() => {
     params.delete("token");
     const qs = params.toString();
     const newUrl =

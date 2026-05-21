@@ -107,7 +107,7 @@ export const dbTokensInvalidateCommand = defineCommand<{
     verbose,
     apiKey,
   }) => {
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createDbClient(clientOptions(config, verbose));
 
     // Resolve the target database — explicit ID, .env, or interactive prompt

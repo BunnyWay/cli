@@ -94,7 +94,7 @@ export const apiCommand = defineCommand<ApiArgs>({
       );
     }
 
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     if (!config.apiKey) {
       throw new UserError(
         "Not logged in.",

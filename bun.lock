@@ -8,6 +8,7 @@
         "@changesets/changelog-github": "^0.6.0",
         "@changesets/cli": "^2.30.0",
         "@types/bun": "latest",
+        "prettier": "^3.8.3",
       },
       "peerDependencies": {
         "typescript": "^5",
@@ -17,15 +18,13 @@
       "name": "@bunny.net/app-config",
       "version": "0.0.1",
       "dependencies": {
-        "zod": "^4.3.6",
-      },
-      "peerDependencies": {
         "@bunny.net/openapi-client": "workspace:*",
+        "zod": "^4.3.6",
       },
     },
     "packages/cli": {
       "name": "@bunny.net/cli",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "bin": {
         "bunny": "./bin/bunny.cjs",
       },
@@ -47,36 +46,36 @@
         "zod": "^4.3.6",
       },
       "optionalDependencies": {
-        "@bunny.net/cli-darwin-arm64": "0.4.1",
-        "@bunny.net/cli-darwin-x64": "0.4.1",
-        "@bunny.net/cli-linux-arm64": "0.4.1",
-        "@bunny.net/cli-linux-x64": "0.4.1",
-        "@bunny.net/cli-windows-x64": "0.4.1",
+        "@bunny.net/cli-darwin-arm64": "0.4.2",
+        "@bunny.net/cli-darwin-x64": "0.4.2",
+        "@bunny.net/cli-linux-arm64": "0.4.2",
+        "@bunny.net/cli-linux-x64": "0.4.2",
+        "@bunny.net/cli-windows-x64": "0.4.2",
       },
     },
     "packages/cli-darwin-arm64": {
       "name": "@bunny.net/cli-darwin-arm64",
-      "version": "0.4.1",
+      "version": "0.4.2",
     },
     "packages/cli-darwin-x64": {
       "name": "@bunny.net/cli-darwin-x64",
-      "version": "0.4.1",
+      "version": "0.4.2",
     },
     "packages/cli-linux-arm64": {
       "name": "@bunny.net/cli-linux-arm64",
-      "version": "0.4.1",
+      "version": "0.4.2",
     },
     "packages/cli-linux-x64": {
       "name": "@bunny.net/cli-linux-x64",
-      "version": "0.4.1",
+      "version": "0.4.2",
     },
     "packages/cli-windows-x64": {
       "name": "@bunny.net/cli-windows-x64",
-      "version": "0.4.1",
+      "version": "0.4.2",
     },
     "packages/database-adapter-libsql": {
       "name": "@bunny.net/database-adapter-libsql",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@bunny.net/database-openapi": "workspace:*",
         "@bunny.net/database-rest": "workspace:*",
@@ -92,7 +91,7 @@
     },
     "packages/database-rest": {
       "name": "@bunny.net/database-rest",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@bunny.net/database-openapi": "workspace:*",
       },
@@ -102,7 +101,7 @@
     },
     "packages/database-shell": {
       "name": "@bunny.net/database-shell",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "bin": {
         "bsql": "./bin/bsql.cjs",
       },
@@ -112,38 +111,39 @@
         "cli-table3": "^0.6.5",
       },
       "optionalDependencies": {
-        "@bunny.net/database-shell-darwin-arm64": "0.2.2",
-        "@bunny.net/database-shell-darwin-x64": "0.2.2",
-        "@bunny.net/database-shell-linux-arm64": "0.2.2",
-        "@bunny.net/database-shell-linux-x64": "0.2.2",
-        "@bunny.net/database-shell-windows-x64": "0.2.2",
+        "@bunny.net/database-shell-darwin-arm64": "0.2.3",
+        "@bunny.net/database-shell-darwin-x64": "0.2.3",
+        "@bunny.net/database-shell-linux-arm64": "0.2.3",
+        "@bunny.net/database-shell-linux-x64": "0.2.3",
+        "@bunny.net/database-shell-windows-x64": "0.2.3",
       },
     },
     "packages/database-shell-darwin-arm64": {
       "name": "@bunny.net/database-shell-darwin-arm64",
-      "version": "0.2.2",
+      "version": "0.2.3",
     },
     "packages/database-shell-darwin-x64": {
       "name": "@bunny.net/database-shell-darwin-x64",
-      "version": "0.2.2",
+      "version": "0.2.3",
     },
     "packages/database-shell-linux-arm64": {
       "name": "@bunny.net/database-shell-linux-arm64",
-      "version": "0.2.2",
+      "version": "0.2.3",
     },
     "packages/database-shell-linux-x64": {
       "name": "@bunny.net/database-shell-linux-x64",
-      "version": "0.2.2",
+      "version": "0.2.3",
     },
     "packages/database-shell-windows-x64": {
       "name": "@bunny.net/database-shell-windows-x64",
-      "version": "0.2.2",
+      "version": "0.2.3",
     },
     "packages/database-studio": {
       "name": "@bunny.net/database-studio",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "@bunny.net/database-adapter-libsql": "workspace:*",
+        "@bunny.net/database-openapi": "workspace:*",
         "@bunny.net/database-rest": "workspace:*",
         "@libsql/client": "^0.17.0",
       },
@@ -890,7 +890,7 @@
 
     "postcss": ["postcss@8.5.8", "", { "dependencies": { "nanoid": "^3.3.11", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-OW/rX8O/jXnm82Ey1k44pObPtdblfiuWnrd8X7GJ7emImCOstunGbXUpp7HdBrFQX6rJzn3sPT397Wp5aCwCHg=="],
 
-    "prettier": ["prettier@2.8.8", "", { "bin": { "prettier": "bin-prettier.js" } }, "sha512-tdN8qQGvNjw4CHbY+XXk0JgCXn9QiF21a55rBe5LJAU+kDyC4WQn4+awm2Xfk2lQMk5fKup9XgzTZtGkjBdP9Q=="],
+    "prettier": ["prettier@3.8.3", "", { "bin": { "prettier": "bin/prettier.cjs" } }, "sha512-7igPTM53cGHMW8xWuVTydi2KO233VFiTNyF5hLJqpilHfmn8C8gPf+PS7dUT64YcXFbiMGZxS9pCSxL/Dxm/Jw=="],
 
     "promise-limit": ["promise-limit@2.7.0", "", {}, "sha512-7nJ6v5lnJsXwGprnGXga4wx6d1POjvi5Qmf1ivTRxTjH4Z/9Czja/UCMLVmB9N93GeWOU93XaFaEt6jbuoagNw=="],
 
@@ -1026,7 +1026,11 @@
 
     "@babel/helper-compilation-targets/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 
+    "@changesets/apply-release-plan/prettier": ["prettier@2.8.8", "", { "bin": { "prettier": "bin-prettier.js" } }, "sha512-tdN8qQGvNjw4CHbY+XXk0JgCXn9QiF21a55rBe5LJAU+kDyC4WQn4+awm2Xfk2lQMk5fKup9XgzTZtGkjBdP9Q=="],
+
     "@changesets/parse/js-yaml": ["js-yaml@4.1.1", "", { "dependencies": { "argparse": "^2.0.1" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-qQKT4zQxXl8lLwBtHMWwaTcGfFOZviOJet3Oy/xmGk2gZH677CJM9EvtfdSkgWcATZhj/55JZ0rmy3myCT5lsA=="],
+
+    "@changesets/write/prettier": ["prettier@2.8.8", "", { "bin": { "prettier": "bin-prettier.js" } }, "sha512-tdN8qQGvNjw4CHbY+XXk0JgCXn9QiF21a55rBe5LJAU+kDyC4WQn4+awm2Xfk2lQMk5fKup9XgzTZtGkjBdP9Q=="],
 
     "@libsql/hrana-client/node-fetch": ["node-fetch@3.3.2", "", { "dependencies": { "data-uri-to-buffer": "^4.0.0", "fetch-blob": "^3.1.4", "formdata-polyfill": "^4.0.10" } }, "sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA=="],
 

@@ -87,7 +87,11 @@ bunny-cli/
 │   │   │   ├── core.json                 # Core API — https://api.bunny.net
 │   │   │   ├── compute.json              # Edge Scripting API — https://api.bunny.net/compute
 │   │   │   ├── database.json             # Database API — https://api.bunny.net/database
-│   │   │   └── magic-containers.json     # Magic Containers API — https://api.bunny.net/mc
+│   │   │   ├── magic-containers.json     # Magic Containers API — https://api.bunny.net/mc
+│   │   │   ├── origin-errors.json        # Origin Errors API — https://cdn-origin-logging.bunny.net
+│   │   │   ├── shield.json               # Shield API — https://api.bunny.net (paths under /shield/...)
+│   │   │   ├── storage.json              # Edge Storage API — https://storage.bunnycdn.com (region-specific)
+│   │   │   └── stream.json               # Stream API — https://video.bunnycdn.com
 │   │   ├── scripts/
 │   │   │   └── update-specs.ts           # Downloads latest specs from bunny.net endpoints
 │   │   └── src/
@@ -98,11 +102,19 @@ bunny-cli/
 │   │       ├── compute-client.ts         # createComputeClient(options) — Edge Scripting
 │   │       ├── db-client.ts              # createDbClient(options) — Database
 │   │       ├── mc-client.ts              # createMcClient(options) — Magic Containers
+│   │       ├── origin-errors-client.ts   # createOriginErrorsClient(options) — Origin Errors
+│   │       ├── shield-client.ts          # createShieldClient(options) — Shield (WAF/DDoS/bots)
+│   │       ├── storage-client.ts         # createStorageClient(options) — Edge Storage (region-specific)
+│   │       ├── stream-client.ts          # createStreamClient(options) — Stream (video libraries)
 │   │       └── generated/                # Generated .d.ts files (gitignored)
 │   │           ├── core.d.ts
 │   │           ├── compute.d.ts
 │   │           ├── database.d.ts
-│   │           └── magic-containers.d.ts
+│   │           ├── magic-containers.d.ts
+│   │           ├── origin-errors.d.ts
+│   │           ├── shield.d.ts
+│   │           ├── storage.d.ts
+│   │           └── stream.d.ts
 │   │
 │   ├── app-config/                        # @bunny.net/app-config package
 │   │   ├── package.json
@@ -301,15 +313,25 @@ The primary factory. Equivalent to Cobra's `cobra.Command{}` struct:
 ```typescript
 import { defineCommand } from "../../core/define-command";
 
-export const myCommand = defineCommand<{ env: string; dryRun: boolean }>({
+export const myCommand = defineCommand<{
+  env: string;
+  dryRun: boolean;
+}>({
   command: "deploy",
   aliases: ["d"],
   describe: "Deploy your project.",
 
   builder: (yargs) =>
     yargs
-      .option("env", { alias: "e", type: "string", default: "production" })
-      .option("dry-run", { type: "boolean", default: false }),
+      .option("env", {
+        alias: "e",
+        type: "string",
+        default: "production",
+      })
+      .option("dry-run", {
+        type: "boolean",
+        default: false,
+      }),
 
   // Optional: runs before handler. Use for validation. (Cobra's PreRunE)
   preRun: async (args) => {
@@ -423,7 +445,7 @@ Config files are written with permissions `0o660`.
 
 ### Config resolution precedence
 
-When resolving the active configuration (in `resolveConfig(profile, apiKeyOverride?)`), the following priority applies — highest wins:
+When resolving the active configuration (in `resolveConfig(profile, apiKeyOverride?, verbose?)`), the following priority applies — highest wins:
 
 1. **`--api-key` flag** — Passed as `apiKeyOverride` to `resolveConfig()`
 2. **Environment variables** — `BUNNYNET_API_KEY` and `BUNNYNET_API_URL`
@@ -553,7 +575,12 @@ With `--output json`, error payloads include all available context:
   "error": "Validation failed.",
   "status": 400,
   "field": "Name",
-  "validationErrors": [{ "field": "Name", "message": "Name is required." }]
+  "validationErrors": [
+    {
+      "field": "Name",
+      "message": "Name is required."
+    }
+  ]
 }
 ```
 
@@ -811,12 +838,16 @@ API calls use `openapi-fetch` with types generated from OpenAPI specs by `openap
 
 ### API domains
 
-| Client                   | Factory                 | Base URL                         | Auth                |
-| ------------------------ | ----------------------- | -------------------------------- | ------------------- |
-| Core API                 | `createCoreClient()`    | `https://api.bunny.net`          | Account `AccessKey` |
-| Edge Scripting (Compute) | `createComputeClient()` | `https://api.bunny.net`          | Account `AccessKey` |
-| Database                 | `createDbClient()`      | `https://api.bunny.net/database` | Account `AccessKey` |
-| Magic Containers         | `createMcClient()`      | `https://api.bunny.net/mc`       | Account `AccessKey` |
+| Client                   | Factory                      | Base URL                               | Auth                   |
+| ------------------------ | ---------------------------- | -------------------------------------- | ---------------------- |
+| Core API                 | `createCoreClient()`         | `https://api.bunny.net`                | Account `AccessKey`    |
+| Edge Scripting (Compute) | `createComputeClient()`      | `https://api.bunny.net`                | Account `AccessKey`    |
+| Database                 | `createDbClient()`           | `https://api.bunny.net/database`       | Account `AccessKey`    |
+| Magic Containers         | `createMcClient()`           | `https://api.bunny.net/mc`             | Account `AccessKey`    |
+| Origin Errors            | `createOriginErrorsClient()` | `https://cdn-origin-logging.bunny.net` | Account `AccessKey`    |
+| Shield                   | `createShieldClient()`       | `https://api.bunny.net`                | Account `AccessKey`    |
+| Storage                  | `createStorageClient()`      | `https://storage.bunnycdn.com`         | Storage Zone password  |
+| Stream                   | `createStreamClient()`       | `https://video.bunnycdn.com`           | Stream Library API key |
 
 All clients accept a `ClientOptions` object and inject `AccessKey` and `User-Agent` headers via shared `authMiddleware()` in `packages/openapi-client/src/middleware.ts`.
 
@@ -841,7 +872,9 @@ The CLI provides a `clientOptions()` helper (`packages/cli/src/core/client-optio
 Some bunny.net API endpoints are not included in the public OpenAPI specs. These are typed manually via a `CustomPaths` type in `packages/openapi-client/src/core-client.ts`, which is intersected with the generated `paths`:
 
 ```typescript
-const client = createClient<paths & CustomPaths>({ baseUrl });
+const client = createClient<paths & CustomPaths>({
+  baseUrl,
+});
 ```
 
 Only type the fields you actually use. When the endpoint is added to the spec, remove it from `CustomPaths`.
@@ -855,7 +888,11 @@ Prefer generated schema types over inline primitives. When you need a subset of 
 type Database = Pick<components["schemas"]["Database2"], "id" | "name" | "url">;
 
 // Bad — inline primitives that duplicate the schema
-type Database = { id: string; name: string; url: string };
+type Database = {
+  id: string;
+  name: string;
+  url: string;
+};
 ```
 
 Only fall back to `string`, `any`, or `number` when no generated type exists (e.g. `CustomPaths` for undocumented endpoints).
@@ -864,8 +901,8 @@ Only fall back to `string`, `any`, or `number` when no generated type exists (e.
 
 Specs are committed as JSON files in `packages/openapi-client/specs/`. Generated types go to `packages/openapi-client/src/generated/` (gitignored). The `redocly.yaml` config and `openapi-typescript` devDependency live in the `@bunny.net/openapi-client` package.
 
-| Spec file                                  | Source URL                                                    |
-| ------------------------------------------ | ------------------------------------------------------------- |
+| Spec file                                             | Source URL                                                    |
+| ----------------------------------------------------- | ------------------------------------------------------------- |
 | `packages/openapi-client/specs/core.json`             | `https://core-api-public-docs.b-cdn.net/docs/v3/public.json`  |
 | `packages/openapi-client/specs/compute.json`          | `https://core-api-public-docs.b-cdn.net/docs/v3/compute.json` |
 | `packages/openapi-client/specs/database.json`         | `https://api.bunny.net/database/docs/private/api.json`        |
@@ -889,7 +926,7 @@ import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 
 handler: async ({ profile, apiKey, verbose }) => {
-  const config = resolveConfig(profile, apiKey);
+  const config = resolveConfig(profile, apiKey, verbose);
   const api = createCoreClient(clientOptions(config, verbose));
 
   const { data, error } = await api.GET("/pullzone/{id}", {
@@ -1132,7 +1169,7 @@ bunny db shell seed.sql
 4. **Add flag equivalents for every interactive prompt** so the command is fully scriptable (see "Agent & Scripting Compatibility").
 5. Use `preRun` for validation that should prevent execution.
 6. Access global flags (`profile`, `verbose`, `output`) directly from the args object.
-7. Resolve config via `resolveConfig(args.profile, args.apiKey)` when API access is needed.
+7. Resolve config via `resolveConfig(args.profile, args.apiKey, args.verbose)` when API access is needed.
 8. Use `logger` for all output. **Every command that returns data must support `--output json`.**
 9. Throw `UserError` for expected failures. Let unexpected errors propagate to the factory's catch block.
 10. Register the new command/namespace in `packages/cli/src/cli.ts`.

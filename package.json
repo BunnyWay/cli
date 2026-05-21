@@ -10,8 +10,12 @@
     "build:studio": "bun run --filter @bunny.net/database-studio build:client",
     "build": "bun run build:studio && bun build packages/cli/src/index.ts --compile --outfile bunny",
     "typecheck": "bun run tsc --noEmit",
-    "lint": "biome check --write .",
-    "lint:ci": "biome ci",
+    "lint": "bun run lint:biome && bun run lint:prettier",
+    "lint:ci": "bun run lint:biome:ci && bun run lint:prettier:ci",
+    "lint:biome": "biome check --write .",
+    "lint:biome:ci": "biome ci",
+    "lint:prettier": "prettier --write \"**/*.{md,mdx,yml,yaml}\"",
+    "lint:prettier:ci": "prettier --check \"**/*.{md,mdx,yml,yaml}\"",
     "openapi:generate": "bun run --filter @bunny.net/openapi-client generate",
     "openapi:update": "bun run --filter @bunny.net/openapi-client update-specs",
     "changeset": "changeset",
@@ -22,7 +26,8 @@
     "@biomejs/biome": "^2.4.12",
     "@changesets/changelog-github": "^0.6.0",
     "@changesets/cli": "^2.30.0",
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "prettier": "^3.8.3"
   },
   "peerDependencies": {
     "typescript": "^5"

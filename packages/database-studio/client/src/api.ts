@@ -1,25 +1,4 @@
-// OpenAPI spec types (subset we use)
-interface OpenAPISpec {
-  paths: Record<string, unknown>;
-  components: {
-    schemas: Record<
-      string,
-      {
-        type?: string;
-        properties?: Record<
-          string,
-          {
-            type?: string;
-            format?: string;
-            nullable?: boolean;
-            example?: unknown;
-          }
-        >;
-        required?: string[];
-      }
-    >;
-  };
-}
+import type { OpenAPISpec } from "@bunny.net/database-openapi";
 
 export interface TableSummary {
   name: string;
@@ -108,12 +87,24 @@ export const fetchTableSchema = async (name: string): Promise<TableSchema> => {
     },
   );
 
-  // Foreign keys and indexes aren't in the OpenAPI spec - return empty for now
-  // The schema tab will show what's available from the spec
+  const foreignKeys: TableSchema["foreignKeys"] = [];
+  for (const [colName, colSchema] of Object.entries(tableSchema.properties)) {
+    const fk = colSchema["x-foreign-key"];
+    if (fk) {
+      foreignKeys.push({ from: colName, table: fk.table, to: fk.column });
+    }
+  }
+
+  const indexes: TableSchema["indexes"] =
+    tableSchema["x-indexes"]?.map((idx) => ({
+      name: idx.name,
+      unique: idx.unique,
+    })) ?? [];
+
   return {
     columns,
-    foreignKeys: [],
-    indexes: [],
+    foreignKeys,
+    indexes,
   };
 };
 

@@ -46,7 +46,7 @@ export const appsEndpointsRemoveCommand = defineCommand<RemoveArgs>({
     apiKey,
   }) => {
     const appId = resolveAppId(rawId);
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
     if (!force) {

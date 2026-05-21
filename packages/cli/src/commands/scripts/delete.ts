@@ -79,7 +79,7 @@ export const scriptsDeleteCommand = defineCommand<DeleteArgs>({
     apiKey,
   }) => {
     const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
 
     const fetchSpin = spinner("Fetching Edge Script...");

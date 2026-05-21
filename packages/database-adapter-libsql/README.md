@@ -51,10 +51,16 @@ Always filters out SQLite internals (`sqlite_*`, `_litestream_*`, `libsql_*`). A
 const schema = await introspect({ client });
 
 // With a custom version
-const schema = await introspect({ client, version: "2.0.0" });
+const schema = await introspect({
+  client,
+  version: "2.0.0",
+});
 
 // Show all tables (disable default excludes)
-const schema = await introspect({ client, exclude: [] });
+const schema = await introspect({
+  client,
+  exclude: [],
+});
 
 // Custom exclude patterns (supports trailing * wildcards)
 const schema = await introspect({

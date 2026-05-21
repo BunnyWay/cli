@@ -4,3 +4,7 @@ export { createDbClient } from "./db-client.ts";
 export { ApiError, UserError } from "./errors.ts";
 export { createMcClient } from "./mc-client.ts";
 export type { ClientOptions } from "./middleware.ts";
+export { createOriginErrorsClient } from "./origin-errors-client.ts";
+export { createShieldClient } from "./shield-client.ts";
+export { createStorageClient } from "./storage-client.ts";
+export { createStreamClient } from "./stream-client.ts";
