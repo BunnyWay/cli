@@ -82,6 +82,7 @@ export interface SchemaObject {
   nullable?: boolean;
   example?: unknown;
   "x-foreign-key"?: { table: string; column: string };
+  "x-indexes"?: Array<{ name: string; columns: string[]; unique: boolean }>;
 }
 
 const NAME_EXAMPLES: [RegExp, unknown][] = [
@@ -227,6 +228,7 @@ const tableToSchema = (table: TableDefinition): SchemaObject => {
     type: "object",
     properties,
     ...(required.length > 0 ? { required } : {}),
+    ...(table.indexes.length > 0 ? { "x-indexes": table.indexes } : {}),
   };
 };
 

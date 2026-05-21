@@ -7,17 +7,17 @@ interface OpenAPIColumnSchema {
   "x-foreign-key"?: { table: string; column: string };
 }
 
+interface OpenAPITableSchema {
+  type?: string;
+  properties?: Record<string, OpenAPIColumnSchema>;
+  required?: string[];
+  "x-indexes"?: Array<{ name: string; columns: string[]; unique: boolean }>;
+}
+
 interface OpenAPISpec {
   paths: Record<string, unknown>;
   components: {
-    schemas: Record<
-      string,
-      {
-        type?: string;
-        properties?: Record<string, OpenAPIColumnSchema>;
-        required?: string[];
-      }
-    >;
+    schemas: Record<string, OpenAPITableSchema>;
   };
 }
 
@@ -116,11 +116,16 @@ export const fetchTableSchema = async (name: string): Promise<TableSchema> => {
     }
   }
 
-  // Indexes aren't in the OpenAPI spec - return empty for now
+  const indexes: TableSchema["indexes"] =
+    tableSchema["x-indexes"]?.map((idx) => ({
+      name: idx.name,
+      unique: idx.unique,
+    })) ?? [];
+
   return {
     columns,
     foreignKeys,
-    indexes: [],
+    indexes,
   };
 };
 
