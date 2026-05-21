@@ -130,7 +130,10 @@ export function DataTable<TData, TValue>({
   const colCount = columns.length + (onInspectRow ? 1 : 0);
 
   return (
-    <Table style={{ minWidth: `${colCount * 150}px` }}>
+    <Table
+      containerClassName="h-full"
+      style={{ minWidth: `${colCount * 150}px` }}
+    >
       <TableHeader className="sticky top-0 z-10 bg-card">
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>

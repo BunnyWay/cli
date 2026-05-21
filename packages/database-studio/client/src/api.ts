@@ -1,4 +1,12 @@
 // OpenAPI spec types (subset we use)
+interface OpenAPIColumnSchema {
+  type?: string;
+  format?: string;
+  nullable?: boolean;
+  example?: unknown;
+  "x-foreign-key"?: { table: string; column: string };
+}
+
 interface OpenAPISpec {
   paths: Record<string, unknown>;
   components: {
@@ -6,15 +14,7 @@ interface OpenAPISpec {
       string,
       {
         type?: string;
-        properties?: Record<
-          string,
-          {
-            type?: string;
-            format?: string;
-            nullable?: boolean;
-            example?: unknown;
-          }
-        >;
+        properties?: Record<string, OpenAPIColumnSchema>;
         required?: string[];
       }
     >;
@@ -108,11 +108,18 @@ export const fetchTableSchema = async (name: string): Promise<TableSchema> => {
     },
   );
 
-  // Foreign keys and indexes aren't in the OpenAPI spec - return empty for now
-  // The schema tab will show what's available from the spec
+  const foreignKeys: TableSchema["foreignKeys"] = [];
+  for (const [colName, colSchema] of Object.entries(tableSchema.properties)) {
+    const fk = colSchema["x-foreign-key"];
+    if (fk) {
+      foreignKeys.push({ from: colName, table: fk.table, to: fk.column });
+    }
+  }
+
+  // Indexes aren't in the OpenAPI spec - return empty for now
   return {
     columns,
-    foreignKeys: [],
+    foreignKeys,
     indexes: [],
   };
 };

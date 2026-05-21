@@ -81,6 +81,7 @@ export interface SchemaObject {
   oneOf?: SchemaObject[];
   nullable?: boolean;
   example?: unknown;
+  "x-foreign-key"?: { table: string; column: string };
 }
 
 const NAME_EXAMPLES: [RegExp, unknown][] = [
@@ -199,8 +200,20 @@ const tableToSchema = (table: TableDefinition): SchemaObject => {
   const properties: Record<string, SchemaObject> = {};
   const required: string[] = [];
 
+  const fkByColumn = new Map(
+    table.foreignKeys.map((fk) => [fk.column, fk] as const),
+  );
+
   for (const column of table.columns) {
-    properties[column.name] = columnTypeToSchema(column);
+    const schema = columnTypeToSchema(column);
+    const fk = fkByColumn.get(column.name);
+    if (fk) {
+      schema["x-foreign-key"] = {
+        table: fk.referencesTable,
+        column: fk.referencesColumn,
+      };
+    }
+    properties[column.name] = schema;
     if (
       !column.nullable &&
       column.defaultValue === undefined &&

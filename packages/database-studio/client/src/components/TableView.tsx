@@ -230,8 +230,8 @@ export function TableView({ tableName, onSelectTable }: TableViewProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b px-4">
-        <div className="flex gap-1">
+      <div className="flex h-10 min-h-10 max-h-10 shrink-0 items-center gap-1 border-b px-4">
+        <div className="flex items-center gap-1">
           <Button
             variant={tab === "data" ? "secondary" : "ghost"}
             size="sm"
