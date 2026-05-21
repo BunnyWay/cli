@@ -18,10 +18,8 @@
       "name": "@bunny.net/app-config",
       "version": "0.0.1",
       "dependencies": {
-        "zod": "^4.3.6",
-      },
-      "peerDependencies": {
         "@bunny.net/openapi-client": "workspace:*",
+        "zod": "^4.3.6",
       },
     },
     "packages/cli": {

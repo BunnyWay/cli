@@ -12,9 +12,7 @@
     "generate:schema": "bun run scripts/generate-schema.ts"
   },
   "dependencies": {
+    "@bunny.net/openapi-client": "workspace:*",
     "zod": "^4.3.6"
-  },
-  "peerDependencies": {
-    "@bunny.net/openapi-client": "workspace:*"
   }
 }
