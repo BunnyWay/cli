@@ -89,7 +89,10 @@ describe("composeToConfig", () => {
     });
   });
 
-  test("env_file merges with environment (environment overrides)", () => {
+  test("env_file keys become pointers; environment literals override", () => {
+    // env_file values stay in .env (gitignored). bunny.jsonc only carries
+    // the *keys* as pointers ("K": "K") that get resolved at deploy time.
+    // environment: literals copy as-is and win over env_file pointers.
     writeFileSync(join(tempDir(), "shared.env"), "PORT=3000\nDB_URL=local\n");
     const result = callTranslate({
       services: {
@@ -101,7 +104,7 @@ describe("composeToConfig", () => {
       },
     });
     expect(result.config.app.containers.api?.env).toEqual({
-      PORT: "3000",
+      PORT: "PORT",
       DB_URL: "prod",
     });
   });
@@ -162,7 +165,7 @@ describe("composeToConfig", () => {
       volumes: { data: {} },
     });
     expect(result.config.app.containers.api?.volumes).toEqual([
-      { name: "data", mount: "/var/lib/data", size: 1024 },
+      { name: "data", mount: "/var/lib/data", size: 1 },
     ]);
   });
 

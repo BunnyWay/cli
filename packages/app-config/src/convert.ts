@@ -120,6 +120,7 @@ function containerConfigToRequest(
     imageNamespace,
     imageTag,
     imageRegistryId: config.registry ?? "",
+    imagePullPolicy: "ifNotPresent",
   };
 
   if (config.command) {

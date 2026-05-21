@@ -164,6 +164,11 @@ function translateService(
   }
 
   // Environment: env_file first, then `environment:` overrides per the spec.
+  //
+  // env_file entries become pointers — only the *keys* go into bunny.jsonc
+  // (`"K": "K"`), so the values stay in `.env` (which is gitignored) and
+  // get resolved at deploy time. `environment:` values are inline literals
+  // and copy as-is; if a key appears in both, the literal wins.
   const env: Record<string, string> = {};
   if (service.env_file !== undefined) {
     const files = Array.isArray(service.env_file)
@@ -176,7 +181,10 @@ function translateService(
           `Service "${name}": env_file \`${file}\` not found at ${path}.`,
         );
       }
-      Object.assign(env, parseDotenv(readFileSync(path, "utf-8")));
+      const fileVars = parseDotenv(readFileSync(path, "utf-8"));
+      for (const key of Object.keys(fileVars)) {
+        env[key] = key;
+      }
     }
   }
   if (service.environment !== undefined) {
@@ -303,10 +311,10 @@ function parseVolumeEntry(
 
 /**
  * Compose doesn't carry a size for volumes; they're created on demand
- * by the local docker daemon at whatever size. MC requires a number.
+ * by the local docker daemon at whatever size. MC requires GiB in [1, 100].
  * Default to 1 GiB and let users edit `bunny.jsonc` if they want more.
  */
-const DEFAULT_VOLUME_SIZE = 1024;
+const DEFAULT_VOLUME_SIZE = 1;
 function sizeForVolume(
   name: string,
   topLevelVolumes: Record<string, unknown>,

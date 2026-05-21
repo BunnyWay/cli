@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { parseImageRef } from "./parse-image-ref.ts";
 
 describe("parseImageRef", () => {
-  test("bare image name defaults tag to 'latest'", () => {
+  test("bare image name defaults tag to 'latest' and namespace to 'library'", () => {
     expect(parseImageRef("nginx")).toEqual({
       imageName: "nginx",
-      imageNamespace: "",
+      imageNamespace: "library",
       imageTag: "latest",
     });
   });
@@ -18,10 +18,10 @@ describe("parseImageRef", () => {
     });
   });
 
-  test("bare image with simple tag", () => {
+  test("bare image with simple tag defaults namespace to 'library'", () => {
     expect(parseImageRef("nginx:1.27")).toEqual({
       imageName: "nginx",
-      imageNamespace: "",
+      imageNamespace: "library",
       imageTag: "1.27",
     });
   });
@@ -29,8 +29,16 @@ describe("parseImageRef", () => {
   test("tag containing dots is preserved", () => {
     expect(parseImageRef("nginx:1.27.0-alpine")).toEqual({
       imageName: "nginx",
-      imageNamespace: "",
+      imageNamespace: "library",
       imageTag: "1.27.0-alpine",
+    });
+  });
+
+  test("empty ref returns all empty fields", () => {
+    expect(parseImageRef("")).toEqual({
+      imageName: "",
+      imageNamespace: "",
+      imageTag: "",
     });
   });
 

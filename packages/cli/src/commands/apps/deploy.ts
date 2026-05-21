@@ -27,6 +27,7 @@ import {
   type ResolvedRegistry,
   resolveRegistryForImage,
 } from "./docker.ts";
+import { resolveContainerEnv } from "./env/resolve.ts";
 import { runWalkthrough } from "./walkthrough.ts";
 
 const COMMAND = "deploy [image]";
@@ -136,6 +137,13 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       ? resolve(process.cwd(), args.config)
       : undefined;
 
+    // `.env` lives next to bunny.jsonc. Container env values that match a
+    // key in this file are resolved at deploy time; everything else is
+    // sent literally. See resolveContainerEnv for the full rule.
+    const dotenvPath = configPath
+      ? resolve(dirname(configPath), ".env")
+      : resolve(process.cwd(), ".env");
+
     if (positionalImage && dockerfileFlag) {
       throw new UserError(
         "Cannot use both <image> and --dockerfile at the same time.",
@@ -171,6 +179,55 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       logger.dim(
         "Dry run complete. No files were written and no API calls were made to deploy.",
       );
+      return;
+    }
+
+    // First-time deploy of a multi-container app (e.g. compose import).
+    // The single-container flow below can only build/push one image, so
+    // for multi-container creates we iterate every container, build any
+    // with a `dockerfile`, resolve a registry for any with a pre-built
+    // `image`, then create the app in one POST.
+    const containerEntries = Object.entries(toml.app.containers);
+    if (
+      !toml.app.id &&
+      containerEntries.length > 1 &&
+      !positionalImage &&
+      !dockerfileFlag &&
+      !args.container
+    ) {
+      await prepareContainersForCreate(client, toml, configPath, {
+        tag: args.tag,
+        contextOverride: args.context,
+      });
+
+      const createSpin = spinner("Creating app...");
+      createSpin.start();
+      const { data: result } = await client.POST("/apps", {
+        body: configToAddRequest(resolveContainerEnv(toml, dotenvPath)),
+      });
+      createSpin.stop();
+
+      if (!result?.id) {
+        throw new UserError("Failed to create app — no ID returned.");
+      }
+
+      toml.app.id = result.id;
+      saveConfig(toml, configPath);
+      logger.success(`App "${toml.app.name}" created (${result.id}).`);
+
+      const deploySpin = spinner("Deploying...");
+      deploySpin.start();
+      await client.POST("/apps/{appId}/deploy", {
+        params: { path: { appId: result.id } },
+      });
+      deploySpin.stop();
+
+      if (output === "json") {
+        logger.log(JSON.stringify({ id: result.id, deployed: true }));
+        return;
+      }
+
+      logger.success("App deployed.");
       return;
     }
 
@@ -295,7 +352,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       createSpin.start();
 
       const { data: result } = await client.POST("/apps", {
-        body: configToAddRequest(toml),
+        body: configToAddRequest(resolveContainerEnv(toml, dotenvPath)),
       });
       createSpin.stop();
 
@@ -323,7 +380,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
       await client.PATCH("/apps/{appId}", {
         params: { path: { appId } },
-        body: configToPatchRequest(toml, existingApp),
+        body: configToPatchRequest(
+          resolveContainerEnv(toml, dotenvPath),
+          existingApp,
+        ),
       });
       pushSpin.stop();
     }
@@ -511,4 +571,136 @@ function resolveBuildContext(
     ? dockerfile
     : resolve(process.cwd(), dockerfile);
   return dirname(absDockerfile);
+}
+
+/**
+ * Walk every container in bunny.jsonc and prepare it for `POST /apps`:
+ *
+ * - `dockerfile`-only entries → build + push to the configured registry,
+ *   then write the resulting image ref back onto the container.
+ * - Pre-built `image` entries → resolve the matching registry record on
+ *   the user's account (compose import assigns the user's push registry
+ *   to every container by default, which is wrong for public images like
+ *   `postgres:17-alpine`).
+ *
+ * The toml is mutated in place and re-saved after every container so
+ * partial progress survives a mid-loop failure.
+ */
+async function prepareContainersForCreate(
+  client: ReturnType<typeof createMcClient>,
+  toml: BunnyAppConfig,
+  configPath: string | undefined,
+  opts: { tag?: string; contextOverride?: string },
+): Promise<void> {
+  const entries = Object.entries(toml.app.containers);
+  const hasAnyBuild = entries.some(([, c]) => c.dockerfile);
+  if (hasAnyBuild) {
+    await ensureDockerAvailable();
+  }
+
+  // One shared tag for every build in this deploy so co-deployed images
+  // are easy to correlate later (same git sha + timestamp).
+  const sharedTag = opts.tag ?? (await generateTag());
+
+  for (const [name, container] of entries) {
+    if (container.dockerfile) {
+      await buildAndPushContainer(client, toml, name, container, {
+        tag: sharedTag,
+        contextOverride: opts.contextOverride,
+      });
+    } else if (container.image) {
+      await resolveContainerRegistry(client, name, container);
+    } else {
+      throw new UserError(
+        `Container "${name}" has neither \`image\` nor \`dockerfile\`.`,
+        "Add one or the other in bunny.jsonc.",
+      );
+    }
+    saveConfig(toml, configPath);
+  }
+}
+
+async function buildAndPushContainer(
+  client: ReturnType<typeof createMcClient>,
+  toml: BunnyAppConfig,
+  name: string,
+  container: ContainerConfig,
+  opts: { tag: string; contextOverride?: string },
+): Promise<void> {
+  if (!container.dockerfile) return;
+
+  let freshCreds: ResolvedRegistry["freshCredentials"];
+  if (!container.registry) {
+    logger.info(`Pick a registry to push the "${name}" image to.`);
+    const resolved = await promptRegistry(client);
+    if (!resolved) {
+      throw new UserError(
+        `A registry is required to build and push "${name}".`,
+      );
+    }
+    container.registry = resolved.id;
+    freshCreds = resolved.freshCredentials;
+  }
+
+  const regSpin = spinner(`Fetching registry for ${name}...`);
+  regSpin.start();
+  const { data: reg } = await client.GET("/registries/{registryId}", {
+    params: { path: { registryId: Number(container.registry) } },
+  });
+  regSpin.stop();
+
+  if (!reg?.hostName) {
+    throw new UserError(
+      `Registry ${container.registry} not found or has no hostname.`,
+      "Use `bunny registries list` to check your registries.",
+    );
+  }
+
+  const imageRef = `${reg.hostName}/${toml.app.name}-${name}:${opts.tag}`;
+  const buildCwd = resolveBuildContext(
+    container.dockerfile,
+    container.context ?? opts.contextOverride,
+  );
+
+  logger.info(`Building ${imageRef}...`);
+  await buildImage(container.dockerfile, imageRef, buildCwd);
+
+  if (freshCreds && reg.hostName) {
+    const loginSpin = spinner(`Logging in to ${reg.hostName}...`);
+    loginSpin.start();
+    try {
+      await dockerLogin(reg.hostName, freshCreds.userName, freshCreds.password);
+      loginSpin.stop();
+    } catch (err) {
+      loginSpin.stop();
+      throw err;
+    }
+  } else if (reg.hostName) {
+    await ensureRegistryLogin(reg.hostName);
+  }
+
+  logger.info(`Pushing ${imageRef}...`);
+  await pushImage(imageRef);
+
+  container.image = imageRef;
+}
+
+async function resolveContainerRegistry(
+  client: ReturnType<typeof createMcClient>,
+  name: string,
+  container: ContainerConfig,
+): Promise<void> {
+  if (!container.image) return;
+
+  // Always resolve by hostname for pre-built images: the registry
+  // currently set on the container may be the user's push registry,
+  // which is wrong for images from other hosts (Docker Hub, etc.).
+  const resolved = await resolveRegistryForImage(client, container.image);
+  if (!resolved) {
+    throw new UserError(
+      `A registry is required for "${name}" (image: ${container.image}).`,
+      "bunny.net needs a registry record for the image hostname so it can pull the image.",
+    );
+  }
+  container.registry = resolved.id;
 }
