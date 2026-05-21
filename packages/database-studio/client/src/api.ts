@@ -1,25 +1,4 @@
-// OpenAPI spec types (subset we use)
-interface OpenAPIColumnSchema {
-  type?: string;
-  format?: string;
-  nullable?: boolean;
-  example?: unknown;
-  "x-foreign-key"?: { table: string; column: string };
-}
-
-interface OpenAPITableSchema {
-  type?: string;
-  properties?: Record<string, OpenAPIColumnSchema>;
-  required?: string[];
-  "x-indexes"?: Array<{ name: string; columns: string[]; unique: boolean }>;
-}
-
-interface OpenAPISpec {
-  paths: Record<string, unknown>;
-  components: {
-    schemas: Record<string, OpenAPITableSchema>;
-  };
-}
+import type { OpenAPISpec } from "@bunny.net/database-openapi";
 
 export interface TableSummary {
   name: string;

@@ -143,6 +143,7 @@
       "version": "0.1.2",
       "dependencies": {
         "@bunny.net/database-adapter-libsql": "workspace:*",
+        "@bunny.net/database-openapi": "workspace:*",
         "@bunny.net/database-rest": "workspace:*",
         "@libsql/client": "^0.17.0",
       },
