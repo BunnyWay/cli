@@ -135,7 +135,7 @@ export const scriptsEnvSetCommand = defineCommand<SetArgs>({
 
     name = name.toUpperCase();
 
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
 
     const spin = spinner("Checking for conflicts...");

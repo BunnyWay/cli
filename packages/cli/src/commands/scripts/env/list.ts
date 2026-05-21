@@ -63,7 +63,7 @@ export const scriptsEnvListCommand = defineCommand<ListArgs>({
 
   handler: async ({ [ARG_ID]: rawId, profile, output, verbose, apiKey }) => {
     const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
 
     const spin = spinner("Fetching environment variables...");

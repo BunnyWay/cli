@@ -48,7 +48,7 @@ export const appsEnvPullCommand = defineCommand<PullArgs>({
     apiKey,
   }) => {
     const appId = resolveAppId(rawId);
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
     const spin = spinner("Fetching environment variables...");

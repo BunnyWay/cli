@@ -128,7 +128,7 @@ export const dbUsageCommand = defineCommand<UsageArgs>({
     verbose,
     apiKey,
   }) => {
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createDbClient(clientOptions(config, verbose));
 
     // Resolve time range

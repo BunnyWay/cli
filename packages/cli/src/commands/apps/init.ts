@@ -64,7 +64,7 @@ export const appsInitCommand = defineCommand<InitArgs>({
     }
     if (!name) throw new UserError("App name is required.");
 
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
     // Detect Dockerfile in cwd

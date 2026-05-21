@@ -59,7 +59,7 @@ export const scriptsLinkCommand = defineCommand<LinkArgs>({
     }),
 
   handler: async ({ [ARG_ID]: id, profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
 
     if (id) {

@@ -61,7 +61,7 @@ export async function createScript(opts: {
   createLinkedPullZone: boolean;
   linkedPullZoneName?: string;
 }): Promise<CreatedScript> {
-  const config = resolveConfig(opts.profile, opts.apiKey);
+  const config = resolveConfig(opts.profile, opts.apiKey, opts.verbose);
   const client = createComputeClient(clientOptions(config, opts.verbose));
 
   const spin = spinner(`Creating script "${opts.name}"...`);

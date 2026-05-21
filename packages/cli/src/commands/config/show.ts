@@ -7,8 +7,8 @@ export const configShowCommand = defineCommand({
   command: "show",
   describe: "Show the loaded configuration.",
 
-  handler: async ({ profile, output, apiKey }) => {
-    const cfg = resolveConfig(profile, apiKey);
+  handler: async ({ profile, output, apiKey, verbose }) => {
+    const cfg = resolveConfig(profile, apiKey, verbose);
 
     if (output === "json") {
       const { apiKey: rawKey, ...rest } = cfg;

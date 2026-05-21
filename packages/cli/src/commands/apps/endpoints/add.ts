@@ -65,7 +65,7 @@ export const appsEndpointsAddCommand = defineCommand<AddArgs>({
     apiKey,
   }) => {
     const appId = resolveAppId(rawId);
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
     const { data: app } = await client.GET("/apps/{appId}", {

@@ -39,7 +39,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
   handler: async ({ image, profile, output, verbose, apiKey }) => {
     const toml = loadConfig();
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
     let appId = toml.app.id;

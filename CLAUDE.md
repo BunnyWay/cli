@@ -38,7 +38,7 @@ This is a Bun workspace monorepo with four packages:
 - See `AGENTS.md` for full architecture documentation.
 - Commands use `defineCommand()` from `packages/cli/src/core/define-command.ts`.
 - Namespaces use `defineNamespace()` from `packages/cli/src/core/define-namespace.ts`.
-- Resolve config via `resolveConfig(profile, apiKey)` — always pass both args.
+- Resolve config via `resolveConfig(profile, apiKey, verbose)` — always pass `profile` and `apiKey`; pass `verbose` so credential-source debug lines respect the flag.
 - Use `formatTable()` / `formatKeyValue()` from `packages/cli/src/core/format.ts` for non-JSON output.
 - Handle `--output json` first in every handler, then pass `output` to format functions.
 - Use `logger` from `packages/cli/src/core/logger.ts` for all user-facing output.

@@ -26,7 +26,7 @@ export const appsPushCommand = defineCommand<PushArgs>({
   handler: async ({ "dry-run": dryRun, profile, output, verbose, apiKey }) => {
     const appId = resolveAppId();
     const toml = loadConfig();
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
     const spin = spinner("Fetching current app state...");

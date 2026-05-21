@@ -37,7 +37,7 @@ export const appsPullCommand = defineCommand<PullArgs>({
 
   handler: async ({ id: rawId, force, profile, output, verbose, apiKey }) => {
     const appId = resolveAppId(rawId);
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
     if (configExists() && !force) {

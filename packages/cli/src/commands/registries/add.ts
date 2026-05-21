@@ -83,7 +83,7 @@ export const registryAddCommand = defineCommand<AddArgs>({
     }
     if (!password) throw new UserError("Password is required.");
 
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
     const spin = spinner("Adding registry...");

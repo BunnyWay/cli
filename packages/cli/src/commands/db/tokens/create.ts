@@ -156,7 +156,7 @@ export const dbTokensCreateCommand = defineCommand<{
     verbose,
     apiKey,
   }) => {
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createDbClient(clientOptions(config, verbose));
 
     const authorization = readOnly ? "read-only" : "full-access";

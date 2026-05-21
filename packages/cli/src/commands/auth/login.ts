@@ -150,7 +150,7 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
       setProfile(profile, apiKey);
 
       // Fetch user details for a personalised greeting
-      const config = resolveConfig(profile);
+      const config = resolveConfig(profile, undefined, verbose);
       const client = createCoreClient(clientOptions(config, verbose));
 
       const spin = spinner("Verifying credentials...");

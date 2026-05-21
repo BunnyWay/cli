@@ -34,7 +34,7 @@ export const whoamiCommand = defineCommand({
   ],
 
   handler: async ({ profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
 
     if (!config.apiKey) {
       throw new UserError(

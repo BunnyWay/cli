@@ -225,7 +225,7 @@ export const dbQuickstartCommand = defineCommand<{
 
     // Resolve URL and token from API if not provided via flags
     if (!url || !token) {
-      const config = resolveConfig(profile, apiKey);
+      const config = resolveConfig(profile, apiKey, verbose);
       const client = createDbClient(clientOptions(config, verbose));
 
       const { id: databaseId } = await resolveDbId(client, databaseIdArg);

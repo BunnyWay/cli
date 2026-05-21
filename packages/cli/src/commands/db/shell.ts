@@ -71,7 +71,7 @@ async function resolveCredentials(
     return { url, token, databaseId: databaseIdArg, tokenGenerated: false };
   }
 
-  const config = resolveConfig(profile, apiKeyOverride);
+  const config = resolveConfig(profile, apiKeyOverride, verbose);
   const apiClient = createDbClient(clientOptions(config, verbose));
 
   const { id: databaseId } = await resolveDbId(apiClient, databaseIdArg);

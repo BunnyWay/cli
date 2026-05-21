@@ -39,7 +39,7 @@ export const registryRemoveCommand = defineCommand<RemoveArgs>({
     verbose,
     apiKey,
   }) => {
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
     if (!force) {

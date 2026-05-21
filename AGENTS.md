@@ -435,7 +435,7 @@ Config files are written with permissions `0o660`.
 
 ### Config resolution precedence
 
-When resolving the active configuration (in `resolveConfig(profile, apiKeyOverride?)`), the following priority applies — highest wins:
+When resolving the active configuration (in `resolveConfig(profile, apiKeyOverride?, verbose?)`), the following priority applies — highest wins:
 
 1. **`--api-key` flag** — Passed as `apiKeyOverride` to `resolveConfig()`
 2. **Environment variables** — `BUNNYNET_API_KEY` and `BUNNYNET_API_URL`
@@ -911,7 +911,7 @@ import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 
 handler: async ({ profile, apiKey, verbose }) => {
-  const config = resolveConfig(profile, apiKey);
+  const config = resolveConfig(profile, apiKey, verbose);
   const api = createCoreClient(clientOptions(config, verbose));
 
   const { data, error } = await api.GET("/pullzone/{id}", {
@@ -1152,7 +1152,7 @@ bunny db shell seed.sql
 4. **Add flag equivalents for every interactive prompt** so the command is fully scriptable (see "Agent & Scripting Compatibility").
 5. Use `preRun` for validation that should prevent execution.
 6. Access global flags (`profile`, `verbose`, `output`) directly from the args object.
-7. Resolve config via `resolveConfig(args.profile, args.apiKey)` when API access is needed.
+7. Resolve config via `resolveConfig(args.profile, args.apiKey, args.verbose)` when API access is needed.
 8. Use `logger` for all output. **Every command that returns data must support `--output json`.**
 9. Throw `UserError` for expected failures. Let unexpected errors propagate to the factory's catch block.
 10. Register the new command/namespace in `packages/cli/src/cli.ts`.

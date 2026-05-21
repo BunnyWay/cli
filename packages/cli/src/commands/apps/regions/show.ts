@@ -26,7 +26,7 @@ export const appsRegionsShowCommand = defineCommand<ShowArgs>({
 
   handler: async ({ id: rawId, profile, output, verbose, apiKey }) => {
     const appId = resolveAppId(rawId);
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
     const spin = spinner("Fetching region settings...");

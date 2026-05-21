@@ -46,7 +46,7 @@ export const dbRegionsListCommand = defineCommand<ListArgs>({
     verbose,
     apiKey,
   }) => {
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createDbClient(clientOptions(config, verbose));
 
     const { id: databaseId } = await resolveDbId(client, databaseIdArg);

@@ -59,7 +59,7 @@ export const dbLinkCommand = defineCommand<LinkArgs>({
     verbose,
     apiKey,
   }) => {
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createDbClient(clientOptions(config, verbose));
 
     if (databaseIdArg) {

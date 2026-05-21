@@ -84,7 +84,7 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
     verbose,
     apiKey,
   }) => {
-    const config = resolveConfig(profile, apiKey);
+    const config = resolveConfig(profile, apiKey, verbose);
     const client = createDbClient(clientOptions(config, verbose));
 
     const { id: databaseId, source } = await resolveDbId(client, databaseIdArg);
