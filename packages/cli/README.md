@@ -185,8 +185,8 @@ bunny db delete <database-id>
 bunny db delete --force
 ```
 
-| Flag      | Description              |
-| --------- | ------------------------ |
+| Flag      | Description               |
+| --------- | ------------------------- |
 | `--force` | Skip confirmation prompts |
 
 #### `bunny db regions list`
@@ -208,10 +208,10 @@ bunny db regions add --replicas UK,NY
 bunny db regions add --primary FR --replicas UK
 ```
 
-| Flag         | Description                                     |
-| ------------ | ----------------------------------------------- |
-| `--primary`  | Comma-separated primary region IDs to add        |
-| `--replicas` | Comma-separated replica region IDs to add        |
+| Flag         | Description                               |
+| ------------ | ----------------------------------------- |
+| `--primary`  | Comma-separated primary region IDs to add |
+| `--replicas` | Comma-separated replica region IDs to add |
 
 #### `bunny db regions remove`
 
@@ -222,10 +222,10 @@ bunny db regions remove --primary FR
 bunny db regions remove --replicas UK,NY
 ```
 
-| Flag         | Description                                     |
-| ------------ | ----------------------------------------------- |
-| `--primary`  | Comma-separated primary region IDs to remove     |
-| `--replicas` | Comma-separated replica region IDs to remove     |
+| Flag         | Description                                  |
+| ------------ | -------------------------------------------- |
+| `--primary`  | Comma-separated primary region IDs to remove |
+| `--replicas` | Comma-separated replica region IDs to remove |
 
 #### `bunny db regions update`
 
@@ -343,12 +343,12 @@ bunny db studio --no-open
 bunny db studio --url libsql://... --token ey...
 ```
 
-| Flag        | Description                                      |
-| ----------- | ------------------------------------------------ |
+| Flag        | Description                                     |
+| ----------- | ----------------------------------------------- |
 | `--port`    | Port for the local studio server (default 4488) |
-| `--url`     | Database URL (skips API lookup)                  |
-| `--token`   | Auth token (skips token generation)              |
-| `--no-open` | Don't automatically open the browser             |
+| `--url`     | Database URL (skips API lookup)                 |
+| `--token`   | Auth token (skips token generation)             |
+| `--no-open` | Don't automatically open the browser            |
 
 #### `bunny db tokens create`
 
@@ -419,16 +419,16 @@ bunny scripts init --repo owner/my-template
 bunny scripts init --template-repo https://github.com/owner/my-template
 ```
 
-| Flag                     | Description                                                           |
-| ------------------------ | --------------------------------------------------------------------- |
-| `--name`                 | Project directory name                                                |
-| `--type`                 | Script type: `standalone` or `middleware`                             |
-| `--template`             | Template name                                                         |
+| Flag                        | Description                                                            |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `--name`                    | Project directory name                                                 |
+| `--type`                    | Script type: `standalone` or `middleware`                              |
+| `--template`                | Template name                                                          |
 | `--template-repo`, `--repo` | Git repository URL or GitHub `owner/repo` shorthand to use as template |
-| `--deploy-method`        | Deployment method: `github` or `cli`                                  |
-| `--deploy`               | Create script on bunny.net after scaffolding                          |
-| `--skip-git`             | Skip git initialization (CLI deploy method only)                      |
-| `--skip-install`         | Skip dependency installation                                          |
+| `--deploy-method`           | Deployment method: `github` or `cli`                                   |
+| `--deploy`                  | Create script on bunny.net after scaffolding                           |
+| `--skip-git`                | Skip git initialization (CLI deploy method only)                       |
+| `--skip-install`            | Skip dependency installation                                           |
 
 When `--repo` / `--template-repo` is given without `--type`, the script type defaults to `standalone`.
 
@@ -451,12 +451,12 @@ bunny scripts create my-script --type middleware
 bunny scripts create my-script --no-pull-zone --no-link
 ```
 
-| Flag               | Description                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------------ |
-| `--type`           | Script type: `standalone` or `middleware` (defaults to manifest, prompts if interactive)    |
-| `--pull-zone`      | Create a linked pull zone (default: true). Use `--no-pull-zone` to skip.                   |
-| `--pull-zone-name` | Name for the linked pull zone                                                              |
-| `--link`           | Link this directory to the new script (default: true). Use `--no-link` to skip.            |
+| Flag               | Description                                                                              |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| `--type`           | Script type: `standalone` or `middleware` (defaults to manifest, prompts if interactive) |
+| `--pull-zone`      | Create a linked pull zone (default: true). Use `--no-pull-zone` to skip.                 |
+| `--pull-zone-name` | Name for the linked pull zone                                                            |
+| `--link`           | Link this directory to the new script (default: true). Use `--no-link` to skip.          |
 
 #### `bunny scripts deploy`
 
@@ -473,9 +473,9 @@ bunny scripts deploy dist/index.js --skip-publish
 bunny scripts deploy dist/index.js 12345
 ```
 
-| Flag              | Description                    |
-| ----------------- | ------------------------------ |
-| `--skip-publish`  | Upload code without publishing |
+| Flag             | Description                    |
+| ---------------- | ------------------------------ |
+| `--skip-publish` | Upload code without publishing |
 
 > **Note:** `bunny scripts deploy` works regardless of how the script was created or whether GitHub Actions is configured. The last deployment always wins — whether triggered by a GitHub Action or a manual CLI deploy.
 
@@ -537,9 +537,9 @@ echo '{"name":"test"}' | bunny api POST /database/v2/databases
 bunny api GET /pullzone --verbose
 ```
 
-| Flag     | Alias | Description        |
-| -------- | ----- | ------------------ |
-| `--body` | `-b`  | JSON request body  |
+| Flag     | Alias | Description       |
+| -------- | ----- | ----------------- |
+| `--body` | `-b`  | JSON request body |
 
 The method is case-insensitive (`get` and `GET` both work). Paths are relative to `https://api.bunny.net` — use `/database/...` for the Database API and `/mc/...` for Magic Containers.
 

@@ -21,7 +21,6 @@
 ### Patch Changes
 
 - [#49](https://github.com/BunnyWay/cli/pull/49) [`61e1518`](https://github.com/BunnyWay/cli/commit/61e1518df6e24dcfc62ac5ef4c299b53a9275ebf) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Harden `bunny db studio` against LAN, cross-origin, and credential-persistence attacks
-
   - The studio HTTP server now binds to `127.0.0.1` instead of every interface, so LAN peers, container bridges, and VPC siblings can no longer reach it.
   - `Access-Control-Allow-Origin: *` and the `OPTIONS` preflight branch were removed. The SPA is same-origin (Vite proxies `/api` in dev; prod serves the SPA and API from the same port), so no cross-origin grant is needed. Evil pages loaded in another tab can no longer read the API.
   - Added a Host header allowlist (`localhost`, `127.0.0.1`, `[::1]`). Requests with any other Host are rejected with `403`, which blocks DNS-rebinding even if the server is reachable via a non-loopback address.
@@ -56,7 +55,6 @@
 - [#42](https://github.com/BunnyWay/cli/pull/42) [`3cd013d`](https://github.com/BunnyWay/cli/commit/3cd013dc0b3cfad3d49e0327ee81d181b6b8720f) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - improve `db studio` error handling
 
   A single broken table used to cause cascading UI problems:
-
   - `/api/tables` would 500 if any one table's row count failed, locking
     users out of the sidebar entirely. The endpoint now isolates per-table
     errors and returns a `null` row count for just the broken table.

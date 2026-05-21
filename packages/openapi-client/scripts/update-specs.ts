@@ -24,6 +24,26 @@ const specs = [
     url: "https://api.bunny.net/database/docs/private/api.json",
     out: "specs/database.json",
   },
+  {
+    name: "origin-errors",
+    url: "https://docs.bunny.net/api-reference/origin-errors/openapi.json",
+    out: "specs/origin-errors.json",
+  },
+  {
+    name: "storage",
+    url: "https://docs.bunny.net/api-reference/storage/openapi.json",
+    out: "specs/storage.json",
+  },
+  {
+    name: "stream",
+    url: "https://video.bunnycdn.com/openapi/bunnynet-video-api.public.json",
+    out: "specs/stream.json",
+  },
+  {
+    name: "shield",
+    url: "https://api.bunny.net/shield/docs/v1/swagger.json",
+    out: "specs/shield.json",
+  },
 ];
 
 console.log("Fetching latest OpenAPI specs...\n");

@@ -14,7 +14,6 @@
 
   A database-agnostic PostgREST-like REST API handler. Provides query parsing,
   SQL building, and a full CRUD request handler with:
-
   - PostgREST-style filtering (`?col=op.value`), sorting, pagination
   - Single-resource endpoints by primary key (`/{table}/{pk}`)
   - Unique column lookups (`/{table}/by-{column}/{value}`)

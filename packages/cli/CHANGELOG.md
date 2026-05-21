@@ -23,7 +23,6 @@
 - [#63](https://github.com/BunnyWay/cli/pull/63) [`4be3c3d`](https://github.com/BunnyWay/cli/commit/4be3c3d6841a9e4679fb216e8ee083df873c9224) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Internal: rename `@bunny.net/api` workspace package to `@bunny.net/openapi-client` for clarity. No user-facing CLI changes.
 
 - [#65](https://github.com/BunnyWay/cli/pull/65) [`aa2f707`](https://github.com/BunnyWay/cli/commit/aa2f70729b1aba5dc781d762a160c52adbac4628) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Update OpenAPI specs and align CLI with new enum casing.
-
   - `database` spec bumped to `0.0.130`: adds `size_max_bytes` / `current_size_bytes`, deprecates the string `size_max` / `current_size`.
   - `magic-containers` spec bumped to `v1.9.19.0`: adds `/apps/{appId}/summary` and `/nodes/plain` endpoints, `DeleteApplication` is now async, and several enums (`ApplicationStatus`, `ApplicationRuntimeType`, `AddRegistryStatus`, `RemoveRegistryStatus`, `AnycastIpProtocolVersion`) switched to lowercase / camelCase values.
   - `core` spec: adds External DNS certificate request/complete endpoints and new Stream Video Library / Storage Zone operations; pull-zone and storage-zone list operation IDs renamed (`Index` → `IndexAll`).
@@ -40,7 +39,6 @@
 - [#51](https://github.com/BunnyWay/cli/pull/51) [`c1896be`](https://github.com/BunnyWay/cli/commit/c1896be35be7808cde1c076a0a89bce54fa15a76) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add `bunny open` command to open the bunny.net dashboard in the default browser. Use `--print` to print the URL instead.
 
 - [#50](https://github.com/BunnyWay/cli/pull/50) [`2bcf964`](https://github.com/BunnyWay/cli/commit/2bcf96435193bf2bb119c804302a1978cbb252f2) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add `bunny scripts create` command
-
   - New `bunny scripts create [name]` command for creating an Edge Script on bunny.net without scaffolding a project. Useful when you already have a project (e.g. ran `bunny scripts init` without `--deploy`) and need a remote script before running `bunny scripts deploy`.
   - Defaults the script name to the current directory name, creates a linked pull zone, and links the directory via `.bunny/script.json`.
   - Flags: `--type` (`standalone` or `middleware`), `--pull-zone`/`--no-pull-zone`, `--pull-zone-name`, `--link`/`--no-link`.
@@ -55,7 +53,6 @@
 - [#58](https://github.com/BunnyWay/cli/pull/58) [`db5b128`](https://github.com/BunnyWay/cli/commit/db5b128fac0bd87d6694141b7b475c4a65447f66) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - The "update available" notice now suggests the right command for how bunny was install
 
 - [#55](https://github.com/BunnyWay/cli/pull/55) [`ccfb7c1`](https://github.com/BunnyWay/cli/commit/ccfb7c100ba97e4f1bbb6c9b1912a5430fe89f85) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Improve the `install.sh` shell installer:
-
   - Default install directory is now `~/.bunny/bin` (no sudo required). Set `BUNNY_INSTALL_DIR=/usr/local/bin` to keep the previous behaviour.
   - On macOS, the installer now clears the `com.apple.quarantine` xattr and ad-hoc codesigns the binary so Gatekeeper allows execution on first run (fixes "killed: 9" on Apple Silicon).
   - Resolving the latest version no longer calls `api.github.com` (rate-limited to 60 req/hr); it uses GitHub's `releases/latest/download` redirect instead.
@@ -74,7 +71,6 @@
 ### Minor Changes
 
 - [#44](https://github.com/BunnyWay/cli/pull/44) [`87d76e1`](https://github.com/BunnyWay/cli/commit/87d76e131a85a1419f0ebc05abb400e396c1fc5a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add `bunny db link` and lifecycle integration for `.bunny/database.json`
-
   - New `bunny db link [database-id]` command that writes `{ id, name }` to `.bunny/database.json`. Subsequent `db` commands resolve the target without needing `BUNNY_DATABASE_URL` in `.env`.
   - Database ID resolution order is now: explicit argument → `.bunny/database.json` → `BUNNY_DATABASE_URL` in `.env` → interactive prompt. The resolver also returns the database name when known, so commands like `db tokens create` can show `Database: <name> (<id>) (from ...)` without an extra API call.
   - `bunny db create` now offers to link the new database to the current directory, generate an auth token, and save credentials to `.env`. Three new flags make these phases non-interactive: `--link`/`--no-link`, `--token`/`--no-token`, `--save-env`/`--no-save-env`. In `--output json` mode, prompts are suppressed entirely — flags are the only way to opt in. The JSON output gains `linked`, `token`, and `saved_to_env` fields.
@@ -83,7 +79,6 @@
 ### Patch Changes
 
 - [#49](https://github.com/BunnyWay/cli/pull/49) [`61e1518`](https://github.com/BunnyWay/cli/commit/61e1518df6e24dcfc62ac5ef4c299b53a9275ebf) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Harden `bunny db studio` against LAN, cross-origin, and credential-persistence attacks
-
   - The studio HTTP server now binds to `127.0.0.1` instead of every interface, so LAN peers, container bridges, and VPC siblings can no longer reach it.
   - `Access-Control-Allow-Origin: *` and the `OPTIONS` preflight branch were removed. The SPA is same-origin (Vite proxies `/api` in dev; prod serves the SPA and API from the same port), so no cross-origin grant is needed. Evil pages loaded in another tab can no longer read the API.
   - Added a Host header allowlist (`localhost`, `127.0.0.1`, `[::1]`). Requests with any other Host are rejected with `403`, which blocks DNS-rebinding even if the server is reachable via a non-loopback address.
@@ -92,7 +87,6 @@
   - The libsql token minted on each run now expires after 30 minutes instead of never. This bounds the blast radius if the token ever leaves the developer's machine.
 
 - [#49](https://github.com/BunnyWay/cli/pull/49) [`61e1518`](https://github.com/BunnyWay/cli/commit/61e1518df6e24dcfc62ac5ef4c299b53a9275ebf) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Harden the `bunny login` loopback callback server
-
   - Every response (success and error) now sets `Cache-Control: no-store`, so browsers don't persist the `?state=…&apiKey=…` URL to disk cache.
   - Non-`GET` requests to `/callback` now return `405 Method Not Allowed` with an `Allow: GET` header instead of falling through and attempting to read query parameters.
 
@@ -110,7 +104,6 @@
 - [#42](https://github.com/BunnyWay/cli/pull/42) [`3cd013d`](https://github.com/BunnyWay/cli/commit/3cd013dc0b3cfad3d49e0327ee81d181b6b8720f) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - improve `db studio` error handling
 
   A single broken table used to cause cascading UI problems:
-
   - `/api/tables` would 500 if any one table's row count failed, locking
     users out of the sidebar entirely. The endpoint now isolates per-table
     errors and returns a `null` row count for just the broken table.
@@ -210,7 +203,6 @@
 ### Patch Changes
 
 - [`4f2f729`](https://github.com/BunnyWay/cli/commit/4f2f72906c07e865019d262614f1be6d0cd81856) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix compiled binary startup crash and optimize builds
-
   - Switch to @libsql/client/web to eliminate native addon dependency that crashed compiled binaries
   - Lazy-load database imports to prevent startup failures for non-db commands
   - Add --minify and --sourcemap flags for smaller, more debuggable production builds

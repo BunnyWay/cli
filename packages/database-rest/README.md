@@ -34,7 +34,11 @@ const handler = createRestHandler(executor, schema);
 const token = process.env.API_TOKEN ?? crypto.randomUUID();
 const guarded = requireAuth(handler, { token });
 
-Bun.serve({ port: 8080, hostname: "127.0.0.1", fetch: guarded });
+Bun.serve({
+  port: 8080,
+  hostname: "127.0.0.1",
+  fetch: guarded,
+});
 ```
 
 Requests must then carry `Authorization: Bearer <token>`. See
@@ -57,7 +61,7 @@ The `DatabaseExecutor` interface is simple:
 interface DatabaseExecutor {
   execute(
     sql: string,
-    args: (string | number | boolean | null)[]
+    args: (string | number | boolean | null)[],
   ): Promise<{
     columns: string[];
     rows: Record<string, unknown>[];
@@ -87,12 +91,12 @@ Bun.serve({ port: 8080, fetch: handler });
 
 #### Options
 
-| Option            | Type             | Default | Description                                       |
-| ----------------- | ---------------- | ------- | ------------------------------------------------- |
-| `basePath`        | `string`         | `""`    | Path prefix to strip before routing (e.g. `/api`) |
-| `openapi.title`   | `string`         | `"Database REST API"` | Title in the OpenAPI spec               |
-| `openapi.version` | `string`         | `schema.version`      | Version in the OpenAPI spec             |
-| `openapi.description` | `string`     | auto-generated        | Description in the OpenAPI spec         |
+| Option                | Type     | Default               | Description                                       |
+| --------------------- | -------- | --------------------- | ------------------------------------------------- |
+| `basePath`            | `string` | `""`                  | Path prefix to strip before routing (e.g. `/api`) |
+| `openapi.title`       | `string` | `"Database REST API"` | Title in the OpenAPI spec                         |
+| `openapi.version`     | `string` | `schema.version`      | Version in the OpenAPI spec                       |
+| `openapi.description` | `string` | auto-generated        | Description in the OpenAPI spec                   |
 
 ### `requireAuth(handler, options): (req: Request) => Promise<Response>`
 
@@ -104,18 +108,18 @@ optionally accepts the token via a named cookie. Returns `401` with
 ```ts
 const guarded = requireAuth(handler, {
   token: process.env.API_TOKEN!,
-  cookieName: "session",            // optional: also accept token in cookie
-  isPublic: (p) => p === "/auth",   // optional: pathnames to skip auth on
+  cookieName: "session", // optional: also accept token in cookie
+  isPublic: (p) => p === "/auth", // optional: pathnames to skip auth on
 });
 ```
 
 #### Options
 
-| Option       | Type                              | Default | Description                                          |
-| ------------ | --------------------------------- | ------- | ---------------------------------------------------- |
-| `token`      | `string`                          | (required) | Shared secret the request must present.           |
-| `cookieName` | `string`                          | none    | If set, also accept the token from this cookie.      |
-| `isPublic`   | `(pathname: string) => boolean`   | none    | Pathnames for which auth is skipped (e.g. handshake).|
+| Option       | Type                            | Default    | Description                                           |
+| ------------ | ------------------------------- | ---------- | ----------------------------------------------------- |
+| `token`      | `string`                        | (required) | Shared secret the request must present.               |
+| `cookieName` | `string`                        | none       | If set, also accept the token from this cookie.       |
+| `isPublic`   | `(pathname: string) => boolean` | none       | Pathnames for which auth is skipped (e.g. handshake). |
 
 #### Bringing your own auth
 
@@ -130,7 +134,10 @@ const handler = createRestHandler(executor, schema);
 Bun.serve({
   fetch: async (req) => {
     const session = await myAuthProvider.authenticate(req);
-    if (!session) return new Response("Unauthorized", { status: 401 });
+    if (!session)
+      return new Response("Unauthorized", {
+        status: 401,
+      });
     return handler(req);
   },
 });
@@ -273,7 +280,10 @@ Returns `404` if the row doesn't exist or if the column isn't a unique index. Co
 
 ```json
 {
-  "data": [{ "id": 1, "name": "John" }, { "id": 2, "name": "Jane" }]
+  "data": [
+    { "id": 1, "name": "John" },
+    { "id": 2, "name": "Jane" }
+  ]
 }
 ```
 
@@ -296,10 +306,10 @@ Returns `404` if the row doesn't exist or if the column isn't a unique index. Co
 
 **Pagination headers** (on collection GET):
 
-| Header          | Example                  |
-| --------------- | ------------------------ |
-| `X-Total-Count` | `42`                     |
-| `Content-Range` | `items 0-9/42`           |
+| Header          | Example        |
+| --------------- | -------------- |
+| `X-Total-Count` | `42`           |
+| `Content-Range` | `items 0-9/42` |
 
 ## Safety
 
@@ -322,10 +332,14 @@ bun add openapi-fetch
 import createClient from "openapi-fetch";
 import type { paths } from "./schema";
 
-const client = createClient<paths>({ baseUrl: "http://localhost:8080" });
+const client = createClient<paths>({
+  baseUrl: "http://localhost:8080",
+});
 
 const { data } = await client.GET("/users", {
-  params: { query: { select: "id,name", limit: 10 } },
+  params: {
+    query: { select: "id,name", limit: 10 },
+  },
 });
 ```
 

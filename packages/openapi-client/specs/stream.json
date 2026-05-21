@@ -1,0 +1,3507 @@
+{
+  "x-generator": "NSwag v13.20.0.0 (NJsonSchema v10.9.0.0 (Newtonsoft.Json v13.0.0.0))",
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Stream API",
+    "termsOfService": "https://bunny.net/tos",
+    "contact": {
+      "name": "bunny.net",
+      "url": "https://docs.bunny.net",
+      "email": "support@bunny.net"
+    },
+    "version": "1.4.74"
+  },
+  "servers": [
+    {
+      "url": "https://video.bunnycdn.com"
+    }
+  ],
+  "paths": {
+    "/library/{libraryId}/collections/{collectionId}": {
+      "get": {
+        "tags": ["Manage Collections"],
+        "summary": "Get Collection",
+        "operationId": "Collection_GetCollection",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "includeThumbnails",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The details of the requested collection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested collection was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "post": {
+        "tags": ["Manage Collections"],
+        "summary": "Update Collection",
+        "operationId": "Collection_UpdateCollection",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCollectionModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "description": "The collection was successfully updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested collection was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["Manage Collections"],
+        "summary": "Delete Collection",
+        "operationId": "Collection_DeleteCollection",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The collection was successfully deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested collection was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/collections": {
+      "get": {
+        "tags": ["Manage Collections"],
+        "summary": "Get Collection List",
+        "operationId": "Collection_List",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            },
+            "x-position": 2
+          },
+          {
+            "name": "itemsPerPage",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            },
+            "x-position": 3
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "orderBy",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "date",
+              "nullable": true
+            },
+            "x-position": 5
+          },
+          {
+            "name": "includeThumbnails",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 6
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The list of videos for the current parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginationListOfCollectionModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "post": {
+        "tags": ["Manage Collections"],
+        "summary": "Create Collection",
+        "operationId": "Collection_CreateCollection",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCollectionModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "The collection was successfully created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}": {
+      "get": {
+        "tags": ["Manage Videos"],
+        "summary": "Get Video",
+        "operationId": "Video_GetVideo",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The details of the requested video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "post": {
+        "tags": ["Manage Videos"],
+        "summary": "Update Video",
+        "operationId": "Video_UpdateVideo",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateVideoModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "description": "The thumbnail was successfully set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["Manage Videos"],
+        "summary": "Delete Video",
+        "operationId": "Video_DeleteVideo",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The video was successfully deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "put": {
+        "tags": ["Manage Videos"],
+        "summary": "Upload Video",
+        "operationId": "Video_UploadVideo",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "jitEnabled",
+            "in": "query",
+            "description": "Marks whether JIT encoding should be enabled for this video (works only when Premium Encoding is enabled), overrides library settings",
+            "schema": {
+              "type": "boolean"
+            },
+            "x-position": 3
+          },
+          {
+            "name": "enabledResolutions",
+            "in": "query",
+            "description": "Comma separated list of resolutions enabled for encoding, available options: 240p, 360p, 480p, 720p, 1080p, 1440p, 2160p",
+            "schema": {
+              "type": "string",
+              "default": "",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "enabledOutputCodecs",
+            "in": "query",
+            "description": "List of codecs that will be used to encode the file (overrides library settings). Available values: x264, vp9",
+            "schema": {
+              "type": "string",
+              "default": "",
+              "nullable": true
+            },
+            "x-position": 6
+          },
+          {
+            "name": "transcribeEnabled",
+            "in": "query",
+            "description": "Setting this to true will enable transcription on this video. Enabling this will incur transcription charges",
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            },
+            "x-position": 7
+          },
+          {
+            "name": "transcribeLanguages",
+            "in": "query",
+            "description": "Comma separated list of languages that will be used as target languages, use ISO 639-1 language codes.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 8
+          },
+          {
+            "name": "sourceLanguage",
+            "in": "query",
+            "description": "Language spoken in the video, use ISO 639-1 language codes.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 9
+          },
+          {
+            "name": "generateTitle",
+            "in": "query",
+            "description": "Whether video title should be generated from transcription.",
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            },
+            "x-position": 10
+          },
+          {
+            "name": "generateDescription",
+            "in": "query",
+            "description": "Whether video description should be generated from transcription.",
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            },
+            "x-position": 11
+          },
+          {
+            "name": "generateChapters",
+            "in": "query",
+            "description": "Whether video chapters should be generated from transcription.",
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            },
+            "x-position": 12
+          },
+          {
+            "name": "generateMoments",
+            "in": "query",
+            "description": "Whether video moments should be generated from transcription.",
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            },
+            "x-position": 13
+          }
+        ],
+        "requestBody": {
+          "description": "Video file to upload",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "nullable": false
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The video was successfully uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The requested video was already uploaded"
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/heatmap": {
+      "get": {
+        "tags": ["Manage Videos"],
+        "summary": "Get Video Heatmap",
+        "description": "Returns the attention heatmap for a specific video, showing relative viewer interest across the timeline. May be unavailable if the feature is disabled or there isn't enough viewing data.",
+        "operationId": "Video_GetVideoHeatmap",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "description": "The GUID of the video.",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The heatmap of the requested video.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoHeatmapModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/play": {
+      "get": {
+        "tags": ["Manage Videos"],
+        "summary": "Get Video play data",
+        "operationId": "Video_GetVideoPlayData",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "expires",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 0
+            },
+            "x-position": 4
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The play data of the requested video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoPlayDataModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/play/heatmap": {
+      "get": {
+        "tags": ["Manage Videos"],
+        "summary": "Get Video heatmap data",
+        "operationId": "Video_GetVideoHeatmapData",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "expires",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 0
+            },
+            "x-position": 4
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The heatmap data of the requested video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoPlayDataModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/library/{libraryId}/statistics": {
+      "get": {
+        "tags": ["Manage Videos"],
+        "summary": "Get Video Statistics",
+        "description": "Returns time-series views and watch time, plus country-level aggregates, at the library level or for a specific video. Control the time window with dateFrom/dateTo and the granularity with hourly. Basic safeguards prevent spam and bot inflation by de-duplicating sessions and ignoring obviously invalid events.",
+        "operationId": "Video_GetVideoStatistics",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "description": "Optional start of the time range (UTC). If omitted or invalid, the last 30 days are returned.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "description": "Optional end of the time range (UTC). If omitted with a valid start, defaults to now; otherwise the last 30 days are returned.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "hourly",
+            "in": "query",
+            "description": "Optional. If true, returns hourly data; otherwise daily (UTC). Default is daily.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 4
+          },
+          {
+            "name": "videoGuid",
+            "in": "query",
+            "description": "Optional video GUID to filter results. When omitted, returns library-level aggregates.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 5
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Statistics including time-series views and watch time, country breakdowns, and engagement score when available.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoStatisticsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found (when filtering by videoGuid)"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/reencode": {
+      "post": {
+        "tags": ["Manage Videos"],
+        "summary": "Reencode Video",
+        "operationId": "Video_ReencodeVideo",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The details of the requested video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Original file is missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/outputs/{outputCodecId}": {
+      "put": {
+        "tags": ["Manage Videos"],
+        "summary": "Add output codec to video",
+        "operationId": "Video_ReencodeUsingCodec",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "outputCodecId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/EncoderOutputCodec"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The details of the requested video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or validation failed, check response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/repackage": {
+      "post": {
+        "tags": ["Manage Videos"],
+        "summary": "Repackage Video",
+        "operationId": "Video_Repackage",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "keepOriginalFiles",
+            "in": "query",
+            "description": "Marks whether previous file versions should be kept in storage, allows for faster repackage later on. Default is true.",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The details of the requested video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Enterprise DRM is disabled for the library, repackaging not available"
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos": {
+      "get": {
+        "tags": ["Manage Videos"],
+        "summary": "List Videos",
+        "operationId": "Video_List",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            },
+            "x-position": 2
+          },
+          {
+            "name": "itemsPerPage",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            },
+            "x-position": 3
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "collection",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "",
+              "nullable": true
+            },
+            "x-position": 5
+          },
+          {
+            "name": "orderBy",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "date",
+              "nullable": true
+            },
+            "x-position": 6
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The list of videos for the current parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginationListOfVideoModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "post": {
+        "tags": ["Manage Videos"],
+        "summary": "Create Video",
+        "operationId": "Video_CreateVideo",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVideoModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "The video was successfully created and returned as the response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "400": {
+            "description": "Request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/thumbnail": {
+      "post": {
+        "tags": ["Manage Videos"],
+        "summary": "Set Thumbnail",
+        "operationId": "Video_SetThumbnail",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "thumbnailUrl",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "description": "Optional thumbnail file to upload",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "nullable": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The thumbnail was successfully set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/fetch": {
+      "post": {
+        "tags": ["Manage Videos"],
+        "summary": "Fetch Video",
+        "operationId": "Video_FetchNewVideo",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "collectionId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "thumbnailTime",
+            "in": "query",
+            "description": "(Optional) Video time in ms to extract the main video thumbnail.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 4
+          }
+        ],
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FetchVideoRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "The video was successfully fetched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "400": {
+            "description": "Failed fetching the video"
+          },
+          "429": {
+            "description": "Too many fetch jobs queued. Please try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/captions/{srclang}": {
+      "post": {
+        "tags": ["Manage Videos"],
+        "summary": "Add Caption",
+        "operationId": "Video_AddCaption",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "srclang",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "captionModel",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaptionModelAdd"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 4
+        },
+        "responses": {
+          "200": {
+            "description": "The caption was successfully uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "400": {
+            "description": "Failed uploading the captions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptionValidationModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["Manage Videos"],
+        "summary": "Delete Caption",
+        "operationId": "Video_DeleteCaption",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "srclang",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caption was successfully deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "400": {
+            "description": "Failed deleting the captions"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/transcribe": {
+      "post": {
+        "tags": ["Manage Videos"],
+        "summary": "Transcribe video",
+        "operationId": "Video_TranscribeVideo",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 4
+          }
+        ],
+        "requestBody": {
+          "x-name": "transcribeSettings",
+          "description": "Used to override video library transcription settings, null by default",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranscribeSettings"
+              }
+            }
+          },
+          "x-position": 5
+        },
+        "responses": {
+          "200": {
+            "description": "The transcription was queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request for transcription queue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/smart": {
+      "post": {
+        "tags": ["Manage Videos"],
+        "summary": "Trigger Smart actions",
+        "operationId": "Video_SmartGenerate",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartGenerateModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 3
+        },
+        "responses": {
+          "202": {
+            "description": "The smart action was queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request for smart feature",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/resolutions": {
+      "get": {
+        "tags": ["Manage Videos"],
+        "summary": "Video resolutions info",
+        "operationId": "Video_GetVideoResolutions",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The resolutions info.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModelOfVideoResolutionsInfoModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/storage": {
+      "get": {
+        "tags": ["Manage Videos"],
+        "summary": "Get video storage size info",
+        "operationId": "Video_GetVideoStorageSize",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The storage size information for the video.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModelOfVideoStorageSizeModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authorization failed"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          },
+          "408": {
+            "description": "Request timeout"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/videos/{videoId}/resolutions/cleanup": {
+      "post": {
+        "tags": ["Manage Videos"],
+        "summary": "Cleanup unconfigured resolutions",
+        "operationId": "Video_DeleteResolutions",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "resolutionsToDelete",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "deleteNonConfiguredResolutions",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 4
+          },
+          {
+            "name": "allResolutions",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 5
+          },
+          {
+            "name": "deleteOriginal",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 6
+          },
+          {
+            "name": "outputs",
+            "in": "query",
+            "description": "Outputs to clean. Supported values: hls, mp4, all",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 7
+          },
+          {
+            "name": "deleteMp4Files",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 8
+          },
+          {
+            "name": "dryRun",
+            "in": "query",
+            "description": "If set to true, no actual file manipulation will happen, only informational data will be returned",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 9
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The resolutions were successfully deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video was not found"
+          },
+          "401": {
+            "description": "The request authentication failed"
+          },
+          "403": {
+            "description": "The request authorization failed"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/OEmbed": {
+      "get": {
+        "tags": ["OEmbed"],
+        "operationId": "OEmbed_GetOEmbed",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 1
+          },
+          {
+            "name": "maxWidth",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "maxHeight",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "expires",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 0
+            },
+            "x-position": 5
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoOEmbedModel"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CollectionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "videoLibraryId": {
+            "type": "integer",
+            "description": "The video library ID that contains the collection",
+            "format": "int64"
+          },
+          "guid": {
+            "type": "string",
+            "description": "The unique ID of the collection",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the collection",
+            "nullable": true
+          },
+          "videoCount": {
+            "type": "integer",
+            "description": "The number of videos that the collection contains",
+            "format": "int64"
+          },
+          "totalSize": {
+            "type": "integer",
+            "description": "The total storage size of the collection",
+            "format": "int64"
+          },
+          "previewVideoIds": {
+            "type": "string",
+            "description": "The IDs of videos to be used as preview icons",
+            "nullable": true
+          },
+          "previewImageUrls": {
+            "type": "array",
+            "description": "The URLs of preview images of videos in the collection",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PaginationListOfCollectionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "totalItems": {
+            "type": "integer",
+            "description": "The total number of items that can be returned",
+            "format": "int64"
+          },
+          "currentPage": {
+            "type": "integer",
+            "description": "The current page of the response",
+            "format": "int64"
+          },
+          "itemsPerPage": {
+            "type": "integer",
+            "description": "The number of items returned per page",
+            "format": "int32"
+          },
+          "items": {
+            "type": "array",
+            "description": "The result items on the current result",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/CollectionModel"
+            }
+          }
+        }
+      },
+      "UpdateCollectionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the collection",
+            "nullable": true
+          }
+        }
+      },
+      "StatusModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Determines if the request was successful"
+          },
+          "message": {
+            "type": "string",
+            "description": "Response message description",
+            "nullable": true
+          },
+          "statusCode": {
+            "type": "integer",
+            "description": "The response status code",
+            "format": "int32"
+          }
+        }
+      },
+      "VideoModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "videoLibraryId",
+          "guid",
+          "title",
+          "dateUploaded",
+          "views",
+          "isPublic",
+          "length",
+          "status",
+          "framerate",
+          "width",
+          "height",
+          "outputCodecs",
+          "thumbnailCount",
+          "encodeProgress",
+          "storageSize",
+          "hasMP4Fallback",
+          "averageWatchTime",
+          "totalWatchTime"
+        ],
+        "properties": {
+          "videoLibraryId": {
+            "type": "integer",
+            "description": "The ID of the video library that the video belongs to",
+            "format": "int64"
+          },
+          "guid": {
+            "type": "string",
+            "description": "The unique ID of the video",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "description": "The title of the video",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "description": "The description of the video",
+            "nullable": true
+          },
+          "dateUploaded": {
+            "type": "string",
+            "description": "The date when the video was uploaded",
+            "format": "date-time",
+            "minLength": 1
+          },
+          "views": {
+            "type": "integer",
+            "description": "The number of views the video received",
+            "format": "int64"
+          },
+          "isPublic": {
+            "type": "boolean",
+            "description": "Determines if the video is publically accessible"
+          },
+          "length": {
+            "type": "integer",
+            "description": "The duration of the video in seconds",
+            "format": "int32"
+          },
+          "status": {
+            "description": "The status of the video. See VideoModelStatus.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/VideoModelStatus"
+              }
+            ]
+          },
+          "framerate": {
+            "type": "number",
+            "description": "The framerate of the video",
+            "format": "double"
+          },
+          "rotation": {
+            "type": "integer",
+            "description": "The rotation of the video",
+            "nullable": true
+          },
+          "width": {
+            "type": "integer",
+            "description": "The width of the original video file",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "description": "The height of the original video file",
+            "format": "int32"
+          },
+          "availableResolutions": {
+            "type": "string",
+            "description": "The available resolutions of the video",
+            "nullable": true
+          },
+          "outputCodecs": {
+            "type": "string",
+            "description": "Encoded output codecs of the video",
+            "minLength": 1
+          },
+          "thumbnailCount": {
+            "type": "integer",
+            "description": "The number of thumbnails generated for this video",
+            "format": "int32"
+          },
+          "encodeProgress": {
+            "type": "integer",
+            "description": "The current encode progress of the video",
+            "format": "int32"
+          },
+          "storageSize": {
+            "type": "integer",
+            "description": "The amount of storage used by this video",
+            "format": "int64"
+          },
+          "captions": {
+            "type": "array",
+            "description": "The list of captions available for the video",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/CaptionModel"
+            }
+          },
+          "hasMP4Fallback": {
+            "type": "boolean",
+            "description": "Determines if the video has MP4 fallback files generated"
+          },
+          "collectionId": {
+            "type": "string",
+            "description": "The ID of the collection where the video belongs",
+            "nullable": true
+          },
+          "thumbnailFileName": {
+            "type": "string",
+            "description": "The file name of the thumbnail inside of the storage",
+            "nullable": true
+          },
+          "thumbnailBlurhash": {
+            "type": "string",
+            "description": "Thumbnail blurhash to show while the actual thumbnail is being loaded",
+            "nullable": true
+          },
+          "averageWatchTime": {
+            "type": "integer",
+            "description": "The average watch time of the video in seconds",
+            "format": "int64"
+          },
+          "totalWatchTime": {
+            "type": "integer",
+            "description": "The total video watch time in seconds",
+            "format": "int64"
+          },
+          "category": {
+            "type": "string",
+            "description": "The automatically detected category of the video",
+            "nullable": true
+          },
+          "chapters": {
+            "type": "array",
+            "description": "The list of chapters available for the video",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/ChapterModel"
+            }
+          },
+          "moments": {
+            "type": "array",
+            "description": "The list of moments available for the video",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/MomentModel"
+            }
+          },
+          "metaTags": {
+            "type": "array",
+            "description": "The list of meta tags that have been added to the video",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/MetaTagModel"
+            }
+          },
+          "transcodingMessages": {
+            "type": "array",
+            "description": "The list of transcoding messages that describe potential issues while the video was transcoding",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TranscodingMessageModel"
+            }
+          },
+          "jitEncodingEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "smartGenerateStatus": {
+            "description": "The status of smart generate action (if triggered)",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SmartGenerateStatus"
+              }
+            ]
+          },
+          "hasOriginal": {
+            "type": "boolean",
+            "description": "Determines if video has the original file available in storage",
+            "nullable": true
+          },
+          "originalHash": {
+            "type": "string",
+            "description": "Original uploaded file SHA256 hash",
+            "nullable": true
+          },
+          "hasHighQualityPreview": {
+            "type": "boolean",
+            "nullable": true
+          }
+        }
+      },
+      "VideoModelStatus": {
+        "type": "integer",
+        "description": "",
+        "enum": [0, 1, 2, 3, 4, 5, 6, 7, 8],
+        "x-enum-varnames": [
+          "Created",
+          "Uploaded",
+          "Processing",
+          "Transcoding",
+          "Finished",
+          "Error",
+          "UploadFailed",
+          "JitSegmenting",
+          "JitPlaylistsCreated"
+        ]
+      },
+      "CaptionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "srclang": {
+            "type": "string",
+            "description": "The unique srclang shortcode for the caption",
+            "nullable": true
+          },
+          "label": {
+            "type": "string",
+            "description": "The text description label for the caption",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChapterModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the chapter",
+            "minLength": 1
+          },
+          "start": {
+            "type": "integer",
+            "description": "The start time of the chapter in seconds",
+            "format": "int32"
+          },
+          "end": {
+            "type": "integer",
+            "description": "The end time of the chapter in seconds",
+            "format": "int32"
+          }
+        }
+      },
+      "MomentModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "The text description label for the chapter",
+            "minLength": 1
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "The timestamp of the moment in seconds",
+            "format": "int32"
+          }
+        }
+      },
+      "MetaTagModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "property": {
+            "type": "string",
+            "nullable": true
+          },
+          "value": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TranscodingMessageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "timeStamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "level": {
+            "$ref": "#/components/schemas/Severity"
+          },
+          "issueCode": {
+            "$ref": "#/components/schemas/IssueCodes"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "value": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "Severity": {
+        "type": "integer",
+        "description": "",
+        "enum": [0, 1, 2, 3],
+        "x-enum-varnames": ["Undefined", "Information", "Warning", "Error"],
+        "x-enum-descriptions": [
+          "Shouldn't be used",
+          "An info message to the user, shouldn't break anythying",
+          "A warning message, for example that the transcoded video may break when playing",
+          "An error, meaning that the video will most likely not be playable"
+        ]
+      },
+      "IssueCodes": {
+        "type": "integer",
+        "description": "",
+        "enum": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+        "x-enum-varnames": [
+          "Undefined",
+          "StreamLengthsDifference",
+          "TranscodingWarnings",
+          "IncompatibleResolution",
+          "InvalidFramerate",
+          "VideoExceededMaxDuration",
+          "AudioExceededMaxDuration",
+          "OriginalCorrupted",
+          "TranscriptionFailed",
+          "JitIncompatible",
+          "JitFailed",
+          "CaptionGenerationFailed"
+        ],
+        "x-enum-descriptions": [
+          "Shouldn't be used",
+          "Marks that there is a mismatch between lengths of audio and video streams in the transcoded file",
+          "Marks that transcoding completed with warnings",
+          "Marks that original video file has incompatible resolution or isn't a video stream",
+          "Marks that original video file has invalid framerate",
+          "Marks that video stream exceeded max duration",
+          "Marks that audio stream exceeded max duration",
+          "Marks that video file is corrupted and couldn't be processed properly",
+          "Marks that video transcription finished with errors and might not be complete",
+          "Marks that video file is not compatible with JIT encoding",
+          "Marks that video failed JIT encoding",
+          "Marks that captions generation failed"
+        ]
+      },
+      "SmartGenerateStatus": {
+        "type": "integer",
+        "description": "",
+        "enum": [0, 1, 2, 3, 4],
+        "x-enum-varnames": [
+          "None",
+          "Queued",
+          "InProgress",
+          "Finished",
+          "Failed"
+        ]
+      },
+      "VideoHeatmapModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "heatmap": {
+            "type": "object",
+            "description": "Timeline heatmap as segment-index to intensity (0–100). Keys represent consecutive segments from the start of the video; values are normalized so 100 equals the most‑watched segment. Missing segments imply 0.",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "VideoPlayDataModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "video": {
+            "description": "Video data.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/VideoModel"
+              }
+            ]
+          },
+          "libraryName": {
+            "type": "string",
+            "nullable": true
+          },
+          "captionsPath": {
+            "type": "string",
+            "nullable": true
+          },
+          "seekPath": {
+            "type": "string",
+            "nullable": true
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "fallbackUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "videoPlaylistUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "originalUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "previewUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "controls": {
+            "type": "string",
+            "nullable": true
+          },
+          "enableDRM": {
+            "type": "boolean"
+          },
+          "drmVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "playerKeyColor": {
+            "type": "string",
+            "nullable": true
+          },
+          "vastTagUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "viAiPublisherId": {
+            "type": "string",
+            "nullable": true
+          },
+          "captionsFontSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "captionsFontColor": {
+            "type": "string",
+            "nullable": true
+          },
+          "captionsBackground": {
+            "type": "string",
+            "nullable": true
+          },
+          "uiLanguage": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowEarlyPlay": {
+            "type": "boolean"
+          },
+          "tokenAuthEnabled": {
+            "type": "boolean"
+          },
+          "enableMP4Fallback": {
+            "type": "boolean"
+          },
+          "showHeatmap": {
+            "type": "boolean"
+          },
+          "fontFamily": {
+            "type": "string",
+            "nullable": true
+          },
+          "playbackSpeeds": {
+            "type": "string",
+            "nullable": true
+          },
+          "widevineMinClientSecurityLevel": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "zoneTier": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "isPlayable": {
+            "type": "boolean",
+            "description": "Determines if the video is currently playable using either playlist or original source."
+          },
+          "isPlaylistPlayable": {
+            "type": "boolean",
+            "description": "Determines if the HLS playlist is currently playable."
+          },
+          "preferredPlaybackSource": {
+            "description": "Preferred playback source for the current video state.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/VideoPlaybackSource"
+              }
+            ]
+          },
+          "rememberPlayerPosition": {
+            "type": "boolean"
+          },
+          "customCss": {
+            "type": "string",
+            "nullable": true
+          },
+          "exposeVideoMetadata": {
+            "type": "boolean"
+          },
+          "enableCompactControls": {
+            "type": "boolean"
+          }
+        }
+      },
+      "VideoPlaybackSource": {
+        "type": "string",
+        "description": "",
+        "enum": ["None", "Playlist", "Original"],
+        "x-enum-varnames": ["None", "Playlist", "Original"]
+      },
+      "VideoStatisticsModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "viewsChart": {
+            "type": "object",
+            "description": "Shows the number of playback starts over time, with each data point representing the count of view starts in the corresponding UTC interval (hourly or daily). It is available at both the library level (aggregated across all videos) and the video level (for a single video). A playback start is counted once per viewer session per video and empty intervals are shown as zero.",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "watchTimeChart": {
+            "type": "object",
+            "description": "Shows the cumulative time viewers spent watching over time, with each data point representing total watch time in the corresponding UTC interval (hourly or daily). It is available at both the library level (aggregated across all videos) and the video level (for a single video). Rewatches and repeated visits add to the total and empty intervals are shown as zero.",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "countryViewCounts": {
+            "type": "object",
+            "description": "Shows the total number of playback starts by country for the selected time range. It is available at both the library level (aggregated across all videos) and the video level (for a single video). Each country’s value reflects unique playback starts per viewer session based on IP geolocation at playback start.",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "countryWatchTime": {
+            "type": "object",
+            "description": "Shows the total watch time by country for the selected time range. It is available at both the library level (aggregated across all videos) and the video level (for a single video). Values reflect cumulative viewing time (rewatches and repeated visits add to the total) based on IP geolocation at playback start.",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "engagementScore": {
+            "type": "integer",
+            "description": "Indicates how engaging a specific video is on a 0–100 scale based on viewing duration and viewing patterns; higher values reflect stronger viewer retention. Reported at the video level only and may be unavailable when there isn’t enough viewing data.",
+            "format": "int32"
+          }
+        }
+      },
+      "EncoderOutputCodec": {
+        "type": "integer",
+        "description": "",
+        "enum": [0, 1, 2, 3],
+        "x-enum-varnames": ["x264", "vp9", "hevc", "av1"]
+      },
+      "PaginationListOfVideoModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "totalItems": {
+            "type": "integer",
+            "description": "The total number of items that can be returned",
+            "format": "int64"
+          },
+          "currentPage": {
+            "type": "integer",
+            "description": "The current page of the response",
+            "format": "int64"
+          },
+          "itemsPerPage": {
+            "type": "integer",
+            "description": "The number of items returned per page",
+            "format": "int32"
+          },
+          "items": {
+            "type": "array",
+            "description": "The result items on the current result",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/VideoModel"
+            }
+          }
+        }
+      },
+      "CreateVideoModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the video",
+            "minLength": 1
+          },
+          "collectionId": {
+            "type": "string",
+            "description": "The ID of the collection where the video will be put",
+            "nullable": true
+          },
+          "thumbnailTime": {
+            "type": "integer",
+            "description": "Video time in ms to extract the main video thumbnail.",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "UpdateVideoModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the video",
+            "nullable": true
+          },
+          "collectionId": {
+            "type": "string",
+            "description": "The ID of the collection where the video belongs",
+            "nullable": true
+          },
+          "chapters": {
+            "type": "array",
+            "description": "The list of chapters available for the video",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/ChapterModel"
+            }
+          },
+          "moments": {
+            "type": "array",
+            "description": "The list of moments available for the video",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/MomentModel"
+            }
+          },
+          "metaTags": {
+            "type": "array",
+            "description": "The meta tags added to the video",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/MetaTagModel"
+            }
+          }
+        }
+      },
+      "FetchVideoRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["url"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The URL from which the video will be fetched from.",
+            "minLength": 1
+          },
+          "headers": {
+            "type": "object",
+            "description": "The headers that will be sent along with the fetch request.",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string",
+            "description": "The title that will be set to video.",
+            "nullable": true
+          }
+        }
+      },
+      "CaptionValidationModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "description": "Denotes whether uploaded captions file was valid"
+          },
+          "errorList": {
+            "type": "array",
+            "description": "When uploaded file was invalid, will contain errors found",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "warningList": {
+            "type": "array",
+            "description": "When uploaded file was valid but non-breaking issues were found, will contain issues found",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CaptionModelAdd": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "srclang": {
+            "type": "string",
+            "description": "The unique srclang shortcode for the caption",
+            "nullable": true
+          },
+          "label": {
+            "type": "string",
+            "description": "The text description label for the caption",
+            "nullable": true
+          },
+          "captionsFile": {
+            "type": "string",
+            "description": "Base64 encoded captions file",
+            "nullable": true
+          }
+        }
+      },
+      "TranscribeSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "targetLanguages": {
+            "type": "array",
+            "description": "List of languages that will be used as target languages, use ISO 639-1 language codes.",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "generateTitle": {
+            "type": "boolean",
+            "description": "Whether video title should be automatically generated.",
+            "nullable": true
+          },
+          "generateDescription": {
+            "type": "boolean",
+            "description": "Whether video description should be automatically generated.",
+            "nullable": true
+          },
+          "generateChapters": {
+            "type": "boolean",
+            "description": "Whether video chapters should be automatically generated.",
+            "nullable": true
+          },
+          "generateMoments": {
+            "type": "boolean",
+            "description": "Whether video moments should be automatically generated.",
+            "nullable": true
+          },
+          "sourceLanguage": {
+            "type": "string",
+            "description": "Video source language, use ISO 639-1 language code.",
+            "nullable": true
+          }
+        }
+      },
+      "SmartGenerateModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "generateTitle": {
+            "type": "boolean",
+            "description": "Whether video title should be generated.",
+            "nullable": true
+          },
+          "generateDescription": {
+            "type": "boolean",
+            "description": "Whether video description should be generated.",
+            "nullable": true
+          },
+          "generateChapters": {
+            "type": "boolean",
+            "description": "Whether video chapters should be generated.",
+            "nullable": true
+          },
+          "generateMoments": {
+            "type": "boolean",
+            "description": "Whether video moments should be generated.",
+            "nullable": true
+          },
+          "sourceLanguage": {
+            "type": "string",
+            "description": "(Optional) Video source language, use ISO 639-1 language code.",
+            "nullable": true
+          }
+        }
+      },
+      "StatusModelOfVideoResolutionsInfoModel": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/StatusModel"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/VideoResolutionsInfoModel"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "VideoResolutionsInfoModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "videoId": {
+            "type": "string",
+            "nullable": true
+          },
+          "videoLibraryId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "availableResolutions": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "configuredResolutions": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "playlistResolutions": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/ResolutionReference"
+            }
+          },
+          "storageResolutions": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/ResolutionReference"
+            }
+          },
+          "mp4Resolutions": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/ResolutionReference"
+            }
+          },
+          "storageObjects": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/StorageObjectModel"
+            }
+          },
+          "oldResolutions": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/StorageObjectModel"
+            }
+          },
+          "hasBothOldAndNewResolutionFormat": {
+            "type": "boolean"
+          },
+          "hasOriginal": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ResolutionReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "resolution": {
+            "type": "string",
+            "nullable": true
+          },
+          "path": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "StorageObjectModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "guid": {
+            "type": "string",
+            "nullable": true
+          },
+          "storageZoneName": {
+            "type": "string",
+            "nullable": true
+          },
+          "path": {
+            "type": "string",
+            "nullable": true
+          },
+          "objectName": {
+            "type": "string",
+            "nullable": true
+          },
+          "length": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastChanged": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "serverId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isDirectory": {
+            "type": "boolean"
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true
+          },
+          "contentType": {
+            "type": "string",
+            "nullable": true
+          },
+          "dateCreated": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "storageZoneId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "checksum": {
+            "type": "string",
+            "nullable": true
+          },
+          "replicatedZones": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "StatusModelOfVideoStorageSizeModel": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/StatusModel"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/VideoStorageSizeModel"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "VideoStorageSizeModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "encoded": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CodecRenditionSizeModel"
+            }
+          },
+          "thumbnails": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "previews": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "originals": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "mp4Fallback": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "miscellaneous": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "calculatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CodecRenditionSizeModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "codec": {
+            "type": "string",
+            "nullable": true
+          },
+          "resolution": {
+            "type": "string",
+            "nullable": true
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "VideoOEmbedModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "thumbnail_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "html": {
+            "type": "string",
+            "nullable": true
+          },
+          "provider_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "provider_url": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "SyncSessionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "sessionKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "rocksDbInfo": {
+            "$ref": "#/components/schemas/RocksDbInfo"
+          }
+        }
+      },
+      "RocksDbInfo": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "SyncSessionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lastSequenceNumber": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "AccessKey": {
+        "type": "apiKey",
+        "description": "AccessKey based authentication",
+        "name": "AccessKey",
+        "in": "header"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Manage Collections"
+    },
+    {
+      "name": "Manage Videos"
+    }
+  ]
+}

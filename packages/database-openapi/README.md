@@ -19,10 +19,30 @@ const schema: DatabaseSchema = {
     users: {
       name: "users",
       columns: [
-        { name: "id", type: "INTEGER", nullable: false, primaryKey: true },
-        { name: "name", type: "TEXT", nullable: false, primaryKey: false },
-        { name: "email", type: "TEXT", nullable: false, primaryKey: false },
-        { name: "age", type: "INTEGER", nullable: true, primaryKey: false },
+        {
+          name: "id",
+          type: "INTEGER",
+          nullable: false,
+          primaryKey: true,
+        },
+        {
+          name: "name",
+          type: "TEXT",
+          nullable: false,
+          primaryKey: false,
+        },
+        {
+          name: "email",
+          type: "TEXT",
+          nullable: false,
+          primaryKey: false,
+        },
+        {
+          name: "age",
+          type: "INTEGER",
+          nullable: true,
+          primaryKey: false,
+        },
         {
           name: "created_at",
           type: "DATETIME",
@@ -82,47 +102,47 @@ const spec = generateOpenAPISpec(schema, {
 });
 ```
 
-| Option        | Default                                      |
-| ------------- | -------------------------------------------- |
-| `title`       | `"Database REST API"`                        |
-| `version`     | Uses `schema.version`                        |
-| `description` | `"Auto-generated REST API for your database"`|
+| Option        | Default                                       |
+| ------------- | --------------------------------------------- |
+| `title`       | `"Database REST API"`                         |
+| `version`     | Uses `schema.version`                         |
+| `description` | `"Auto-generated REST API for your database"` |
 
 ## Examples in the spec
 
 The generator adds `example` values to every column schema. It uses name-aware hinting first, then falls back to type-based defaults:
 
-| Column name pattern                        | Example                            |
-| ------------------------------------------ | ---------------------------------- |
-| `email`                                    | `"user@example.com"`               |
-| `name`                                     | `"John Doe"`                       |
-| `first_name`                               | `"John"`                           |
-| `last_name`                                | `"Doe"`                            |
-| `username`                                 | `"johndoe"`                        |
-| `phone`, `mobile`, `tel`                   | `"+1-555-0123"`                    |
-| `url`, `website`, `homepage`, `link`       | `"https://example.com"`            |
-| `image`, `avatar`, `photo`, `*_url`        | `"https://example.com/image.png"`  |
-| `title`, `subject`, `headline`             | `"Hello World"`                    |
-| `description`, `summary`, `bio`, `about`   | `"A short description"`            |
-| `body`, `content`, `text`, `message`       | `"Lorem ipsum dolor sit amet"`     |
-| `slug`                                     | `"hello-world"`                    |
-| `price`, `amount`, `cost`, `total`         | `9.99`                             |
-| `age`                                      | `25`                               |
-| `latitude`                                 | `37.7749`                          |
-| `longitude`                                | `-122.4194`                        |
-| `*_at`, `*_date`, `*_time`, `*_on`         | `"2024-01-01T00:00:00Z"`           |
-| `*_id`                                     | `1`                                |
+| Column name pattern                      | Example                           |
+| ---------------------------------------- | --------------------------------- |
+| `email`                                  | `"user@example.com"`              |
+| `name`                                   | `"John Doe"`                      |
+| `first_name`                             | `"John"`                          |
+| `last_name`                              | `"Doe"`                           |
+| `username`                               | `"johndoe"`                       |
+| `phone`, `mobile`, `tel`                 | `"+1-555-0123"`                   |
+| `url`, `website`, `homepage`, `link`     | `"https://example.com"`           |
+| `image`, `avatar`, `photo`, `*_url`      | `"https://example.com/image.png"` |
+| `title`, `subject`, `headline`           | `"Hello World"`                   |
+| `description`, `summary`, `bio`, `about` | `"A short description"`           |
+| `body`, `content`, `text`, `message`     | `"Lorem ipsum dolor sit amet"`    |
+| `slug`                                   | `"hello-world"`                   |
+| `price`, `amount`, `cost`, `total`       | `9.99`                            |
+| `age`                                    | `25`                              |
+| `latitude`                               | `37.7749`                         |
+| `longitude`                              | `-122.4194`                       |
+| `*_at`, `*_date`, `*_time`, `*_on`       | `"2024-01-01T00:00:00Z"`          |
+| `*_id`                                   | `1`                               |
 
 For unrecognized names, falls back by type:
 
-| Column type | Example                    |
-| ----------- | -------------------------- |
-| `INTEGER`   | `1`                        |
-| `REAL`      | `1.5`                      |
-| `BOOLEAN`   | `true`                     |
-| `DATETIME`  | `"2024-01-01T00:00:00Z"`   |
-| `TEXT`      | `"string"`                 |
-| `BLOB`      | _(none)_                   |
+| Column type | Example                  |
+| ----------- | ------------------------ |
+| `INTEGER`   | `1`                      |
+| `REAL`      | `1.5`                    |
+| `BOOLEAN`   | `true`                   |
+| `DATETIME`  | `"2024-01-01T00:00:00Z"` |
+| `TEXT`      | `"string"`               |
+| `BLOB`      | _(none)_                 |
 
 ## Schema types
 
@@ -205,9 +225,13 @@ npx openapi-typescript http://localhost:8080/ -o ./schema.d.ts
 import createClient from "openapi-fetch";
 import type { paths } from "./schema";
 
-const client = createClient<paths>({ baseUrl: "http://localhost:8080" });
+const client = createClient<paths>({
+  baseUrl: "http://localhost:8080",
+});
 
 const { data } = await client.GET("/users", {
-  params: { query: { select: "id,name", limit: 10 } },
+  params: {
+    query: { select: "id,name", limit: 10 },
+  },
 });
 ```

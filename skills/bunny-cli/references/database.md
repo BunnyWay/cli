@@ -193,12 +193,12 @@ bunny db studio --no-open                            # don't auto-open browser
 bunny db studio --url libsql://... --token ey...     # explicit credentials
 ```
 
-| Flag        | Default | Description                                     |
-| ----------- | ------- | ----------------------------------------------- |
-| `--port`    | `4488`  | Port for the local studio server                |
-| `--url`     |         | Database URL (skips API lookup)                 |
-| `--token`   |         | Auth token (skips token generation)             |
-| `--no-open` | `false` | Don't automatically open the browser            |
+| Flag        | Default | Description                          |
+| ----------- | ------- | ------------------------------------ |
+| `--port`    | `4488`  | Port for the local studio server     |
+| `--url`     |         | Database URL (skips API lookup)      |
+| `--token`   |         | Auth token (skips token generation)  |
+| `--no-open` | `false` | Don't automatically open the browser |
 
 Spins up a local server, generates a short-lived auth token if needed, and opens a browser-based read-only table viewer. Long-running until interrupted (Ctrl+C). Credential resolution mirrors `db shell`: `--url`/`--token` flags > `.env` vars > API lookup.
 

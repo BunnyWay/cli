@@ -1,0 +1,23 @@
+# Dependencies and lockfiles
+node_modules
+bun.lock
+bun.lockb
+
+# Build output
+out
+dist
+bunny
+bsql
+
+# Generated artifacts
+packages/openapi-client/src/generated
+packages/openapi-client/specs
+packages/app-config/generated
+
+# Changesets keeps its own format
+.changeset/*.md
+!.changeset/README.md
+
+# Vendored / third-party
+**/*.min.*
+coverage

@@ -1,0 +1,375 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "bunny.net Edge Storage API",
+    "description": "![bunny.net Logo](https://bunny.net/v2/images/bunnynet-logo-dark.png \"bunny.net Logo\")\n\nLearn how to use the [bunny.net](https://bunny.net \"bunny.net - The content delivery platform that truly hops\") Edge Storage API. It allows you to easily upload, download and delete files with just a few lines of code.\n<h2>API libraries:</h2> \nThese libraries allow quick integration for bunny.net Edge Storage.\n\n<ul>\n  <li><a rel=\"nofollow\" href=\"https://github.com/BunnyWay/BunnyCDN.PHP.Storage\">BunnyCDN.PHP.Storage</a> - Official PHP storage library</li>\n  <li><a rel=\"nofollow\" href=\"https://github.com/BunnyWay/BunnyCDN.Net.Storage\">BunnyCDN.Net.Storage</a> - Official .NET storage library</li>\n  <li><a rel=\"nofollow\" href=\"https://github.com/BunnyWay/BunnyCDN.Java.Storage\">BunnyCDN.Java.Storage</a> - Official Java storage library</li>\n  \n  <li><a rel=\"nofollow\" href=\"https://github.com/NiveditJain/BunnyCDNStorageLib\">Python Storage Library</a> - (Unofficial)</li>\n</ul>\n\n<h2>Storage Endpoints:</h2> \n\nThe storage API endpoint depends on the primary storage region of your storage zone. You can also find this in the FTP & HTTP API Information of your storage zone.\n<ul>\n  <li><strong>Falkenstein</strong>: storage.bunnycdn.com</li>\n  <li><strong>New York</strong>: la.storage.bunnycdn.com</li>\n  <li><strong>Los Angeles</strong>: la.storage.bunnycdn.com</li>\n  <li><strong>Singapore</strong>: sg.storage.bunnycdn.com</li>\n  <li><strong>Sydney</strong>: syd.storage.bunnycdn.com</li>\n</ul>\n",
+    "termsOfService": "http://swagger.io/terms/",
+    "contact": {
+      "name": "bunny.net API Team",
+      "email": "support@bunny.net",
+      "url": "http://bunny.net"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "http://github.com/gruntjs/grunt/blob/master/LICENSE-MIT"
+    }
+  },
+  "security": [
+    {
+      "AccessKeyAuthentication": []
+    }
+  ],
+  "paths": {
+    "/{storageZoneName}/{path}/{fileName}": {
+      "get": {
+        "tags": ["Manage Files"],
+        "summary": "Download File",
+        "description": "Returns the stored file at the given path. If the file does not exist, a 404 response will be returned.\n",
+        "parameters": [
+          {
+            "name": "storageZoneName",
+            "in": "path",
+            "description": "The name of your storage zone where you are connecting to.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "The directory path to your file. If this is the root of your storage zone, you can ignore this parameter.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileName",
+            "in": "path",
+            "description": "The name of the file that you wish to download.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "AccessKey",
+            "in": "header",
+            "required": true,
+            "description": "The API AccessKey used for authentication.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returns the file stored at the given path."
+          },
+          "404": {
+            "description": "The file on the given path does not exist.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ErrorObject"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Manage Files"],
+        "summary": "Upload File",
+        "description": "Upload a file to a storage zone based on the URL path. If the directory tree does not exist, it will be created automatically. **The file content should be sent as the body of the request without any type of encoding.**",
+        "responses": {
+          "201": {
+            "description": "The file upload was successful."
+          },
+          "400": {
+            "description": "Upload failed."
+          }
+        },
+        "requestBody": {
+          "description": "Raw request body should contain the contents of the file. This should be raw file data without any sort of encoding.",
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "storageZoneName",
+            "in": "path",
+            "description": "he name of your storage zone where you are connecting to.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "The directory path to where your file will be stored. If this is the root of your storage zone, you can ignore this parameter.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileName",
+            "in": "path",
+            "description": "The name that the file will be uploaded as.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Checksum",
+            "in": "header",
+            "required": false,
+            "description": "The SHA256 checksum of the uploaded content in HEX format (UPPERCASE). The server will compare the final SHA256 to the checksum and reject the request in case the checksums do not match.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "D7A8FBB307D7809469CA9ABCB0082E4F8D5651E46D3CDB762D02D0BF37C9E592"
+          },
+          {
+            "name": "AccessKey",
+            "in": "header",
+            "required": true,
+            "description": "The API AccessKey used for authentication.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["Manage Files"],
+        "summary": "Delete File",
+        "description": "Delete an object from the storage zone. In case the object is a directory all the data in it will be recursively deleted as well.",
+        "parameters": [
+          {
+            "name": "storageZoneName",
+            "in": "path",
+            "description": "The name of your storage zone where you are connecting to.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "The directory path to your file. If this is the root of your storage zone, you can ignore this parameter.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileName",
+            "in": "path",
+            "description": "The name of the file that you wish to delete.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "AccessKey",
+            "in": "header",
+            "required": true,
+            "description": "The API AccessKey used for authentication.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Object was successfully deleted"
+          },
+          "400": {
+            "description": "Object delete failed"
+          }
+        }
+      }
+    },
+    "/{storageZoneName}/{path}/": {
+      "get": {
+        "tags": ["Browse Files"],
+        "summary": "List Files",
+        "description": "Retrieve a list of files and directories located in the given directory.\n",
+        "parameters": [
+          {
+            "name": "storageZoneName",
+            "in": "path",
+            "description": "he name of your storage zone where you are connecting to.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "The directory path that you want to list.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A JSON encoded array of objects.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StorageObject"
+                  }
+                }
+              },
+              "application/json": {
+                "examples": {
+                  "response": {
+                    "value": [
+                      {
+                        "Guid": "d6445d80-a797-4535-bf0e-d3819bcdf928",
+                        "StorageZoneName": "testfiles",
+                        "Path": "/testfiles/images/",
+                        "ObjectName": "300kb.jpg",
+                        "Length": 300000,
+                        "LastChanged": "2017-03-10T03:06:48.203",
+                        "IsDirectory": false,
+                        "ServerId": 24,
+                        "UserId": "6eb577ca-556c-4e23-970c-a5afde191042",
+                        "DateCreated": "2017-03-10T03:06:48.203",
+                        "StorageZoneId": 18201
+                      },
+                      {
+                        "Guid": "bc0f1128-fa88-4c53-a09d-fc59b442391d",
+                        "StorageZoneName": "testfiles",
+                        "Path": "/testfiles/images/",
+                        "ObjectName": "300kb.jpg",
+                        "Length": 300000,
+                        "LastChanged": "2017-03-10T03:06:48.203",
+                        "IsDirectory": false,
+                        "ServerId": 24,
+                        "UserId": "1e733d2d-c0a4-4462-be8e-f8e63888d154",
+                        "DateCreated": "2017-03-10T03:06:48.203",
+                        "StorageZoneId": 18201
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://storage.bunnycdn.com/"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "AccessKeyAuthentication": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "AccessKey",
+        "description": "The storage zone password also doubles as your API key. You can find it in your storage zone details page in the bunny.net dashboard."
+      }
+    },
+    "schemas": {
+      "ErrorObject": {
+        "type": "object",
+        "properties": {
+          "HttpCode": {
+            "type": "integer",
+            "description": "The error status code of the request"
+          },
+          "Message": {
+            "type": "string",
+            "description": "The error description message"
+          }
+        }
+      },
+      "StorageObject": {
+        "type": "object",
+        "properties": {
+          "Guid": {
+            "type": "string",
+            "format": "guid",
+            "description": "The unique Guid that represents the file"
+          },
+          "StorageZoneName": {
+            "type": "string",
+            "description": "The full hostname domain value"
+          },
+          "Path": {
+            "type": "string",
+            "description": "True directory path where the object is located"
+          },
+          "ObjectName": {
+            "type": "string",
+            "description": "The name of the object, file or directory name"
+          },
+          "Length": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The size of the file"
+          },
+          "LastChanged": {
+            "type": "string",
+            "format": "datetime",
+            "description": "The time when the file was last changed"
+          },
+          "IsDirectory": {
+            "type": "boolean",
+            "description": "True if this is a directory object, false if it's a file"
+          },
+          "ServerId": {
+            "type": "integer",
+            "description": "The ID of the physical server that holds the file"
+          },
+          "UserId": {
+            "type": "string",
+            "description": "The ID of the user that holds the file"
+          },
+          "DateCreated": {
+            "type": "string",
+            "format": "datetime",
+            "description": "The date and time when the object was first created"
+          },
+          "StorageZoneId": {
+            "type": "integer",
+            "description": "The storage zone ID to which the file belongs"
+          }
+        }
+      }
+    }
+  },
+  "x-explorer-enabled": true,
+  "x-proxy-enabled": true,
+  "x-samples-enabled": true,
+  "x-samples-languages": ["curl", "node", "ruby", "javascript", "python"]
+}

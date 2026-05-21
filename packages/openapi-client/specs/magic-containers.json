@@ -2,7 +2,7 @@
   "openapi": "3.0.4",
   "info": {
     "title": "Public API",
-    "description": "Public API endpoints for user consumption. Release version: v1.9.19.0",
+    "description": "Public API endpoints for user consumption. Release version: v1.9.22.0",
     "version": "1.0"
   },
   "servers": [

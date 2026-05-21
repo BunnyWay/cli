@@ -20,17 +20,21 @@ Requires `@bunny.net/openapi-client` as a peer dependency (for API type definiti
     "scaling": { "min": 1, "max": 3 },
     "regions": {
       "allowed": ["EU-West", "US-East"],
-      "required": ["EU-West"]
+      "required": ["EU-West"],
     },
     "containers": {
       "web": {
         "image": "nginx:latest",
         "endpoints": [
-          { "type": "cdn", "ssl": true, "ports": [{ "public": 80, "container": 8080 }] }
-        ]
-      }
-    }
-  }
+          {
+            "type": "cdn",
+            "ssl": true,
+            "ports": [{ "public": 80, "container": 8080 }],
+          },
+        ],
+      },
+    },
+  },
 }
 ```
 
@@ -40,13 +44,13 @@ The `$schema` property enables editor autocompletion and validation.
 
 Zod schemas define the config structure. Types are inferred from schemas (single source of truth).
 
-| Schema                    | Type               | Description                          |
-| ------------------------- | ------------------ | ------------------------------------ |
-| `BunnyAppConfigSchema`    | `BunnyAppConfig`   | Root config (app + containers)       |
-| `ContainerConfigSchema`   | `ContainerConfig`  | Container: image, env, probes, etc.  |
-| `EndpointConfigSchema`    | `EndpointConfig`   | CDN or Anycast endpoint              |
-| `VolumeConfigSchema`      | `VolumeConfig`     | Persistent volume mount              |
-| `ProbeConfigSchema`       | `ProbeConfig`      | Health check probe (http/tcp/grpc)   |
+| Schema                  | Type              | Description                         |
+| ----------------------- | ----------------- | ----------------------------------- |
+| `BunnyAppConfigSchema`  | `BunnyAppConfig`  | Root config (app + containers)      |
+| `ContainerConfigSchema` | `ContainerConfig` | Container: image, env, probes, etc. |
+| `EndpointConfigSchema`  | `EndpointConfig`  | CDN or Anycast endpoint             |
+| `VolumeConfigSchema`    | `VolumeConfig`    | Persistent volume mount             |
+| `ProbeConfigSchema`     | `ProbeConfig`     | Health check probe (http/tcp/grpc)  |
 
 ```typescript
 import { BunnyAppConfigSchema, type BunnyAppConfig } from "@bunny.net/app-config";
@@ -77,7 +81,9 @@ const patchRequest = configToPatchRequest(config, existingApp);
 ```typescript
 import { parseImageRef } from "@bunny.net/app-config";
 
-const { imageName, imageNamespace, imageTag } = parseImageRef("registry.example.com/myorg/api:v1.2");
+const { imageName, imageNamespace, imageTag } = parseImageRef(
+  "registry.example.com/myorg/api:v1.2",
+);
 ```
 
 ## JSON Schema
