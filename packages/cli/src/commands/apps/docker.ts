@@ -62,14 +62,86 @@ export async function generateTag(): Promise<string> {
 }
 
 /**
- * Build a Docker image from a Dockerfile.
+ * Extract container ports from `EXPOSE` directives in a Dockerfile.
+ *
+ * Handles each documented form:
+ *   EXPOSE 8080
+ *   EXPOSE 8080 443
+ *   EXPOSE 8080/tcp
+ *   EXPOSE 80/udp        (skipped - bunny CDN/Anycast endpoints are TCP)
+ *
+ * Returns a deduped list in source order. Pure string parsing - no I/O -
+ * so it's trivially testable without a Dockerfile on disk.
+ */
+export function parseDockerfileExposedPorts(content: string): number[] {
+  const ports: number[] = [];
+  const seen = new Set<number>();
+  for (const rawLine of content.split("\n")) {
+    // Strip inline comments and trim. Dockerfile comments start with `#`
+    // and run to end of line; they're not valid mid-instruction in real
+    // Dockerfiles, but stripping is harmless for the EXPOSE-line case.
+    const line = rawLine.replace(/#.*$/, "").trim();
+    if (!line) continue;
+    const match = line.match(/^EXPOSE\s+(.+)$/i);
+    if (!match?.[1]) continue;
+    for (const token of match[1].trim().split(/\s+/)) {
+      const [portStr, proto] = token.split("/");
+      if (proto && proto.toLowerCase() !== "tcp") continue;
+      const port = Number(portStr);
+      if (!Number.isInteger(port) || port <= 0 || port >= 65536) continue;
+      if (seen.has(port)) continue;
+      seen.add(port);
+      ports.push(port);
+    }
+  }
+  return ports;
+}
+
+/**
+ * Read a Dockerfile from disk and return its EXPOSE'd ports. Returns
+ * an empty list when the file doesn't exist or can't be read - callers
+ * treat "no exposed ports" the same as "couldn't determine ports".
+ */
+export async function readDockerfileExposedPorts(
+  dockerfilePath: string,
+): Promise<number[]> {
+  try {
+    const content = await Bun.file(dockerfilePath).text();
+    return parseDockerfileExposedPorts(content);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Magic Containers only supports `linux/amd64` images. On arm64 hosts
+ * (any Apple Silicon Mac) Docker's default build target is the host arch,
+ * which silently breaks pulls on MC's side with a generic 500. Hard-coded
+ * here rather than configurable because it's a platform requirement, not
+ * a per-app choice.
+ */
+const MC_TARGET_PLATFORM = "linux/amd64";
+
+/**
+ * Build a Docker image from a Dockerfile, targeting `linux/amd64` so the
+ * resulting image is actually deployable to Magic Containers.
  */
 export async function buildImage(
   dockerfile: string,
   tag: string,
   cwd?: string,
 ): Promise<void> {
-  const args = ["docker", "build", "-f", dockerfile, "-t", tag, "."];
+  const args = [
+    "docker",
+    "build",
+    "--platform",
+    MC_TARGET_PLATFORM,
+    "-f",
+    dockerfile,
+    "-t",
+    tag,
+    ".",
+  ];
 
   const proc = Bun.spawn(args, {
     cwd: cwd ?? process.cwd(),
@@ -102,7 +174,7 @@ export async function pushImage(tag: string): Promise<void> {
     const hostname = imageHostname(tag);
     const hint =
       hostname === "ghcr.io"
-        ? "Log in with `gh auth token | docker login ghcr.io -u <user> --password-stdin`, or ensure your token has write:packages scope."
+        ? "If you saw `permission_denied: write_package`, your token is missing the `write:packages` scope. Run `gh auth refresh -h github.com -s write:packages` then `gh auth token | docker login ghcr.io -u $(gh api user --jq .login) --password-stdin` and try again."
         : `Run \`docker login ${hostname ?? "<hostname>"}\` and try again. Check that your token has push permission.`;
     throw new UserError(`Docker push failed (exit code ${exitCode}).`, hint);
   }
@@ -184,6 +256,87 @@ export async function ghIsAuthenticated(): Promise<boolean> {
 }
 
 /**
+ * Parse the `X-Oauth-Scopes` response header from `gh api user -i` output.
+ *
+ * GitHub returns the active scopes for the token on every authenticated
+ * request, which is the only reliable way to verify scopes - `gh auth
+ * status` reads cached/configured scopes, not what the token actually
+ * carries server-side.
+ *
+ * Returns `[]` if the header is absent (older gh, or no auth).
+ */
+export function parseOauthScopes(headerOutput: string): string[] {
+  const match = headerOutput.match(/^X-Oauth-Scopes:\s*(.+)$/im);
+  if (!match?.[1]) return [];
+  return match[1]
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Fetch the OAuth scopes attached to the current `gh` token, as reported
+ * by GitHub. Returns `[]` if `gh` is unauthenticated or the call fails.
+ */
+export async function ghTokenScopes(): Promise<string[]> {
+  const proc = Bun.spawn(["gh", "api", "user", "-i"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if ((await proc.exited) !== 0) return [];
+  const out = await new Response(proc.stdout).text();
+  return parseOauthScopes(out);
+}
+
+/**
+ * Ensure the local `gh` token has `write:packages` scope before we hand it
+ * to `docker login`. Without this scope, login succeeds but `docker push`
+ * fails with `permission_denied: write_package`, which is confusing
+ * because the failure happens minutes later, after a full image build.
+ *
+ * If the scope is missing, offer to run `gh auth refresh` interactively.
+ * The user has to complete the browser flow themselves; we just kick it off.
+ */
+export async function ghEnsureWritePackagesScope(): Promise<void> {
+  const scopes = await ghTokenScopes();
+  if (scopes.includes("write:packages")) return;
+
+  logger.warn(
+    "Your GitHub CLI token is missing the `write:packages` scope, which ghcr.io requires for pushes.",
+  );
+
+  const { value } = await prompts({
+    type: "confirm",
+    name: "value",
+    message: "Run `gh auth refresh -h github.com -s write:packages` to add it?",
+    initial: true,
+  });
+
+  if (!value) {
+    throw new UserError(
+      "`write:packages` scope is required to push to ghcr.io.",
+      "Run `gh auth refresh -h github.com -s write:packages` and try again.",
+    );
+  }
+
+  const proc = Bun.spawn(
+    ["gh", "auth", "refresh", "-h", "github.com", "-s", "write:packages"],
+    {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    },
+  );
+
+  if ((await proc.exited) !== 0) {
+    throw new UserError(
+      "`gh auth refresh` failed.",
+      "Run `gh auth refresh -h github.com -s write:packages` manually and try again.",
+    );
+  }
+}
+
+/**
  * Log in to a registry using the local `gh` CLI for credentials.
  *
  * The user is already authenticated to GitHub, so we read their username
@@ -191,6 +344,10 @@ export async function ghIsAuthenticated(): Promise<boolean> {
  * the normal `docker login` flow. Token never touches stdout/stderr.
  */
 export async function ghDockerLogin(hostname: string): Promise<void> {
+  if (hostname === "ghcr.io") {
+    await ghEnsureWritePackagesScope();
+  }
+
   const userProc = Bun.spawn(["gh", "api", "user", "--jq", ".login"], {
     stdout: "pipe",
     stderr: "pipe",
@@ -276,6 +433,31 @@ export async function ensureRegistryLogin(hostname: string): Promise<void> {
     spin.stop();
     throw err;
   }
+}
+
+/**
+ * Build a fully-qualified image ref for pushing to a registry.
+ *
+ * Most registries (ghcr.io, Docker Hub) require the namespace segment -
+ * `host/<owner>/<image>:tag`. Without it, ghcr.io interprets the first
+ * segment as the owner and rejects the blob upload with 400 Bad Request.
+ *
+ * `userName` from the registry record is the namespace for the user's
+ * own pushes. When it's missing (public registry, or self-hosted setup
+ * that doesn't need a namespace), fall back to `host/image:tag`.
+ *
+ * Both the namespace and the image name are lowercased because GHCR and
+ * Docker Hub reject mixed-case path segments.
+ */
+export function buildImageRef(
+  hostName: string,
+  userName: string | null | undefined,
+  imageName: string,
+  tag: string,
+): string {
+  const ns = userName?.trim().toLowerCase();
+  const name = imageName.toLowerCase();
+  return ns ? `${hostName}/${ns}/${name}:${tag}` : `${hostName}/${name}:${tag}`;
 }
 
 /**

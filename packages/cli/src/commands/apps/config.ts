@@ -7,6 +7,9 @@ import {
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import { parse as parseJsonc } from "jsonc-parser";
 import { UserError } from "../../core/errors.ts";
+import { logger } from "../../core/logger.ts";
+import { loadManifest } from "../../core/manifest.ts";
+import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 
 type Application = components["schemas"]["Application"];
 
@@ -66,18 +69,60 @@ export function loadConfig(explicitPath?: string): BunnyAppConfig {
 }
 
 /**
+ * Strip fields that should never be persisted to `bunny.jsonc`.
+ *
+ * `bunny.jsonc` stores deploy *intent* - name, containers, env, regions,
+ * scaling. Anything that's account-scoped identity or per-build artifact
+ * lives in `.bunny/app.json` (see `apps/constants.ts` + `core/manifest.ts`) instead, so the
+ * config file stays committable and stable across a team:
+ *
+ * - `app.id` - MC app ID is per-account.
+ * - `containers[name].registry` - registry record IDs are per-account.
+ * - `containers[name].image` when the container builds from a `dockerfile`
+ *   - the tag changes every build and the MC API is the source of truth.
+ *
+ * For containers with only `image` (a pre-built ref the user pinned
+ * intentionally, e.g. `nginx:1.27`), `image` is preserved - it's a
+ * universally resolvable upstream reference.
+ *
+ * Exposed for testing; production callers should use {@link saveConfig}.
+ */
+export function stripTransientFields(data: BunnyAppConfig): BunnyAppConfig {
+  const containers: BunnyAppConfig["app"]["containers"] = {};
+  for (const [name, c] of Object.entries(data.app.containers)) {
+    const { registry: _registry, ...withoutRegistry } = c;
+    if (c.dockerfile) {
+      const { image: _image, ...rest } = withoutRegistry;
+      containers[name] = rest;
+    } else {
+      containers[name] = withoutRegistry;
+    }
+  }
+  const { id: _id, ...appWithoutId } = data.app;
+  return {
+    ...data,
+    app: { ...appWithoutId, containers },
+  };
+}
+
+/**
  * Write the app config.
  *
  * When `explicitPath` is given the file is written exactly there;
  * otherwise we write to `./bunny.jsonc` in the current working
  * directory. The `--config <path>` flow uses the explicit form so that
  * deploys can persist `app.id` back to whatever file the caller chose.
+ *
+ * Transient fields (see {@link stripTransientFields}) are removed before
+ * write - callers can freely mutate the in-memory `image` field during a
+ * deploy without polluting the on-disk config.
  */
 export function saveConfig(data: BunnyAppConfig, explicitPath?: string): void {
   const path = explicitPath ?? join(process.cwd(), CONFIG_FILENAME);
+  const cleaned = stripTransientFields(data);
 
   // Re-key the object so the file always starts with $schema → version → app.
-  const { $schema: _schema, version, ...rest } = data;
+  const { $schema: _schema, version, ...rest } = cleaned;
   const output = {
     $schema: "./node_modules/@bunny.net/app-config/generated/schema.json",
     version,
@@ -100,19 +145,56 @@ export function configExists(explicitPath?: string): boolean {
 }
 
 /**
- * Resolve an app ID from an explicit value or from bunny.jsonc.
- * Throws if neither source provides an ID.
+ * Resolve the active app ID.
+ *
+ * Precedence: explicit flag → `.bunny/app.json` → legacy `app.id`
+ * in `bunny.jsonc` (deprecation-warned). Throws if nothing resolves so
+ * callers don't have to repeat the "no linked app" branch everywhere.
  */
 export function resolveAppId(explicit?: string): string {
   if (explicit) return explicit;
 
-  const config = loadConfig();
-  if (config.app.id) return config.app.id;
+  const manifest = loadManifest<AppManifest>(APP_MANIFEST);
+  if (manifest.id) return manifest.id;
+
+  if (configExists()) {
+    const config = loadConfig();
+    if (config.app.id) {
+      logger.warn(
+        `\`app.id\` in bunny.jsonc is deprecated and will be removed in a future release. Run \`bunny apps link ${config.app.id}\` to migrate to .bunny/${APP_MANIFEST}.`,
+      );
+      return config.app.id;
+    }
+  }
 
   throw new UserError(
-    "No app ID found in bunny.jsonc.",
-    "Run `bunny apps deploy` to create the app first, or pass --id explicitly.",
+    "No linked app.",
+    "Run `bunny apps link <app-id>` to link this directory, or `bunny apps deploy` to create a new app.",
   );
+}
+
+/**
+ * Resolve the registry record ID for a given container.
+ *
+ * Precedence: manifest entry → legacy `container.registry` in bunny.jsonc
+ * (deprecation-warned). Returns undefined when neither source has it -
+ * callers that need a registry should then prompt or otherwise resolve.
+ */
+export function resolveContainerRegistry(
+  containerName: string,
+  legacyContainer?: { registry?: string },
+): string | undefined {
+  const manifest = loadManifest<AppManifest>(APP_MANIFEST);
+  const fromManifest = manifest.containers?.[containerName]?.registry;
+  if (fromManifest) return fromManifest;
+
+  if (legacyContainer?.registry) {
+    logger.warn(
+      `\`containers.${containerName}.registry\` in bunny.jsonc is deprecated. It will move to .bunny/${APP_MANIFEST} on the next deploy.`,
+    );
+    return legacyContainer.registry;
+  }
+  return undefined;
 }
 
 /**

@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
@@ -22,10 +21,14 @@ import {
   type McClient,
   promptRegistry,
   type ResolvedRegistry,
+  readDockerfileExposedPorts,
   resolveRegistryForImage,
 } from "./docker.ts";
-
-type EndpointRequest = components["schemas"]["EndpointRequest"];
+import {
+  confirmEndpointSuggestions,
+  endpointRequestToConfig,
+  promptSuggestedEnv,
+} from "./suggestions.ts";
 
 const DEFAULT_DOCKERFILE = "Dockerfile";
 
@@ -59,9 +62,26 @@ export interface WalkthroughInput {
    * Absolute path the resulting config should be written to. When
    * unset, the walkthrough writes `./bunny.jsonc` in cwd (current
    * default). Set this when `--config <path>` is used so the persisted
-   * `app.id` lands in the caller's chosen file.
+   * config lands in the caller's chosen file.
    */
   configPath?: string;
+}
+
+/**
+ * Result of the walkthrough.
+ *
+ * `config` is the new `bunny.jsonc` (intent only). `registries` is the
+ * per-container registry mapping the user picked or that we inferred -
+ * it doesn't go in `bunny.jsonc` (account-scoped), but the deploy flow
+ * that immediately runs after the walkthrough needs it to call the API.
+ * Whichever command runs the walkthrough is responsible for persisting
+ * these into `.bunny/app.json` once it has the app ID to attach them
+ * to. `apps init` just discards them - the next deploy will re-prompt
+ * or re-resolve.
+ */
+export interface WalkthroughResult {
+  config: BunnyAppConfig;
+  registries: Record<string, string>;
 }
 
 /**
@@ -76,7 +96,7 @@ export interface WalkthroughInput {
 export async function runWalkthrough(
   client: McClient,
   input: WalkthroughInput,
-): Promise<BunnyAppConfig> {
+): Promise<WalkthroughResult> {
   logger.info("No bunny.jsonc found. Setting up this app.");
 
   let imageRef: string | undefined = input.positionalImage;
@@ -151,6 +171,24 @@ export async function runWalkthrough(
       logger.dim(suggestions.instructions);
       logger.log();
     }
+  } else if (mode === "build" && dockerfilePath) {
+    // Read EXPOSE directives from the Dockerfile to seed endpoint
+    // suggestions. bunny's getConfigSuggestions only works for pre-built
+    // images, so build mode needs a local equivalent - otherwise users
+    // end up with an app that has no way to reach the container.
+    const dockerfileAbs = resolve(process.cwd(), dockerfilePath);
+    const exposedPorts = await readDockerfileExposedPorts(dockerfileAbs);
+    if (exposedPorts.length > 0) {
+      suggestions = {
+        endpointSuggestions: exposedPorts.map((port) => ({
+          displayName: "cdn",
+          cdn: {
+            isSslEnabled: true,
+            portMappings: [{ exposedPort: 443, containerPort: port }],
+          },
+        })),
+      };
+    }
   }
 
   const name =
@@ -159,9 +197,11 @@ export async function runWalkthrough(
 
   const regions = await pickRegions(client);
 
-  const container: ContainerConfig = {
-    registry: registry.id,
-  };
+  // `registry` is account-scoped - it lives in the manifest, not the
+  // shared config. We hold it in memory long enough for the deploy run
+  // that immediately follows this walkthrough, then `saveConfig` strips
+  // it from disk via `stripTransientFields`.
+  const container: ContainerConfig = {};
 
   if (mode === "build" && dockerfilePath) {
     container.dockerfile = dockerfilePath;
@@ -220,7 +260,7 @@ export async function runWalkthrough(
     logger.dim("Would write bunny.jsonc (--dry-run).");
   }
 
-  return toml;
+  return { config: toml, registries: { [name]: registry.id } };
 }
 
 /**
@@ -236,7 +276,7 @@ async function runComposeImport(
   client: McClient,
   composeFilePath: string,
   input: WalkthroughInput,
-): Promise<BunnyAppConfig> {
+): Promise<WalkthroughResult> {
   const compose = loadComposeFile(composeFilePath);
 
   const serviceNames = Object.keys(compose.services);
@@ -291,7 +331,12 @@ async function runComposeImport(
     logger.dim("Would write bunny.jsonc (--dry-run).");
   }
 
-  return config;
+  // Every service in a compose import shares the same registry by default.
+  const registries: Record<string, string> = {};
+  for (const serviceName of Object.keys(config.app.containers)) {
+    registries[serviceName] = registry.id;
+  }
+  return { config, registries };
 }
 
 async function promptAppName(suggested?: string): Promise<string> {
@@ -337,105 +382,4 @@ async function pickRegions(client: McClient): Promise<string[]> {
     throw new UserError("A region must be selected.");
   }
   return [selectedRegion];
-}
-
-async function confirmEndpointSuggestions(
-  endpoints: EndpointRequest[],
-): Promise<EndpointRequest[]> {
-  const accepted: EndpointRequest[] = [];
-  for (const ep of endpoints) {
-    const label = describeEndpoint(ep);
-    const { value } = await prompts({
-      type: "confirm",
-      name: "value",
-      message: `Add suggested endpoint: ${label}?`,
-      initial: true,
-    });
-    if (value) accepted.push(ep);
-  }
-  return accepted;
-}
-
-function describeEndpoint(ep: EndpointRequest): string {
-  if (ep.cdn) {
-    const ports = ep.cdn.portMappings
-      ?.map((p) => `${p.exposedPort}→${p.containerPort}`)
-      .join(", ");
-    return `CDN (${ports ?? "default port"})${ep.cdn.isSslEnabled ? " + SSL" : ""}`;
-  }
-  if (ep.anycast) {
-    const ports = ep.anycast.portMappings
-      .map((p) => `${p.exposedPort}→${p.containerPort}`)
-      .join(", ");
-    return `Anycast (${ports})`;
-  }
-  return ep.displayName ?? "endpoint";
-}
-
-function endpointRequestToConfig(
-  ep: EndpointRequest,
-): NonNullable<ContainerConfig["endpoints"]>[number] {
-  if (ep.cdn) {
-    return {
-      type: "cdn",
-      ssl: ep.cdn.isSslEnabled,
-      ports:
-        ep.cdn.portMappings?.map((p) => ({
-          public: p.exposedPort ?? p.containerPort,
-          container: p.containerPort,
-        })) ?? [],
-    };
-  }
-  if (ep.anycast) {
-    return {
-      type: "anycast",
-      ports: ep.anycast.portMappings.map((p) => ({
-        public: p.exposedPort ?? p.containerPort,
-        container: p.containerPort,
-      })),
-    };
-  }
-  return { type: "cdn" };
-}
-
-async function promptSuggestedEnv(
-  suggestions: components["schemas"]["EnvironmentVariableSuggestion"][],
-): Promise<Record<string, string>> {
-  const env: Record<string, string> = {};
-  const required = suggestions.filter((s) => s.required);
-  const optional = suggestions.filter((s) => !s.required);
-
-  for (const item of required) {
-    if (!item.name) continue;
-    const { value } = await prompts({
-      type: "text",
-      name: "value",
-      message: `${item.name}${item.description ? ` (${item.description})` : ""}:`,
-      initial: item.defaultValue ?? "",
-    });
-    if (value !== undefined && value !== "") env[item.name] = String(value);
-  }
-
-  if (optional.length > 0) {
-    const { value: confirm } = await prompts({
-      type: "confirm",
-      name: "value",
-      message: `Configure ${optional.length} optional env var${optional.length === 1 ? "" : "s"} now?`,
-      initial: false,
-    });
-    if (confirm) {
-      for (const item of optional) {
-        if (!item.name) continue;
-        const { value } = await prompts({
-          type: "text",
-          name: "value",
-          message: `${item.name}${item.description ? ` (${item.description})` : ""}:`,
-          initial: item.defaultValue ?? "",
-        });
-        if (value !== undefined && value !== "") env[item.name] = String(value);
-      }
-    }
-  }
-
-  return env;
 }

@@ -5,6 +5,7 @@ export {
   apiToConfig,
   configToAddRequest,
   configToPatchRequest,
+  type RegistryMap,
 } from "./convert.ts";
 // Utilities
 export { parseImageRef } from "./parse-image-ref.ts";

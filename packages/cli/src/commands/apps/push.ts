@@ -1,10 +1,13 @@
+import type { RegistryMap } from "@bunny.net/app-config";
 import { createMcClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
+import { loadManifest } from "../../core/manifest.ts";
 import { spinner } from "../../core/ui.ts";
 import { configToPatchRequest, loadConfig, resolveAppId } from "./config.ts";
+import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 
 const COMMAND = "push";
 const DESCRIPTION = "Apply local bunny.jsonc config to remote app.";
@@ -43,7 +46,22 @@ export const appsPushCommand = defineCommand<PushArgs>({
       process.exit(1);
     }
 
-    const patchRequest = configToPatchRequest(toml, existingApp);
+    // Pull registry IDs from the manifest so the patch body still
+    // carries `imageRegistryId` per container - these don't live in
+    // bunny.jsonc anymore. Fall back to whatever the existing template
+    // already had (no-op change) when the manifest doesn't know.
+    const manifest = loadManifest<AppManifest>(APP_MANIFEST);
+    const registries: RegistryMap = {};
+    for (const ct of existingApp.containerTemplates) {
+      const fromManifest = manifest.containers?.[ct.name]?.registry;
+      registries[ct.name] =
+        fromManifest ??
+        (ct.imageRegistryId && ct.imageRegistryId !== "0"
+          ? ct.imageRegistryId
+          : undefined);
+    }
+
+    const patchRequest = configToPatchRequest(toml, existingApp, registries);
 
     if (dryRun) {
       if (output === "json") {

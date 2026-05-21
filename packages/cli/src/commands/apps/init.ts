@@ -111,7 +111,7 @@ export const appsInitCommand = defineCommand<InitArgs>({
     const cfg = resolveConfig(profile, apiKey);
     const client = createMcClient(clientOptions(cfg, verbose));
 
-    const toml = await runWalkthrough(client, {
+    const { config: toml } = await runWalkthrough(client, {
       positionalImage: image,
       dockerfileFlag: normalizeDockerfileFlag(dockerfile),
       registryFlag: registry,

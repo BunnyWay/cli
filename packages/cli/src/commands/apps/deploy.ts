@@ -1,10 +1,12 @@
 import { dirname, isAbsolute, resolve } from "node:path";
+import type { RegistryMap } from "@bunny.net/app-config";
 import { createMcClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
+import { loadManifest, saveManifest } from "../../core/manifest.ts";
 import { spinner } from "../../core/ui.ts";
 import {
   type BunnyAppConfig,
@@ -14,20 +16,131 @@ import {
   configToPatchRequest,
   loadConfig,
   parseImageRef,
+  resolveContainerRegistry,
   saveConfig,
 } from "./config.ts";
+import { APP_MANIFEST, type AppManifest } from "./constants.ts";
+
+/**
+ * Extract the per-container registry IDs we have so far into the
+ * registry-override map expected by `configToAddRequest` /
+ * `configToPatchRequest`. Empty entries are omitted so they don't
+ * accidentally clear a registry on the server.
+ */
+function draftRegistries(
+  containers: AppManifest["containers"],
+): RegistryMap | undefined {
+  const map: RegistryMap = {};
+  let any = false;
+  for (const [name, entry] of Object.entries(containers)) {
+    if (entry.registry) {
+      map[name] = entry.registry;
+      any = true;
+    }
+  }
+  return any ? map : undefined;
+}
+
+/**
+ * Ask bunny.net for endpoint/env suggestions for an image we just
+ * pushed, and prompt the user to merge them into `targetContainer`.
+ *
+ * The API call is the source of truth - it can see the image manifest
+ * and apply well-known patterns (Postgres → 5432, Node images → 3000,
+ * etc.). When it returns nothing useful (network error, registry
+ * doesn't expose the manifest), we fall back to parsing `EXPOSE` out
+ * of the local Dockerfile so the user isn't left with no endpoints.
+ *
+ * Suggestions already covered by `targetContainer.endpoints` (by
+ * container port) or `targetContainer.env` (by name) are filtered out
+ * before prompting - avoids re-asking about ports the walkthrough
+ * already added.
+ */
+async function applyPostPushSuggestions(
+  client: ReturnType<typeof createMcClient>,
+  registryId: string,
+  imageRef: string,
+  _mode: { kind: "build"; dockerfile: string },
+  opts: { targetContainer: ContainerConfig; dockerfilePath: string },
+): Promise<void> {
+  const parsed = parseImageRef(imageRef);
+  const suggestions = await getConfigSuggestions(client, registryId, parsed);
+
+  let endpointSuggestions = suggestions?.endpointSuggestions ?? [];
+  const envSuggestions = suggestions?.environmentVariablesSuggestions ?? [];
+
+  // Fallback: if the API didn't return endpoint suggestions, derive
+  // them from the Dockerfile's EXPOSE directives. Only triggers when
+  // the API call genuinely returned nothing - otherwise we trust the
+  // backend's view.
+  if (endpointSuggestions.length === 0) {
+    const dockerfileAbs = resolve(process.cwd(), opts.dockerfilePath);
+    const exposedPorts = await readDockerfileExposedPorts(dockerfileAbs);
+    if (exposedPorts.length > 0) {
+      endpointSuggestions = exposedPorts.map((port) => ({
+        displayName: "cdn",
+        cdn: {
+          isSslEnabled: true,
+          portMappings: [{ exposedPort: 443, containerPort: port }],
+        },
+      }));
+    }
+  }
+
+  if (suggestions?.instructions) {
+    logger.log();
+    logger.dim(suggestions.instructions);
+    logger.log();
+  }
+
+  const newEndpoints = filterNewEndpointSuggestions(
+    endpointSuggestions,
+    opts.targetContainer,
+  );
+  if (newEndpoints.length > 0) {
+    const accepted = await confirmEndpointSuggestions(newEndpoints);
+    if (accepted.length > 0) {
+      opts.targetContainer.endpoints = [
+        ...(opts.targetContainer.endpoints ?? []),
+        ...accepted.map(endpointRequestToConfig),
+      ];
+    }
+  }
+
+  const newEnvs = filterNewEnvSuggestions(envSuggestions, opts.targetContainer);
+  if (newEnvs.length > 0) {
+    const env = await promptSuggestedEnv(newEnvs);
+    if (Object.keys(env).length > 0) {
+      opts.targetContainer.env = {
+        ...env,
+        ...(opts.targetContainer.env ?? {}),
+      };
+    }
+  }
+}
+
 import {
   buildImage,
+  buildImageRef,
   dockerLogin,
   ensureDockerAvailable,
   ensureRegistryLogin,
   generateTag,
+  getConfigSuggestions,
   promptRegistry,
   pushImage,
   type ResolvedRegistry,
+  readDockerfileExposedPorts,
   resolveRegistryForImage,
 } from "./docker.ts";
 import { resolveContainerEnv } from "./env/resolve.ts";
+import {
+  confirmEndpointSuggestions,
+  endpointRequestToConfig,
+  filterNewEndpointSuggestions,
+  filterNewEnvSuggestions,
+  promptSuggestedEnv,
+} from "./suggestions.ts";
 import { runWalkthrough } from "./walkthrough.ts";
 
 const COMMAND = "deploy [image]";
@@ -155,8 +268,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     const client = createMcClient(clientOptions(cfg, verbose));
 
     let toml: BunnyAppConfig;
+    /** Registries the walkthrough resolved, to seed the manifest draft below. */
+    let walkthroughRegistries: Record<string, string> = {};
     if (!configExists(configPath)) {
-      toml = await runWalkthrough(client, {
+      const result = await runWalkthrough(client, {
         positionalImage,
         dockerfileFlag,
         contextFlag: args.context,
@@ -167,9 +282,53 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         configPath,
         dryRun,
       });
+      toml = result.config;
+      walkthroughRegistries = result.registries;
     } else {
       toml = loadConfig(configPath);
     }
+
+    // Build a writable draft of the manifest for this deploy run. We
+    // save eagerly after each piece of state we resolve (app ID,
+    // per-container registry, per-container template ID) so a mid-deploy
+    // crash doesn't lose what we've learned.
+    const existingManifest = loadManifest<AppManifest>(APP_MANIFEST);
+    const draft: {
+      id?: string;
+      profile?: string;
+      containers: AppManifest["containers"];
+    } = {
+      id: existingManifest.id ?? toml.app.id,
+      profile: existingManifest.profile ?? profile,
+      containers: { ...(existingManifest.containers ?? {}) },
+    };
+    // Seed with any registry picks the walkthrough just resolved so
+    // we don't re-prompt below for the same registry.
+    for (const [name, registryId] of Object.entries(walkthroughRegistries)) {
+      draft.containers[name] = {
+        ...draft.containers[name],
+        registry: registryId,
+      };
+    }
+    const persistDraft = () => {
+      if (!draft.id) return;
+      saveManifest<AppManifest>(APP_MANIFEST, {
+        id: draft.id,
+        profile: draft.profile,
+        containers: draft.containers,
+      });
+    };
+    const setContainerRegistry = (name: string, registryId: string) => {
+      draft.containers[name] = {
+        ...draft.containers[name],
+        registry: registryId,
+      };
+      persistDraft();
+    };
+    const setContainerTemplateId = (name: string, templateId: string) => {
+      draft.containers[name] = { ...draft.containers[name], id: templateId };
+      persistDraft();
+    };
 
     if (dryRun) {
       logger.log();
@@ -189,7 +348,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     // `image`, then create the app in one POST.
     const containerEntries = Object.entries(toml.app.containers);
     if (
-      !toml.app.id &&
+      !draft.id &&
       containerEntries.length > 1 &&
       !positionalImage &&
       !dockerfileFlag &&
@@ -198,12 +357,17 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       await prepareContainersForCreate(client, toml, configPath, {
         tag: args.tag,
         contextOverride: args.context,
+        draftContainers: draft.containers,
+        onRegistryResolved: setContainerRegistry,
       });
 
       const createSpin = spinner("Creating app...");
       createSpin.start();
       const { data: result } = await client.POST("/apps", {
-        body: configToAddRequest(resolveContainerEnv(toml, dotenvPath)),
+        body: configToAddRequest(
+          resolveContainerEnv(toml, dotenvPath),
+          draftRegistries(draft.containers),
+        ),
       });
       createSpin.stop();
 
@@ -211,9 +375,22 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         throw new UserError("Failed to create app — no ID returned.");
       }
 
-      toml.app.id = result.id;
-      saveConfig(toml, configPath);
+      draft.id = result.id;
+      persistDraft();
       logger.success(`App "${toml.app.name}" created (${result.id}).`);
+
+      // POST /apps returns only the new app ID. Fetch the full app to
+      // capture container template IDs so subsequent commands can target
+      // each container without re-fetching.
+      const fetchSpin = spinner("Recording container IDs...");
+      fetchSpin.start();
+      const { data: createdApp } = await client.GET("/apps/{appId}", {
+        params: { path: { appId: result.id } },
+      });
+      fetchSpin.stop();
+      for (const ct of createdApp?.containerTemplates ?? []) {
+        setContainerTemplateId(ct.name, ct.id);
+      }
 
       const deploySpin = spinner("Deploying...");
       deploySpin.start();
@@ -244,7 +421,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
     let deployImage: string | undefined;
     let registryId: string | undefined =
-      args.registry ?? targetContainer.registry;
+      args.registry ?? resolveContainerRegistry(targetName, targetContainer);
     let freshCreds: ResolvedRegistry["freshCredentials"];
 
     if (mode.kind === "build") {
@@ -260,8 +437,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         }
         registryId = resolved.id;
         freshCreds = resolved.freshCredentials;
-        targetContainer.registry = registryId;
-        saveConfig(toml, configPath);
+        setContainerRegistry(targetName, registryId);
       }
 
       const regSpin = spinner("Fetching registry...");
@@ -279,7 +455,12 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       }
 
       const tag = args.tag ?? (await generateTag());
-      const imageRef = `${reg.hostName}/${toml.app.name}:${tag}`;
+      const imageRef = buildImageRef(
+        reg.hostName,
+        reg.userName,
+        toml.app.name,
+        tag,
+      );
       const buildCwd = resolveBuildContext(mode.dockerfile, args.context);
 
       logger.info(`Building ${imageRef}...`);
@@ -320,6 +501,11 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       await pushImage(imageRef);
 
       deployImage = imageRef;
+      // In-memory only - `saveConfig` strips `image` for dockerfile
+      // containers via `stripTransientFields`. The MC API is the source
+      // of truth for what's deployed; `bunny.jsonc` stores intent only.
+      // The mutation is still needed for `configToAddRequest` /
+      // `configToPatchRequest` to read the ref in the same deploy run.
       targetContainer.image = imageRef;
       // Persist dockerfile/context if they came from flags so the manifest stays the source of truth.
       if (!targetContainer.dockerfile) {
@@ -328,7 +514,21 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       if (args.context && !targetContainer.context) {
         targetContainer.context = args.context;
       }
-      saveConfig(toml);
+
+      // Now that the image is live in the registry, ask bunny.net to
+      // analyze it. This is the same `getConfigSuggestions` call we
+      // make for pre-built images during the walkthrough - it returns
+      // endpoint and env-var hints derived from the image manifest /
+      // known-image patterns. For a fresh first deploy we usually have
+      // no endpoints yet, so this is what populates them.
+      if (registryId) {
+        await applyPostPushSuggestions(client, registryId, imageRef, mode, {
+          targetContainer,
+          dockerfilePath: mode.dockerfile,
+        });
+      }
+
+      saveConfig(toml, configPath);
     }
 
     if (mode.kind === "image") {
@@ -341,18 +541,23 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       }
       registryId = resolved.id;
       deployImage = mode.image;
+      // `image` is a pinned upstream ref - keep it in bunny.jsonc (intent).
+      // Registry is account-scoped - record in the manifest instead.
       targetContainer.image = mode.image;
-      targetContainer.registry = registryId;
-      saveConfig(toml);
+      setContainerRegistry(targetName, registryId);
+      saveConfig(toml, configPath);
     }
 
-    let appId = toml.app.id;
+    let appId = draft.id;
     if (!appId) {
       const createSpin = spinner("Creating app...");
       createSpin.start();
 
       const { data: result } = await client.POST("/apps", {
-        body: configToAddRequest(resolveContainerEnv(toml, dotenvPath)),
+        body: configToAddRequest(
+          resolveContainerEnv(toml, dotenvPath),
+          draftRegistries(draft.containers),
+        ),
       });
       createSpin.stop();
 
@@ -361,8 +566,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       }
 
       appId = result.id;
-      toml.app.id = appId;
-      saveConfig(toml);
+      draft.id = appId;
+      persistDraft();
 
       logger.success(`App "${toml.app.name}" created (${appId}).`);
     } else {
@@ -383,6 +588,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         body: configToPatchRequest(
           resolveContainerEnv(toml, dotenvPath),
           existingApp,
+          draftRegistries(draft.containers),
         ),
       });
       pushSpin.stop();
@@ -417,6 +623,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       previousImage = match.image ?? undefined;
 
       const containerId = match.id;
+      // Cache the resolved template ID in the manifest so the next
+      // deploy/restart/env-push doesn't have to re-resolve by name.
+      setContainerTemplateId(targetName, containerId);
       const { imageName, imageNamespace, imageTag } =
         parseImageRef(deployImage);
 
@@ -590,7 +799,18 @@ async function prepareContainersForCreate(
   client: ReturnType<typeof createMcClient>,
   toml: BunnyAppConfig,
   configPath: string | undefined,
-  opts: { tag?: string; contextOverride?: string },
+  opts: {
+    tag?: string;
+    contextOverride?: string;
+    /**
+     * Manifest's container map at the start of the deploy. Read-only
+     * here - registry IDs we already know come from this. New
+     * registries discovered in this loop are reported via
+     * {@link onRegistryResolved} so the parent can persist eagerly.
+     */
+    draftContainers: AppManifest["containers"];
+    onRegistryResolved: (name: string, registryId: string) => void;
+  },
 ): Promise<void> {
   const entries = Object.entries(toml.app.containers);
   const hasAnyBuild = entries.some(([, c]) => c.dockerfile);
@@ -607,9 +827,13 @@ async function prepareContainersForCreate(
       await buildAndPushContainer(client, toml, name, container, {
         tag: sharedTag,
         contextOverride: opts.contextOverride,
+        draftContainers: opts.draftContainers,
+        onRegistryResolved: opts.onRegistryResolved,
       });
     } else if (container.image) {
-      await resolveContainerRegistry(client, name, container);
+      await resolveRegistryForPrebuiltImage(client, name, container, {
+        onRegistryResolved: opts.onRegistryResolved,
+      });
     } else {
       throw new UserError(
         `Container "${name}" has neither \`image\` nor \`dockerfile\`.`,
@@ -625,12 +849,21 @@ async function buildAndPushContainer(
   toml: BunnyAppConfig,
   name: string,
   container: ContainerConfig,
-  opts: { tag: string; contextOverride?: string },
+  opts: {
+    tag: string;
+    contextOverride?: string;
+    draftContainers: AppManifest["containers"];
+    onRegistryResolved: (name: string, registryId: string) => void;
+  },
 ): Promise<void> {
   if (!container.dockerfile) return;
 
   let freshCreds: ResolvedRegistry["freshCredentials"];
-  if (!container.registry) {
+  let registryId =
+    opts.draftContainers[name]?.registry ??
+    resolveContainerRegistry(name, container);
+
+  if (!registryId) {
     logger.info(`Pick a registry to push the "${name}" image to.`);
     const resolved = await promptRegistry(client);
     if (!resolved) {
@@ -638,25 +871,31 @@ async function buildAndPushContainer(
         `A registry is required to build and push "${name}".`,
       );
     }
-    container.registry = resolved.id;
+    registryId = resolved.id;
     freshCreds = resolved.freshCredentials;
+    opts.onRegistryResolved(name, registryId);
   }
 
   const regSpin = spinner(`Fetching registry for ${name}...`);
   regSpin.start();
   const { data: reg } = await client.GET("/registries/{registryId}", {
-    params: { path: { registryId: Number(container.registry) } },
+    params: { path: { registryId: Number(registryId) } },
   });
   regSpin.stop();
 
   if (!reg?.hostName) {
     throw new UserError(
-      `Registry ${container.registry} not found or has no hostname.`,
+      `Registry ${registryId} not found or has no hostname.`,
       "Use `bunny registries list` to check your registries.",
     );
   }
 
-  const imageRef = `${reg.hostName}/${toml.app.name}-${name}:${opts.tag}`;
+  const imageRef = buildImageRef(
+    reg.hostName,
+    reg.userName,
+    `${toml.app.name}-${name}`,
+    opts.tag,
+  );
   const buildCwd = resolveBuildContext(
     container.dockerfile,
     container.context ?? opts.contextOverride,
@@ -682,19 +921,30 @@ async function buildAndPushContainer(
   logger.info(`Pushing ${imageRef}...`);
   await pushImage(imageRef);
 
+  // In-memory only - `saveConfig` strips this for dockerfile containers.
+  // Needed here so `configToAddRequest` picks up the ref on first create.
   container.image = imageRef;
+
+  await applyPostPushSuggestions(
+    client,
+    registryId,
+    imageRef,
+    { kind: "build", dockerfile: container.dockerfile },
+    { targetContainer: container, dockerfilePath: container.dockerfile },
+  );
 }
 
-async function resolveContainerRegistry(
+async function resolveRegistryForPrebuiltImage(
   client: ReturnType<typeof createMcClient>,
   name: string,
   container: ContainerConfig,
+  opts: { onRegistryResolved: (name: string, registryId: string) => void },
 ): Promise<void> {
   if (!container.image) return;
 
-  // Always resolve by hostname for pre-built images: the registry
-  // currently set on the container may be the user's push registry,
-  // which is wrong for images from other hosts (Docker Hub, etc.).
+  // Always resolve by hostname for pre-built images: any registry
+  // currently associated with this container may be the user's push
+  // registry, which is wrong for images from other hosts (Docker Hub, etc.).
   const resolved = await resolveRegistryForImage(client, container.image);
   if (!resolved) {
     throw new UserError(
@@ -702,5 +952,5 @@ async function resolveContainerRegistry(
       "bunny.net needs a registry record for the image hostname so it can pull the image.",
     );
   }
-  container.registry = resolved.id;
+  opts.onRegistryResolved(name, resolved.id);
 }

@@ -3,8 +3,10 @@ import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
+import { loadManifest, removeManifest } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import { resolveAppId } from "./config.ts";
+import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 
 const COMMAND = "delete";
 const DESCRIPTION = "Delete an app.";
@@ -53,6 +55,12 @@ export const appsDeleteCommand = defineCommand<DeleteArgs>({
     });
 
     spin.stop();
+
+    // If this delete matches the manifest-linked app, drop the manifest
+    // so the next deploy doesn't try to PATCH a now-deleted app ID.
+    if (loadManifest<AppManifest>(APP_MANIFEST).id === appId) {
+      removeManifest(APP_MANIFEST);
+    }
 
     if (output === "json") {
       logger.log(JSON.stringify({ id: appId, deleted: true }));

@@ -187,17 +187,39 @@ function collectVolumes(
   }
 }
 
+/**
+ * Per-container registry ID overrides supplied at request-build time.
+ *
+ * Registry IDs are account-scoped (the same image can be reached via
+ * different account-side registry records) and so don't live in
+ * `bunny.jsonc`. Callers pass them in here from whatever per-user state
+ * they keep - the CLI uses `.bunny/manifest.json`.
+ */
+export type RegistryMap = Record<string, string | undefined>;
+
+function mergeRegistry(
+  name: string,
+  c: ContainerConfig,
+  registries: RegistryMap | undefined,
+): ContainerConfig {
+  const override = registries?.[name];
+  if (!override) return c;
+  return { ...c, registry: override };
+}
+
 /** Convert BunnyAppConfig to an AddApplicationRequest for creating a new app. */
 export function configToAddRequest(
   config: BunnyAppConfig,
+  registries?: RegistryMap,
 ): AddApplicationRequest {
   const containers: ContainerRequest[] = [];
   const volumes: VolumeRequest[] = [];
   const seenVolumes = new Set<string>();
 
   for (const [name, c] of Object.entries(config.app.containers)) {
-    containers.push(containerConfigToRequest(name, c));
-    collectVolumes(c, volumes, seenVolumes);
+    const merged = mergeRegistry(name, c, registries);
+    containers.push(containerConfigToRequest(name, merged));
+    collectVolumes(merged, volumes, seenVolumes);
   }
 
   return {
@@ -217,6 +239,7 @@ export function configToAddRequest(
 export function configToPatchRequest(
   config: BunnyAppConfig,
   existingApp: Application,
+  registries?: RegistryMap,
 ): PatchApplicationRequest {
   const containers: ContainerRequest[] = [];
   const volumes: VolumeRequest[] = [];
@@ -230,8 +253,9 @@ export function configToPatchRequest(
       i === 0
         ? existingApp.containerTemplates[0]
         : existingApp.containerTemplates.find((ct) => ct.name === name);
-    containers.push(containerConfigToRequest(name, c, existing?.id));
-    collectVolumes(c, volumes, seenVolumes);
+    const merged = mergeRegistry(name, c, registries);
+    containers.push(containerConfigToRequest(name, merged, existing?.id));
+    collectVolumes(merged, volumes, seenVolumes);
   }
 
   return {

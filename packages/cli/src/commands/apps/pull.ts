@@ -3,6 +3,7 @@ import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
+import { saveManifest } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import {
   apiToConfig,
@@ -10,6 +11,7 @@ import {
   resolveAppId,
   saveConfig,
 } from "./config.ts";
+import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 
 const COMMAND = "pull";
 const DESCRIPTION = "Sync remote app config to local bunny.jsonc.";
@@ -67,11 +69,31 @@ export const appsPullCommand = defineCommand<PullArgs>({
     const toml = apiToConfig(app);
     saveConfig(toml);
 
+    // Mirror identity into `.bunny/app.json` so subsequent commands
+    // don't fall back to legacy `app.id`/`container.registry` reads from
+    // bunny.jsonc (those fields are stripped on the next save).
+    const manifestContainers: AppManifest["containers"] = {};
+    for (const ct of app.containerTemplates) {
+      manifestContainers[ct.name] = {
+        id: ct.id,
+        registry:
+          ct.imageRegistryId && ct.imageRegistryId !== "0"
+            ? ct.imageRegistryId
+            : undefined,
+      };
+    }
+    saveManifest<AppManifest>(APP_MANIFEST, {
+      id: appId,
+      profile: profile ?? "default",
+      containers: manifestContainers,
+    });
+
     if (output === "json") {
       logger.log(JSON.stringify(toml, null, 2));
       return;
     }
 
     logger.success("bunny.jsonc updated from remote.");
+    logger.dim(`Linked to ${appId} → .bunny/${APP_MANIFEST}`);
   },
 });
