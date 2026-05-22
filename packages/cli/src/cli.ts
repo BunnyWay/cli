@@ -13,6 +13,7 @@ import { openCommand } from "./commands/open.ts";
 import { registriesNamespace } from "./commands/registries/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
+import { bunny } from "./core/colors.ts";
 import { logger } from "./core/logger.ts";
 import { VERSION } from "./core/version.ts";
 
@@ -77,7 +78,6 @@ export const cli = instance
     false as never,
     () => {},
     () => {
-      const bunny = chalk.hex("#fb8827");
       const art = `
                   @@@@                                                                                                              
                  @@@@                                                                                                               
@@ -98,7 +98,7 @@ export const cli = instance
       if ((process.stdout.columns ?? 0) >= 135) {
         console.log(art);
       }
-      logger.dim(`  ${chalk.bold("bunny")} ${chalk.dim(`v${VERSION}`)}`);
+      logger.dim(`  ${chalk.bold("bunny")} ${chalk.gray(`v${VERSION}`)}`);
       logger.dim("  The official bunny.net CLI.\n");
 
       console.log(bunny.bold("  Commands:\n"));
@@ -113,10 +113,10 @@ export const cli = instance
       console.log();
       console.log(bunny.bold("  Global Options:\n"));
       logger.dim(
-        `    ${chalk.reset.bold("-p, --profile".padEnd(22))}Configuration profile to use ${chalk.dim('(default: "default")')}`,
+        `    ${chalk.reset.bold("-p, --profile".padEnd(22))}Configuration profile to use ${chalk.gray('(default: "default")')}`,
       );
       logger.dim(
-        `    ${chalk.reset.bold("-o, --output".padEnd(22))}Output format: text, json, table, csv, markdown ${chalk.dim('(default: "text")')}`,
+        `    ${chalk.reset.bold("-o, --output".padEnd(22))}Output format: text, json, table, csv, markdown ${chalk.gray('(default: "text")')}`,
       );
       logger.dim(
         `    ${chalk.reset.bold("--api-key".padEnd(22))}API key (takes priority over profile and environment)`,
@@ -134,7 +134,7 @@ export const cli = instance
 
       console.log(bunny.bold("  Examples:\n"));
       for (const [desc, cmd] of examples) {
-        logger.dim(`  ${chalk.dim("–")} ${desc}\n`);
+        logger.dim(`  ${chalk.gray("–")} ${desc}\n`);
         console.log(`    ${bunny(`$ ${cmd}`)}\n`);
       }
 

@@ -297,7 +297,7 @@ export const dbQuickstartCommand = defineCommand<{
     if (!envReady) {
       logger.log(chalk.bold(`  ${step}. Add to your .env`));
       logger.log();
-      logger.log(chalk.dim("     # .env"));
+      logger.log(chalk.gray("     # .env"));
       if (!hasUrl) logger.log(`     BUNNY_DATABASE_URL=${url}`);
       if (!hasToken) logger.log(`     BUNNY_DATABASE_AUTH_TOKEN=${token}`);
       logger.log();
@@ -307,7 +307,7 @@ export const dbQuickstartCommand = defineCommand<{
     // Install
     logger.log(chalk.bold(`  ${step}. Install the client`));
     logger.log();
-    logger.log(`     ${chalk.dim("$")} ${snippet.install}`);
+    logger.log(`     ${chalk.gray("$")} ${snippet.install}`);
     logger.log();
     step++;
 
