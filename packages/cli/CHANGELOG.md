@@ -1,5 +1,17 @@
 # @bunny.net/cli
 
+## 0.5.0
+
+### Minor Changes
+
+- [#66](https://github.com/BunnyWay/cli/pull/66) [`adc1ef8`](https://github.com/BunnyWay/cli/commit/adc1ef8e3d3803b6cec04a2ca649747adf23980f) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Rework bunny apps deploy command
+
+### Patch Changes
+
+- [#78](https://github.com/BunnyWay/cli/pull/78) [`4d34f44`](https://github.com/BunnyWay/cli/commit/4d34f446dcfa91d2017d1895450285c462ebcf6e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Thread `--verbose` through `resolveConfig()` everywhere
+
+- [#76](https://github.com/BunnyWay/cli/pull/76) [`9a4251d`](https://github.com/BunnyWay/cli/commit/9a4251d4b7c9a2ccf93d45e2af45d3399c9e4f22) Thanks [@twogood](https://github.com/twogood)! - fix: route logger human-readable output to stderr to avoid polluting JSON stdout
+
 ## 0.4.2
 
 ### Patch Changes

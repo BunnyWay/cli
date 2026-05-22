@@ -1,5 +1,11 @@
 # @bunny.net/openapi-client
 
+## 0.1.0
+
+### Minor Changes
+
+- [#74](https://github.com/BunnyWay/cli/pull/74) [`ca6cc9b`](https://github.com/BunnyWay/cli/commit/ca6cc9bce501002c03d4348f7dc38c60cea0b7f5) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add four new clients: `createStorageClient` (Edge Storage), `createStreamClient` (Stream), `createShieldClient` (Shield WAF/DDoS), and `createOriginErrorsClient` (CDN origin error logs)
+
 ## 0.0.1
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # @bunny.net/database-studio
 
+## 0.2.0
+
+### Minor Changes
+
+- [#77](https://github.com/BunnyWay/cli/pull/77) [`91dd4b0`](https://github.com/BunnyWay/cli/commit/91dd4b0aa51c766c27c90247f6840deefc0f09fb) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Restore foreign key support in Database Studio. The OpenAPI generator now emits an `x-foreign-key` extension on column schemas, and the studio reads it to show `FK` badges in column headers and let you click a foreign key value to open the referenced row in a side sheet. Also fixes the sticky table header during vertical scroll and a small vertical shift in the Data/Schema toolbar when switching tabs.
+
+### Patch Changes
+
+- Updated dependencies [[`91dd4b0`](https://github.com/BunnyWay/cli/commit/91dd4b0aa51c766c27c90247f6840deefc0f09fb), [`91dd4b0`](https://github.com/BunnyWay/cli/commit/91dd4b0aa51c766c27c90247f6840deefc0f09fb)]:
+  - @bunny.net/database-openapi@0.2.0
+  - @bunny.net/database-adapter-libsql@0.1.2
+  - @bunny.net/database-rest@0.1.2
+
 ## 0.1.2
 
 ### Patch Changes

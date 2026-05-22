@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/openapi-client",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "module": "src/index.ts",
   "scripts": {
