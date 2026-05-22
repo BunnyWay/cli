@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.5.1
+
+### Patch Changes
+
+- [#79](https://github.com/BunnyWay/cli/pull/79) [`5a92317`](https://github.com/BunnyWay/cli/commit/5a92317242dafbbf0c7a3699f6c0cfc93e2f2c96) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - use chalk.gray for dim and bunny orange for info
+
 ## 0.5.0
 
 ### Minor Changes
