@@ -1,5 +1,17 @@
 # @bunny.net/cli
 
+## 0.5.3
+
+### Patch Changes
+
+- [`acc5332`](https://github.com/BunnyWay/cli/commit/acc5332fa55b5fa766b8181eb8fba9a45edf4b13) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(apps/deploy): pre-select detected Dockerfiles in the walkthrough multi-pick so plain Enter accepts them, and stop defaulting the follow-up "add a path?" prompt to yes when files were already detected
+
+- [`acc5332`](https://github.com/BunnyWay/cli/commit/acc5332fa55b5fa766b8181eb8fba9a45edf4b13) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(scripts/init): replace the misleading "How will you deploy?" two-choice prompt with a single yes/no "Enable continuous integration with GitHub Actions?". Both deploy paths (CLI and GitHub Actions) remain available either way — the choice now only controls whether the template's `.github/` workflow is kept. The `.changeset/` directory is removed from every template (bunny scripts don't use it). `--deploy-method` is replaced by `--github-actions` / `--no-github-actions`.
+
+- [`acc5332`](https://github.com/BunnyWay/cli/commit/acc5332fa55b5fa766b8181eb8fba9a45edf4b13) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(scripts/init): detect the user's package manager (bun, pnpm, yarn, npm) via npm_config_user_agent, template lockfile, and PATH probe instead of always running `bun install`; warn cleanly when none is available, and surface a notice when the chosen PM doesn't match the template's lockfile
+
+- [`acc5332`](https://github.com/BunnyWay/cli/commit/acc5332fa55b5fa766b8181eb8fba9a45edf4b13) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(apps/deploy): check Docker availability before walkthrough writes, and surface a friendly install hint when the binary is missing from PATH
+
 ## 0.5.2
 
 ### Patch Changes
