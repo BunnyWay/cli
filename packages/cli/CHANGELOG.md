@@ -1,5 +1,17 @@
 # @bunny.net/cli
 
+## 0.5.2
+
+### Patch Changes
+
+- [#81](https://github.com/BunnyWay/cli/pull/81) [`eab6e8d`](https://github.com/BunnyWay/cli/commit/eab6e8d4f0db1c02cc583bc254237cc837705d57) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `apps deploy` no longer asks for the container registry twice on a first-run build. The registry picked during the walkthrough is now reused for the build/push step instead of being re-prompted, matching the multi-container path.
+
+- [#81](https://github.com/BunnyWay/cli/pull/81) [`eab6e8d`](https://github.com/BunnyWay/cli/commit/eab6e8d4f0db1c02cc583bc254237cc837705d57) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `apps deploy` no longer prints the "Previous image / To rollback" hint after a first-time deploy. The hint is now suppressed when there was no prior app, instead of leaning on a byte-equality check between the locally pushed image ref and the canonical ref the API echoes back (which can diverge cosmetically and accidentally trigger the hint).
+
+- [#81](https://github.com/BunnyWay/cli/pull/81) [`eab6e8d`](https://github.com/BunnyWay/cli/commit/eab6e8d4f0db1c02cc583bc254237cc837705d57) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `apps deploy` now prints where the app is reachable once the deploy completes — an `https://`/`http://` URL for CDN endpoints and the public IP for anycast/public-IP endpoints, per container. Endpoints whose IPs are still being assigned show as "provisioning…" with a pointer to `apps endpoints list`. The reachable targets are also included in `--output json`. The success line now reads "Your app was deployed successfully 🪄" and uses the bunny brand colour for its success marker.
+
+- [#81](https://github.com/BunnyWay/cli/pull/81) [`eab6e8d`](https://github.com/BunnyWay/cli/commit/eab6e8d4f0db1c02cc583bc254237cc837705d57) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `apps deploy` and `apps init` now detect Dockerfiles in monorepo subdirectories during the first-run walkthrough. When more than one is found you can multi-select to create one container per Dockerfile, and an "add another" prompt lets you include paths the scan missed.
+
 ## 0.5.1
 
 ### Patch Changes
