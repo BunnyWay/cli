@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { useTempDir } from "../../test-utils/temp-dir.ts";
 import {
+  assignContainerNamesToDockerfiles,
   buildImageRef,
+  defaultContainerNameFromDockerfile,
   dockerHasCredentials,
+  findDockerfiles,
   imageHostname,
+  isDockerfileName,
   parseDockerfileExposedPorts,
   parseOauthScopes,
 } from "./docker.ts";
@@ -198,5 +202,129 @@ describe("dockerHasCredentials", () => {
   test("returns false on malformed JSON", () => {
     writeFileSync(configFile(), "{not json");
     expect(dockerHasCredentials("ghcr.io", configFile())).toBe(false);
+  });
+});
+
+describe("isDockerfileName", () => {
+  test.each([
+    ["Dockerfile", true],
+    ["dockerfile", true],
+    ["Dockerfile.api", true],
+    ["Dockerfile.dev", true],
+    ["api.dockerfile", true],
+    ["foo.bar.dockerfile", true],
+    ["Dockerfilex", false],
+    ["dockerfilex", false],
+    ["api.dockerfile.bak", false],
+    ["compose.yml", false],
+    [".dockerignore", false],
+  ])("isDockerfileName(%j) → %j", (input, expected) => {
+    expect(isDockerfileName(input)).toBe(expected);
+  });
+});
+
+describe("defaultContainerNameFromDockerfile", () => {
+  test.each([
+    ["Dockerfile", "app"],
+    ["apps/api/Dockerfile", "api"],
+    ["services/web-app/Dockerfile", "web-app"],
+    ["Dockerfile.api", "api"],
+    ["Dockerfile.Dev", "dev"],
+    ["api.dockerfile", "api"],
+    ["apps/My Service/Dockerfile", "my-service"],
+    ["apps/_legacy_/Dockerfile", "legacy"],
+  ])("defaultContainerNameFromDockerfile(%j) → %j", (input, expected) => {
+    expect(defaultContainerNameFromDockerfile(input)).toBe(expected);
+  });
+});
+
+describe("assignContainerNamesToDockerfiles", () => {
+  test("returns name + path pairs in input order", () => {
+    expect(
+      assignContainerNamesToDockerfiles([
+        "apps/api/Dockerfile",
+        "apps/web/Dockerfile",
+      ]),
+    ).toEqual([
+      { path: "apps/api/Dockerfile", name: "api" },
+      { path: "apps/web/Dockerfile", name: "web" },
+    ]);
+  });
+
+  test("deduplicates colliding names with numeric suffixes", () => {
+    expect(
+      assignContainerNamesToDockerfiles([
+        "apps/api/Dockerfile",
+        "services/api/Dockerfile",
+        "Dockerfile.api",
+      ]),
+    ).toEqual([
+      { path: "apps/api/Dockerfile", name: "api" },
+      { path: "services/api/Dockerfile", name: "api-2" },
+      { path: "Dockerfile.api", name: "api-3" },
+    ]);
+  });
+
+  test("falls back to `app` for a root Dockerfile", () => {
+    expect(assignContainerNamesToDockerfiles(["Dockerfile"])).toEqual([
+      { path: "Dockerfile", name: "app" },
+    ]);
+  });
+});
+
+describe("findDockerfiles", () => {
+  const tempDir = useTempDir("bunny-dockerfiles-");
+
+  function touch(rel: string): void {
+    const abs = join(tempDir(), rel);
+    const dir = abs.substring(0, abs.lastIndexOf("/"));
+    if (dir && dir !== tempDir()) mkdirSync(dir, { recursive: true });
+    writeFileSync(abs, "FROM scratch\n");
+  }
+
+  test("returns an empty list when no Dockerfiles exist", () => {
+    expect(findDockerfiles(tempDir())).toEqual([]);
+  });
+
+  test("finds a single Dockerfile at the root", () => {
+    touch("Dockerfile");
+    expect(findDockerfiles(tempDir())).toEqual(["Dockerfile"]);
+  });
+
+  test("finds Dockerfiles in monorepo-style subdirectories", () => {
+    touch("apps/api/Dockerfile");
+    touch("apps/web/Dockerfile");
+    touch("services/worker/Dockerfile");
+    expect(findDockerfiles(tempDir())).toEqual([
+      "apps/api/Dockerfile",
+      "apps/web/Dockerfile",
+      "services/worker/Dockerfile",
+    ]);
+  });
+
+  test("matches named variants like `Dockerfile.api` and `api.dockerfile`", () => {
+    touch("Dockerfile.api");
+    touch("services/web.dockerfile");
+    expect(findDockerfiles(tempDir())).toEqual([
+      "Dockerfile.api",
+      "services/web.dockerfile",
+    ]);
+  });
+
+  test("skips node_modules, .git, and other build/dependency dirs", () => {
+    touch("Dockerfile");
+    touch("node_modules/some-pkg/Dockerfile");
+    touch(".git/Dockerfile");
+    touch("dist/Dockerfile");
+    touch(".next/Dockerfile");
+    touch(".turbo/Dockerfile");
+    expect(findDockerfiles(tempDir())).toEqual(["Dockerfile"]);
+  });
+
+  test("skips arbitrary dotdirs", () => {
+    touch(".cache/Dockerfile");
+    touch(".vscode/Dockerfile");
+    touch("apps/api/Dockerfile");
+    expect(findDockerfiles(tempDir())).toEqual(["apps/api/Dockerfile"]);
   });
 });

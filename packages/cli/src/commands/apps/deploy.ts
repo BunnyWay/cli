@@ -1,12 +1,16 @@
+import { existsSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import type { RegistryMap } from "@bunny.net/app-config";
 import { createMcClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
+import { bunny } from "../../core/colors.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
+import { formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
+import type { OutputFormat } from "../../core/types.ts";
 import { spinner } from "../../core/ui.ts";
 import {
   type BunnyAppConfig,
@@ -133,6 +137,10 @@ import {
   readDockerfileExposedPorts,
   resolveRegistryForImage,
 } from "./docker.ts";
+import {
+  collectDeployedEndpoints,
+  type DeployedEndpointLine,
+} from "./endpoints/format.ts";
 import { resolveContainerEnv } from "./env/resolve.ts";
 import {
   confirmEndpointSuggestions,
@@ -399,12 +407,17 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       });
       deploySpin.stop();
 
+      const endpoints = await fetchDeployedEndpoints(client, result.id);
+
       if (output === "json") {
-        logger.log(JSON.stringify({ id: result.id, deployed: true }));
+        logger.log(
+          JSON.stringify({ id: result.id, deployed: true, endpoints }),
+        );
         return;
       }
 
-      logger.success("App deployed.");
+      logger.success("Your app was deployed successfully 🪄", bunny);
+      printDeployedEndpoints(endpoints, output);
       return;
     }
 
@@ -420,11 +433,16 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     });
 
     let deployImage: string | undefined;
-    let registryId: string | undefined =
-      args.registry ?? resolveContainerRegistry(targetName, targetContainer);
+    let registryId: string | undefined = resolveDeployRegistry(
+      args.registry,
+      draft.containers[targetName]?.registry,
+      () => resolveContainerRegistry(targetName, targetContainer),
+    );
     let freshCreds: ResolvedRegistry["freshCredentials"];
 
     if (mode.kind === "build") {
+      assertDockerfileExists(mode.dockerfile, targetName);
+
       await ensureDockerAvailable();
 
       // Ensure a registry is selected before we build (we need its hostname).
@@ -548,6 +566,15 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       saveConfig(toml, configPath);
     }
 
+    // Captured before the create-or-patch so the rollback hint at the
+    // bottom can suppress itself on a first-time deploy. The GET we issue
+    // after creating an app can return a canonical `image` ref that
+    // doesn't byte-equal what we just pushed (the API stores the parts —
+    // imageName/Namespace/Tag — and may reconstruct the full ref
+    // differently), which would otherwise make `previousImage !== deployImage`
+    // accidentally true and surface a misleading rollback hint.
+    const isFirstDeploy = !draft.id;
+
     let appId = draft.id;
     if (!appId) {
       const createSpin = spinner("Creating app...");
@@ -652,6 +679,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     });
     deploySpin.stop();
 
+    const endpoints = await fetchDeployedEndpoints(client, appId);
+
     if (output === "json") {
       logger.log(
         JSON.stringify({
@@ -659,22 +688,72 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
           deployed: true,
           image: deployImage,
           previousImage,
+          endpoints,
         }),
       );
       return;
     }
 
-    logger.success("App deployed.");
+    logger.success("Your app was deployed successfully 🪄", bunny);
+    printDeployedEndpoints(endpoints, output);
 
-    // Rollback hint, only meaningful when there was a previous image
-    // and we just replaced it with a different one.
-    if (previousImage && previousImage !== deployImage) {
+    // Rollback hint, only meaningful when this is a redeploy of an
+    // existing app and we just replaced its image with a different one.
+    // On a first-time deploy there's nothing to roll back to.
+    if (!isFirstDeploy && previousImage && previousImage !== deployImage) {
       logger.log();
       logger.dim(`Previous image: ${previousImage}`);
       logger.dim(`To rollback:    bunny apps deploy ${previousImage}`);
     }
   },
 });
+
+/**
+ * Fetch the app post-deploy and flatten its endpoints to reachable
+ * URLs/IPs. The deploy POST returns nothing useful — the hosts and IPs
+ * live on the app's container templates — so we re-read once to surface
+ * "where is my app now?".
+ */
+async function fetchDeployedEndpoints(
+  client: ReturnType<typeof createMcClient>,
+  appId: string,
+): Promise<DeployedEndpointLine[]> {
+  const spin = spinner("Fetching endpoints...");
+  spin.start();
+  const { data: app } = await client.GET("/apps/{appId}", {
+    params: { path: { appId } },
+  });
+  spin.stop();
+  return collectDeployedEndpoints(app);
+}
+
+/**
+ * Print the deployed app's endpoints as a small table. No-op when there
+ * are none. Endpoints whose target is still provisioning (anycast IPs
+ * assigned moments after deploy) show "provisioning…" with a hint to
+ * re-check via `apps endpoints list`.
+ */
+function printDeployedEndpoints(
+  endpoints: DeployedEndpointLine[],
+  output: OutputFormat,
+): void {
+  if (endpoints.length === 0) return;
+
+  logger.log();
+  logger.info("Endpoints:");
+  const rows = endpoints.map((e) => [
+    e.container,
+    e.type,
+    e.target ?? "provisioning…",
+  ]);
+  logger.log(formatTable(["Container", "Type", "URL / IP"], rows, output));
+
+  if (endpoints.some((e) => !e.target)) {
+    logger.dim(
+      "Some endpoints are still provisioning. Run `bunny apps endpoints list` once the app is active.",
+    );
+  }
+}
 
 /**
  * yargs returns `--dockerfile` (bare) as an empty string and `--dockerfile foo`
@@ -739,6 +818,31 @@ function resolveTargetContainer(
   return first;
 }
 
+/**
+ * Pick the registry a single-container deploy should use, in precedence
+ * order:
+ *
+ *   1. `--registry` flag (explicit override)
+ *   2. a registry the walkthrough just resolved this run (the draft)
+ *   3. the persisted manifest / legacy `bunny.jsonc` field (`fallback`)
+ *
+ * The draft must beat the manifest fallback. On a first-run deploy the
+ * app has no ID yet, so the draft can't be persisted to disk and the
+ * manifest lookup returns nothing — without consulting the draft we'd
+ * re-prompt for a registry the walkthrough already picked. Mirrors the
+ * lookup order in `buildAndPushContainer` (the multi-container path).
+ *
+ * `fallback` is lazy so its disk read / deprecation warning only fire
+ * when neither the flag nor the draft supplies a registry.
+ */
+export function resolveDeployRegistry(
+  flag: string | undefined,
+  draftRegistry: string | undefined,
+  fallback: () => string | undefined,
+): string | undefined {
+  return flag ?? draftRegistry ?? fallback();
+}
+
 type DeployMode =
   | { kind: "build"; dockerfile: string }
   | { kind: "image"; image: string }
@@ -765,6 +869,33 @@ function resolveMode(args: {
     "Nothing to deploy.",
     "Pass <image>, use --dockerfile, or set `image`/`dockerfile` on the container in bunny.jsonc.",
   );
+}
+
+/**
+ * Verify a Dockerfile actually exists on disk before we invoke docker.
+ *
+ * docker's failure mode is opaque ("open Dockerfile: no such file or
+ * directory") and the path it prints isn't the one we passed, which makes
+ * it look like a build-context issue when it's really a stale
+ * `bunny.jsonc`. Surface a clear UserError naming the exact path the
+ * config is pointing at so the fix (edit `bunny.jsonc` or rerun init) is
+ * obvious.
+ */
+function assertDockerfileExists(
+  dockerfile: string,
+  containerName: string,
+): void {
+  const abs = isAbsolute(dockerfile)
+    ? dockerfile
+    : resolve(process.cwd(), dockerfile);
+  if (!existsSync(abs)) {
+    throw new UserError(
+      `Dockerfile not found at ${dockerfile} (resolved to ${abs}) for container "${containerName}".`,
+      "Edit `containers." +
+        containerName +
+        ".dockerfile` in bunny.jsonc to point at the correct file, delete bunny.jsonc and rerun `bunny apps init`, or pass `--dockerfile <path>` explicitly.",
+    );
+  }
 }
 
 function resolveBuildContext(
@@ -857,6 +988,8 @@ async function buildAndPushContainer(
   },
 ): Promise<void> {
   if (!container.dockerfile) return;
+
+  assertDockerfileExists(container.dockerfile, name);
 
   let freshCreds: ResolvedRegistry["freshCredentials"];
   let registryId =

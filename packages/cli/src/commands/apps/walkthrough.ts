@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
@@ -17,20 +17,22 @@ import {
   saveConfig,
 } from "./config.ts";
 import {
+  assignContainerNamesToDockerfiles,
+  findDockerfiles,
   getConfigSuggestions,
+  isDockerfileName,
   type McClient,
   promptRegistry,
   type ResolvedRegistry,
   readDockerfileExposedPorts,
   resolveRegistryForImage,
 } from "./docker.ts";
+import { parseDotenv } from "./env/parse.ts";
 import {
   confirmEndpointSuggestions,
   endpointRequestToConfig,
   promptSuggestedEnv,
 } from "./suggestions.ts";
-
-const DEFAULT_DOCKERFILE = "Dockerfile";
 
 /**
  * Inputs to the shared walkthrough. Flags passed from `apps deploy`,
@@ -104,11 +106,18 @@ export async function runWalkthrough(
 
   if (!imageRef && !dockerfilePath) {
     const composeFile = findComposeFile(process.cwd());
-    const hasDockerfile = existsSync(join(process.cwd(), DEFAULT_DOCKERFILE));
+    const detectedDockerfiles = findDockerfiles(process.cwd());
 
     const composeServicesCount = composeFile
       ? Object.keys(loadComposeFile(composeFile).services).length
       : 0;
+
+    const dockerfileChoiceTitle =
+      detectedDockerfiles.length === 0
+        ? "Build from a Dockerfile (enter path)"
+        : detectedDockerfiles.length === 1
+          ? `Build from ${detectedDockerfiles[0]}`
+          : `Build from Dockerfile(s) (${detectedDockerfiles.length} detected)`;
 
     const { value } = await prompts({
       type: "select",
@@ -123,9 +132,7 @@ export async function runWalkthrough(
               },
             ]
           : []),
-        ...(hasDockerfile
-          ? [{ title: "Build from ./Dockerfile", value: "dockerfile" }]
-          : []),
+        { title: dockerfileChoiceTitle, value: "dockerfile" },
         { title: "Deploy a pre-built image", value: "image" },
       ],
     });
@@ -136,7 +143,14 @@ export async function runWalkthrough(
     }
 
     if (value === "dockerfile") {
-      dockerfilePath = DEFAULT_DOCKERFILE;
+      const selectedPaths = await chooseDockerfiles(detectedDockerfiles);
+      if (selectedPaths.length === 0) {
+        throw new UserError("At least one Dockerfile is required.");
+      }
+      if (selectedPaths.length > 1) {
+        return runMultiDockerfileImport(client, selectedPaths, input);
+      }
+      dockerfilePath = selectedPaths[0];
     } else {
       const { value: ref } = await prompts({
         type: "text",
@@ -205,7 +219,16 @@ export async function runWalkthrough(
 
   if (mode === "build" && dockerfilePath) {
     container.dockerfile = dockerfilePath;
-    if (input.contextFlag) container.context = input.contextFlag;
+    if (input.contextFlag) {
+      container.context = input.contextFlag;
+    } else if (defaultBuildContextForDockerfile(dockerfilePath)) {
+      // Subdirectory Dockerfile - assume monorepo layout where the build
+      // context is the repo root rather than the Dockerfile's parent.
+      container.context = ".";
+      logger.dim(
+        `Using cwd as build context for ${dockerfilePath} (monorepo default; edit \`containers.${name}.context\` in bunny.jsonc to override).`,
+      );
+    }
   }
   if (imageRef) {
     container.image = imageRef;
@@ -226,6 +249,16 @@ export async function runWalkthrough(
     );
     if (Object.keys(env).length > 0) {
       container.env = env;
+    }
+  }
+
+  // Build mode: bunny.net can't see env defaults until the image is
+  // pushed. Compensate by scanning the Dockerfile's neighbourhood for a
+  // `.env` / `.env.example` and offering those keys for inclusion.
+  if (mode === "build" && dockerfilePath) {
+    const picked = await pickEnvKeysFromDockerfile(dockerfilePath, name);
+    if (Object.keys(picked).length > 0) {
+      container.env = { ...(container.env ?? {}), ...picked };
     }
   }
 
@@ -259,6 +292,8 @@ export async function runWalkthrough(
   } else {
     logger.dim("Would write bunny.jsonc (--dry-run).");
   }
+
+  printEnvHint(toml, input.configPath);
 
   return { config: toml, registries: { [name]: registry.id } };
 }
@@ -382,4 +417,331 @@ async function pickRegions(client: McClient): Promise<string[]> {
     throw new UserError("A region must be selected.");
   }
   return [selectedRegion];
+}
+
+/**
+ * After the walkthrough writes `bunny.jsonc`, summarise any self-pointer
+ * env keys (where `env[key] === key`) that still need a value supplied at
+ * deploy time. The resolution happens in {@link resolveContainerEnv},
+ * which reads from a `.env` file sitting next to `bunny.jsonc`.
+ *
+ * Missing keys aren't an error — bunny.net will accept the literal key as
+ * the value if no resolution happens — but they're almost always not what
+ * the user wanted, so we surface the gap loudly while it's still cheap to
+ * fix.
+ */
+function printEnvHint(config: BunnyAppConfig, configPath?: string): void {
+  const pointerKeys = new Set<string>();
+  for (const container of Object.values(config.app.containers)) {
+    if (!container.env) continue;
+    for (const [key, value] of Object.entries(container.env)) {
+      if (value === key) pointerKeys.add(key);
+    }
+  }
+  if (pointerKeys.size === 0) return;
+
+  const dotenvPath = configPath
+    ? resolve(dirname(configPath), ".env")
+    : resolve(process.cwd(), ".env");
+
+  logger.log();
+  logger.dim(
+    `Resolve these env keys at deploy time by adding them to ${dotenvPath}:`,
+  );
+  for (const key of [...pointerKeys].sort()) {
+    logger.dim(`  ${key}=`);
+  }
+}
+
+// Files we'll search next to a Dockerfile to bootstrap container env.
+// Order matters: `.env` reflects the values currently in use, so its key
+// set is the most accurate; `.env.example` is the documentation fallback.
+const ENV_CANDIDATE_FILES = [".env", ".env.example"] as const;
+
+/**
+ * Read `.env` / `.env.example` next to the Dockerfile (and at cwd as a
+ * fallback for monorepos that share a root `.env.example`), parse out
+ * the keys, and return a sorted, deduped union. Returns `[]` if nothing
+ * resolves so callers can skip prompting entirely.
+ *
+ * Values are never read into memory beyond the parse step - we only need
+ * the key set. The actual values stay in the user's `.env` and are
+ * resolved at deploy time by {@link resolveContainerEnv}.
+ */
+function discoverEnvKeysForDockerfile(dockerfilePath: string): string[] {
+  const dockerfileDir = dirname(resolve(process.cwd(), dockerfilePath));
+  const cwd = resolve(process.cwd());
+  const candidates: string[] = [];
+  for (const file of ENV_CANDIDATE_FILES) {
+    candidates.push(resolve(dockerfileDir, file));
+    if (dockerfileDir !== cwd) candidates.push(resolve(cwd, file));
+  }
+
+  const keys = new Set<string>();
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    try {
+      const parsed = parseDotenv(readFileSync(candidate, "utf-8"));
+      for (const key of Object.keys(parsed)) keys.add(key);
+    } catch {
+      // Unreadable file - ignore. Surfacing an error here would block
+      // the walkthrough on a totally peripheral concern.
+    }
+  }
+
+  return [...keys].sort();
+}
+
+/**
+ * Interactive: offer the user a multi-select of env keys discovered next
+ * to a Dockerfile, and return a self-pointer map (`KEY: KEY`) for the
+ * selected ones. Empty map when no keys found or the user picks none.
+ *
+ * The self-pointer pattern lets {@link resolveContainerEnv} fill in
+ * actual values from a root `.env` at deploy time without storing
+ * secrets in the committed `bunny.jsonc`.
+ */
+async function pickEnvKeysFromDockerfile(
+  dockerfilePath: string,
+  containerName: string,
+): Promise<Record<string, string>> {
+  const keys = discoverEnvKeysForDockerfile(dockerfilePath);
+  if (keys.length === 0) return {};
+
+  const { picked } = await prompts({
+    type: "multiselect",
+    name: "picked",
+    message: `Env keys to set on "${containerName}" (from .env / .env.example near ${dockerfilePath}):`,
+    choices: keys.map((key) => ({ title: key, value: key, selected: true })),
+    hint: "space to toggle, enter to confirm",
+    instructions: false,
+  });
+
+  const result: Record<string, string> = {};
+  if (Array.isArray(picked)) {
+    for (const key of picked) {
+      if (typeof key === "string") result[key] = key;
+    }
+  }
+  return result;
+}
+
+/**
+ * Decide whether a Dockerfile needs an explicit build-context override.
+ *
+ * For a root `Dockerfile`, docker's default context (the directory `-f`
+ * resolves from) is already correct - no override needed.
+ *
+ * For a Dockerfile in a subdirectory (e.g. `apps/web/Dockerfile`), the
+ * default would point at `apps/web/`. In a monorepo that's almost always
+ * wrong: the Dockerfile references workspace files (`pnpm-lock.yaml`,
+ * `apps/web/package.json`) that only resolve when the build context is
+ * the repo root. Returns `true` so callers know to set `container.context`
+ * to cwd.
+ */
+function defaultBuildContextForDockerfile(dockerfilePath: string): boolean {
+  return dockerfilePath.includes("/");
+}
+
+/**
+ * Resolve the set of Dockerfile paths the user wants to build.
+ *
+ * - 0 detected → straight to manual entry; user must supply at least one path.
+ * - 1 detected → ask "use this, or pick a different path?".
+ * - 2+ detected → multi-select; any combination (including none) is fine,
+ *   and the add-another loop after this can extend the list.
+ *
+ * In every case we offer an "add another" loop so users with Dockerfiles
+ * the scanner missed (deeper than the cap, or with non-conventional
+ * filenames) can still include them. Returns paths relative to cwd
+ * where possible.
+ */
+async function chooseDockerfiles(detected: string[]): Promise<string[]> {
+  const selected: string[] = [];
+
+  if (detected.length === 1) {
+    const onlyMatch = detected[0];
+    if (!onlyMatch) throw new UserError("No Dockerfile path resolved.");
+    const { useDetected } = await prompts({
+      type: "confirm",
+      name: "useDetected",
+      message: `Use detected Dockerfile (${onlyMatch})?`,
+      initial: true,
+    });
+    if (useDetected) selected.push(onlyMatch);
+  } else if (detected.length > 1) {
+    const { picked } = await prompts({
+      type: "multiselect",
+      name: "picked",
+      message: "Select Dockerfile(s) to deploy as containers:",
+      choices: detected.map((path) => ({ title: path, value: path })),
+      hint: "space to toggle, enter to confirm",
+      instructions: false,
+    });
+    if (Array.isArray(picked)) {
+      for (const path of picked) {
+        if (typeof path === "string") selected.push(path);
+      }
+    }
+  }
+
+  // Add-another loop. Default-on when nothing has been selected yet so
+  // users in monorepos with no auto-detected files aren't left guessing.
+  while (true) {
+    const { addAnother } = await prompts({
+      type: "confirm",
+      name: "addAnother",
+      message:
+        selected.length === 0
+          ? "Add a Dockerfile path?"
+          : "Add another Dockerfile?",
+      initial: selected.length === 0,
+    });
+    if (!addAnother) break;
+
+    const { path } = await prompts({
+      type: "text",
+      name: "path",
+      message: "Dockerfile path (relative to cwd):",
+      validate: (input: string) => {
+        if (!input?.trim()) return "Path cannot be empty.";
+        const abs = isAbsolute(input)
+          ? input
+          : resolve(process.cwd(), input.trim());
+        if (!existsSync(abs)) return `No file found at ${input}.`;
+        if (!isDockerfileName(basename(abs)))
+          return "File does not look like a Dockerfile.";
+        return true;
+      },
+    });
+    if (!path) break;
+
+    const trimmed = path.trim();
+    const abs = isAbsolute(trimmed) ? trimmed : resolve(process.cwd(), trimmed);
+    const rel = relative(process.cwd(), abs) || trimmed;
+    if (!selected.includes(rel)) selected.push(rel);
+  }
+
+  return selected;
+}
+
+/**
+ * Multi-Dockerfile import path: build a multi-container `bunny.jsonc`
+ * from the user's Dockerfile picks.
+ *
+ * Mirrors the shape of {@link runComposeImport}: one registry is shared
+ * across every container (deploy can re-prompt per container later if
+ * needed), endpoints are seeded from each Dockerfile's `EXPOSE`
+ * directives, container names are derived from path conventions, and
+ * the file is saved unless `dryRun` is set.
+ */
+async function runMultiDockerfileImport(
+  client: McClient,
+  dockerfilePaths: string[],
+  input: WalkthroughInput,
+): Promise<WalkthroughResult> {
+  const named = assignContainerNamesToDockerfiles(dockerfilePaths);
+
+  logger.info(
+    `Importing ${named.length} container${named.length === 1 ? "" : "s"}: ${named.map((n) => `${n.name} (${n.path})`).join(", ")}.`,
+  );
+
+  if (named.some(({ path }) => defaultBuildContextForDockerfile(path))) {
+    logger.dim(
+      "Build context defaulted to cwd for Dockerfiles in subdirectories (typical monorepo layout). Edit `containers.<name>.context` in bunny.jsonc to override per container.",
+    );
+  }
+
+  const name = input.nameOverride ?? (await promptAppName());
+
+  const regions = await pickRegions(client);
+
+  let registry: ResolvedRegistry | null;
+  if (input.registryFlag) {
+    registry = { id: input.registryFlag };
+  } else {
+    logger.info("Pick a registry to push all images to.");
+    registry = await promptRegistry(client);
+  }
+  if (!registry) throw new UserError("A registry is required.");
+
+  const containers: Record<string, ContainerConfig> = {};
+  for (const { path, name: containerName } of named) {
+    const container: ContainerConfig = { dockerfile: path };
+
+    // Monorepo Dockerfiles almost always expect the build context at the
+    // repo root - they reference workspace-level files like
+    // `pnpm-lock.yaml` and sibling-package paths like
+    // `apps/web/package.json`. Default to cwd so the build "just works";
+    // user can override per-container in bunny.jsonc afterward.
+    if (defaultBuildContextForDockerfile(path)) {
+      container.context = ".";
+    }
+
+    // Seed endpoints from EXPOSE so each container has a reachable port
+    // when MC stands it up. Same shape compose translation produces - one
+    // CDN endpoint with every exposed port grouped under it.
+    const exposedPorts = await readDockerfileExposedPorts(
+      resolve(process.cwd(), path),
+    );
+    if (exposedPorts.length > 0) {
+      container.endpoints = [
+        {
+          type: "cdn",
+          ssl: true,
+          ports: exposedPorts.map((port) => ({
+            public: 443,
+            container: port,
+          })),
+        },
+      ];
+    }
+
+    const pickedEnv = await pickEnvKeysFromDockerfile(path, containerName);
+    if (Object.keys(pickedEnv).length > 0) {
+      container.env = pickedEnv;
+    }
+
+    containers[containerName] = container;
+  }
+
+  // --command is ambiguous with multiple containers — same rule as
+  // multi-service compose imports.
+  if (input.commandOverride) {
+    logger.warn(
+      "--command was ignored: pass it per container in bunny.jsonc when multiple Dockerfiles are selected.",
+    );
+  }
+
+  // --port likewise can't sensibly target one of N containers.
+  if (input.portOverride !== undefined) {
+    logger.warn(
+      "--port was ignored: set the container port per container in bunny.jsonc when multiple Dockerfiles are selected.",
+    );
+  }
+
+  const config: BunnyAppConfig = {
+    version: CURRENT_VERSION,
+    app: {
+      name,
+      scaling: { min: 1, max: 1 },
+      regions,
+      containers,
+    },
+  };
+
+  if (!input.dryRun) {
+    saveConfig(config, input.configPath);
+    logger.success("Wrote bunny.jsonc.");
+  } else {
+    logger.dim("Would write bunny.jsonc (--dry-run).");
+  }
+
+  printEnvHint(config, input.configPath);
+
+  const registries: Record<string, string> = {};
+  for (const containerName of Object.keys(containers)) {
+    registries[containerName] = registry.id;
+  }
+  return { config, registries };
 }

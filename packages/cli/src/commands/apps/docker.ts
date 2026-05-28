@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
+import { type Dirent, existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import type { createMcClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import prompts from "prompts";
@@ -113,6 +113,155 @@ export async function readDockerfileExposedPorts(
   }
 }
 
+const DOCKERFILE_SCAN_IGNORE = new Set([
+  "node_modules",
+  ".git",
+  ".bunny",
+  "dist",
+  "build",
+  "out",
+  ".next",
+  ".turbo",
+  ".vercel",
+  ".svelte-kit",
+  ".output",
+  ".nuxt",
+  ".cache",
+  "coverage",
+  "target",
+  "vendor",
+  ".venv",
+  "__pycache__",
+]);
+
+// Monorepos rarely nest containerised services deeper than this; keeping
+// the walk shallow keeps the prompt snappy on large repos.
+const DOCKERFILE_SCAN_MAX_DEPTH = 4;
+
+/**
+ * Return true if `name` looks like a Dockerfile. Matches the conventional
+ * `Dockerfile`, named variants like `Dockerfile.api`, and reverse-named
+ * variants like `api.dockerfile`. Case-insensitive.
+ */
+export function isDockerfileName(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (lower === "dockerfile") return true;
+  if (lower.startsWith("dockerfile.")) return true;
+  if (lower.endsWith(".dockerfile")) return true;
+  return false;
+}
+
+/**
+ * Walk `cwd` looking for Dockerfile-shaped files in subdirectories,
+ * skipping common build/dependency directories and capping depth so
+ * monorepos with hundreds of packages don't grind.
+ *
+ * Returns paths relative to `cwd` (e.g. `apps/api/Dockerfile`), sorted
+ * deterministically so prompts and tests are stable.
+ */
+export function findDockerfiles(cwd: string): string[] {
+  const results: string[] = [];
+
+  const walk = (absDir: string, relPrefix: string, depth: number): void => {
+    if (depth > DOCKERFILE_SCAN_MAX_DEPTH) return;
+
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(absDir, {
+        withFileTypes: true,
+        encoding: "utf8",
+      }) as Dirent[];
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const name = entry.name;
+      const rel = relPrefix ? `${relPrefix}/${name}` : name;
+
+      if (entry.isDirectory()) {
+        if (DOCKERFILE_SCAN_IGNORE.has(name)) continue;
+        // Skip every dotdir (`.git`, `.next`, etc.) beyond the explicit
+        // list — they're noise in the picker either way.
+        if (name.startsWith(".")) continue;
+        walk(join(absDir, name), rel, depth + 1);
+      } else if (entry.isFile() && isDockerfileName(name)) {
+        results.push(rel);
+      }
+    }
+  };
+
+  walk(cwd, "", 0);
+  return results.sort();
+}
+
+/**
+ * Derive a default container name from a Dockerfile path.
+ *
+ * Naming rules (in priority order):
+ *   - `apps/api/Dockerfile`     → "api"   (parent dir)
+ *   - `services/web/Dockerfile` → "web"   (parent dir)
+ *   - `Dockerfile.api`          → "api"   (suffix after the dot)
+ *   - `api.dockerfile`          → "api"   (prefix before the extension)
+ *   - `Dockerfile` (at root)    → "app"   (fallback)
+ *
+ * Sanitises the result to the character set bunny.net's container names
+ * accept (lower-kebab) so the walkthrough can drop it straight into the
+ * config without further massaging.
+ */
+export function defaultContainerNameFromDockerfile(path: string): string {
+  const parts = path.split("/").filter(Boolean);
+  const filename = parts[parts.length - 1] ?? "";
+  const parentDir = (parts.length > 1 ? parts[parts.length - 2] : "") ?? "";
+  const lower = filename.toLowerCase();
+
+  let candidate = "";
+  if (lower === "dockerfile") {
+    candidate = parentDir;
+  } else if (lower.startsWith("dockerfile.")) {
+    candidate = filename.slice("dockerfile.".length);
+  } else if (lower.endsWith(".dockerfile")) {
+    candidate = filename.slice(0, -".dockerfile".length);
+  }
+
+  const sanitised = candidate
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return sanitised || "app";
+}
+
+/**
+ * Resolve a list of Dockerfile paths into `{ path, name }` entries with
+ * unique container names, appending `-2`, `-3`, ... to collisions in the
+ * order paths were provided.
+ */
+export function assignContainerNamesToDockerfiles(
+  paths: string[],
+): Array<{ path: string; name: string }> {
+  const used = new Set<string>();
+  return paths.map((path) => {
+    const base = defaultContainerNameFromDockerfile(path);
+    let name = base;
+    let suffix = 2;
+    while (used.has(name)) {
+      name = `${base}-${suffix++}`;
+    }
+    used.add(name);
+    return { path, name };
+  });
+}
+
+/**
+ * Best-effort derivation of an app name from a directory path. Mirrors
+ * how the existing walkthrough already does `basename(process.cwd())`,
+ * but exposed so the multi-Dockerfile flow can derive a stable name
+ * without re-importing path utilities.
+ */
+export function defaultAppNameFromCwd(cwd: string): string {
+  return basename(cwd) || "app";
+}
+
 /**
  * Magic Containers only supports `linux/amd64` images. On arm64 hosts
  * (any Apple Silicon Mac) Docker's default build target is the host arch,
@@ -131,13 +280,24 @@ export async function buildImage(
   tag: string,
   cwd?: string,
 ): Promise<void> {
+  // `dockerfile` is relative to `process.cwd()` (that's where every caller
+  // resolves it from), but docker resolves `-f` relative to its own cwd.
+  // When the build context is something other than process.cwd() (a
+  // subdirectory in a monorepo, say), a relative `-f` then points at the
+  // wrong place and we get a confusing "open Dockerfile: no such file"
+  // error from inside docker. Resolve to an absolute path so it's
+  // unambiguous regardless of where docker is spawned.
+  const dockerfileAbs = isAbsolute(dockerfile)
+    ? dockerfile
+    : resolve(process.cwd(), dockerfile);
+
   const args = [
     "docker",
     "build",
     "--platform",
     MC_TARGET_PLATFORM,
     "-f",
-    dockerfile,
+    dockerfileAbs,
     "-t",
     tag,
     ".",
