@@ -811,7 +811,7 @@ bunny
 │       │                                   Generate an auth token
 │       └── invalidate  [database-id] [--force]   Invalidate all tokens for a database
 ├── scripts
-│   ├── init            [--name] [--type] [--template] [--deploy-method] [--deploy] [--skip-git] [--skip-install]
+│   ├── init            [--name] [--type] [--template] [--github-actions] [--deploy] [--skip-git] [--skip-install]
 │   │                                       Create a new Edge Script project from a template
 │   ├── create          [name] [--type] [--pull-zone] [--pull-zone-name] [--link]
 │   │                                       Create a remote Edge Script (use after init when --deploy was skipped)

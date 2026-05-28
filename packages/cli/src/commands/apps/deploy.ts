@@ -272,6 +272,14 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       );
     }
 
+    // Fail fast when the user's flags already commit us to a build. The
+    // walkthrough also checks this on its interactive picks, but for
+    // `--dockerfile` (with no existing config) the choice is implicit so
+    // it'd otherwise skip the menu and only blow up after writing files.
+    if (dockerfileFlag) {
+      await ensureDockerAvailable();
+    }
+
     const cfg = resolveConfig(profile, apiKey);
     const client = createMcClient(clientOptions(cfg, verbose));
 
@@ -294,6 +302,14 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       walkthroughRegistries = result.registries;
     } else {
       toml = loadConfig(configPath);
+      // Existing config: bail before any registry prompts if a container
+      // declares a `dockerfile` (we'll need Docker to build it).
+      const hasAnyBuild = Object.values(toml.app.containers).some((c) =>
+        Boolean(c.dockerfile),
+      );
+      if (hasAnyBuild) {
+        await ensureDockerAvailable();
+      }
     }
 
     // Build a writable draft of the manifest for this deploy run. We
@@ -442,8 +458,6 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
     if (mode.kind === "build") {
       assertDockerfileExists(mode.dockerfile, targetName);
-
-      await ensureDockerAvailable();
 
       // Ensure a registry is selected before we build (we need its hostname).
       if (!registryId) {
@@ -944,10 +958,6 @@ async function prepareContainersForCreate(
   },
 ): Promise<void> {
   const entries = Object.entries(toml.app.containers);
-  const hasAnyBuild = entries.some(([, c]) => c.dockerfile);
-  if (hasAnyBuild) {
-    await ensureDockerAvailable();
-  }
 
   // One shared tag for every build in this deploy so co-deployed images
   // are easy to correlate later (same git sha + timestamp).

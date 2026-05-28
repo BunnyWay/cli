@@ -18,6 +18,7 @@ import {
 } from "./config.ts";
 import {
   assignContainerNamesToDockerfiles,
+  ensureDockerAvailable,
   findDockerfiles,
   getConfigSuggestions,
   isDockerfileName,
@@ -137,6 +138,13 @@ export async function runWalkthrough(
       ],
     });
     if (!value) throw new UserError("Setup cancelled.");
+
+    // Bail before any further prompts / disk writes if Docker is missing.
+    // Both "compose" and "dockerfile" picks always end in a local build;
+    // without Docker we'd write `bunny.jsonc` and then crash mid-deploy.
+    if (value === "compose" || value === "dockerfile") {
+      await ensureDockerAvailable();
+    }
 
     if (value === "compose" && composeFile) {
       return runComposeImport(client, composeFile, input);
@@ -574,7 +582,12 @@ async function chooseDockerfiles(detected: string[]): Promise<string[]> {
       type: "multiselect",
       name: "picked",
       message: "Select Dockerfile(s) to deploy as containers:",
-      choices: detected.map((path) => ({ title: path, value: path })),
+      // Pre-selected so plain enter accepts all detected files.
+      choices: detected.map((path) => ({
+        title: path,
+        value: path,
+        selected: true,
+      })),
       hint: "space to toggle, enter to confirm",
       instructions: false,
     });
@@ -585,8 +598,8 @@ async function chooseDockerfiles(detected: string[]): Promise<string[]> {
     }
   }
 
-  // Add-another loop. Default-on when nothing has been selected yet so
-  // users in monorepos with no auto-detected files aren't left guessing.
+  // Default-on only when nothing was detected — otherwise an empty pick
+  // is an explicit "no", not a cue to prompt for a manual path.
   while (true) {
     const { addAnother } = await prompts({
       type: "confirm",
@@ -595,7 +608,7 @@ async function chooseDockerfiles(detected: string[]): Promise<string[]> {
         selected.length === 0
           ? "Add a Dockerfile path?"
           : "Add another Dockerfile?",
-      initial: selected.length === 0,
+      initial: detected.length === 0 && selected.length === 0,
     });
     if (!addAnother) break;
 

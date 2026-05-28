@@ -9,6 +9,7 @@ import { saveManifestAt } from "../../core/manifest.ts";
 import { confirm, openBrowser, spinner } from "../../core/ui.ts";
 import { SCRIPT_MANIFEST, TEMPLATES, type Template } from "./constants.ts";
 import { createScript } from "./create.ts";
+import { detectFromLockfile, pickPackageManager } from "./package-manager.ts";
 
 type EdgeScriptTypes = components["schemas"]["EdgeScriptTypes"];
 
@@ -27,15 +28,13 @@ const ARG_TEMPLATE_REPO_DESCRIPTION =
   "Git repository URL or GitHub owner/repo shorthand to use as template";
 const ARG_DEPLOY = "deploy";
 const ARG_DEPLOY_DESCRIPTION = "Deploy after creation";
-const ARG_DEPLOY_METHOD = "deploy-method";
-const ARG_DEPLOY_METHOD_DESCRIPTION =
-  "Deployment method: github (GitHub Actions) or cli (manual)";
+const ARG_GITHUB_ACTIONS = "github-actions";
+const ARG_GITHUB_ACTIONS_DESCRIPTION =
+  "Keep the template's GitHub Actions workflow for CI deploys (use --no-github-actions to remove it)";
 const ARG_SKIP_GIT = "skip-git";
 const ARG_SKIP_GIT_DESCRIPTION = "Skip git initialization";
 const ARG_SKIP_INSTALL = "skip-install";
 const ARG_SKIP_INSTALL_DESCRIPTION = "Skip dependency installation";
-
-type DeployMethod = "github" | "cli";
 
 interface InitArgs {
   [ARG_NAME]?: string;
@@ -43,7 +42,7 @@ interface InitArgs {
   [ARG_TEMPLATE]?: string;
   [ARG_TEMPLATE_REPO]?: string;
   [ARG_DEPLOY]?: boolean;
-  [ARG_DEPLOY_METHOD]?: string;
+  [ARG_GITHUB_ACTIONS]?: boolean;
   [ARG_SKIP_GIT]?: boolean;
   [ARG_SKIP_INSTALL]?: boolean;
 }
@@ -66,11 +65,11 @@ function resolveTemplateRepo(input: string): string {
  * # Interactive wizard
  * bunny scripts init
  *
- * # Non-interactive with CLI deployment
- * bunny scripts init --name my-script --type standalone --template Empty --deploy-method cli --deploy
+ * # Non-interactive, no GitHub Actions
+ * bunny scripts init --name my-script --type standalone --template Empty --no-github-actions --deploy
  *
- * # Non-interactive with GitHub Actions
- * bunny scripts init --name my-script --type standalone --template Empty --deploy-method github --deploy
+ * # Non-interactive, keep the GitHub Actions workflow
+ * bunny scripts init --name my-script --type standalone --template Empty --github-actions --deploy
  *
  * # Skip dependency installation
  * bunny scripts init --name my-script --skip-install
@@ -88,7 +87,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
   examples: [
     ["$0 scripts init", "Interactive wizard"],
     [
-      "$0 scripts init --name my-script --type standalone --template Empty --deploy-method cli",
+      "$0 scripts init --name my-script --type standalone --template Empty --no-github-actions",
       "Non-interactive",
     ],
   ],
@@ -117,10 +116,9 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
         type: "boolean",
         describe: ARG_DEPLOY_DESCRIPTION,
       })
-      .option(ARG_DEPLOY_METHOD, {
-        type: "string",
-        choices: ["github", "cli"],
-        describe: ARG_DEPLOY_METHOD_DESCRIPTION,
+      .option(ARG_GITHUB_ACTIONS, {
+        type: "boolean",
+        describe: ARG_GITHUB_ACTIONS_DESCRIPTION,
       })
       .option(ARG_SKIP_GIT, {
         type: "boolean",
@@ -220,32 +218,19 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
     }
     if (!selected) throw new UserError("Template selection is required.");
 
-    // Step 4: Deployment method
-    let deployMethod: DeployMethod | undefined;
-
-    if (args[ARG_DEPLOY_METHOD]) {
-      deployMethod = args[ARG_DEPLOY_METHOD] as DeployMethod;
+    // Step 4: GitHub Actions opt-in. Whether to keep the template's
+    // `.github/` workflow. CLI deploys work either way — this only
+    // controls whether the CI workflow file ships with the project.
+    let enableGithubActions: boolean;
+    if (args[ARG_GITHUB_ACTIONS] !== undefined) {
+      enableGithubActions = args[ARG_GITHUB_ACTIONS];
     } else if (interactive) {
-      const { value } = await prompts({
-        type: "select",
-        name: "value",
-        message: "How will you deploy?",
-        choices: [
-          {
-            title: "GitHub Actions — deploy on push to main",
-            value: "github",
-          },
-          {
-            title: "CLI — deploy manually with `bunny scripts deploy`",
-            value: "cli",
-          },
-        ],
-      });
-      deployMethod = value;
+      enableGithubActions = await confirm(
+        "Enable continuous integration with GitHub Actions?",
+      );
     } else {
-      deployMethod = "cli";
+      enableGithubActions = false;
     }
-    if (!deployMethod) throw new UserError("Deployment method is required.");
 
     // Step 5: Clone template
     const spin = spinner(`Cloning template "${selected.name}"...`);
@@ -253,7 +238,10 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
 
     const clone = Bun.spawn(
       ["git", "clone", "--depth", "1", "--", selected.repo, dirPath],
-      { stdout: "ignore", stderr: "pipe" },
+      {
+        stdout: "ignore",
+        stderr: "pipe",
+      },
     );
     const cloneExit = await clone.exited;
 
@@ -276,17 +264,18 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
       await rm.exited;
     }
 
-    // Remove GitHub-specific files for CLI deployments
-    if (deployMethod === "cli") {
-      for (const dir of [".github", ".changeset"]) {
-        const dirToRemove = `${dirPath}/${dir}`;
-        if (existsSync(dirToRemove)) {
-          const rm = Bun.spawn(["rm", "-rf", dirToRemove], {
-            stdout: "ignore",
-            stderr: "ignore",
-          });
-          await rm.exited;
-        }
+    // Drop `.changeset/` unconditionally — bunny scripts don't use it.
+    // Drop `.github/` only when CI is disabled; otherwise the workflow stays.
+    const dirsToRemove = [".changeset"];
+    if (!enableGithubActions) dirsToRemove.push(".github");
+    for (const dir of dirsToRemove) {
+      const dirToRemove = `${dirPath}/${dir}`;
+      if (existsSync(dirToRemove)) {
+        const rm = Bun.spawn(["rm", "-rf", dirToRemove], {
+          stdout: "ignore",
+          stderr: "ignore",
+        });
+        await rm.exited;
       }
     }
 
@@ -306,23 +295,41 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
           ? await confirm("Install dependencies?")
           : true;
       if (shouldInstall) {
-        const installSpin = spinner("Installing dependencies...");
-        installSpin.start();
-
-        const install = Bun.spawn(["bun", "install"], {
-          cwd: dirPath,
-          stdout: "ignore",
-          stderr: "pipe",
-        });
-        const installExit = await install.exited;
-        installSpin.stop();
-
-        if (installExit === 0) {
-          logger.success("Dependencies installed.");
-        } else {
+        const pm = await pickPackageManager(dirPath);
+        if (!pm) {
           logger.warn(
-            "Failed to install dependencies. Run `bun install` manually.",
+            "No package manager found on PATH. Install bun, npm, pnpm, or yarn, then run `<pm> install` in the new project.",
           );
+        } else {
+          const lockfilePm = detectFromLockfile(dirPath);
+          if (lockfilePm && lockfilePm !== pm) {
+            logger.warn(
+              `Template ships a ${lockfilePm} lockfile but ${lockfilePm} isn't installed — using ${pm}. Lockfile will be regenerated.`,
+            );
+          }
+          const installSpin = spinner(`Installing dependencies (${pm})...`);
+          installSpin.start();
+
+          let installExit = 1;
+          try {
+            const install = Bun.spawn([pm, "install"], {
+              cwd: dirPath,
+              stdout: "ignore",
+              stderr: "pipe",
+            });
+            installExit = await install.exited;
+          } catch {
+            // Binary vanished between detection and spawn (warn below).
+          }
+          installSpin.stop();
+
+          if (installExit === 0) {
+            logger.success("Dependencies installed.");
+          } else {
+            logger.warn(
+              `Failed to install dependencies. Run \`${pm} install\` manually.`,
+            );
+          }
         }
       }
     }
@@ -330,36 +337,12 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
     // Step 7: Save script type to manifest
     saveManifestAt(dirPath, SCRIPT_MANIFEST, { scriptType });
 
-    // Step 8: Git init
-    if (deployMethod === "github") {
-      // GitHub Actions implies git — auto-init without prompting
-      const gitInit = Bun.spawn(["git", "init"], {
-        cwd: dirPath,
-        stdout: "ignore",
-        stderr: "ignore",
-      });
-      await gitInit.exited;
-
-      // Ensure .bunny/ is in .gitignore
-      const gitignorePath = `${dirPath}/.gitignore`;
-      const existing = existsSync(gitignorePath)
-        ? await Bun.file(gitignorePath).text()
-        : "";
-
-      if (!existing.includes(".bunny")) {
-        await Bun.write(
-          gitignorePath,
-          existing +
-            (existing.endsWith("\n") || existing === "" ? "" : "\n") +
-            ".bunny/\n",
-        );
-      }
-
-      logger.success("Initialized git repository.");
-    } else if (args[ARG_SKIP_GIT] !== true) {
-      const shouldGit = interactive
-        ? await confirm("Initialize git repository?")
-        : true;
+    // Step 8: Git init. CI implies git, so skip the prompt when CI is on.
+    // `--skip-git` still wins as an explicit opt-out.
+    if (args[ARG_SKIP_GIT] !== true) {
+      const shouldGit =
+        enableGithubActions ||
+        (interactive ? await confirm("Initialize git repository?") : true);
       if (shouldGit) {
         const gitInit = Bun.spawn(["git", "init"], {
           cwd: dirPath,
@@ -391,16 +374,11 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
       | { id: number; name: string; hostname?: string }
       | undefined;
 
-    const deployPrompt =
-      deployMethod === "github"
-        ? "Create script on bunny.net?"
-        : "Deploy script now?";
-
     const shouldDeploy =
       args[ARG_DEPLOY] !== undefined
         ? args[ARG_DEPLOY]
         : interactive
-          ? await confirm(deployPrompt)
+          ? await confirm("Create script on bunny.net?")
           : false;
 
     if (shouldDeploy) {
@@ -450,7 +428,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
           logger.dim(`  URL: ${deployResult.hostname}`);
         }
 
-        if (deployMethod === "github") {
+        if (enableGithubActions) {
           logger.log();
           logger.info(
             "Before pushing to GitHub, add this secret to your repo:",
@@ -480,7 +458,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
             directory: dirName,
             scriptType,
             template: selected.name,
-            deployMethod,
+            githubActions: enableGithubActions,
             ...(deployResult && {
               script: {
                 id: deployResult.id,

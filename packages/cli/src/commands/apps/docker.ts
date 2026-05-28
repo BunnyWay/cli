@@ -15,16 +15,31 @@ export type ConfigSuggestions =
 
 /**
  * Ensure the Docker CLI is available on the system.
+ *
+ * Two failure modes need to map to the same friendly error:
+ *   - `docker` not on PATH → `Bun.spawn` throws ENOENT synchronously
+ *     (unlike Node's child_process, which emits an 'error' event).
+ *   - `docker` on PATH but daemon not running / version probe fails →
+ *     non-zero exit code.
+ *
+ * Without the try/catch the first case escapes as a raw spawn error
+ * and lands on the generic "An unexpected error occurred." branch in
+ * `defineCommand`, which hides the install link.
  */
 export async function ensureDockerAvailable(): Promise<void> {
-  const proc = Bun.spawn(
-    ["docker", "version", "--format", "{{.Client.Version}}"],
-    {
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
-  const exitCode = await proc.exited;
+  let exitCode: number;
+  try {
+    const proc = Bun.spawn(
+      ["docker", "version", "--format", "{{.Client.Version}}"],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    exitCode = await proc.exited;
+  } catch {
+    exitCode = 1;
+  }
 
   if (exitCode !== 0) {
     throw new UserError(
