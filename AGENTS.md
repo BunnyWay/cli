@@ -175,7 +175,7 @@ bunny-cli/
 │           │   │   ├── index.ts          # defineNamespace("apps", false) — hidden, registers all app commands
 │           │   │   ├── constants.ts      # Status label maps + APP_MANIFEST filename + AppManifest interface (consumed via core/manifest.ts)
 │           │   │   ├── config.ts         # bunny.jsonc file I/O (saveConfig strips transient `image`/`registry`/`app.id` via stripTransientFields), re-exports from @bunny.net/app-config; provides resolveAppId, resolveContainerId, resolveContainerRegistry
-│           │   │   ├── docker.ts         # Docker + registry helpers (build, push, dockerLogin, ensureRegistryLogin, dockerHasCredentials, ghDockerLogin, generateTag, promptRegistry, resolveRegistryForImage, getConfigSuggestions, imageHostname, parseDockerfileExposedPorts/readDockerfileExposedPorts)
+│           │   │   ├── docker.ts         # Docker + registry helpers (build, push, dockerLogin, ensureRegistryLogin, dockerHasCredentials, ghDockerLogin, generateTag, promptRegistry, resolveRegistryForImage, getConfigSuggestions, imageHostname, parseDockerfileExposedPorts/readDockerfileExposedPorts, findDockerfiles/isDockerfileName/defaultContainerNameFromDockerfile/assignContainerNamesToDockerfiles for monorepo Dockerfile discovery)
 │           │   │   ├── suggestions.ts    # Shared endpoint/env-var suggestion prompting (confirmEndpointSuggestions, endpointRequestToConfig, promptSuggestedEnv, filterNewEndpointSuggestions, filterNewEnvSuggestions) - used by walkthrough.ts and deploy.ts (post-push)
 │           │   │   ├── init.ts           # Scaffold bunny.jsonc (detects Dockerfile, prompts for registry)
 │           │   │   ├── link.ts           # Link this directory to an existing MC app (writes .bunny/app.json)
@@ -188,7 +188,7 @@ bunny-cli/
 │           │   │   ├── delete.ts         # Delete app (also drops .bunny/app.json if it pointed at this app)
 │           │   │   ├── pull.ts           # Sync API → bunny.jsonc + .bunny/app.json
 │           │   │   ├── push.ts           # Sync bunny.jsonc → API (uses manifest for registry IDs)
-│           │   │   ├── walkthrough.ts    # Shared new-app walkthrough used by init and deploy (runWalkthrough, runComposeImport) - returns { config, registries } so the caller can write the manifest after creating the app
+│           │   │   ├── walkthrough.ts    # Shared new-app walkthrough used by init and deploy (runWalkthrough, runComposeImport, runMultiDockerfileImport with chooseDockerfiles for one-or-many Dockerfile selection in monorepos) - returns { config, registries } so the caller can write the manifest after creating the app
 │           │   │   ├── compose/          # docker-compose import: parse, translate, validate
 │           │   │   │   ├── index.ts      # findComposeFile, loadComposeFile, composeToConfig
 │           │   │   │   ├── schema.ts     # Zod schema for compose subset
@@ -209,7 +209,9 @@ bunny-cli/
 │           │   │   │   ├── index.ts      # defineNamespace("endpoints", ...)
 │           │   │   │   ├── list.ts       # List endpoints per container
 │           │   │   │   ├── add.ts        # Add CDN or Anycast endpoint
-│           │   │   │   └── remove.ts     # Remove endpoint
+│           │   │   │   ├── remove.ts     # Remove endpoint
+│           │   │   │   ├── format.ts     # endpointTarget()/collectDeployedEndpoints() - resolve cdn→https URL, anycast/publicIp→IP; used by deploy.ts post-deploy
+│           │   │   │   └── format.test.ts # endpoint target/collection unit tests
 │           │   │   ├── volumes/
 │           │   │   │   ├── index.ts      # defineNamespace("volumes", ...)
 │           │   │   │   ├── list.ts       # List volumes
@@ -750,7 +752,7 @@ bunny
 │   ├── show            [--id]              Show app details and overview
 │   ├── deploy          [image] [--name] [--dockerfile] [--context] [--tag] [--registry] [--container] [--port] [--command] [--config] [--dry-run] [--no-push]
 │   │                                       Deploy a pre-built image, build from a Dockerfile, or re-deploy from bunny.jsonc.
-│   │                                       First-run, in order: imports compose.yml if present, else asks for Dockerfile / pre-built image.
+│   │                                       First-run, in order: imports compose.yml if present, else scans for Dockerfiles (monorepo subdirs included) and lets the user pick one or many (each becomes a container) plus an "add another" loop for manual paths, else falls back to a pre-built image.
 │   │                                       --config <path> uses that file as the source of truth (CI / agent flows); --dry-run skips writes and API.
 │   ├── undeploy        [--id] [--force]    Undeploy an app
 │   ├── restart         [--id]              Restart an app
