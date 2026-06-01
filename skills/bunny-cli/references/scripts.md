@@ -2,16 +2,18 @@
 
 All Edge Scripts commands live under `bunny scripts`. They manage serverless scripts that run on bunny.net's edge, either **Standalone** (handle requests independently) or **Middleware** (process requests before or after an origin).
 
-Most commands accept an optional `id` (the numeric Edge Script ID). When omitted, the ID is resolved from the linked script in `.bunny/script.json`, written by `bunny scripts link`, `bunny scripts create`, or `bunny scripts init`. If no link exists and no ID is passed, the command errors. The manifest is gitignored, since it's per-developer state rather than shared.
+Most commands accept an optional `id` (the numeric Edge Script ID). When omitted, the ID is resolved from the linked script in `.bunny/script.json`, written by `bunny scripts link`, `bunny scripts create`, or `bunny scripts init`. If no link exists and no ID is passed, the command errors. The manifest holds per-developer state rather than shared config, so it should not be committed. `bunny scripts init` adds `.bunny/` to `.gitignore` for you, but `link` and `create` do not, so in an existing repo add `.bunny/` to `.gitignore` yourself.
 
 ## Typical workflow
 
 ```bash
-bunny scripts init                 # scaffold a project from a template
+bunny scripts init --deploy        # scaffold a project AND create the remote script
 cd my-edge-script
 bunny scripts deploy dist/index.js # build, then upload + publish
 bunny scripts show                 # check status, hostname, usage
 ```
+
+`deploy` needs a script ID. `init` only creates the remote script (and saves its ID to `.bunny/script.json`) when you pass `--deploy` or accept the create-script prompt. If you ran `init` without either, run `bunny scripts create` before deploying.
 
 Or, starting from an existing project:
 
@@ -35,16 +37,16 @@ bunny scripts init --name my-script --template-repo https://github.com/user/my-t
 
 ### Flags
 
-| Flag               | Alias    | Description                                                                              |
-| ------------------ | -------- | ---------------------------------------------------------------------------------------- |
-| `--name`           |          | Project directory name (prompted if omitted). Providing it implies non-interactive mode. |
-| `--type`           |          | Script type: `standalone` or `middleware`                                                |
-| `--template`       |          | Built-in template name (e.g. `Empty`, `Return JSON`, `Simple Middleware`)                |
-| `--template-repo`  | `--repo` | Git repo URL or GitHub `owner/repo` shorthand to clone as the template                   |
-| `--deploy`         |          | Create the script on bunny.net after scaffolding                                         |
-| `--github-actions` |          | Keep the template's GitHub Actions CI workflow. Use `--no-github-actions` to remove it.  |
-| `--skip-git`       |          | Skip `git init`                                                                          |
-| `--skip-install`   |          | Skip dependency installation                                                             |
+| Flag               | Alias    | Description                                                                                                                                                                                           |
+| ------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--name`           |          | Project directory name (prompted if omitted). Skips the template-selection and confirmation prompts, but `init` still prompts for the script type unless `--type` or `--template-repo` is also given. |
+| `--type`           |          | Script type: `standalone` or `middleware`                                                                                                                                                             |
+| `--template`       |          | Built-in template name (e.g. `Empty`, `Return JSON`, `Simple Middleware`)                                                                                                                             |
+| `--template-repo`  | `--repo` | Git repo URL or GitHub `owner/repo` shorthand to clone as the template                                                                                                                                |
+| `--deploy`         |          | Create the script on bunny.net after scaffolding                                                                                                                                                      |
+| `--github-actions` |          | Keep the template's GitHub Actions CI workflow. Use `--no-github-actions` to remove it.                                                                                                               |
+| `--skip-git`       |          | Skip `git init`                                                                                                                                                                                       |
+| `--skip-install`   |          | Skip dependency installation                                                                                                                                                                          |
 
 ### Behavior notes
 
@@ -54,6 +56,7 @@ bunny scripts init --name my-script --template-repo https://github.com/user/my-t
 - A custom `--template-repo` defaults the script type to `standalone` unless `--type` is given.
 - With `--deploy` and `--github-actions`, the command prints the `SCRIPT_ID` secret to add to your GitHub repo for CI deploys.
 - Adds `.bunny/` to `.gitignore` when initializing git.
+- For a fully non-interactive run (CI), pass `--name` and `--type` (or `--template-repo`), plus `--deploy`/`--no-github-actions` to pin the remaining choices. With `--name` but no type input, it still blocks on the script-type prompt.
 
 ---
 
@@ -66,7 +69,7 @@ bunny scripts create                                          # current dir name
 bunny scripts create my-script --type middleware              # explicit name + type
 bunny scripts create my-script --no-pull-zone --no-link       # skip pull zone + linking
 bunny scripts create my-script --pull-zone-name my-zone       # name the linked pull zone
-bunny scripts create --output json                            # non-interactive
+bunny scripts create --type standalone --output json          # non-interactive (type required, no prompt fallback)
 ```
 
 ### Flags
@@ -78,7 +81,7 @@ bunny scripts create --output json                            # non-interactive
 | `--pull-zone-name` | Name for the linked pull zone                                                            |
 | `--link`           | Link this directory via `.bunny/script.json` (default: `true`). Use `--no-link` to skip. |
 
-The script name defaults to the current directory name. Script type resolves in order: an explicit `--type`, then an existing `.bunny/script.json`, then an interactive prompt, otherwise it errors. In `--output json` mode, prompts are suppressed and the output includes `id`, `name`, `scriptType`, `hostname`, and `linked`.
+The script name defaults to the current directory name. Script type resolves in order: an explicit `--type`, then an existing `.bunny/script.json`, then an interactive prompt, otherwise it errors. In `--output json` mode the prompt is suppressed, so you must pass `--type` (or already have a manifest) or the command errors. The JSON output includes `id`, `name`, `scriptType`, `hostname`, and `linked`.
 
 ---
 
@@ -193,7 +196,7 @@ bunny scripts env set MY_VAR "value" --id 12345  # specific script
 | `--id`     | Edge Script ID (uses linked script if omitted)            |
 | `--secret` | Store as an encrypted secret rather than a plain variable |
 
-Prompts for missing name, value, and secret flag interactively (secret values are masked on input).
+Run with no positional name for full interactive mode: it prompts for the name, whether the value is a secret, and the value (secret values are masked on input). When you pass a name on the command line, the secret prompt is skipped, so pass `--secret` explicitly or the value is stored as a plain variable. A missing value is still prompted for in either case.
 
 ### `bunny scripts env remove`: Remove a variable or secret
 
