@@ -2,17 +2,23 @@
   "name": "@bunny.net/openapi-client",
   "version": "0.1.0",
   "type": "module",
-  "module": "src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "generate": "openapi-typescript",
-    "update-specs": "bun run scripts/update-specs.ts && bun run generate"
+    "update-specs": "bun run scripts/update-specs.ts && bun run generate",
+    "build": "rm -rf dist && bun run generate && bun run scripts/build.ts"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./generated/*": "./src/generated/*"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./generated/*": "./dist/generated/*"
   },
   "files": [
-    "src",
+    "dist",
     "README.md"
   ],
   "publishConfig": {
@@ -22,6 +28,7 @@
     "openapi-fetch": "^0.17.0"
   },
   "devDependencies": {
-    "openapi-typescript": "^7.13.0"
+    "openapi-typescript": "^7.13.0",
+    "typescript": "^5"
   }
 }
