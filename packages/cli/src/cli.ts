@@ -10,7 +10,7 @@ import { configNamespace } from "./commands/config/index.ts";
 import { dbNamespace } from "./commands/db/index.ts";
 import { docsCommand } from "./commands/docs.ts";
 import { openCommand } from "./commands/open.ts";
-import { pullzonesNamespace } from "./commands/pullzones/index.ts";
+import { pzNamespace } from "./commands/pz/index.ts";
 import { registriesNamespace } from "./commands/registries/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
@@ -24,7 +24,7 @@ const commands: CommandModule[] = [
   whoamiCommand,
   dbNamespace,
   scriptsNamespace,
-  pullzonesNamespace,
+  pzNamespace,
   configNamespace,
   docsCommand,
   openCommand,
