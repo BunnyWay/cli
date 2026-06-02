@@ -4,10 +4,11 @@ import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
-import { removeManifest } from "../../core/manifest.ts";
+import { loadManifest, removeManifest } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import {
   PULL_ZONE_MANIFEST,
+  type PullZoneManifest,
 } from "./constants.ts";
 import { resolvePullZoneId } from "./resolve-pullzone.ts";
 
@@ -65,8 +66,11 @@ export const pzDeleteCommand = defineCommand<DeleteArgs>({
       throw new UserError(`Failed to delete pull zone: ${error}`);
     }
 
-    // Remove manifest if it pointed at the deleted zone
-    removeManifest(PULL_ZONE_MANIFEST);
+    // Remove manifest only if it pointed at the deleted zone
+    const manifest = loadManifest<PullZoneManifest>(PULL_ZONE_MANIFEST);
+    if (manifest.id === zoneId) {
+      removeManifest(PULL_ZONE_MANIFEST);
+    }
 
     if (output === "json") {
       logger.log(JSON.stringify({ id: zoneId, deleted: true }));
