@@ -62,13 +62,13 @@ export async function resolvePullZoneId(
       }
       throw new UserError(
         `Pull zone with ID ${numericId} not found.`,
-        "Run `bunny pullzones list` to see available zones.",
+        "Run `bunny pz list` to see available zones.",
       );
     }
 
     throw new UserError(
       `Pull zone "${idOrName}" not found.`,
-      "Run `bunny pullzones list` to see available zones.",
+      "Run `bunny pz list` to see available zones.",
     );
   }
 
@@ -79,6 +79,6 @@ export async function resolvePullZoneId(
 
   throw new UserError(
     "No pull zone selected.",
-    'Run "bunny pullzones select" or pass a zone name or ID.',
+    'Run "bunny pz select" or pass a zone name or ID.',
   );
 }
