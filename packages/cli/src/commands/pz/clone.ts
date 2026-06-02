@@ -22,6 +22,73 @@ interface EdgeRule {
   Triggers?: unknown[];
 }
 
+/** Fields from the OpenAPI PullZoneAddModel schema — the only fields allowed in POST /pullzone. */
+const ADD_MODEL_FIELDS = [
+  "OriginUrl", "AllowedReferrers", "BlockedReferrers", "BlockNoneReferrer",
+  "BlockedIps", "EnableGeoZoneUS", "EnableGeoZoneEU", "EnableGeoZoneASIA",
+  "EnableGeoZoneSA", "EnableGeoZoneAF", "BlockRootPathAccess", "BlockPostRequests",
+  "EnableQueryStringOrdering", "EnableWebPVary", "EnableAvifVary",
+  "EnableMobileVary", "EnableCountryCodeVary", "EnableCountryStateCodeVary",
+  "EnableHostnameVary", "EnableCacheSlice", "EnableWebPVary",
+  "ZoneSecurityEnabled",
+  "ZoneSecurityIncludeHashRemoteIP", "IgnoreQueryStrings", "MonthlyBandwidthLimit",
+  "AccessControlOriginHeaderExtensions", "EnableAccessControlOriginHeader",
+  "DisableCookies", "BudgetRedirectedCountries", "BlockedCountries",
+  "CacheControlMaxAgeOverride", "CacheControlPublicMaxAgeOverride",
+  "CacheControlBrowserMaxAgeOverride", "AddHostHeader", "AddCanonicalHeader",
+  "EnableLogging", "LoggingIPAnonymizationEnabled", "PermaCacheStorageZoneId",
+  "PermaCacheType", "AWSSigningEnabled", "AWSSigningKey", "AWSSigningRegionName",
+  "AWSSigningSecret", "EnableOriginShield", "OriginShieldZoneCode",
+  "EnableTLS1", "EnableTLS1_1", "CacheErrorResponses", "VerifyOriginSSL",
+  "LogForwardingEnabled", "LogForwardingHostname", "LogForwardingPort",
+  "LogForwardingToken", "LogForwardingProtocol", "LoggingSaveToStorage",
+  "LoggingStorageZoneId", "FollowRedirects", "ConnectionLimitPerIPCount",
+  "RequestLimit", "LimitRateAfter", "LimitRatePerSecond", "BurstSize",
+  "ErrorPageEnableCustomCode", "ErrorPageCustomCode",
+  "ErrorPageEnableStatuspageWidget", "ErrorPageStatuspageCode",
+  "ErrorPageWhitelabel", "OptimizerEnabled", "OptimizerTunnelEnabled",
+  "OptimizerDesktopMaxWidth", "OptimizerMobileMaxWidth",
+  "OptimizerImageQuality", "OptimizerMobileImageQuality", "OptimizerEnableWebP",
+  "OptimizerPrerenderHtml", "OptimizerEnableManipulationEngine",
+  "OptimizerMinifyCSS", "OptimizerMinifyJavaScript",
+  "OptimizerWatermarkEnabled", "OptimizerWatermarkUrl",
+  "OptimizerWatermarkPosition", "OptimizerWatermarkOffset",
+  "OptimizerWatermarkMinImageSize", "OptimizerAutomaticOptimizationEnabled",
+  "OptimizerClasses", "OptimizerForceClasses", "OptimizerStaticHtmlEnabled",
+  "OptimizerStaticHtmlWordPressPath", "OptimizerStaticHtmlWordPressBypassCookie",
+  "Type", "OriginRetries", "OriginConnectTimeout", "OriginResponseTimeout",
+  "UseStaleWhileUpdating", "UseStaleWhileOffline", "OriginRetry5XXResponses",
+  "OriginRetryConnectionTimeout", "OriginRetryResponseTimeout",
+  "OriginRetryDelay", "DnsOriginPort", "DnsOriginScheme",
+  "QueryStringVaryParameters", "OriginShieldEnableConcurrencyLimit",
+  "OriginShieldMaxConcurrentRequests", "EnableCookieVary",
+  "CookieVaryParameters", "EnableSafeHop", "OriginShieldQueueMaxWaitTime",
+  "OriginShieldMaxQueuedRequests", "UseBackgroundUpdate", "EnableAutoSSL",
+  "LogAnonymizationType", "StorageZoneId", "EdgeScriptId", "MiddlewareScriptId",
+  "EdgeScriptExecutionPhase", "OriginType", "MagicContainersAppId",
+  "MagicContainersEndpointId", "LogFormat", "LogForwardingFormat",
+  "ShieldDDosProtectionType", "ShieldDDosProtectionEnabled",
+  "OriginHostHeader", "EnableSmartCache", "EnableRequestCoalescing",
+  "RequestCoalescingTimeout", "DisableLetsEncrypt", "EnableBunnyImageAi",
+  "BunnyAiImageBlueprints", "PreloadingScreenEnabled", "PreloadingScreenCode",
+  "PreloadingScreenLogoUrl", "PreloadingScreenShowOnFirstVisit",
+  "PreloadingScreenTheme", "PreloadingScreenCodeEnabled",
+  "PreloadingScreenDelay", "RoutingFilters", "StickySessionType",
+  "StickySessionCookieName", "StickySessionClientHeaders",
+  "OptimizerEnableUpscaling", "EnableWebSockets", "MaxWebSocketConnections",
+  "Name",
+] as const;
+
+function pick<T extends Record<string, unknown>>(obj: T, keys: readonly string[]): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (key in obj) {
+      result[key] = obj[key];
+    }
+  }
+  return result;
+}
+
 interface CloneArgs {
   source?: string;
   target?: string;
@@ -50,7 +117,6 @@ export const pzCloneCommand = defineCommand<CloneArgs>({
 
     const { id: sourceId } = await resolvePullZoneId(client, source);
 
-    // Fetch full source zone
     const fetchSpin = spinner("Fetching source pull zone...");
     fetchSpin.start();
 
@@ -65,15 +131,14 @@ export const pzCloneCommand = defineCommand<CloneArgs>({
       throw new UserError(`Source pull zone ${sourceId} not found.`);
     }
 
-    // Clone: zero out identity fields, set new name
+    // Clone: pick only PullZoneAddModel fields and set new name.
+    // Serves as a type-safe allow-list, excluding response-only fields
+    // (e.g. Id, Enabled, Suspended, UserId, MonthlyBandwidthUsed, etc.)
     const cloneBody = {
-      ...zone,
-      Id: undefined,
+      ...pick(zone, ADD_MODEL_FIELDS),
       Name: target,
       EdgeScriptId: undefined,
       MiddlewareScriptId: null,
-      Hostnames: [],
-      EdgeRules: undefined,
     };
 
     const createSpin = spinner("Creating clone...");
