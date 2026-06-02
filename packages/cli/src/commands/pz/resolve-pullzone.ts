@@ -53,9 +53,17 @@ export async function resolvePullZoneId(
       return { id: match.Id, name: match.Name ?? undefined, source: "argument" };
     }
 
-    // Fall back to numeric ID
+    // Fall back to numeric ID — verify it exists in the list
     if (isNumeric) {
-      return { id: Number(idOrName), source: "argument" };
+      const numericId = Number(idOrName);
+      const byId = zones.find((z) => z.Id === numericId);
+      if (byId) {
+        return { id: byId.Id, name: byId.Name ?? undefined, source: "argument" };
+      }
+      throw new UserError(
+        `Pull zone with ID ${numericId} not found.`,
+        "Run `bunny pullzones list` to see available zones.",
+      );
     }
 
     throw new UserError(
