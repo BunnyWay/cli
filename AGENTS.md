@@ -726,6 +726,16 @@ Each release includes prebuilt binaries as release assets, created automatically
 3. Merge the Release PR — changesets bumps versions for `@bunny.net/cli` and all platform packages (kept in sync via `fixed`)
 4. The release workflow detects the version change, builds binaries for all platforms, publishes platform packages then `@bunny.net/cli` to npm, and creates a GitHub release with binaries attached
 
+### Publishing `@bunny.net/openapi-client`
+
+Unlike the CLI and `database-shell` (which ship as compiled binaries), `@bunny.net/openapi-client` is published as a plain TypeScript library — compiled JS plus `.d.ts` declarations.
+
+Its `package.json` `exports`/`main`/`types` point at `dist/`, so npm consumers get the compiled output. **In-repo tooling resolves it from source instead** — the root `tsconfig.json` has a `paths` mapping for `@bunny.net/openapi-client` → `src/`, and `bun run`, `bun build --compile`, `bun test`, and `tsc` all honor `paths` over the package's `exports`. So the CLI build and dev loop consume live source with no prebuild step, while only the publish step needs `dist/` built. (Published consumers never see the repo `tsconfig.json`, so they fall back to `exports`.)
+
+- `bun run --filter @bunny.net/openapi-client build` runs `generate` (the `src/generated/` types are gitignored, so they are regenerated from the committed specs), then `scripts/build.ts`.
+- `scripts/build.ts` drives the TypeScript compiler API (using `tsconfig.build.json`) to emit JS + declarations, then copies the generated `.d.ts` files into `dist/generated/` (tsc never emits its inputs, and those files back the `./generated/*` subpath export). `rewriteRelativeImportExtensions` rewrites `./x.ts` → `./x.js` in the emitted **JS**; TypeScript has no equivalent for declaration emit, so an `afterDeclarations` transformer rewrites the `.ts`/`.d.ts` specifiers in the emitted **`.d.ts`** files on the AST.
+- The `publish-openapi-client` job in `release.yml` (gated on a version bump detected via `npm view`) builds, then runs `cd packages/openapi-client && npm publish` (`files` ships `dist` + `README.md`). The package versions independently of the CLI — it is not part of any `fixed` group in `.changeset/config.json`.
+
 ### CI
 
 Tests and type-checking run on every pull request via `.github/workflows/ci.yml` (`bun run typecheck` and `bun test`).
