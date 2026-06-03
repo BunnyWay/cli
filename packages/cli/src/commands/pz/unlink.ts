@@ -3,21 +3,21 @@ import { logger } from "../../core/logger.ts";
 import { removeManifest } from "../../core/manifest.ts";
 import { PULL_ZONE_MANIFEST } from "./constants.ts";
 
-export const pzDeselectCommand = defineCommand({
-  command: "deselect",
-  describe: "Clear the active pull zone context.",
+export const pzUnlinkCommand = defineCommand({
+  command: "unlink",
+  describe: "Unlink the current directory from its pull zone.",
   examples: [
-    ["$0 pz deselect", "Deselect the current pull zone"],
+    ["$0 pz unlink", "Unlink the current pull zone"],
   ],
 
   handler: async ({ output }) => {
     removeManifest(PULL_ZONE_MANIFEST);
 
     if (output === "json") {
-      logger.log(JSON.stringify({ deselected: true }));
+      logger.log(JSON.stringify({ unlinked: true }));
       return;
     }
 
-    logger.success("Pull zone deselected.");
+    logger.success("Pull zone unlinked.");
   },
 });

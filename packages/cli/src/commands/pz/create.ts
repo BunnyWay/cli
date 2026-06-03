@@ -1,5 +1,4 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -11,11 +10,6 @@ import {
   PULL_ZONE_MANIFEST,
   type PullZoneManifest,
 } from "./constants.ts";
-
-interface PullZone {
-  Id: number;
-  Name?: string | null;
-}
 
 interface CreateArgs {
   name?: string;
@@ -47,59 +41,39 @@ export const pzCreateCommand = defineCommand<CreateArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    // Check if zone already exists
-    const spin = spinner("Checking for existing zone...");
-    spin.start();
-
-    const { data } = await client.GET("/pullzone");
-    const zones = (data ?? []) as PullZone[];
-
-    spin.stop();
-
-    const existing = zones.find(
-      (z) => z.Name?.toLowerCase() === name.toLowerCase(),
-    );
-    if (existing) {
-      throw new UserError(`Pull zone "${name}" already exists (ID: ${existing.Id}).`);
-    }
-
     // Create
     const createSpin = spinner("Creating pull zone...");
     createSpin.start();
 
-    await client.POST("/pullzone", {
+    const { data, error } = await client.POST("/pullzone", {
       body: { Name: name, OriginUrl: url } as any,
     });
 
     createSpin.stop();
 
-    // Find the new zone to get its ID
-    const findSpin = spinner("Fetching new zone...");
-    findSpin.start();
+    if (error) {
+      throw new UserError(`Failed to create pull zone: ${error}`);
+    }
 
-    const { data: updated } = await client.GET("/pullzone");
-    const newZone = ((updated ?? []) as PullZone[]).find(
-      (z) => z.Name?.toLowerCase() === name.toLowerCase(),
-    );
-
-    findSpin.stop();
+    const created = data as { Id?: number; Name?: string | null } | undefined;
+    const createdId = created?.Id;
 
     if (output === "json") {
-      logger.log(JSON.stringify({ name, origin: url, id: newZone?.Id ?? null }));
+      logger.log(JSON.stringify(created, null, 2));
       return;
     }
 
     logger.success(`Pull zone "${name}" created.`);
 
     // Offer to select it
-    if (newZone) {
+    if (createdId) {
       const shouldSelect = await confirm(
         `Set "${name}" as the active context?`,
       );
       if (shouldSelect) {
         saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, {
-          id: newZone.Id,
-          name: newZone.Name ?? undefined,
+          id: createdId,
+          name: created?.Name ?? undefined,
         });
         logger.success(`Selected ${name}.`);
       }

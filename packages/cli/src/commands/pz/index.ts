@@ -1,12 +1,11 @@
 import { defineNamespace } from "../../core/define-namespace.ts";
-import { pzCloneCommand } from "./clone.ts";
 import { pzCreateCommand } from "./create.ts";
 import { pzDeleteCommand } from "./delete.ts";
-import { pzDeselectCommand } from "./deselect.ts";
+import { pzLinkCommand } from "./link.ts";
 import { pzListCommand } from "./list.ts";
 import { pzPurgeCommand } from "./purge.ts";
-import { pzSelectCommand } from "./select.ts";
 import { pzShowCommand } from "./show.ts";
+import { pzUnlinkCommand } from "./unlink.ts";
 
 // TODO: implement rules and hostnames subcommands
 // const rulesNamespace = defineNamespace("rules", "Manage pull zone edge rules.", [...]);
@@ -18,11 +17,10 @@ export const pzNamespace = defineNamespace(
   [
     pzListCommand,
     pzCreateCommand,
-    pzCloneCommand,
     pzDeleteCommand,
-    pzSelectCommand,
+    pzLinkCommand,
     pzPurgeCommand,
     pzShowCommand,
-    pzDeselectCommand,
+    pzUnlinkCommand,
   ],
 );

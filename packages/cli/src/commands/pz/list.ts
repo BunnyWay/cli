@@ -1,3 +1,4 @@
+import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
@@ -6,13 +7,7 @@ import { formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
 
-interface PullZone {
-  Id: number;
-  Name?: string | null;
-  OriginUrl?: string | null;
-  Enabled: boolean;
-  Suspended: boolean;
-}
+type PullZone = components["schemas"]["PullZoneModel"];
 
 export const pzListCommand = defineCommand({
   command: "list",

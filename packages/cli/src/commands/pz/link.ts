@@ -1,3 +1,4 @@
+import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { createCoreClient } from "@bunny.net/openapi-client";
 import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
@@ -11,50 +12,38 @@ import {
   PULL_ZONE_MANIFEST,
   type PullZoneManifest,
 } from "./constants.ts";
-import { resolvePullZoneId } from "./resolve-pullzone.ts";
 
-interface PullZone {
-  Id: number;
-  Name?: string | null;
+interface LinkArgs {
+  id?: number;
 }
 
-interface SelectArgs {
-  "name-or-id"?: string;
-}
-
-export const pzSelectCommand = defineCommand<SelectArgs>({
-  command: "select [name-or-id]",
-  describe: "Select a pull zone as the active context.",
+export const pzLinkCommand = defineCommand<LinkArgs>({
+  command: "link [id]",
+  describe: "Link the current directory to a pull zone.",
   examples: [
-    ["$0 pz select", "Interactive selection"],
-    ["$0 pz select my-zone", "Select by name"],
-    ["$0 pz select 12345", "Select by ID"],
+    ["$0 pz link", "Interactive selection"],
+    ["$0 pz link 12345", "Link by ID"],
   ],
 
   builder: (yargs) =>
-    yargs.positional("name-or-id", {
-      type: "string",
-      describe: "Pull zone name or ID",
+    yargs.positional("id", {
+      type: "number",
+      describe: "Pull zone ID",
     }),
 
-  handler: async ({ "name-or-id": nameOrId, profile, output, verbose, apiKey }) => {
+  handler: async ({ id, profile, output, verbose, apiKey }) => {
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    if (nameOrId) {
-      const { id, name } = await resolvePullZoneId(client, nameOrId);
-
-      saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, {
-        id,
-        name,
-      });
+    if (id) {
+      saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, { id });
 
       if (output === "json") {
-        logger.log(JSON.stringify({ id, name }));
+        logger.log(JSON.stringify({ id }));
         return;
       }
 
-      logger.success(`Selected ${name ?? id}.`);
+      logger.success(`Linked to pull zone ${id}.`);
       return;
     }
 
@@ -65,7 +54,7 @@ export const pzSelectCommand = defineCommand<SelectArgs>({
 
     spin.stop();
 
-    const zones = (data ?? []) as PullZone[];
+    const zones = (data ?? []) as components["schemas"]["PullZoneModel"][];
 
     if (zones.length === 0) {
       throw new UserError(
@@ -81,7 +70,7 @@ export const pzSelectCommand = defineCommand<SelectArgs>({
     const { selected } = await prompts({
       type: "select",
       name: "selected",
-      message: "Select a pull zone:",
+      message: "Link to a pull zone:",
       choices: sorted.map((zone) => ({
         title: zone.Name ?? String(zone.Id),
         value: zone,
@@ -89,20 +78,19 @@ export const pzSelectCommand = defineCommand<SelectArgs>({
     });
 
     if (!selected) {
-      logger.log("Select cancelled.");
+      logger.log("Link cancelled.");
       process.exit(1);
     }
 
     saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, {
       id: selected.Id,
-      name: selected.Name ?? undefined,
     });
 
     if (output === "json") {
-      logger.log(JSON.stringify({ id: selected.Id, name: selected.Name }));
+      logger.log(JSON.stringify({ id: selected.Id }));
       return;
     }
 
-    logger.success(`Selected ${selected.Name ?? selected.Id}.`);
+    logger.success(`Linked to ${selected.Name ?? selected.Id}.`);
   },
 });

@@ -10,28 +10,26 @@ import {
   PULL_ZONE_MANIFEST,
   type PullZoneManifest,
 } from "./constants.ts";
-import { resolvePullZoneId } from "./resolve-pullzone.ts";
 
 interface DeleteArgs {
-  "name-or-id"?: string;
+  id?: number;
   force?: boolean;
 }
 
 export const pzDeleteCommand = defineCommand<DeleteArgs>({
-  command: "delete [name-or-id]",
+  command: "delete [id]",
   describe: "Delete a pull zone.",
   examples: [
     ["$0 pz delete", "Delete selected pull zone"],
-    ["$0 pz delete my-zone", "Delete by name"],
-    ["$0 pz delete 12345", "Delete by ID"],
+    ["$0 pz delete 12345", "Delete pull zone 12345"],
     ["$0 pz delete --force", "Skip confirmation"],
   ],
 
   builder: (yargs) =>
     yargs
-      .positional("name-or-id", {
-        type: "string",
-        describe: "Pull zone name or ID (uses selected one if omitted)",
+      .positional("id", {
+        type: "number",
+        describe: "Pull zone ID (uses selected one if omitted)",
       })
       .option("force", {
         alias: "f",
@@ -40,14 +38,27 @@ export const pzDeleteCommand = defineCommand<DeleteArgs>({
         describe: "Skip confirmation",
       }),
 
-  handler: async ({ "name-or-id": nameOrId, force, profile, output, verbose, apiKey }) => {
+  handler: async ({ id, force, profile, output, verbose, apiKey }) => {
+    const zoneId = id ?? loadManifest<PullZoneManifest>(PULL_ZONE_MANIFEST).id;
+    if (!zoneId) {
+      throw new UserError(
+        "No pull zone specified.",
+        'Pass a pull zone ID or run "bunny pz link" first.',
+      );
+    }
+
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const { id: zoneId, name } = await resolvePullZoneId(client, nameOrId);
+    const { data: zone } = await client.GET("/pullzone/{id}", {
+      params: { path: { id: zoneId } },
+    });
 
-    const label = name ?? String(zoneId);
-    const ok = await confirm(`Delete pull zone "${label}"?`, { force });
+    const label = zone?.Name
+      ? `${zone.Name} (${zoneId})`
+      : String(zoneId);
+
+    const ok = await confirm(`Delete pull zone ${label}?`, { force });
     if (!ok) {
       logger.log("Delete cancelled.");
       return;
@@ -77,6 +88,6 @@ export const pzDeleteCommand = defineCommand<DeleteArgs>({
       return;
     }
 
-    logger.success(`Pull zone "${label}" deleted.`);
+    logger.success(`Pull zone ${label} deleted.`);
   },
 });
