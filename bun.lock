@@ -16,7 +16,7 @@
     },
     "packages/app-config": {
       "name": "@bunny.net/app-config",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "dependencies": {
         "@bunny.net/openapi-client": "workspace:*",
         "zod": "^4.3.6",
@@ -24,7 +24,7 @@
     },
     "packages/cli": {
       "name": "@bunny.net/cli",
-      "version": "0.4.2",
+      "version": "0.5.3",
       "bin": {
         "bunny": "./bin/bunny.cjs",
       },
@@ -55,27 +55,27 @@
     },
     "packages/cli-darwin-arm64": {
       "name": "@bunny.net/cli-darwin-arm64",
-      "version": "0.4.2",
+      "version": "0.5.3",
     },
     "packages/cli-darwin-x64": {
       "name": "@bunny.net/cli-darwin-x64",
-      "version": "0.4.2",
+      "version": "0.5.3",
     },
     "packages/cli-linux-arm64": {
       "name": "@bunny.net/cli-linux-arm64",
-      "version": "0.4.2",
+      "version": "0.5.3",
     },
     "packages/cli-linux-x64": {
       "name": "@bunny.net/cli-linux-x64",
-      "version": "0.4.2",
+      "version": "0.5.3",
     },
     "packages/cli-windows-x64": {
       "name": "@bunny.net/cli-windows-x64",
-      "version": "0.4.2",
+      "version": "0.5.3",
     },
     "packages/database-adapter-libsql": {
       "name": "@bunny.net/database-adapter-libsql",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "@bunny.net/database-openapi": "workspace:*",
         "@bunny.net/database-rest": "workspace:*",
@@ -84,14 +84,14 @@
     },
     "packages/database-openapi": {
       "name": "@bunny.net/database-openapi",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "devDependencies": {
         "@seriousme/openapi-schema-validator": "^2.9.0",
       },
     },
     "packages/database-rest": {
       "name": "@bunny.net/database-rest",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "@bunny.net/database-openapi": "workspace:*",
       },
@@ -140,7 +140,7 @@
     },
     "packages/database-studio": {
       "name": "@bunny.net/database-studio",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "dependencies": {
         "@bunny.net/database-adapter-libsql": "workspace:*",
         "@bunny.net/database-openapi": "workspace:*",
@@ -172,12 +172,13 @@
     },
     "packages/openapi-client": {
       "name": "@bunny.net/openapi-client",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "dependencies": {
         "openapi-fetch": "^0.17.0",
       },
       "devDependencies": {
         "openapi-typescript": "^7.13.0",
+        "typescript": "^5",
       },
     },
   },
