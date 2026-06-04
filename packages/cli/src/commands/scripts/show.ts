@@ -11,6 +11,7 @@ import {
   fetchPullZoneHostnames,
   type Hostname,
   hostnameUrl,
+  toSafeHostname,
 } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { resolveManifestId } from "../../core/manifest.ts";
@@ -82,13 +83,24 @@ export const scriptsShowCommand = defineCommand<ShowArgs>({
       if (zone.Id == null) continue;
       try {
         hostnames.push(...(await fetchPullZoneHostnames(coreClient, zone.Id)));
-      } catch {}
+      } catch (err) {
+        logger.debug(
+          `Failed to fetch hostnames for pull zone ${zone.Id}: ${err}`,
+          verbose,
+        );
+      }
     }
 
     spin.stop();
 
     if (output === "json") {
-      logger.log(JSON.stringify({ ...script, Hostnames: hostnames }, null, 2));
+      logger.log(
+        JSON.stringify(
+          { ...script, Hostnames: hostnames.map(toSafeHostname) },
+          null,
+          2,
+        ),
+      );
       return;
     }
 

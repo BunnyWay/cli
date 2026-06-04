@@ -11,6 +11,7 @@ import {
   fetchPullZoneHostnames,
   hostnameUrl,
   type ResolvedPullZone,
+  toSafeHostname,
 } from "./client.ts";
 
 /** Resolves the pull zone (and a core client) for the resource being targeted. */
@@ -19,15 +20,17 @@ export type HostnameResolver = (
 ) => Promise<ResolvedPullZone>;
 
 export interface HostnamesMountOptions {
-  /** Command breadcrumb used in examples and follow-up hints, e.g. "scripts hostnames". */
+  /** Command breadcrumb used in examples and follow-up hints, e.g. "scripts domains". */
   commandPath: string;
+  /** Visible namespace name shown in help (defaults to "domains"). */
+  namespace?: string;
   /** Resolve the pull zone + core client from the parsed args. */
   resolve: HostnameResolver;
   /** Adds resource-targeting flags (e.g. --id, --pull-zone) shared by every subcommand. */
   target?: (yargs: Argv) => Argv;
   /** Namespace description shown in help. */
   describe?: string;
-  /** Hidden namespace aliases (e.g. ["domains"]) — they work but stay out of help. */
+  /** Hidden namespace aliases (e.g. ["hostnames"]) — they work but stay out of help. */
   hiddenAliases?: string[];
 }
 
@@ -36,8 +39,16 @@ function normalizeHostname(value: string): string {
   return value.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
 }
 
+/** Echo back the targeting flags the user passed so copy-paste follow-up hints keep the same scope. */
+function targetSuffix(args: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (args.id != null) parts.push(`--id ${args.id}`);
+  if (args["pull-zone"] != null) parts.push(`--pull-zone ${args["pull-zone"]}`);
+  return parts.length ? ` ${parts.join(" ")}` : "";
+}
+
 /**
- * Build a reusable `hostnames` command namespace for any resource backed by a
+ * Build a reusable `domains` command namespace for any resource backed by a
  * pull zone (Edge Scripts today, Magic Containers apps next). The caller
  * supplies a {@link HostnameResolver} that maps the parsed args to a pull
  * zone; the add/ssl/list/remove behavior is identical across resources.
@@ -56,14 +67,14 @@ export function createHostnamesCommands(
     resolve(args as GlobalArgs & Record<string, unknown>);
 
   const addCommand = defineCommand<{
-    hostname: string;
+    domain: string;
     ssl?: boolean;
     "force-ssl"?: boolean;
   }>({
-    command: "add <hostname>",
-    describe: "Add a custom hostname to a pull zone.",
+    command: "add <domain>",
+    describe: "Add a custom domain to a pull zone.",
     examples: [
-      [`$0 ${commandPath} add shop.example.com`, "Add a hostname (no SSL)"],
+      [`$0 ${commandPath} add shop.example.com`, "Add a domain (no SSL)"],
       [
         `$0 ${commandPath} add shop.example.com --ssl`,
         "Add and request SSL now",
@@ -72,9 +83,9 @@ export function createHostnamesCommands(
     builder: (yargs) =>
       target(
         yargs
-          .positional("hostname", {
+          .positional("domain", {
             type: "string",
-            describe: "Custom hostname to add (e.g. shop.example.com)",
+            describe: "Custom domain to add (e.g. shop.example.com)",
             demandOption: true,
           })
           .option("ssl", {
@@ -90,8 +101,8 @@ export function createHostnamesCommands(
           }),
       ),
     handler: async (args) => {
-      const hostname = normalizeHostname(args.hostname ?? "");
-      if (!hostname) throw new UserError("A hostname is required.");
+      const hostname = normalizeHostname(args.domain ?? "");
+      if (!hostname) throw new UserError("A domain is required.");
 
       const requestSsl = args.ssl === true;
       const force = args["force-ssl"] !== false;
@@ -119,13 +130,20 @@ export function createHostnamesCommands(
         const sslSpin = spinner("Requesting free SSL certificate...");
         sslSpin.start();
         try {
-          await enableSsl(coreClient, pullZoneId, hostname, force);
+          await enableSsl(coreClient, pullZoneId, hostname, force, hostnames);
           sslIssued = true;
         } catch (err) {
           sslError = err instanceof Error ? err.message : String(err);
         }
         sslSpin.stop();
       }
+
+      const sslHint = `bunny ${commandPath} ssl ${hostname}${targetSuffix(
+        args as unknown as Record<string, unknown>,
+      )}`;
+
+      // A requested certificate that failed to issue is a command error, like `ssl`.
+      const sslFailed = requestSsl && sslError != null;
 
       if (args.output === "json") {
         logger.log(
@@ -142,6 +160,8 @@ export function createHostnamesCommands(
             2,
           ),
         );
+        // Emit the full result for agents/CI, then signal failure with a non-zero exit.
+        if (sslFailed) process.exit(1);
         return;
       }
 
@@ -167,24 +187,25 @@ export function createHostnamesCommands(
       }
 
       logger.log();
-      if (sslError) {
-        logger.warn(`Couldn't issue a certificate yet: ${sslError}`);
-        logger.dim(
-          "  This is normal until DNS propagates. Once it's live, run:",
+
+      if (sslFailed) {
+        throw new UserError(
+          `Couldn't issue a certificate for ${hostname} yet: ${sslError}`,
+          `This is normal until DNS propagates. Once it's live, run: ${sslHint}`,
         );
-      } else {
-        logger.log("Then enable HTTPS once DNS is live:");
       }
-      logger.dim(`  bunny ${commandPath} ssl ${hostname}`);
+
+      logger.log("Then enable HTTPS once DNS is live:");
+      logger.dim(`  ${sslHint}`);
     },
   });
 
   const sslCommand = defineCommand<{
-    hostname: string;
+    domain: string;
     "force-ssl"?: boolean;
   }>({
-    command: "ssl <hostname>",
-    describe: "Request a free SSL certificate for a custom hostname.",
+    command: "ssl <domain>",
+    describe: "Request a free SSL certificate for a custom domain.",
     examples: [
       [
         `$0 ${commandPath} ssl shop.example.com`,
@@ -198,9 +219,9 @@ export function createHostnamesCommands(
     builder: (yargs) =>
       target(
         yargs
-          .positional("hostname", {
+          .positional("domain", {
             type: "string",
-            describe: "Custom hostname to secure (e.g. shop.example.com)",
+            describe: "Custom domain to secure (e.g. shop.example.com)",
             demandOption: true,
           })
           .option("force-ssl", {
@@ -211,8 +232,8 @@ export function createHostnamesCommands(
           }),
       ),
     handler: async (args) => {
-      const hostname = normalizeHostname(args.hostname ?? "");
-      if (!hostname) throw new UserError("A hostname is required.");
+      const hostname = normalizeHostname(args.domain ?? "");
+      if (!hostname) throw new UserError("A domain is required.");
 
       const force = args["force-ssl"] !== false;
 
@@ -225,10 +246,11 @@ export function createHostnamesCommands(
         await enableSsl(coreClient, pullZoneId, hostname, force);
       } catch (err) {
         spin.stop();
+        if (err instanceof UserError) throw err;
         const message = err instanceof Error ? err.message : String(err);
         throw new UserError(
           `Couldn't issue a certificate for ${hostname}: ${message}`,
-          "Make sure the hostname's DNS points at bunny.net, then try again.",
+          "Make sure the domain's DNS points at bunny.net, then try again.",
         );
       }
 
@@ -259,9 +281,9 @@ export function createHostnamesCommands(
   const listCommand = defineCommand({
     command: "list",
     aliases: ["ls"],
-    describe: "List the hostnames on a pull zone.",
+    describe: "List the domains on a pull zone.",
     examples: [
-      [`$0 ${commandPath} list`, "List hostnames"],
+      [`$0 ${commandPath} list`, "List domains"],
       [`$0 ${commandPath} list --output json`, "JSON output"],
     ],
     builder: (yargs) => target(yargs),
@@ -276,18 +298,18 @@ export function createHostnamesCommands(
       spin.stop();
 
       if (args.output === "json") {
-        logger.log(JSON.stringify(hostnames, null, 2));
+        logger.log(JSON.stringify(hostnames.map(toSafeHostname), null, 2));
         return;
       }
 
       if (hostnames.length === 0) {
-        logger.info("No hostnames found.");
+        logger.info("No domains found.");
         return;
       }
 
       logger.log(
         formatTable(
-          ["Hostname", "Type", "SSL", "Force SSL"],
+          ["Domain", "Type", "SSL", "Force SSL"],
           hostnames.map((h) => [
             hostnameUrl(h.Value ?? "", {
               hasCertificate: h.HasCertificate,
@@ -304,14 +326,14 @@ export function createHostnamesCommands(
   });
 
   const removeCommand = defineCommand<{
-    hostname: string;
+    domain: string;
     force?: boolean;
   }>({
-    command: "remove <hostname>",
+    command: "remove <domain>",
     aliases: ["rm"],
-    describe: "Remove a custom hostname from a pull zone.",
+    describe: "Remove a custom domain from a pull zone.",
     examples: [
-      [`$0 ${commandPath} remove shop.example.com`, "Remove a custom hostname"],
+      [`$0 ${commandPath} remove shop.example.com`, "Remove a custom domain"],
       [
         `$0 ${commandPath} remove shop.example.com --force`,
         "Skip confirmation",
@@ -320,9 +342,9 @@ export function createHostnamesCommands(
     builder: (yargs) =>
       target(
         yargs
-          .positional("hostname", {
+          .positional("domain", {
             type: "string",
-            describe: "Custom hostname to remove",
+            describe: "Custom domain to remove",
             demandOption: true,
           })
           .option("force", {
@@ -333,8 +355,8 @@ export function createHostnamesCommands(
           }),
       ),
     handler: async (args) => {
-      const hostname = normalizeHostname(args.hostname ?? "");
-      if (!hostname) throw new UserError("A hostname is required.");
+      const hostname = normalizeHostname(args.domain ?? "");
+      if (!hostname) throw new UserError("A domain is required.");
 
       const { pullZoneId, coreClient } = await resolveArgs(args);
 
@@ -350,7 +372,7 @@ export function createHostnamesCommands(
       );
       if (!match) {
         throw new UserError(
-          `Hostname "${hostname}" is not on pull zone ${pullZoneId}.`,
+          `Domain "${hostname}" is not on pull zone ${pullZoneId}.`,
         );
       }
       if (match.IsSystemHostname) {
@@ -389,10 +411,11 @@ export function createHostnamesCommands(
   });
 
   const subcommands = [addCommand, sslCommand, listCommand, removeCommand];
-  const describe = opts.describe ?? "Manage custom hostnames.";
+  const describe = opts.describe ?? "Manage custom domains.";
+  const namespace = opts.namespace ?? "domains";
 
   return [
-    defineNamespace("hostnames", describe, subcommands),
+    defineNamespace(namespace, describe, subcommands),
     ...(opts.hiddenAliases ?? []).map((alias) =>
       defineNamespace(alias, false, subcommands),
     ),

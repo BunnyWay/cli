@@ -1,8 +1,36 @@
 import type { createCoreClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
+import { UserError } from "../errors.ts";
 
 export type CoreClient = ReturnType<typeof createCoreClient>;
 export type Hostname = components["schemas"]["HostnameModel"];
+
+/** Hostname fields safe to serialize — excludes Certificate/CertificateKey private-key material. */
+export type SafeHostname = Pick<
+  Hostname,
+  | "Id"
+  | "Value"
+  | "ForceSSL"
+  | "IsSystemHostname"
+  | "IsManagedHostname"
+  | "HasCertificate"
+  | "CertificateProvisionType"
+  | "CertificateKeyType"
+>;
+
+/** Drop certificate/private-key material so hostnames can be safely written to logs/JSON. */
+export function toSafeHostname(h: Hostname): SafeHostname {
+  return {
+    Id: h.Id,
+    Value: h.Value,
+    ForceSSL: h.ForceSSL,
+    IsSystemHostname: h.IsSystemHostname,
+    IsManagedHostname: h.IsManagedHostname,
+    HasCertificate: h.HasCertificate,
+    CertificateProvisionType: h.CertificateProvisionType,
+    CertificateKeyType: h.CertificateKeyType,
+  };
+}
 
 /** A resolved pull zone plus a core client, returned by a resource's resolver. */
 export interface ResolvedPullZone {
@@ -36,20 +64,34 @@ export async function fetchPullZoneHostnames(
   });
 }
 
-/** Issue a free SSL certificate for a hostname, optionally forcing HTTPS. */
+/** Issue a free SSL certificate for a hostname on a pull zone, then set its Force SSL state. */
 export async function enableSsl(
   client: CoreClient,
   pullZoneId: number,
   hostname: string,
   forceSSL: boolean,
+  knownHostnames?: Hostname[],
 ): Promise<void> {
+  // loadFreeCertificate is account-wide (keyed only by hostname), so confirm the
+  // hostname lives on this pull zone before issuing — never touch another zone's.
+  const hostnames =
+    knownHostnames ?? (await fetchPullZoneHostnames(client, pullZoneId));
+  const onZone = hostnames.some(
+    (h) => (h.Value ?? "").toLowerCase() === hostname.toLowerCase(),
+  );
+  if (!onZone) {
+    throw new UserError(
+      `"${hostname}" is not on pull zone ${pullZoneId}.`,
+      "Add it first, then request a certificate.",
+    );
+  }
+
   await client.GET("/pullzone/loadFreeCertificate", {
     params: { query: { hostname } },
   });
-  if (forceSSL) {
-    await client.POST("/pullzone/{id}/setForceSSL", {
-      params: { path: { id: pullZoneId } },
-      body: { Hostname: hostname, ForceSSL: true },
-    });
-  }
+  // Always set Force SSL to the requested value so --no-force-ssl can also turn it off.
+  await client.POST("/pullzone/{id}/setForceSSL", {
+    params: { path: { id: pullZoneId } },
+    body: { Hostname: hostname, ForceSSL: forceSSL },
+  });
 }

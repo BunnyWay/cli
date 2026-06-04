@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hostnameUrl } from "./client.ts";
+import { type Hostname, hostnameUrl, toSafeHostname } from "./client.ts";
 
 describe("hostnameUrl", () => {
   test("respects an existing scheme", () => {
@@ -30,5 +30,35 @@ describe("hostnameUrl", () => {
         forceSSL: true,
       }),
     ).toBe("http://shop.example.com");
+  });
+});
+
+describe("toSafeHostname", () => {
+  const raw: Hostname = {
+    Id: 1,
+    Value: "shop.example.com",
+    ForceSSL: true,
+    IsSystemHostname: false,
+    IsManagedHostname: false,
+    HasCertificate: true,
+    Certificate: "BASE64-CERT",
+    CertificateKey: "BASE64-PRIVATE-KEY",
+  };
+
+  test("drops Certificate and CertificateKey", () => {
+    const safe = toSafeHostname(raw);
+    expect("Certificate" in safe).toBe(false);
+    expect("CertificateKey" in safe).toBe(false);
+    expect(JSON.stringify(safe)).not.toContain("PRIVATE-KEY");
+  });
+
+  test("keeps the non-sensitive display fields", () => {
+    expect(toSafeHostname(raw)).toMatchObject({
+      Id: 1,
+      Value: "shop.example.com",
+      ForceSSL: true,
+      IsSystemHostname: false,
+      HasCertificate: true,
+    });
   });
 });

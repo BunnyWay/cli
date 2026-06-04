@@ -284,7 +284,7 @@ bunny-cli/
 │           │       │   ├── index.ts      # defineNamespace("deployments", ...)
 │           │       │   └── list.ts       # List deployments for an Edge Script
 │           │       ├── hostnames/
-│           │       │   └── index.ts      # Mounts core/hostnames factory: script pull-zone resolver + --id/--pull-zone + hidden "domains" alias
+│           │       │   └── index.ts      # Mounts core/hostnames factory: script pull-zone resolver + --id/--pull-zone, visible as "domains" with hidden "hostnames" alias
 │           │       └── env/
 │           │           ├── index.ts      # defineNamespace("env", ...)
 │           │           ├── list.ts       # List environment variables for a script
@@ -314,11 +314,11 @@ bunny-cli/
 - **Error classes are split.** `UserError` and `ApiError` live in `@bunny.net/openapi-client` (the SDK needs them). `ConfigError` lives in the CLI and extends `UserError`. The CLI's `errors.ts` re-exports `UserError` and `ApiError` from `@bunny.net/openapi-client`.
 - **Import API clients from `@bunny.net/openapi-client`**, not relative paths. Import generated types from `@bunny.net/openapi-client/generated/<spec>.d.ts`.
 - **Pull-zone settings are exposed via "Hybrid D" across surfaces.** Scripts and apps are backed by a pull zone, which has a large settings surface (hostnames, caching, edge rules, origin, security, purge, CORS, optimizer, logging, …). To keep each owner's help legible:
-  - **Flatten only first-class groups** directly into the owner — picked by user mental model, kept to one or two. `scripts hostnames` is the flattened group (a custom domain is "my site's address," not a CDN setting).
+  - **Flatten only first-class groups** directly into the owner — picked by user mental model, kept to one or two. `scripts domains` is the flattened group (a custom domain is "my site's address," not a CDN setting).
   - **Group the long tail** under a `pullzone` sub-namespace within the owner (e.g. `scripts pullzone <setting>`), so the owner's top-level help gains one line, not ten. Curate per owner — don't expose settings that don't apply (a script _is_ its pull zone's origin, so no origin-URL command under `scripts`).
   - **A standalone `bunny pullzone` command** (planned) is the canonical full surface for pull zones not backing a script/app, targeted by `--id`.
   - Each setting-area is a **mountable factory** like `createHostnamesCommands` (`core/hostnames/`): one `{ commandPath, target, resolve(args) => { pullZoneId, coreClient }, hiddenAliases }` mounted into the root `pullzone` (resolve from `--id`), `scripts` (resolve from the linked manifest), and `apps` (resolve from the CDN endpoint). The resolver is the only per-surface difference.
-  - Canonical term is `pullzone` (matches the bunny.net dashboard/API); `pz` is a hidden alias (`defineNamespace(alias, false, …)`), the same pattern as `hostnames`'s hidden `domains` alias.
+  - Canonical term is `pullzone` (matches the bunny.net dashboard/API); `pz` is a hidden alias (`defineNamespace(alias, false, …)`), the same pattern as `domains`'s hidden `hostnames` alias.
 
 ---
 
@@ -845,14 +845,14 @@ bunny
 │   ├── deployments
 │   │   └── list        [id] (alias: ls)    List deployments for an Edge Script
 │   ├── docs                                Open Edge Script documentation in browser
-│   ├── hostnames                           (hidden alias: domains)
-│   │   ├── add         <hostname> [--ssl] [--no-force-ssl] [--id] [--pull-zone]
-│   │   │                                   Add a custom hostname (SSL opt-in; HTTPS forced by default)
-│   │   ├── ssl         <hostname> [--no-force-ssl] [--id] [--pull-zone]
+│   ├── domains                             (hidden alias: hostnames)
+│   │   ├── add         <domain> [--ssl] [--no-force-ssl] [--id] [--pull-zone]
+│   │   │                                   Add a custom domain (SSL opt-in; HTTPS forced by default)
+│   │   ├── ssl         <domain> [--no-force-ssl] [--id] [--pull-zone]
 │   │   │                                   Issue a free SSL certificate (HTTPS forced by default)
-│   │   ├── list        (alias: ls) [--id] [--pull-zone]   List pull zone hostnames
-│   │   └── remove      <hostname> (alias: rm) [--force] [--id] [--pull-zone]
-│   │                                       Remove a custom hostname
+│   │   ├── list        (alias: ls) [--id] [--pull-zone]   List pull zone domains
+│   │   └── remove      <domain> (alias: rm) [--force] [--id] [--pull-zone]
+│   │                                       Remove a custom domain
 │   ├── env
 │   │   ├── list        [id]                List environment variables
 │   │   ├── set         <key> <value> [id]  Set environment variable

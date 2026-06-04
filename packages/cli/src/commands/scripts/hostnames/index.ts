@@ -75,11 +75,12 @@ async function resolveScriptPullZone(args: {
   return { pullZoneId, coreClient };
 }
 
-/** The `hostnames` namespace + hidden `domains` alias, ready to spread into `scripts`. */
+/** The `domains` namespace + hidden `hostnames` alias, ready to spread into `scripts`. */
 export const scriptsHostnamesCommands = createHostnamesCommands({
-  commandPath: "scripts hostnames",
-  describe: "Manage custom hostnames for an Edge Script.",
-  hiddenAliases: ["domains"],
+  commandPath: "scripts domains",
+  namespace: "domains",
+  describe: "Manage custom domains for an Edge Script.",
+  hiddenAliases: ["hostnames"],
   target: (yargs) =>
     yargs
       .option("id", {

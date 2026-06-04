@@ -601,23 +601,23 @@ bunny scripts env pull --force
 | --------- | ---------------------------------------------- |
 | `--force` | Overwrite an existing `.env` without prompting |
 
-#### `bunny scripts hostnames`
+#### `bunny scripts domains`
 
-Manage custom hostnames for an Edge Script. A script's hostnames live on its linked pull zone, so these commands operate on that pull zone. All subcommands default to the linked script; pass `--id <script-id>` to target another, and `--pull-zone <id>` when a script has more than one linked pull zone.
+Manage custom domains for an Edge Script. A script's domains live on its linked pull zone, so these commands operate on that pull zone. All subcommands default to the linked script; pass `--id <script-id>` to target another, and `--pull-zone <id>` when a script has more than one linked pull zone. (`bunny scripts hostnames` is kept as a hidden alias.)
 
-##### `bunny scripts hostnames add`
+##### `bunny scripts domains add`
 
-Add a custom hostname. SSL is **not** requested by default — a free certificate can only be issued once your DNS points at bunny.net, so the command prints the `CNAME` record to create and the follow-up command to enable HTTPS. Pass `--ssl` to issue a certificate immediately; HTTP is redirected to HTTPS by default (opt out with `--no-force-ssl`).
+Add a custom domain. SSL is **not** requested by default — a free certificate can only be issued once your DNS points at bunny.net, so the command prints the `CNAME` record to create and the follow-up command to enable HTTPS. Pass `--ssl` to issue a certificate immediately; HTTP is redirected to HTTPS by default (opt out with `--no-force-ssl`).
 
 ```bash
-# Add a hostname and get DNS instructions
-bunny scripts hostnames add shop.example.com
+# Add a domain and get DNS instructions
+bunny scripts domains add shop.example.com
 
 # Add and request SSL now (DNS must already be pointed at bunny.net) — HTTPS forced
-bunny scripts hostnames add shop.example.com --ssl
+bunny scripts domains add shop.example.com --ssl
 
 # Add and request SSL without forcing HTTPS
-bunny scripts hostnames add shop.example.com --ssl --no-force-ssl
+bunny scripts domains add shop.example.com --ssl --no-force-ssl
 ```
 
 | Flag             | Description                                                             |
@@ -627,32 +627,32 @@ bunny scripts hostnames add shop.example.com --ssl --no-force-ssl
 | `--id`           | Edge Script ID (uses linked script if omitted)                          |
 | `--pull-zone`    | Pull zone ID (required if the script has multiple linked zones)         |
 
-##### `bunny scripts hostnames ssl`
+##### `bunny scripts domains ssl`
 
-Request a free SSL certificate for a custom hostname. Run this after the hostname's DNS points at bunny.net (see the `CNAME` printed by `hostnames add`). HTTP is redirected to HTTPS by default; pass `--no-force-ssl` to keep plain HTTP.
+Request a free SSL certificate for a custom domain. Run this after the domain's DNS points at bunny.net (see the `CNAME` printed by `domains add`). HTTP is redirected to HTTPS by default; pass `--no-force-ssl` to keep plain HTTP.
 
 ```bash
-bunny scripts hostnames ssl shop.example.com
-bunny scripts hostnames ssl shop.example.com --no-force-ssl
+bunny scripts domains ssl shop.example.com
+bunny scripts domains ssl shop.example.com --no-force-ssl
 ```
 
-##### `bunny scripts hostnames list`
+##### `bunny scripts domains list`
 
-List the hostnames on a script's pull zone, with SSL and Force SSL status.
+List the domains on a script's pull zone, with SSL and Force SSL status.
 
 ```bash
-bunny scripts hostnames list
-bunny scripts hostnames ls
-bunny scripts hostnames list --output json
+bunny scripts domains list
+bunny scripts domains ls
+bunny scripts domains list --output json
 ```
 
-##### `bunny scripts hostnames remove`
+##### `bunny scripts domains remove`
 
-Remove a custom hostname. System hostnames controlled by bunny.net cannot be removed.
+Remove a custom domain. System hostnames controlled by bunny.net cannot be removed.
 
 ```bash
-bunny scripts hostnames remove shop.example.com
-bunny scripts hostnames remove shop.example.com --force
+bunny scripts domains remove shop.example.com
+bunny scripts domains remove shop.example.com --force
 ```
 
 #### `bunny scripts docs`

@@ -150,7 +150,12 @@ export const scriptsDeployCommand = defineCommand<DeployArgs>({
       if (zone.Id == null) continue;
       try {
         hostnames.push(...(await fetchPullZoneHostnames(coreClient, zone.Id)));
-      } catch {}
+      } catch (err) {
+        logger.debug(
+          `Failed to fetch hostnames for pull zone ${zone.Id}: ${err}`,
+          verbose,
+        );
+      }
     }
 
     if (hostnames.length === 0) {
