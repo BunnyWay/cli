@@ -10,11 +10,15 @@ import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { resolveManifestId } from "../../../core/manifest.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
-import { fetchScript, fetchScriptHostnames, logLiveHostnames } from "../api.ts";
+import {
+  fetchScript,
+  fetchScriptHostnames,
+  findRelease,
+  logLiveHostnames,
+} from "../api.ts";
 import { SCRIPT_MANIFEST } from "../constants.ts";
 
 type EdgeScript = components["schemas"]["EdgeScriptModel"];
-type EdgeScriptRelease = components["schemas"]["EdgeScriptReleaseModel"];
 
 const COMMAND = "publish <release> [id]";
 const DESCRIPTION = "Publish (roll back to) a past Edge Script deployment.";
@@ -102,15 +106,9 @@ export const scriptsDeploymentsPublishCommand = defineCommand<PublishArgs>({
     const spin = spinner("Fetching deployments...");
     spin.start();
 
-    const { data } = await client.GET("/compute/script/{id}/releases", {
-      params: { path: { id } },
-    });
+    const release = await findRelease(client, id, releaseId);
 
     spin.stop();
-
-    const release = (data?.Items ?? [])
-      .filter((r: EdgeScriptRelease) => !r.Deleted)
-      .find((r: EdgeScriptRelease) => r.Id === releaseId);
 
     if (!release) {
       throw new UserError(
@@ -124,10 +122,10 @@ export const scriptsDeploymentsPublishCommand = defineCommand<PublishArgs>({
 
     const proceed = await confirm(
       `Publish release ${releaseId} as the live deployment?`,
-      { force: force || output === "json" },
+      { force },
     );
     if (!proceed) {
-      logger.info("Aborted.");
+      logger.log("Cancelled.");
       return;
     }
 

@@ -15,6 +15,9 @@ type ComputeClient = ReturnType<typeof createComputeClient>;
 type EdgeScript = components["schemas"]["EdgeScriptModel"];
 type EdgeScriptVariable = components["schemas"]["EdgeScriptVariableModel"];
 type EdgeScriptSecret = components["schemas"]["EdgeScriptSecretModel"];
+type EdgeScriptRelease = components["schemas"]["EdgeScriptReleaseModel"];
+
+const RELEASES_PER_PAGE = 1000;
 
 export interface EnvEntry {
   id: number;
@@ -80,6 +83,46 @@ export async function fetchEnvEntries(
       secret: true,
     })),
   ].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Walk paginated results one page at a time, short-circuiting as soon as `match` hits. */
+export async function findAcrossPages<T>(
+  fetchPage: (page: number) => Promise<{ items: T[]; hasMore: boolean }>,
+  match: (item: T) => boolean,
+): Promise<T | undefined> {
+  let page = 1;
+  while (true) {
+    const { items, hasMore } = await fetchPage(page);
+    const found = items.find(match);
+    if (found) return found;
+
+    // Stop on the last page, or if a page comes back empty (guards a bad flag).
+    if (!hasMore || items.length === 0) return undefined;
+    page += 1;
+  }
+}
+
+/** Find a non-deleted release by ID, paging through the script's releases until found or exhausted. */
+export function findRelease(
+  client: ComputeClient,
+  scriptId: number,
+  releaseId: number,
+): Promise<EdgeScriptRelease | undefined> {
+  return findAcrossPages(
+    async (page) => {
+      const { data } = await client.GET("/compute/script/{id}/releases", {
+        params: {
+          path: { id: scriptId },
+          query: { page, perPage: RELEASES_PER_PAGE },
+        },
+      });
+      return {
+        items: (data?.Items ?? []) as EdgeScriptRelease[],
+        hasMore: data?.HasMoreItems ?? false,
+      };
+    },
+    (r) => !r.Deleted && r.Id === releaseId,
+  );
 }
 
 /** Fetch every hostname across a script's linked pull zones (parallel; per-zone errors logged). */
