@@ -1,5 +1,4 @@
 import { createDbClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
 import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
@@ -8,13 +7,12 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifest } from "../../core/manifest.ts";
 import { spinner } from "../../core/ui.ts";
+import { fetchAllDatabases, fetchDatabase } from "./api.ts";
 import {
   ARG_DATABASE_ID,
   DATABASE_MANIFEST,
   type DatabaseManifest,
 } from "./constants.ts";
-
-type Database = Pick<components["schemas"]["Database2"], "id" | "name">;
 
 const COMMAND = `link [${ARG_DATABASE_ID}]`;
 const DESCRIPTION = "Link the current directory to a database.";
@@ -66,16 +64,9 @@ export const dbLinkCommand = defineCommand<LinkArgs>({
       const spin = spinner("Fetching database...");
       spin.start();
 
-      const { data } = await client.GET("/v2/databases/{db_id}", {
-        params: { path: { db_id: databaseIdArg } },
-      });
+      const db = await fetchDatabase(client, databaseIdArg);
 
       spin.stop();
-
-      const db = data?.db;
-      if (!db) {
-        throw new UserError(`Database ${databaseIdArg} not found.`);
-      }
 
       saveManifest<DatabaseManifest>(DATABASE_MANIFEST, {
         id: db.id,
@@ -94,19 +85,7 @@ export const dbLinkCommand = defineCommand<LinkArgs>({
     const spin = spinner("Fetching databases...");
     spin.start();
 
-    const allDatabases: Database[] = [];
-    let page = 1;
-
-    while (true) {
-      const { data } = await client.GET("/v2/databases", {
-        params: { query: { page, per_page: 100 } },
-      });
-
-      allDatabases.push(...(data?.databases ?? []));
-
-      if (!data?.page_info?.has_more_items) break;
-      page++;
-    }
+    const allDatabases = await fetchAllDatabases(client);
 
     spin.stop();
 
@@ -131,7 +110,7 @@ export const dbLinkCommand = defineCommand<LinkArgs>({
 
     if (!selected) {
       logger.log("Link cancelled.");
-      process.exit(1);
+      return;
     }
 
     saveManifest<DatabaseManifest>(DATABASE_MANIFEST, {

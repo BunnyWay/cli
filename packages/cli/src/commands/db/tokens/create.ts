@@ -7,6 +7,7 @@ import { formatKeyValue } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
 import { readEnvValue, writeEnvValue } from "../../../utils/env-file.ts";
+import { generateToken } from "../api.ts";
 import {
   ARG_DATABASE_ID,
   ENV_DATABASE_AUTH_TOKEN,
@@ -182,10 +183,7 @@ export const dbTokensCreateCommand = defineCommand<{
 
     // Fetch token and database details in parallel
     const [tokenResult, dbResult] = await Promise.all([
-      client.PUT("/v2/databases/{db_id}/auth/generate", {
-        params: { path: { db_id: databaseId } },
-        body: { authorization, expires_at: expiresAt },
-      }),
+      generateToken(client, databaseId, { authorization, expiresAt }),
       client.GET("/v2/databases/{db_id}", {
         params: { path: { db_id: databaseId } },
       }),
@@ -193,7 +191,7 @@ export const dbTokensCreateCommand = defineCommand<{
 
     spin.stop();
 
-    const token = tokenResult.data?.token;
+    const token = tokenResult?.token;
     const dbUrl = dbResult.data?.db?.url;
 
     if (output === "json") {
@@ -201,7 +199,7 @@ export const dbTokensCreateCommand = defineCommand<{
         JSON.stringify(
           {
             token,
-            expires_at: tokenResult.data?.expires_at ?? null,
+            expires_at: tokenResult?.expires_at ?? null,
             db_id: databaseId,
             authorization,
           },
@@ -226,7 +224,7 @@ export const dbTokensCreateCommand = defineCommand<{
     }
     entries.push({
       key: "Expires",
-      value: tokenResult.data?.expires_at ?? "never",
+      value: tokenResult?.expires_at ?? "never",
     });
 
     logger.success("Token generated.");

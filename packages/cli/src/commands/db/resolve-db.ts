@@ -1,5 +1,16 @@
 import type { createDbClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
+import prompts from "prompts";
+import { UserError } from "../../core/errors.ts";
+import { loadManifest } from "../../core/manifest.ts";
+import { spinner } from "../../core/ui.ts";
+import { readEnvValue } from "../../utils/env-file.ts";
+import { fetchAllDatabases } from "./api.ts";
+import {
+  DATABASE_MANIFEST,
+  type DatabaseManifest,
+  ENV_DATABASE_URL,
+} from "./constants.ts";
 
 type Database = Pick<components["schemas"]["Database2"], "id" | "name" | "url">;
 
@@ -9,17 +20,6 @@ export interface ResolvedDb {
   name?: Database["name"];
   source: "argument" | "manifest" | "env" | "prompt";
 }
-
-import prompts from "prompts";
-import { UserError } from "../../core/errors.ts";
-import { loadManifest } from "../../core/manifest.ts";
-import { spinner } from "../../core/ui.ts";
-import { readEnvValue } from "../../utils/env-file.ts";
-import {
-  DATABASE_MANIFEST,
-  type DatabaseManifest,
-  ENV_DATABASE_URL,
-} from "./constants.ts";
 
 /**
  * Walk up the directory tree looking for a `.env` file containing a database URL.
@@ -53,23 +53,10 @@ export async function resolveDbId(
 
   const url = findDbUrlFromEnv();
 
-  // Paginate through all databases
-  const allDatabases: Database[] = [];
-  let page = 1;
-
   const spin = url ? undefined : spinner("Fetching databases...");
   spin?.start();
 
-  while (true) {
-    const { data } = await client.GET("/v2/databases", {
-      params: { query: { page, per_page: 100 } },
-    });
-
-    allDatabases.push(...(data?.databases ?? []));
-
-    if (!data?.page_info?.has_more_items) break;
-    page++;
-  }
+  const allDatabases = await fetchAllDatabases(client);
 
   spin?.stop();
 
@@ -103,7 +90,7 @@ export async function resolveDbId(
   });
 
   if (!selected) {
-    process.exit(1);
+    throw new UserError("No database selected.");
   }
 
   return { id: selected.id, name: selected.name, source: "prompt" };
