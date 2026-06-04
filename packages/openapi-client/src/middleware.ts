@@ -26,6 +26,20 @@ function looksLikeJson(contentType: string): boolean {
   );
 }
 
+/**
+ * Content types that are legitimately non-JSON payloads (e.g. DNS zone-file
+ * exports, downloads) rather than CDN/proxy HTML interception. Callers fetch
+ * these with `parseAs: "text"`, so they must not trip the non-JSON guard.
+ */
+function isDownloadableNonJson(contentType: string): boolean {
+  const lower = contentType.toLowerCase();
+  return (
+    lower.includes("text/plain") ||
+    lower.includes("application/octet-stream") ||
+    lower.includes("text/csv")
+  );
+}
+
 const STATUS_MESSAGES: Record<number, string> = {
   401: "Unauthorized. Check your API key.",
   403: "Forbidden. You don't have permission for this action.",
@@ -125,7 +139,10 @@ export function authMiddleware(options: ClientOptions): Middleware {
       // HTML error page with a 200 status code.
       if (response.ok) {
         const contentType = response.headers.get("content-type") ?? "";
-        if (!looksLikeJson(contentType)) {
+        if (
+          !looksLikeJson(contentType) &&
+          !isDownloadableNonJson(contentType)
+        ) {
           const text = await response.clone().text();
           if (text.trim().length > 0) {
             const preview = text.length > 200 ? `${text.slice(0, 200)}…` : text;

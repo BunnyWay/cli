@@ -139,4 +139,26 @@ describe("authMiddleware onResponse", () => {
     );
     expect(result).toBeUndefined();
   });
+
+  test("allows an OK text/plain download body (e.g. DNS zone-file export)", async () => {
+    const result = await runResponse(
+      { apiKey: "k" },
+      new Response("$ORIGIN example.com.\nwww IN CNAME example.b-cdn.net.", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+    expect(result).toBeUndefined();
+  });
+
+  test("allows an OK application/octet-stream download body", async () => {
+    const result = await runResponse(
+      { apiKey: "k" },
+      new Response("binary-ish payload", {
+        status: 200,
+        headers: { "content-type": "application/octet-stream" },
+      }),
+    );
+    expect(result).toBeUndefined();
+  });
 });
