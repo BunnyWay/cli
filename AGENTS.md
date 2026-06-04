@@ -233,19 +233,22 @@ bunny-cli/
 │           │   │       └── delete.ts     # Remove a profile
 │           │   ├── whoami.ts             # Show authenticated account: name, email, profile (top-level: bunny whoami)
 │           │   ├── db/
-│           │   │   ├── index.ts          # defineNamespace("db", ...) — registers all database commands
-│           │   │   ├── constants.ts      # Database status labels, region maps
-│           │   │   ├── create.ts         # Create a new database (interactive region selection or flags)
-│           │   │   ├── delete.ts         # Delete a database (double confirmation or --force)
-│           │   │   ├── docs.ts           # Open database documentation in browser
-│           │   │   ├── link.ts           # Link directory to a database (.bunny/database.json)
-│           │   │   ├── list.ts           # List all databases
-│           │   │   ├── quickstart.ts     # Generate quickstart guide for connecting to a database
-│           │   │   ├── region-choices.ts # Shared: grouped region prompt choices by continent
-│           │   │   ├── resolve-db.ts     # Helper: resolve database ID from flag, manifest, .env, or interactive prompt
-│           │   │   ├── shell.ts          # Thin wrapper: credential resolution + delegates to @bunny.net/database-shell
-│           │   │   ├── show.ts           # Show database details (regions, size, status)
-│           │   │   ├── usage.ts          # Show database usage statistics
+│           │   │   ├── index.ts               # defineNamespace("db", ...) — registers all database commands
+│           │   │   ├── constants.ts           # Database status labels, region maps
+│           │   │   ├── api.ts                 # Shared: typed v2 database/token API calls (fetchDatabase, fetchAllDatabases, generateToken, fetchLiveStatus, …)
+│           │   │   ├── create.ts              # Create a new database (interactive region selection or flags)
+│           │   │   ├── delete.ts              # Delete a database (double confirmation or --force)
+│           │   │   ├── docs.ts                # Open database documentation in browser
+│           │   │   ├── link.ts                # Link directory to a database (.bunny/database.json)
+│           │   │   ├── list.ts                # List all databases
+│           │   │   ├── quickstart.ts          # Generate quickstart guide for connecting to a database
+│           │   │   ├── quickstart-snippets.ts # Shared: per-language connection code snippets (TypeScript, Go, Rust, .NET)
+│           │   │   ├── region-choices.ts      # Shared: grouped region prompt choices by continent
+│           │   │   ├── resolve-db.ts          # Helper: resolve database ID from flag, manifest, .env, or interactive prompt
+│           │   │   ├── shell.ts               # Thin wrapper: credential resolution + delegates to @bunny.net/database-shell
+│           │   │   ├── show.ts                # Show database details (regions, size, status)
+│           │   │   ├── studio.ts              # Open a visual database explorer in the browser (local web UI)
+│           │   │   ├── usage.ts               # Show database usage statistics
 │           │   │   ├── regions/
 │           │   │   │   ├── index.ts     # defineNamespace("regions", ...) — registers region commands
 │           │   │   │   ├── add.ts       # Add primary/replica regions (interactive multiselect or flags)
