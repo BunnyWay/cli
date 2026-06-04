@@ -1,16 +1,20 @@
 import { createDbClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
 import { formatBytes, formatKeyValue, progressBar } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
+import {
+  fetchDatabase,
+  fetchLiveStatus,
+  fetchRegionConfig,
+  liveMainRegion,
+  liveStatusLabel,
+  regionNameMap,
+} from "./api.ts";
 import { ARG_DATABASE_ID } from "./constants.ts";
 import { resolveDbId } from "./resolve-db.ts";
-
-type Region = components["schemas"]["Region"];
 
 const COMMAND = `show [${ARG_DATABASE_ID}]`;
 const DESCRIPTION = "Show database details.";
@@ -60,31 +64,16 @@ export const dbShowCommand = defineCommand<ShowArgs>({
     const spin = spinner("Fetching database...");
     spin.start();
 
-    const [dbResult, liveResult, configResult] = await Promise.all([
-      client.GET("/v2/databases/{db_id}", {
-        params: { path: { db_id: databaseId } },
-      }),
-      client.POST("/v1/live/live_db", {
-        body: { db_ids: [databaseId] },
-      }),
-      client.GET("/v1/config", { params: {} }),
+    const [db, liveMetrics, regionConfig] = await Promise.all([
+      fetchDatabase(client, databaseId),
+      fetchLiveStatus(client, [databaseId]),
+      fetchRegionConfig(client),
     ]);
 
     spin.stop();
 
-    const db = dbResult.data?.db;
-    if (!db) throw new UserError(`Database ${databaseId} not found.`);
-
-    const live = liveResult.data?.live_metrics?.[databaseId];
-
-    const regionNames = new Map<string, string>();
-    const allRegions: Region[] = [
-      ...(configResult.data?.primary_regions ?? []),
-      ...(configResult.data?.replica_regions ?? []),
-    ];
-    for (const r of allRegions) {
-      regionNames.set(r.id, r.name);
-    }
+    const live = liveMetrics[databaseId];
+    const regionNames = regionNameMap(regionConfig);
 
     /** Format a region code as "Name (CODE)". */
     const formatRegion = (code: string) => {
@@ -97,9 +86,9 @@ export const dbShowCommand = defineCommand<ShowArgs>({
       return;
     }
 
-    const status = live?.state === "Live" ? "Active" : "Idle";
-    const primaryRegion =
-      live?.state === "Live" ? formatRegion(live.metadata.main) : "—";
+    const status = liveStatusLabel(live);
+    const mainCode = liveMainRegion(live);
+    const primaryRegion = mainCode ? formatRegion(mainCode) : "—";
     const replicaRegions =
       live?.state === "Live" && live.metadata.replicas.length > 0
         ? live.metadata.replicas.map(formatRegion).join(", ")

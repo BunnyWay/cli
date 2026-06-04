@@ -111,8 +111,7 @@ export const scriptsLinkCommand = defineCommand<LinkArgs>({
     });
 
     if (!selected) {
-      logger.log("Link cancelled.");
-      return;
+      throw new UserError("Link cancelled.");
     }
 
     saveManifest(SCRIPT_MANIFEST, {

@@ -8,12 +8,12 @@ import { UserError } from "../../../core/errors.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { spinner } from "../../../core/ui.ts";
+import { fetchDatabaseWithRegions, regionNameMap } from "../api.ts";
 import { ARG_DATABASE_ID } from "../constants.ts";
 import { groupedRegionChoices } from "../region-choices.ts";
 import { resolveDbId } from "../resolve-db.ts";
 
 type PossibleRegion = components["schemas"]["PossibleRegion"];
-type Region = components["schemas"]["Region"];
 
 const COMMAND = `update [${ARG_DATABASE_ID}]`;
 const DESCRIPTION = "Update region configuration.";
@@ -78,22 +78,12 @@ export const dbRegionsUpdateCommand = defineCommand<UpdateArgs>({
     const spin = spinner("Fetching database and regions...");
     spin.start();
 
-    const [dbResult, configResult] = await Promise.all([
-      client.GET("/v2/databases/{db_id}", {
-        params: { path: { db_id: databaseId } },
-      }),
-      client.GET("/v1/config", { params: {} }),
-    ]);
+    const { db, config: regionConfig } = await fetchDatabaseWithRegions(
+      client,
+      databaseId,
+    );
 
     spin.stop();
-
-    const db = dbResult.data?.db;
-    if (!db) throw new UserError(`Database ${databaseId} not found.`);
-
-    const regionConfig = configResult.data;
-    if (!regionConfig) {
-      throw new UserError("Could not fetch region configuration.");
-    }
 
     const availablePrimary = regionConfig.primary_regions;
     const availableReplicas = regionConfig.replica_regions;
@@ -123,8 +113,7 @@ export const dbRegionsUpdateCommand = defineCommand<UpdateArgs>({
       });
 
       if (!selectedPrimary) {
-        logger.log("Cancelled.");
-        return;
+        throw new UserError("Cancelled.");
       }
 
       newPrimary = selectedPrimary as PossibleRegion[];
@@ -138,8 +127,7 @@ export const dbRegionsUpdateCommand = defineCommand<UpdateArgs>({
       });
 
       if (!selectedReplicas) {
-        logger.log("Cancelled.");
-        return;
+        throw new UserError("Cancelled.");
       }
 
       newReplicas = selectedReplicas as PossibleRegion[];
@@ -194,11 +182,7 @@ export const dbRegionsUpdateCommand = defineCommand<UpdateArgs>({
     }
 
     // Build region name lookup
-    const regionNames = new Map<string, string>();
-    const allRegions: Region[] = [...availablePrimary, ...availableReplicas];
-    for (const r of allRegions) {
-      regionNames.set(r.id, r.name);
-    }
+    const regionNames = regionNameMap(regionConfig);
 
     const rows: string[][] = [];
     for (const id of newPrimary) {

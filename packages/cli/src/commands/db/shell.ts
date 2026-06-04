@@ -9,10 +9,12 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
 import { readEnvValue } from "../../utils/env-file.ts";
+import { generateToken, tokenExpiryFromNow } from "./api.ts";
 import {
   ARG_DATABASE_ID,
   ENV_DATABASE_AUTH_TOKEN,
   ENV_DATABASE_URL,
+  TOKEN_TTL_MINUTES,
 } from "./constants.ts";
 import { resolveDbId } from "./resolve-db.ts";
 
@@ -29,8 +31,6 @@ const ARG_TOKEN = "token";
 const ARG_VIEWS_DIR = "views-dir";
 
 const PRINT_MODES = ["default", "table", "json", "csv", "markdown"];
-
-const TOKEN_TTL_MINUTES = 30;
 
 /** Create a ShellLogger adapter that wraps the CLI logger. */
 function shellLogger(): ShellLogger {
@@ -94,13 +94,10 @@ async function resolveCredentials(
 
   if (willGenerateToken) {
     spin.text = "Generating token...";
-    const expiresAt = new Date(
-      Date.now() + TOKEN_TTL_MINUTES * 60 * 1000,
-    ).toISOString();
     fetches.push(
-      apiClient.PUT("/v2/databases/{db_id}/auth/generate", {
-        params: { path: { db_id: databaseId } },
-        body: { authorization: "full-access", expires_at: expiresAt },
+      generateToken(apiClient, databaseId, {
+        authorization: "full-access",
+        expiresAt: tokenExpiryFromNow(),
       }),
     );
   }
@@ -110,7 +107,7 @@ async function resolveCredentials(
   spin.stop();
 
   if (!url && dbResult) url = dbResult.data?.db?.url;
-  if (willGenerateToken && tokenResult) token = tokenResult.data?.token;
+  if (willGenerateToken && tokenResult) token = tokenResult.token;
 
   if (!url || !token) {
     throw new UserError("Could not resolve database URL or generate token.");
@@ -251,8 +248,8 @@ export const dbShellCommand = defineCommand<{
             masked: !unmaskArg,
             logger: log,
           });
-        } catch (err: any) {
-          throw new UserError(err.message);
+        } catch (err: unknown) {
+          throw new UserError(err instanceof Error ? err.message : String(err));
         }
       }
       return;
@@ -268,9 +265,9 @@ export const dbShellCommand = defineCommand<{
         databaseId: resolvedDbId,
         viewsDir: viewsDirArg ? resolve(viewsDirArg) : undefined,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       throw new UserError(
-        err.message,
+        err instanceof Error ? err.message : String(err),
         `Use --${ARG_EXEC} to run a statement non-interactively.`,
       );
     }

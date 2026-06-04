@@ -119,8 +119,7 @@ export const scriptsEnvRemoveCommand = defineCommand<RemoveArgs>({
       name = value;
     }
     if (!name) {
-      logger.log("Cancelled.");
-      return;
+      throw new UserError("Cancelled.");
     }
 
     const entry = entries.find(

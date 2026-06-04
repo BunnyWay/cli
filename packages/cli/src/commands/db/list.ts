@@ -1,15 +1,18 @@
 import { createDbClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { formatBytes, formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
-
-type Database = components["schemas"]["Database2"];
-type DBLiveStatus = components["schemas"]["DBLiveStatus"];
-type Region = components["schemas"]["Region"];
+import {
+  fetchAllDatabases,
+  fetchLiveStatus,
+  fetchRegionConfig,
+  liveMainRegion,
+  liveStatusLabel,
+  regionNameMap,
+} from "./api.ts";
 
 const COMMAND = "list";
 const ALIASES = ["ls"] as const;
@@ -46,40 +49,22 @@ export const dbListCommand = defineCommand({
     const spin = spinner("Fetching databases...");
     spin.start();
 
-    const allDatabases: Database[] = [];
-    let page = 1;
-
-    while (true) {
-      const { data } = await client.GET("/v2/databases", {
-        params: { query: { page, per_page: 100 } },
-      });
-
-      allDatabases.push(...(data?.databases ?? []));
-
-      if (!data?.page_info?.has_more_items) break;
-      page++;
-    }
+    const allDatabases = await fetchAllDatabases(client);
 
     // Fetch live status and region config in parallel
-    let liveMetrics: Record<string, DBLiveStatus> = {};
-    const regionNames = new Map<string, string>();
+    let liveMetrics: Awaited<ReturnType<typeof fetchLiveStatus>> = {};
+    let regionNames = new Map<string, string>();
 
     if (allDatabases.length > 0) {
-      const [liveRes, configRes] = await Promise.all([
-        client.POST("/v1/live/live_db", {
-          body: { db_ids: allDatabases.map((db) => db.id) },
-        }),
-        client.GET("/v1/config", { params: {} }),
+      const [live, config] = await Promise.all([
+        fetchLiveStatus(
+          client,
+          allDatabases.map((db) => db.id),
+        ),
+        fetchRegionConfig(client),
       ]);
-      liveMetrics = liveRes.data?.live_metrics ?? {};
-
-      const allRegions: Region[] = [
-        ...(configRes.data?.primary_regions ?? []),
-        ...(configRes.data?.replica_regions ?? []),
-      ];
-      for (const r of allRegions) {
-        regionNames.set(r.id, r.name);
-      }
+      liveMetrics = live;
+      regionNames = regionNameMap(config);
     }
 
     spin.stop();
@@ -101,8 +86,8 @@ export const dbListCommand = defineCommand({
         ["ID", "Name", "Status", "Primary Region", "Size"],
         databases.map((db) => {
           const live = liveMetrics[db.id];
-          const status = live?.state === "Live" ? "Active" : "Idle";
-          const regionCode = live?.state === "Live" ? live.metadata.main : null;
+          const status = liveStatusLabel(live);
+          const regionCode = liveMainRegion(live);
           const primary = regionCode
             ? (regionNames.get(regionCode) ?? regionCode)
             : "—";

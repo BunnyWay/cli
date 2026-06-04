@@ -10,6 +10,7 @@ import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import { readEnvValue, writeEnvValue } from "../../utils/env-file.ts";
+import { fetchRegionConfig, generateToken } from "./api.ts";
 import {
   DATABASE_MANIFEST,
   type DatabaseManifest,
@@ -146,15 +147,9 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     const configSpin = spinner("Fetching available regions...");
     configSpin.start();
 
-    const { data: regionConfig } = await client.GET("/v1/config", {
-      params: {},
-    });
+    const regionConfig = await fetchRegionConfig(client);
 
     configSpin.stop();
-
-    if (!regionConfig) {
-      throw new UserError("Could not fetch region configuration.");
-    }
 
     const storageRegions = regionConfig.storage_region_available;
     const availablePrimary = regionConfig.primary_regions;
@@ -258,7 +253,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
           message: "Database location:",
           choices,
           initial: preselected
-            ? choices.findIndex((c: any) => c.value === preselected)
+            ? choices.findIndex((c) => c.value === preselected)
             : 0,
         });
         if (!location) throw new UserError("Location is required.");
@@ -394,13 +389,10 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       const tokenSpin = spinner("Generating token...");
       tokenSpin.start();
 
-      const { data: tokenData } = await client.PUT(
-        "/v2/databases/{db_id}/auth/generate",
-        {
-          params: { path: { db_id: data.db_id } },
-          body: { authorization: "full-access", expires_at: null },
-        },
-      );
+      const tokenData = await generateToken(client, data.db_id, {
+        authorization: "full-access",
+        expiresAt: null,
+      });
 
       tokenSpin.stop();
 

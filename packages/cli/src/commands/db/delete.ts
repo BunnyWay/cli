@@ -3,11 +3,11 @@ import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, removeManifest } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import { readEnvValue, removeEnvValue } from "../../utils/env-file.ts";
+import { fetchDatabase } from "./api.ts";
 import {
   ARG_DATABASE_ID,
   DATABASE_MANIFEST,
@@ -93,14 +93,9 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
     const fetchSpin = spinner("Fetching database...");
     fetchSpin.start();
 
-    const { data } = await client.GET("/v2/databases/{db_id}", {
-      params: { path: { db_id: databaseId } },
-    });
+    const db = await fetchDatabase(client, databaseId);
 
     fetchSpin.stop();
-
-    const db = data?.db;
-    if (!db) throw new UserError(`Database ${databaseId} not found.`);
 
     if (source === "env") {
       logger.dim(`Database: ${db.name} (${databaseId}, from .env)`);
