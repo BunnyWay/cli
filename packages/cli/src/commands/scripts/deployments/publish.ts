@@ -143,7 +143,11 @@ export const scriptsDeploymentsPublishCommand = defineCommand<PublishArgs>({
 
     if (output === "json") {
       logger.log(
-        JSON.stringify({ id, release: releaseId, published: true }, null, 2),
+        JSON.stringify(
+          { id, release: releaseId, uuid: release.Uuid, published: true },
+          null,
+          2,
+        ),
       );
       return;
     }
