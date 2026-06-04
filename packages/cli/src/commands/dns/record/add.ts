@@ -9,6 +9,7 @@ import { logger } from "../../../core/logger.ts";
 import { spinner } from "../../../core/ui.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
 import {
+  type DnsRecordTypes,
   parseRecordType,
   RECORD_TYPES,
   recordName,
@@ -16,6 +17,7 @@ import {
 } from "../record-types.ts";
 
 type AddDnsRecordModel = components["schemas"]["AddDnsRecordModel"];
+type RecordLinks = Pick<AddDnsRecordModel, "PullZoneId" | "ScriptId">;
 
 interface AddArgs {
   domain?: string;
@@ -28,34 +30,29 @@ interface AddArgs {
   script?: number;
 }
 
-interface RecordOpts {
-  pullZoneId?: number;
-  scriptId?: number;
-}
-
 /** Build the request body from positional values, honouring per-type grammar. */
 function buildRecord(
-  type: number,
+  type: DnsRecordTypes,
   name: string,
   values: string[],
-  opts: RecordOpts,
+  links: RecordLinks,
 ): AddDnsRecordModel {
   const record: AddDnsRecordModel = {
-    Type: type as never,
+    Type: type,
     Name: name === "@" ? "" : name,
   };
 
   if (type === RECORD_TYPES.PULLZONE) {
-    if (opts.pullZoneId === undefined)
+    if (links.PullZoneId == null)
       throw new UserError("PullZone records require --pull-zone <id>.");
-    record.PullZoneId = opts.pullZoneId;
+    record.PullZoneId = links.PullZoneId;
     return record;
   }
 
   if (type === RECORD_TYPES.SCRIPT) {
-    if (opts.scriptId === undefined)
+    if (links.ScriptId == null)
       throw new UserError("Script records require --script <id>.");
-    record.ScriptId = opts.scriptId;
+    record.ScriptId = links.ScriptId;
     return record;
   }
 
@@ -118,11 +115,11 @@ function required<T>(value: T | undefined, label: string): T {
 
 /** Interactively gather a record when positional args were omitted. */
 async function promptRecord(
-  type: number,
+  type: DnsRecordTypes,
   name: string,
 ): Promise<AddDnsRecordModel> {
   const record: AddDnsRecordModel = {
-    Type: type as never,
+    Type: type,
     Name: name === "@" ? "" : name,
   };
 
@@ -300,8 +297,8 @@ export const dnsAddCommand = defineCommand<AddArgs>({
       const name = args.name ?? "@";
       const values = (args.values ?? []).map((v) => String(v));
       record = buildRecord(type, name, values, {
-        pullZoneId: args["pull-zone"],
-        scriptId: args.script,
+        PullZoneId: args["pull-zone"],
+        ScriptId: args.script,
       });
     }
 

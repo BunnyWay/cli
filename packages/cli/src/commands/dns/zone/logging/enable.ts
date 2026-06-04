@@ -1,4 +1,5 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
+import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { resolveConfig } from "../../../../config/index.ts";
 import { clientOptions } from "../../../../core/client-options.ts";
 import { defineCommand } from "../../../../core/define-command.ts";
@@ -7,6 +8,12 @@ import { logger } from "../../../../core/logger.ts";
 import { spinner } from "../../../../core/ui.ts";
 import { resolveZoneInteractive } from "../../interactive.ts";
 
+type LogAnonymizationType = components["schemas"]["LogAnonymizationType"];
+type LoggingUpdate = Pick<
+  components["schemas"]["UpdateDnsZoneModel"],
+  "LoggingEnabled" | "LoggingIPAnonymizationEnabled" | "LogAnonymizationType"
+>;
+
 interface EnableArgs {
   domain?: string;
   "anonymize-ip"?: boolean;
@@ -14,7 +21,10 @@ interface EnableArgs {
 }
 
 // LogAnonymizationType: 0 = OneDigit, 1 = Drop
-const ANONYMIZATION: Record<string, 0 | 1> = { onedigit: 0, drop: 1 };
+const ANONYMIZATION: Record<string, LogAnonymizationType> = {
+  onedigit: 0,
+  drop: 1,
+};
 
 export const dnsZoneLoggingEnableCommand = defineCommand<EnableArgs>({
   command: "enable [domain]",
@@ -47,11 +57,7 @@ export const dnsZoneLoggingEnableCommand = defineCommand<EnableArgs>({
 
     const zone = await resolveZoneInteractive(client, domain);
 
-    const body: {
-      LoggingEnabled: boolean;
-      LoggingIPAnonymizationEnabled?: boolean;
-      LogAnonymizationType?: 0 | 1;
-    } = { LoggingEnabled: true };
+    const body: LoggingUpdate = { LoggingEnabled: true };
 
     if (args["anonymize-ip"] !== undefined) {
       body.LoggingIPAnonymizationEnabled = args["anonymize-ip"];

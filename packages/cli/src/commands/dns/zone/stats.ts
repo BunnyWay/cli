@@ -8,6 +8,7 @@ import { formatKeyValue, formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { spinner } from "../../../core/ui.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
+import { queryTypeLabel } from "../query-types.ts";
 
 interface StatsArgs {
   domain?: string;
@@ -110,9 +111,9 @@ export const dnsStatsCommand = defineCommand<StatsArgs>({
       ),
     );
 
-    const byType = Object.entries(data?.QueriesByTypeChart ?? {}).sort(
-      (a, b) => b[1] - a[1],
-    );
+    const byType = Object.entries(data?.QueriesByTypeChart ?? {})
+      .map(([code, count]): [string, number] => [queryTypeLabel(code), count])
+      .sort((a, b) => b[1] - a[1]);
     if (byType.length > 0) {
       logger.log("");
       logger.dim("  Queries by type");
