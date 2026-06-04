@@ -113,8 +113,7 @@ export const dbRegionsUpdateCommand = defineCommand<UpdateArgs>({
       });
 
       if (!selectedPrimary) {
-        logger.log("Cancelled.");
-        return;
+        throw new UserError("Cancelled.");
       }
 
       newPrimary = selectedPrimary as PossibleRegion[];
@@ -128,8 +127,7 @@ export const dbRegionsUpdateCommand = defineCommand<UpdateArgs>({
       });
 
       if (!selectedReplicas) {
-        logger.log("Cancelled.");
-        return;
+        throw new UserError("Cancelled.");
       }
 
       newReplicas = selectedReplicas as PossibleRegion[];

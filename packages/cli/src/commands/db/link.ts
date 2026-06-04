@@ -109,8 +109,7 @@ export const dbLinkCommand = defineCommand<LinkArgs>({
     });
 
     if (!selected) {
-      logger.log("Link cancelled.");
-      return;
+      throw new UserError("Link cancelled.");
     }
 
     saveManifest<DatabaseManifest>(DATABASE_MANIFEST, {
