@@ -41,7 +41,7 @@ export const dnsRecordListCommand = defineCommand<ListArgs>({
     );
 
     if (output === "json") {
-      logger.log(JSON.stringify(zone, null, 2));
+      logger.log(JSON.stringify(records, null, 2));
       return;
     }
 

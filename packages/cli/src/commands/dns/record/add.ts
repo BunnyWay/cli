@@ -307,11 +307,15 @@ export const dnsAddCommand = defineCommand<AddArgs>({
 
     const spin = spinner("Adding record...");
     spin.start();
-    const { data } = await client.PUT("/dnszone/{zoneId}/records", {
-      params: { path: { zoneId: zone.Id as number } },
-      body: record,
-    });
-    spin.stop();
+    let data: { Id?: number } | undefined;
+    try {
+      ({ data } = await client.PUT("/dnszone/{zoneId}/records", {
+        params: { path: { zoneId: zone.Id as number } },
+        body: record,
+      }));
+    } finally {
+      spin.stop();
+    }
 
     if (output === "json") {
       logger.log(JSON.stringify(data, null, 2));
@@ -319,7 +323,7 @@ export const dnsAddCommand = defineCommand<AddArgs>({
     }
 
     logger.success(
-      `Added ${recordTypeLabel(record.Type as number)} record ${recordName(record.Name)} to ${zone.Domain} (ID: ${data?.Id}).`,
+      `Added ${recordTypeLabel(record.Type as number)} record ${recordName(record.Name)} to ${zone.Domain}${data?.Id != null ? ` (ID: ${data.Id})` : ""}.`,
     );
   },
 });

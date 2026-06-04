@@ -68,15 +68,23 @@ export const dnsZoneLoggingEnableCommand = defineCommand<EnableArgs>({
         throw new UserError("Anonymization must be 'onedigit' or 'drop'.");
       }
       body.LogAnonymizationType = type;
+      // Choosing a strategy implies enabling anonymization unless explicitly disabled.
+      if (args["anonymize-ip"] === undefined) {
+        body.LoggingIPAnonymizationEnabled = true;
+      }
     }
 
     const spin = spinner("Enabling logging...");
     spin.start();
-    const { data } = await client.POST("/dnszone/{id}", {
-      params: { path: { id: zone.Id as number } },
-      body,
-    });
-    spin.stop();
+    let data: components["schemas"]["DnsZoneModel"] | undefined;
+    try {
+      ({ data } = await client.POST("/dnszone/{id}", {
+        params: { path: { id: zone.Id as number } },
+        body,
+      }));
+    } finally {
+      spin.stop();
+    }
 
     if (output === "json") {
       logger.log(JSON.stringify(data, null, 2));

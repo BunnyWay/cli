@@ -4,6 +4,7 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
 import { spinner } from "../../../core/ui.ts";
+import type { DnsZoneModel } from "../api.ts";
 
 interface ZoneAddArgs {
   domain: string;
@@ -28,17 +29,22 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
     const spin = spinner("Creating DNS zone...");
     spin.start();
 
-    await client.POST("/dnszone", { body: { Domain: domain } });
+    let created: DnsZoneModel | undefined;
+    try {
+      await client.POST("/dnszone", { body: { Domain: domain } });
 
-    // The add endpoint returns no body — look the new zone up to report its ID.
-    const { data } = await client.GET("/dnszone", {
-      params: { query: { search: domain, perPage: 1000 } },
-    });
-    const created = (data?.Items ?? []).find(
-      (z) => (z.Domain ?? "").toLowerCase() === domain.toLowerCase(),
-    );
-
-    spin.stop();
+      // Look the new zone up to report its ID; a lookup failure must not mask the created zone.
+      try {
+        const { data } = await client.GET("/dnszone", {
+          params: { query: { search: domain, perPage: 1000 } },
+        });
+        created = (data?.Items ?? []).find(
+          (z) => (z.Domain ?? "").toLowerCase() === domain.toLowerCase(),
+        );
+      } catch {}
+    } finally {
+      spin.stop();
+    }
 
     if (output === "json") {
       logger.log(JSON.stringify(created ?? { Domain: domain }, null, 2));

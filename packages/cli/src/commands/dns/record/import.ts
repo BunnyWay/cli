@@ -57,16 +57,19 @@ export const dnsImportCommand = defineCommand<ImportArgs>({
     const spin = spinner("Importing records...");
     spin.start();
 
-    // The import endpoint takes the raw zone file as the request body,
-    // which the generated spec does not model — pass it through directly.
-    const { data } = await client.POST("/dnszone/{zoneId}/import", {
-      params: { path: { zoneId: zone.Id as number } },
-      body: contents as never,
-      bodySerializer: (body: string) => body,
-      headers: { "Content-Type": "text/plain" },
-    } as never);
-
-    spin.stop();
+    let data: unknown;
+    try {
+      // The import endpoint takes the raw zone file as the request body,
+      // which the generated spec does not model — pass it through directly.
+      ({ data } = await client.POST("/dnszone/{zoneId}/import", {
+        params: { path: { zoneId: zone.Id as number } },
+        body: contents as never,
+        bodySerializer: (body: string) => body,
+        headers: { "Content-Type": "text/plain" },
+      } as never));
+    } finally {
+      spin.stop();
+    }
 
     const result = data as
       | {

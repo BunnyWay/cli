@@ -11,9 +11,12 @@ function runRequest(options: ClientOptions, request: Request) {
 function runResponse(
   options: ClientOptions,
   response: Response,
+  parseAs: "json" | "text" = "json",
 ): Promise<unknown> {
   const mw = authMiddleware(options);
-  return Promise.resolve(mw.onResponse!({ response } as never));
+  return Promise.resolve(
+    mw.onResponse!({ response, options: { parseAs } } as never),
+  );
 }
 
 describe("authMiddleware onRequest", () => {
@@ -140,25 +143,41 @@ describe("authMiddleware onResponse", () => {
     expect(result).toBeUndefined();
   });
 
-  test("allows an OK text/plain download body (e.g. DNS zone-file export)", async () => {
+  test("allows an OK text/plain download body when parseAs is text (e.g. DNS zone-file export)", async () => {
     const result = await runResponse(
       { apiKey: "k" },
       new Response("$ORIGIN example.com.\nwww IN CNAME example.b-cdn.net.", {
         status: 200,
         headers: { "content-type": "text/plain" },
       }),
+      "text",
     );
     expect(result).toBeUndefined();
   });
 
-  test("allows an OK application/octet-stream download body", async () => {
+  test("allows an OK application/octet-stream download body when parseAs is text", async () => {
     const result = await runResponse(
       { apiKey: "k" },
       new Response("binary-ish payload", {
         status: 200,
         headers: { "content-type": "application/octet-stream" },
       }),
+      "text",
     );
     expect(result).toBeUndefined();
+  });
+
+  test("throws on a non-JSON body when parseAs is json (proxy serving text/plain to a JSON call)", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        new Response("upstream connect error", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      ),
+    )) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.message).toContain("non-JSON");
   });
 });

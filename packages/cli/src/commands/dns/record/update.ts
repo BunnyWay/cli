@@ -85,7 +85,7 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
     const existing = await resolveRecordInteractive(zone, id, "update");
     const recordId = existing.Id as number;
 
-    // Seed from the existing record so unspecified fields are preserved.
+    // Seed from the existing record so unspecified fields (including advanced settings) are preserved.
     const body: UpdateDnsRecordModel = {
       Type: existing.Type ?? null,
       Ttl: existing.Ttl ?? null,
@@ -98,6 +98,15 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
       Port: existing.Port ?? null,
       Disabled: existing.Disabled ?? null,
       Comment: existing.Comment ?? null,
+      Accelerated: existing.Accelerated ?? null,
+      PullZoneId: existing.AcceleratedPullZoneId ?? null,
+      MonitorType: existing.MonitorType ?? null,
+      GeolocationLatitude: existing.GeolocationLatitude ?? null,
+      GeolocationLongitude: existing.GeolocationLongitude ?? null,
+      LatencyZone: existing.LatencyZone ?? null,
+      SmartRoutingType: existing.SmartRoutingType ?? null,
+      EnviromentalVariables: existing.EnviromentalVariables ?? null,
+      AutoSslIssuance: existing.AutoSslIssuance ?? null,
     };
 
     if (args.name !== undefined) body.Name = args.name === "@" ? "" : args.name;
@@ -116,11 +125,14 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
 
     const spin = spinner("Updating record...");
     spin.start();
-    await client.POST("/dnszone/{zoneId}/records/{id}", {
-      params: { path: { zoneId: zone.Id as number, id: recordId } },
-      body,
-    });
-    spin.stop();
+    try {
+      await client.POST("/dnszone/{zoneId}/records/{id}", {
+        params: { path: { zoneId: zone.Id as number, id: recordId } },
+        body,
+      });
+    } finally {
+      spin.stop();
+    }
 
     if (output === "json") {
       logger.log(

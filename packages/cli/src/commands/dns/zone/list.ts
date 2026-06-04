@@ -5,7 +5,7 @@ import { defineCommand } from "../../../core/define-command.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { spinner } from "../../../core/ui.ts";
-import { fetchZones } from "../api.ts";
+import { type DnsZoneModel, fetchZones } from "../api.ts";
 
 export const dnsZoneListCommand = defineCommand({
   command: "list",
@@ -22,8 +22,12 @@ export const dnsZoneListCommand = defineCommand({
 
     const spin = spinner("Fetching DNS zones...");
     spin.start();
-    const zones = await fetchZones(client);
-    spin.stop();
+    let zones: DnsZoneModel[];
+    try {
+      zones = await fetchZones(client);
+    } finally {
+      spin.stop();
+    }
 
     if (output === "json") {
       logger.log(JSON.stringify(zones, null, 2));

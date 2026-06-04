@@ -57,10 +57,15 @@ export const dnsRemoveCommand = defineCommand<RemoveArgs>({
 
     const removeSpin = spinner("Removing record...");
     removeSpin.start();
-    await client.DELETE("/dnszone/{zoneId}/records/{id}", {
-      params: { path: { zoneId: zone.Id as number, id: record.Id as number } },
-    });
-    removeSpin.stop();
+    try {
+      await client.DELETE("/dnszone/{zoneId}/records/{id}", {
+        params: {
+          path: { zoneId: zone.Id as number, id: record.Id as number },
+        },
+      });
+    } finally {
+      removeSpin.stop();
+    }
 
     if (output === "json") {
       logger.log(

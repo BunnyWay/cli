@@ -57,7 +57,7 @@ export async function resolveZone(
   if (!match?.Id) {
     throw new UserError(
       `No DNS zone found for "${domainOrId}".`,
-      'Run "bunny dns list" to see your zones.',
+      'Run "bunny dns zone list" to see your zones.',
     );
   }
   return fetchZone(client, match.Id);

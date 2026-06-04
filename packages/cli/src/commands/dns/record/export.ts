@@ -45,11 +45,15 @@ export const dnsExportCommand = defineCommand<ExportArgs>({
 
     const spin = spinner("Exporting zone...");
     spin.start();
-    const { data } = await client.GET("/dnszone/{id}/export", {
-      params: { path: { id: zone.Id as number } },
-      parseAs: "text",
-    });
-    spin.stop();
+    let data: unknown;
+    try {
+      ({ data } = await client.GET("/dnszone/{id}/export", {
+        params: { path: { id: zone.Id as number } },
+        parseAs: "text",
+      }));
+    } finally {
+      spin.stop();
+    }
 
     const zonefile = (data as string) ?? "";
 

@@ -35,8 +35,12 @@ export async function resolveZoneInteractive(
 
   const spin = spinner("Fetching zones...");
   spin.start();
-  const zones = await fetchZones(client);
-  spin.stop();
+  let zones: DnsZoneModel[];
+  try {
+    zones = await fetchZones(client);
+  } finally {
+    spin.stop();
+  }
 
   if (zones.length === 0) {
     throw new UserError(

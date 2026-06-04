@@ -1,4 +1,5 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
+import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { resolveConfig } from "../../../../config/index.ts";
 import { clientOptions } from "../../../../core/client-options.ts";
 import { defineCommand } from "../../../../core/define-command.ts";
@@ -30,10 +31,14 @@ export const dnsZoneDnssecEnableCommand = defineCommand<EnableArgs>({
 
     const spin = spinner("Enabling DNSSEC...");
     spin.start();
-    const { data } = await client.POST("/dnszone/{id}/dnssec", {
-      params: { path: { id: zone.Id as number } },
-    });
-    spin.stop();
+    let data: components["schemas"]["DnsSecDsRecordModel"] | undefined;
+    try {
+      ({ data } = await client.POST("/dnszone/{id}/dnssec", {
+        params: { path: { id: zone.Id as number } },
+      }));
+    } finally {
+      spin.stop();
+    }
 
     if (output === "json") {
       logger.log(JSON.stringify(data, null, 2));

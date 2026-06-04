@@ -48,10 +48,13 @@ export const dnsZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
 
     const removeSpin = spinner("Deleting zone...");
     removeSpin.start();
-    await client.DELETE("/dnszone/{id}", {
-      params: { path: { id: zone.Id as number } },
-    });
-    removeSpin.stop();
+    try {
+      await client.DELETE("/dnszone/{id}", {
+        params: { path: { id: zone.Id as number } },
+      });
+    } finally {
+      removeSpin.stop();
+    }
 
     if (output === "json") {
       logger.log(
