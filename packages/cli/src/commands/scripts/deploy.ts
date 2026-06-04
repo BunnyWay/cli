@@ -1,10 +1,18 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { createComputeClient } from "@bunny.net/openapi-client";
+import {
+  createComputeClient,
+  createCoreClient,
+} from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
+import {
+  fetchPullZoneHostnames,
+  type Hostname,
+  hostnameUrl,
+} from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { resolveManifestId } from "../../core/manifest.ts";
 import { spinner } from "../../core/ui.ts";
@@ -92,7 +100,8 @@ export const scriptsDeployCommand = defineCommand<DeployArgs>({
     const code = await Bun.file(absPath).text();
 
     const config = resolveConfig(profile, apiKey, verbose);
-    const client = createComputeClient(clientOptions(config, verbose));
+    const options = clientOptions(config, verbose);
+    const client = createComputeClient(options);
 
     const spin = spinner("Uploading code...");
     spin.start();
@@ -125,13 +134,52 @@ export const scriptsDeployCommand = defineCommand<DeployArgs>({
       return;
     }
 
+    if (!published) return;
+
     const { data: script } = await client.GET("/compute/script/{id}", {
       params: { path: { id } },
     });
 
-    const hostname = script?.LinkedPullZones?.[0]?.DefaultHostname ?? undefined;
-    if (hostname && published) {
-      logger.info(`Live at: ${hostname}`);
+    const zones = script?.LinkedPullZones ?? [];
+
+    // Pull the full hostname list (incl. custom domains) from the core API;
+    // fall back to the script's system hostname if that lookup fails.
+    const coreClient = createCoreClient(options);
+    const hostnames: Hostname[] = [];
+    for (const zone of zones) {
+      if (zone.Id == null) continue;
+      try {
+        hostnames.push(...(await fetchPullZoneHostnames(coreClient, zone.Id)));
+      } catch {}
+    }
+
+    if (hostnames.length === 0) {
+      const fallback = zones[0]?.DefaultHostname;
+      if (fallback) logger.info(`Live at: ${fallback}`);
+      return;
+    }
+
+    const system = hostnames.find((h) => h.IsSystemHostname);
+    const primary = system ?? hostnames[0];
+    const customs = hostnames.filter((h) => h !== primary);
+
+    if (primary?.Value) {
+      logger.info(
+        `Live at: ${hostnameUrl(primary.Value, {
+          hasCertificate: primary.HasCertificate,
+          forceSSL: primary.ForceSSL,
+        })}`,
+      );
+    }
+
+    for (const custom of customs) {
+      if (!custom.Value) continue;
+      logger.log(
+        `  ${hostnameUrl(custom.Value, {
+          hasCertificate: custom.HasCertificate,
+          forceSSL: custom.ForceSSL,
+        })}`,
+      );
     }
   },
 });

@@ -15,7 +15,7 @@ import type { Argv, CommandModule } from "yargs";
  */
 export function defineNamespace(
   command: string,
-  describe: string,
+  describe: string | false,
   subcommands: CommandModule[],
 ): CommandModule {
   let yRef: Argv;

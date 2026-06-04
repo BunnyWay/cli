@@ -81,6 +81,14 @@ bunny open --print
 bunny open --print --output json
 ```
 
+### `bunny docs`
+
+Open the bunny.net documentation in your default browser.
+
+```bash
+bunny docs
+```
+
 ### `bunny config`
 
 Manage CLI configuration and profiles.
@@ -477,6 +485,8 @@ bunny scripts deploy dist/index.js 12345
 | ---------------- | ------------------------------ |
 | `--skip-publish` | Upload code without publishing |
 
+After publishing, the live URL and any custom domains are printed.
+
 > **Note:** `bunny scripts deploy` works regardless of how the script was created or whether GitHub Actions is configured. The last deployment always wins — whether triggered by a GitHub Action or a manual CLI deploy.
 
 #### `bunny scripts link`
@@ -503,11 +513,154 @@ bunny scripts list --output json
 
 #### `bunny scripts show`
 
-Show details for an Edge Script. Uses the linked script from `.bunny/script.json` if no ID is provided.
+Show details for an Edge Script. Uses the linked script from `.bunny/script.json` if no ID is provided. Output includes the script's hostnames (system and custom) with their SSL status.
 
 ```bash
 bunny scripts show <script-id>
 bunny scripts show
+```
+
+#### `bunny scripts delete`
+
+Delete an Edge Script. Uses the linked script if no ID is provided. Requires double confirmation (or `--force` to skip).
+
+```bash
+bunny scripts delete <script-id>
+bunny scripts delete
+bunny scripts delete <script-id> --force
+```
+
+| Flag      | Description               |
+| --------- | ------------------------- |
+| `--force` | Skip confirmation prompts |
+
+#### `bunny scripts deployments`
+
+Manage Edge Script deployments.
+
+##### `bunny scripts deployments list`
+
+List deployments for an Edge Script. Uses the linked script if no ID is provided.
+
+```bash
+bunny scripts deployments list
+bunny scripts deployments ls
+bunny scripts deployments list <script-id>
+bunny scripts deployments list --output json
+```
+
+#### `bunny scripts env`
+
+Manage environment variables and secrets for an Edge Script. All subcommands default to the linked script; pass `--id <script-id>` to target another.
+
+##### `bunny scripts env list`
+
+List environment variables and secrets.
+
+```bash
+bunny scripts env list
+bunny scripts env ls
+bunny scripts env list --output json
+```
+
+##### `bunny scripts env set`
+
+Set an environment variable or secret. Runs interactively when arguments are omitted. The variable name is uppercased.
+
+```bash
+bunny scripts env set MY_VAR value
+bunny scripts env set            # interactive
+bunny scripts env set API_KEY secret-value --secret
+```
+
+| Flag       | Description                             |
+| ---------- | --------------------------------------- |
+| `--secret` | Store as an encrypted secret            |
+| `--id`     | Edge Script ID (uses linked if omitted) |
+
+##### `bunny scripts env remove`
+
+Remove an environment variable or secret. Shows an interactive picker when no name is given; prompts for confirmation unless `--force`.
+
+```bash
+bunny scripts env remove MY_VAR
+bunny scripts env rm MY_VAR -f
+```
+
+##### `bunny scripts env pull`
+
+Pull environment variables to a local `.env` file.
+
+```bash
+bunny scripts env pull
+bunny scripts env pull <script-id>
+bunny scripts env pull --force
+```
+
+| Flag      | Description                                    |
+| --------- | ---------------------------------------------- |
+| `--force` | Overwrite an existing `.env` without prompting |
+
+#### `bunny scripts hostnames`
+
+Manage custom hostnames for an Edge Script. A script's hostnames live on its linked pull zone, so these commands operate on that pull zone. All subcommands default to the linked script; pass `--id <script-id>` to target another, and `--pull-zone <id>` when a script has more than one linked pull zone.
+
+##### `bunny scripts hostnames add`
+
+Add a custom hostname. SSL is **not** requested by default — a free certificate can only be issued once your DNS points at bunny.net, so the command prints the `CNAME` record to create and the follow-up command to enable HTTPS. Pass `--ssl` to issue a certificate immediately; HTTP is redirected to HTTPS by default (opt out with `--no-force-ssl`).
+
+```bash
+# Add a hostname and get DNS instructions
+bunny scripts hostnames add shop.example.com
+
+# Add and request SSL now (DNS must already be pointed at bunny.net) — HTTPS forced
+bunny scripts hostnames add shop.example.com --ssl
+
+# Add and request SSL without forcing HTTPS
+bunny scripts hostnames add shop.example.com --ssl --no-force-ssl
+```
+
+| Flag             | Description                                                             |
+| ---------------- | ----------------------------------------------------------------------- |
+| `--ssl`          | Issue a free SSL certificate now and force HTTPS (requires DNS pointed) |
+| `--no-force-ssl` | When issuing SSL, keep serving HTTP instead of redirecting to HTTPS     |
+| `--id`           | Edge Script ID (uses linked script if omitted)                          |
+| `--pull-zone`    | Pull zone ID (required if the script has multiple linked zones)         |
+
+##### `bunny scripts hostnames ssl`
+
+Request a free SSL certificate for a custom hostname. Run this after the hostname's DNS points at bunny.net (see the `CNAME` printed by `hostnames add`). HTTP is redirected to HTTPS by default; pass `--no-force-ssl` to keep plain HTTP.
+
+```bash
+bunny scripts hostnames ssl shop.example.com
+bunny scripts hostnames ssl shop.example.com --no-force-ssl
+```
+
+##### `bunny scripts hostnames list`
+
+List the hostnames on a script's pull zone, with SSL and Force SSL status.
+
+```bash
+bunny scripts hostnames list
+bunny scripts hostnames ls
+bunny scripts hostnames list --output json
+```
+
+##### `bunny scripts hostnames remove`
+
+Remove a custom hostname. System hostnames controlled by bunny.net cannot be removed.
+
+```bash
+bunny scripts hostnames remove shop.example.com
+bunny scripts hostnames remove shop.example.com --force
+```
+
+#### `bunny scripts docs`
+
+Open the Edge Scripts documentation in your browser.
+
+```bash
+bunny scripts docs
 ```
 
 ### `bunny api`
@@ -542,6 +695,14 @@ bunny api GET /pullzone --verbose
 | `--body` | `-b`  | JSON request body |
 
 The method is case-insensitive (`get` and `GET` both work). Paths are relative to `https://api.bunny.net` — use `/database/...` for the Database API and `/mc/...` for Magic Containers.
+
+### `bunny completion`
+
+Generate a shell completion script. Add the output to your shell profile to enable tab completion.
+
+```bash
+bunny completion >> ~/.zshrc
+```
 
 ## Global Options
 

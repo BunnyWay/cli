@@ -1,9 +1,17 @@
-import { createComputeClient } from "@bunny.net/openapi-client";
+import {
+  createComputeClient,
+  createCoreClient,
+} from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { formatKeyValue, formatTable } from "../../core/format.ts";
+import {
+  fetchPullZoneHostnames,
+  type Hostname,
+  hostnameUrl,
+} from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { resolveManifestId } from "../../core/manifest.ts";
 import { spinner } from "../../core/ui.ts";
@@ -59,17 +67,28 @@ export const scriptsShowCommand = defineCommand<ShowArgs>({
   handler: async ({ [ARG_ID]: rawId, profile, output, verbose, apiKey }) => {
     const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
     const config = resolveConfig(profile, apiKey, verbose);
-    const client = createComputeClient(clientOptions(config, verbose));
+    const options = clientOptions(config, verbose);
+    const client = createComputeClient(options);
 
     const spin = spinner("Fetching Edge Script...");
     spin.start();
 
     const script = await fetchScript(client, id);
 
+    // Pull each linked pull zone's hostnames (incl. custom domains + SSL state).
+    const coreClient = createCoreClient(options);
+    const hostnames: Hostname[] = [];
+    for (const zone of script.LinkedPullZones ?? []) {
+      if (zone.Id == null) continue;
+      try {
+        hostnames.push(...(await fetchPullZoneHostnames(coreClient, zone.Id)));
+      } catch {}
+    }
+
     spin.stop();
 
     if (output === "json") {
-      logger.log(JSON.stringify(script, null, 2));
+      logger.log(JSON.stringify({ ...script, Hostnames: hostnames }, null, 2));
       return;
     }
 
@@ -114,6 +133,26 @@ export const scriptsShowCommand = defineCommand<ShowArgs>({
             String(pz.Id ?? ""),
             pz.PullZoneName ?? "",
             pz.DefaultHostname ?? "",
+          ]),
+          output,
+        ),
+      );
+    }
+
+    if (hostnames.length > 0) {
+      logger.log();
+      logger.log("Hostnames:");
+      logger.log(
+        formatTable(
+          ["Hostname", "Type", "SSL", "Force SSL"],
+          hostnames.map((h) => [
+            hostnameUrl(h.Value ?? "", {
+              hasCertificate: h.HasCertificate,
+              forceSSL: h.ForceSSL,
+            }),
+            h.IsSystemHostname ? "System" : "Custom",
+            h.HasCertificate ? "Yes" : "No",
+            h.ForceSSL ? "Yes" : "No",
           ]),
           output,
         ),
