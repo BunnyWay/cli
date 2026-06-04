@@ -1,6 +1,12 @@
 import type { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 import { UserError } from "../../core/errors.ts";
+import {
+  type CoreClient,
+  fetchHostnamesForZones,
+  type Hostname,
+  liveHostnames,
+} from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { confirm, openBrowser } from "../../core/ui.ts";
 import { SCRIPT_TYPE_MIDDLEWARE, SCRIPT_TYPE_STANDALONE } from "./constants.ts";
@@ -74,6 +80,38 @@ export async function fetchEnvEntries(
       secret: true,
     })),
   ].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Fetch every hostname across a script's linked pull zones (parallel; per-zone errors logged). */
+export async function fetchScriptHostnames(
+  coreClient: CoreClient,
+  script: EdgeScript,
+  verbose: boolean,
+): Promise<Hostname[]> {
+  const zoneIds = (script.LinkedPullZones ?? [])
+    .map((zone) => zone.Id)
+    .filter((id): id is number => id != null);
+  return fetchHostnamesForZones(coreClient, zoneIds, (zoneId, err) =>
+    logger.debug(
+      `Failed to fetch hostnames for pull zone ${zoneId}: ${err}`,
+      verbose,
+    ),
+  );
+}
+
+/** Print where a script is live, listing custom domains, falling back to the zone default. */
+export function logLiveHostnames(
+  script: EdgeScript,
+  hostnames: Hostname[],
+): void {
+  const { primary, customs } = liveHostnames(hostnames);
+  if (primary) {
+    logger.info(`Live at: ${primary}`);
+    for (const url of customs) logger.log(`  ${url}`);
+    return;
+  }
+  const fallback = script.LinkedPullZones?.[0]?.DefaultHostname;
+  if (fallback) logger.info(`Live at: ${fallback}`);
 }
 
 /** Prompt to open a script's hostname in the browser, with a deploy hint otherwise. */

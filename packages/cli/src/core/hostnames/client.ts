@@ -64,6 +64,43 @@ export async function fetchPullZoneHostnames(
   });
 }
 
+/** Fetch hostnames across several pull zones in parallel, tolerating per-zone failures. */
+export async function fetchHostnamesForZones(
+  client: CoreClient,
+  zoneIds: number[],
+  onError?: (zoneId: number, err: unknown) => void,
+): Promise<Hostname[]> {
+  const results = await Promise.all(
+    zoneIds.map(async (zoneId) => {
+      try {
+        return await fetchPullZoneHostnames(client, zoneId);
+      } catch (err) {
+        onError?.(zoneId, err);
+        return [] as Hostname[];
+      }
+    }),
+  );
+  return results.flat();
+}
+
+/** Pick the system-preferred live URL plus any custom-domain URLs from a hostname list. */
+export function liveHostnames(hostnames: Hostname[]): {
+  primary?: string;
+  customs: string[];
+} {
+  if (hostnames.length === 0) return { customs: [] };
+  const primaryHost = hostnames.find((h) => h.IsSystemHostname) ?? hostnames[0];
+  const toUrl = (h: Hostname) =>
+    hostnameUrl(h.Value ?? "", {
+      hasCertificate: h.HasCertificate,
+      forceSSL: h.ForceSSL,
+    });
+  return {
+    primary: primaryHost?.Value ? toUrl(primaryHost) : undefined,
+    customs: hostnames.filter((h) => h !== primaryHost && h.Value).map(toUrl),
+  };
+}
+
 /** Issue a free SSL certificate for a hostname on a pull zone, then set its Force SSL state. */
 export async function enableSsl(
   client: CoreClient,
