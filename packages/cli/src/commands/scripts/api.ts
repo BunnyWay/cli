@@ -148,13 +148,15 @@ export function logLiveHostnames(
   hostnames: Hostname[],
 ): void {
   const { primary, customs } = liveHostnames(hostnames);
-  if (primary) {
-    logger.info(`Live at: ${primary}`);
-    for (const url of customs) logger.log(`  ${url}`);
-    return;
+  if (primary) logger.info(`Live at: ${primary}`);
+  for (const url of customs) logger.log(`  ${url}`);
+
+  // Only fall back to the zone default when nothing resolved from the API —
+  // a valueless primary must not discard the custom domains we did find.
+  if (!primary && customs.length === 0) {
+    const fallback = script.LinkedPullZones?.[0]?.DefaultHostname;
+    if (fallback) logger.info(`Live at: ${fallback}`);
   }
-  const fallback = script.LinkedPullZones?.[0]?.DefaultHostname;
-  if (fallback) logger.info(`Live at: ${fallback}`);
 }
 
 /** Prompt to open a script's hostname in the browser, with a deploy hint otherwise. */
