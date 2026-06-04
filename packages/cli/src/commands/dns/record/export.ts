@@ -1,10 +1,10 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
-import { resolveZoneInteractive } from "./interactive.ts";
+import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
+import { defineCommand } from "../../../core/define-command.ts";
+import { logger } from "../../../core/logger.ts";
+import { spinner } from "../../../core/ui.ts";
+import { resolveZoneInteractive } from "../interactive.ts";
 
 interface ExportArgs {
   domain?: string;
@@ -16,9 +16,12 @@ export const dnsExportCommand = defineCommand<ExportArgs>({
   command: "export [domain]",
   describe: "Export a zone's records as a BIND zone file.",
   examples: [
-    ["$0 dns export example.com", "Print the zone file to stdout"],
-    ["$0 dns export example.com --file ./example.zone", "Write to a path"],
-    ["$0 dns export example.com --save", "Write to ./example.com.zone"],
+    ["$0 dns record export example.com", "Print the zone file to stdout"],
+    [
+      "$0 dns record export example.com --file ./example.zone",
+      "Write to a path",
+    ],
+    ["$0 dns record export example.com --save", "Write to ./example.com.zone"],
   ],
 
   builder: (yargs) =>

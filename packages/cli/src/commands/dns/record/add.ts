@@ -1,19 +1,19 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import prompts from "prompts";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
-import { resolveZoneInteractive } from "./interactive.ts";
+import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
+import { defineCommand } from "../../../core/define-command.ts";
+import { UserError } from "../../../core/errors.ts";
+import { logger } from "../../../core/logger.ts";
+import { spinner } from "../../../core/ui.ts";
+import { resolveZoneInteractive } from "../interactive.ts";
 import {
   parseRecordType,
   RECORD_TYPES,
   recordName,
   recordTypeLabel,
-} from "./record-types.ts";
+} from "../record-types.ts";
 
 type AddDnsRecordModel = components["schemas"]["AddDnsRecordModel"];
 
@@ -204,17 +204,20 @@ export const dnsAddCommand = defineCommand<AddArgs>({
   command: "add [domain] [name] [type] [values..]",
   describe: "Add a DNS record to a zone (interactive when args are omitted).",
   examples: [
-    ["$0 dns add example.com api A 198.51.100.1", "Add an A record"],
-    ["$0 dns add example.com '@' MX mail.example.com 10", "Add an MX record"],
+    ["$0 dns record add example.com api A 198.51.100.1", "Add an A record"],
     [
-      "$0 dns add example.com '@' SRV 10 0 389 sip.example.com",
+      "$0 dns record add example.com '@' MX mail.example.com 10",
+      "Add an MX record",
+    ],
+    [
+      "$0 dns record add example.com '@' SRV 10 0 389 sip.example.com",
       "Add an SRV record",
     ],
     [
-      "$0 dns add example.com '@' CAA '0 issue \"letsencrypt.org\"'",
+      "$0 dns record add example.com '@' CAA '0 issue \"letsencrypt.org\"'",
       "Add a CAA record",
     ],
-    ["$0 dns add", "Interactive wizard"],
+    ["$0 dns record add", "Interactive wizard"],
   ],
 
   builder: (yargs) =>

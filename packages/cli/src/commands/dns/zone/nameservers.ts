@@ -1,10 +1,10 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { formatKeyValue, formatTable } from "../../core/format.ts";
-import { logger } from "../../core/logger.ts";
-import { resolveZoneInteractive } from "./interactive.ts";
+import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
+import { defineCommand } from "../../../core/define-command.ts";
+import { formatKeyValue, formatTable } from "../../../core/format.ts";
+import { logger } from "../../../core/logger.ts";
+import { resolveZoneInteractive } from "../interactive.ts";
 
 interface NameserversArgs {
   domain?: string;
@@ -18,8 +18,8 @@ export const dnsNameserversCommand = defineCommand<NameserversArgs>({
   aliases: ["ns"],
   describe: "Show the nameservers to set at your registrar for a zone.",
   examples: [
-    ["$0 dns nameservers example.com", "Show the zone's nameservers"],
-    ["$0 dns ns example.com --output json", "JSON output"],
+    ["$0 dns zone nameservers example.com", "Show the zone's nameservers"],
+    ["$0 dns zone ns example.com --output json", "JSON output"],
   ],
 
   builder: (yargs) =>

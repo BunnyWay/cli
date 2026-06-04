@@ -1,15 +1,15 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
+import { defineCommand } from "../../../core/define-command.ts";
+import { logger } from "../../../core/logger.ts";
+import { spinner } from "../../../core/ui.ts";
 import {
   resolveRecordInteractive,
   resolveZoneInteractive,
-} from "./interactive.ts";
-import { parseRecordType, recordName } from "./record-types.ts";
+} from "../interactive.ts";
+import { parseRecordType, recordName } from "../record-types.ts";
 
 type UpdateDnsRecordModel = components["schemas"]["UpdateDnsRecordModel"];
 
@@ -37,13 +37,13 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
   describe: "Update an existing DNS record (prompts when args are omitted).",
   examples: [
     [
-      "$0 dns update example.com 123 --value 198.51.100.2",
+      "$0 dns record update example.com 123 --value 198.51.100.2",
       "Change a record value",
     ],
-    ["$0 dns update example.com 123 --ttl 3600", "Change the TTL"],
-    ["$0 dns update example.com 123 --disabled", "Disable a record"],
+    ["$0 dns record update example.com 123 --ttl 3600", "Change the TTL"],
+    ["$0 dns record update example.com 123 --disabled", "Disable a record"],
     [
-      "$0 dns update example.com --value 198.51.100.2",
+      "$0 dns record update example.com --value 198.51.100.2",
       "Pick the record interactively",
     ],
   ],

@@ -257,23 +257,26 @@ bunny-cli/
 │           │   │       ├── create.ts     # Generate an auth token (read-only/full-access, optional expiry)
 │           │   │       └── invalidate.ts # Invalidate all tokens for a database (with confirmation)
 │           │   ├── dns/                   # Experimental — hidden from help and landing page
-│           │   │   ├── index.ts          # defineNamespace("dns", ...) — registers all DNS commands
+│           │   │   ├── index.ts          # defineNamespace("dns", ...) — registers the record + zone groups (+ hidden domain aliases)
 │           │   │   ├── api.ts            # CoreClient type, fetchZones/fetchZone, resolveZone (domain-or-ID → zone)
 │           │   │   ├── interactive.ts    # resolveZoneInteractive (zone picker) + resolveRecordInteractive (record picker) fallbacks
 │           │   │   ├── record-types.ts   # Record type name⇄integer map, parseRecordType, recordTypeLabel, formatRecordValue
-│           │   │   ├── list.ts           # List DNS zones, or records within a zone (alias: ls)
-│           │   │   ├── add.ts            # Add a DNS record (positional grammar per type, or interactive wizard; --pull-zone/--script)
-│           │   │   ├── update.ts         # Update a DNS record (alias: edit; prompts to pick zone+record when omitted)
-│           │   │   ├── remove.ts         # Remove a DNS record (alias: rm; prompts to pick zone+record when omitted)
-│           │   │   ├── import.ts         # Import records from a BIND zone file (prompts for zone/file when omitted)
-│           │   │   ├── export.ts         # Export a zone as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
-│           │   │   ├── stats.ts          # Show DNS query statistics for a zone (TotalQueriesServed, by-type breakdown)
-│           │   │   ├── nameservers.ts    # Show registrar nameservers (alias: ns; custom if set, else kiki/coco.bunny.net)
-│           │   │   └── zone/
-│           │   │       ├── index.ts      # defineNamespace("zone", ...)
+│           │   │   ├── record/            # `dns record` — entries within a zone (aliases: records, rec)
+│           │   │   │   ├── index.ts      # defineNamespace("record", ...)
+│           │   │   │   ├── list.ts       # List records in a zone (alias: ls)
+│           │   │   │   ├── add.ts        # Add a record (positional grammar per type, or interactive wizard; --pull-zone/--script)
+│           │   │   │   ├── update.ts     # Update a record (alias: edit; prompts to pick zone+record when omitted)
+│           │   │   │   ├── remove.ts     # Remove a record (alias: rm; prompts to pick zone+record when omitted)
+│           │   │   │   ├── import.ts     # Import records from a BIND zone file (prompts for zone/file when omitted)
+│           │   │   │   └── export.ts     # Export records as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
+│           │   │   └── zone/              # `dns zone` — the zone itself (aliases: zones; hidden: domain, domains)
+│           │   │       ├── index.ts      # defineNamespace("zone", ...) + dnsZoneHiddenAliases (domain/domains)
+│           │   │       ├── list.ts       # List all DNS zones (alias: ls)
 │           │   │       ├── add.ts        # Create a DNS zone
 │           │   │       ├── show.ts       # Show zone details (nameservers, SOA, DNSSEC, logging, record count)
 │           │   │       ├── remove.ts     # Delete a DNS zone and its records (alias: rm)
+│           │   │       ├── stats.ts      # Show DNS query statistics (TotalQueriesServed, by-type bar chart in text mode)
+│           │   │       ├── nameservers.ts # Show registrar nameservers (alias: ns; custom if set, else kiki/coco.bunny.net)
 │           │   │       ├── dnssec/
 │           │   │       │   ├── index.ts  # defineNamespace("dnssec", ...)
 │           │   │       │   ├── enable.ts # Enable DNSSEC, print DS record for the registrar
@@ -821,21 +824,24 @@ bunny
 │   │                                       Update registry name and/or rotate credentials
 │   └── remove          <id>                Remove registry
 ├── dns                                     (experimental — hidden from help and landing page)
-│   │                                       Every [domain] is optional — omit it to pick a zone interactively (resolveZoneInteractive)
-│   ├── list            [domain] (alias: ls)  List DNS zones, or records within a zone
-│   ├── add             [domain] [name] [type] [values..] [--ttl] [--comment] [--pull-zone] [--script]
-│   │                                       Add a DNS record (interactive wizard when args omitted; MX/SRV/CAA use positional values; PullZone/Script use --pull-zone/--script)
-│   ├── update          [domain] [id] [--name] [--value] [--type] [--ttl] [--priority] [--weight] [--port] [--flags] [--tag] [--comment] [--disabled] [--pull-zone] [--script]
-│   │                                       Update a DNS record (alias: edit; prompts to pick zone+record when omitted)
-│   ├── remove          [domain] [id] [--force]  Remove a DNS record (alias: rm; prompts to pick zone+record when omitted)
-│   ├── import          [domain] [file]     Import records from a BIND zone file (prompts for zone/file when omitted)
-│   ├── export          [domain] [--file] [--save]  Export a zone as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
-│   ├── stats           [domain] [--from] [--to]  Show DNS query statistics for a zone (defaults to last 30 days)
-│   ├── nameservers     [domain] (alias: ns)  Show the nameservers to set at the registrar (custom if enabled, else bunny.net defaults)
-│   └── zone
+│   │                                       Two resource groups: `record` (entries in a zone) and `zone` (the zone itself).
+│   │                                       Every [domain] is optional — omit it to pick a zone interactively (resolveZoneInteractive).
+│   ├── record                              (aliases: records, rec)
+│   │   ├── list        [domain] (alias: ls)  List the records within a zone
+│   │   ├── add         [domain] [name] [type] [values..] [--ttl] [--comment] [--pull-zone] [--script]
+│   │   │                                   Add a DNS record (interactive wizard when args omitted; MX/SRV/CAA use positional values; PullZone/Script use --pull-zone/--script)
+│   │   ├── update      [domain] [id] [--name] [--value] [--type] [--ttl] [--priority] [--weight] [--port] [--flags] [--tag] [--comment] [--disabled] [--pull-zone] [--script]
+│   │   │                                   Update a DNS record (alias: edit; prompts to pick zone+record when omitted)
+│   │   ├── remove      [domain] [id] [--force]  Remove a DNS record (alias: rm; prompts to pick zone+record when omitted)
+│   │   ├── import      [domain] [file]     Import records from a BIND zone file (prompts for zone/file when omitted)
+│   │   └── export      [domain] [--file] [--save]  Export a zone as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
+│   └── zone                                (aliases: zones; hidden: domain, domains)
+│       ├── list                            List all DNS zones (alias: ls)
 │       ├── add         <domain>            Create a DNS zone
 │       ├── show        [domain]            Show zone details (nameservers, SOA, DNSSEC, logging, record count)
 │       ├── remove      [domain] [--force]  Delete a DNS zone and its records (alias: rm)
+│       ├── stats       [domain] [--from] [--to]  Show DNS query statistics for a zone (defaults to last 30 days; text mode renders a bar chart)
+│       ├── nameservers [domain] (alias: ns)  Show the nameservers to set at the registrar (custom if enabled, else bunny.net defaults)
 │       ├── dnssec
 │       │   ├── enable  [domain]            Enable DNSSEC and print the DS record for the registrar
 │       │   └── disable [domain] [--force]  Disable DNSSEC

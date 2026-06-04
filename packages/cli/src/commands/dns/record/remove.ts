@@ -1,18 +1,18 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
-import { confirm, spinner } from "../../core/ui.ts";
+import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
+import { defineCommand } from "../../../core/define-command.ts";
+import { logger } from "../../../core/logger.ts";
+import { confirm, spinner } from "../../../core/ui.ts";
 import {
   resolveRecordInteractive,
   resolveZoneInteractive,
-} from "./interactive.ts";
+} from "../interactive.ts";
 import {
   formatRecordValue,
   recordName,
   recordTypeLabel,
-} from "./record-types.ts";
+} from "../record-types.ts";
 
 interface RemoveArgs {
   domain?: string;
@@ -25,9 +25,9 @@ export const dnsRemoveCommand = defineCommand<RemoveArgs>({
   aliases: ["rm"],
   describe: "Remove a DNS record from a zone (prompts when args are omitted).",
   examples: [
-    ["$0 dns remove example.com 123", "Remove a record by ID"],
-    ["$0 dns remove example.com 123 --force", "Skip confirmation"],
-    ["$0 dns remove", "Pick a zone and record interactively"],
+    ["$0 dns record remove example.com 123", "Remove a record by ID"],
+    ["$0 dns record remove example.com 123 --force", "Skip confirmation"],
+    ["$0 dns record remove", "Pick a zone and record interactively"],
   ],
 
   builder: (yargs) =>

@@ -1,13 +1,13 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import chalk from "chalk";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { bunny } from "../../core/colors.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { formatKeyValue, formatTable } from "../../core/format.ts";
-import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
-import { resolveZoneInteractive } from "./interactive.ts";
+import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
+import { bunny } from "../../../core/colors.ts";
+import { defineCommand } from "../../../core/define-command.ts";
+import { formatKeyValue, formatTable } from "../../../core/format.ts";
+import { logger } from "../../../core/logger.ts";
+import { spinner } from "../../../core/ui.ts";
+import { resolveZoneInteractive } from "../interactive.ts";
 
 interface StatsArgs {
   domain?: string;
@@ -46,9 +46,9 @@ export const dnsStatsCommand = defineCommand<StatsArgs>({
   command: "stats [domain]",
   describe: "Show DNS query statistics for a zone.",
   examples: [
-    ["$0 dns stats example.com", "Statistics for the last 30 days"],
+    ["$0 dns zone stats example.com", "Statistics for the last 30 days"],
     [
-      "$0 dns stats example.com --from 2026-05-01 --to 2026-05-31",
+      "$0 dns zone stats example.com --from 2026-05-01 --to 2026-05-31",
       "Statistics for a date range",
     ],
   ],

@@ -398,52 +398,50 @@ bunny registries remove <registry-id>
 
 > **Experimental** — hidden from `--help` and the landing page while it stabilizes.
 
-Manage DNS zones and records. The `[domain]` argument accepts either the zone's domain name or its numeric zone ID — and is optional everywhere: omit it and you'll be prompted to pick a zone. `update` and `remove` likewise prompt you to pick a record when the ID is omitted.
+Manage DNS through two resource groups: **`bunny dns record`** (the entries within a zone) and **`bunny dns zone`** (the zone itself — settings, DNSSEC, logging, stats, nameservers). The `[domain]` argument accepts either the zone's domain name or its numeric zone ID, and is optional everywhere — omit it and you'll be prompted to pick a zone. `record update`/`record remove` likewise prompt you to pick a record when the ID is omitted. `record` aliases to `records`/`rec`; `zone` aliases to `zones` (and `domain`/`domains`).
 
 ```bash
-# List all DNS zones
-bunny dns list
-bunny dns ls
-
-# List records within a zone
-bunny dns list example.com
+# Records — list within a zone
+bunny dns record list example.com
+bunny dns rec ls example.com
 
 # Add records (use '@' for the zone apex)
-bunny dns add example.com api A 198.51.100.1
-bunny dns add example.com '@' MX mail.example.com 10
-bunny dns add example.com '@' SRV 10 0 389 sip.example.com
-bunny dns add example.com '@' CAA '0 issue "letsencrypt.org"'
+bunny dns record add example.com api A 198.51.100.1
+bunny dns record add example.com '@' MX mail.example.com 10
+bunny dns record add example.com '@' SRV 10 0 389 sip.example.com
+bunny dns record add example.com '@' CAA '0 issue "letsencrypt.org"'
 
 # Link a record to a pull zone or Edge Script
-bunny dns add example.com cdn PullZone --pull-zone 12345
-bunny dns add example.com fn Script --script 67890
+bunny dns record add example.com cdn PullZone --pull-zone 12345
+bunny dns record add example.com fn Script --script 67890
 
 # Interactive wizard — omit the record type (or all args) to be prompted
-bunny dns add
-bunny dns add example.com
+bunny dns record add
+bunny dns record add example.com
 
 # Update / remove a record by its ID
-bunny dns update example.com 123 --value 198.51.100.2 --ttl 3600
-bunny dns remove example.com 123
+bunny dns record update example.com 123 --value 198.51.100.2 --ttl 3600
+bunny dns record remove example.com 123
 
 # Import / export a BIND zone file
-bunny dns import example.com ./zonefile.txt
-bunny dns export example.com                  # print to stdout
-bunny dns export example.com --file ./my.zone # write to a path
-bunny dns export example.com --save           # write to ./example.com.zone
+bunny dns record import example.com ./zonefile.txt
+bunny dns record export example.com                  # print to stdout
+bunny dns record export example.com --file ./my.zone # write to a path
+bunny dns record export example.com --save           # write to ./example.com.zone
 
-# Query statistics (defaults to the last 30 days)
-bunny dns stats example.com
-bunny dns stats example.com --from 2026-05-01 --to 2026-05-31
-
-# Nameservers to set at your registrar (custom if enabled, else bunny.net defaults)
-bunny dns nameservers example.com
-bunny dns ns example.com
-
-# Manage zones
+# Zones — lifecycle
+bunny dns zone list
 bunny dns zone add example.com
 bunny dns zone show example.com
 bunny dns zone remove example.com
+
+# Query statistics (defaults to the last 30 days; text mode draws a bar chart)
+bunny dns zone stats example.com
+bunny dns zone stats example.com --from 2026-05-01 --to 2026-05-31
+
+# Nameservers to set at your registrar (custom if enabled, else bunny.net defaults)
+bunny dns zone nameservers example.com
+bunny dns zone ns example.com
 
 # DNSSEC — enable prints the DS record to register at your domain registrar
 bunny dns zone dnssec enable example.com
@@ -455,18 +453,18 @@ bunny dns zone logging enable example.com --anonymize-ip --anonymization drop
 bunny dns zone logging disable example.com
 ```
 
-Positional value ordering follows the record type: `A`/`AAAA`/`CNAME`/`TXT`/`NS` take a single value, `MX` takes `<value> <priority>`, `SRV` takes `<priority> <weight> <port> <target>`, and `CAA` takes a single quoted `'<flags> <tag> "<value>"'` string. `PullZone` and `Script` records take no positional value — pass `--pull-zone <id>` or `--script <id>` instead. Omit the record type (or all arguments) to run an interactive wizard that prompts for the zone, type, and per-type values.
+Positional value ordering for `record add` follows the record type: `A`/`AAAA`/`CNAME`/`TXT`/`NS` take a single value, `MX` takes `<value> <priority>`, `SRV` takes `<priority> <weight> <port> <target>`, and `CAA` takes a single quoted `'<flags> <tag> "<value>"'` string. `PullZone` and `Script` records take no positional value — pass `--pull-zone <id>` or `--script <id>` instead. Omit the record type (or all arguments) to run an interactive wizard that prompts for the zone, type, and per-type values.
 
-| Flag                                                                                                | Commands                                                               | Description                                                     |
-| --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `--ttl`                                                                                             | `add`, `update`                                                        | Time to live in seconds                                         |
-| `--comment`                                                                                         | `add`, `update`                                                        | Optional comment for the record                                 |
-| `--pull-zone`, `--script`                                                                           | `add`, `update`                                                        | Link a `PullZone` / `Script` record by ID                       |
-| `--name`, `--value`, `--type`, `--priority`, `--weight`, `--port`, `--flags`, `--tag`, `--disabled` | `update`                                                               | Edit individual record fields (see `bunny dns update --help`)   |
-| `--file`, `--save`                                                                                  | `export`                                                               | Write to a path, or to `<domain>.zone` in the current directory |
-| `--from`, `--to`                                                                                    | `stats`                                                                | Date range (defaults to the last 30 days)                       |
-| `--anonymize-ip`, `--anonymization`                                                                 | `zone logging enable`                                                  | Anonymize client IPs in logs (`onedigit` \| `drop`)             |
-| `--force`                                                                                           | `remove`, `zone remove`, `zone dnssec disable`, `zone logging disable` | Skip the confirmation prompt                                    |
+| Flag                                                                                                | Commands                                                                      | Description                                                          |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `--ttl`                                                                                             | `record add`, `record update`                                                 | Time to live in seconds                                              |
+| `--comment`                                                                                         | `record add`, `record update`                                                 | Optional comment for the record                                      |
+| `--pull-zone`, `--script`                                                                           | `record add`, `record update`                                                 | Link a `PullZone` / `Script` record by ID                            |
+| `--name`, `--value`, `--type`, `--priority`, `--weight`, `--port`, `--flags`, `--tag`, `--disabled` | `record update`                                                               | Edit individual record fields (see `bunny dns record update --help`) |
+| `--file`, `--save`                                                                                  | `record export`                                                               | Write to a path, or to `<domain>.zone` in the current directory      |
+| `--from`, `--to`                                                                                    | `zone stats`                                                                  | Date range (defaults to the last 30 days)                            |
+| `--anonymize-ip`, `--anonymization`                                                                 | `zone logging enable`                                                         | Anonymize client IPs in logs (`onedigit` \| `drop`)                  |
+| `--force`                                                                                           | `record remove`, `zone remove`, `zone dnssec disable`, `zone logging disable` | Skip the confirmation prompt                                         |
 
 ### `bunny scripts`
 

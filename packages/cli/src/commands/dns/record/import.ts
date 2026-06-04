@@ -1,12 +1,12 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import prompts from "prompts";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
-import { resolveZoneInteractive } from "./interactive.ts";
+import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
+import { defineCommand } from "../../../core/define-command.ts";
+import { UserError } from "../../../core/errors.ts";
+import { logger } from "../../../core/logger.ts";
+import { spinner } from "../../../core/ui.ts";
+import { resolveZoneInteractive } from "../interactive.ts";
 
 interface ImportArgs {
   domain?: string;
@@ -18,7 +18,7 @@ export const dnsImportCommand = defineCommand<ImportArgs>({
   describe: "Import DNS records into a zone from a BIND zone file.",
   examples: [
     [
-      "$0 dns import example.com ./zonefile.txt",
+      "$0 dns record import example.com ./zonefile.txt",
       "Import records from a zone file",
     ],
   ],
