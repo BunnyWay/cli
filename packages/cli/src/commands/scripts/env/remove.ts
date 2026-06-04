@@ -1,5 +1,4 @@
 import { createComputeClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
@@ -8,10 +7,8 @@ import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { resolveManifestId } from "../../../core/manifest.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
+import { fetchEnvEntries } from "../api.ts";
 import { SCRIPT_MANIFEST } from "../constants.ts";
-
-type EdgeScriptVariable = components["schemas"]["EdgeScriptVariableModel"];
-type EdgeScriptSecret = components["schemas"]["EdgeScriptSecretModel"];
 
 const COMMAND = "remove [name]";
 const ALIASES = ["rm"] as const;
@@ -30,12 +27,6 @@ interface RemoveArgs {
   [ARG_NAME]?: string;
   [ARG_ID]?: number;
   [ARG_FORCE]?: boolean;
-}
-
-interface EnvEntry {
-  id: number;
-  name: string;
-  secret: boolean;
 }
 
 /**
@@ -105,32 +96,9 @@ export const scriptsEnvRemoveCommand = defineCommand<RemoveArgs>({
     const spin = spinner("Fetching environment variables...");
     spin.start();
 
-    const [scriptResult, secretsResult] = await Promise.all([
-      client.GET("/compute/script/{id}", {
-        params: { path: { id } },
-      }),
-      client.GET("/compute/script/{id}/secrets", {
-        params: { path: { id } },
-      }),
-    ]);
+    const entries = await fetchEnvEntries(client, id);
 
     spin.stop();
-
-    const variables = scriptResult.data?.EdgeScriptVariables ?? [];
-    const secrets = secretsResult.data?.Secrets ?? [];
-
-    const entries: EnvEntry[] = [
-      ...variables.map((v: EdgeScriptVariable) => ({
-        id: v.Id ?? 0,
-        name: v.Name ?? "",
-        secret: false,
-      })),
-      ...secrets.map((s: EdgeScriptSecret) => ({
-        id: s.Id ?? 0,
-        name: s.Name ?? "",
-        secret: true,
-      })),
-    ].sort((a, b) => a.name.localeCompare(b.name));
 
     if (entries.length === 0) {
       logger.info("No environment variables or secrets found.");

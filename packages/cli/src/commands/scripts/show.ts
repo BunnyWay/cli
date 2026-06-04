@@ -7,7 +7,8 @@ import { formatKeyValue, formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { resolveManifestId } from "../../core/manifest.ts";
 import { spinner } from "../../core/ui.ts";
-import { SCRIPT_MANIFEST, SCRIPT_TYPE_LABELS } from "./constants.ts";
+import { fetchScript } from "./api.ts";
+import { SCRIPT_MANIFEST, scriptTypeLabel } from "./constants.ts";
 
 type EdgeScript = components["schemas"]["EdgeScriptModel"];
 
@@ -63,16 +64,9 @@ export const scriptsShowCommand = defineCommand<ShowArgs>({
     const spin = spinner("Fetching Edge Script...");
     spin.start();
 
-    const { data: script } = await client.GET("/compute/script/{id}", {
-      params: { path: { id } },
-    });
+    const script = await fetchScript(client, id);
 
     spin.stop();
-
-    if (!script) {
-      logger.error("Edge Script not found.");
-      process.exit(1);
-    }
 
     if (output === "json") {
       logger.log(JSON.stringify(script, null, 2));
@@ -86,7 +80,7 @@ export const scriptsShowCommand = defineCommand<ShowArgs>({
           { key: "Name", value: script.Name ?? "" },
           {
             key: "Type",
-            value: SCRIPT_TYPE_LABELS[script.ScriptType ?? -1] ?? "Unknown",
+            value: scriptTypeLabel(script.ScriptType),
           },
           { key: "Default Hostname", value: script.DefaultHostname ?? "" },
           { key: "System Hostname", value: script.SystemHostname ?? "" },

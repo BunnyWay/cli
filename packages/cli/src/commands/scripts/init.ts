@@ -1,17 +1,23 @@
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 import prompts from "prompts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifestAt } from "../../core/manifest.ts";
-import { confirm, openBrowser, spinner } from "../../core/ui.ts";
-import { SCRIPT_MANIFEST, TEMPLATES, type Template } from "./constants.ts";
+import { confirm, spinner } from "../../core/ui.ts";
+import { promptOpenInBrowser } from "./api.ts";
+import {
+  type EdgeScriptTypes,
+  parseScriptType,
+  SCRIPT_MANIFEST,
+  SCRIPT_TYPE_MIDDLEWARE,
+  SCRIPT_TYPE_STANDALONE,
+  TEMPLATES,
+  type Template,
+} from "./constants.ts";
 import { createScript } from "./create.ts";
 import { detectFromLockfile, pickPackageManager } from "./package-manager.ts";
-
-type EdgeScriptTypes = components["schemas"]["EdgeScriptTypes"];
 
 const COMMAND = "init";
 const DESCRIPTION = "Create a new Edge Script project.";
@@ -154,22 +160,25 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
     }
 
     // Step 2: Script type
-    let scriptType: EdgeScriptTypes | undefined;
-    if (args[ARG_TYPE]) {
-      scriptType = args[ARG_TYPE] === "standalone" ? 1 : 2;
-    } else if (args[ARG_TEMPLATE_REPO]) {
+    let scriptType: EdgeScriptTypes | undefined = parseScriptType(
+      args[ARG_TYPE],
+    );
+    if (scriptType === undefined && args[ARG_TEMPLATE_REPO]) {
       // Custom template repo implies the user knows what they're doing — default to standalone
-      scriptType = 1;
-    } else {
+      scriptType = SCRIPT_TYPE_STANDALONE;
+    } else if (scriptType === undefined) {
       const { value } = await prompts({
         type: "select",
         name: "value",
         message: "Script type:",
         choices: [
-          { title: "Standalone — handles requests independently", value: 1 },
+          {
+            title: "Standalone — handles requests independently",
+            value: SCRIPT_TYPE_STANDALONE,
+          },
           {
             title: "Middleware — processes requests before/after origin",
-            value: 2,
+            value: SCRIPT_TYPE_MIDDLEWARE,
           },
         ],
       });
@@ -412,18 +421,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
           output !== "json" &&
           process.stdout.isTTY
         ) {
-          const shouldOpen = await confirm("Open script in browser?");
-          if (shouldOpen) {
-            const url = deployResult.hostname.startsWith("http")
-              ? deployResult.hostname
-              : `https://${deployResult.hostname}`;
-            logger.dim(`  Opening ${url}`);
-            openBrowser(url);
-          } else {
-            logger.dim(
-              "  Make changes locally, then run `bunny scripts deploy <file>` to publish.",
-            );
-          }
+          await promptOpenInBrowser(deployResult.hostname);
         } else if (deployResult.hostname) {
           logger.dim(`  URL: ${deployResult.hostname}`);
         }
@@ -435,10 +433,11 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
           );
           logger.dim(`  SCRIPT_ID = ${created.id}`);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "";
         logger.warn(
-          err?.message
-            ? `Could not create script on bunny.net: ${err.message}`
+          message
+            ? `Could not create script on bunny.net: ${message}`
             : "Could not create script on bunny.net.",
         );
         logger.dim(

@@ -4,10 +4,10 @@ import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { resolveManifestId } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
+import { fetchScript } from "./api.ts";
 import { SCRIPT_MANIFEST } from "./constants.ts";
 
 type EdgeScript = components["schemas"]["EdgeScriptModel"];
@@ -85,13 +85,9 @@ export const scriptsDeleteCommand = defineCommand<DeleteArgs>({
     const fetchSpin = spinner("Fetching Edge Script...");
     fetchSpin.start();
 
-    const { data: script } = await client.GET("/compute/script/{id}", {
-      params: { path: { id } },
-    });
+    const script = await fetchScript(client, id);
 
     fetchSpin.stop();
-
-    if (!script) throw new UserError(`Edge Script ${id} not found.`);
 
     const confirmed = await confirm(
       `Delete Edge Script "${script.Name}" (${id})? This cannot be undone.`,
