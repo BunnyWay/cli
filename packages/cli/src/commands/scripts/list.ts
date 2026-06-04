@@ -5,7 +5,8 @@ import { defineCommand } from "../../core/define-command.ts";
 import { formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
-import { SCRIPT_TYPE_LABELS } from "./constants.ts";
+import { fetchScripts } from "./api.ts";
+import { scriptTypeLabel } from "./constants.ts";
 
 const COMMAND = "list";
 const DESCRIPTION = "List all Edge Scripts.";
@@ -43,20 +44,9 @@ export const scriptsListCommand = defineCommand({
     const spin = spinner("Fetching Edge Scripts...");
     spin.start();
 
-    const { data } = await client.GET("/compute/script", {
-      params: {
-        query: {
-          includeLinkedPullzones: true,
-          type: [1, 2],
-        },
-      },
-    });
+    const scripts = await fetchScripts(client);
 
     spin.stop();
-
-    const scripts = (data?.Items ?? []).sort((a, b) =>
-      (a.Name ?? "").localeCompare(b.Name ?? ""),
-    );
 
     if (output === "json") {
       logger.log(JSON.stringify(scripts, null, 2));
@@ -74,7 +64,7 @@ export const scriptsListCommand = defineCommand({
         scripts.map((script) => [
           String(script.Id ?? ""),
           script.Name ?? "",
-          SCRIPT_TYPE_LABELS[script.ScriptType ?? -1] ?? "Unknown",
+          scriptTypeLabel(script.ScriptType),
           (script.LinkedPullZones ?? [])
             .map((pz) => `${pz.DefaultHostname} (${pz.Id})`)
             .join(", "),

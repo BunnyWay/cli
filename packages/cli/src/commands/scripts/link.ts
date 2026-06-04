@@ -8,6 +8,7 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifest } from "../../core/manifest.ts";
 import { spinner } from "../../core/ui.ts";
+import { fetchScript, fetchScripts } from "./api.ts";
 import { SCRIPT_MANIFEST } from "./constants.ts";
 
 type EdgeScript = components["schemas"]["EdgeScriptModel"];
@@ -62,19 +63,13 @@ export const scriptsLinkCommand = defineCommand<LinkArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
 
-    if (id) {
+    if (id != null) {
       const spin = spinner("Fetching Edge Script...");
       spin.start();
 
-      const { data: script } = await client.GET("/compute/script/{id}", {
-        params: { path: { id } },
-      });
+      const script = await fetchScript(client, id);
 
       spin.stop();
-
-      if (!script) {
-        throw new UserError(`Edge Script ${id} not found.`);
-      }
 
       saveManifest(SCRIPT_MANIFEST, {
         id: script.Id,
@@ -94,20 +89,9 @@ export const scriptsLinkCommand = defineCommand<LinkArgs>({
     const spin = spinner("Fetching Edge Scripts...");
     spin.start();
 
-    const { data } = await client.GET("/compute/script", {
-      params: {
-        query: {
-          includeLinkedPullzones: true,
-          type: [1, 2],
-        },
-      },
-    });
+    const scripts = await fetchScripts(client);
 
     spin.stop();
-
-    const scripts = (data?.Items ?? []).sort((a, b) =>
-      (a.Name ?? "").localeCompare(b.Name ?? ""),
-    );
 
     if (scripts.length === 0) {
       throw new UserError("No Edge Scripts found in your account.");

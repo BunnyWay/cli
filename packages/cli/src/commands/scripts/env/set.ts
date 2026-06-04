@@ -1,5 +1,4 @@
 import { createComputeClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
@@ -8,10 +7,8 @@ import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { resolveManifestId } from "../../../core/manifest.ts";
 import { spinner } from "../../../core/ui.ts";
+import { fetchEnvEntries } from "../api.ts";
 import { SCRIPT_MANIFEST } from "../constants.ts";
-
-type EdgeScriptVariable = components["schemas"]["EdgeScriptVariableModel"];
-type EdgeScriptSecret = components["schemas"]["EdgeScriptSecretModel"];
 
 const COMMAND = "set [name] [value]";
 const DESCRIPTION = "Set an environment variable or secret for an Edge Script.";
@@ -141,38 +138,17 @@ export const scriptsEnvSetCommand = defineCommand<SetArgs>({
     const spin = spinner("Checking for conflicts...");
     spin.start();
 
-    const [scriptResult, secretsResult] = await Promise.all([
-      client.GET("/compute/script/{id}", {
-        params: { path: { id } },
-      }),
-      client.GET("/compute/script/{id}/secrets", {
-        params: { path: { id } },
-      }),
-    ]);
-
-    const existingVars = scriptResult.data?.EdgeScriptVariables ?? [];
-    const existingSecrets = secretsResult.data?.Secrets ?? [];
-
-    if (isSecret) {
-      const conflict = existingVars.find(
-        (v: EdgeScriptVariable) => v.Name?.toUpperCase() === name,
+    // A name conflict is one held by the opposite type (variable vs secret).
+    const conflict = (await fetchEnvEntries(client, id)).find(
+      (e) => e.name.toUpperCase() === name && e.secret !== isSecret,
+    );
+    if (conflict) {
+      spin.stop();
+      throw new UserError(
+        isSecret
+          ? `A variable named "${name}" already exists. Remove it first to set it as a secret.`
+          : `A secret named "${name}" already exists. Remove it first to set it as a variable.`,
       );
-      if (conflict) {
-        spin.stop();
-        throw new UserError(
-          `A variable named "${name}" already exists. Remove it first to set it as a secret.`,
-        );
-      }
-    } else {
-      const conflict = existingSecrets.find(
-        (s: EdgeScriptSecret) => s.Name?.toUpperCase() === name,
-      );
-      if (conflict) {
-        spin.stop();
-        throw new UserError(
-          `A secret named "${name}" already exists. Remove it first to set it as a variable.`,
-        );
-      }
     }
 
     spin.text = isSecret ? "Setting secret..." : "Setting variable...";

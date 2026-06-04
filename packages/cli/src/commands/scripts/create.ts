@@ -1,6 +1,5 @@
 import { basename, resolve } from "node:path";
 import { createComputeClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
@@ -9,10 +8,16 @@ import { UserError } from "../../core/errors.ts";
 import { formatKeyValue } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
-import { confirm, openBrowser, spinner } from "../../core/ui.ts";
-import { SCRIPT_MANIFEST } from "./constants.ts";
-
-type EdgeScriptTypes = components["schemas"]["EdgeScriptTypes"];
+import { confirm, spinner } from "../../core/ui.ts";
+import { promptOpenInBrowser } from "./api.ts";
+import {
+  type EdgeScriptTypes,
+  parseScriptType,
+  SCRIPT_MANIFEST,
+  SCRIPT_TYPE_MIDDLEWARE,
+  SCRIPT_TYPE_STANDALONE,
+  scriptTypeLabel,
+} from "./constants.ts";
 
 const COMMAND = "create [name]";
 const DESCRIPTION = "Create a new Edge Script on bunny.net.";
@@ -161,31 +166,39 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
     const name = args[ARG_NAME] ?? basename(resolve(process.cwd()));
     if (!name) throw new UserError("Script name is required.");
 
+    const manifest = loadManifest(SCRIPT_MANIFEST);
+
     // Resolve script type: explicit flag → manifest → prompt → error.
-    let scriptType: EdgeScriptTypes | undefined;
-    if (args[ARG_TYPE]) {
-      scriptType = args[ARG_TYPE] === "standalone" ? 1 : 2;
-    } else {
-      const manifest = loadManifest(SCRIPT_MANIFEST);
-      if (manifest.scriptType === 1 || manifest.scriptType === 2) {
-        scriptType = manifest.scriptType as EdgeScriptTypes;
+    let scriptType = parseScriptType(args[ARG_TYPE]);
+    if (scriptType === undefined) {
+      if (
+        manifest.scriptType === SCRIPT_TYPE_STANDALONE ||
+        manifest.scriptType === SCRIPT_TYPE_MIDDLEWARE
+      ) {
+        scriptType = manifest.scriptType;
       } else if (isInteractive) {
         const { value } = await prompts({
           type: "select",
           name: "value",
           message: "Script type:",
           choices: [
-            { title: "Standalone — handles requests independently", value: 1 },
+            {
+              title: "Standalone — handles requests independently",
+              value: SCRIPT_TYPE_STANDALONE,
+            },
             {
               title: "Middleware — processes requests before/after origin",
-              value: 2,
+              value: SCRIPT_TYPE_MIDDLEWARE,
             },
           ],
         });
         scriptType = value;
       }
     }
-    if (scriptType !== 1 && scriptType !== 2) {
+    if (
+      scriptType !== SCRIPT_TYPE_STANDALONE &&
+      scriptType !== SCRIPT_TYPE_MIDDLEWARE
+    ) {
       throw new UserError(
         "Script type is required.",
         "Pass --type standalone or --type middleware.",
@@ -203,14 +216,13 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
     });
 
     // Decide whether to link this directory to the new script.
-    const existing = loadManifest(SCRIPT_MANIFEST);
     const linkArg = args[ARG_LINK];
     let shouldLink: boolean;
     if (linkArg !== undefined) {
       shouldLink = linkArg;
-    } else if (isInteractive && existing.id && existing.id !== created.id) {
+    } else if (isInteractive && manifest.id && manifest.id !== created.id) {
       shouldLink = await confirm(
-        `Replace existing link to ${existing.name ?? existing.id}?`,
+        `Replace existing link to ${manifest.name ?? manifest.id}?`,
       );
     } else {
       shouldLink = true;
@@ -246,7 +258,7 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
       { key: "Name", value: created.name },
       {
         key: "Type",
-        value: created.scriptType === 1 ? "Standalone" : "Middleware",
+        value: scriptTypeLabel(created.scriptType),
       },
     ];
     if (created.hostname) {
@@ -265,18 +277,7 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
     logger.log();
 
     if (created.hostname && isInteractive) {
-      const shouldOpen = await confirm("Open script in browser?");
-      if (shouldOpen) {
-        const url = created.hostname.startsWith("http")
-          ? created.hostname
-          : `https://${created.hostname}`;
-        logger.dim(`  Opening ${url}`);
-        openBrowser(url);
-      } else {
-        logger.dim(
-          "  Make changes locally, then run `bunny scripts deploy <file>` to publish.",
-        );
-      }
+      await promptOpenInBrowser(created.hostname);
     } else {
       logger.dim(`  Deploy:  bunny scripts deploy <file>`);
     }
