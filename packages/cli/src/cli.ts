@@ -8,6 +8,7 @@ import { authLoginCommand } from "./commands/auth/login.ts";
 import { authLogoutCommand } from "./commands/auth/logout.ts";
 import { configNamespace } from "./commands/config/index.ts";
 import { dbNamespace } from "./commands/db/index.ts";
+import { dnsNamespace } from "./commands/dns/index.ts";
 import { docsCommand } from "./commands/docs.ts";
 import { openCommand } from "./commands/open.ts";
 import { pzNamespace } from "./commands/pz/index.ts";
@@ -35,6 +36,7 @@ const commands: CommandModule[] = [
 const experimentalCommands: CommandModule[] = [
   appsNamespace,
   registriesNamespace,
+  dnsNamespace,
 ];
 
 let instance = yargs(hideBin(process.argv))
