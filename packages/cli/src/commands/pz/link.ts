@@ -103,7 +103,7 @@ export const pzLinkCommand = defineCommand<LinkArgs>({
 
     if (!selected) {
       logger.log("Link cancelled.");
-      process.exit(1);
+      return;
     }
 
     saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, {
