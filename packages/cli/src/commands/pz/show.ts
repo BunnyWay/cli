@@ -53,7 +53,7 @@ export const pzShowCommand = defineCommand<ShowArgs>({
     } catch (err: unknown) {
       spin.stop();
       const msg = err instanceof Error ? err.message : String(err);
-      throw new UserError(`Fetching failed: ${msg}`);
+      throw new UserError(`Failed to fetch pull zone ${zoneId}: ${msg}`);
     }
 
     spin.stop();

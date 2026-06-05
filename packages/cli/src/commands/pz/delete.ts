@@ -50,9 +50,15 @@ export const pzDeleteCommand = defineCommand<DeleteArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const { data: zone } = await client.GET("/pullzone/{id}", {
+    const { data: zone, error: getError } = await client.GET("/pullzone/{id}", {
       params: { path: { id: zoneId } },
     });
+
+    if (getError) {
+      throw new UserError(
+        `Failed to fetch pull zone ${zoneId}: ${getError.message ?? getError}`,
+      );
+    }
 
     const label = zone?.Name
       ? `${zone.Name} (${zoneId})`
