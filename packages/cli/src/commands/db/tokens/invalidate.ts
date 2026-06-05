@@ -10,6 +10,7 @@ import {
   removeEnvValue,
   writeEnvValue,
 } from "../../../utils/env-file.ts";
+import { generateToken } from "../api.ts";
 import {
   ARG_DATABASE_ID,
   ENV_DATABASE_AUTH_TOKEN,
@@ -187,9 +188,9 @@ export const dbTokensInvalidateCommand = defineCommand<{
     spin3.start();
 
     const [tokenResult, dbResult] = await Promise.all([
-      client.PUT("/v2/databases/{db_id}/auth/generate", {
-        params: { path: { db_id: databaseId } },
-        body: { authorization: "full-access", expires_at: null },
+      generateToken(client, databaseId, {
+        authorization: "full-access",
+        expiresAt: null,
       }),
       client.GET("/v2/databases/{db_id}", {
         params: { path: { db_id: databaseId } },
@@ -198,7 +199,7 @@ export const dbTokensInvalidateCommand = defineCommand<{
 
     spin3.stop();
 
-    const newToken = tokenResult.data?.token;
+    const newToken = tokenResult?.token;
     const dbUrl = dbResult.data?.db?.url;
 
     if (!newToken) {

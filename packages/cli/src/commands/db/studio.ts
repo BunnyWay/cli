@@ -6,10 +6,12 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import { readEnvValue } from "../../utils/env-file.ts";
+import { generateToken, tokenExpiryFromNow } from "./api.ts";
 import {
   ARG_DATABASE_ID,
   ENV_DATABASE_AUTH_TOKEN,
   ENV_DATABASE_URL,
+  TOKEN_TTL_MINUTES,
 } from "./constants.ts";
 import { resolveDbId } from "./resolve-db.ts";
 
@@ -23,8 +25,6 @@ const ARG_NO_OPEN = "no-open";
 const ARG_DEV = "dev";
 const ARG_FORCE = "force";
 const ARG_FORCE_ALIAS = "f";
-
-const TOKEN_TTL_MINUTES = 30;
 
 /**
  * Resolve database credentials — same pattern as shell.ts.
@@ -64,13 +64,10 @@ async function resolveCredentials(
 
   if (!token) {
     spin.text = "Generating token...";
-    const expiresAt = new Date(
-      Date.now() + TOKEN_TTL_MINUTES * 60 * 1000,
-    ).toISOString();
     fetches.push(
-      apiClient.PUT("/v2/databases/{db_id}/auth/generate", {
-        params: { path: { db_id: databaseId } },
-        body: { authorization: "full-access", expires_at: expiresAt },
+      generateToken(apiClient, databaseId, {
+        authorization: "full-access",
+        expiresAt: tokenExpiryFromNow(),
       }),
     );
   }
@@ -80,7 +77,7 @@ async function resolveCredentials(
   spin.stop();
 
   if (!url && dbResult) url = dbResult.data?.db?.url;
-  if (!token && tokenResult) token = tokenResult.data?.token;
+  if (!token && tokenResult) token = tokenResult.token;
 
   if (!url || !token) {
     throw new UserError("Could not resolve database URL or generate token.");

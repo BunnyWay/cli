@@ -1,5 +1,4 @@
 import { createDbClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
 import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
@@ -8,10 +7,9 @@ import { UserError } from "../../../core/errors.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
+import { fetchDatabaseWithRegions, regionNameMap } from "../api.ts";
 import { ARG_DATABASE_ID } from "../constants.ts";
 import { resolveDbId } from "../resolve-db.ts";
-
-type Region = components["schemas"]["Region"];
 
 const COMMAND = `remove [${ARG_DATABASE_ID}]`;
 const ALIASES = ["rm"] as const;
@@ -98,27 +96,14 @@ export const dbRegionsRemoveCommand = defineCommand<RemoveArgs>({
     const spin = spinner("Fetching database and regions...");
     spin.start();
 
-    const [dbResult, configResult] = await Promise.all([
-      client.GET("/v2/databases/{db_id}", {
-        params: { path: { db_id: databaseId } },
-      }),
-      client.GET("/v1/config", { params: {} }),
-    ]);
+    const { db, config: regionConfig } = await fetchDatabaseWithRegions(
+      client,
+      databaseId,
+    );
 
     spin.stop();
 
-    const db = dbResult.data?.db;
-    if (!db) throw new UserError(`Database ${databaseId} not found.`);
-
-    // Build region name lookup
-    const regionNames = new Map<string, string>();
-    const allRegions: Region[] = [
-      ...(configResult.data?.primary_regions ?? []),
-      ...(configResult.data?.replica_regions ?? []),
-    ];
-    for (const r of allRegions) {
-      regionNames.set(r.id, r.name);
-    }
+    const regionNames = regionNameMap(regionConfig);
 
     let removePrimary: Set<string>;
     let removeReplicas: Set<string>;

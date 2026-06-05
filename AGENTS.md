@@ -158,6 +158,11 @@ bunny-cli/
 │           │   ├── errors.ts             # Re-exports UserError/ApiError from @bunny.net/openapi-client + ConfigError
 │           │   ├── format.ts             # Shared table/key-value rendering (text, table, csv, markdown)
 │           │   ├── format.test.ts        # Tests for format utilities
+│           │   ├── hostnames/            # Reusable pull-zone hostname feature (mounted by scripts; apps next)
+│           │   │   ├── index.ts          # Re-exports client helpers + createHostnamesCommands
+│           │   │   ├── client.ts         # hostnameUrl(), fetchPullZoneHostnames(), enableSsl() + Hostname/ResolvedPullZone types
+│           │   │   ├── client.test.ts    # Tests for hostnameUrl() scheme logic
+│           │   │   └── commands.ts       # createHostnamesCommands(): add/ssl/list/remove factory parameterized by a pull-zone resolver
 │           │   ├── logger.ts             # Chalk-based structured logger
 │           │   ├── manifest.ts           # .bunny/ context file resolution (load, save, resolveManifestId)
 │           │   ├── types.ts              # GlobalArgs, OutputFormat, and shared type definitions
@@ -233,19 +238,22 @@ bunny-cli/
 │           │   │       └── delete.ts     # Remove a profile
 │           │   ├── whoami.ts             # Show authenticated account: name, email, profile (top-level: bunny whoami)
 │           │   ├── db/
-│           │   │   ├── index.ts          # defineNamespace("db", ...) — registers all database commands
-│           │   │   ├── constants.ts      # Database status labels, region maps
-│           │   │   ├── create.ts         # Create a new database (interactive region selection or flags)
-│           │   │   ├── delete.ts         # Delete a database (double confirmation or --force)
-│           │   │   ├── docs.ts           # Open database documentation in browser
-│           │   │   ├── link.ts           # Link directory to a database (.bunny/database.json)
-│           │   │   ├── list.ts           # List all databases
-│           │   │   ├── quickstart.ts     # Generate quickstart guide for connecting to a database
-│           │   │   ├── region-choices.ts # Shared: grouped region prompt choices by continent
-│           │   │   ├── resolve-db.ts     # Helper: resolve database ID from flag, manifest, .env, or interactive prompt
-│           │   │   ├── shell.ts          # Thin wrapper: credential resolution + delegates to @bunny.net/database-shell
-│           │   │   ├── show.ts           # Show database details (regions, size, status)
-│           │   │   ├── usage.ts          # Show database usage statistics
+│           │   │   ├── index.ts               # defineNamespace("db", ...) — registers all database commands
+│           │   │   ├── constants.ts           # Database status labels, region maps
+│           │   │   ├── api.ts                 # Shared: typed v2 database/token API calls (fetchDatabase, fetchAllDatabases, generateToken, fetchLiveStatus, …)
+│           │   │   ├── create.ts              # Create a new database (interactive region selection or flags)
+│           │   │   ├── delete.ts              # Delete a database (double confirmation or --force)
+│           │   │   ├── docs.ts                # Open database documentation in browser
+│           │   │   ├── link.ts                # Link directory to a database (.bunny/database.json)
+│           │   │   ├── list.ts                # List all databases
+│           │   │   ├── quickstart.ts          # Generate quickstart guide for connecting to a database
+│           │   │   ├── quickstart-snippets.ts # Shared: per-language connection code snippets (TypeScript, Go, Rust, .NET)
+│           │   │   ├── region-choices.ts      # Shared: grouped region prompt choices by continent
+│           │   │   ├── resolve-db.ts          # Helper: resolve database ID from flag, manifest, .env, or interactive prompt
+│           │   │   ├── shell.ts               # Thin wrapper: credential resolution + delegates to @bunny.net/database-shell
+│           │   │   ├── show.ts                # Show database details (regions, size, status)
+│           │   │   ├── studio.ts              # Open a visual database explorer in the browser (local web UI)
+│           │   │   ├── usage.ts               # Show database usage statistics
 │           │   │   ├── regions/
 │           │   │   │   ├── index.ts     # defineNamespace("regions", ...) — registers region commands
 │           │   │   │   ├── add.ts       # Add primary/replica regions (interactive multiselect or flags)
@@ -268,15 +276,18 @@ bunny-cli/
 │           │       ├── index.ts          # defineNamespace("scripts", ...) — registers all script commands
 │           │       ├── constants.ts      # SCRIPT_MANIFEST, SCRIPT_TYPE_LABELS
 │           │       ├── create.ts         # Create a remote Edge Script (exports shared `createScript` helper)
+│           │       ├── delete.ts         # Delete an Edge Script (double confirmation or --force)
 │           │       ├── deploy.ts         # Deploy code to an Edge Script (publishes by default)
 │           │       ├── docs.ts           # Open Edge Script documentation in browser
 │           │       ├── init.ts           # Scaffold a new Edge Script project from a template (calls `createScript`)
 │           │       ├── link.ts           # Link directory to a remote Edge Script (.bunny/script.json)
 │           │       ├── list.ts           # List all Edge Scripts (Standalone + Middleware)
-│           │       ├── show.ts           # Show Edge Script details (supports manifest fallback)
+│           │       ├── show.ts           # Show Edge Script details + hostnames (supports manifest fallback)
 │           │       ├── deployments/
 │           │       │   ├── index.ts      # defineNamespace("deployments", ...)
 │           │       │   └── list.ts       # List deployments for an Edge Script
+│           │       ├── hostnames/
+│           │       │   └── index.ts      # Mounts core/hostnames factory: script pull-zone resolver + --id/--pull-zone, visible as "domains" with hidden "hostnames" alias
 │           │       └── env/
 │           │           ├── index.ts      # defineNamespace("env", ...)
 │           │           ├── list.ts       # List environment variables for a script
@@ -301,10 +312,16 @@ bunny-cli/
 - **Namespaces are directories** with an `index.ts` that calls `defineNamespace()`.
 - **Leaf commands** are individual `.ts` files that call `defineCommand()`.
 - **Top-level commands** (`login`, `logout`, `whoami`) are registered directly in `cli.ts` without a namespace.
-- **Shared internal code lives in `packages/cli/src/core/`** — command factories, errors, logger, format utilities, UI helpers, and shared types. Keep this flat (no nested subdirectories).
+- **Shared internal code lives in `packages/cli/src/core/`** — command factories, errors, logger, format utilities, UI helpers, and shared types. Keep this mostly flat; a cohesive, reusable feature spanning several files may use a subdirectory (e.g. `core/hostnames/` — the pull-zone hostname helpers + the `createHostnamesCommands` factory mounted by both `scripts` and, in future, `apps`).
 - **Config logic lives in `packages/cli/src/config/`** — schema, file resolution, and profile management.
 - **Error classes are split.** `UserError` and `ApiError` live in `@bunny.net/openapi-client` (the SDK needs them). `ConfigError` lives in the CLI and extends `UserError`. The CLI's `errors.ts` re-exports `UserError` and `ApiError` from `@bunny.net/openapi-client`.
 - **Import API clients from `@bunny.net/openapi-client`**, not relative paths. Import generated types from `@bunny.net/openapi-client/generated/<spec>.d.ts`.
+- **Pull-zone settings are exposed via "Hybrid D" across surfaces.** Scripts and apps are backed by a pull zone, which has a large settings surface (hostnames, caching, edge rules, origin, security, purge, CORS, optimizer, logging, …). To keep each owner's help legible:
+  - **Flatten only first-class groups** directly into the owner — picked by user mental model, kept to one or two. `scripts domains` is the flattened group (a custom domain is "my site's address," not a CDN setting).
+  - **Group the long tail** under a `pullzone` sub-namespace within the owner (e.g. `scripts pullzone <setting>`), so the owner's top-level help gains one line, not ten. Curate per owner — don't expose settings that don't apply (a script _is_ its pull zone's origin, so no origin-URL command under `scripts`).
+  - **A standalone `bunny pullzone` command** (planned) is the canonical full surface for pull zones not backing a script/app, targeted by `--id`.
+  - Each setting-area is a **mountable factory** like `createHostnamesCommands` (`core/hostnames/`): one `{ commandPath, target, resolve(args) => { pullZoneId, coreClient }, hiddenAliases }` mounted into the root `pullzone` (resolve from `--id`), `scripts` (resolve from the linked manifest), and `apps` (resolve from the CDN endpoint). The resolver is the only per-surface difference.
+  - Canonical term is `pullzone` (matches the bunny.net dashboard/API); `pz` is a hidden alias (`defineNamespace(alias, false, …)`), the same pattern as `domains`'s hidden `hostnames` alias.
 
 ---
 
@@ -827,9 +844,18 @@ bunny
 │   │                                       Create a remote Edge Script (use after init when --deploy was skipped)
 │   ├── deploy          <file> [id] [--skip-publish]
 │   │                                       Deploy code to an Edge Script (publishes by default)
+│   ├── delete          [id] [--force]      Delete an Edge Script (double confirmation or --force)
 │   ├── deployments
 │   │   └── list        [id] (alias: ls)    List deployments for an Edge Script
 │   ├── docs                                Open Edge Script documentation in browser
+│   ├── domains                             (hidden alias: hostnames)
+│   │   ├── add         <domain> [--ssl] [--no-force-ssl] [--id] [--pull-zone]
+│   │   │                                   Add a custom domain (SSL opt-in; HTTPS forced by default)
+│   │   ├── ssl         <domain> [--no-force-ssl] [--id] [--pull-zone]
+│   │   │                                   Issue a free SSL certificate (HTTPS forced by default)
+│   │   ├── list        (alias: ls) [--id] [--pull-zone]   List pull zone domains
+│   │   └── remove      <domain> (alias: rm) [--force] [--id] [--pull-zone]
+│   │                                       Remove a custom domain
 │   ├── env
 │   │   ├── list        [id]                List environment variables
 │   │   ├── set         <key> <value> [id]  Set environment variable

@@ -1,5 +1,4 @@
 import { createComputeClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
@@ -7,10 +6,8 @@ import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { resolveManifestId } from "../../../core/manifest.ts";
 import { spinner } from "../../../core/ui.ts";
+import { fetchEnvEntries } from "../api.ts";
 import { SCRIPT_MANIFEST } from "../constants.ts";
-
-type EdgeScriptVariable = components["schemas"]["EdgeScriptVariableModel"];
-type EdgeScriptSecret = components["schemas"]["EdgeScriptSecretModel"];
 
 const COMMAND = "list [id]";
 const ALIASES = ["ls"] as const;
@@ -69,34 +66,9 @@ export const scriptsEnvListCommand = defineCommand<ListArgs>({
     const spin = spinner("Fetching environment variables...");
     spin.start();
 
-    const [scriptResult, secretsResult] = await Promise.all([
-      client.GET("/compute/script/{id}", {
-        params: { path: { id } },
-      }),
-      client.GET("/compute/script/{id}/secrets", {
-        params: { path: { id } },
-      }),
-    ]);
+    const entries = await fetchEnvEntries(client, id);
 
     spin.stop();
-
-    const variables = scriptResult.data?.EdgeScriptVariables ?? [];
-    const secrets = secretsResult.data?.Secrets ?? [];
-
-    const entries = [
-      ...variables.map((v: EdgeScriptVariable) => ({
-        id: v.Id ?? 0,
-        name: v.Name ?? "",
-        value: v.DefaultValue ?? "",
-        secret: false,
-      })),
-      ...secrets.map((s: EdgeScriptSecret) => ({
-        id: s.Id ?? 0,
-        name: s.Name ?? "",
-        value: "",
-        secret: true,
-      })),
-    ].sort((a, b) => a.name.localeCompare(b.name));
 
     if (output === "json") {
       logger.log(JSON.stringify(entries, null, 2));

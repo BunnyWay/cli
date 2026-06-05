@@ -8,7 +8,17 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
 import { readEnvValue } from "../../utils/env-file.ts";
-import { ARG_DATABASE_ID } from "./constants.ts";
+import { generateToken } from "./api.ts";
+import {
+  ARG_DATABASE_ID,
+  ENV_DATABASE_AUTH_TOKEN,
+  ENV_DATABASE_URL,
+} from "./constants.ts";
+import {
+  getSnippet,
+  QUICKSTART_LANGUAGES,
+  type QuickstartLang,
+} from "./quickstart-snippets.ts";
 import { resolveDbId } from "./resolve-db.ts";
 
 const COMMAND = `quickstart [${ARG_DATABASE_ID}]`;
@@ -18,114 +28,6 @@ const ARG_LANG = "lang";
 const ARG_LANG_ALIAS = "l";
 const ARG_URL = "url";
 const ARG_TOKEN = "token";
-
-interface Snippet {
-  lang: string;
-  install: string;
-  code: string;
-}
-
-const LANGUAGES = [
-  { id: "typescript", title: "TypeScript" },
-  { id: "go", title: "Go" },
-  { id: "rust", title: "Rust" },
-  { id: "dotnet", title: ".NET" },
-] as const;
-
-type LangId = (typeof LANGUAGES)[number]["id"];
-
-/** Return the install command and connection code snippet for a given language. */
-function getSnippet(lang: string): Snippet {
-  switch (lang) {
-    case "typescript":
-      return {
-        lang: "TypeScript",
-        install: "bun add @libsql/client",
-        code: `import { createClient } from "@libsql/client/web";
-
-const client = createClient({
-  url: process.env.BUNNY_DATABASE_URL,
-  authToken: process.env.BUNNY_DATABASE_AUTH_TOKEN,
-});
-
-await client.execute("SELECT * FROM users");`,
-      };
-    case "go":
-      return {
-        lang: "Go",
-        install: "go get github.com/tursodatabase/libsql-client-go/libsql",
-        code: `package main
-
-import (
-\t"database/sql"
-\t"fmt"
-\t"os"
-
-\t_ "github.com/tursodatabase/libsql-client-go/libsql"
-)
-
-func main() {
-\turl := fmt.Sprintf("%s?authToken=%s",
-\t\tos.Getenv("BUNNY_DATABASE_URL"),
-\t\tos.Getenv("BUNNY_DATABASE_AUTH_TOKEN"),
-\t)
-
-\tdb, err := sql.Open("libsql", url)
-\tif err != nil {
-\t\tfmt.Fprintf(os.Stderr, "failed to open db %s: %s", url, err)
-\t\tos.Exit(1)
-\t}
-\tdefer db.Close()
-}`,
-      };
-    case "rust":
-      return {
-        lang: "Rust",
-        install: "cargo add libsql",
-        code: `use libsql::Builder;
-
-let url = std::env::var("BUNNY_DATABASE_URL").expect("BUNNY_DATABASE_URL must be set");
-let token = std::env::var("BUNNY_DATABASE_AUTH_TOKEN").expect("BUNNY_DATABASE_AUTH_TOKEN must be set");
-
-let db = Builder::new_remote(url, token)
-    .build()
-    .await?;
-
-let conn = db.connect()?;
-
-let mut rows = conn.query("SELECT * FROM users", ()).await?;
-
-while let Some(row) = rows.next().await? {
-    let id: i64 = row.get(0)?;
-    let name: String = row.get(1)?;
-    println!("User: {} - {}", id, name);
-}`,
-      };
-    case "dotnet":
-      return {
-        lang: ".NET",
-        install: "dotnet add package Bunny.LibSql.Client",
-        code: `var db = new AppDb(
-    Environment.GetEnvironmentVariable("BUNNY_DATABASE_URL"),
-    Environment.GetEnvironmentVariable("BUNNY_DATABASE_AUTH_TOKEN")
-);
-
-await db.ApplyMigrationsAsync();
-
-var users = await db.Users.ToListAsync();
-
-foreach (var user in users)
-{
-    Console.WriteLine($"User: {user.name}");
-}`,
-      };
-    default:
-      throw new UserError(
-        `Unsupported language: "${lang}"`,
-        `Supported: ${LANGUAGES.map((l) => l.id).join(", ")}`,
-      );
-  }
-}
 
 /**
  * Generate a language-specific quickstart guide for connecting to a database.
@@ -179,7 +81,7 @@ export const dbQuickstartCommand = defineCommand<{
       .option(ARG_LANG, {
         alias: ARG_LANG_ALIAS,
         type: "string",
-        choices: LANGUAGES.map((l) => l.id) as string[],
+        choices: QUICKSTART_LANGUAGES.map((l) => l.id) as string[],
         describe: "Language for the code snippet",
       })
       .option(ARG_URL, {
@@ -202,13 +104,15 @@ export const dbQuickstartCommand = defineCommand<{
     apiKey,
   }) => {
     // Language selection
-    let lang: LangId | undefined = langArg as LangId | undefined;
+    let lang: QuickstartLang | undefined = langArg as
+      | QuickstartLang
+      | undefined;
     if (!lang) {
       const { value } = await prompts({
         type: "select",
         name: "value",
         message: "Language:",
-        choices: LANGUAGES.map((l) => ({
+        choices: QUICKSTART_LANGUAGES.map((l) => ({
           title: l.title,
           value: l.id,
         })),
@@ -242,9 +146,9 @@ export const dbQuickstartCommand = defineCommand<{
       if (!token) {
         spin.text = "Generating token...";
         fetches.push(
-          client.PUT("/v2/databases/{db_id}/auth/generate", {
-            params: { path: { db_id: databaseId } },
-            body: { authorization: "full-access", expires_at: null },
+          generateToken(client, databaseId, {
+            authorization: "full-access",
+            expiresAt: null,
           }),
         );
       }
@@ -256,7 +160,7 @@ export const dbQuickstartCommand = defineCommand<{
       const db = dbResult.data?.db;
       dbName = db?.name;
       if (!url) url = db?.url;
-      if (!token && tokenResult) token = tokenResult.data?.token;
+      if (!token && tokenResult) token = tokenResult.token;
     }
 
     if (!url || !token) {
@@ -274,8 +178,8 @@ export const dbQuickstartCommand = defineCommand<{
             install: snippet.install,
             code: snippet.code,
             env: {
-              BUNNY_DATABASE_URL: url,
-              BUNNY_DATABASE_AUTH_TOKEN: token,
+              [ENV_DATABASE_URL]: url,
+              [ENV_DATABASE_AUTH_TOKEN]: token,
             },
           },
           null,
@@ -288,8 +192,8 @@ export const dbQuickstartCommand = defineCommand<{
     logger.info(`Quickstart for ${dbName ?? "database"} (${snippet.lang})`);
     logger.log();
 
-    const hasUrl = !!readEnvValue("BUNNY_DATABASE_URL");
-    const hasToken = !!readEnvValue("BUNNY_DATABASE_AUTH_TOKEN");
+    const hasUrl = !!readEnvValue(ENV_DATABASE_URL);
+    const hasToken = !!readEnvValue(ENV_DATABASE_AUTH_TOKEN);
     const envReady = hasUrl && hasToken;
     let step = 1;
 
@@ -298,8 +202,8 @@ export const dbQuickstartCommand = defineCommand<{
       logger.log(chalk.bold(`  ${step}. Add to your .env`));
       logger.log();
       logger.log(chalk.gray("     # .env"));
-      if (!hasUrl) logger.log(`     BUNNY_DATABASE_URL=${url}`);
-      if (!hasToken) logger.log(`     BUNNY_DATABASE_AUTH_TOKEN=${token}`);
+      if (!hasUrl) logger.log(`     ${ENV_DATABASE_URL}=${url}`);
+      if (!hasToken) logger.log(`     ${ENV_DATABASE_AUTH_TOKEN}=${token}`);
       logger.log();
       step++;
     }
