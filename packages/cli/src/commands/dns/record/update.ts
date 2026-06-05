@@ -99,7 +99,6 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
       Disabled: existing.Disabled ?? null,
       Comment: existing.Comment ?? null,
       Accelerated: existing.Accelerated ?? null,
-      PullZoneId: existing.AcceleratedPullZoneId ?? null,
       MonitorType: existing.MonitorType ?? null,
       GeolocationLatitude: existing.GeolocationLatitude ?? null,
       GeolocationLongitude: existing.GeolocationLongitude ?? null,
@@ -108,6 +107,11 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
       EnviromentalVariables: existing.EnviromentalVariables ?? null,
       AutoSslIssuance: existing.AutoSslIssuance ?? null,
     };
+
+    // AcceleratedPullZoneId is the CDN-acceleration pull zone, not a PullZone-type record's link — only seed it when actually accelerated.
+    if (existing.Accelerated && existing.AcceleratedPullZoneId != null) {
+      body.PullZoneId = existing.AcceleratedPullZoneId;
+    }
 
     if (args.name !== undefined) body.Name = args.name === "@" ? "" : args.name;
     if (args.value !== undefined) body.Value = args.value;
