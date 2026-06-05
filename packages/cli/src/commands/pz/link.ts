@@ -36,14 +36,38 @@ export const pzLinkCommand = defineCommand<LinkArgs>({
     const client = createCoreClient(clientOptions(config, verbose));
 
     if (id) {
-      saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, { id });
+      const spin = spinner("Fetching pull zone...");
+      spin.start();
+
+      let zone: components["schemas"]["PullZoneModel"] | undefined;
+
+      try {
+        const { data } = await client.GET("/pullzone/{id}", {
+          params: { path: { id } },
+        });
+        zone = data as components["schemas"]["PullZoneModel"] | undefined;
+      } catch (err: unknown) {
+        spin.stop();
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new UserError(`Fetching failed: ${msg}`);
+      }
+
+      spin.stop();
+
+      if (!zone) {
+        throw new UserError(`Pull zone ${id} not found.`);
+      }
+
+      saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, {
+        id: zone.Id ?? id,
+      });
 
       if (output === "json") {
-        logger.log(JSON.stringify({ id }));
+        logger.log(JSON.stringify({ id: zone.Id ?? id }));
         return;
       }
 
-      logger.success(`Linked to pull zone ${id}.`);
+      logger.success(`Linked to ${zone.Name ?? zone.Id ?? id}.`);
       return;
     }
 
