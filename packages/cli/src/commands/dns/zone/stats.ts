@@ -1,11 +1,10 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import chalk from "chalk";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
-import { bunny } from "../../../core/colors.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { formatKeyValue, formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
+import { renderBarChart, sumChart } from "../../../core/stats.ts";
 import { spinner } from "../../../core/ui.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
 import { queryTypeLabel } from "../query-types.ts";
@@ -14,33 +13,6 @@ interface StatsArgs {
   domain?: string;
   from?: string;
   to?: string;
-}
-
-const BAR_WIDTH = 24;
-
-/** Sum the values of a date-keyed chart map. */
-function sumChart(chart: { [key: string]: number } | null | undefined): number {
-  return Object.values(chart ?? {}).reduce((acc, n) => acc + n, 0);
-}
-
-/** Render a horizontal bar chart of query counts per record type. */
-function renderTypeChart(byType: [string, number][]): string {
-  const max = Math.max(...byType.map(([, n]) => n), 1);
-  const labelWidth = Math.max(...byType.map(([t]) => t.length));
-  const numWidth = Math.max(
-    ...byType.map(([, n]) => n.toLocaleString().length),
-  );
-  return byType
-    .map(([type, count]) => {
-      const filled =
-        count > 0 ? Math.max(1, Math.round((count / max) * BAR_WIDTH)) : 0;
-      const bar =
-        bunny("█".repeat(filled)) + chalk.gray("░".repeat(BAR_WIDTH - filled));
-      const label = type.padEnd(labelWidth);
-      const value = count.toLocaleString().padStart(numWidth);
-      return `  ${label}  ${bar}  ${value}`;
-    })
-    .join("\n");
 }
 
 export const dnsStatsCommand = defineCommand<StatsArgs>({
@@ -118,7 +90,7 @@ export const dnsStatsCommand = defineCommand<StatsArgs>({
       logger.log("");
       logger.dim("  Queries by type");
       if (output === "text") {
-        logger.log(renderTypeChart(byType));
+        logger.log(renderBarChart(byType));
       } else {
         logger.log(
           formatTable(

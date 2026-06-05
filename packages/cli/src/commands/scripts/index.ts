@@ -10,6 +10,7 @@ import { scriptsInitCommand } from "./init.ts";
 import { scriptsLinkCommand } from "./link.ts";
 import { scriptsListCommand } from "./list.ts";
 import { scriptsShowCommand } from "./show.ts";
+import { scriptsStatsCommand } from "./stats.ts";
 
 export const scriptsNamespace = defineNamespace(
   "scripts",
@@ -26,5 +27,6 @@ export const scriptsNamespace = defineNamespace(
     scriptsLinkCommand,
     scriptsListCommand,
     scriptsShowCommand,
+    scriptsStatsCommand,
   ],
 );

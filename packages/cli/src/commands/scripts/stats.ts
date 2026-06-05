@@ -1,55 +1,32 @@
 import { createComputeClient } from "@bunny.net/openapi-client";
-import chalk from "chalk";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
-import { bunny } from "../../core/colors.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { formatKeyValue, formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
-import { resolveManifestId } from "../../core/manifest.ts";
+import { formatBucketLabel, renderBarChart } from "../../core/stats.ts";
 import { spinner } from "../../core/ui.ts";
-import { fetchScript } from "./api.ts";
-import { SCRIPT_MANIFEST } from "./constants.ts";
+import { maybeLinkScript, resolveScriptInteractive } from "./interactive.ts";
 
 interface StatsArgs {
   id?: number;
   from?: string;
   to?: string;
   hourly?: boolean;
-}
-
-const BAR_WIDTH = 24;
-
-// TODO(#91): lift renderBarChart/BAR_WIDTH into core/stats.ts and share with dns/zone/stats.ts once feat/dns lands.
-
-/** Render a horizontal bar chart from a list of [label, value] pairs. */
-function renderBarChart(rows: [string, number][]): string {
-  const max = Math.max(...rows.map(([, n]) => n), 1);
-  const labelWidth = Math.max(...rows.map(([l]) => l.length));
-  const numWidth = Math.max(...rows.map(([, n]) => n.toLocaleString().length));
-  return rows
-    .map(([label, value]) => {
-      const filled =
-        value > 0 ? Math.max(1, Math.round((value / max) * BAR_WIDTH)) : 0;
-      const bar =
-        bunny("█".repeat(filled)) + chalk.gray("░".repeat(BAR_WIDTH - filled));
-      const name = label.padEnd(labelWidth);
-      const num = value.toLocaleString().padStart(numWidth);
-      return `  ${name}  ${bar}  ${num}`;
-    })
-    .join("\n");
+  link?: boolean;
 }
 
 /**
  * Show usage statistics for an Edge Script.
  *
  * Displays request, CPU, and cost totals over the period, plus a per-bucket
- * requests-served bar chart. Falls back to the linked script ID from the local
- * manifest when no explicit ID is provided.
+ * requests-served bar chart. When no ID is given it falls back to the linked
+ * script from the local manifest, then to an interactive picker (offering to
+ * link the directory for next time).
  *
  * @example
  * ```bash
- * # Stats for the linked script (last 30 days)
+ * # Stats for the linked script, or pick one interactively (last 30 days)
  * bunny scripts stats
  *
  * # Stats for a specific script over a date range
@@ -88,6 +65,11 @@ export const scriptsStatsCommand = defineCommand<StatsArgs>({
       .option("hourly", {
         type: "boolean",
         describe: "Group statistics by hour instead of by day",
+      })
+      .option("link", {
+        type: "boolean",
+        describe:
+          "Link the directory to the picked script (use --no-link to skip the prompt)",
       }),
 
   handler: async ({
@@ -95,19 +77,23 @@ export const scriptsStatsCommand = defineCommand<StatsArgs>({
     from,
     to,
     hourly,
+    link,
     profile,
     output,
     verbose,
     apiKey,
   }) => {
-    const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
+
+    const { script, picked } = await resolveScriptInteractive(client, rawId, {
+      output,
+    });
+    const id = script.Id as number;
 
     const spin = spinner("Fetching statistics...");
     spin.start();
 
-    const script = await fetchScript(client, id);
     const { data } = await client.GET("/compute/script/{id}/statistics", {
       params: {
         path: { id },
@@ -157,7 +143,14 @@ export const scriptsStatsCommand = defineCommand<StatsArgs>({
       logger.log("");
       logger.dim("  Requests served");
       if (output === "text") {
-        logger.log(renderBarChart(requests));
+        logger.log(
+          renderBarChart(
+            requests.map(([bucket, count]) => [
+              formatBucketLabel(bucket, hourly),
+              count,
+            ]),
+          ),
+        );
       } else {
         logger.log(
           formatTable(
@@ -167,6 +160,11 @@ export const scriptsStatsCommand = defineCommand<StatsArgs>({
           ),
         );
       }
+    }
+
+    if (picked) {
+      logger.log("");
+      await maybeLinkScript(script, link);
     }
   },
 });
