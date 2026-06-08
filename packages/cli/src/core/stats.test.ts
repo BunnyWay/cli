@@ -41,6 +41,12 @@ describe("formatBucketLabel", () => {
     );
   });
 
+  test("renders an hourly midnight bucket as 00:00, never 24:00", () => {
+    expect(formatBucketLabel("2026-05-01T00:00:00Z", true)).toBe(
+      "May 1, 2026 00:00",
+    );
+  });
+
   test("returns the raw value when unparseable", () => {
     expect(formatBucketLabel("not-a-date")).toBe("not-a-date");
   });

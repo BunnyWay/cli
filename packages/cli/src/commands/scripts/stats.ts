@@ -94,14 +94,14 @@ export const scriptsStatsCommand = defineCommand<StatsArgs>({
     const spin = spinner("Fetching statistics...");
     spin.start();
 
-    const { data } = await client.GET("/compute/script/{id}/statistics", {
-      params: {
-        path: { id },
-        query: { dateFrom: from, dateTo: to, hourly },
-      },
-    });
-
-    spin.stop();
+    const { data } = await client
+      .GET("/compute/script/{id}/statistics", {
+        params: {
+          path: { id },
+          query: { dateFrom: from, dateTo: to, hourly },
+        },
+      })
+      .finally(() => spin.stop());
 
     if (output === "json") {
       logger.log(JSON.stringify(data ?? {}, null, 2));

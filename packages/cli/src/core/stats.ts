@@ -23,13 +23,9 @@ export function formatBucketLabel(bucket: string, hourly = false): string {
   });
   if (!hourly) return day;
 
-  const time = date.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "UTC",
-  });
-  return `${day} ${time}`;
+  const hh = String(date.getUTCHours()).padStart(2, "0");
+  const mm = String(date.getUTCMinutes()).padStart(2, "0");
+  return `${day} ${hh}:${mm}`;
 }
 
 /** Render a horizontal bar chart from a list of [label, value] pairs. */
