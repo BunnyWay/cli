@@ -304,6 +304,7 @@ bunny-cli/
 │           │   └── scripts/
 │           │       ├── index.ts          # defineNamespace("scripts", ...) — registers all script commands
 │           │       ├── constants.ts      # SCRIPT_MANIFEST, SCRIPT_TYPE_LABELS
+│           │       ├── api.ts            # Shared: fetchScript(s), fetchEnvEntries, fetchScriptHostnames, logLiveHostnames, promptOpenInBrowser
 │           │       ├── create.ts         # Create a remote Edge Script (exports shared `createScript` helper)
 │           │       ├── delete.ts         # Delete an Edge Script (double confirmation or --force)
 │           │       ├── deploy.ts         # Deploy code to an Edge Script (publishes by default)
@@ -314,7 +315,8 @@ bunny-cli/
 │           │       ├── show.ts           # Show Edge Script details + hostnames (supports manifest fallback)
 │           │       ├── deployments/
 │           │       │   ├── index.ts      # defineNamespace("deployments", ...)
-│           │       │   └── list.ts       # List deployments for an Edge Script
+│           │       │   ├── list.ts       # List deployments for an Edge Script
+│           │       │   └── publish.ts    # Publish (roll back to) a past deployment by release ID
 │           │       ├── hostnames/
 │           │       │   └── index.ts      # Mounts core/hostnames factory: script pull-zone resolver + --id/--pull-zone, visible as "domains" with hidden "hostnames" alias
 │           │       └── env/
@@ -901,7 +903,9 @@ bunny
 │   │                                       Deploy code to an Edge Script (publishes by default)
 │   ├── delete          [id] [--force]      Delete an Edge Script (double confirmation or --force)
 │   ├── deployments
-│   │   └── list        [id] (alias: ls)    List deployments for an Edge Script
+│   │   ├── list        [id] (alias: ls)    List deployments for an Edge Script
+│   │   └── publish     <release> [id] [--force]
+│   │                                       Publish (roll back to) a past deployment by release ID
 │   ├── docs                                Open Edge Script documentation in browser
 │   ├── domains                             (hidden alias: hostnames)
 │   │   ├── add         <domain> [--ssl] [--no-force-ssl] [--id] [--pull-zone]

@@ -621,6 +621,20 @@ bunny scripts deployments list <script-id>
 bunny scripts deployments list --output json
 ```
 
+##### `bunny scripts deployments publish`
+
+Publish (roll back to) a past deployment by its release ID, as shown in `deployments list`. `bunny scripts deploy` already uploads and publishes in one step; use this to re-publish an earlier release without touching the current code. Uses the linked script if no ID is provided.
+
+```bash
+bunny scripts deployments publish <release-id>
+bunny scripts deployments publish <release-id> <script-id>
+bunny scripts deployments publish <release-id> --force
+```
+
+| Flag      | Description                  |
+| --------- | ---------------------------- |
+| `--force` | Skip the confirmation prompt |
+
 #### `bunny scripts env`
 
 Manage environment variables and secrets for an Edge Script. All subcommands default to the linked script; pass `--id <script-id>` to target another.

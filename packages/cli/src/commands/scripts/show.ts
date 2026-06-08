@@ -7,16 +7,11 @@ import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { formatKeyValue, formatTable } from "../../core/format.ts";
-import {
-  fetchPullZoneHostnames,
-  type Hostname,
-  hostnameUrl,
-  toSafeHostname,
-} from "../../core/hostnames/index.ts";
+import { hostnameUrl, toSafeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { resolveManifestId } from "../../core/manifest.ts";
 import { spinner } from "../../core/ui.ts";
-import { fetchScript } from "./api.ts";
+import { fetchScript, fetchScriptHostnames } from "./api.ts";
 import { SCRIPT_MANIFEST, scriptTypeLabel } from "./constants.ts";
 
 type EdgeScript = components["schemas"]["EdgeScriptModel"];
@@ -78,18 +73,7 @@ export const scriptsShowCommand = defineCommand<ShowArgs>({
 
     // Pull each linked pull zone's hostnames (incl. custom domains + SSL state).
     const coreClient = createCoreClient(options);
-    const hostnames: Hostname[] = [];
-    for (const zone of script.LinkedPullZones ?? []) {
-      if (zone.Id == null) continue;
-      try {
-        hostnames.push(...(await fetchPullZoneHostnames(coreClient, zone.Id)));
-      } catch (err) {
-        logger.debug(
-          `Failed to fetch hostnames for pull zone ${zone.Id}: ${err}`,
-          verbose,
-        );
-      }
-    }
+    const hostnames = await fetchScriptHostnames(coreClient, script, verbose);
 
     spin.stop();
 

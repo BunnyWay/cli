@@ -1,9 +1,11 @@
 export {
   type CoreClient,
   enableSsl,
+  fetchHostnamesForZones,
   fetchPullZoneHostnames,
   type Hostname,
   hostnameUrl,
+  liveHostnames,
   type ResolvedPullZone,
   type SafeHostname,
   toSafeHostname,
