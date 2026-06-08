@@ -1,5 +1,11 @@
 # @bunny.net/openapi-client
 
+## 0.1.1
+
+### Patch Changes
+
+- [#91](https://github.com/BunnyWay/cli/pull/91) [`73cb7a7`](https://github.com/BunnyWay/cli/commit/73cb7a74741898144dbc80e4b8554f102d7c8f03) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix: let legitimate non-JSON 200 responses pass the proxy-interception guard
+
 ## 0.1.0
 
 ### Minor Changes
