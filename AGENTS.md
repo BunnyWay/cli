@@ -165,6 +165,8 @@ bunny-cli/
 │           │   │   └── commands.ts       # createHostnamesCommands(): add/ssl/list/remove factory parameterized by a pull-zone resolver
 │           │   ├── logger.ts             # Chalk-based structured logger
 │           │   ├── manifest.ts           # .bunny/ context file resolution (load, save, resolveManifestId)
+│           │   ├── stats.ts              # Shared stats rendering: sumChart(), renderBarChart(), formatBucketLabel() (UTC date labels), BAR_WIDTH (used by dns/zone/stats + scripts/stats)
+│           │   ├── stats.test.ts         # Tests for stats helpers
 │           │   ├── types.ts              # GlobalArgs, OutputFormat, and shared type definitions
 │           │   ├── ui.ts                 # readPassword(), confirm(), spinner() wrappers
 │           │   └── version.ts            # VERSION constant from package.json
@@ -310,9 +312,11 @@ bunny-cli/
 │           │       ├── deploy.ts         # Deploy code to an Edge Script (publishes by default)
 │           │       ├── docs.ts           # Open Edge Script documentation in browser
 │           │       ├── init.ts           # Scaffold a new Edge Script project from a template (calls `createScript`)
+│           │       ├── interactive.ts     # resolveScriptInteractive(): explicit ID → linked manifest → picker (offers to link; skipped for JSON output)
 │           │       ├── link.ts           # Link directory to a remote Edge Script (.bunny/script.json)
 │           │       ├── list.ts           # List all Edge Scripts (Standalone + Middleware)
 │           │       ├── show.ts           # Show Edge Script details + hostnames (supports manifest fallback)
+│           │       ├── stats.ts          # Show Edge Script usage statistics (requests/CPU/cost totals + per-bucket bar chart with friendly UTC date labels; uses core/stats.ts)
 │           │       ├── deployments/
 │           │       │   ├── index.ts      # defineNamespace("deployments", ...)
 │           │       │   ├── list.ts       # List deployments for an Edge Script
@@ -922,7 +926,9 @@ bunny
 │   │   └── pull        [id] [--force]      Pull env vars to .env file
 │   ├── link            [--id]              Link directory to a remote Edge Script
 │   ├── list            (alias: ls)         List all Edge Scripts
-│   └── show            [id]                Show Edge Script details (uses linked script if omitted)
+│   ├── show            [id]                Show Edge Script details (uses linked script if omitted)
+│   └── stats           [id] [--from] [--to] [--hourly] [--link]
+│                                           Show usage statistics (requests/CPU/cost totals + bar chart; defaults to last 30 days). No ID → linked script → interactive picker (offers to link; --no-link skips). JSON output skips the picker and errors.
 ├── docs                                    Open bunny.net documentation in browser
 ├── open               [--print]            Open bunny.net dashboard in browser (or print URL)
 ├── --profile, -p       <string>            Profile to use (default: "default")
