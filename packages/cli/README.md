@@ -592,6 +592,29 @@ bunny scripts show <script-id>
 bunny scripts show
 ```
 
+#### `bunny scripts stats`
+
+Show usage statistics for an Edge Script — request, CPU, and cost totals over the period, plus a per-bucket requests-served bar chart in text mode (buckets are labelled with friendly UTC dates, e.g. `May 19, 2026`, or date + time with `--hourly`). Defaults to the last 30 days.
+
+When no ID is given, the command resolves the linked script from `.bunny/script.json`. If there is no link either, it prompts you to pick a script and offers to link the directory for next time. In `--output json` mode the picker is skipped and the command errors instead — pass an ID or run `bunny scripts link` in CI.
+
+```bash
+bunny scripts stats
+bunny scripts stats 12345 --from 2026-05-01 --to 2026-05-31
+bunny scripts stats 12345 --hourly
+bunny scripts stats 12345 --output json
+
+# Pick interactively without being asked to link (e.g. one-off checks)
+bunny scripts stats --no-link
+```
+
+| Flag       | Description                                                                        |
+| ---------- | ---------------------------------------------------------------------------------- |
+| `--from`   | Start date (YYYY-MM-DD); defaults to 30 days ago                                   |
+| `--to`     | End date (YYYY-MM-DD); defaults to today                                           |
+| `--hourly` | Group statistics by hour instead of by day                                         |
+| `--link`   | After an interactive pick, link the directory (use `--no-link` to skip the prompt) |
+
 #### `bunny scripts delete`
 
 Delete an Edge Script. Uses the linked script if no ID is provided. Requires double confirmation (or `--force` to skip).
@@ -620,6 +643,20 @@ bunny scripts deployments ls
 bunny scripts deployments list <script-id>
 bunny scripts deployments list --output json
 ```
+
+##### `bunny scripts deployments publish`
+
+Publish (roll back to) a past deployment by its release ID, as shown in `deployments list`. `bunny scripts deploy` already uploads and publishes in one step; use this to re-publish an earlier release without touching the current code. Uses the linked script if no ID is provided.
+
+```bash
+bunny scripts deployments publish <release-id>
+bunny scripts deployments publish <release-id> <script-id>
+bunny scripts deployments publish <release-id> --force
+```
+
+| Flag      | Description                  |
+| --------- | ---------------------------- |
+| `--force` | Skip the confirmation prompt |
 
 #### `bunny scripts env`
 

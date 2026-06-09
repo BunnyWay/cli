@@ -1,5 +1,21 @@
 # @bunny.net/cli
 
+## 0.6.0
+
+### Minor Changes
+
+- [#89](https://github.com/BunnyWay/cli/pull/89) [`f4bc85d`](https://github.com/BunnyWay/cli/commit/f4bc85d8236929302072301574c3b8da23c1376e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(scripts): manage custom domains for Edge Scripts (`bunny scripts domains`, with `hostnames` as a hidden alias)
+
+- [#93](https://github.com/BunnyWay/cli/pull/93) [`4b68307`](https://github.com/BunnyWay/cli/commit/4b683076315665ef5a79561439106dd330c2fe89) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(scripts): sketch Edge Script statistics command
+
+- [#92](https://github.com/BunnyWay/cli/pull/92) [`bcfc45a`](https://github.com/BunnyWay/cli/commit/bcfc45aa08177f8a1fc67370357c5551a60c813e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(scripts): add deployments publish for rollbacks
+
+- [#91](https://github.com/BunnyWay/cli/pull/91) [`73cb7a7`](https://github.com/BunnyWay/cli/commit/73cb7a74741898144dbc80e4b8554f102d7c8f03) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): add experimental `bunny dns` commands for managing DNS zones and records
+
+### Patch Changes
+
+- [#88](https://github.com/BunnyWay/cli/pull/88) [`aa0f44d`](https://github.com/BunnyWay/cli/commit/aa0f44d1c2cca49d8ee7dba4ffd854f83c71f93b) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Cancelling an interactive selection prompt now exits non-zero so scripts and CI can tell a cancelled command apart from a successful one. Previously `db link`, `db regions update`, and `scripts env remove` printed a "Cancelled." line and exited `0` when you aborted the picker with Ctrl-C/Esc, making a no-op indistinguishable from success. They now exit `1` (and emit a proper `{"error":…}` payload under `--output json`), matching `scripts link`, `apps link`, and the shared `resolveDbId` selection prompt. Declining a confirmation ("Delete?", "Replace?") still exits `0` — that's a deliberate answer, not an abort.
+
 ## 0.5.3
 
 ### Patch Changes

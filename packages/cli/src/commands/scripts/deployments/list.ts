@@ -1,4 +1,7 @@
-import { createComputeClient } from "@bunny.net/openapi-client";
+import {
+  createComputeClient,
+  createCoreClient,
+} from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
@@ -7,6 +10,7 @@ import { formatDateTime, formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { resolveManifestId } from "../../../core/manifest.ts";
 import { spinner } from "../../../core/ui.ts";
+import { fetchScriptHostnames, logLiveHostnames } from "../api.ts";
 import { SCRIPT_MANIFEST } from "../constants.ts";
 
 type EdgeScript = components["schemas"]["EdgeScriptModel"];
@@ -75,7 +79,8 @@ export const scriptsDeploymentsListCommand = defineCommand<ListArgs>({
   handler: async ({ [ARG_ID]: rawId, profile, output, verbose, apiKey }) => {
     const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
     const config = resolveConfig(profile, apiKey, verbose);
-    const client = createComputeClient(clientOptions(config, verbose));
+    const options = clientOptions(config, verbose);
+    const client = createComputeClient(options);
 
     const spin = spinner("Fetching deployments...");
     spin.start();
@@ -106,7 +111,6 @@ export const scriptsDeploymentsListCommand = defineCommand<ListArgs>({
     }
 
     const script = scriptResult.data;
-    const hostname = script?.LinkedPullZones?.[0]?.DefaultHostname ?? undefined;
 
     if (script?.Name) {
       logger.info(`Deployments for ${script.Name}:`);
@@ -130,11 +134,13 @@ export const scriptsDeploymentsListCommand = defineCommand<ListArgs>({
     );
 
     if (
-      hostname &&
+      script &&
       releases.some((r: EdgeScriptRelease) => r.Status === RELEASE_STATUS_LIVE)
     ) {
+      const coreClient = createCoreClient(options);
+      const hostnames = await fetchScriptHostnames(coreClient, script, verbose);
       logger.log();
-      logger.info(`Live at: ${hostname}`);
+      logLiveHostnames(script, hostnames);
     }
   },
 });
