@@ -6,10 +6,7 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, removeManifest } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
-import {
-  PULL_ZONE_MANIFEST,
-  type PullZoneManifest,
-} from "./constants.ts";
+import { PULL_ZONE_MANIFEST, type PullZoneManifest } from "./constants.ts";
 
 interface DeleteArgs {
   id?: number;
@@ -50,19 +47,11 @@ export const pzDeleteCommand = defineCommand<DeleteArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const { data: zone, error: getError } = await client.GET("/pullzone/{id}", {
+    const { data: zone } = await client.GET("/pullzone/{id}", {
       params: { path: { id: zoneId } },
     });
 
-    if (getError) {
-      throw new UserError(
-        `Failed to fetch pull zone ${zoneId}: ${getError.message ?? getError}`,
-      );
-    }
-
-    const label = zone?.Name
-      ? `${zone.Name} (${zoneId})`
-      : String(zoneId);
+    const label = zone?.Name ? `${zone.Name} (${zoneId})` : String(zoneId);
 
     const ok = await confirm(`Delete pull zone ${label}?`, { force });
     if (!ok) {

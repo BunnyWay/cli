@@ -1,5 +1,5 @@
-import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { createCoreClient } from "@bunny.net/openapi-client";
+import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -53,7 +53,7 @@ export const pzShowCommand = defineCommand<ShowArgs>({
     } catch (err: unknown) {
       spin.stop();
       const msg = err instanceof Error ? err.message : String(err);
-      throw new UserError(`Failed to fetch pull zone ${zoneId}: ${msg}`);
+      throw new UserError(`Fetching failed: ${msg}`);
     }
 
     spin.stop();
@@ -67,10 +67,10 @@ export const pzShowCommand = defineCommand<ShowArgs>({
       return;
     }
 
-    const hostnames = zone.Hostnames
-      ?.map((h) => h.Value)
-      .filter(Boolean)
-      .join(", ") ?? "none";
+    const hostnames =
+      zone.Hostnames?.map((h) => h.Value)
+        .filter(Boolean)
+        .join(", ") ?? "none";
 
     const status = zone.Suspended
       ? "Suspended"

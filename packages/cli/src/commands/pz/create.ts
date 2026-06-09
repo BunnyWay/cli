@@ -6,10 +6,7 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifest } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
-import {
-  PULL_ZONE_MANIFEST,
-  type PullZoneManifest,
-} from "./constants.ts";
+import { PULL_ZONE_MANIFEST, type PullZoneManifest } from "./constants.ts";
 
 interface CreateArgs {
   name?: string;

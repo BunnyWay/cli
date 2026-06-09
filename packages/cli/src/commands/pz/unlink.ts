@@ -6,9 +6,7 @@ import { PULL_ZONE_MANIFEST } from "./constants.ts";
 export const pzUnlinkCommand = defineCommand({
   command: "unlink",
   describe: "Unlink the current directory from its pull zone.",
-  examples: [
-    ["$0 pz unlink", "Unlink the current pull zone"],
-  ],
+  examples: [["$0 pz unlink", "Unlink the current pull zone"]],
 
   handler: async ({ output }) => {
     removeManifest(PULL_ZONE_MANIFEST);

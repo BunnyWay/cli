@@ -1,5 +1,5 @@
-import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { createCoreClient } from "@bunny.net/openapi-client";
+import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
@@ -8,10 +8,7 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifest } from "../../core/manifest.ts";
 import { spinner } from "../../core/ui.ts";
-import {
-  PULL_ZONE_MANIFEST,
-  type PullZoneManifest,
-} from "./constants.ts";
+import { PULL_ZONE_MANIFEST, type PullZoneManifest } from "./constants.ts";
 
 interface LinkArgs {
   id?: number;
