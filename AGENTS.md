@@ -69,12 +69,13 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 
 ## Project Structure
 
-This is a Bun workspace monorepo with four packages:
+This is a Bun workspace monorepo with five packages:
 
 - **`@bunny.net/openapi-client`** (`packages/openapi-client/`) — Standalone, type-safe OpenAPI client for bunny.net, generated from OpenAPI specs. Zero CLI dependencies. Publishable to npm.
 - **`@bunny.net/app-config`** (`packages/app-config/`) — Shared app configuration schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. Used by the CLI and potentially other tools.
+- **`@bunny.net/project-config`** (`packages/project-config/`) — Schemas, types, and JSON Schema for `bunny.jsonc`, the per-project resource map (databases + Edge Scripts today; storage, pull zones, and DNS later). JSON Schema is generated through the Standard JSON Schema interface (https://standardschema.dev/json-schema).
 - **`@bunny.net/database-shell`** (`packages/database-shell/`) — Standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
-- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/app-config`, and `@bunny.net/database-shell`.
+- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/app-config`, `@bunny.net/project-config`, and `@bunny.net/database-shell`.
 
 ```
 bunny-cli/
@@ -129,6 +130,19 @@ bunny-cli/
 │   │       ├── convert.ts                 # API ↔ config conversion (apiToConfig, configToAddRequest, configToPatchRequest)
 │   │       └── parse-image-ref.ts         # Docker image reference parser (parseImageRef)
 │   │
+│   ├── project-config/                    # @bunny.net/project-config package
+│   │   ├── package.json
+│   │   ├── tsconfig.json
+│   │   ├── scripts/
+│   │   │   └── generate-schema.ts         # Generates JSON Schema via the Standard JSON Schema interface
+│   │   ├── generated/
+│   │   │   └── schema.json                # JSON Schema for bunny.jsonc (committed)
+│   │   └── src/
+│   │       ├── index.ts                   # Barrel export: schemas, types, converters, toJSONSchema
+│   │       ├── schema.ts                  # Zod schemas + inferred types (BunnyProjectConfig, bindings)
+│   │       ├── convert.ts                 # API → binding converters (databaseToBinding, scriptToBinding, suggestBindingName)
+│   │       └── standard-json-schema.ts    # Consumer-side StandardJSONSchemaV1 types + toJSONSchema() helper
+│   │
 │   ├── database-shell/                   # @bunny.net/database-shell package
 │   │   ├── package.json                  # bin: { "bsql": "./src/cli.ts" }
 │   │   ├── tsconfig.json
@@ -165,6 +179,8 @@ bunny-cli/
 │           │   │   └── commands.ts       # createHostnamesCommands(): add/ssl/list/remove factory parameterized by a pull-zone resolver
 │           │   ├── logger.ts             # Chalk-based structured logger
 │           │   ├── manifest.ts           # .bunny/ context file resolution (load, save, resolveManifestId)
+│           │   ├── project-config.ts     # bunny.jsonc I/O: load/validate, comment-preserving upsert/remove (jsonc-parser modify), offerProjectRecord() hook for create commands
+│           │   ├── project-config.test.ts # Tests for template, validation errors, comment-preserving edits
 │           │   ├── stats.ts              # Shared stats rendering: sumChart(), renderBarChart(), formatBucketLabel() (UTC date labels), BAR_WIDTH (used by dns/zone/stats + scripts/stats)
 │           │   ├── stats.test.ts         # Tests for stats helpers
 │           │   ├── types.ts              # GlobalArgs, OutputFormat, and shared type definitions
@@ -181,7 +197,7 @@ bunny-cli/
 │           │   │   ├── APPS.md           # Apps documentation (while experimental)
 │           │   │   ├── index.ts          # defineNamespace("apps", false) — hidden, registers all app commands
 │           │   │   ├── constants.ts      # Status label maps + APP_MANIFEST filename + AppManifest interface (consumed via core/manifest.ts)
-│           │   │   ├── config.ts         # bunny.jsonc file I/O (saveConfig strips transient `image`/`registry`/`app.id` via stripTransientFields), re-exports from @bunny.net/app-config; provides resolveAppId, resolveContainerId, resolveContainerRegistry
+│           │   │   ├── config.ts         # bunny.jsonc file I/O (saveConfig strips transient `image`/`registry`/`app.id` via stripTransientFields; writes via surgical JSONC edits so comments and project-map keys survive), re-exports from @bunny.net/app-config; provides resolveAppId, resolveContainerId, resolveContainerRegistry
 │           │   │   ├── docker.ts         # Docker + registry helpers (build, push, dockerLogin, ensureRegistryLogin, dockerHasCredentials, ghDockerLogin, generateTag, promptRegistry, resolveRegistryForImage, getConfigSuggestions, imageHostname, parseDockerfileExposedPorts/readDockerfileExposedPorts, findDockerfiles/isDockerfileName/defaultContainerNameFromDockerfile/assignContainerNamesToDockerfiles for monorepo Dockerfile discovery)
 │           │   │   ├── suggestions.ts    # Shared endpoint/env-var suggestion prompting (confirmEndpointSuggestions, endpointRequestToConfig, promptSuggestedEnv, filterNewEndpointSuggestions, filterNewEnvSuggestions) - used by walkthrough.ts and deploy.ts (post-push)
 │           │   │   ├── init.ts           # Scaffold bunny.jsonc (detects Dockerfile, prompts for registry)
@@ -295,6 +311,19 @@ bunny-cli/
 │           │   │           ├── index.ts  # defineNamespace("logging", ...)
 │           │   │           ├── enable.ts # Enable DNS query logging (optional IP anonymization)
 │           │   │           └── disable.ts # Disable DNS query logging (with confirmation)
+│           │   ├── project/              # Experimental — hidden from help and landing page
+│           │   │   ├── index.ts          # defineNamespace("project", ...) — registers init, show, validate, add, remove
+│           │   │   ├── shared.ts         # ARG_BINDING + assertBindingName + ensureBindingReplaceable helpers
+│           │   │   ├── init.ts           # Scaffold or upgrade bunny.jsonc (commented template; augments an apps-only file; optional account import via --from-account)
+│           │   │   ├── import-account.ts # Fetch account databases+scripts in parallel as mappable resources (fetchAccountResources, uniqueBinding)
+│           │   │   ├── show.ts           # Show the project resource map (tables per resource kind)
+│           │   │   ├── validate.ts       # Validate bunny.jsonc against the schema (CI-friendly)
+│           │   │   ├── add-database.ts   # Map an existing database under a binding (fetch by ID or interactive picker)
+│           │   │   ├── add-script.ts     # Map an existing Edge Script under a binding (--entry records a local entry point)
+│           │   │   ├── remove.ts         # Remove a binding from the project config (remote resource untouched)
+│           │   │   ├── dashboard.ts      # Serve a live local canvas of the resource map via Bun.serve (alias: canvas; re-reads bunny.jsonc per poll)
+│           │   │   ├── dashboard-graph.ts # buildProjectGraph(): config → nodes/edges model for the canvas
+│           │   │   └── dashboard-page.ts # Embedded single-file HTML/JS canvas page (no assets; binary-safe)
 │           │   ├── registries/
 │           │   │   ├── index.ts          # Manual CommandModule (not defineNamespace) — default handler runs list
 │           │   │   ├── list.ts           # List container registries
@@ -340,7 +369,7 @@ bunny-cli/
 
 ### Conventions
 
-- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/app-config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/cli/` is the CLI.
+- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/app-config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/project-config/` does the same for `bunny.jsonc` (the per-project resource map); `packages/database-shell/` is the standalone SQL shell engine; `packages/cli/` is the CLI.
 - **API clients use `ClientOptions`** — an options object with `apiKey`, `baseUrl`, `verbose`, `userAgent`, and `onDebug`. The CLI provides a `clientOptions(config, verbose)` helper to build this from `ResolvedConfig`.
 - **One command per file.** Each file in `commands/` exports a single command or namespace.
 - **Commands are grouped by domain** in subdirectories (`config/`, `db/`, `scripts/`).
@@ -872,6 +901,18 @@ bunny
 │           ├── enable  [domain] [--anonymize-ip] [--anonymization onedigit|drop]
 │           │                               Enable DNS query logging
 │           └── disable [domain] [--force]  Disable DNS query logging
+├── project                                 (experimental — hidden from help and landing page)
+│   │                                       Maps a project to the bunny.net resources it uses via bunny.jsonc (a committable binding → resource map).
+│   │                                       `db create` / `scripts create` offer to record new resources when a config exists.
+│   ├── init            [name] [--from-account]  Create or upgrade bunny.jsonc (upgrades an apps-only file in place; --from-account maps existing account resources)
+│   ├── show            [--config]          Show the project resource map
+│   ├── validate        [--config]          Validate bunny.jsonc against its schema (CI-friendly)
+│   ├── add
+│   │   ├── database    <binding> [database-id]  (alias: db)  Map an existing database (interactive picker when ID omitted)
+│   │   └── script      <binding> [script-id] [--entry]       Map an existing Edge Script (records a local entry point with --entry)
+│   ├── remove          <binding> (alias: rm)  Remove a binding from the config (remote resource untouched)
+│   └── dashboard       [--port] [--config] [--no-open]  (alias: canvas)
+│                                           Serve a live local canvas of the resource map (re-reads bunny.jsonc every poll)
 ├── db
 │   ├── create          [--name] [--primary] [--replicas] [--storage-region]
 │   │                                       Create a new database

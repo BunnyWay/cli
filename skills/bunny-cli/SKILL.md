@@ -42,6 +42,7 @@ Use this to route to the correct reference file:
 
 - **Authenticate or switch profiles** -> `references/auth.md`
 - **Database management (create, list, show, link, delete, shell, studio, regions, tokens)** -> `references/database.md`
+- **Edge Scripts (init, create, deploy, deployments, env, domains, stats)** -> `references/scripts.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)
 

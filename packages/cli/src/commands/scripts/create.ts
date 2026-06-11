@@ -1,5 +1,6 @@
 import { basename, resolve } from "node:path";
 import { createComputeClient } from "@bunny.net/openapi-client";
+import { scriptToBinding, suggestBindingName } from "@bunny.net/project-config";
 import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
@@ -8,6 +9,7 @@ import { UserError } from "../../core/errors.ts";
 import { formatKeyValue } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
+import { offerProjectRecord } from "../../core/project-config.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import { promptOpenInBrowser } from "./api.ts";
 import {
@@ -235,6 +237,18 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
         scriptType: created.scriptType,
       });
     }
+
+    // Offer to record the script in the bunny.jsonc resource map (no-op without one)
+    await offerProjectRecord({
+      kind: "scripts",
+      binding: suggestBindingName(created.name),
+      entry: scriptToBinding({
+        Id: created.id,
+        Name: created.name,
+        ScriptType: created.scriptType,
+      }),
+      interactive: isInteractive,
+    });
 
     if (output === "json") {
       logger.log(

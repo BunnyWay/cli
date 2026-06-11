@@ -1,0 +1,19 @@
+{
+  "name": "@bunny.net/project-config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "module": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema.json": "./generated/schema.json"
+  },
+  "scripts": {
+    "generate:schema": "bun run scripts/generate-schema.ts"
+  },
+  "dependencies": {
+    "@bunny.net/app-config": "workspace:*",
+    "@bunny.net/openapi-client": "workspace:*",
+    "zod": "^4.3.6"
+  }
+}

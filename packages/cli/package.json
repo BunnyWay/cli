@@ -12,6 +12,7 @@
   "devDependencies": {
     "@bunny.net/openapi-client": "workspace:*",
     "@bunny.net/app-config": "workspace:*",
+    "@bunny.net/project-config": "workspace:*",
     "@bunny.net/database-shell": "workspace:*",
     "@bunny.net/database-studio": "workspace:*",
     "@libsql/client": "^0.17.0",

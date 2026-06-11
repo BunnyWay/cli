@@ -474,6 +474,53 @@ Positional value ordering for `record add` follows the record type: `A`/`AAAA`/`
 | `--anonymize-ip`, `--anonymization`                                                                 | `zone logging enable`                                                         | Anonymize client IPs in logs (`onedigit` \| `drop`)                  |
 | `--force`                                                                                           | `record remove`, `zone remove`, `zone dnssec disable`, `zone logging disable` | Skip the confirmation prompt                                         |
 
+### `bunny project`
+
+> **Experimental** — hidden from `--help` and the landing page while it stabilizes.
+
+Describe the bunny.net resources a project uses in a committable `bunny.jsonc` — a map from **binding names** to resources (databases and Edge Scripts today; storage zones, pull zones, and DNS later). The resource map lives in the same `bunny.jsonc` used by `bunny apps`: `project init` creates it, or upgrades an existing apps-only `bunny.jsonc` in place (adding `name`/`databases`/`scripts` via surgical JSONC edits, leaving the `app` block and any comments untouched). The file is plain JSONC with a `$schema` reference (`./node_modules/@bunny.net/project-config/generated/schema.json`, which embeds the apps schema so one file validates for both) for editor autocompletion and validation, similar to `wrangler.jsonc`. It doesn't drive deploys; it's how tooling (and, later, a local dashboard) knows what belongs to a project and how things connect. The same resources can be mapped from any number of projects.
+
+```bash
+# Scaffold bunny.jsonc (name defaults to the directory name)
+bunny project init
+bunny project init acme-storefront
+bunny project init --from-account            # also map the account's existing databases & scripts (multiselect)
+
+# Map existing resources under a binding name
+bunny project add database db                # interactive picker
+bunny project add database db <database-id>  # by ID
+bunny project add script api 1234 --entry src/index.ts
+
+# Inspect and validate
+bunny project show
+bunny project validate                       # CI-friendly; non-zero exit on schema errors
+
+# Unmap a binding (the remote resource is untouched)
+bunny project remove db
+
+# Open a live canvas of the project's architecture in the browser
+bunny project dashboard
+bunny project canvas --port 3000 --no-open
+```
+
+```jsonc
+{
+  "$schema": "./node_modules/@bunny.net/project-config/generated/schema.json",
+  "version": "2026-06-10",
+  "name": "acme-storefront",
+  "databases": {
+    "db": { "id": "db_01KCHBG8C5KSFGG0VRNFQ7EK7X", "name": "acme-db" }
+  },
+  "scripts": {
+    "api": { "id": 1234, "name": "acme-api", "type": "standalone", "entry": "src/index.ts" }
+  }
+}
+```
+
+`init` also offers to map your account's existing resources (it already has your API token): interactively it's a multiselect preselected to all; non-interactively `--from-account` maps everything and `--no-from-account` skips the prompt. When a `bunny.jsonc` exists, `bunny db create` and `bunny scripts create` offer to record the new resource in it after creation. Edits are surgical (via JSONC edits), so comments in the file survive. Identity for commands still lives in `.bunny/` manifests — the project config is purely a resource map.
+
+`bunny project dashboard` (alias: `canvas`) serves a local web canvas of the map — the project node connected to its databases, Edge Scripts, and app containers. It re-reads `bunny.jsonc` on every poll, so edits (by hand or via `bunny project add` / `db create`) appear within a couple of seconds; invalid configs show the validation errors in a banner without losing the last good render.
+
 ### `bunny scripts`
 
 Manage Edge Scripts.

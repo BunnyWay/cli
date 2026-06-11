@@ -156,6 +156,39 @@ test("saveConfig strips id/registry/transient-image on disk", () => {
   expect(parsed.app.id).toBeUndefined();
 });
 
+test("saveConfig preserves comments and sibling project keys", () => {
+  const path = join(tempDir(), "unified.jsonc");
+  writeFileSync(
+    path,
+    `{
+  // unified project + apps config
+  "$schema": "./node_modules/@bunny.net/project-config/generated/schema.json",
+  "version": "2026-05-11",
+  "name": "acme",
+  "databases": { "db": { "id": "db_1" } },
+  "app": { "name": "demo", "containers": { "api": { "image": "nginx" } } }
+}`,
+  );
+
+  const config = loadConfig(path);
+  config.app.scaling = { min: 1, max: 3 };
+  saveConfig(config, path);
+
+  const text = readFileSync(path, "utf-8");
+  expect(text).toContain("// unified project + apps config");
+  expect(text).toContain("project-config/generated/schema.json");
+
+  const reloaded = loadConfig(path);
+  expect(reloaded.app.scaling).toEqual({ min: 1, max: 3 });
+
+  const raw = JSON.parse(text.replace(/^\s*\/\/.*$/gm, "")) as Record<
+    string,
+    unknown
+  >;
+  expect(raw.name).toBe("acme");
+  expect(raw.databases).toEqual({ db: { id: "db_1" } });
+});
+
 test("load → save → reload preserves intent fields", () => {
   const path = join(tempDir(), "rt.jsonc");
   writeFileSync(

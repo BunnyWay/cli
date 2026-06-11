@@ -11,6 +11,7 @@ import { dbNamespace } from "./commands/db/index.ts";
 import { dnsNamespace } from "./commands/dns/index.ts";
 import { docsCommand } from "./commands/docs.ts";
 import { openCommand } from "./commands/open.ts";
+import { projectNamespace } from "./commands/project/index.ts";
 import { registriesNamespace } from "./commands/registries/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
@@ -35,6 +36,7 @@ const experimentalCommands: CommandModule[] = [
   appsNamespace,
   registriesNamespace,
   dnsNamespace,
+  projectNamespace,
 ];
 
 let instance = yargs(hideBin(process.argv))

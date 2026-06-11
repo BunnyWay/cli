@@ -5,7 +5,7 @@ import {
   BunnyAppConfigSchema,
 } from "@bunny.net/app-config";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
-import { parse as parseJsonc } from "jsonc-parser";
+import { applyEdits, modify, parse as parseJsonc } from "jsonc-parser";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest } from "../../core/manifest.ts";
@@ -116,20 +116,34 @@ export function stripTransientFields(data: BunnyAppConfig): BunnyAppConfig {
  * Transient fields (see {@link stripTransientFields}) are removed before
  * write - callers can freely mutate the in-memory `image` field during a
  * deploy without polluting the on-disk config.
+ *
+ * Only `$schema`/`version`/`app` are touched, via surgical JSONC edits -
+ * comments and sibling keys (e.g. the `bunny project` resource map) survive.
  */
 export function saveConfig(data: BunnyAppConfig, explicitPath?: string): void {
   const path = explicitPath ?? join(process.cwd(), CONFIG_FILENAME);
   const cleaned = stripTransientFields(data);
 
-  // Re-key the object so the file always starts with $schema → version → app.
-  const { $schema: _schema, version, ...rest } = cleaned;
-  const output = {
-    $schema: "./node_modules/@bunny.net/app-config/generated/schema.json",
-    version,
-    ...rest,
-  };
+  const original = existsSync(path) ? readFileSync(path, "utf-8") : "{}";
+  const existing = parseJsonc(original) ?? {};
+  const opts = { formattingOptions: { insertSpaces: true, tabSize: 2 } };
 
-  writeFileSync(path, `${JSON.stringify(output, null, 2)}\n`);
+  let text = original;
+  if (existing.$schema === undefined) {
+    text = applyEdits(
+      text,
+      modify(
+        text,
+        ["$schema"],
+        "./node_modules/@bunny.net/app-config/generated/schema.json",
+        opts,
+      ),
+    );
+  }
+  text = applyEdits(text, modify(text, ["version"], cleaned.version, opts));
+  text = applyEdits(text, modify(text, ["app"], cleaned.app, opts));
+
+  writeFileSync(path, text);
 }
 
 /**

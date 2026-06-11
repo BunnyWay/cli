@@ -1,5 +1,9 @@
 import { createDbClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
+import {
+  databaseToBinding,
+  suggestBindingName,
+} from "@bunny.net/project-config";
 import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
@@ -8,6 +12,7 @@ import { UserError } from "../../core/errors.ts";
 import { formatKeyValue } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
+import { offerProjectRecord } from "../../core/project-config.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import { readEnvValue, writeEnvValue } from "../../utils/env-file.ts";
 import { fetchRegionConfig, generateToken } from "./api.ts";
@@ -368,6 +373,14 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         logger.log();
       }
     }
+
+    // Offer to record the database in the bunny.jsonc resource map (no-op without one)
+    await offerProjectRecord({
+      kind: "databases",
+      binding: suggestBindingName(db?.name ?? name),
+      entry: databaseToBinding({ id: data.db_id, name: db?.name ?? name }),
+      interactive: isInteractive,
+    });
 
     // Offer to create an auth token
     const tokenArg = args[ARG_TOKEN];
