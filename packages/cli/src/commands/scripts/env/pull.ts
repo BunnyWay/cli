@@ -6,23 +6,25 @@ import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
-import { manifestDir, resolveManifestId } from "../../../core/manifest.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { manifestDir } from "../../../core/manifest.ts";
+import { confirm } from "../../../core/ui.ts";
 import { SCRIPT_MANIFEST } from "../constants.ts";
+import {
+  type ScriptSelectorArgs,
+  scriptSelectorBuilder,
+  selectScript,
+} from "../interactive.ts";
 
 type EdgeScriptVariable = components["schemas"]["EdgeScriptVariableModel"];
 
 const COMMAND = "pull [id]";
 const DESCRIPTION = "Pull environment variables to a local .env file.";
 
-const ARG_ID = "id";
-const ARG_ID_DESCRIPTION = "Edge Script ID (uses linked script if omitted)";
 const ARG_FORCE = "force";
 const ARG_FORCE_ALIAS = "f";
 const ARG_FORCE_DESCRIPTION = "Overwrite existing .env file without prompting";
 
-interface PullArgs {
-  [ARG_ID]?: number;
+interface PullArgs extends ScriptSelectorArgs {
   [ARG_FORCE]?: boolean;
 }
 
@@ -54,40 +56,32 @@ export const scriptsEnvPullCommand = defineCommand<PullArgs>({
   ],
 
   builder: (yargs) =>
-    yargs
-      .positional(ARG_ID, {
-        type: "number",
-        describe: ARG_ID_DESCRIPTION,
-      })
-      .option(ARG_FORCE, {
-        alias: ARG_FORCE_ALIAS,
-        type: "boolean",
-        default: false,
-        describe: ARG_FORCE_DESCRIPTION,
-      }),
+    scriptSelectorBuilder(yargs).option(ARG_FORCE, {
+      alias: ARG_FORCE_ALIAS,
+      type: "boolean",
+      default: false,
+      describe: ARG_FORCE_DESCRIPTION,
+    }),
 
   handler: async ({
-    [ARG_ID]: rawId,
+    id: rawId,
     [ARG_FORCE]: force,
+    link,
     profile,
     output,
     verbose,
     apiKey,
   }) => {
-    const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
 
-    const spin = spinner("Fetching environment variables...");
-    spin.start();
-
-    const { data: script } = await client.GET("/compute/script/{id}", {
-      params: { path: { id } },
+    const { script, offerLink } = await selectScript(client, {
+      id: rawId,
+      link,
+      output,
     });
 
-    spin.stop();
-
-    const variables = script?.EdgeScriptVariables ?? [];
+    const variables = script.EdgeScriptVariables ?? [];
 
     if (output === "json") {
       logger.log(
@@ -108,6 +102,7 @@ export const scriptsEnvPullCommand = defineCommand<PullArgs>({
       logger.warn(
         "Secrets are not included — their values cannot be read from the API.",
       );
+      await offerLink();
       return;
     }
 
@@ -136,5 +131,7 @@ export const scriptsEnvPullCommand = defineCommand<PullArgs>({
     logger.warn(
       "Secrets are not included — their values cannot be read from the API.",
     );
+
+    await offerLink();
   },
 });

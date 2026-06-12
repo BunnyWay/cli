@@ -25,14 +25,14 @@ export async function readPassword(message: string): Promise<string> {
  */
 export async function confirm(
   message: string,
-  opts?: { force?: boolean },
+  opts?: { force?: boolean; initial?: boolean },
 ): Promise<boolean> {
   if (opts?.force) return true;
   const { confirmed } = await prompts({
     type: "confirm",
     name: "confirmed",
     message,
-    initial: false,
+    initial: opts?.initial ?? false,
   });
   return confirmed ?? false;
 }

@@ -38,6 +38,14 @@ export interface ResolvedPullZone {
   coreClient: CoreClient;
 }
 
+/** Strip any scheme and trailing slash from a user-supplied hostname. */
+export function normalizeHostname(value: string): string {
+  return value
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/+$/, "");
+}
+
 /** Build a URL from a hostname, respecting an existing scheme; else derive it from SSL state. */
 export function hostnameUrl(
   host: string,
@@ -99,6 +107,23 @@ export function liveHostnames(hostnames: Hostname[]): {
     primary: primaryHost?.Value ? toUrl(primaryHost) : undefined,
     customs: hostnames.filter((h) => h !== primaryHost && h.Value).map(toUrl),
   };
+}
+
+/** Add a hostname to a pull zone, returning the zone's hostnames and the CNAME target to point DNS at. */
+export async function addHostname(
+  client: CoreClient,
+  pullZoneId: number,
+  hostname: string,
+): Promise<{ hostnames: Hostname[]; cnameTarget?: string }> {
+  await client.POST("/pullzone/{id}/addHostname", {
+    params: { path: { id: pullZoneId } },
+    body: { Hostname: hostname },
+  });
+  const hostnames = await fetchPullZoneHostnames(client, pullZoneId);
+  const cnameTarget = hostnames
+    .find((h) => h.IsSystemHostname)
+    ?.Value?.replace(/^https?:\/\//i, "");
+  return { hostnames, cnameTarget };
 }
 
 /** Issue a free SSL certificate for a hostname on a pull zone, then set its Force SSL state. */

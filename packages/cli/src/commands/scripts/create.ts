@@ -1,11 +1,23 @@
 import { basename, resolve } from "node:path";
-import { createComputeClient } from "@bunny.net/openapi-client";
+import {
+  createComputeClient,
+  createCoreClient,
+} from "@bunny.net/openapi-client";
 import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { formatKeyValue } from "../../core/format.ts";
+import {
+  addHostname,
+  type BunnyDnsResult,
+  findBunnyDnsZone,
+  normalizeHostname,
+  offerBunnyDnsRecord,
+  offerDnsWaitAndSsl,
+  printSslHint,
+} from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
@@ -34,6 +46,9 @@ const ARG_PULL_ZONE_NAME_DESCRIPTION = "Name for the linked pull zone";
 const ARG_LINK = "link";
 const ARG_LINK_DESCRIPTION =
   "Link this directory to the new script (default: true). Use --no-link to skip.";
+const ARG_DOMAIN = "domain";
+const ARG_DOMAIN_DESCRIPTION =
+  "Add a custom domain to the new script's pull zone (prompted when interactive)";
 
 interface CreateArgs {
   [ARG_NAME]?: string;
@@ -41,6 +56,7 @@ interface CreateArgs {
   [ARG_PULL_ZONE]?: boolean;
   [ARG_PULL_ZONE_NAME]?: string;
   [ARG_LINK]?: boolean;
+  [ARG_DOMAIN]?: string;
 }
 
 interface CreatedScript {
@@ -48,6 +64,7 @@ interface CreatedScript {
   name: string;
   scriptType: EdgeScriptTypes;
   hostname?: string;
+  pullZoneId?: number;
 }
 
 /**
@@ -94,7 +111,110 @@ export async function createScript(opts: {
     name: script.Name ?? opts.name,
     scriptType: opts.scriptType,
     hostname: script.LinkedPullZones?.[0]?.DefaultHostname ?? undefined,
+    pullZoneId: script.LinkedPullZones?.[0]?.Id ?? undefined,
   };
+}
+
+/**
+ * Attach a custom domain to the new script's pull zone, print the DNS
+ * instructions, and (when interactive) offer to wait for DNS and enable
+ * HTTPS. A failure to add the domain is a warning, not an error — the
+ * script itself was already created.
+ *
+ * Shared between `scripts create` and `scripts init`. Returns true when
+ * an SSL certificate was issued for the domain.
+ */
+export async function setupCustomDomain(opts: {
+  profile: string;
+  apiKey?: string;
+  verbose: boolean;
+  pullZoneId: number;
+  domain: string;
+  scriptId: number;
+  linked: boolean;
+  interactive: boolean;
+}): Promise<boolean> {
+  const config = resolveConfig(opts.profile, opts.apiKey, opts.verbose);
+  const coreClient = createCoreClient(clientOptions(config, opts.verbose));
+  const idSuffix = opts.linked ? "" : ` --id ${opts.scriptId}`;
+  const sslHint = `bunny scripts domains ssl ${opts.domain}${idSuffix}`;
+
+  const spin = spinner(`Adding ${opts.domain}...`);
+  spin.start();
+
+  let cnameTarget: string | undefined;
+  try {
+    ({ cnameTarget } = await addHostname(
+      coreClient,
+      opts.pullZoneId,
+      opts.domain,
+    ));
+  } catch (err) {
+    spin.stop();
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn(`Couldn't add ${opts.domain}: ${message}`);
+    logger.dim(`  Retry: bunny scripts domains add ${opts.domain}${idSuffix}`);
+    return false;
+  }
+
+  spin.stop();
+  logger.success(`Added ${opts.domain} to pull zone ${opts.pullZoneId}.`);
+
+  if (!cnameTarget) return false;
+
+  // If the domain is on Bunny DNS, offer to add the record (prompted) so SSL can issue right away.
+  if (opts.interactive) {
+    let dnsResult: BunnyDnsResult | undefined;
+    try {
+      const match = await findBunnyDnsZone(coreClient, opts.domain);
+      if (match) {
+        dnsResult = await offerBunnyDnsRecord({
+          client: coreClient,
+          hostname: opts.domain,
+          pullZoneId: opts.pullZoneId,
+          match,
+        });
+      }
+    } catch (err) {
+      // A Bunny DNS hiccup shouldn't block domain setup — fall back to manual DNS.
+      if (opts.verbose) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.dim(`  Bunny DNS check skipped: ${message}`);
+      }
+    }
+
+    if (dnsResult && dnsResult !== "declined") {
+      logger.log();
+      return offerDnsWaitAndSsl({
+        coreClient,
+        pullZoneId: opts.pullZoneId,
+        hostname: opts.domain,
+        cnameTarget,
+        forceSsl: true,
+        sslHint,
+        dnsAlreadyLive: true,
+      });
+    }
+  }
+
+  logger.log();
+  logger.log("Point your DNS at bunny.net to activate it:");
+  logger.accent(`  CNAME  ${opts.domain}  →  ${cnameTarget}`);
+  logger.log();
+
+  if (!opts.interactive) {
+    printSslHint(sslHint);
+    return false;
+  }
+
+  return offerDnsWaitAndSsl({
+    coreClient,
+    pullZoneId: opts.pullZoneId,
+    hostname: opts.domain,
+    cnameTarget,
+    forceSsl: true,
+    sslHint,
+  });
 }
 
 /**
@@ -133,6 +253,10 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
       "$0 scripts create my-script --no-pull-zone --no-link",
       "Skip pull zone creation and directory linking",
     ],
+    [
+      "$0 scripts create my-script --domain shop.example.com",
+      "Create and attach a custom domain",
+    ],
   ],
 
   builder: (yargs) =>
@@ -157,6 +281,10 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
       .option(ARG_LINK, {
         type: "boolean",
         describe: ARG_LINK_DESCRIPTION,
+      })
+      .option(ARG_DOMAIN, {
+        type: "string",
+        describe: ARG_DOMAIN_DESCRIPTION,
       }),
 
   handler: async (args) => {
@@ -165,6 +293,16 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
 
     const name = args[ARG_NAME] ?? basename(resolve(process.cwd()));
     if (!name) throw new UserError("Script name is required.");
+
+    const domainFlag = args[ARG_DOMAIN]
+      ? normalizeHostname(args[ARG_DOMAIN])
+      : undefined;
+    if (domainFlag && args[ARG_PULL_ZONE] === false) {
+      throw new UserError(
+        "--domain requires a linked pull zone.",
+        "Drop --no-pull-zone to attach a custom domain.",
+      );
+    }
 
     const manifest = loadManifest(SCRIPT_MANIFEST);
 
@@ -237,6 +375,30 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
     }
 
     if (output === "json") {
+      // --domain is added non-interactively; a failure still reports the created script.
+      let customDomain: {
+        hostname: string;
+        cnameTarget: string | null;
+      } | null = null;
+      let customDomainError: string | undefined;
+      if (domainFlag && created.pullZoneId != null) {
+        const config = resolveConfig(profile, apiKey, verbose);
+        const coreClient = createCoreClient(clientOptions(config, verbose));
+        try {
+          const { cnameTarget } = await addHostname(
+            coreClient,
+            created.pullZoneId,
+            domainFlag,
+          );
+          customDomain = {
+            hostname: domainFlag,
+            cnameTarget: cnameTarget ?? null,
+          };
+        } catch (err) {
+          customDomainError = err instanceof Error ? err.message : String(err);
+        }
+      }
+
       logger.log(
         JSON.stringify(
           {
@@ -245,11 +407,14 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
             scriptType: created.scriptType,
             hostname: created.hostname ?? null,
             linked: shouldLink,
+            customDomain,
+            ...(customDomainError ? { customDomainError } : {}),
           },
           null,
           2,
         ),
       );
+      if (customDomainError) process.exit(1);
       return;
     }
 
@@ -276,8 +441,39 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
 
     logger.log();
 
-    if (created.hostname && isInteractive) {
-      await promptOpenInBrowser(created.hostname);
+    // Custom domain: --domain flag, or offer one interactively when a pull zone exists.
+    let openTarget = created.hostname;
+    if (created.pullZoneId != null) {
+      let domain = domainFlag;
+      if (!domain && isInteractive) {
+        const { value } = await prompts({
+          type: "text",
+          name: "value",
+          message: "Custom domain (leave blank to skip):",
+        });
+        domain = normalizeHostname(value ?? "");
+      }
+
+      if (domain) {
+        const sslIssued = await setupCustomDomain({
+          profile,
+          apiKey,
+          verbose,
+          pullZoneId: created.pullZoneId,
+          domain,
+          scriptId: created.id,
+          linked: shouldLink,
+          interactive: isInteractive,
+        });
+        if (sslIssued) openTarget = domain;
+        logger.log();
+      }
+    } else if (domainFlag) {
+      logger.warn("No linked pull zone — can't attach a custom domain.");
+    }
+
+    if (openTarget && isInteractive) {
+      await promptOpenInBrowser(openTarget);
     } else {
       logger.dim(`  Deploy:  bunny scripts deploy <file>`);
     }

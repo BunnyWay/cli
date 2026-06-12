@@ -8,21 +8,20 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { formatDateTime, formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
-import { resolveManifestId } from "../../../core/manifest.ts";
 import { spinner } from "../../../core/ui.ts";
 import { fetchScriptHostnames, logLiveHostnames } from "../api.ts";
-import { SCRIPT_MANIFEST } from "../constants.ts";
+import {
+  type ScriptSelectorArgs,
+  scriptSelectorBuilder,
+  selectScript,
+} from "../interactive.ts";
 
-type EdgeScript = components["schemas"]["EdgeScriptModel"];
 type EdgeScriptRelease = components["schemas"]["EdgeScriptReleaseModel"];
 type EdgeScriptReleaseStatus = components["schemas"]["EdgeScriptReleaseStatus"];
 
 const COMMAND = "list [id]";
 const ALIASES = ["ls"] as const;
 const DESCRIPTION = "List deployments for an Edge Script.";
-
-const ARG_ID = "id";
-const ARG_ID_DESCRIPTION = "Edge Script ID (uses linked script if omitted)";
 
 const RELEASE_STATUS_LIVE: EdgeScriptReleaseStatus = 1;
 
@@ -31,9 +30,7 @@ const STATUS_LABELS: Record<EdgeScriptReleaseStatus, string> = {
   1: "Live",
 };
 
-interface ListArgs {
-  [ARG_ID]?: EdgeScript["Id"];
-}
+type ListArgs = ScriptSelectorArgs;
 
 /**
  * List all deployments (releases) for an Edge Script.
@@ -42,8 +39,9 @@ interface ListArgs {
  * in a table. Deleted releases are excluded. If a release is currently live
  * and the script has a linked pull zone, the hostname is printed at the end.
  *
- * Falls back to the linked script ID from the local manifest when no
- * explicit ID is provided.
+ * When no ID is given it falls back to the linked script from the local
+ * manifest, then to an interactive picker (offering to link the directory
+ * for next time).
  *
  * @example
  * ```bash
@@ -70,33 +68,29 @@ export const scriptsDeploymentsListCommand = defineCommand<ListArgs>({
     ["$0 scripts deployments list --output json", "JSON output"],
   ],
 
-  builder: (yargs) =>
-    yargs.positional(ARG_ID, {
-      type: "number",
-      describe: ARG_ID_DESCRIPTION,
-    }),
+  builder: (yargs) => scriptSelectorBuilder(yargs),
 
-  handler: async ({ [ARG_ID]: rawId, profile, output, verbose, apiKey }) => {
-    const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
+  handler: async ({ id: rawId, link, profile, output, verbose, apiKey }) => {
     const config = resolveConfig(profile, apiKey, verbose);
     const options = clientOptions(config, verbose);
     const client = createComputeClient(options);
 
+    const { script, id, offerLink } = await selectScript(client, {
+      id: rawId,
+      link,
+      output,
+    });
+
     const spin = spinner("Fetching deployments...");
     spin.start();
 
-    const [releasesResult, scriptResult] = await Promise.all([
-      client.GET("/compute/script/{id}/releases", {
+    const { data } = await client
+      .GET("/compute/script/{id}/releases", {
         params: { path: { id } },
-      }),
-      client.GET("/compute/script/{id}", {
-        params: { path: { id } },
-      }),
-    ]);
+      })
+      .finally(() => spin.stop());
 
-    spin.stop();
-
-    const releases = (releasesResult.data?.Items ?? []).filter(
+    const releases = (data?.Items ?? []).filter(
       (r: EdgeScriptRelease) => !r.Deleted,
     );
 
@@ -107,12 +101,11 @@ export const scriptsDeploymentsListCommand = defineCommand<ListArgs>({
 
     if (releases.length === 0) {
       logger.info("No deployments found for this script.");
+      await offerLink();
       return;
     }
 
-    const script = scriptResult.data;
-
-    if (script?.Name) {
+    if (script.Name) {
       logger.info(`Deployments for ${script.Name}:`);
       logger.log();
     }
@@ -134,7 +127,6 @@ export const scriptsDeploymentsListCommand = defineCommand<ListArgs>({
     );
 
     if (
-      script &&
       releases.some((r: EdgeScriptRelease) => r.Status === RELEASE_STATUS_LIVE)
     ) {
       const coreClient = createCoreClient(options);
@@ -142,5 +134,7 @@ export const scriptsDeploymentsListCommand = defineCommand<ListArgs>({
       logger.log();
       logLiveHostnames(script, hostnames);
     }
+
+    await offerLink();
   },
 });

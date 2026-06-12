@@ -155,13 +155,19 @@ bunny-cli/
 │           │   ├── client-options.ts     # clientOptions() helper — builds ClientOptions from ResolvedConfig
 │           │   ├── define-command.ts     # Command factory (see "Command Pattern" below)
 │           │   ├── define-namespace.ts   # Namespace/group factory for subcommand trees
+│           │   ├── dns-record-types.ts   # Canonical DNS record-type name⇄integer map (RECORD_TYPES) + recordTypeLabel(); shared by commands/dns + core/hostnames
 │           │   ├── errors.ts             # Re-exports UserError/ApiError from @bunny.net/openapi-client + ConfigError
 │           │   ├── format.ts             # Shared table/key-value rendering (text, table, csv, markdown)
 │           │   ├── format.test.ts        # Tests for format utilities
 │           │   ├── hostnames/            # Reusable pull-zone hostname feature (mounted by scripts; apps next)
-│           │   │   ├── index.ts          # Re-exports client helpers + createHostnamesCommands
-│           │   │   ├── client.ts         # hostnameUrl(), fetchPullZoneHostnames(), enableSsl() + Hostname/ResolvedPullZone types
+│           │   │   ├── index.ts          # Re-exports client helpers, DNS/flow helpers + createHostnamesCommands
+│           │   │   ├── client.ts         # hostnameUrl(), normalizeHostname(), addHostname(), fetchPullZoneHostnames(), enableSsl() + Hostname/ResolvedPullZone types
 │           │   │   ├── client.test.ts    # Tests for hostnameUrl() scheme logic
+│           │   │   ├── dns.ts            # dnsPointsAt()/anyResolverPointsAt(): DNS checks (CNAME or flattened A records) via system + public (1.1.1.1/8.8.8.8) resolvers, injectable for tests
+│           │   │   ├── dns.test.ts       # Tests for DNS matching + multi-resolver checks with fake resolvers
+│           │   │   ├── flow.ts           # offerDnsWaitAndSsl(): poll DNS + opportunistically attempt SSL issuance (~30s) since bunny's resolvers decide validation; printSslHint(). dnsAlreadyLive skips the poll (Bunny DNS record already live)
+│           │   │   ├── bunny-dns.ts       # findBunnyDnsZone()/offerBunnyDnsRecord(): detect a hostname inside an account Bunny DNS zone, then add/repoint a PullZone record (always confirmed) so SSL can issue immediately
+│           │   │   ├── bunny-dns.test.ts  # Tests for longest-suffix zone matching + record-name derivation with a fake core client
 │           │   │   └── commands.ts       # createHostnamesCommands(): add/ssl/list/remove factory parameterized by a pull-zone resolver
 │           │   ├── logger.ts             # Chalk-based structured logger
 │           │   ├── manifest.ts           # .bunny/ context file resolution (load, save, resolveManifestId)
@@ -270,7 +276,7 @@ bunny-cli/
 │           │   │   ├── index.ts          # defineNamespace("dns", ...) — registers the record + zone groups (+ hidden domain aliases)
 │           │   │   ├── api.ts            # CoreClient type, fetchZones/fetchZone, resolveZone (domain-or-ID → zone)
 │           │   │   ├── interactive.ts    # resolveZoneInteractive (zone picker) + resolveRecordInteractive (record picker) fallbacks
-│           │   │   ├── record-types.ts   # Record type name⇄integer map, parseRecordType, recordTypeLabel, formatRecordValue
+│           │   │   ├── record-types.ts   # Re-exports RECORD_TYPES/recordTypeLabel from core/dns-record-types.ts; adds parseRecordType, recordName, formatRecordValue
 │           │   │   ├── record/            # `dns record` — entries within a zone (aliases: records, rec)
 │           │   │   │   ├── index.ts      # defineNamespace("record", ...)
 │           │   │   │   ├── list.ts       # List records in a zone (alias: ls)
@@ -311,7 +317,7 @@ bunny-cli/
 │           │       ├── delete.ts         # Delete an Edge Script (double confirmation or --force)
 │           │       ├── deploy.ts         # Deploy code to an Edge Script (publishes by default)
 │           │       ├── docs.ts           # Open Edge Script documentation in browser
-│           │       ├── init.ts           # Scaffold a new Edge Script project from a template (calls `createScript`)
+│           │       ├── init.ts           # Scaffold a new Edge Script project from a template (calls `createScript` + `setupCustomDomain`)
 │           │       ├── interactive.ts     # resolveScriptInteractive(): explicit ID → linked manifest → picker (offers to link; skipped for JSON output)
 │           │       ├── link.ts           # Link directory to a remote Edge Script (.bunny/script.json)
 │           │       ├── list.ts           # List all Edge Scripts (Standalone + Middleware)
@@ -322,7 +328,7 @@ bunny-cli/
 │           │       │   ├── list.ts       # List deployments for an Edge Script
 │           │       │   └── publish.ts    # Publish (roll back to) a past deployment by release ID
 │           │       ├── hostnames/
-│           │       │   └── index.ts      # Mounts core/hostnames factory: script pull-zone resolver + --id/--pull-zone, visible as "domains" with hidden "hostnames" alias
+│           │       │   └── index.ts      # Mounts core/hostnames factory: script pull-zone resolver + [id] positional (--id also accepted)/--pull-zone, visible as "domains" with hidden "hostnames" alias
 │           │       └── env/
 │           │           ├── index.ts      # defineNamespace("env", ...)
 │           │           ├── list.ts       # List environment variables for a script
@@ -355,7 +361,7 @@ bunny-cli/
   - **Flatten only first-class groups** directly into the owner — picked by user mental model, kept to one or two. `scripts domains` is the flattened group (a custom domain is "my site's address," not a CDN setting).
   - **Group the long tail** under a `pullzone` sub-namespace within the owner (e.g. `scripts pullzone <setting>`), so the owner's top-level help gains one line, not ten. Curate per owner — don't expose settings that don't apply (a script _is_ its pull zone's origin, so no origin-URL command under `scripts`).
   - **A standalone `bunny pullzone` command** (planned) is the canonical full surface for pull zones not backing a script/app, targeted by `--id`.
-  - Each setting-area is a **mountable factory** like `createHostnamesCommands` (`core/hostnames/`): one `{ commandPath, target, resolve(args) => { pullZoneId, coreClient }, hiddenAliases }` mounted into the root `pullzone` (resolve from `--id`), `scripts` (resolve from the linked manifest), and `apps` (resolve from the CDN endpoint). The resolver is the only per-surface difference.
+  - Each setting-area is a **mountable factory** like `createHostnamesCommands` (`core/hostnames/`): one `{ commandPath, target, targetPositional, resolve(args) => { pullZoneId, coreClient }, hiddenAliases }` mounted into the root `pullzone` (resolve from `--id`), `scripts` (resolve from the linked manifest), and `apps` (resolve from the CDN endpoint). The resolver is the only per-surface difference. `targetPositional` appends an optional trailing positional (e.g. `[id]`) to every subcommand so mounts can match their namespace's positional-ID convention; the flag form of the same key keeps working.
   - Canonical term is `pullzone` (matches the bunny.net dashboard/API); `pz` is a hidden alias (`defineNamespace(alias, false, …)`), the same pattern as `domains`'s hidden `hostnames` alias.
 
 ---
@@ -901,7 +907,7 @@ bunny
 ├── scripts
 │   ├── init            [--name] [--type] [--template] [--github-actions] [--deploy] [--skip-git] [--skip-install]
 │   │                                       Create a new Edge Script project from a template
-│   ├── create          [name] [--type] [--pull-zone] [--pull-zone-name] [--link]
+│   ├── create          [name] [--type] [--pull-zone] [--pull-zone-name] [--link] [--domain]
 │   │                                       Create a remote Edge Script (use after init when --deploy was skipped)
 │   ├── deploy          <file> [id] [--skip-publish]
 │   │                                       Deploy code to an Edge Script (publishes by default)
@@ -912,13 +918,13 @@ bunny
 │   │                                       Publish (roll back to) a past deployment by release ID
 │   ├── docs                                Open Edge Script documentation in browser
 │   ├── domains                             (hidden alias: hostnames)
-│   │   ├── add         <domain> [--ssl] [--no-force-ssl] [--id] [--pull-zone]
-│   │   │                                   Add a custom domain (SSL opt-in; HTTPS forced by default)
-│   │   ├── ssl         <domain> [--no-force-ssl] [--id] [--pull-zone]
+│   │   ├── add         <domain> [id] [--ssl] [--wait] [--no-force-ssl] [--pull-zone]
+│   │   │                                   Add a custom domain (SSL opt-in; HTTPS forced by default; --wait polls DNS then issues SSL)
+│   │   ├── ssl         <domain> [id] [--no-force-ssl] [--pull-zone]
 │   │   │                                   Issue a free SSL certificate (HTTPS forced by default)
-│   │   ├── list        (alias: ls) [--id] [--pull-zone]   List pull zone domains
-│   │   └── remove      <domain> (alias: rm) [--force] [--id] [--pull-zone]
-│   │                                       Remove a custom domain
+│   │   ├── list        [id] (alias: ls) [--pull-zone]   List pull zone domains
+│   │   └── remove      <domain> [id] (alias: rm) [--force] [--pull-zone]
+│   │                                       Remove a custom domain (script [id] also accepted as --id on all domains subcommands)
 │   ├── env
 │   │   ├── list        [id]                List environment variables
 │   │   ├── set         <key> <value> [id]  Set environment variable

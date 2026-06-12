@@ -55,7 +55,7 @@ function resolvePullZoneId(script: EdgeScript, flag?: number): number {
   return id;
 }
 
-/** Resolve a script's pull zone (from manifest/--id) plus a core client. */
+/** Resolve a script's pull zone (from manifest/[id]/--id) plus a core client. */
 async function resolveScriptPullZone(args: {
   profile: string;
   apiKey?: string;
@@ -81,17 +81,16 @@ export const scriptsHostnamesCommands = createHostnamesCommands({
   namespace: "domains",
   describe: "Manage custom domains for an Edge Script.",
   hiddenAliases: ["hostnames"],
+  targetPositional: {
+    name: "id",
+    describe: "Edge Script ID (uses linked script if omitted)",
+  },
   target: (yargs) =>
-    yargs
-      .option("id", {
-        type: "number",
-        describe: "Edge Script ID (uses linked script if omitted)",
-      })
-      .option("pull-zone", {
-        type: "number",
-        describe:
-          "Pull zone ID (required if the script has multiple linked zones)",
-      }),
+    yargs.option("pull-zone", {
+      type: "number",
+      describe:
+        "Pull zone ID (required if the script has multiple linked zones)",
+    }),
   resolve: (args) =>
     resolveScriptPullZone({
       profile: args.profile,

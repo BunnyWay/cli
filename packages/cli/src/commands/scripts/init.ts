@@ -3,6 +3,7 @@ import { basename, resolve } from "node:path";
 import prompts from "prompts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
+import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifestAt } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
@@ -16,7 +17,7 @@ import {
   TEMPLATES,
   type Template,
 } from "./constants.ts";
-import { createScript } from "./create.ts";
+import { createScript, setupCustomDomain } from "./create.ts";
 import { detectFromLockfile, pickPackageManager } from "./package-manager.ts";
 
 const COMMAND = "init";
@@ -416,12 +417,36 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
           hostname: created.hostname,
         };
 
-        if (
-          deployResult.hostname &&
-          output !== "json" &&
-          process.stdout.isTTY
-        ) {
-          await promptOpenInBrowser(deployResult.hostname);
+        const isInteractive = output !== "json" && process.stdout.isTTY;
+
+        // Offer a custom domain; on SSL success the browser prompt opens it instead.
+        let openTarget = deployResult.hostname;
+        if (created.pullZoneId != null && isInteractive) {
+          const { value } = await prompts({
+            type: "text",
+            name: "value",
+            message: "Custom domain (leave blank to skip):",
+          });
+          const domain = normalizeHostname(value ?? "");
+          if (domain) {
+            // The user is still outside the project directory, so hints must carry --id.
+            const sslIssued = await setupCustomDomain({
+              profile,
+              apiKey,
+              verbose,
+              pullZoneId: created.pullZoneId,
+              domain,
+              scriptId: created.id,
+              linked: false,
+              interactive: true,
+            });
+            if (sslIssued) openTarget = domain;
+            logger.log();
+          }
+        }
+
+        if (openTarget && isInteractive) {
+          await promptOpenInBrowser(openTarget);
         } else if (deployResult.hostname) {
           logger.dim(`  URL: ${deployResult.hostname}`);
         }

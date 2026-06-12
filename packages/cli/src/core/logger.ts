@@ -9,6 +9,7 @@ export const logger = {
   warn: (msg: string) => console.error(chalk.yellow("⚠"), msg),
   error: (msg: string) => console.error(chalk.red("✖"), msg),
   dim: (msg: string) => console.error(chalk.gray(msg)),
+  accent: (msg: string) => console.error(bunny(msg)),
   debug: (msg: string, verbose: boolean) => {
     if (verbose) console.error(chalk.gray("[debug]"), msg);
   },
