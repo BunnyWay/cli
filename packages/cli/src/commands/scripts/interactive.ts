@@ -74,8 +74,7 @@ async function resolveScriptInteractive(
   });
   if (!selected) throw new UserError("A script is required.");
 
-  // The list endpoint returns a trimmed model; re-fetch by ID so callers get
-  // the same full shape as an explicit-ID lookup (variables, hostnames, etc.).
+  // The list endpoint returns a trimmed model — re-fetch by ID for the full shape.
   return {
     script: await fetchScript(client, selected.Id as number),
     picked: true,

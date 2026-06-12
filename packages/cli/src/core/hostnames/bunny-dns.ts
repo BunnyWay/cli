@@ -34,12 +34,7 @@ export interface BunnyDnsMatch {
   /** The record name within the zone — "" for the apex. */
   recordName: string;
   existing: DnsRecordModel | null;
-  /**
-   * True when bunny's nameservers are actually serving this zone (the registrar
-   * delegated it). When false the zone exists in the account but the public
-   * internet can't resolve its records yet — callers must still poll DNS rather
-   * than assume a freshly-added record is live.
-   */
+  /** True when the registrar delegates to bunny's nameservers — if false, records here aren't publicly resolvable yet. */
   delegated: boolean;
 }
 

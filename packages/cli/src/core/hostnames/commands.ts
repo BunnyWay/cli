@@ -174,9 +174,7 @@ export function createHostnamesCommands(
       const sslFailed = requestSsl && sslError != null;
 
       if (args.output === "json") {
-        // --wait was requested (e.g. in CI): poll DNS and issue SSL before
-        // reporting, so the JSON reflects the real certificate outcome instead
-        // of a premature ssl:false. The flow stays quiet so stdout is just JSON.
+        // With --wait, finish the DNS/SSL flow first so the JSON reflects the real certificate outcome.
         if (systemHostname && args.wait === true && !sslIssued) {
           try {
             sslIssued = await offerDnsWaitAndSsl({
@@ -240,8 +238,7 @@ export function createHostnamesCommands(
         logger.dim("  This is normal until DNS propagates.");
       }
 
-      // If the domain lives in a Bunny DNS zone, offer to point the record at the
-      // pull zone (prompted) so SSL can issue right away — same shortcut as `scripts create`.
+      // If the domain is on Bunny DNS, offer to add the record (prompted) so SSL can issue right away.
       if (systemHostname && interactive) {
         try {
           const match = await findBunnyDnsZone(coreClient, hostname);
@@ -254,8 +251,6 @@ export function createHostnamesCommands(
             });
             if (dnsResult !== "declined") {
               logger.log();
-              // Only skip the poll when the zone is actually delegated — an
-              // undelegated zone's records aren't visible to bunny's resolvers yet.
               await offerDnsWaitAndSsl({
                 coreClient,
                 pullZoneId,

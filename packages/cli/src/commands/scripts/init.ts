@@ -429,8 +429,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
           });
           const domain = normalizeHostname(value ?? "");
           if (domain) {
-            // The script already exists — a domain/DNS/SSL failure mustn't trip the
-            // script-creation catch below, or post-create guidance gets skipped.
+            // A domain failure mustn't trip the script-creation catch — the script already exists.
             try {
               // The user is still outside the project directory, so hints must carry --id.
               const sslIssued = await setupCustomDomain({

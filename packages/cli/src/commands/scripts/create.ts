@@ -187,8 +187,6 @@ export async function setupCustomDomain(opts: {
 
     if (dnsResult && dnsResult !== "declined") {
       logger.log();
-      // Only skip the poll when the zone is actually delegated — an undelegated
-      // zone's records aren't visible to bunny's resolvers yet.
       return offerDnsWaitAndSsl({
         coreClient,
         pullZoneId: opts.pullZoneId,

@@ -6,7 +6,6 @@ import {
 } from "../../core/dns-record-types.ts";
 import { UserError } from "../../core/errors.ts";
 
-// Canonical definitions live in core so other layers can share them.
 export { type DnsRecordTypes, RECORD_TYPES, recordTypeLabel };
 export type DnsRecordModel = components["schemas"]["DnsRecordModel"];
 
