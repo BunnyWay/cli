@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { findBunnyDnsZone } from "./bunny-dns.ts";
+import prompts from "prompts";
+import { findBunnyDnsZone, offerBunnyDnsRecord } from "./bunny-dns.ts";
 import type { CoreClient } from "./client.ts";
 
 type Zone = { Id: number; Domain: string };
@@ -76,5 +77,31 @@ describe("findBunnyDnsZone", () => {
     });
     const match = await findBunnyDnsZone(client, "shop.example.com");
     expect(match?.existing).toBeNull();
+  });
+});
+
+describe("offerBunnyDnsRecord", () => {
+  test("throws instead of repointing a record that has no ID", async () => {
+    // A record missing an Id would otherwise produce a `.../records/undefined` request.
+    prompts.inject([true]);
+    const client = {
+      POST: async () => {
+        throw new Error("repoint must not be attempted without a record ID");
+      },
+    } as unknown as CoreClient;
+
+    await expect(
+      offerBunnyDnsRecord({
+        client,
+        hostname: "shop.example.com",
+        pullZoneId: 12345,
+        match: {
+          zoneId: 7,
+          zoneDomain: "example.com",
+          recordName: "shop",
+          existing: { Type: 0, Name: "shop", Value: "1.2.3.4" },
+        },
+      }),
+    ).rejects.toThrow(/has no ID/);
   });
 });

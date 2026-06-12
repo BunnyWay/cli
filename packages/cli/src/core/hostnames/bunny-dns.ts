@@ -177,10 +177,15 @@ export async function offerBunnyDnsRecord(opts: {
   if (!(await confirm("Repoint it at this pull zone?", { initial: false }))) {
     return "declined";
   }
+  if (existing.Id == null) {
+    throw new Error(
+      `DNS record for "${hostname}" has no ID — cannot repoint it.`,
+    );
+  }
   await repointPullZoneRecord(
     client,
     zoneId,
-    existing.Id as number,
+    existing.Id,
     recordName,
     pullZoneId,
   );

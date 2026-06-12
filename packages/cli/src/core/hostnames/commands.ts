@@ -6,6 +6,7 @@ import { formatTable } from "../format.ts";
 import { logger } from "../logger.ts";
 import type { GlobalArgs } from "../types.ts";
 import { confirm, spinner } from "../ui.ts";
+import { findBunnyDnsZone, offerBunnyDnsRecord } from "./bunny-dns.ts";
 import {
   addHostname,
   enableSsl,
@@ -173,6 +174,27 @@ export function createHostnamesCommands(
       const sslFailed = requestSsl && sslError != null;
 
       if (args.output === "json") {
+        // --wait was requested (e.g. in CI): poll DNS and issue SSL before
+        // reporting, so the JSON reflects the real certificate outcome instead
+        // of a premature ssl:false. The flow stays quiet so stdout is just JSON.
+        if (systemHostname && args.wait === true && !sslIssued) {
+          try {
+            sslIssued = await offerDnsWaitAndSsl({
+              coreClient,
+              pullZoneId,
+              hostname,
+              cnameTarget: systemHostname,
+              forceSsl: force,
+              sslHint,
+              assumeYes: true,
+              json: true,
+            });
+            if (sslIssued) sslError = undefined;
+          } catch (err) {
+            sslError = err instanceof Error ? err.message : String(err);
+          }
+        }
+
         logger.log(
           JSON.stringify(
             {
@@ -188,7 +210,9 @@ export function createHostnamesCommands(
           ),
         );
         // Emit the full result for agents/CI, then signal failure with a non-zero exit.
-        if (sslFailed) process.exit(1);
+        const sslWanted =
+          requestSsl || (args.wait === true && systemHostname != null);
+        if (sslWanted && !sslIssued) process.exit(1);
         return;
       }
 
@@ -207,14 +231,6 @@ export function createHostnamesCommands(
         return;
       }
 
-      if (systemHostname) {
-        logger.log();
-        logger.log("Point your DNS at bunny.net to activate it:");
-        logger.accent(`  CNAME  ${hostname}  →  ${systemHostname}`);
-      }
-
-      logger.log();
-
       // Offer to wait for DNS and finish HTTPS in one go (or just do it with --wait).
       const offerWait =
         systemHostname != null && (args.wait === true || interactive);
@@ -222,8 +238,50 @@ export function createHostnamesCommands(
       if (sslFailed && offerWait) {
         logger.warn(`Couldn't issue a certificate yet: ${sslError}`);
         logger.dim("  This is normal until DNS propagates.");
-        logger.log();
       }
+
+      // If the domain lives in a Bunny DNS zone, offer to point the record at the
+      // pull zone (prompted) so SSL can issue right away — same shortcut as `scripts create`.
+      if (systemHostname && interactive) {
+        try {
+          const match = await findBunnyDnsZone(coreClient, hostname);
+          if (match) {
+            const dnsResult = await offerBunnyDnsRecord({
+              client: coreClient,
+              hostname,
+              pullZoneId,
+              match,
+            });
+            if (dnsResult !== "declined") {
+              logger.log();
+              await offerDnsWaitAndSsl({
+                coreClient,
+                pullZoneId,
+                hostname,
+                cnameTarget: systemHostname,
+                forceSsl: force,
+                sslHint,
+                dnsAlreadyLive: true,
+              });
+              return;
+            }
+          }
+        } catch (err) {
+          // A Bunny DNS hiccup shouldn't block domain setup — fall back to manual DNS.
+          if (args.verbose) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.dim(`  Bunny DNS check skipped: ${message}`);
+          }
+        }
+      }
+
+      if (systemHostname) {
+        logger.log();
+        logger.log("Point your DNS at bunny.net to activate it:");
+        logger.accent(`  CNAME  ${hostname}  →  ${systemHostname}`);
+      }
+
+      logger.log();
 
       if (systemHostname && offerWait) {
         await offerDnsWaitAndSsl({

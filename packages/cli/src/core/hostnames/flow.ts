@@ -30,6 +30,8 @@ export interface DnsSslFlowOptions {
   assumeYes?: boolean;
   /** Skip the wait prompt and DNS poll, issuing SSL right away (record already live on bunny's resolvers). */
   dnsAlreadyLive?: boolean;
+  /** Suppress the human-readable summary on stdout (the caller emits JSON instead). */
+  json?: boolean;
 }
 
 /** Print the manual follow-up for enabling HTTPS once DNS propagates. */
@@ -142,14 +144,16 @@ export async function offerDnsWaitAndSsl(
     );
   }
 
-  logger.success("DNS is live.");
-  logger.success(
-    opts.forceSsl
-      ? `SSL certificate issued for ${opts.hostname} and HTTPS forced.`
-      : `SSL certificate issued for ${opts.hostname}.`,
-  );
-  logger.log(
-    `  Live at: ${hostnameUrl(opts.hostname, { hasCertificate: true })}`,
-  );
+  if (!opts.json) {
+    logger.success("DNS is live.");
+    logger.success(
+      opts.forceSsl
+        ? `SSL certificate issued for ${opts.hostname} and HTTPS forced.`
+        : `SSL certificate issued for ${opts.hostname}.`,
+    );
+    logger.log(
+      `  Live at: ${hostnameUrl(opts.hostname, { hasCertificate: true })}`,
+    );
+  }
   return true;
 }
