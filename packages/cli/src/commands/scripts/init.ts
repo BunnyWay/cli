@@ -429,18 +429,32 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
           });
           const domain = normalizeHostname(value ?? "");
           if (domain) {
-            // The user is still outside the project directory, so hints must carry --id.
-            const sslIssued = await setupCustomDomain({
-              profile,
-              apiKey,
-              verbose,
-              pullZoneId: created.pullZoneId,
-              domain,
-              scriptId: created.id,
-              linked: false,
-              interactive: true,
-            });
-            if (sslIssued) openTarget = domain;
+            // The script already exists — a domain/DNS/SSL failure mustn't trip the
+            // script-creation catch below, or post-create guidance gets skipped.
+            try {
+              // The user is still outside the project directory, so hints must carry --id.
+              const sslIssued = await setupCustomDomain({
+                profile,
+                apiKey,
+                verbose,
+                pullZoneId: created.pullZoneId,
+                domain,
+                scriptId: created.id,
+                linked: false,
+                interactive: true,
+              });
+              if (sslIssued) openTarget = domain;
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : "";
+              logger.warn(
+                message
+                  ? `Couldn't finish setting up ${domain}: ${message}`
+                  : `Couldn't finish setting up ${domain}.`,
+              );
+              logger.dim(
+                `  Retry later: bunny scripts domains add ${domain} --id ${created.id} --wait`,
+              );
+            }
             logger.log();
           }
         }

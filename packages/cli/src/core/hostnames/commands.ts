@@ -254,6 +254,8 @@ export function createHostnamesCommands(
             });
             if (dnsResult !== "declined") {
               logger.log();
+              // Only skip the poll when the zone is actually delegated — an
+              // undelegated zone's records aren't visible to bunny's resolvers yet.
               await offerDnsWaitAndSsl({
                 coreClient,
                 pullZoneId,
@@ -261,7 +263,7 @@ export function createHostnamesCommands(
                 cnameTarget: systemHostname,
                 forceSsl: force,
                 sslHint,
-                dnsAlreadyLive: true,
+                dnsAlreadyLive: match.delegated,
               });
               return;
             }

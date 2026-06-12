@@ -165,9 +165,11 @@ export async function setupCustomDomain(opts: {
   // If the domain is on Bunny DNS, offer to add the record (prompted) so SSL can issue right away.
   if (opts.interactive) {
     let dnsResult: BunnyDnsResult | undefined;
+    let delegated = false;
     try {
       const match = await findBunnyDnsZone(coreClient, opts.domain);
       if (match) {
+        delegated = match.delegated;
         dnsResult = await offerBunnyDnsRecord({
           client: coreClient,
           hostname: opts.domain,
@@ -185,6 +187,8 @@ export async function setupCustomDomain(opts: {
 
     if (dnsResult && dnsResult !== "declined") {
       logger.log();
+      // Only skip the poll when the zone is actually delegated — an undelegated
+      // zone's records aren't visible to bunny's resolvers yet.
       return offerDnsWaitAndSsl({
         coreClient,
         pullZoneId: opts.pullZoneId,
@@ -192,7 +196,7 @@ export async function setupCustomDomain(opts: {
         cnameTarget,
         forceSsl: true,
         sslHint,
-        dnsAlreadyLive: true,
+        dnsAlreadyLive: delegated,
       });
     }
   }

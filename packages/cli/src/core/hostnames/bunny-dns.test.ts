@@ -3,7 +3,7 @@ import prompts from "prompts";
 import { findBunnyDnsZone, offerBunnyDnsRecord } from "./bunny-dns.ts";
 import type { CoreClient } from "./client.ts";
 
-type Zone = { Id: number; Domain: string };
+type Zone = { Id: number; Domain: string; NameserversDetected?: boolean };
 type Rec = { Id?: number; Type?: number; Name?: string; Value?: string };
 
 /** A core client stubbed to serve a fixed set of zones and per-zone records. */
@@ -18,7 +18,13 @@ function fakeClient(
       }
       if (path === "/dnszone/{id}") {
         const id = opts.params.path?.id as number;
-        return { data: { Records: recordsByZone[id] ?? [] } };
+        const zone = zones.find((z) => z.Id === id);
+        return {
+          data: {
+            Records: recordsByZone[id] ?? [],
+            NameserversDetected: zone?.NameserversDetected,
+          },
+        };
       }
       throw new Error(`unexpected GET ${path}`);
     },
@@ -78,6 +84,23 @@ describe("findBunnyDnsZone", () => {
     const match = await findBunnyDnsZone(client, "shop.example.com");
     expect(match?.existing).toBeNull();
   });
+
+  test("reports delegated:true only when nameservers are detected", async () => {
+    const delegated = fakeClient([
+      { Id: 7, Domain: "example.com", NameserversDetected: true },
+    ]);
+    expect(
+      (await findBunnyDnsZone(delegated, "shop.example.com"))?.delegated,
+    ).toBe(true);
+
+    // A zone in the account but not yet delegated at the registrar isn't live.
+    const undelegated = fakeClient([
+      { Id: 7, Domain: "example.com", NameserversDetected: false },
+    ]);
+    expect(
+      (await findBunnyDnsZone(undelegated, "shop.example.com"))?.delegated,
+    ).toBe(false);
+  });
 });
 
 describe("offerBunnyDnsRecord", () => {
@@ -100,6 +123,7 @@ describe("offerBunnyDnsRecord", () => {
           zoneDomain: "example.com",
           recordName: "shop",
           existing: { Type: 0, Name: "shop", Value: "1.2.3.4" },
+          delegated: true,
         },
       }),
     ).rejects.toThrow(/has no ID/);
