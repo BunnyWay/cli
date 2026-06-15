@@ -1,5 +1,7 @@
 import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
+import { logger } from "../../core/logger.ts";
+import { loadManifest } from "../../core/manifest.ts";
 import { spinner } from "../../core/ui.ts";
 import {
   type CoreClient,
@@ -9,6 +11,7 @@ import {
   fetchZones,
   resolveZone,
 } from "./api.ts";
+import { DNS_MANIFEST, type DnsManifest } from "./constants.ts";
 import {
   formatRecordValue,
   recordName,
@@ -33,6 +36,20 @@ export async function resolveZoneInteractive(
     }
   }
 
+  // Fall back to a directory linked with `bunny dns zones link` before prompting.
+  const manifest = loadManifest<DnsManifest>(DNS_MANIFEST);
+  if (manifest.id) {
+    const spin = spinner("Loading linked zone...");
+    spin.start();
+    try {
+      const zone = await fetchZone(client, manifest.id);
+      logger.dim(`Using linked zone ${zone.Domain}.`);
+      return zone;
+    } finally {
+      spin.stop();
+    }
+  }
+
   const spin = spinner("Fetching zones...");
   spin.start();
   let zones: DnsZoneModel[];
@@ -45,7 +62,7 @@ export async function resolveZoneInteractive(
   if (zones.length === 0) {
     throw new UserError(
       "No DNS zones found.",
-      'Create one with "bunny dns zone add <domain>".',
+      'Create one with "bunny dns zones add <domain>".',
     );
   }
 

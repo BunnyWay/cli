@@ -25,9 +25,9 @@ export const dnsRemoveCommand = defineCommand<RemoveArgs>({
   aliases: ["rm"],
   describe: "Remove a DNS record from a zone (prompts when args are omitted).",
   examples: [
-    ["$0 dns record remove example.com 123", "Remove a record by ID"],
-    ["$0 dns record remove example.com 123 --force", "Skip confirmation"],
-    ["$0 dns record remove", "Pick a zone and record interactively"],
+    ["$0 dns records remove example.com 123", "Remove a record by ID"],
+    ["$0 dns records remove example.com 123 --force", "Skip confirmation"],
+    ["$0 dns records remove", "Pick a zone and record interactively"],
   ],
 
   builder: (yargs) =>

@@ -273,22 +273,25 @@ bunny-cli/
 │           │   │       ├── create.ts     # Generate an auth token (read-only/full-access, optional expiry)
 │           │   │       └── invalidate.ts # Invalidate all tokens for a database (with confirmation)
 │           │   ├── dns/                   # Experimental — hidden from help and landing page
-│           │   │   ├── index.ts          # defineNamespace("dns", ...) — registers the record + zone groups (+ hidden domain aliases)
+│           │   │   ├── index.ts          # defineNamespace("dns", ...) — registers the records + zones groups (+ hidden domain aliases)
 │           │   │   ├── api.ts            # CoreClient type, fetchZones/fetchZone, resolveZone (domain-or-ID → zone)
-│           │   │   ├── interactive.ts    # resolveZoneInteractive (zone picker) + resolveRecordInteractive (record picker) fallbacks
+│           │   │   ├── constants.ts      # DNS_MANIFEST (".bunny/dns.json") + DnsManifest type, written by `dns zones link`
+│           │   │   ├── interactive.ts    # resolveZoneInteractive (arg → .bunny/dns.json manifest → zone picker) + resolveRecordInteractive (record picker) fallbacks
 │           │   │   ├── record-types.ts   # Re-exports RECORD_TYPES/recordTypeLabel from core/dns-record-types.ts; adds parseRecordType, recordName, formatRecordValue
-│           │   │   ├── record/            # `dns record` — entries within a zone (aliases: records, rec)
-│           │   │   │   ├── index.ts      # defineNamespace("record", ...)
+│           │   │   ├── record/            # `dns records` — entries within a zone (canonical: records; aliases: record, rec)
+│           │   │   │   ├── index.ts      # defineNamespace("records", ...)
 │           │   │   │   ├── list.ts       # List records in a zone (alias: ls)
 │           │   │   │   ├── add.ts        # Add a record (positional grammar per type, or interactive wizard; --pull-zone/--script)
 │           │   │   │   ├── update.ts     # Update a record (alias: edit; prompts to pick zone+record when omitted)
 │           │   │   │   ├── remove.ts     # Remove a record (alias: rm; prompts to pick zone+record when omitted)
 │           │   │   │   ├── import.ts     # Import records from a BIND zone file (prompts for zone/file when omitted)
 │           │   │   │   └── export.ts     # Export records as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
-│           │   │   └── zone/              # `dns zone` — the zone itself (aliases: zones; hidden: domain, domains)
-│           │   │       ├── index.ts      # defineNamespace("zone", ...) + dnsZoneHiddenAliases (domain/domains)
+│           │   │   └── zone/              # `dns zones` — the zone itself (canonical: zones; aliases: zone; hidden: domain, domains)
+│           │   │       ├── index.ts      # defineNamespace("zones", ...) + dnsZoneHiddenAliases (domain/domains)
 │           │   │       ├── list.ts       # List all DNS zones (alias: ls)
 │           │   │       ├── add.ts        # Create a DNS zone
+│           │   │       ├── link.ts       # Link this directory to a zone → .bunny/dns.json (arg, else pick interactively)
+│           │   │       ├── unlink.ts     # Remove .bunny/dns.json (alias-free; --force skips confirm)
 │           │   │       ├── show.ts       # Show zone details (nameservers, SOA, DNSSEC, logging, record count)
 │           │   │       ├── remove.ts     # Delete a DNS zone and its records (alias: rm)
 │           │   │       ├── stats.ts      # Show DNS query statistics (TotalQueriesServed, by-type bar chart in text mode)
@@ -853,9 +856,9 @@ bunny
 │   │                                       Update registry name and/or rotate credentials
 │   └── remove          <id>                Remove registry
 ├── dns                                     (experimental — hidden from help and landing page)
-│   │                                       Two resource groups: `record` (entries in a zone) and `zone` (the zone itself).
-│   │                                       Every [domain] is optional — omit it to pick a zone interactively (resolveZoneInteractive).
-│   ├── record                              (aliases: records, rec)
+│   │                                       Two resource groups: `records` (entries in a zone) and `zones` (the zone itself).
+│   │                                       Every [domain] is optional — omit it to use the linked zone (`dns zones link` → .bunny/dns.json), else pick interactively (resolveZoneInteractive).
+│   ├── records                             (canonical; aliases: record, rec)
 │   │   ├── list        [domain] (alias: ls)  List the records within a zone
 │   │   ├── add         [domain] [name] [type] [values..] [--ttl] [--comment] [--pull-zone] [--script]
 │   │   │                                   Add a DNS record (interactive wizard when args omitted; MX/SRV/CAA use positional values; PullZone/Script use --pull-zone/--script)
@@ -864,9 +867,11 @@ bunny
 │   │   ├── remove      [domain] [id] [--force]  Remove a DNS record (alias: rm; prompts to pick zone+record when omitted)
 │   │   ├── import      [domain] [file]     Import records from a BIND zone file (prompts for zone/file when omitted)
 │   │   └── export      [domain] [--file] [--save]  Export a zone as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
-│   └── zone                                (aliases: zones; hidden: domain, domains)
+│   └── zones                               (canonical; aliases: zone; hidden: domain, domains)
 │       ├── list                            List all DNS zones (alias: ls)
 │       ├── add         <domain>            Create a DNS zone
+│       ├── link        [domain]            Link this directory to a zone → .bunny/dns.json (pick interactively when omitted)
+│       ├── unlink      [--force]           Remove .bunny/dns.json, unlinking this directory
 │       ├── show        [domain]            Show zone details (nameservers, SOA, DNSSEC, logging, record count)
 │       ├── remove      [domain] [--force]  Delete a DNS zone and its records (alias: rm)
 │       ├── stats       [domain] [--from] [--to]  Show DNS query statistics for a zone (defaults to last 30 days; text mode renders a bar chart)

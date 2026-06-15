@@ -18,8 +18,8 @@ export const dnsNameserversCommand = defineCommand<NameserversArgs>({
   aliases: ["ns"],
   describe: "Show the nameservers to set at your registrar for a zone.",
   examples: [
-    ["$0 dns zone nameservers example.com", "Show the zone's nameservers"],
-    ["$0 dns zone ns example.com --output json", "JSON output"],
+    ["$0 dns zones nameservers example.com", "Show the zone's nameservers"],
+    ["$0 dns zones ns example.com --output json", "JSON output"],
   ],
 
   builder: (yargs) =>

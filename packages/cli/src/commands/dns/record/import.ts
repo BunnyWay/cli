@@ -18,7 +18,7 @@ export const dnsImportCommand = defineCommand<ImportArgs>({
   describe: "Import DNS records into a zone from a BIND zone file.",
   examples: [
     [
-      "$0 dns record import example.com ./zonefile.txt",
+      "$0 dns records import example.com ./zonefile.txt",
       "Import records from a zone file",
     ],
   ],

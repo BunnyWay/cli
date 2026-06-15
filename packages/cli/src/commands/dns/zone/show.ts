@@ -14,8 +14,8 @@ export const dnsZoneShowCommand = defineCommand<ShowArgs>({
   command: "show [domain]",
   describe: "Show details for a DNS zone.",
   examples: [
-    ["$0 dns zone show example.com", "Show zone details"],
-    ["$0 dns zone show example.com --output json", "JSON output"],
+    ["$0 dns zones show example.com", "Show zone details"],
+    ["$0 dns zones show example.com --output json", "JSON output"],
   ],
 
   builder: (yargs) =>

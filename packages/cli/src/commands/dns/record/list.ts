@@ -20,8 +20,8 @@ export const dnsRecordListCommand = defineCommand<ListArgs>({
   aliases: ["ls"],
   describe: "List the records within a zone.",
   examples: [
-    ["$0 dns record list example.com", "List records in a zone"],
-    ["$0 dns record list example.com --output json", "JSON output"],
+    ["$0 dns records list example.com", "List records in a zone"],
+    ["$0 dns records list example.com --output json", "JSON output"],
   ],
 
   builder: (yargs) =>

@@ -201,20 +201,20 @@ export const dnsAddCommand = defineCommand<AddArgs>({
   command: "add [domain] [name] [type] [values..]",
   describe: "Add a DNS record to a zone (interactive when args are omitted).",
   examples: [
-    ["$0 dns record add example.com api A 198.51.100.1", "Add an A record"],
+    ["$0 dns records add example.com api A 198.51.100.1", "Add an A record"],
     [
-      "$0 dns record add example.com '@' MX mail.example.com 10",
+      "$0 dns records add example.com '@' MX mail.example.com 10",
       "Add an MX record",
     ],
     [
-      "$0 dns record add example.com '@' SRV 10 0 389 sip.example.com",
+      "$0 dns records add example.com '@' SRV 10 0 389 sip.example.com",
       "Add an SRV record",
     ],
     [
-      "$0 dns record add example.com '@' CAA '0 issue \"letsencrypt.org\"'",
+      "$0 dns records add example.com '@' CAA '0 issue \"letsencrypt.org\"'",
       "Add a CAA record",
     ],
-    ["$0 dns record add", "Interactive wizard"],
+    ["$0 dns records add", "Interactive wizard"],
   ],
 
   builder: (yargs) =>

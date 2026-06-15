@@ -15,8 +15,8 @@ export const dnsZoneDnssecDisableCommand = defineCommand<DisableArgs>({
   command: "disable [domain]",
   describe: "Disable DNSSEC for a zone.",
   examples: [
-    ["$0 dns zone dnssec disable example.com", "Disable DNSSEC"],
-    ["$0 dns zone dnssec disable example.com --force", "Skip confirmation"],
+    ["$0 dns zones dnssec disable example.com", "Disable DNSSEC"],
+    ["$0 dns zones dnssec disable example.com --force", "Skip confirmation"],
   ],
 
   builder: (yargs) =>
