@@ -2,29 +2,25 @@ import {
   createComputeClient,
   createCoreClient,
 } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { formatKeyValue, formatTable } from "../../core/format.ts";
 import { hostnameUrl, toSafeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
-import { resolveManifestId } from "../../core/manifest.ts";
 import { spinner } from "../../core/ui.ts";
-import { fetchScript, fetchScriptHostnames } from "./api.ts";
-import { SCRIPT_MANIFEST, scriptTypeLabel } from "./constants.ts";
-
-type EdgeScript = components["schemas"]["EdgeScriptModel"];
+import { fetchScriptHostnames } from "./api.ts";
+import { scriptTypeLabel } from "./constants.ts";
+import {
+  type ScriptSelectorArgs,
+  scriptSelectorBuilder,
+  selectScript,
+} from "./interactive.ts";
 
 const COMMAND = "show [id]";
 const DESCRIPTION = "Show details of an Edge Script.";
 
-const ARG_ID = "id";
-const ARG_ID_DESCRIPTION = "Edge Script ID (uses linked script if omitted)";
-
-interface ShowArgs {
-  [ARG_ID]?: EdgeScript["Id"];
-}
+type ShowArgs = ScriptSelectorArgs;
 
 /**
  * Show details of an Edge Script.
@@ -54,22 +50,21 @@ export const scriptsShowCommand = defineCommand<ShowArgs>({
     ["$0 scripts show --output json", "JSON output"],
   ],
 
-  builder: (yargs) =>
-    yargs.positional(ARG_ID, {
-      type: "number",
-      describe: ARG_ID_DESCRIPTION,
-    }),
+  builder: (yargs) => scriptSelectorBuilder(yargs),
 
-  handler: async ({ [ARG_ID]: rawId, profile, output, verbose, apiKey }) => {
-    const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
+  handler: async ({ id: rawId, link, profile, output, verbose, apiKey }) => {
     const config = resolveConfig(profile, apiKey, verbose);
     const options = clientOptions(config, verbose);
     const client = createComputeClient(options);
 
-    const spin = spinner("Fetching Edge Script...");
-    spin.start();
+    const { script, offerLink } = await selectScript(client, {
+      id: rawId,
+      link,
+      output,
+    });
 
-    const script = await fetchScript(client, id);
+    const spin = spinner("Fetching hostnames...");
+    spin.start();
 
     // Pull each linked pull zone's hostnames (incl. custom domains + SSL state).
     const coreClient = createCoreClient(options);
@@ -172,5 +167,7 @@ export const scriptsShowCommand = defineCommand<ShowArgs>({
         ),
       );
     }
+
+    await offerLink();
   },
 });

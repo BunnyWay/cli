@@ -5,10 +5,13 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { resolveManifestId } from "../../../core/manifest.ts";
 import { spinner } from "../../../core/ui.ts";
 import { fetchEnvEntries } from "../api.ts";
-import { SCRIPT_MANIFEST } from "../constants.ts";
+import {
+  type ScriptSelectorArgs,
+  scriptIdOptionBuilder,
+  selectScript,
+} from "../interactive.ts";
 
 const COMMAND = "set [name] [value]";
 const DESCRIPTION = "Set an environment variable or secret for an Edge Script.";
@@ -17,15 +20,12 @@ const ARG_NAME = "name";
 const ARG_NAME_DESCRIPTION = "Variable name (will be uppercased)";
 const ARG_VALUE = "value";
 const ARG_VALUE_DESCRIPTION = "Variable value";
-const ARG_ID = "id";
-const ARG_ID_DESCRIPTION = "Edge Script ID (uses linked script if omitted)";
 const ARG_SECRET = "secret";
 const ARG_SECRET_DESCRIPTION = "Store as an encrypted secret";
 
-interface SetArgs {
+interface SetArgs extends ScriptSelectorArgs {
   [ARG_NAME]?: string;
   [ARG_VALUE]?: string;
-  [ARG_ID]?: number;
   [ARG_SECRET]?: boolean;
 }
 
@@ -62,35 +62,40 @@ export const scriptsEnvSetCommand = defineCommand<SetArgs>({
   ],
 
   builder: (yargs) =>
-    yargs
-      .positional(ARG_NAME, {
-        type: "string",
-        describe: ARG_NAME_DESCRIPTION,
-      })
-      .positional(ARG_VALUE, {
-        type: "string",
-        describe: ARG_VALUE_DESCRIPTION,
-      })
-      .option(ARG_ID, {
-        type: "number",
-        describe: ARG_ID_DESCRIPTION,
-      })
-      .option(ARG_SECRET, {
-        type: "boolean",
-        describe: ARG_SECRET_DESCRIPTION,
-      }),
+    scriptIdOptionBuilder(
+      yargs
+        .positional(ARG_NAME, {
+          type: "string",
+          describe: ARG_NAME_DESCRIPTION,
+        })
+        .positional(ARG_VALUE, {
+          type: "string",
+          describe: ARG_VALUE_DESCRIPTION,
+        }),
+    ).option(ARG_SECRET, {
+      type: "boolean",
+      describe: ARG_SECRET_DESCRIPTION,
+    }),
 
   handler: async ({
     [ARG_NAME]: rawName,
     [ARG_VALUE]: rawValue,
-    [ARG_ID]: rawId,
+    id: rawId,
     [ARG_SECRET]: secret,
+    link,
     profile,
     output,
     verbose,
     apiKey,
   }) => {
-    const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
+    const config = resolveConfig(profile, apiKey, verbose);
+    const client = createComputeClient(clientOptions(config, verbose));
+
+    const { id, offerLink } = await selectScript(client, {
+      id: rawId,
+      link,
+      output,
+    });
 
     const interactive = !rawName;
     let name = rawName;
@@ -131,9 +136,6 @@ export const scriptsEnvSetCommand = defineCommand<SetArgs>({
     if (value === undefined) throw new UserError("Variable value is required.");
 
     name = name.toUpperCase();
-
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createComputeClient(clientOptions(config, verbose));
 
     const spin = spinner("Checking for conflicts...");
     spin.start();
@@ -177,5 +179,7 @@ export const scriptsEnvSetCommand = defineCommand<SetArgs>({
         ? `Secret "${name}" set successfully.`
         : `Variable "${name}" set to "${value}".`,
     );
+
+    await offerLink();
   },
 });

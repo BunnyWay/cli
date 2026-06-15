@@ -14,8 +14,8 @@ export const dnsZoneShowCommand = defineCommand<ShowArgs>({
   command: "show [domain]",
   describe: "Show details for a DNS zone.",
   examples: [
-    ["$0 dns zone show example.com", "Show zone details"],
-    ["$0 dns zone show example.com --output json", "JSON output"],
+    ["$0 dns zones show example.com", "Show zone details"],
+    ["$0 dns zones show example.com --output json", "JSON output"],
   ],
 
   builder: (yargs) =>
@@ -28,7 +28,10 @@ export const dnsZoneShowCommand = defineCommand<ShowArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, {
+      output,
+      offerLink: true,
+    });
 
     if (output === "json") {
       logger.log(JSON.stringify(zone, null, 2));

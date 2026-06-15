@@ -19,9 +19,9 @@ export const dnsStatsCommand = defineCommand<StatsArgs>({
   command: "stats [domain]",
   describe: "Show DNS query statistics for a zone.",
   examples: [
-    ["$0 dns zone stats example.com", "Statistics for the last 30 days"],
+    ["$0 dns zones stats example.com", "Statistics for the last 30 days"],
     [
-      "$0 dns zone stats example.com --from 2026-05-01 --to 2026-05-31",
+      "$0 dns zones stats example.com --from 2026-05-01 --to 2026-05-31",
       "Statistics for a date range",
     ],
   ],
@@ -42,7 +42,10 @@ export const dnsStatsCommand = defineCommand<StatsArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, {
+      output,
+      offerLink: true,
+    });
 
     const spin = spinner("Fetching statistics...");
     spin.start();

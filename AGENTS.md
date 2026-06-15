@@ -155,13 +155,19 @@ bunny-cli/
 │           │   ├── client-options.ts     # clientOptions() helper — builds ClientOptions from ResolvedConfig
 │           │   ├── define-command.ts     # Command factory (see "Command Pattern" below)
 │           │   ├── define-namespace.ts   # Namespace/group factory for subcommand trees
+│           │   ├── dns-record-types.ts   # Canonical DNS record-type name⇄integer map (RECORD_TYPES) + recordTypeLabel(); shared by commands/dns + core/hostnames
 │           │   ├── errors.ts             # Re-exports UserError/ApiError from @bunny.net/openapi-client + ConfigError
 │           │   ├── format.ts             # Shared table/key-value rendering (text, table, csv, markdown)
 │           │   ├── format.test.ts        # Tests for format utilities
 │           │   ├── hostnames/            # Reusable pull-zone hostname feature (mounted by scripts; apps next)
-│           │   │   ├── index.ts          # Re-exports client helpers + createHostnamesCommands
-│           │   │   ├── client.ts         # hostnameUrl(), fetchPullZoneHostnames(), enableSsl() + Hostname/ResolvedPullZone types
+│           │   │   ├── index.ts          # Re-exports client helpers, DNS/flow helpers + createHostnamesCommands
+│           │   │   ├── client.ts         # hostnameUrl(), normalizeHostname(), addHostname(), fetchPullZoneHostnames(), enableSsl() + Hostname/ResolvedPullZone types
 │           │   │   ├── client.test.ts    # Tests for hostnameUrl() scheme logic
+│           │   │   ├── dns.ts            # dnsPointsAt()/anyResolverPointsAt(): DNS checks (CNAME or flattened A records) via system + public (1.1.1.1/8.8.8.8) resolvers, injectable for tests
+│           │   │   ├── dns.test.ts       # Tests for DNS matching + multi-resolver checks with fake resolvers
+│           │   │   ├── flow.ts           # offerDnsWaitAndSsl(): poll DNS + opportunistically attempt SSL issuance (~30s) since bunny's resolvers decide validation; printSslHint(). dnsAlreadyLive skips the poll (Bunny DNS record already live). offerBunnyDnsThenSsl() takes an optional onBunnyDnsZone(zone) callback fired when the hostname is on Bunny DNS (lets the command layer link the directory)
+│           │   │   ├── bunny-dns.ts       # findBunnyDnsZone()/offerBunnyDnsRecord(): detect a hostname inside an account Bunny DNS zone, then add/repoint a PullZone record (always confirmed) so SSL can issue immediately
+│           │   │   ├── bunny-dns.test.ts  # Tests for longest-suffix zone matching + record-name derivation with a fake core client
 │           │   │   └── commands.ts       # createHostnamesCommands(): add/ssl/list/remove factory parameterized by a pull-zone resolver
 │           │   ├── logger.ts             # Chalk-based structured logger
 │           │   ├── manifest.ts           # .bunny/ context file resolution (load, save, resolveManifestId)
@@ -267,22 +273,25 @@ bunny-cli/
 │           │   │       ├── create.ts     # Generate an auth token (read-only/full-access, optional expiry)
 │           │   │       └── invalidate.ts # Invalidate all tokens for a database (with confirmation)
 │           │   ├── dns/                   # Experimental — hidden from help and landing page
-│           │   │   ├── index.ts          # defineNamespace("dns", ...) — registers the record + zone groups (+ hidden domain aliases)
+│           │   │   ├── index.ts          # defineNamespace("dns", ...) — registers the records + zones groups (+ hidden domain aliases)
 │           │   │   ├── api.ts            # CoreClient type, fetchZones/fetchZone, resolveZone (domain-or-ID → zone)
-│           │   │   ├── interactive.ts    # resolveZoneInteractive (zone picker) + resolveRecordInteractive (record picker) fallbacks
-│           │   │   ├── record-types.ts   # Record type name⇄integer map, parseRecordType, recordTypeLabel, formatRecordValue
-│           │   │   ├── record/            # `dns record` — entries within a zone (aliases: records, rec)
-│           │   │   │   ├── index.ts      # defineNamespace("record", ...)
+│           │   │   ├── constants.ts      # DNS_MANIFEST (".bunny/dns.json") + DnsManifest type, written by `dns zones link`
+│           │   │   ├── interactive.ts    # resolveZoneInteractive (arg → .bunny/dns.json manifest → zone picker; offerLink prompts to link a picked zone, skipped under --output json) + resolveRecordInteractive; autoLinkDnsZone (link a zone found in another flow — silent write, confirm before relinking a different zone) reused by scripts custom-domain setup
+│           │   │   ├── record-types.ts   # Re-exports RECORD_TYPES/recordTypeLabel from core/dns-record-types.ts; adds parseRecordType, recordName, formatRecordValue
+│           │   │   ├── record/            # `dns records` — entries within a zone (canonical: records; aliases: record, rec)
+│           │   │   │   ├── index.ts      # defineNamespace("records", ...)
 │           │   │   │   ├── list.ts       # List records in a zone (alias: ls)
 │           │   │   │   ├── add.ts        # Add a record (positional grammar per type, or interactive wizard; --pull-zone/--script)
 │           │   │   │   ├── update.ts     # Update a record (alias: edit; prompts to pick zone+record when omitted)
 │           │   │   │   ├── remove.ts     # Remove a record (alias: rm; prompts to pick zone+record when omitted)
 │           │   │   │   ├── import.ts     # Import records from a BIND zone file (prompts for zone/file when omitted)
 │           │   │   │   └── export.ts     # Export records as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
-│           │   │   └── zone/              # `dns zone` — the zone itself (aliases: zones; hidden: domain, domains)
-│           │   │       ├── index.ts      # defineNamespace("zone", ...) + dnsZoneHiddenAliases (domain/domains)
+│           │   │   └── zone/              # `dns zones` — the zone itself (canonical: zones; aliases: zone; hidden: domain, domains)
+│           │   │       ├── index.ts      # defineNamespace("zones", ...) + dnsZoneHiddenAliases (domain/domains)
 │           │   │       ├── list.ts       # List all DNS zones (alias: ls)
 │           │   │       ├── add.ts        # Create a DNS zone
+│           │   │       ├── link.ts       # Link this directory to a zone → .bunny/dns.json (arg, else pick interactively)
+│           │   │       ├── unlink.ts     # Remove .bunny/dns.json (alias-free; --force skips confirm)
 │           │   │       ├── show.ts       # Show zone details (nameservers, SOA, DNSSEC, logging, record count)
 │           │   │       ├── remove.ts     # Delete a DNS zone and its records (alias: rm)
 │           │   │       ├── stats.ts      # Show DNS query statistics (TotalQueriesServed, by-type bar chart in text mode)
@@ -307,11 +316,11 @@ bunny-cli/
 │           │       ├── index.ts          # defineNamespace("scripts", ...) — registers all script commands
 │           │       ├── constants.ts      # SCRIPT_MANIFEST, SCRIPT_TYPE_LABELS
 │           │       ├── api.ts            # Shared: fetchScript(s), fetchEnvEntries, fetchScriptHostnames, logLiveHostnames, promptOpenInBrowser
-│           │       ├── create.ts         # Create a remote Edge Script (exports shared `createScript` helper)
+│           │       ├── create.ts         # Create a remote Edge Script (exports shared `createScript` + `setupCustomDomain`; for a linked script, setupCustomDomain auto-links the dir to the domain's Bunny DNS zone via autoLinkDnsZone)
 │           │       ├── delete.ts         # Delete an Edge Script (double confirmation or --force)
 │           │       ├── deploy.ts         # Deploy code to an Edge Script (publishes by default)
 │           │       ├── docs.ts           # Open Edge Script documentation in browser
-│           │       ├── init.ts           # Scaffold a new Edge Script project from a template (calls `createScript`)
+│           │       ├── init.ts           # Scaffold a new Edge Script project from a template (calls `createScript` + `setupCustomDomain`)
 │           │       ├── interactive.ts     # resolveScriptInteractive(): explicit ID → linked manifest → picker (offers to link; skipped for JSON output)
 │           │       ├── link.ts           # Link directory to a remote Edge Script (.bunny/script.json)
 │           │       ├── list.ts           # List all Edge Scripts (Standalone + Middleware)
@@ -322,7 +331,7 @@ bunny-cli/
 │           │       │   ├── list.ts       # List deployments for an Edge Script
 │           │       │   └── publish.ts    # Publish (roll back to) a past deployment by release ID
 │           │       ├── hostnames/
-│           │       │   └── index.ts      # Mounts core/hostnames factory: script pull-zone resolver + --id/--pull-zone, visible as "domains" with hidden "hostnames" alias
+│           │       │   └── index.ts      # Mounts core/hostnames factory: script pull-zone resolver + [id] positional (--id also accepted)/--pull-zone, visible as "domains" with hidden "hostnames" alias
 │           │       └── env/
 │           │           ├── index.ts      # defineNamespace("env", ...)
 │           │           ├── list.ts       # List environment variables for a script
@@ -355,7 +364,7 @@ bunny-cli/
   - **Flatten only first-class groups** directly into the owner — picked by user mental model, kept to one or two. `scripts domains` is the flattened group (a custom domain is "my site's address," not a CDN setting).
   - **Group the long tail** under a `pullzone` sub-namespace within the owner (e.g. `scripts pullzone <setting>`), so the owner's top-level help gains one line, not ten. Curate per owner — don't expose settings that don't apply (a script _is_ its pull zone's origin, so no origin-URL command under `scripts`).
   - **A standalone `bunny pullzone` command** (planned) is the canonical full surface for pull zones not backing a script/app, targeted by `--id`.
-  - Each setting-area is a **mountable factory** like `createHostnamesCommands` (`core/hostnames/`): one `{ commandPath, target, resolve(args) => { pullZoneId, coreClient }, hiddenAliases }` mounted into the root `pullzone` (resolve from `--id`), `scripts` (resolve from the linked manifest), and `apps` (resolve from the CDN endpoint). The resolver is the only per-surface difference.
+  - Each setting-area is a **mountable factory** like `createHostnamesCommands` (`core/hostnames/`): one `{ commandPath, target, targetPositional, resolve(args) => { pullZoneId, coreClient }, hiddenAliases }` mounted into the root `pullzone` (resolve from `--id`), `scripts` (resolve from the linked manifest), and `apps` (resolve from the CDN endpoint). The resolver is the only per-surface difference. `targetPositional` appends an optional trailing positional (e.g. `[id]`) to every subcommand so mounts can match their namespace's positional-ID convention; the flag form of the same key keeps working.
   - Canonical term is `pullzone` (matches the bunny.net dashboard/API); `pz` is a hidden alias (`defineNamespace(alias, false, …)`), the same pattern as `domains`'s hidden `hostnames` alias.
 
 ---
@@ -847,9 +856,9 @@ bunny
 │   │                                       Update registry name and/or rotate credentials
 │   └── remove          <id>                Remove registry
 ├── dns                                     (experimental — hidden from help and landing page)
-│   │                                       Two resource groups: `record` (entries in a zone) and `zone` (the zone itself).
-│   │                                       Every [domain] is optional — omit it to pick a zone interactively (resolveZoneInteractive).
-│   ├── record                              (aliases: records, rec)
+│   │                                       Two resource groups: `records` (entries in a zone) and `zones` (the zone itself).
+│   │                                       Every [domain] is optional — omit it to use the linked zone (`dns zones link` → .bunny/dns.json), else pick interactively (resolveZoneInteractive). Picking a zone interactively offers to link the directory (skipped under --output json; `zones remove` never offers).
+│   ├── records                             (canonical; aliases: record, rec)
 │   │   ├── list        [domain] (alias: ls)  List the records within a zone
 │   │   ├── add         [domain] [name] [type] [values..] [--ttl] [--comment] [--pull-zone] [--script]
 │   │   │                                   Add a DNS record (interactive wizard when args omitted; MX/SRV/CAA use positional values; PullZone/Script use --pull-zone/--script)
@@ -858,9 +867,11 @@ bunny
 │   │   ├── remove      [domain] [id] [--force]  Remove a DNS record (alias: rm; prompts to pick zone+record when omitted)
 │   │   ├── import      [domain] [file]     Import records from a BIND zone file (prompts for zone/file when omitted)
 │   │   └── export      [domain] [--file] [--save]  Export a zone as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
-│   └── zone                                (aliases: zones; hidden: domain, domains)
+│   └── zones                               (canonical; aliases: zone; hidden: domain, domains)
 │       ├── list                            List all DNS zones (alias: ls)
 │       ├── add         <domain>            Create a DNS zone
+│       ├── link        [domain]            Link this directory to a zone → .bunny/dns.json (pick interactively when omitted)
+│       ├── unlink      [--force]           Remove .bunny/dns.json, unlinking this directory
 │       ├── show        [domain]            Show zone details (nameservers, SOA, DNSSEC, logging, record count)
 │       ├── remove      [domain] [--force]  Delete a DNS zone and its records (alias: rm)
 │       ├── stats       [domain] [--from] [--to]  Show DNS query statistics for a zone (defaults to last 30 days; text mode renders a bar chart)
@@ -901,7 +912,7 @@ bunny
 ├── scripts
 │   ├── init            [--name] [--type] [--template] [--github-actions] [--deploy] [--skip-git] [--skip-install]
 │   │                                       Create a new Edge Script project from a template
-│   ├── create          [name] [--type] [--pull-zone] [--pull-zone-name] [--link]
+│   ├── create          [name] [--type] [--pull-zone] [--pull-zone-name] [--link] [--domain]
 │   │                                       Create a remote Edge Script (use after init when --deploy was skipped)
 │   ├── deploy          <file> [id] [--skip-publish]
 │   │                                       Deploy code to an Edge Script (publishes by default)
@@ -912,13 +923,13 @@ bunny
 │   │                                       Publish (roll back to) a past deployment by release ID
 │   ├── docs                                Open Edge Script documentation in browser
 │   ├── domains                             (hidden alias: hostnames)
-│   │   ├── add         <domain> [--ssl] [--no-force-ssl] [--id] [--pull-zone]
-│   │   │                                   Add a custom domain (SSL opt-in; HTTPS forced by default)
-│   │   ├── ssl         <domain> [--no-force-ssl] [--id] [--pull-zone]
+│   │   ├── add         <domain> [id] [--ssl] [--wait] [--no-force-ssl] [--pull-zone]
+│   │   │                                   Add a custom domain (SSL opt-in; HTTPS forced by default; --wait polls DNS then issues SSL)
+│   │   ├── ssl         <domain> [id] [--no-force-ssl] [--pull-zone]
 │   │   │                                   Issue a free SSL certificate (HTTPS forced by default)
-│   │   ├── list        (alias: ls) [--id] [--pull-zone]   List pull zone domains
-│   │   └── remove      <domain> (alias: rm) [--force] [--id] [--pull-zone]
-│   │                                       Remove a custom domain
+│   │   ├── list        [id] (alias: ls) [--pull-zone]   List pull zone domains
+│   │   └── remove      <domain> [id] (alias: rm) [--force] [--pull-zone]
+│   │                                       Remove a custom domain (script [id] also accepted as --id on all domains subcommands)
 │   ├── env
 │   │   ├── list        [id]                List environment variables
 │   │   ├── set         <key> <value> [id]  Set environment variable

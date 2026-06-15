@@ -6,14 +6,16 @@ import { formatKeyValue, formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { formatBucketLabel, renderBarChart } from "../../core/stats.ts";
 import { spinner } from "../../core/ui.ts";
-import { maybeLinkScript, resolveScriptInteractive } from "./interactive.ts";
+import {
+  type ScriptSelectorArgs,
+  scriptSelectorBuilder,
+  selectScript,
+} from "./interactive.ts";
 
-interface StatsArgs {
-  id?: number;
+interface StatsArgs extends ScriptSelectorArgs {
   from?: string;
   to?: string;
   hourly?: boolean;
-  link?: boolean;
 }
 
 /**
@@ -49,11 +51,7 @@ export const scriptsStatsCommand = defineCommand<StatsArgs>({
   ],
 
   builder: (yargs) =>
-    yargs
-      .positional("id", {
-        type: "number",
-        describe: "Edge Script ID (uses linked script if omitted)",
-      })
+    scriptSelectorBuilder(yargs)
       .option("from", {
         type: "string",
         describe: "Start date (YYYY-MM-DD); defaults to 30 days ago",
@@ -65,11 +63,6 @@ export const scriptsStatsCommand = defineCommand<StatsArgs>({
       .option("hourly", {
         type: "boolean",
         describe: "Group statistics by hour instead of by day",
-      })
-      .option("link", {
-        type: "boolean",
-        describe:
-          "Link the directory to the picked script (use --no-link to skip the prompt)",
       }),
 
   handler: async ({
@@ -86,10 +79,11 @@ export const scriptsStatsCommand = defineCommand<StatsArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
 
-    const { script, picked } = await resolveScriptInteractive(client, rawId, {
+    const { script, id, offerLink } = await selectScript(client, {
+      id: rawId,
+      link,
       output,
     });
-    const id = script.Id as number;
 
     const spin = spinner("Fetching statistics...");
     spin.start();
@@ -162,9 +156,6 @@ export const scriptsStatsCommand = defineCommand<StatsArgs>({
       }
     }
 
-    if (picked) {
-      logger.log("");
-      await maybeLinkScript(script, link);
-    }
+    await offerLink();
   },
 });

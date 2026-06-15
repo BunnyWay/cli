@@ -15,7 +15,7 @@ interface EnableArgs {
 export const dnsZoneDnssecEnableCommand = defineCommand<EnableArgs>({
   command: "enable [domain]",
   describe: "Enable DNSSEC for a zone and print its DS record.",
-  examples: [["$0 dns zone dnssec enable example.com", "Enable DNSSEC"]],
+  examples: [["$0 dns zones dnssec enable example.com", "Enable DNSSEC"]],
 
   builder: (yargs) =>
     yargs.positional("domain", {
@@ -27,7 +27,10 @@ export const dnsZoneDnssecEnableCommand = defineCommand<EnableArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, {
+      output,
+      offerLink: true,
+    });
 
     const spin = spinner("Enabling DNSSEC...");
     spin.start();

@@ -7,7 +7,7 @@ import { dnsRemoveCommand } from "./remove.ts";
 import { dnsUpdateCommand } from "./update.ts";
 
 export const dnsRecordNamespace = defineNamespace(
-  "record",
+  "records",
   "Manage the DNS records within a zone.",
   [
     dnsRecordListCommand,
@@ -17,5 +17,5 @@ export const dnsRecordNamespace = defineNamespace(
     dnsImportCommand,
     dnsExportCommand,
   ],
-  ["records", "rec"],
+  ["record", "rec"],
 );
