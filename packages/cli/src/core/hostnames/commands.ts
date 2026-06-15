@@ -7,12 +7,19 @@ import { logger } from "../logger.ts";
 import type { GlobalArgs } from "../types.ts";
 import { confirm, spinner } from "../ui.ts";
 import {
+  addHostname,
   enableSsl,
   fetchPullZoneHostnames,
   hostnameUrl,
+  normalizeHostname,
   type ResolvedPullZone,
   toSafeHostname,
 } from "./client.ts";
+import {
+  offerBunnyDnsThenSsl,
+  offerDnsWaitAndSsl,
+  printSslHint,
+} from "./flow.ts";
 
 /** Resolves the pull zone (and a core client) for the resource being targeted. */
 export type HostnameResolver = (
@@ -28,15 +35,12 @@ export interface HostnamesMountOptions {
   resolve: HostnameResolver;
   /** Adds resource-targeting flags (e.g. --id, --pull-zone) shared by every subcommand. */
   target?: (yargs: Argv) => Argv;
+  /** Optional trailing positional (e.g. `[id]`) appended to every subcommand for targeting the resource. */
+  targetPositional?: { name: string; describe: string };
   /** Namespace description shown in help. */
   describe?: string;
   /** Hidden namespace aliases (e.g. ["hostnames"]) — they work but stay out of help. */
   hiddenAliases?: string[];
-}
-
-/** Strip any scheme and trailing slash from a user-supplied hostname. */
-function normalizeHostname(value: string): string {
-  return value.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
 }
 
 /** Echo back the targeting flags the user passed so copy-paste follow-up hints keep the same scope. */
@@ -59,10 +63,22 @@ function targetSuffix(args: Record<string, unknown>): string {
 export function createHostnamesCommands(
   opts: HostnamesMountOptions,
 ): CommandModule[] {
-  const { commandPath, resolve } = opts;
+  const { commandPath, resolve, targetPositional } = opts;
+  // Append the targeting positional (e.g. "[id]") to a subcommand's command string.
+  const command = (base: string) =>
+    targetPositional ? `${base} [${targetPositional.name}]` : base;
   // Generic passthrough so each subcommand's inferred arg type is preserved.
-  const target = <T>(yargs: Argv<T>): Argv<T> =>
-    (opts.target ? opts.target(yargs as Argv) : yargs) as Argv<T>;
+  const target = <T>(yargs: Argv<T>): Argv<T> => {
+    const withPositional = targetPositional
+      ? yargs.positional(targetPositional.name, {
+          type: "number",
+          describe: targetPositional.describe,
+        })
+      : yargs;
+    return (
+      opts.target ? opts.target(withPositional as Argv) : withPositional
+    ) as Argv<T>;
+  };
   const resolveArgs = (args: GlobalArgs) =>
     resolve(args as GlobalArgs & Record<string, unknown>);
 
@@ -70,8 +86,9 @@ export function createHostnamesCommands(
     domain: string;
     ssl?: boolean;
     "force-ssl"?: boolean;
+    wait?: boolean;
   }>({
-    command: "add <domain>",
+    command: command("add <domain>"),
     describe: "Add a custom domain to a pull zone.",
     examples: [
       [`$0 ${commandPath} add shop.example.com`, "Add a domain (no SSL)"],
@@ -79,6 +96,18 @@ export function createHostnamesCommands(
         `$0 ${commandPath} add shop.example.com --ssl`,
         "Add and request SSL now",
       ],
+      [
+        `$0 ${commandPath} add shop.example.com --wait`,
+        "Add, wait for DNS, then enable HTTPS",
+      ],
+      ...(targetPositional
+        ? ([
+            [
+              `$0 ${commandPath} add shop.example.com 12345`,
+              `Target an explicit ${targetPositional.name}`,
+            ],
+          ] as const)
+        : []),
     ],
     builder: (yargs) =>
       target(
@@ -98,6 +127,11 @@ export function createHostnamesCommands(
             default: true,
             describe:
               "Force HTTP→HTTPS when issuing SSL (default: true). Use --no-force-ssl to keep HTTP.",
+          })
+          .option("wait", {
+            type: "boolean",
+            describe:
+              "Wait for DNS to point at bunny.net (up to 10 minutes), then issue SSL automatically",
           }),
       ),
     handler: async (args) => {
@@ -106,21 +140,18 @@ export function createHostnamesCommands(
 
       const requestSsl = args.ssl === true;
       const force = args["force-ssl"] !== false;
+      const interactive = args.output !== "json" && process.stdout.isTTY;
 
       const { pullZoneId, coreClient } = await resolveArgs(args);
 
       const spin = spinner(`Adding ${hostname}...`);
       spin.start();
 
-      await coreClient.POST("/pullzone/{id}/addHostname", {
-        params: { path: { id: pullZoneId } },
-        body: { Hostname: hostname },
-      });
-
-      const hostnames = await fetchPullZoneHostnames(coreClient, pullZoneId);
-      const systemHostname = hostnames
-        .find((h) => h.IsSystemHostname)
-        ?.Value?.replace(/^https?:\/\//i, "");
+      const { hostnames, cnameTarget: systemHostname } = await addHostname(
+        coreClient,
+        pullZoneId,
+        hostname,
+      );
 
       spin.stop();
 
@@ -146,6 +177,25 @@ export function createHostnamesCommands(
       const sslFailed = requestSsl && sslError != null;
 
       if (args.output === "json") {
+        // With --wait, finish the DNS/SSL flow first so the JSON reflects the real certificate outcome.
+        if (systemHostname && args.wait === true && !sslIssued) {
+          try {
+            sslIssued = await offerDnsWaitAndSsl({
+              coreClient,
+              pullZoneId,
+              hostname,
+              cnameTarget: systemHostname,
+              forceSsl: force,
+              sslHint,
+              assumeYes: true,
+              json: true,
+            });
+            if (sslIssued) sslError = undefined;
+          } catch (err) {
+            sslError = err instanceof Error ? err.message : String(err);
+          }
+        }
+
         logger.log(
           JSON.stringify(
             {
@@ -161,7 +211,9 @@ export function createHostnamesCommands(
           ),
         );
         // Emit the full result for agents/CI, then signal failure with a non-zero exit.
-        if (sslFailed) process.exit(1);
+        const sslWanted =
+          requestSsl || (args.wait === true && systemHostname != null);
+        if (sslWanted && !sslIssued) process.exit(1);
         return;
       }
 
@@ -180,13 +232,49 @@ export function createHostnamesCommands(
         return;
       }
 
+      // Offer to wait for DNS and finish HTTPS in one go (or just do it with --wait).
+      const offerWait =
+        systemHostname != null && (args.wait === true || interactive);
+
+      if (sslFailed && offerWait) {
+        logger.warn(`Couldn't issue a certificate yet: ${sslError}`);
+        logger.dim("  This is normal until DNS propagates.");
+      }
+
+      // If the domain is on Bunny DNS, offer to add the record (prompted) so SSL can issue right away.
+      if (systemHostname && interactive) {
+        const issued = await offerBunnyDnsThenSsl({
+          coreClient,
+          hostname,
+          pullZoneId,
+          cnameTarget: systemHostname,
+          forceSsl: force,
+          sslHint,
+          verbose: args.verbose,
+        });
+        if (issued !== null) return;
+      }
+
       if (systemHostname) {
         logger.log();
         logger.log("Point your DNS at bunny.net to activate it:");
-        logger.dim(`  CNAME  ${hostname}  →  ${systemHostname}`);
+        logger.accent(`  CNAME  ${hostname}  →  ${systemHostname}`);
       }
 
       logger.log();
+
+      if (systemHostname && offerWait) {
+        await offerDnsWaitAndSsl({
+          coreClient,
+          pullZoneId,
+          hostname,
+          cnameTarget: systemHostname,
+          forceSsl: force,
+          sslHint,
+          assumeYes: args.wait === true,
+        });
+        return;
+      }
 
       if (sslFailed) {
         throw new UserError(
@@ -195,8 +283,7 @@ export function createHostnamesCommands(
         );
       }
 
-      logger.log("Then enable HTTPS once DNS is live:");
-      logger.dim(`  ${sslHint}`);
+      printSslHint(sslHint);
     },
   });
 
@@ -204,7 +291,7 @@ export function createHostnamesCommands(
     domain: string;
     "force-ssl"?: boolean;
   }>({
-    command: "ssl <domain>",
+    command: command("ssl <domain>"),
     describe: "Request a free SSL certificate for a custom domain.",
     examples: [
       [
@@ -279,7 +366,7 @@ export function createHostnamesCommands(
   });
 
   const listCommand = defineCommand({
-    command: "list",
+    command: command("list"),
     aliases: ["ls"],
     describe: "List the domains on a pull zone.",
     examples: [
@@ -329,7 +416,7 @@ export function createHostnamesCommands(
     domain: string;
     force?: boolean;
   }>({
-    command: "remove <domain>",
+    command: command("remove <domain>"),
     aliases: ["rm"],
     describe: "Remove a custom domain from a pull zone.",
     examples: [

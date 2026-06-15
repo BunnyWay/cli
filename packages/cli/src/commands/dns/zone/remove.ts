@@ -16,9 +16,9 @@ export const dnsZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
   aliases: ["rm"],
   describe: "Delete a DNS zone and all of its records.",
   examples: [
-    ["$0 dns zone remove example.com", "Delete a zone"],
-    ["$0 dns zone remove example.com --force", "Skip confirmation"],
-    ["$0 dns zone remove", "Pick a zone interactively"],
+    ["$0 dns zones remove example.com", "Delete a zone"],
+    ["$0 dns zones remove example.com --force", "Skip confirmation"],
+    ["$0 dns zones remove", "Pick a zone interactively"],
   ],
 
   builder: (yargs) =>

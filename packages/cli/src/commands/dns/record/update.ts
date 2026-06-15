@@ -37,13 +37,13 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
   describe: "Update an existing DNS record (prompts when args are omitted).",
   examples: [
     [
-      "$0 dns record update example.com 123 --value 198.51.100.2",
+      "$0 dns records update example.com 123 --value 198.51.100.2",
       "Change a record value",
     ],
-    ["$0 dns record update example.com 123 --ttl 3600", "Change the TTL"],
-    ["$0 dns record update example.com 123 --disabled", "Disable a record"],
+    ["$0 dns records update example.com 123 --ttl 3600", "Change the TTL"],
+    ["$0 dns records update example.com 123 --disabled", "Disable a record"],
     [
-      "$0 dns record update example.com --value 198.51.100.2",
+      "$0 dns records update example.com --value 198.51.100.2",
       "Pick the record interactively",
     ],
   ],
@@ -81,7 +81,10 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, {
+      output,
+      offerLink: true,
+    });
     const existing = await resolveRecordInteractive(zone, id, "update");
     const recordId = existing.Id as number;
 

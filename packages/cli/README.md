@@ -512,6 +512,8 @@ bunny scripts init --template-repo https://github.com/owner/my-template
 
 When `--repo` / `--template-repo` is given without `--type`, the script type defaults to `standalone`.
 
+After creating the script on bunny.net, the interactive wizard also asks for an optional custom domain — the same DNS + HTTPS flow as `bunny scripts create` and `bunny scripts domains add`, including the offer to wire up the DNS record for you (after confirmation) when the domain is on Bunny DNS.
+
 With `--github-actions`, git is initialized automatically, the template's `.github/` workflow is kept, and after creating the script you'll be shown the `SCRIPT_ID` to add as a GitHub repo secret. With `--no-github-actions`, the `.github/` directory is removed and git init is prompted (or skipped via `--skip-git`).
 
 The `.changeset/` directory is always removed from the template — bunny scripts don't use it.
@@ -529,6 +531,9 @@ bunny scripts create my-script --type middleware
 
 # Skip pull zone creation and directory linking
 bunny scripts create my-script --no-pull-zone --no-link
+
+# Create and attach a custom domain
+bunny scripts create my-script --domain shop.example.com
 ```
 
 | Flag               | Description                                                                              |
@@ -537,6 +542,9 @@ bunny scripts create my-script --no-pull-zone --no-link
 | `--pull-zone`      | Create a linked pull zone (default: true). Use `--no-pull-zone` to skip.                 |
 | `--pull-zone-name` | Name for the linked pull zone                                                            |
 | `--link`           | Link this directory to the new script (default: true). Use `--no-link` to skip.          |
+| `--domain`         | Add a custom domain to the new script's pull zone (prompted when interactive)            |
+
+When run interactively, `create` also asks for an optional custom domain. If that domain is already in one of your Bunny DNS zones, it offers to add (or repoint) the DNS record for you — declining, or any record it would overwrite, always prompts first, and nothing is changed without confirmation. With the record in place, DNS is live on bunny's resolvers immediately, so it skips straight to issuing the free SSL certificate. Otherwise it prints the `CNAME` record to create and offers to wait while DNS propagates, issuing the certificate automatically once the domain points at bunny.net — the same flow as `bunny scripts domains add --wait`.
 
 #### `bunny scripts deploy`
 
@@ -712,28 +720,35 @@ bunny scripts env pull --force
 
 #### `bunny scripts domains`
 
-Manage custom domains for an Edge Script. A script's domains live on its linked pull zone, so these commands operate on that pull zone. All subcommands default to the linked script; pass `--id <script-id>` to target another, and `--pull-zone <id>` when a script has more than one linked pull zone. (`bunny scripts hostnames` is kept as a hidden alias.)
+Manage custom domains for an Edge Script. A script's domains live on its linked pull zone, so these commands operate on that pull zone. All subcommands default to the linked script; pass a trailing `[id]` positional (or the equivalent `--id <script-id>` flag) to target another, and `--pull-zone <id>` when a script has more than one linked pull zone. (`bunny scripts hostnames` is kept as a hidden alias.)
 
 ##### `bunny scripts domains add`
 
-Add a custom domain. SSL is **not** requested by default — a free certificate can only be issued once your DNS points at bunny.net, so the command prints the `CNAME` record to create and the follow-up command to enable HTTPS. Pass `--ssl` to issue a certificate immediately; HTTP is redirected to HTTPS by default (opt out with `--no-force-ssl`).
+Add a custom domain. SSL is **not** requested by default — a free certificate can only be issued once your DNS points at bunny.net, so the command prints the `CNAME` record to create. When run interactively it then offers to wait while DNS propagates (checking every few seconds, up to 10 minutes) and issues the certificate automatically once the domain is live; pass `--wait` to do that without the prompt, or `--ssl` to issue a certificate immediately. HTTP is redirected to HTTPS by default (opt out with `--no-force-ssl`).
 
 ```bash
-# Add a domain and get DNS instructions
+# Add a domain, get DNS instructions, and optionally wait for DNS + HTTPS
 bunny scripts domains add shop.example.com
+
+# Add, wait for DNS to propagate, then enable HTTPS — no prompts
+bunny scripts domains add shop.example.com --wait
 
 # Add and request SSL now (DNS must already be pointed at bunny.net) — HTTPS forced
 bunny scripts domains add shop.example.com --ssl
 
 # Add and request SSL without forcing HTTPS
 bunny scripts domains add shop.example.com --ssl --no-force-ssl
+
+# Target a script other than the linked one
+bunny scripts domains add shop.example.com 12345
 ```
 
 | Flag             | Description                                                             |
 | ---------------- | ----------------------------------------------------------------------- |
 | `--ssl`          | Issue a free SSL certificate now and force HTTPS (requires DNS pointed) |
+| `--wait`         | Wait for DNS to point at bunny.net (up to 10 minutes), then issue SSL   |
 | `--no-force-ssl` | When issuing SSL, keep serving HTTP instead of redirecting to HTTPS     |
-| `--id`           | Edge Script ID (uses linked script if omitted)                          |
+| `[id]` / `--id`  | Edge Script ID (uses linked script if omitted)                          |
 | `--pull-zone`    | Pull zone ID (required if the script has multiple linked zones)         |
 
 ##### `bunny scripts domains ssl`

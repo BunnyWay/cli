@@ -12,8 +12,8 @@ export const dnsZoneListCommand = defineCommand({
   aliases: ["ls"],
   describe: "List all DNS zones.",
   examples: [
-    ["$0 dns zone list", "List all DNS zones"],
-    ["$0 dns zone list --output json", "JSON output"],
+    ["$0 dns zones list", "List all DNS zones"],
+    ["$0 dns zones list --output json", "JSON output"],
   ],
 
   handler: async ({ profile, output, verbose, apiKey }) => {

@@ -5,10 +5,13 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { resolveManifestId } from "../../../core/manifest.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
 import { fetchEnvEntries } from "../api.ts";
-import { SCRIPT_MANIFEST } from "../constants.ts";
+import {
+  type ScriptSelectorArgs,
+  scriptIdOptionBuilder,
+  selectScript,
+} from "../interactive.ts";
 
 const COMMAND = "remove [name]";
 const ALIASES = ["rm"] as const;
@@ -17,15 +20,12 @@ const DESCRIPTION =
 
 const ARG_NAME = "name";
 const ARG_NAME_DESCRIPTION = "Variable or secret name to remove";
-const ARG_ID = "id";
-const ARG_ID_DESCRIPTION = "Edge Script ID (uses linked script if omitted)";
 const ARG_FORCE = "force";
 const ARG_FORCE_ALIAS = "f";
 const ARG_FORCE_DESCRIPTION = "Skip confirmation prompt";
 
-interface RemoveArgs {
+interface RemoveArgs extends ScriptSelectorArgs {
   [ARG_NAME]?: string;
-  [ARG_ID]?: number;
   [ARG_FORCE]?: boolean;
 }
 
@@ -64,34 +64,36 @@ export const scriptsEnvRemoveCommand = defineCommand<RemoveArgs>({
   ],
 
   builder: (yargs) =>
-    yargs
-      .positional(ARG_NAME, {
+    scriptIdOptionBuilder(
+      yargs.positional(ARG_NAME, {
         type: "string",
         describe: ARG_NAME_DESCRIPTION,
-      })
-      .option(ARG_ID, {
-        type: "number",
-        describe: ARG_ID_DESCRIPTION,
-      })
-      .option(ARG_FORCE, {
-        alias: ARG_FORCE_ALIAS,
-        type: "boolean",
-        default: false,
-        describe: ARG_FORCE_DESCRIPTION,
       }),
+    ).option(ARG_FORCE, {
+      alias: ARG_FORCE_ALIAS,
+      type: "boolean",
+      default: false,
+      describe: ARG_FORCE_DESCRIPTION,
+    }),
 
   handler: async ({
     [ARG_NAME]: rawName,
-    [ARG_ID]: rawId,
+    id: rawId,
     [ARG_FORCE]: force,
+    link,
     profile,
     output,
     verbose,
     apiKey,
   }) => {
-    const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
+
+    const { id, offerLink } = await selectScript(client, {
+      id: rawId,
+      link,
+      output,
+    });
 
     const spin = spinner("Fetching environment variables...");
     spin.start();
@@ -102,6 +104,7 @@ export const scriptsEnvRemoveCommand = defineCommand<RemoveArgs>({
 
     if (entries.length === 0) {
       logger.info("No environment variables or secrets found.");
+      await offerLink();
       return;
     }
 
@@ -163,5 +166,7 @@ export const scriptsEnvRemoveCommand = defineCommand<RemoveArgs>({
     logger.success(
       `Removed ${entry.secret ? "secret" : "variable"} "${entry.name}".`,
     );
+
+    await offerLink();
   },
 });

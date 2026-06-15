@@ -13,7 +13,7 @@ interface ZoneAddArgs {
 export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
   command: "add <domain>",
   describe: "Create a new DNS zone.",
-  examples: [["$0 dns zone add example.com", "Create a zone for example.com"]],
+  examples: [["$0 dns zones add example.com", "Create a zone for example.com"]],
 
   builder: (yargs) =>
     yargs.positional("domain", {

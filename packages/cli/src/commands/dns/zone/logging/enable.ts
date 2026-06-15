@@ -30,9 +30,9 @@ export const dnsZoneLoggingEnableCommand = defineCommand<EnableArgs>({
   command: "enable [domain]",
   describe: "Enable DNS query logging for a zone.",
   examples: [
-    ["$0 dns zone logging enable example.com", "Start collecting query logs"],
+    ["$0 dns zones logging enable example.com", "Start collecting query logs"],
     [
-      "$0 dns zone logging enable example.com --anonymize-ip --anonymization drop",
+      "$0 dns zones logging enable example.com --anonymize-ip --anonymization drop",
       "Enable with IP anonymization",
     ],
   ],
@@ -55,7 +55,10 @@ export const dnsZoneLoggingEnableCommand = defineCommand<EnableArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, {
+      output,
+      offerLink: true,
+    });
 
     const body: LoggingUpdate = { LoggingEnabled: true };
 

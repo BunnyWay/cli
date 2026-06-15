@@ -15,8 +15,8 @@ export const dnsZoneLoggingDisableCommand = defineCommand<DisableArgs>({
   command: "disable [domain]",
   describe: "Disable DNS query logging for a zone.",
   examples: [
-    ["$0 dns zone logging disable example.com", "Stop collecting query logs"],
-    ["$0 dns zone logging disable example.com --force", "Skip confirmation"],
+    ["$0 dns zones logging disable example.com", "Stop collecting query logs"],
+    ["$0 dns zones logging disable example.com --force", "Skip confirmation"],
   ],
 
   builder: (yargs) =>
@@ -33,7 +33,10 @@ export const dnsZoneLoggingDisableCommand = defineCommand<DisableArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, {
+      output,
+      offerLink: true,
+    });
 
     const confirmed = await confirm(
       `Disable DNS query logging for ${zone.Domain}?`,

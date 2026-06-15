@@ -4,22 +4,20 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
-import { resolveManifestId } from "../../../core/manifest.ts";
 import { spinner } from "../../../core/ui.ts";
 import { fetchEnvEntries } from "../api.ts";
-import { SCRIPT_MANIFEST } from "../constants.ts";
+import {
+  type ScriptSelectorArgs,
+  scriptSelectorBuilder,
+  selectScript,
+} from "../interactive.ts";
 
 const COMMAND = "list [id]";
 const ALIASES = ["ls"] as const;
 const DESCRIPTION =
   "List environment variables and secrets for an Edge Script.";
 
-const ARG_ID = "id";
-const ARG_ID_DESCRIPTION = "Edge Script ID (uses linked script if omitted)";
-
-interface ListArgs {
-  [ARG_ID]?: number;
-}
+type ListArgs = ScriptSelectorArgs;
 
 /**
  * List all environment variables and secrets for an Edge Script.
@@ -52,16 +50,17 @@ export const scriptsEnvListCommand = defineCommand<ListArgs>({
     ["$0 scripts env list --output json", "JSON output"],
   ],
 
-  builder: (yargs) =>
-    yargs.positional(ARG_ID, {
-      type: "number",
-      describe: ARG_ID_DESCRIPTION,
-    }),
+  builder: (yargs) => scriptSelectorBuilder(yargs),
 
-  handler: async ({ [ARG_ID]: rawId, profile, output, verbose, apiKey }) => {
-    const id = resolveManifestId(SCRIPT_MANIFEST, rawId, "script");
+  handler: async ({ id: rawId, link, profile, output, verbose, apiKey }) => {
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createComputeClient(clientOptions(config, verbose));
+
+    const { id, offerLink } = await selectScript(client, {
+      id: rawId,
+      link,
+      output,
+    });
 
     const spin = spinner("Fetching environment variables...");
     spin.start();
@@ -77,6 +76,7 @@ export const scriptsEnvListCommand = defineCommand<ListArgs>({
 
     if (entries.length === 0) {
       logger.info("No environment variables or secrets found.");
+      await offerLink();
       return;
     }
 
@@ -92,5 +92,7 @@ export const scriptsEnvListCommand = defineCommand<ListArgs>({
         output,
       ),
     );
+
+    await offerLink();
   },
 });

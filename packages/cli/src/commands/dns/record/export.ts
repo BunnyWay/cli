@@ -16,12 +16,12 @@ export const dnsExportCommand = defineCommand<ExportArgs>({
   command: "export [domain]",
   describe: "Export a zone's records as a BIND zone file.",
   examples: [
-    ["$0 dns record export example.com", "Print the zone file to stdout"],
+    ["$0 dns records export example.com", "Print the zone file to stdout"],
     [
-      "$0 dns record export example.com --file ./example.zone",
+      "$0 dns records export example.com --file ./example.zone",
       "Write to a path",
     ],
-    ["$0 dns record export example.com --save", "Write to ./example.com.zone"],
+    ["$0 dns records export example.com --save", "Write to ./example.com.zone"],
   ],
 
   builder: (yargs) =>
@@ -41,7 +41,10 @@ export const dnsExportCommand = defineCommand<ExportArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, {
+      output,
+      offerLink: true,
+    });
 
     const spin = spinner("Exporting zone...");
     spin.start();
