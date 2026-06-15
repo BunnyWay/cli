@@ -186,6 +186,11 @@ export async function offerBunnyDnsThenSsl(opts: {
   forceSsl: boolean;
   sslHint: string;
   verbose: boolean;
+  /** Invoked with the owning zone when the hostname is on Bunny DNS — lets the caller link the directory. */
+  onBunnyDnsZone?: (zone: {
+    id: number;
+    domain: string;
+  }) => void | Promise<void>;
 }): Promise<boolean | null> {
   let match: BunnyDnsMatch | null;
   try {
@@ -199,6 +204,8 @@ export async function offerBunnyDnsThenSsl(opts: {
     return null;
   }
   if (!match) return null;
+
+  await opts.onBunnyDnsZone?.({ id: match.zoneId, domain: match.zoneDomain });
 
   const dnsResult = await offerBunnyDnsRecord({
     client: opts.coreClient,

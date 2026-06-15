@@ -34,7 +34,10 @@ export const dnsRecordListCommand = defineCommand<ListArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, {
+      output,
+      offerLink: true,
+    });
 
     const records = (zone.Records ?? []).sort((a, b) =>
       recordName(a.Name).localeCompare(recordName(b.Name)),

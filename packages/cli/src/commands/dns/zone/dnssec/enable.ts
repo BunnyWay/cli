@@ -27,7 +27,10 @@ export const dnsZoneDnssecEnableCommand = defineCommand<EnableArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, {
+      output,
+      offerLink: true,
+    });
 
     const spin = spinner("Enabling DNSSEC...");
     spin.start();

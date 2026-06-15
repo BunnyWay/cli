@@ -45,7 +45,10 @@ export const dnsRemoveCommand = defineCommand<RemoveArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, {
+      output,
+      offerLink: true,
+    });
     const record = await resolveRecordInteractive(zone, id, "remove");
 
     const label = `${recordTypeLabel(record.Type)} ${recordName(record.Name)} → ${formatRecordValue(record)}`;

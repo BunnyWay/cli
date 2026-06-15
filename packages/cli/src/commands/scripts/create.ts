@@ -19,6 +19,7 @@ import {
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
+import { autoLinkDnsZone } from "../dns/interactive.ts";
 import { promptOpenInBrowser } from "./api.ts";
 import {
   type EdgeScriptTypes,
@@ -170,6 +171,8 @@ export async function setupCustomDomain(opts: {
       forceSsl: true,
       sslHint,
       verbose: opts.verbose,
+      // Only link the directory when this is a linked script project.
+      onBunnyDnsZone: opts.linked ? autoLinkDnsZone : undefined,
     });
     if (issued !== null) return issued;
   }

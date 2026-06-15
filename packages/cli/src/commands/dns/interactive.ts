@@ -1,8 +1,9 @@
 import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
-import { loadManifest } from "../../core/manifest.ts";
-import { spinner } from "../../core/ui.ts";
+import { loadManifest, saveManifest } from "../../core/manifest.ts";
+import type { OutputFormat } from "../../core/types.ts";
+import { confirm, spinner } from "../../core/ui.ts";
 import {
   type CoreClient,
   type DnsRecordModel,
@@ -18,13 +19,51 @@ import {
   recordTypeLabel,
 } from "./record-types.ts";
 
+function writeDnsManifest(id: number, domain: string | undefined): void {
+  saveManifest<DnsManifest>(DNS_MANIFEST, { id, domain });
+  logger.success(`Linked this directory to DNS zone ${domain ?? id}.`);
+}
+
+/** Offer to remember a zone picked from the prompt; a no-op if the user declines. */
+async function maybeLinkZone(zone: DnsZoneModel): Promise<void> {
+  if (!(await confirm(`Link this directory to ${zone.Domain}?`))) return;
+  writeDnsManifest(zone.Id as number, zone.Domain ?? undefined);
+}
+
+/**
+ * Link a directory to a zone discovered during another flow (e.g. setting up a
+ * script's custom domain). Writes silently when nothing is linked yet, confirms
+ * before replacing a different linked zone, and no-ops when already linked here.
+ */
+export async function autoLinkDnsZone(zone: {
+  id: number;
+  domain?: string;
+}): Promise<void> {
+  const existing = loadManifest<DnsManifest>(DNS_MANIFEST);
+  if (existing.id === zone.id) return;
+  if (
+    existing.id &&
+    !(await confirm(
+      `This directory is linked to DNS zone ${existing.domain ?? existing.id}. Relink to ${zone.domain ?? zone.id}?`,
+    ))
+  ) {
+    return;
+  }
+  writeDnsManifest(zone.id, zone.domain);
+}
+
 /**
  * Resolve a zone by name/ID, or prompt the user to pick one when no
  * reference is given. Manages its own spinner so it never spins over a prompt.
+ *
+ * When `offerLink` is set and the zone is chosen via the picker (not an
+ * explicit ref or the existing manifest), offer to link the directory to it.
+ * The offer is skipped under `--output json` so machine output stays clean.
  */
 export async function resolveZoneInteractive(
   client: CoreClient,
   ref: string | undefined,
+  opts: { output?: OutputFormat; offerLink?: boolean } = {},
 ): Promise<DnsZoneModel> {
   if (ref) {
     const spin = spinner("Resolving zone...");
@@ -76,11 +115,17 @@ export async function resolveZoneInteractive(
 
   const resolveSpin = spinner("Loading zone...");
   resolveSpin.start();
+  let zone: DnsZoneModel;
   try {
-    return await fetchZone(client, id);
+    zone = await fetchZone(client, id);
   } finally {
     resolveSpin.stop();
   }
+
+  if (opts.offerLink && opts.output !== "json") {
+    await maybeLinkZone(zone);
+  }
+  return zone;
 }
 
 /**

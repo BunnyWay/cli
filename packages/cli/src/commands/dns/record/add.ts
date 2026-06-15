@@ -256,7 +256,10 @@ export const dnsAddCommand = defineCommand<AddArgs>({
     const interactive = !args.type;
 
     // Resolve the target zone (prompt with a picker when no domain given).
-    const zone = await resolveZoneInteractive(client, args.domain);
+    const zone = await resolveZoneInteractive(client, args.domain, {
+      output,
+      offerLink: true,
+    });
 
     let record: AddDnsRecordModel;
     if (interactive) {

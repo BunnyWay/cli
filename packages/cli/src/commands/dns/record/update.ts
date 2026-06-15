@@ -81,7 +81,10 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, {
+      output,
+      offerLink: true,
+    });
     const existing = await resolveRecordInteractive(zone, id, "update");
     const recordId = existing.Id as number;
 

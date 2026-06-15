@@ -42,7 +42,10 @@ export const dnsStatsCommand = defineCommand<StatsArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, {
+      output,
+      offerLink: true,
+    });
 
     const spin = spinner("Fetching statistics...");
     spin.start();
