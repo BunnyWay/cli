@@ -432,17 +432,31 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
       }
 
       if (domain) {
-        const sslIssued = await setupCustomDomain({
-          profile,
-          apiKey,
-          verbose,
-          pullZoneId: created.pullZoneId,
-          domain,
-          scriptId: created.id,
-          linked: shouldLink,
-          interactive: isInteractive,
-        });
-        if (sslIssued) openTarget = domain;
+        // A domain failure mustn't fail the command — the script already exists.
+        try {
+          const sslIssued = await setupCustomDomain({
+            profile,
+            apiKey,
+            verbose,
+            pullZoneId: created.pullZoneId,
+            domain,
+            scriptId: created.id,
+            linked: shouldLink,
+            interactive: isInteractive,
+          });
+          if (sslIssued) openTarget = domain;
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : "";
+          const idSuffix = shouldLink ? "" : ` --id ${created.id}`;
+          logger.warn(
+            message
+              ? `Couldn't finish setting up ${domain}: ${message}`
+              : `Couldn't finish setting up ${domain}.`,
+          );
+          logger.dim(
+            `  Retry later: bunny scripts domains add ${domain}${idSuffix} --wait`,
+          );
+        }
         logger.log();
       }
     } else if (domainFlag) {
