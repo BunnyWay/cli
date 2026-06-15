@@ -2,7 +2,7 @@ import { UserError } from "../errors.ts";
 import { logger } from "../logger.ts";
 import { confirm, spinner } from "../ui.ts";
 import {
-  type BunnyDnsResult,
+  type BunnyDnsMatch,
   findBunnyDnsZone,
   offerBunnyDnsRecord,
 } from "./bunny-dns.ts";
@@ -169,9 +169,10 @@ export async function offerDnsWaitAndSsl(
  * issued, or null when the domain isn't on Bunny DNS or the user declined — in
  * which case the caller should fall back to manual CNAME instructions.
  *
- * The DNS lookup/record offer is wrapped so a Bunny DNS API hiccup degrades to
- * manual setup; the wait/SSL flow runs outside that catch so its own errors
- * surface instead of being mistaken for a hiccup.
+ * Only zone detection is wrapped: an unreachable Bunny DNS API degrades to
+ * manual setup. Once a zone matches, the record offer and wait/SSL flow run
+ * outside the catch, so a write the user just confirmed (or a propagation
+ * timeout) surfaces instead of being mistaken for a detection hiccup.
  */
 export async function offerBunnyDnsThenSsl(opts: {
   coreClient: CoreClient;
@@ -182,28 +183,26 @@ export async function offerBunnyDnsThenSsl(opts: {
   sslHint: string;
   verbose: boolean;
 }): Promise<boolean | null> {
-  let delegated = false;
-  let dnsResult: BunnyDnsResult | undefined;
+  let match: BunnyDnsMatch | null;
   try {
-    const match = await findBunnyDnsZone(opts.coreClient, opts.hostname);
-    if (match) {
-      delegated = match.delegated;
-      dnsResult = await offerBunnyDnsRecord({
-        client: opts.coreClient,
-        hostname: opts.hostname,
-        pullZoneId: opts.pullZoneId,
-        match,
-      });
-    }
+    match = await findBunnyDnsZone(opts.coreClient, opts.hostname);
   } catch (err) {
-    // A Bunny DNS hiccup shouldn't block domain setup — fall back to manual DNS.
+    // Detecting the zone failed (API unreachable, etc.) — fall back to manual DNS.
     if (opts.verbose) {
       const message = err instanceof Error ? err.message : String(err);
       logger.dim(`  Bunny DNS check skipped: ${message}`);
     }
+    return null;
   }
+  if (!match) return null;
 
-  if (!dnsResult || dnsResult === "declined") return null;
+  const dnsResult = await offerBunnyDnsRecord({
+    client: opts.coreClient,
+    hostname: opts.hostname,
+    pullZoneId: opts.pullZoneId,
+    match,
+  });
+  if (dnsResult === "declined") return null;
 
   logger.log();
   return offerDnsWaitAndSsl({
@@ -213,6 +212,6 @@ export async function offerBunnyDnsThenSsl(opts: {
     cnameTarget: opts.cnameTarget,
     forceSsl: opts.forceSsl,
     sslHint: opts.sslHint,
-    dnsAlreadyLive: delegated,
+    dnsAlreadyLive: match.delegated,
   });
 }

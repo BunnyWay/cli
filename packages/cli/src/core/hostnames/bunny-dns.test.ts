@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import prompts from "prompts";
 import { findBunnyDnsZone, offerBunnyDnsRecord } from "./bunny-dns.ts";
 import type { CoreClient } from "./client.ts";
+import { offerBunnyDnsThenSsl } from "./flow.ts";
 
 type Zone = { Id: number; Domain: string; NameserversDetected?: boolean };
 type Rec = { Id?: number; Type?: number; Name?: string; Value?: string };
@@ -125,6 +126,30 @@ describe("offerBunnyDnsRecord", () => {
           existing: { Type: 0, Name: "shop", Value: "1.2.3.4" },
           delegated: true,
         },
+      }),
+    ).rejects.toThrow(/has no ID/);
+  });
+});
+
+describe("offerBunnyDnsThenSsl", () => {
+  test("surfaces a post-confirmation error instead of swallowing it as a detection hiccup", async () => {
+    // Zone detection succeeds, but the matched record has no Id — once the user
+    // confirms the repoint, the failure must propagate, not fall back to manual DNS.
+    prompts.inject([true]);
+    const client = fakeClient(
+      [{ Id: 7, Domain: "example.com", NameserversDetected: true }],
+      { 7: [{ Type: 0, Name: "shop", Value: "1.2.3.4" }] },
+    );
+
+    await expect(
+      offerBunnyDnsThenSsl({
+        coreClient: client,
+        hostname: "shop.example.com",
+        pullZoneId: 12345,
+        cnameTarget: "shop.b-cdn.net",
+        forceSsl: true,
+        sslHint: "bunny scripts domains ssl shop.example.com",
+        verbose: false,
       }),
     ).rejects.toThrow(/has no ID/);
   });

@@ -1,5 +1,6 @@
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { RECORD_TYPES, recordTypeLabel } from "../dns-record-types.ts";
+import { UserError } from "../errors.ts";
 import { logger } from "../logger.ts";
 import { confirm, spinner } from "../ui.ts";
 import type { CoreClient } from "./client.ts";
@@ -181,8 +182,9 @@ export async function offerBunnyDnsRecord(opts: {
     return "declined";
   }
   if (existing.Id == null) {
-    throw new Error(
+    throw new UserError(
       `DNS record for "${hostname}" has no ID — cannot repoint it.`,
+      "Update the record manually in the Bunny DNS dashboard.",
     );
   }
   await repointPullZoneRecord(
