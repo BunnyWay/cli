@@ -1,5 +1,23 @@
 # @bunny.net/cli
 
+## 0.7.0
+
+### Minor Changes
+
+- [#94](https://github.com/BunnyWay/cli/pull/94) [`e2def53`](https://github.com/BunnyWay/cli/commit/e2def537dee2e11c1a12d2b6e01c2e87d583e11e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(scripts): wait for DNS and enable HTTPS automatically when adding a custom domain
+
+  `scripts domains add` gains `--wait` to poll DNS (up to 10 minutes) and issue the free SSL certificate once the domain points at bunny.net; interactive runs offer the same. `scripts create` and `scripts init` now offer a custom domain as part of the flow.
+
+- [#94](https://github.com/BunnyWay/cli/pull/94) [`e2def53`](https://github.com/BunnyWay/cli/commit/e2def537dee2e11c1a12d2b6e01c2e87d583e11e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(scripts): point a custom domain at the pull zone via Bunny DNS automatically
+
+  When a custom domain added in `scripts create`/`init` belongs to one of your Bunny DNS zones, the CLI offers to add (or repoint) the DNS record for you — always after confirmation — then issues SSL immediately since the record is already live on bunny's resolvers.
+
+### Patch Changes
+
+- [#94](https://github.com/BunnyWay/cli/pull/94) [`e2def53`](https://github.com/BunnyWay/cli/commit/e2def537dee2e11c1a12d2b6e01c2e87d583e11e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - refactor(scripts): share a common script selector across subcommands
+
+  `scripts` subcommands (env, deployments, show, stats) now use a shared selector, so they consistently accept the optional `[id]` positional and `--link` flag for targeting and linking a script.
+
 ## 0.6.0
 
 ### Minor Changes
