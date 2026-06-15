@@ -1,6 +1,11 @@
 import { UserError } from "../errors.ts";
 import { logger } from "../logger.ts";
 import { confirm, spinner } from "../ui.ts";
+import {
+  type BunnyDnsResult,
+  findBunnyDnsZone,
+  offerBunnyDnsRecord,
+} from "./bunny-dns.ts";
 import { type CoreClient, enableSsl, hostnameUrl } from "./client.ts";
 import { anyResolverPointsAt, defaultResolvers } from "./dns.ts";
 
@@ -156,4 +161,58 @@ export async function offerDnsWaitAndSsl(
     );
   }
   return true;
+}
+
+/**
+ * When the domain is on Bunny DNS, offer (prompted) to point a record at the
+ * pull zone, then run the wait/SSL flow. Returns whether a certificate was
+ * issued, or null when the domain isn't on Bunny DNS or the user declined — in
+ * which case the caller should fall back to manual CNAME instructions.
+ *
+ * The DNS lookup/record offer is wrapped so a Bunny DNS API hiccup degrades to
+ * manual setup; the wait/SSL flow runs outside that catch so its own errors
+ * surface instead of being mistaken for a hiccup.
+ */
+export async function offerBunnyDnsThenSsl(opts: {
+  coreClient: CoreClient;
+  hostname: string;
+  pullZoneId: number;
+  cnameTarget: string;
+  forceSsl: boolean;
+  sslHint: string;
+  verbose: boolean;
+}): Promise<boolean | null> {
+  let delegated = false;
+  let dnsResult: BunnyDnsResult | undefined;
+  try {
+    const match = await findBunnyDnsZone(opts.coreClient, opts.hostname);
+    if (match) {
+      delegated = match.delegated;
+      dnsResult = await offerBunnyDnsRecord({
+        client: opts.coreClient,
+        hostname: opts.hostname,
+        pullZoneId: opts.pullZoneId,
+        match,
+      });
+    }
+  } catch (err) {
+    // A Bunny DNS hiccup shouldn't block domain setup — fall back to manual DNS.
+    if (opts.verbose) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.dim(`  Bunny DNS check skipped: ${message}`);
+    }
+  }
+
+  if (!dnsResult || dnsResult === "declined") return null;
+
+  logger.log();
+  return offerDnsWaitAndSsl({
+    coreClient: opts.coreClient,
+    pullZoneId: opts.pullZoneId,
+    hostname: opts.hostname,
+    cnameTarget: opts.cnameTarget,
+    forceSsl: opts.forceSsl,
+    sslHint: opts.sslHint,
+    dnsAlreadyLive: delegated,
+  });
 }

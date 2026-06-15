@@ -11,10 +11,8 @@ import { UserError } from "../../core/errors.ts";
 import { formatKeyValue } from "../../core/format.ts";
 import {
   addHostname,
-  type BunnyDnsResult,
-  findBunnyDnsZone,
   normalizeHostname,
-  offerBunnyDnsRecord,
+  offerBunnyDnsThenSsl,
   offerDnsWaitAndSsl,
   printSslHint,
 } from "../../core/hostnames/index.ts";
@@ -164,39 +162,16 @@ export async function setupCustomDomain(opts: {
 
   // If the domain is on Bunny DNS, offer to add the record (prompted) so SSL can issue right away.
   if (opts.interactive) {
-    let dnsResult: BunnyDnsResult | undefined;
-    let delegated = false;
-    try {
-      const match = await findBunnyDnsZone(coreClient, opts.domain);
-      if (match) {
-        delegated = match.delegated;
-        dnsResult = await offerBunnyDnsRecord({
-          client: coreClient,
-          hostname: opts.domain,
-          pullZoneId: opts.pullZoneId,
-          match,
-        });
-      }
-    } catch (err) {
-      // A Bunny DNS hiccup shouldn't block domain setup — fall back to manual DNS.
-      if (opts.verbose) {
-        const message = err instanceof Error ? err.message : String(err);
-        logger.dim(`  Bunny DNS check skipped: ${message}`);
-      }
-    }
-
-    if (dnsResult && dnsResult !== "declined") {
-      logger.log();
-      return offerDnsWaitAndSsl({
-        coreClient,
-        pullZoneId: opts.pullZoneId,
-        hostname: opts.domain,
-        cnameTarget,
-        forceSsl: true,
-        sslHint,
-        dnsAlreadyLive: delegated,
-      });
-    }
+    const issued = await offerBunnyDnsThenSsl({
+      coreClient,
+      hostname: opts.domain,
+      pullZoneId: opts.pullZoneId,
+      cnameTarget,
+      forceSsl: true,
+      sslHint,
+      verbose: opts.verbose,
+    });
+    if (issued !== null) return issued;
   }
 
   logger.log();

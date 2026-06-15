@@ -7,11 +7,6 @@ import { logger } from "../logger.ts";
 import type { GlobalArgs } from "../types.ts";
 import { confirm, spinner } from "../ui.ts";
 import {
-  type BunnyDnsResult,
-  findBunnyDnsZone,
-  offerBunnyDnsRecord,
-} from "./bunny-dns.ts";
-import {
   addHostname,
   enableSsl,
   fetchPullZoneHostnames,
@@ -20,7 +15,11 @@ import {
   type ResolvedPullZone,
   toSafeHostname,
 } from "./client.ts";
-import { offerDnsWaitAndSsl, printSslHint } from "./flow.ts";
+import {
+  offerBunnyDnsThenSsl,
+  offerDnsWaitAndSsl,
+  printSslHint,
+} from "./flow.ts";
 
 /** Resolves the pull zone (and a core client) for the resource being targeted. */
 export type HostnameResolver = (
@@ -243,42 +242,17 @@ export function createHostnamesCommands(
       }
 
       // If the domain is on Bunny DNS, offer to add the record (prompted) so SSL can issue right away.
-      let dnsResult: BunnyDnsResult | undefined;
-      let delegated = false;
       if (systemHostname && interactive) {
-        try {
-          const match = await findBunnyDnsZone(coreClient, hostname);
-          if (match) {
-            delegated = match.delegated;
-            dnsResult = await offerBunnyDnsRecord({
-              client: coreClient,
-              hostname,
-              pullZoneId,
-              match,
-            });
-          }
-        } catch (err) {
-          // A Bunny DNS hiccup shouldn't block domain setup — fall back to manual DNS.
-          if (args.verbose) {
-            const message = err instanceof Error ? err.message : String(err);
-            logger.dim(`  Bunny DNS check skipped: ${message}`);
-          }
-        }
-      }
-
-      // Record is in place — wait/issue SSL outside the try so its own errors aren't swallowed.
-      if (systemHostname && dnsResult && dnsResult !== "declined") {
-        logger.log();
-        await offerDnsWaitAndSsl({
+        const issued = await offerBunnyDnsThenSsl({
           coreClient,
-          pullZoneId,
           hostname,
+          pullZoneId,
           cnameTarget: systemHostname,
           forceSsl: force,
           sslHint,
-          dnsAlreadyLive: delegated,
+          verbose: args.verbose,
         });
-        return;
+        if (issued !== null) return;
       }
 
       if (systemHostname) {

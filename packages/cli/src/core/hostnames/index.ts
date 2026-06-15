@@ -31,6 +31,7 @@ export {
 } from "./dns.ts";
 export {
   type DnsSslFlowOptions,
+  offerBunnyDnsThenSsl,
   offerDnsWaitAndSsl,
   printSslHint,
 } from "./flow.ts";
