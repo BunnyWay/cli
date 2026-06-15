@@ -153,4 +153,46 @@ describe("offerBunnyDnsThenSsl", () => {
       }),
     ).rejects.toThrow(/has no ID/);
   });
+
+  test("adds the record but skips the poll when the zone isn't delegated", async () => {
+    // A PULLZONE record on an undelegated zone never resolves publicly — short-circuit
+    // rather than entering offerDnsWaitAndSsl, which would poll for the full 10 minutes.
+    prompts.inject([true]);
+    let putCalled = false;
+    const client = {
+      GET: async (path: string) => {
+        if (path === "/dnszone") {
+          return {
+            data: {
+              Items: [
+                { Id: 7, Domain: "example.com", NameserversDetected: false },
+              ],
+              HasMoreItems: false,
+            },
+          };
+        }
+        if (path === "/dnszone/{id}") {
+          return { data: { Records: [], NameserversDetected: false } };
+        }
+        throw new Error(`unexpected GET ${path}`);
+      },
+      PUT: async () => {
+        putCalled = true;
+        return {};
+      },
+    } as unknown as CoreClient;
+
+    const issued = await offerBunnyDnsThenSsl({
+      coreClient: client,
+      hostname: "shop.example.com",
+      pullZoneId: 12345,
+      cnameTarget: "shop.b-cdn.net",
+      forceSsl: true,
+      sslHint: "bunny scripts domains ssl shop.example.com",
+      verbose: false,
+    });
+
+    expect(putCalled).toBe(true); // the record was added
+    expect(issued).toBe(false); // but no certificate / poll — short-circuited on delegation
+  });
 });

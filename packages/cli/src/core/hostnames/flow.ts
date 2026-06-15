@@ -173,6 +173,10 @@ export async function offerDnsWaitAndSsl(
  * manual setup. Once a zone matches, the record offer and wait/SSL flow run
  * outside the catch, so a write the user just confirmed (or a propagation
  * timeout) surfaces instead of being mistaken for a detection hiccup.
+ *
+ * When the matched zone isn't delegated, the just-added PULLZONE record can't
+ * resolve publicly (only bunny's nameservers serve it), so we point the user at
+ * their registrar instead of starting a poll that would time out after 10 min.
  */
 export async function offerBunnyDnsThenSsl(opts: {
   coreClient: CoreClient;
@@ -204,6 +208,20 @@ export async function offerBunnyDnsThenSsl(opts: {
   });
   if (dnsResult === "declined") return null;
 
+  // An undelegated zone's PULLZONE record never reaches public resolvers, so
+  // skip the doomed poll and tell the user to delegate at their registrar.
+  if (!match.delegated) {
+    logger.log();
+    logger.warn(
+      `${match.zoneDomain} isn't delegated to bunny.net's nameservers yet.`,
+    );
+    logger.dim(
+      "  The record is set, but won't resolve (or get a certificate) until you point your registrar at bunny.net.",
+    );
+    printSslHint(opts.sslHint);
+    return false;
+  }
+
   logger.log();
   return offerDnsWaitAndSsl({
     coreClient: opts.coreClient,
@@ -212,6 +230,6 @@ export async function offerBunnyDnsThenSsl(opts: {
     cnameTarget: opts.cnameTarget,
     forceSsl: opts.forceSsl,
     sslHint: opts.sslHint,
-    dnsAlreadyLive: match.delegated,
+    dnsAlreadyLive: true,
   });
 }
