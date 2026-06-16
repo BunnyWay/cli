@@ -45,12 +45,25 @@ if (!existsSync(binPath)) {
   process.exit(1);
 }
 
-try {
-  execFileSync(binPath, process.argv.slice(2), { stdio: "inherit" });
-} catch (err) {
-  if (err.status != null) {
-    process.exit(err.status);
+// The default binary uses AVX2; on pre-Haswell x64 CPUs it dies with SIGILL, so fall back to the baseline build shipped alongside it.
+const candidates = [binPath];
+const baselinePath = path.join(path.dirname(binPath), "bunny-baseline");
+if (existsSync(baselinePath)) {
+  candidates.push(baselinePath);
+}
+
+for (let i = 0; i < candidates.length; i++) {
+  try {
+    execFileSync(candidates[i], process.argv.slice(2), { stdio: "inherit" });
+    process.exit(0);
+  } catch (err) {
+    if (err.status != null) {
+      process.exit(err.status);
+    }
+    if (err.signal === "SIGILL" && i < candidates.length - 1) {
+      continue;
+    }
+    console.error(`Failed to execute bunny binary: ${err.message}`);
+    process.exit(1);
   }
-  console.error(`Failed to execute bunny binary: ${err.message}`);
-  process.exit(1);
 }

@@ -9,7 +9,8 @@
     "x64"
   ],
   "files": [
-    "bsql"
+    "bsql",
+    "bsql-baseline"
   ],
   "publishConfig": {
     "access": "public"
