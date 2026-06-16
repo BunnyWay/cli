@@ -1,8 +1,29 @@
 #!/usr/bin/env node
 
 const { execFileSync } = require("node:child_process");
-const { existsSync } = require("node:fs");
+const { existsSync, readFileSync } = require("node:fs");
 const path = require("node:path");
+
+// Only x64 binaries use AVX2; assume it's present on other arches or when detection fails, letting the SIGILL fallback catch any mistake.
+function hasAvx2() {
+  if (process.arch !== "x64") return true;
+  try {
+    if (process.platform === "linux") {
+      return readFileSync("/proc/cpuinfo", "utf8").includes("avx2");
+    }
+    if (process.platform === "darwin") {
+      const features = execFileSync(
+        "sysctl",
+        ["-n", "machdep.cpu.leaf7_features"],
+        { encoding: "utf8" },
+      );
+      return /avx2/i.test(features);
+    }
+  } catch {
+    return true;
+  }
+  return true;
+}
 
 const PLATFORMS = {
   "darwin-arm64": "@bunny.net/database-shell-darwin-arm64",
@@ -46,10 +67,14 @@ if (!existsSync(binPath)) {
 }
 
 // The default binary uses AVX2; on pre-Haswell x64 CPUs it dies with SIGILL, so fall back to the baseline build shipped alongside it.
-const candidates = [binPath];
 const baselinePath = path.join(path.dirname(binPath), "bsql-baseline");
+const candidates = [binPath];
 if (existsSync(baselinePath)) {
   candidates.push(baselinePath);
+}
+// Run the baseline first on x64 CPUs without AVX2, so we don't spawn the default binary just to catch its crash on every invocation.
+if (candidates.length > 1 && !hasAvx2()) {
+  candidates.reverse();
 }
 
 for (let i = 0; i < candidates.length; i++) {
@@ -62,6 +87,12 @@ for (let i = 0; i < candidates.length; i++) {
     }
     if (err.signal === "SIGILL" && i < candidates.length - 1) {
       continue;
+    }
+    if (err.signal === "SIGILL") {
+      console.error(
+        "bsql crashed with an illegal instruction; this CPU is not supported.",
+      );
+      process.exit(1);
     }
     console.error(`Failed to execute bsql binary: ${err.message}`);
     process.exit(1);
