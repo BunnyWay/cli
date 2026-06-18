@@ -3,6 +3,11 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import type { RegistryMap } from "@bunny.net/app-config";
 import { createMcClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
+import {
+  REGISTRY_URL_ENV,
+  REGISTRY_USERNAME,
+  tryResolveRegistryEndpoint,
+} from "../../core/bunny-registry.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { bunny } from "../../core/colors.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -124,6 +129,7 @@ async function applyPostPushSuggestions(
 }
 
 import {
+  BUNNY_REGISTRY_ID,
   buildImage,
   buildImageRef,
   dockerLogin,
@@ -207,7 +213,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       })
       .option("registry", {
         type: "string",
-        describe: "bunny.net registry ID to push to (overrides bunny.jsonc)",
+        describe:
+          'Registry ID to push to, or "bunny" for the bunny.net registry (overrides bunny.jsonc)',
       })
       .option("container", {
         type: "string",
@@ -459,9 +466,15 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     if (mode.kind === "build") {
       assertDockerfileExists(mode.dockerfile, targetName);
 
+      const bunnyEndpoint = tryResolveRegistryEndpoint();
+      // `--registry bunny` is a friendly alias for the internal sentinel.
+      if (registryId === "bunny") registryId = BUNNY_REGISTRY_ID;
+
       // Ensure a registry is selected before we build (we need its hostname).
       if (!registryId) {
-        const resolved = await promptRegistry(client);
+        const resolved = await promptRegistry(client, {
+          bunnyEndpoint: bunnyEndpoint ?? undefined,
+        });
         if (!resolved) {
           throw new UserError(
             "A registry is required to build and push images.",
@@ -469,7 +482,82 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         }
         registryId = resolved.id;
         freshCreds = resolved.freshCredentials;
-        setContainerRegistry(targetName, registryId);
+        // TODO: The bunny registry has no account record — don't persist a sentinel AT THE MOMENT
+        if (!resolved.bunny) setContainerRegistry(targetName, registryId);
+      }
+
+      // TODO: bunny.net registry (env stub): build + push with the API token, then skip deploy — MC can't pull from it until `/registries` exposes a `bunny` record we can deploy by id.
+      if (registryId === BUNNY_REGISTRY_ID) {
+        if (!bunnyEndpoint) {
+          throw new UserError(
+            "The bunny.net registry endpoint is not configured.",
+            `Set ${REGISTRY_URL_ENV} to the registry URL and try again.`,
+          );
+        }
+        if (!cfg.apiKey) {
+          throw new UserError(
+            "Not logged in.",
+            'Run "bunny login" to authenticate.',
+          );
+        }
+
+        const tag = args.tag ?? (await generateTag());
+        const imageRef = buildImageRef(
+          bunnyEndpoint.host,
+          undefined,
+          toml.app.name,
+          tag,
+        );
+        const buildCwd = resolveBuildContext(mode.dockerfile, args.context);
+
+        logger.info(`Building ${imageRef}...`);
+        await buildImage(mode.dockerfile, imageRef, buildCwd);
+
+        if (noPush) {
+          logger.success(`Image built: ${imageRef}`);
+          logger.dim("Skipping push and deploy (--no-push).");
+          if (output === "json") {
+            logger.log(
+              JSON.stringify({
+                built: true,
+                image: imageRef,
+                pushed: false,
+                deployed: false,
+              }),
+            );
+          }
+          return;
+        }
+
+        const loginSpin = spinner(`Logging in to ${bunnyEndpoint.host}...`);
+        loginSpin.start();
+        try {
+          await dockerLogin(bunnyEndpoint.host, REGISTRY_USERNAME, cfg.apiKey);
+        } finally {
+          loginSpin.stop();
+        }
+
+        logger.info(`Pushing ${imageRef}...`);
+        await pushImage(imageRef);
+
+        if (output === "json") {
+          logger.log(
+            JSON.stringify({
+              built: true,
+              image: imageRef,
+              pushed: true,
+              deployed: false,
+              reason: "mc-pull-unsupported",
+            }),
+          );
+          return;
+        }
+
+        logger.success(`Pushed ${imageRef}`);
+        logger.warn(
+          "Magic Containers can't deploy from the bunny.net registry yet — image pushed, deploy skipped.",
+        );
+        return;
       }
 
       const regSpin = spinner("Fetching registry...");

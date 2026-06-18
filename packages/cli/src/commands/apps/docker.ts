@@ -9,8 +9,6 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
 
-// Generic Docker primitives live in core/docker.ts; re-exported here so
-// existing app-command imports keep resolving from this module.
 export {
   dockerLogin,
   ensureDockerAvailable,
@@ -561,6 +559,9 @@ export function buildImageRef(
 
 const ADD_NEW_REGISTRY = "__add_new__";
 
+/** Stand-in id for the bunny.net registry; swap for the real id once `/registries` returns it as a `bunny` record. */
+export const BUNNY_REGISTRY_ID = "bunny";
+
 /**
  * Result of resolving a registry — the ID plus, if the user just entered
  * credentials in this session, those credentials so the caller can run
@@ -673,6 +674,7 @@ export async function createRegistry(
  */
 export async function promptRegistry(
   client: McClient,
+  opts: { bunnyEndpoint?: { host: string } } = {},
 ): Promise<ResolvedRegistry | null> {
   const regSpin = spinner("Fetching registries...");
   regSpin.start();
@@ -685,6 +687,14 @@ export async function promptRegistry(
   const pushable = registries.filter((r) => r.userName);
 
   const choices = [
+    ...(opts.bunnyEndpoint
+      ? [
+          {
+            title: `bunny.net registry (${opts.bunnyEndpoint.host})`,
+            value: BUNNY_REGISTRY_ID,
+          },
+        ]
+      : []),
     ...pushable.map((r) => ({
       title: `${r.displayName} (${r.hostName} — ${r.userName})`,
       value: String(r.id ?? ""),
@@ -700,6 +710,9 @@ export async function promptRegistry(
   });
 
   if (choice === undefined) return null;
+  if (choice === BUNNY_REGISTRY_ID) {
+    return { id: BUNNY_REGISTRY_ID, hostName: opts.bunnyEndpoint?.host };
+  }
   if (choice !== ADD_NEW_REGISTRY) {
     const existing = pushable.find((r) => String(r.id) === String(choice));
     return { id: String(choice), hostName: existing?.hostName };

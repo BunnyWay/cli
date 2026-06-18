@@ -1,12 +1,6 @@
 import { UserError } from "./errors.ts";
 
 /**
- * Generic Docker CLI primitives shared across commands. Registry- or
- * app-specific helpers (image-ref construction, MC platform targeting)
- * stay in their own command modules and build on top of these.
- */
-
-/**
  * Ensure the Docker CLI is available on the system.
  *
  * Two failure modes need to map to the same friendly error:
