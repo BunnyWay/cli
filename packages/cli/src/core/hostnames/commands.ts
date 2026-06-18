@@ -36,7 +36,11 @@ export interface HostnamesMountOptions {
   /** Adds resource-targeting flags (e.g. --id, --pull-zone) shared by every subcommand. */
   target?: (yargs: Argv) => Argv;
   /** Optional trailing positional (e.g. `[id]`) appended to every subcommand for targeting the resource. */
-  targetPositional?: { name: string; describe: string };
+  targetPositional?: {
+    name: string;
+    describe: string;
+    type?: "string" | "number";
+  };
   /** Namespace description shown in help. */
   describe?: string;
   /** Hidden namespace aliases (e.g. ["hostnames"]) — they work but stay out of help. */
@@ -71,7 +75,7 @@ export function createHostnamesCommands(
   const target = <T>(yargs: Argv<T>): Argv<T> => {
     const withPositional = targetPositional
       ? yargs.positional(targetPositional.name, {
-          type: "number",
+          type: targetPositional.type ?? "number",
           describe: targetPositional.describe,
         })
       : yargs;

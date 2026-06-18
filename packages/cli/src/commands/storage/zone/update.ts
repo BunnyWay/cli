@@ -7,29 +7,45 @@ import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { spinner } from "../../../core/ui.ts";
 import type { StorageZoneModel, StorageZoneSettingsModel } from "../api.ts";
+import {
+  normalizeReplicationRegions,
+  replicationChoices,
+} from "../constants.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 
 interface ZoneUpdateArgs {
   zone?: string;
-  originUrl?: string;
   custom404Path?: string;
   rewrite404To200?: boolean;
   replication?: string[];
 }
 
 const FLAG_HINT =
-  "Pass at least one of --origin-url, --custom-404-path, --rewrite-404-to-200, --replication.";
+  "Pass at least one of --custom-404-path, --rewrite-404-to-200, --replication.";
 
-// Collect only the settings passed as flags.
-function settingsFromFlags(args: ZoneUpdateArgs): StorageZoneSettingsModel {
+function hasAnyFlag(args: ZoneUpdateArgs): boolean {
+  return (
+    args.custom404Path !== undefined ||
+    args.rewrite404To200 !== undefined ||
+    args.replication !== undefined
+  );
+}
+
+// Collect the settings passed as flgss, excluding the primary from replication.
+function settingsFromFlags(
+  args: ZoneUpdateArgs,
+  primaryCode?: string,
+): StorageZoneSettingsModel {
   const settings: StorageZoneSettingsModel = {};
-  if (args.originUrl !== undefined) settings.OriginUrl = args.originUrl;
   if (args.custom404Path !== undefined)
     settings.Custom404FilePath = args.custom404Path;
   if (args.rewrite404To200 !== undefined)
     settings.Rewrite404To200 = args.rewrite404To200;
   if (args.replication !== undefined)
-    settings.ReplicationZones = args.replication;
+    settings.ReplicationZones = normalizeReplicationRegions(
+      args.replication,
+      primaryCode,
+    );
   return settings;
 }
 
@@ -40,11 +56,6 @@ async function promptSettings(
   const answers = await prompts([
     {
       type: "text",
-      name: "originUrl",
-      message: "Origin URL (blank for none):",
-    },
-    {
-      type: "text",
       name: "custom404Path",
       message: "Custom 404 file path (blank for none):",
       initial: zone.Custom404FilePath ?? "",
@@ -52,28 +63,29 @@ async function promptSettings(
     {
       type: "toggle",
       name: "rewrite404To200",
-      message: "Rewrite 404 → 200?",
+      message: "Rewrite 404 to 200?",
       initial: zone.Rewrite404To200 ?? false,
       active: "yes",
       inactive: "no",
     },
     {
-      type: "list",
+      type: "multiselect",
       name: "replication",
-      message: "Replication regions (comma-separated, blank for none):",
-      initial: (zone.ReplicationRegions ?? []).join(", "),
+      message: "Replication regions (space to toggle):",
+      choices: replicationChoices(zone.Region ?? undefined).map((region) => ({
+        title: `${region.name} (${region.code})`,
+        value: region.code,
+        selected: (zone.ReplicationRegions ?? []).includes(region.code),
+      })),
     },
   ]);
   if (Object.keys(answers).length === 0)
     throw new UserError("Update cancelled.");
 
   return {
-    OriginUrl: answers.originUrl || null,
     Custom404FilePath: answers.custom404Path || null,
     Rewrite404To200: answers.rewrite404To200,
-    ReplicationZones: (answers.replication ?? [])
-      .map((region: string) => region.trim())
-      .filter(Boolean),
+    ReplicationZones: answers.replication ?? [],
   };
 }
 
@@ -83,8 +95,8 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
   examples: [
     ["$0 storage zones update my-zone", "Edit settings interactively"],
     [
-      "$0 storage zones update my-zone --origin-url https://example.com",
-      "Set the origin URL non-interactively",
+      "$0 storage zones update my-zone --custom-404-path /404.html",
+      "Set the custom 404 file non-interactively",
     ],
   ],
 
@@ -93,10 +105,6 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
       .positional("zone", {
         type: "string",
         describe: "Storage zone name or ID",
-      })
-      .option("origin-url", {
-        type: "string",
-        describe: "Origin URL the zone pulls from",
       })
       .option("custom-404-path", {
         type: "string",
@@ -114,8 +122,7 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
 
   handler: async (args) => {
     const { zone: ref, profile, output, verbose, apiKey } = args;
-    const flagSettings = settingsFromFlags(args);
-    const hasFlags = Object.keys(flagSettings).length > 0;
+    const hasFlags = hasAnyFlag(args);
 
     // JSON output stays non-interactive; settings must come from flags.
     if (!hasFlags && output === "json") {
@@ -126,7 +133,9 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
     const client = createCoreClient(clientOptions(config, verbose));
 
     const zone = await resolveStorageZoneInteractive(client, ref);
-    const settings = hasFlags ? flagSettings : await promptSettings(zone);
+    const settings = hasFlags
+      ? settingsFromFlags(args, zone.Region ?? undefined)
+      : await promptSettings(zone);
 
     const spin = spinner("Updating storage zone...");
     spin.start();

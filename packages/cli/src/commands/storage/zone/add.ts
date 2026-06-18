@@ -4,14 +4,27 @@ import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
+import {
+  createPullZone,
+  normalizeHostname,
+  setupHostname,
+} from "../../../core/hostnames/index.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
-import { fetchStorageRegions, type StorageZoneModel } from "../api.ts";
+import { confirm, spinner } from "../../../core/ui.ts";
+import type { StorageZoneModel } from "../api.ts";
+import {
+  normalizeReplicationRegions,
+  replicationChoices,
+  STORAGE_REGIONS,
+} from "../constants.ts";
 
 interface ZoneAddArgs {
   name?: string;
   region?: string;
   replication?: string[];
+  pullZone?: boolean;
+  pullZoneName?: string;
+  domain?: string;
 }
 
 export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
@@ -43,12 +56,27 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
         type: "string",
         array: true,
         describe: "Replication region codes",
+      })
+      .option("pull-zone", {
+        type: "boolean",
+        describe: "Create a pull zone to serve the storage zone over the web",
+      })
+      .option("pull-zone-name", {
+        type: "string",
+        describe: "Name for the pull zone (defaults to the storage zone name)",
+      })
+      .option("domain", {
+        type: "string",
+        describe: "Custom domain to add to the pull zone (implies --pull-zone)",
       }),
 
   handler: async ({
     name,
     region,
     replication,
+    pullZone,
+    pullZoneName,
+    domain,
     profile,
     output,
     verbose,
@@ -59,6 +87,11 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
 
     // JSON output stays non-interactive; name and region must come from flags.
     const interactive = output !== "json";
+
+    // The region and replication choices both drive storage pricing, so flag it up front.
+    if (interactive && (region === undefined || replication === undefined)) {
+      logger.dim("Region and replication regions both affect storage pricing.");
+    }
 
     let zoneName = name;
     if (!zoneName && interactive) {
@@ -74,20 +107,13 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     // The main region cannot be changed after creation, so prompt for it too.
     let mainRegion = region;
     if (!mainRegion && interactive) {
-      const regions = await fetchStorageRegions(client);
-      if (regions.length === 0) {
-        throw new UserError(
-          "Could not load storage regions.",
-          "Pass --region with a region code instead.",
-        );
-      }
       const { picked } = await prompts({
         type: "select",
         name: "picked",
         message: "Main region:",
-        choices: regions.map((r) => ({
-          title: `${r.Name ?? r.Id} (${r.Id})`,
-          value: r.Id,
+        choices: STORAGE_REGIONS.map((r) => ({
+          title: `${r.name} (${r.code})`,
+          value: r.code,
         })),
       });
       mainRegion = picked;
@@ -98,6 +124,26 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
         "Pass --region with a region code (e.g. DE, NY, LA, SG).",
       );
     }
+    mainRegion = mainRegion.toUpperCase();
+
+    // Replication regions are optional and drawn from the other storage regions.
+    let replicationRegions = replication;
+    if (replicationRegions === undefined && interactive) {
+      const { picked } = await prompts({
+        type: "multiselect",
+        name: "picked",
+        message:
+          "Replication regions (each adds storage cost; space to toggle):",
+        choices: replicationChoices(mainRegion).map((region) => ({
+          title: `${region.name} (${region.code})`,
+          value: region.code,
+        })),
+      });
+      replicationRegions = picked ?? [];
+    }
+    const replicationCodes = replicationRegions
+      ? normalizeReplicationRegions(replicationRegions, mainRegion)
+      : [];
 
     const spin = spinner("Creating storage zone...");
     spin.start();
@@ -107,7 +153,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
         body: {
           Name: zoneName,
           Region: mainRegion,
-          ReplicationRegions: replication ?? null,
+          ReplicationRegions: replicationCodes.length ? replicationCodes : null,
         },
       });
       created = data;
@@ -115,15 +161,90 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       spin.stop();
     }
 
+    const zoneId = created?.Id;
+
+    // A storage zone only holds files; a pull zone serves them on the web.
+    // A custom domain attaches to that pull zone, so --domain implies one too.
+    let shouldCreatePullZone = pullZone ?? (domain !== undefined || undefined);
+    if (shouldCreatePullZone === undefined && interactive && zoneId) {
+      shouldCreatePullZone = await confirm(
+        `Make ${zoneName} available on the web? This creates a pull zone (bunny's CDN layer) in front of it.`,
+      );
+    }
+
+    let pullZoneResult:
+      | { id?: number; name?: string | null; url?: string }
+      | undefined;
+    if (shouldCreatePullZone && zoneId) {
+      const pzSpin = spinner("Creating pull zone...");
+      pzSpin.start();
+      let pz: Awaited<ReturnType<typeof createPullZone>> | undefined;
+      try {
+        pz = await createPullZone(client, pullZoneName ?? zoneName, zoneId);
+      } finally {
+        pzSpin.stop();
+      }
+      const host = (pz?.Hostnames ?? []).find((h) => h.IsSystemHostname)?.Value;
+      pullZoneResult = {
+        id: pz?.Id,
+        name: pz?.Name,
+        url: host ? `https://${host}` : undefined,
+      };
+    }
+
     if (output === "json") {
-      logger.log(JSON.stringify(created ?? { Name: zoneName }, null, 2));
+      logger.log(
+        JSON.stringify(
+          {
+            ...(created ?? { Name: zoneName }),
+            PullZone: pullZoneResult ?? null,
+          },
+          null,
+          2,
+        ),
+      );
       return;
     }
 
     logger.success(
-      created?.Id
-        ? `Created storage zone ${zoneName} (ID: ${created.Id}).`
+      zoneId
+        ? `Created storage zone ${zoneName} (ID: ${zoneId}).`
         : `Created storage zone ${zoneName}.`,
     );
+    if (pullZoneResult) {
+      logger.success(`Created pull zone ${pullZoneResult.name}.`);
+      if (pullZoneResult.url) {
+        logger.info(`Files are now served at ${pullZoneResult.url}`);
+      }
+    }
+
+    // Offer a custom domain on the new pull zone, reusing the shared DNS + SSL flow.
+    if (pullZoneResult?.id) {
+      let customDomain = domain;
+      if (
+        customDomain === undefined &&
+        (await confirm("Add a custom domain?"))
+      ) {
+        const { value } = await prompts({
+          type: "text",
+          name: "value",
+          message: "Domain (e.g. cdn.example.com):",
+        });
+        customDomain = value;
+      }
+      if (customDomain) {
+        const host = normalizeHostname(customDomain);
+        await setupHostname({
+          coreClient: client,
+          pullZoneId: pullZoneResult.id,
+          domain: host,
+          sslHint: `bunny storage zone domains ssl ${host} ${zoneName}`,
+          retryHint: `bunny storage zone domains add ${host} ${zoneName}`,
+          forceSsl: true,
+          interactive: true,
+          verbose,
+        });
+      }
+    }
   },
 });

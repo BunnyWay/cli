@@ -480,15 +480,19 @@ Positional value ordering for `record add` follows the record type: `A`/`AAAA`/`
 
 Manage Edge Storage through two resource groups: **`bunny storage zone`** (the zone itself: create, list, inspect, update, delete) and **`bunny storage file`** (the files within a zone). Zone management uses the account API key; file operations use the zone's own password and a region-specific host, both resolved automatically from the zone. The `[zone]` argument accepts either the zone name or its numeric ID. `zone` aliases to `zones` (and `bucket`/`buckets`); `file` aliases to `files`.
 
+A storage zone only holds files; a **pull zone** is what serves them on the web. `zone add` offers to create one (origin set to the new storage zone) and then to add a custom domain, or pass `--pull-zone`/`--domain` to do it non-interactively. Custom domains live on the pull zone and are managed with `bunny storage zone domains`.
+
 ```bash
 # Zones (lifecycle)
 bunny storage zone list
 bunny storage zone add                                # interactive: prompts for name and region
 bunny storage zone add my-zone --region DE
 bunny storage zone add my-zone --region NY --replication LA,SG
+bunny storage zone add my-zone --region DE --pull-zone   # also create a pull zone to serve it on the web
+bunny storage zone add my-zone --region DE --domain cdn.example.com   # pull zone + custom domain
 bunny storage zone show my-zone
 bunny storage zone update my-zone                     # interactive: edit settings, pre-filled with current values
-bunny storage zone update my-zone --origin-url https://example.com
+bunny storage zone update my-zone --custom-404-path /404.html
 bunny storage zone remove my-zone
 
 # List the available storage regions
@@ -509,6 +513,12 @@ bunny storage file download my-zone images/photo.png --out ./local.png
 bunny storage file remove my-zone images/photo.png
 bunny storage file remove my-zone images/ --force   # trailing slash removes a directory
 
+# Custom domains on the zone's pull zone
+bunny storage zone domains list my-zone
+bunny storage zone domains add cdn.example.com my-zone
+bunny storage zone domains ssl cdn.example.com my-zone
+bunny storage zone domains remove cdn.example.com my-zone
+
 # Open the storage documentation
 bunny storage docs
 ```
@@ -517,15 +527,16 @@ A trailing slash on a `file` path denotes a directory: `file list my-zone images
 
 bunny.net's S3-compatible API is in closed preview and is opt-in per zone (it cannot be enabled on an existing zone). When a zone has access, `bunny storage zone show` surfaces its S3 endpoint, and `bunny storage zone credentials` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
 
-| Flag                                                                         | Commands                     | Description                                                                      |
-| ---------------------------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------- |
-| `--region`, `--replication`                                                  | `zone add`                   | Main region code and optional replication regions                                |
-| `--origin-url`, `--custom-404-path`, `--rewrite-404-to-200`, `--replication` | `zone update`                | Edit zone settings (see `bunny storage zone update --help`)                      |
-| `--format` (`rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only`            | `zone credentials`           | Emit S3 config for a tool; use the read-only password as the secret              |
-| `--to`                                                                       | `file upload`                | Remote path; a trailing slash uploads into that directory                        |
-| `--checksum`, `--content-type`                                               | `file upload`                | Send a SHA256 checksum for server-side verification; set the stored content type |
-| `--out`                                                                      | `file download`              | Local destination path (defaults to the file name)                               |
-| `--force`                                                                    | `zone remove`, `file remove` | Skip the confirmation prompt                                                     |
+| Flag                                                              | Commands                     | Description                                                                                                                        |
+| ----------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `--region`, `--replication`                                       | `zone add`                   | Primary region code, plus optional replication regions (any storage region except the primary; run `zone regions` to list them)    |
+| `--pull-zone`, `--pull-zone-name`, `--domain`                     | `zone add`                   | Also create a pull zone (what serves the stored files on the web) and optionally a custom domain; interactively, `add` offers both |
+| `--custom-404-path`, `--rewrite-404-to-200`, `--replication`      | `zone update`                | Edit zone settings (see `bunny storage zone update --help`)                                                                        |
+| `--format` (`rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only` | `zone credentials`           | Emit S3 config for a tool; use the read-only password as the secret                                                                |
+| `--to`                                                            | `file upload`                | Remote path; a trailing slash uploads into that directory                                                                          |
+| `--checksum`, `--content-type`                                    | `file upload`                | Send a SHA256 checksum for server-side verification; set the stored content type                                                   |
+| `--out`                                                           | `file download`              | Local destination path (defaults to the file name)                                                                                 |
+| `--force`                                                         | `zone remove`, `file remove` | Skip the confirmation prompt                                                                                                       |
 
 ### `bunny scripts`
 

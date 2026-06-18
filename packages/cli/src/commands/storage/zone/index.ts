@@ -2,6 +2,7 @@ import type { CommandModule } from "yargs";
 import { defineNamespace } from "../../../core/define-namespace.ts";
 import { storageZoneAddCommand } from "./add.ts";
 import { storageZoneCredentialsCommand } from "./credentials.ts";
+import { storageZoneHostnamesCommands } from "./hostnames/index.ts";
 import { storageZoneListCommand } from "./list.ts";
 import { storageZoneRegionsCommand } from "./regions.ts";
 import { storageZoneRemoveCommand } from "./remove.ts";
@@ -16,6 +17,7 @@ const subcommands: CommandModule[] = [
   storageZoneRemoveCommand,
   storageZoneCredentialsCommand,
   storageZoneRegionsCommand,
+  ...storageZoneHostnamesCommands,
 ];
 
 export const storageZoneNamespace = defineNamespace(

@@ -6,7 +6,6 @@ export type CoreClient = ReturnType<typeof createCoreClient>;
 export type StorageZoneModel = components["schemas"]["StorageZoneModel"];
 export type StorageZoneSettingsModel =
   components["schemas"]["StorageZoneSettingsModel"];
-export type StorageRegionModel = components["schemas"]["StorageRegionModel"];
 
 export async function fetchStorageZones(
   client: CoreClient,
@@ -53,11 +52,4 @@ export async function resolveStorageZone(
     );
   }
   return fetchStorageZone(client, match.Id);
-}
-
-export async function fetchStorageRegions(
-  client: CoreClient,
-): Promise<StorageRegionModel[]> {
-  const { data } = await client.GET("/storagezone/regions");
-  return data ?? [];
 }
