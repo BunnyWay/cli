@@ -4,6 +4,7 @@ import { basename, isAbsolute, join, resolve } from "node:path";
 import type { createMcClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import prompts from "prompts";
+import { tryResolveRegistryEndpoint } from "../../core/bunny-registry.ts";
 import { dockerLogin, imageHostname } from "../../core/docker.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
@@ -674,8 +675,21 @@ export async function createRegistry(
  */
 export async function promptRegistry(
   client: McClient,
-  opts: { bunnyEndpoint?: { host: string } } = {},
 ): Promise<ResolvedRegistry | null> {
+  const bunnyEndpoint = tryResolveRegistryEndpoint();
+  if (bunnyEndpoint) {
+    const { value: useBunny } = await prompts({
+      type: "confirm",
+      name: "value",
+      message: "Push to the bunny.net registry?",
+      initial: true,
+    });
+    if (useBunny === undefined) return null;
+    if (useBunny) {
+      return { id: BUNNY_REGISTRY_ID, hostName: bunnyEndpoint.host };
+    }
+  }
+
   const regSpin = spinner("Fetching registries...");
   regSpin.start();
 
@@ -687,14 +701,6 @@ export async function promptRegistry(
   const pushable = registries.filter((r) => r.userName);
 
   const choices = [
-    ...(opts.bunnyEndpoint
-      ? [
-          {
-            title: `bunny.net registry (${opts.bunnyEndpoint.host})`,
-            value: BUNNY_REGISTRY_ID,
-          },
-        ]
-      : []),
     ...pushable.map((r) => ({
       title: `${r.displayName} (${r.hostName} — ${r.userName})`,
       value: String(r.id ?? ""),
@@ -710,9 +716,6 @@ export async function promptRegistry(
   });
 
   if (choice === undefined) return null;
-  if (choice === BUNNY_REGISTRY_ID) {
-    return { id: BUNNY_REGISTRY_ID, hostName: opts.bunnyEndpoint?.host };
-  }
   if (choice !== ADD_NEW_REGISTRY) {
     const existing = pushable.find((r) => String(r.id) === String(choice));
     return { id: String(choice), hostName: existing?.hostName };

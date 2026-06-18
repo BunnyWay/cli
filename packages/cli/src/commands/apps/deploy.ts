@@ -467,14 +467,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       assertDockerfileExists(mode.dockerfile, targetName);
 
       const bunnyEndpoint = tryResolveRegistryEndpoint();
-      // `--registry bunny` is a friendly alias for the internal sentinel.
-      if (registryId === "bunny") registryId = BUNNY_REGISTRY_ID;
-
       // Ensure a registry is selected before we build (we need its hostname).
       if (!registryId) {
-        const resolved = await promptRegistry(client, {
-          bunnyEndpoint: bunnyEndpoint ?? undefined,
-        });
+        const resolved = await promptRegistry(client);
         if (!resolved) {
           throw new UserError(
             "A registry is required to build and push images.",
@@ -482,8 +477,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         }
         registryId = resolved.id;
         freshCreds = resolved.freshCredentials;
-        // TODO: The bunny registry has no account record — don't persist a sentinel AT THE MOMENT
-        if (!resolved.bunny) setContainerRegistry(targetName, registryId);
+        // The bunny registry has no account record — don't persist its id.
+        if (registryId !== BUNNY_REGISTRY_ID) {
+          setContainerRegistry(targetName, registryId);
+        }
       }
 
       // TODO: bunny.net registry (env stub): build + push with the API token, then skip deploy — MC can't pull from it until `/registries` exposes a `bunny` record we can deploy by id.
@@ -1105,6 +1102,13 @@ async function buildAndPushContainer(
     registryId = resolved.id;
     freshCreds = resolved.freshCredentials;
     opts.onRegistryResolved(name, registryId);
+  }
+
+  if (registryId === BUNNY_REGISTRY_ID) {
+    throw new UserError(
+      "The bunny.net registry isn't supported for multi-container apps yet.",
+      "Push images individually with `bunny registry push`, or use a single-container app.",
+    );
   }
 
   const regSpin = spinner(`Fetching registry for ${name}...`);
