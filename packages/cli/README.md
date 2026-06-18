@@ -402,6 +402,23 @@ bunny registries add --name "GitHub" --username myorg
 bunny registries remove <registry-id>
 ```
 
+### `bunny registry`
+
+> **Experimental** internal use only
+
+Push and inspect images on the bunny.net OCI registry. The endpoint is read from the `BUNNYNET_REGISTRY_URL` environment variable.
+
+```bash
+export BUNNYNET_REGISTRY_URL=https://<registry-host>
+
+bunny registry push myapp:latest                      # push, deriving repository/tag from the image
+bunny registry push myapp:dev --repository team/myapp --tag v1
+bunny registry list                                   # list repositories (alias: ls)
+bunny registry tags team/myapp                        # list tags for a repository
+```
+
+`push` currently uses Docker to read the local image; `list` and `tags` talk to the registry directly.
+
 ### `bunny dns`
 
 > **Experimental** — hidden from `--help` and the landing page while it stabilizes.
