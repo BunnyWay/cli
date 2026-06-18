@@ -474,6 +474,59 @@ Positional value ordering for `record add` follows the record type: `A`/`AAAA`/`
 | `--anonymize-ip`, `--anonymization`                                                                 | `zone logging enable`                                                         | Anonymize client IPs in logs (`onedigit` \| `drop`)                  |
 | `--force`                                                                                           | `record remove`, `zone remove`, `zone dnssec disable`, `zone logging disable` | Skip the confirmation prompt                                         |
 
+### `bunny storage`
+
+> **Experimental**: hidden from `--help` and the landing page while it stabilizes.
+
+Manage Edge Storage through two resource groups: **`bunny storage zone`** (the zone itself: create, list, inspect, update, delete) and **`bunny storage file`** (the files within a zone). Zone management uses the account API key; file operations use the zone's own password and a region-specific host, both resolved automatically from the zone. The `[zone]` argument accepts either the zone name or its numeric ID. `zone` aliases to `zones` (and `bucket`/`buckets`); `file` aliases to `files`.
+
+```bash
+# Zones (lifecycle)
+bunny storage zone list
+bunny storage zone add                                # interactive: prompts for name and region
+bunny storage zone add my-zone --region DE
+bunny storage zone add my-zone --region NY --replication LA,SG
+bunny storage zone show my-zone
+bunny storage zone update my-zone                     # interactive: edit settings, pre-filled with current values
+bunny storage zone update my-zone --origin-url https://example.com
+bunny storage zone remove my-zone
+
+# List the available storage regions
+bunny storage zone regions
+
+# S3-compatible credentials (for zones with S3 preview access)
+bunny storage zone credentials my-zone                # show endpoint + access key + secret
+bunny storage zone credentials my-zone --read-only    # use the read-only password as the secret
+bunny storage zone credentials my-zone --format rclone >> ~/.config/rclone/rclone.conf
+eval "$(bunny storage zone credentials my-zone --format env)"   # AWS-compatible env vars
+
+# Files: list, upload, download, delete (paths are relative to the zone root)
+bunny storage file list my-zone
+bunny storage file list my-zone images/
+bunny storage file upload my-zone ./photo.png --to images/
+bunny storage file upload my-zone ./photo.png --checksum --content-type image/png
+bunny storage file download my-zone images/photo.png --out ./local.png
+bunny storage file remove my-zone images/photo.png
+bunny storage file remove my-zone images/ --force   # trailing slash removes a directory
+
+# Open the storage documentation
+bunny storage docs
+```
+
+A trailing slash on a `file` path denotes a directory: `file list my-zone images/` lists that directory, and `file remove my-zone images/` deletes it and its contents recursively. Edge Storage file operations are powered by the [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage).
+
+bunny.net's S3-compatible API is in closed preview and is opt-in per zone (it cannot be enabled on an existing zone). When a zone has access, `bunny storage zone show` surfaces its S3 endpoint, and `bunny storage zone credentials` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
+
+| Flag                                                                         | Commands                     | Description                                                                      |
+| ---------------------------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------- |
+| `--region`, `--replication`                                                  | `zone add`                   | Main region code and optional replication regions                                |
+| `--origin-url`, `--custom-404-path`, `--rewrite-404-to-200`, `--replication` | `zone update`                | Edit zone settings (see `bunny storage zone update --help`)                      |
+| `--format` (`rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only`            | `zone credentials`           | Emit S3 config for a tool; use the read-only password as the secret              |
+| `--to`                                                                       | `file upload`                | Remote path; a trailing slash uploads into that directory                        |
+| `--checksum`, `--content-type`                                               | `file upload`                | Send a SHA256 checksum for server-side verification; set the stored content type |
+| `--out`                                                                      | `file download`              | Local destination path (defaults to the file name)                               |
+| `--force`                                                                    | `zone remove`, `file remove` | Skip the confirmation prompt                                                     |
+
 ### `bunny scripts`
 
 Manage Edge Scripts.

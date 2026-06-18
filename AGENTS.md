@@ -304,6 +304,30 @@ bunny-cli/
 │           │   │           ├── index.ts  # defineNamespace("logging", ...)
 │           │   │           ├── enable.ts # Enable DNS query logging (optional IP anonymization)
 │           │   │           └── disable.ts # Disable DNS query logging (with confirmation)
+│           │   ├── storage/                 # Experimental (hidden from help and landing page)
+│           │   │   ├── index.ts          # defineNamespace("storage", ...): registers zone + file groups + docs (+ hidden bucket aliases)
+│           │   │   ├── api.ts            # CoreClient type, fetchStorageZones/fetchStorageZone, resolveStorageZone (name-or-ID → zone, re-fetched by ID), fetchStorageRegions
+│           │   │   ├── interactive.ts    # resolveStorageZoneInteractive (arg → zone picker → fetch by ID)
+│           │   │   ├── files-api.ts      # Adapter over @bunny.net/storage-sdk: connectStorageZone (zone → SDK connection, Region→StorageRegion enum + password), listFiles/uploadFile/downloadFile/deleteFile (deleteFile translates the SDK's boolean return into a UserError)
+│           │   │   ├── files-api.test.ts # Tests for region mapping + delete error translation (NOT the SDK's URL building)
+│           │   │   ├── s3.ts             # S3 (closed preview): isS3Enabled (StorageZoneType===1), s3Endpoint (<region>-s3.storage.bunnycdn.com), s3Credentials (name=access key, password=secret), renderS3ToolConfig (rclone/aws/s3cmd/env formatters)
+│           │   │   ├── s3.test.ts        # Tests for S3 derivation + tool-config formatters
+│           │   │   ├── docs.ts           # Open storage docs (bunny storage docs)
+│           │   │   ├── zone/              # `bunny storage zones` (canonical: zones; aliases: zone; hidden: bucket, buckets)
+│           │   │   │   ├── index.ts      # defineNamespace("zones", ...) + storageZoneHiddenAliases (bucket/buckets)
+│           │   │   │   ├── list.ts       # List all storage zones (alias: ls)
+│           │   │   │   ├── add.ts        # Create a storage zone (prompts for name + region when omitted; non-interactive under --output json)
+│           │   │   │   ├── show.ts       # Show zone details (region, replication, hostname, usage; adds S3 endpoint rows when S3-enabled)
+│           │   │   │   ├── credentials.ts # S3 credentials / tool config for the zone (alias: creds; --format, --read-only)
+│           │   │   │   ├── update.ts     # Update zone settings (origin URL, custom 404, rewrite 404→200, replication); interactive pre-filled editor when no flags, non-interactive under --output json
+│           │   │   │   ├── remove.ts     # Delete a storage zone and its files (alias: rm)
+│           │   │   │   └── regions.ts    # List available storage regions
+│           │   │   └── file/              # `bunny storage files` (canonical: files; aliases: file)
+│           │   │       ├── index.ts      # defineNamespace("files", ...)
+│           │   │       ├── list.ts       # List files in a directory (alias: ls; directories first)
+│           │   │       ├── upload.ts     # Upload a local file (--to, --checksum streams a SHA256, --content-type)
+│           │   │       ├── download.ts   # Download a file to disk (--out)
+│           │   │       └── remove.ts     # Delete a file or directory (alias: rm; trailing slash = recursive)
 │           │   ├── registries/
 │           │   │   ├── index.ts          # Manual CommandModule (not defineNamespace) — default handler runs list
 │           │   │   ├── list.ts           # List container registries
@@ -883,6 +907,23 @@ bunny
 │           ├── enable  [domain] [--anonymize-ip] [--anonymization onedigit|drop]
 │           │                               Enable DNS query logging
 │           └── disable [domain] [--force]  Disable DNS query logging
+├── storage                                 (experimental, hidden from help and landing page)
+│   │                                       Two resource groups: `zones` (the zone, via core API + account key) and `files` (zone contents, via @bunny.net/storage-sdk + the zone password/region host, resolved automatically). [zone] accepts a name or numeric ID.
+│   ├── zones                               (canonical; aliases: zone; hidden: bucket, buckets)
+│   │   ├── list                            List all storage zones (alias: ls)
+│   │   ├── add         [name] [--region] [--replication]  Create a storage zone (prompts for name + region when omitted; non-interactive under --output json)
+│   │   ├── show        [zone]              Show zone details (region, replication, hostname, usage)
+│   │   ├── update      [zone] [--origin-url] [--custom-404-path] [--rewrite-404-to-200] [--replication]  Update zone settings (edits interactively pre-filled when no flags; non-interactive under --output json)
+│   │   ├── remove      [zone] [--force]    Delete a storage zone and its files (alias: rm)
+│   │   ├── credentials [zone] [--format rclone|aws|s3cmd|env] [--read-only]  (alias: creds)
+│   │   │                                   S3 credentials for the zone (name = access key, password = secret); --format emits tool config, else table/--output json
+│   │   └── regions                         List available storage regions
+│   ├── files                               (canonical; aliases: file)
+│   │   ├── list        <zone> [path] (alias: ls)  List files in a directory (trailing slash on path)
+│   │   ├── upload      <zone> <file> [--to] [--checksum] [--content-type]  Upload a local file
+│   │   ├── download    <zone> <path> [--out]  Download a file
+│   │   └── remove      <zone> <path> [--force] (alias: rm)  Delete a file or directory (trailing slash = recursive)
+│   └── docs                                Open storage documentation in browser
 ├── db
 │   ├── create          [--name] [--primary] [--replicas] [--storage-region]
 │   │                                       Create a new database
