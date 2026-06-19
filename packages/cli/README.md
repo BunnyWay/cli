@@ -808,9 +808,9 @@ bunny sandbox create my-sandbox
 bunny sandbox create my-sandbox --region NY
 ```
 
-| Flag       | Description                                          | Default |
-| ---------- | ---------------------------------------------------- | ------- |
-| `--region` | Region ID to deploy in (e.g. `AMS`, `NY`, `LA`, …)  | `AMS`   |
+| Flag       | Description                                        | Default |
+| ---------- | -------------------------------------------------- | ------- |
+| `--region` | Region ID to deploy in (e.g. `AMS`, `NY`, `LA`, …) | `AMS`   |
 
 Once ready, the output shows the app ID, public HTTPS hostname, and SSH address.
 
@@ -837,9 +837,9 @@ bunny sandbox delete my-sandbox --force
 bunny sandbox rm my-sandbox -f   # alias
 ```
 
-| Flag      | Alias | Description               | Default |
-| --------- | ----- | ------------------------- | ------- |
-| `--force` | `-f`  | Skip confirmation prompt  | `false` |
+| Flag      | Alias | Description              | Default |
+| --------- | ----- | ------------------------ | ------- |
+| `--force` | `-f`  | Skip confirmation prompt | `false` |
 
 #### `bunny sandbox exec`
 
@@ -856,9 +856,9 @@ bunny sandbox exec my-sandbox --cwd /tmp env
 bunny sandbox exec my-sandbox -- cat /etc/os-release
 ```
 
-| Flag    | Description                              | Default      |
-| ------- | ---------------------------------------- | ------------ |
-| `--cwd` | Working directory inside the sandbox     | `/workplace` |
+| Flag    | Description                          | Default      |
+| ------- | ------------------------------------ | ------------ |
+| `--cwd` | Working directory inside the sandbox | `/workplace` |
 
 #### `bunny sandbox ssh`
 
@@ -884,9 +884,9 @@ bunny sandbox url add my-sandbox 3000
 bunny sandbox url add my-sandbox 8080 --label my-api
 ```
 
-| Flag      | Description                                    | Default          |
-| --------- | ---------------------------------------------- | ---------------- |
-| `--label` | Display name for the endpoint                  | `port-<port>`    |
+| Flag      | Description                   | Default       |
+| --------- | ----------------------------- | ------------- |
+| `--label` | Display name for the endpoint | `port-<port>` |
 
 ##### `bunny sandbox url list`
 
