@@ -18,25 +18,37 @@ export const sandboxSshCommand = defineCommand({
   handler: async ({ name }) => {
     const record = getSandbox(name);
     if (!record) {
-      throw new UserError(`No sandbox named "${name}" found. Run: bunny sandbox create ${name}`);
+      throw new UserError(
+        `No sandbox named "${name}" found. Run: bunny sandbox create ${name}`,
+      );
     }
     if (!record.ssh_host) {
-      throw new UserError(`Sandbox "${name}" has no SSH endpoint recorded. Re-create it.`);
+      throw new UserError(
+        `Sandbox "${name}" has no SSH endpoint recorded. Re-create it.`,
+      );
     }
 
-    const [host, portStr] = (record.ssh_host.includes(":")
-      ? record.ssh_host.split(":")
-      : [record.ssh_host, "8023"]) as [string, string];
+    const [host, portStr] = (
+      record.ssh_host.includes(":")
+        ? record.ssh_host.split(":")
+        : [record.ssh_host, "8023"]
+    ) as [string, string];
 
     const proc = Bun.spawn(
       [
-        "sshpass", "-p", record.agent_token,
+        "sshpass",
+        "-p",
+        record.agent_token,
         "ssh",
         "-t",
-        "-p", portStr,
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "UserKnownHostsFile=/dev/null",
-        "-o", "LogLevel=ERROR",
+        "-p",
+        portStr,
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "LogLevel=ERROR",
         `root@${host}`,
         `cd ${WORKPLACE} && exec bash -l`,
       ],

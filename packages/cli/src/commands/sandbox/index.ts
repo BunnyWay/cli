@@ -6,11 +6,15 @@ import { sandboxListCommand } from "./list.ts";
 import { sandboxSshCommand } from "./ssh.ts";
 import { sandboxUrlNamespace } from "./url/index.ts";
 
-export const sandboxNamespace = defineNamespace("sandbox", "Manage sandboxes.", [
-  sandboxCreateCommand,
-  sandboxListCommand,
-  sandboxDeleteCommand,
-  sandboxExecCommand,
-  sandboxSshCommand,
-  sandboxUrlNamespace,
-]);
+export const sandboxNamespace = defineNamespace(
+  "sandbox",
+  "Manage sandboxes.",
+  [
+    sandboxCreateCommand,
+    sandboxListCommand,
+    sandboxDeleteCommand,
+    sandboxExecCommand,
+    sandboxSshCommand,
+    sandboxUrlNamespace,
+  ],
+);

@@ -14,7 +14,11 @@ export const sandboxUrlListCommand = defineCommand({
   examples: [["$0 sandbox url list my-sandbox", "List all endpoints"]],
 
   builder: (yargs) =>
-    yargs.positional("name", { type: "string", demandOption: true, describe: "Sandbox name" }),
+    yargs.positional("name", {
+      type: "string",
+      demandOption: true,
+      describe: "Sandbox name",
+    }),
 
   handler: async ({ name, profile, apiKey, verbose, output }: any) => {
     const record = getSandbox(name);
@@ -32,7 +36,10 @@ export const sandboxUrlListCommand = defineCommand({
 
     spin.stop();
 
-    if (error) throw new UserError(`Failed to fetch endpoints: ${JSON.stringify(error)}`);
+    if (error)
+      throw new UserError(
+        `Failed to fetch endpoints: ${JSON.stringify(error)}`,
+      );
 
     const DEFAULT_ENDPOINTS = new Set(["api", "ssh"]);
     const items = ((data?.items ?? []) as any[]).filter(

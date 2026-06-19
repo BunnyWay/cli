@@ -1,5 +1,9 @@
 import { createMcClient } from "@bunny.net/openapi-client";
-import { deleteSandbox, getSandbox, resolveConfig } from "../../config/index.ts";
+import {
+  deleteSandbox,
+  getSandbox,
+  resolveConfig,
+} from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
@@ -41,7 +45,9 @@ export const sandboxDeleteCommand = defineCommand<DeleteArgs>({
     }
 
     if (!force) {
-      const ok = await confirm(`Delete sandbox "${name}" (app ${record.app_id})?`);
+      const ok = await confirm(
+        `Delete sandbox "${name}" (app ${record.app_id})?`,
+      );
       if (!ok) {
         logger.info("Aborted.");
         return;

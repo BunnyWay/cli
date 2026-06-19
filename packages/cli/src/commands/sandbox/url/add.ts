@@ -17,14 +17,28 @@ export const sandboxUrlAddCommand = defineCommand<AddArgs>({
   describe: "Expose a port as a public CDN endpoint.",
   examples: [
     ["$0 sandbox url add my-sandbox 3000", "Expose port 3000"],
-    ["$0 sandbox url add my-sandbox 8080 --label api", "Expose port 8080 as 'api'"],
+    [
+      "$0 sandbox url add my-sandbox 8080 --label api",
+      "Expose port 8080 as 'api'",
+    ],
   ],
 
   builder: (yargs) =>
     yargs
-      .positional("name", { type: "string", demandOption: true, describe: "Sandbox name" })
-      .positional("port", { type: "number", demandOption: true, describe: "Container port to expose" })
-      .option("label", { type: "string", describe: "Endpoint display name (defaults to 'port-<port>')" }),
+      .positional("name", {
+        type: "string",
+        demandOption: true,
+        describe: "Sandbox name",
+      })
+      .positional("port", {
+        type: "number",
+        demandOption: true,
+        describe: "Container port to expose",
+      })
+      .option("label", {
+        type: "string",
+        describe: "Endpoint display name (defaults to 'port-<port>')",
+      }),
 
   handler: async ({ name, port, label, profile, apiKey, verbose, output }) => {
     const record = getSandbox(name);
@@ -45,7 +59,9 @@ export const sandboxUrlAddCommand = defineCommand<AddArgs>({
       throw new UserError(`Failed to fetch app: ${JSON.stringify(appError)}`);
     }
 
-    const containerId = (app as any).containerTemplates?.[0]?.id as string | undefined;
+    const containerId = (app as any).containerTemplates?.[0]?.id as
+      | string
+      | undefined;
     if (!containerId) {
       spin.stop();
       throw new UserError("Could not find container template ID.");
@@ -70,7 +86,9 @@ export const sandboxUrlAddCommand = defineCommand<AddArgs>({
 
     if (epError) {
       spin.stop();
-      throw new UserError(`Failed to create endpoint: ${JSON.stringify(epError)}`);
+      throw new UserError(
+        `Failed to create endpoint: ${JSON.stringify(epError)}`,
+      );
     }
 
     const endpointId = (ep as any)?.id as string;
@@ -85,19 +103,30 @@ export const sandboxUrlAddCommand = defineCommand<AddArgs>({
         params: { path: { appId: record.app_id } },
       });
       const found = (list?.items ?? []).find((e: any) => e.id === endpointId);
-      if (found?.publicHost) { publicHost = found.publicHost; break; }
+      if (found?.publicHost) {
+        publicHost = found.publicHost;
+        break;
+      }
     }
 
     spin.stop();
 
     if (output === "json") {
-      logger.log(JSON.stringify({ id: endpointId, displayName, port, publicHost }, null, 2));
+      logger.log(
+        JSON.stringify(
+          { id: endpointId, displayName, port, publicHost },
+          null,
+          2,
+        ),
+      );
       return;
     }
 
     logger.log(`Endpoint "${displayName}" created.`);
     logger.log(`  Port: ${port}`);
     logger.log(`  ID:   ${endpointId}`);
-    logger.log(`  URL:  ${publicHost ? `https://${publicHost}` : "— (still provisioning)"}`);
+    logger.log(
+      `  URL:  ${publicHost ? `https://${publicHost}` : "— (still provisioning)"}`,
+    );
   },
 });

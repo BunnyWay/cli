@@ -1,5 +1,5 @@
-import { createMcClient } from "@bunny.net/openapi-client";
 import { randomBytes } from "node:crypto";
+import { createMcClient } from "@bunny.net/openapi-client";
 import { resolveConfig, setSandbox } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -19,7 +19,11 @@ const STARTUP_TIMEOUT_MS = 120_000;
 type App = Record<string, unknown> & {
   id?: string;
   status?: string;
-  containerTemplates?: Array<{ endpoints?: Array<Record<string, unknown> & { type?: string; publicHost?: string }> }>;
+  containerTemplates?: Array<{
+    endpoints?: Array<
+      Record<string, unknown> & { type?: string; publicHost?: string }
+    >;
+  }>;
 };
 
 function generateToken(): string {
@@ -39,7 +43,11 @@ function extractAnycastHost(app: App): string | null {
 
 async function probeSsh(host: string, port: number): Promise<boolean> {
   try {
-    const socket = await Bun.connect({ hostname: host, port, socket: { data() {}, open() {}, close() {}, error() {} } });
+    const socket = await Bun.connect({
+      hostname: host,
+      port,
+      socket: { data() {}, open() {}, close() {}, error() {} },
+    });
     socket.end();
     return true;
   } catch {
@@ -60,9 +68,12 @@ async function waitUntilActive(
     const { data, error } = await client.GET("/apps/{appId}", {
       params: { path: { appId } },
     });
-    if (error) throw new UserError(`Failed to poll app: ${JSON.stringify(error)}`);
+    if (error)
+      throw new UserError(`Failed to poll app: ${JSON.stringify(error)}`);
     const app = data as App;
-    const status = (app as Record<string, unknown>).status as string | undefined;
+    const status = (app as Record<string, unknown>).status as
+      | string
+      | undefined;
     if (status === "failing" || status === "suspended") {
       throw new UserError(`Sandbox entered terminal state: ${status}`);
     }
@@ -72,18 +83,24 @@ async function waitUntilActive(
   }
 
   if (!sshHost) {
-    throw new UserError(`Sandbox SSH endpoint was not assigned within ${STARTUP_TIMEOUT_MS / 1000}s`);
+    throw new UserError(
+      `Sandbox SSH endpoint was not assigned within ${STARTUP_TIMEOUT_MS / 1000}s`,
+    );
   }
 
   // Phase 2: probe SSH port until the container accepts connections
-  const [sshIp, sshPortStr] = (sshHost.includes(":") ? sshHost.split(":") : [sshHost, "8023"]) as [string, string];
+  const [sshIp, sshPortStr] = (
+    sshHost.includes(":") ? sshHost.split(":") : [sshHost, "8023"]
+  ) as [string, string];
   const sshPort = Number(sshPortStr);
   while (Date.now() < deadline) {
     if (await probeSsh(sshIp, sshPort)) return { sshHost };
     await Bun.sleep(POLL_INTERVAL_MS);
   }
 
-  throw new UserError(`Sandbox SSH did not become reachable within ${STARTUP_TIMEOUT_MS / 1000}s`);
+  throw new UserError(
+    `Sandbox SSH did not become reachable within ${STARTUP_TIMEOUT_MS / 1000}s`,
+  );
 }
 
 interface CreateArgs {
@@ -97,7 +114,10 @@ export const sandboxCreateCommand = defineCommand<CreateArgs>({
   examples: [
     ["$0 sandbox create", "Create a sandbox with a generated name"],
     ["$0 sandbox create my-sandbox", "Create a sandbox named my-sandbox"],
-    ["$0 sandbox create my-sandbox --region NY", "Create a sandbox in New York"],
+    [
+      "$0 sandbox create my-sandbox --region NY",
+      "Create a sandbox in New York",
+    ],
   ],
 
   builder: (yargs) =>
@@ -121,47 +141,56 @@ export const sandboxCreateCommand = defineCommand<CreateArgs>({
     const spin = spinner("Creating sandbox...");
     spin.start();
 
-    const { data: app, error: createError } = await (client as any).POST("/apps", {
-      body: {
-        name,
-        runtimeType: "shared",
-        autoScaling: { min: 1, max: 1 },
-        regionSettings: {
-          allowedRegionIds: [region],
-          requiredRegionIds: [region],
-        },
-        volumes: [
-          { name: "workplace", size: 10 },
-        ],
-        containerTemplates: [
-          {
-            name: "agent",
-            imageRegistryId: IMAGE_REGISTRY_ID,
-            imageNamespace: IMAGE_NAMESPACE,
-            imageName: IMAGE_NAME,
-            imageTag: IMAGE_TAG,
-            imagePullPolicy: "ifNotPresent",
-            environmentVariables: [{ name: "AGENT_TOKEN", value: agentToken }],
-            volumeMounts: [
-              { name: "workplace", mountPath: WORKPLACE },
-            ],
-            endpoints: [
-              {
-                displayName: "ssh",
-                anycast: {
-                  type: "ipv4",
-                  portMappings: [{ containerPort: 8023, exposedPort: 8023, protocols: ["Tcp"] }],
-                },
-              },
-            ],
+    const { data: app, error: createError } = await (client as any).POST(
+      "/apps",
+      {
+        body: {
+          name,
+          runtimeType: "shared",
+          autoScaling: { min: 1, max: 1 },
+          regionSettings: {
+            allowedRegionIds: [region],
+            requiredRegionIds: [region],
           },
-        ],
+          volumes: [{ name: "workplace", size: 10 }],
+          containerTemplates: [
+            {
+              name: "agent",
+              imageRegistryId: IMAGE_REGISTRY_ID,
+              imageNamespace: IMAGE_NAMESPACE,
+              imageName: IMAGE_NAME,
+              imageTag: IMAGE_TAG,
+              imagePullPolicy: "ifNotPresent",
+              environmentVariables: [
+                { name: "AGENT_TOKEN", value: agentToken },
+              ],
+              volumeMounts: [{ name: "workplace", mountPath: WORKPLACE }],
+              endpoints: [
+                {
+                  displayName: "ssh",
+                  anycast: {
+                    type: "ipv4",
+                    portMappings: [
+                      {
+                        containerPort: 8023,
+                        exposedPort: 8023,
+                        protocols: ["Tcp"],
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
       },
-    });
+    );
 
     if (createError || !app) {
       spin.stop();
-      throw new UserError(`Failed to create sandbox: ${JSON.stringify(createError)}`);
+      throw new UserError(
+        `Failed to create sandbox: ${JSON.stringify(createError)}`,
+      );
     }
 
     const appId = (app as Record<string, unknown>).id as string;
@@ -173,13 +202,19 @@ export const sandboxCreateCommand = defineCommand<CreateArgs>({
     } catch (err) {
       spin.stop();
       // best-effort cleanup
-      await client.DELETE("/apps/{appId}", { params: { path: { appId } } }).catch(() => {});
+      await client
+        .DELETE("/apps/{appId}", { params: { path: { appId } } })
+        .catch(() => {});
       throw err;
     }
 
     spin.stop();
 
-    const record = { app_id: appId, agent_token: agentToken, ssh_host: sshHost };
+    const record = {
+      app_id: appId,
+      agent_token: agentToken,
+      ssh_host: sshHost,
+    };
     setSandbox(name, record);
 
     logger.log(`Sandbox "${name}" is ready.`);
