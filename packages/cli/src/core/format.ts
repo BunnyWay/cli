@@ -164,6 +164,8 @@ export function formatBytes(bytes: number): string {
 }
 
 export function maskSecret(secret: string): string {
+  // Revealing the last 4 chars of an 8-or-fewer-char secret exposes half or more, so fully mask it.
+  if (secret.length <= 8) return "•".repeat(8);
   const tail = secret.slice(-4);
   return `${"•".repeat(Math.max(secret.length - 4, 4))}${tail}`;
 }

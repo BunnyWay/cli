@@ -140,11 +140,13 @@ describe("maskSecret", () => {
     expect(maskSecret("abcdef1234567890wxyz")).toBe("••••••••••••••••wxyz");
   });
 
-  test("never reveals more than the last 4 chars", () => {
-    expect(maskSecret("short")).toBe("••••hort");
+  test("keeps the last 4 chars once the secret is longer than 8", () => {
+    expect(maskSecret("abcdef123")).toBe("•••••f123");
   });
 
-  test("pads to at least 4 dots for very short secrets", () => {
-    expect(maskSecret("ab")).toBe("••••ab");
+  test("fully masks short secrets so the tail can't expose half or more", () => {
+    expect(maskSecret("short")).toBe("••••••••");
+    expect(maskSecret("12345678")).toBe("••••••••");
+    expect(maskSecret("ab")).toBe("••••••••");
   });
 });

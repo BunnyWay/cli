@@ -147,7 +147,9 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
           value: region.code,
         })),
       });
-      replicationRegions = picked ?? [];
+      // Cancelling (Ctrl+C) yields undefined; an empty array is a deliberate "no replication".
+      if (picked === undefined) throw new UserError("Creation cancelled.");
+      replicationRegions = picked;
     }
     const replicationCodes = replicationRegions
       ? normalizeReplicationRegions(replicationRegions, mainRegion)
