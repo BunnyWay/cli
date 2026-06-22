@@ -4,7 +4,6 @@ import { storageZoneAddCommand } from "./add.ts";
 import { storageZoneCredentialsCommand } from "./credentials.ts";
 import { storageZoneHostnamesCommands } from "./hostnames/index.ts";
 import { storageZoneListCommand } from "./list.ts";
-import { storageZoneRegionsCommand } from "./regions.ts";
 import { storageZoneRemoveCommand } from "./remove.ts";
 import { storageZoneShowCommand } from "./show.ts";
 import { storageZoneUpdateCommand } from "./update.ts";
@@ -16,7 +15,6 @@ const subcommands: CommandModule[] = [
   storageZoneUpdateCommand,
   storageZoneRemoveCommand,
   storageZoneCredentialsCommand,
-  storageZoneRegionsCommand,
   ...storageZoneHostnamesCommands,
 ];
 

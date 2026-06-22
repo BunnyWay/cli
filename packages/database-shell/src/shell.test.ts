@@ -30,8 +30,6 @@ import {
   splitStatements,
 } from "./index.ts";
 
-// --- helpers ---
-
 function makeResultSet(
   columns: string[],
   rows: unknown[][],
@@ -58,8 +56,6 @@ function captureLogger(lines: string[]): ShellLogger {
   };
 }
 
-// --- formatValue ---
-
 describe("formatValue", () => {
   test("returns styled NULL for null", () => {
     const result = formatValue(null);
@@ -79,8 +75,6 @@ describe("formatValue", () => {
   });
 });
 
-// --- formatValueRaw ---
-
 describe("formatValueRaw", () => {
   test("returns plain NULL for null", () => {
     expect(formatValueRaw(null)).toBe("NULL");
@@ -94,8 +88,6 @@ describe("formatValueRaw", () => {
     expect(formatValueRaw("hello")).toBe("hello");
   });
 });
-
-// --- csvEscape ---
 
 describe("csvEscape", () => {
   test("returns plain value when no special characters", () => {
@@ -118,8 +110,6 @@ describe("csvEscape", () => {
     expect(csvEscape("")).toBe("");
   });
 });
-
-// --- printResultSet ---
 
 describe("printResultSet", () => {
   test("json mode outputs JSON array of objects", () => {
@@ -221,8 +211,6 @@ describe("printResultSet", () => {
   });
 });
 
-// --- history ---
-
 describe("history", () => {
   let tmpDir: string;
   let originalEnv: string | undefined;
@@ -288,8 +276,6 @@ describe("history", () => {
   });
 });
 
-// --- isSensitiveColumn ---
-
 describe("isSensitiveColumn", () => {
   test("matches password variants", () => {
     expect(isSensitiveColumn("password")).toBe(true);
@@ -351,8 +337,6 @@ describe("isSensitiveColumn", () => {
   });
 });
 
-// --- columnMaskType ---
-
 describe("columnMaskType", () => {
   test("returns full for password columns", () => {
     expect(columnMaskType("password")).toBe("full");
@@ -369,8 +353,6 @@ describe("columnMaskType", () => {
     expect(columnMaskType("name")).toBe("none");
   });
 });
-
-// --- maskEmail ---
 
 describe("maskEmail", () => {
   test("masks middle of local part", () => {
@@ -397,8 +379,6 @@ describe("maskEmail", () => {
     expect(maskEmail("@example.com")).toBe("********");
   });
 });
-
-// --- printResultSet masking ---
 
 describe("printResultSet masking", () => {
   test("json mode masks sensitive columns", () => {
@@ -517,8 +497,6 @@ describe("printResultSet masking", () => {
   });
 });
 
-// --- splitStatements ---
-
 describe("splitStatements", () => {
   test("splits multiple statements", () => {
     expect(splitStatements("SELECT 1; SELECT 2;")).toEqual([
@@ -594,8 +572,6 @@ describe("splitStatements", () => {
     expect(splitStatements(sql)).toEqual(["SELECT 1"]);
   });
 });
-
-// --- views ---
 
 describe("views", () => {
   let tmpDir: string;

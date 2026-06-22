@@ -66,7 +66,10 @@ export const storageFileListCommand = defineCommand<ListArgs>({
     }
 
     if (files.length === 0) {
-      logger.info("Directory is empty.");
+      const where = path ? `"${path}"` : "the zone root";
+      logger.info(
+        `No files found at ${where}. The path may be empty or not exist.`,
+      );
       return;
     }
 

@@ -1,12 +1,12 @@
-import { defineCommand } from "../../../core/define-command.ts";
-import { formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { STORAGE_REGIONS } from "../constants.ts";
+import { defineCommand } from "../../core/define-command.ts";
+import { formatTable } from "../../core/format.ts";
+import { logger } from "../../core/logger.ts";
+import { STORAGE_REGIONS } from "./constants.ts";
 
-export const storageZoneRegionsCommand = defineCommand({
+export const storageRegionsCommand = defineCommand({
   command: "regions",
-  describe: "List available storage zone regions.",
-  examples: [["$0 storage zones regions", "List storage regions"]],
+  describe: "List available storage regions.",
+  examples: [["$0 storage regions", "List storage regions"]],
 
   handler: async ({ output }) => {
     if (output === "json") {

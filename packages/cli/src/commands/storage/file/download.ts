@@ -65,7 +65,7 @@ export const storageFileDownloadCommand = defineCommand<DownloadArgs>({
     spin.start();
     try {
       const { response } = await downloadFile(connection, path);
-      await Bun.write(dest, response);
+      await Bun.write(dest, await response.arrayBuffer());
     } finally {
       spin.stop();
     }

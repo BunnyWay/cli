@@ -496,10 +496,11 @@ bunny storage zone update my-zone --custom-404-path /404.html
 bunny storage zone remove my-zone
 
 # List the available storage regions
-bunny storage zone regions
+bunny storage regions
 
 # S3-compatible credentials (for zones with S3 preview access)
-bunny storage zone credentials my-zone                # show endpoint + access key + secret
+bunny storage zone credentials my-zone                # show endpoint + access key (secret masked)
+bunny storage zone credentials my-zone --show-secret  # reveal the secret access key
 bunny storage zone credentials my-zone --read-only    # use the read-only password as the secret
 bunny storage zone credentials my-zone --format rclone >> ~/.config/rclone/rclone.conf
 eval "$(bunny storage zone credentials my-zone --format env)"   # AWS-compatible env vars
@@ -525,18 +526,18 @@ bunny storage docs
 
 A trailing slash on a `file` path denotes a directory: `file list my-zone images/` lists that directory, and `file remove my-zone images/` deletes it and its contents recursively. Edge Storage file operations are powered by the [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage).
 
-bunny.net's S3-compatible API is in closed preview and is opt-in per zone (it cannot be enabled on an existing zone). When a zone has access, `bunny storage zone show` surfaces its S3 endpoint, and `bunny storage zone credentials` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
+bunny.net's S3-compatible API is in closed preview and is opt-in per zone (it cannot be enabled on an existing zone). When a zone has access, `bunny storage zone show` surfaces its S3 endpoint, and `bunny storage zone credentials` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table masks the secret by default; pass `--show-secret` to reveal it (`--output json` and `--format` always emit it in full, since they're meant to be consumed by tools). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
 
-| Flag                                                              | Commands                     | Description                                                                                                                        |
-| ----------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `--region`, `--replication`                                       | `zone add`                   | Primary region code, plus optional replication regions (any storage region except the primary; run `zone regions` to list them)    |
-| `--pull-zone`, `--pull-zone-name`, `--domain`                     | `zone add`                   | Also create a pull zone (what serves the stored files on the web) and optionally a custom domain; interactively, `add` offers both |
-| `--custom-404-path`, `--rewrite-404-to-200`, `--replication`      | `zone update`                | Edit zone settings (see `bunny storage zone update --help`)                                                                        |
-| `--format` (`rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only` | `zone credentials`           | Emit S3 config for a tool; use the read-only password as the secret                                                                |
-| `--to`                                                            | `file upload`                | Remote path; a trailing slash uploads into that directory                                                                          |
-| `--checksum`, `--content-type`                                    | `file upload`                | Send a SHA256 checksum for server-side verification; set the stored content type                                                   |
-| `--out`                                                           | `file download`              | Local destination path (defaults to the file name)                                                                                 |
-| `--force`                                                         | `zone remove`, `file remove` | Skip the confirmation prompt                                                                                                       |
+| Flag                                                                               | Commands                     | Description                                                                                                                        |
+| ---------------------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `--region`, `--replication`                                                        | `zone add`                   | Primary region code, plus optional replication regions (any storage region except the primary; run `storage regions` to list them) |
+| `--pull-zone`, `--pull-zone-name`, `--domain`                                      | `zone add`                   | Also create a pull zone (what serves the stored files on the web) and optionally a custom domain; interactively, `add` offers both |
+| `--custom-404-path`, `--rewrite-404-to-200`, `--replication`                       | `zone update`                | Edit zone settings (see `bunny storage zone update --help`)                                                                        |
+| `--format` (`rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only`, `--show-secret` | `zone credentials`           | Emit S3 config for a tool; use the read-only password as the secret; reveal the masked secret in the table                         |
+| `--to`                                                                             | `file upload`                | Remote path; a trailing slash uploads into that directory                                                                          |
+| `--checksum`, `--content-type`                                                     | `file upload`                | Send a SHA256 checksum for server-side verification; set the stored content type                                                   |
+| `--out`                                                                            | `file download`              | Local destination path (defaults to the file name)                                                                                 |
+| `--force`                                                                          | `zone remove`, `file remove` | Skip the confirmation prompt                                                                                                       |
 
 ### `bunny scripts`
 

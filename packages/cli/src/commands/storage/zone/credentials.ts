@@ -2,7 +2,7 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
-import { formatKeyValue } from "../../../core/format.ts";
+import { formatKeyValue, maskSecret } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 import {
@@ -17,6 +17,7 @@ interface CredentialsArgs {
   zone?: string;
   format?: S3ToolFormat;
   readOnly?: boolean;
+  showSecret?: boolean;
 }
 
 export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
@@ -24,7 +25,14 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
   aliases: ["creds"],
   describe: "Show S3 credentials for a storage zone, or config for an S3 tool.",
   examples: [
-    ["$0 storage zones credentials my-zone", "Show endpoint and S3 keys"],
+    [
+      "$0 storage zones credentials my-zone",
+      "Show endpoint and keys (secret masked)",
+    ],
+    [
+      "$0 storage zones credentials my-zone --show-secret",
+      "Reveal the secret access key",
+    ],
     [
       "$0 storage zones credentials my-zone --format rclone >> ~/.config/rclone/rclone.conf",
       "Append an rclone remote",
@@ -50,12 +58,19 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
         type: "boolean",
         default: false,
         describe: "Use the zone's read-only password as the secret",
+      })
+      .option("show-secret", {
+        type: "boolean",
+        default: false,
+        describe:
+          "Reveal the secret access key in the table (masked by default)",
       }),
 
   handler: async ({
     zone: ref,
     format,
     readOnly,
+    showSecret,
     profile,
     output,
     verbose,
@@ -89,11 +104,20 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
           { key: "Endpoint", value: creds.endpoint },
           { key: "Region", value: creds.region },
           { key: "Access Key ID", value: creds.accessKeyId },
-          { key: "Secret Access Key", value: creds.secretAccessKey },
+          {
+            key: "Secret Access Key",
+            value: showSecret
+              ? creds.secretAccessKey
+              : maskSecret(creds.secretAccessKey),
+          },
         ],
         output,
       ),
     );
-    logger.warn("Treat the secret access key like a password.");
+    if (showSecret) {
+      logger.warn("Treat the secret access key like a password.");
+    } else {
+      logger.dim("Secret masked. Pass --show-secret to reveal it.");
+    }
   },
 });

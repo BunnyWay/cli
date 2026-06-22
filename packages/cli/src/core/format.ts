@@ -162,3 +162,8 @@ export function formatBytes(bytes: number): string {
   const value = bytes / 1024 ** i;
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`;
 }
+
+export function maskSecret(secret: string): string {
+  const tail = secret.slice(-4);
+  return `${"•".repeat(Math.max(secret.length - 4, 4))}${tail}`;
+}
