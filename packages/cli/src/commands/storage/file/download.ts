@@ -1,4 +1,5 @@
-import { basename } from "node:path";
+import { mkdir } from "node:fs/promises";
+import { basename, dirname } from "node:path";
 import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
@@ -57,15 +58,31 @@ export const storageFileDownloadCommand = defineCommand<DownloadArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref);
+    const zone = await resolveStorageZoneInteractive(client, ref, output);
     const connection = connectStorageZone(zone);
     const dest = out ?? basename(path);
 
     const spin = spinner(`Downloading ${path}...`);
     spin.start();
     try {
-      const { response } = await downloadFile(connection, path);
-      await Bun.write(dest, await response.arrayBuffer());
+      // Stream to disk so multi-GB objects don't have to fit in memory.
+      // FileSink, unlike Bun.write, won't create the parent dir for --out paths.
+      await mkdir(dirname(dest), { recursive: true });
+      const { stream } = await downloadFile(connection, path);
+      const sink = Bun.file(dest).writer();
+      try {
+        for await (const chunk of stream) {
+          sink.write(chunk);
+        }
+        await sink.end();
+      } catch (err) {
+        // Don't leave a truncated file behind on a failed download.
+        await Promise.resolve(sink.end()).catch(() => {});
+        await Bun.file(dest)
+          .unlink()
+          .catch(() => {});
+        throw err;
+      }
     } finally {
       spin.stop();
     }

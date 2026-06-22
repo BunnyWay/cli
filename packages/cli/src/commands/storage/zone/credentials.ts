@@ -79,7 +79,7 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref);
+    const zone = await resolveStorageZoneInteractive(client, ref, output);
     const creds = s3Credentials(zone, readOnly ?? false);
 
     if (!isS3Enabled(zone)) {

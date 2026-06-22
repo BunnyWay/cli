@@ -31,7 +31,6 @@ function hasAnyFlag(args: ZoneUpdateArgs): boolean {
   );
 }
 
-// Collect the settings passed as flgss, excluding the primary from replication.
 function settingsFromFlags(
   args: ZoneUpdateArgs,
   primaryCode?: string,
@@ -49,7 +48,6 @@ function settingsFromFlags(
   return settings;
 }
 
-// Prompt for each setting, pre-filled with the zone's current values.
 async function promptSettings(
   zone: StorageZoneModel,
 ): Promise<StorageZoneSettingsModel> {
@@ -117,7 +115,7 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
       .option("replication", {
         type: "string",
         array: true,
-        describe: "Replication region codes",
+        describe: "Replication region codes (comma-separated or repeated)",
       }),
 
   handler: async (args) => {
@@ -132,7 +130,7 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref);
+    const zone = await resolveStorageZoneInteractive(client, ref, output);
     const settings = hasFlags
       ? settingsFromFlags(args, zone.Region ?? undefined)
       : await promptSettings(zone);

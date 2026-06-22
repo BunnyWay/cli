@@ -306,7 +306,7 @@ bunny-cli/
 │           │   │           └── disable.ts # Disable DNS query logging (with confirmation)
 │           │   ├── storage/                 # Experimental (hidden from help and landing page)
 │           │   │   ├── index.ts          # defineNamespace("storage", ...): registers zone + file groups + regions + docs (+ hidden bucket aliases)
-│           │   │   ├── api.ts            # CoreClient type, fetchStorageZones/fetchStorageZone, resolveStorageZone (name-or-ID to zone, re-fetched by ID)
+│           │   │   ├── api.ts            # CoreClient type, fetchStorageZones/fetchStorageZone, resolveStorageZone (name-or-ID to zone, re-fetched by ID), toSafeStorageZone (strips Password/ReadOnlyPassword; used by every command that emits a raw zone as JSON: show/list/add)
 │           │   │   ├── constants.ts      # STORAGE_REGIONS (from SDK enum; /storagezone/regions API endpoint is not reliable) + replicationChoices/normalizeReplicationRegions (replication uses the same regions minus the primary; the SDK file ZoneSchema is the physical footprint, NOT the create input)
 │           │   │   ├── interactive.ts    # resolveStorageZoneInteractive (arg to zone picker to fetch by ID)
 │           │   │   ├── files-api.ts      # Adapter over @bunny.net/storage-sdk: connectStorageZone (zone → SDK connection, Region→StorageRegion enum + password), listFiles/uploadFile/downloadFile/deleteFile (deleteFile translates the SDK's boolean return into a UserError)
@@ -318,7 +318,7 @@ bunny-cli/
 │           │   │   ├── zone/              # `bunny storage zones` (canonical: zones; aliases: zone; hidden: bucket, buckets)
 │           │   │   │   ├── index.ts      # defineNamespace("zones", ...) + storageZoneHiddenAliases (bucket/buckets)
 │           │   │   │   ├── list.ts       # List all storage zones (alias: ls)
-│           │   │   │   ├── add.ts        # Create a storage zone (prompts for name + region when omitted; offers/--pull-zone creates a pull zone via core/hostnames createPullZone, then offers/--domain a custom domain via setupHostname; non-interactive under --output json)
+│           │   │   │   ├── add.ts        # Create a storage zone (prompts for name + region when omitted; offers/--pull-zone creates a pull zone via core/hostnames createPullZone, then offers/--domain a custom domain via setupHostname). Under --output json it stays non-interactive: --domain is attached via addHostname (no DNS/SSL prompts) and reported in the CustomDomain field (with cnameTarget or error)
 │           │   │   │   ├── show.ts       # Show zone details (region, replication, hostname, usage; adds S3 endpoint rows when S3-enabled)
 │           │   │   │   ├── credentials.ts # S3 credentials / tool config for the zone (alias: creds; --format, --read-only, --show-secret); table masks the secret unless --show-secret, JSON/--format always emit it in full
 │           │   │   │   ├── update.ts     # Update zone settings (custom 404, rewrite 404->200, replication); interactive pre-filled editor when no flags, non-interactive under --output json

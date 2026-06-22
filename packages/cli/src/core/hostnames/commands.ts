@@ -47,10 +47,16 @@ export interface HostnamesMountOptions {
   hiddenAliases?: string[];
 }
 
-/** Echo back the targeting flags the user passed so copy-paste follow-up hints keep the same scope. */
-function targetSuffix(args: Record<string, unknown>): string {
+/** Echo back the targeting args the user passed so copy-paste follow-up hints keep the same scope. */
+export function targetSuffix(
+  args: Record<string, unknown>,
+  positionalName?: string,
+): string {
   const parts: string[] = [];
-  if (args.id != null) parts.push(`--id ${args.id}`);
+  // The trailing positional (storage zone, or script id) re-targets the resource.
+  if (positionalName && args[positionalName] != null) {
+    parts.push(String(args[positionalName]));
+  }
   if (args["pull-zone"] != null) parts.push(`--pull-zone ${args["pull-zone"]}`);
   return parts.length ? ` ${parts.join(" ")}` : "";
 }
@@ -175,6 +181,7 @@ export function createHostnamesCommands(
 
       const sslHint = `bunny ${commandPath} ssl ${hostname}${targetSuffix(
         args as unknown as Record<string, unknown>,
+        targetPositional?.name,
       )}`;
 
       // A requested certificate that failed to issue is a command error, like `ssl`.

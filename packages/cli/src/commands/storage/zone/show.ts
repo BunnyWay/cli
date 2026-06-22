@@ -8,6 +8,7 @@ import {
   formatKeyValue,
 } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
+import { toSafeStorageZone } from "../api.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 import { isS3Enabled, s3Endpoint } from "../s3.ts";
 
@@ -33,10 +34,10 @@ export const storageZoneShowCommand = defineCommand<ShowArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref);
+    const zone = await resolveStorageZoneInteractive(client, ref, output);
 
     if (output === "json") {
-      logger.log(JSON.stringify(zone, null, 2));
+      logger.log(JSON.stringify(toSafeStorageZone(zone), null, 2));
       return;
     }
 
@@ -53,7 +54,6 @@ export const storageZoneShowCommand = defineCommand<ShowArgs>({
       { key: "Modified", value: formatDateTime(zone.DateModified) },
     ];
 
-    // Surface S3 details only for the zones that have preview access.
     if (isS3Enabled(zone)) {
       rows.push(
         { key: "S3 compatible", value: "Enabled" },

@@ -38,7 +38,7 @@ export const storageZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref);
+    const zone = await resolveStorageZoneInteractive(client, ref, output);
 
     const confirmed = await confirm(
       `Delete storage zone ${zone.Name} and all ${zone.FilesStored ?? 0} file(s)? This cannot be undone.`,

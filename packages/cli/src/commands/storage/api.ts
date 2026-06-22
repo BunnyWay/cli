@@ -7,6 +7,18 @@ export type StorageZoneModel = components["schemas"]["StorageZoneModel"];
 export type StorageZoneSettingsModel =
   components["schemas"]["StorageZoneSettingsModel"];
 
+export type SafeStorageZone = Omit<
+  StorageZoneModel,
+  "Password" | "ReadOnlyPassword"
+>;
+
+// Strip the read-write/read-only passwords so inspect/list/create JSON never
+// leaks credentials; use `storage zones credentials` to retrieve those on purpose.
+export function toSafeStorageZone(zone: StorageZoneModel): SafeStorageZone {
+  const { Password: _p, ReadOnlyPassword: _r, ...safe } = zone;
+  return safe;
+}
+
 export async function fetchStorageZones(
   client: CoreClient,
 ): Promise<StorageZoneModel[]> {

@@ -27,6 +27,17 @@ test("normalizeReplicationRegions uppercases, trims, and drops the primary", () 
   expect(normalizeReplicationRegions(["UK", "NY"], "UK")).toEqual(["NY"]);
 });
 
+test("normalizeReplicationRegions splits comma-separated entries", () => {
+  // yargs array:true passes `--replication LA,SG` as a single element.
+  expect(normalizeReplicationRegions(["LA,SG"], "NY")).toEqual(["LA", "SG"]);
+  // Mixed comma + repeated flag, with stray whitespace.
+  expect(normalizeReplicationRegions(["LA, SG", "UK"], "NY")).toEqual([
+    "LA",
+    "SG",
+    "UK",
+  ]);
+});
+
 test("normalizeReplicationRegions rejects codes that are not storage regions", () => {
   // CZ is in the SDK file ZoneSchema but is not a valid create-time region.
   expect(() => normalizeReplicationRegions(["NY", "CZ"])).toThrow(

@@ -5,7 +5,11 @@ import { defineCommand } from "../../../core/define-command.ts";
 import { formatBytes, formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { spinner } from "../../../core/ui.ts";
-import { fetchStorageZones, type StorageZoneModel } from "../api.ts";
+import {
+  fetchStorageZones,
+  type StorageZoneModel,
+  toSafeStorageZone,
+} from "../api.ts";
 
 export const storageZoneListCommand = defineCommand({
   command: "list",
@@ -30,7 +34,7 @@ export const storageZoneListCommand = defineCommand({
     }
 
     if (output === "json") {
-      logger.log(JSON.stringify(zones, null, 2));
+      logger.log(JSON.stringify(zones.map(toSafeStorageZone), null, 2));
       return;
     }
 

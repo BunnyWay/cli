@@ -5,13 +5,14 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import {
+  addHostname,
   createPullZone,
   normalizeHostname,
   setupHostname,
 } from "../../../core/hostnames/index.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
-import type { StorageZoneModel } from "../api.ts";
+import { type StorageZoneModel, toSafeStorageZone } from "../api.ts";
 import {
   normalizeReplicationRegions,
   replicationChoices,
@@ -55,7 +56,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       .option("replication", {
         type: "string",
         array: true,
-        describe: "Replication region codes",
+        describe: "Replication region codes (comma-separated or repeated)",
       })
       .option("pull-zone", {
         type: "boolean",
@@ -82,11 +83,19 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     verbose,
     apiKey,
   }) => {
+    // A custom domain needs a pull zone to attach to, so the flags can't conflict.
+    if (domain !== undefined && pullZone === false) {
+      throw new UserError(
+        "--domain requires a pull zone, but --no-pull-zone was given.",
+        "Drop --no-pull-zone, or remove --domain to create the zone without one.",
+      );
+    }
+
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    // JSON output stays non-interactive; name and region must come from flags.
-    const interactive = output !== "json";
+    // JSON output and non-TTY runs stay non-interactive; values must come from flags.
+    const interactive = output !== "json" && process.stdout.isTTY === true;
 
     // The region and replication choices both drive storage pricing, so flag it up front.
     if (interactive && (region === undefined || replication === undefined)) {
@@ -126,7 +135,6 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     }
     mainRegion = mainRegion.toUpperCase();
 
-    // Replication regions are optional and drawn from the other storage regions.
     let replicationRegions = replication;
     if (replicationRegions === undefined && interactive) {
       const { picked } = await prompts({
@@ -193,11 +201,41 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     }
 
     if (output === "json") {
+      // Non-interactive: attach the requested domain to the pull zone (no DNS/SSL
+      // prompts; SSL is issued later via `domains ssl` once DNS points at bunny).
+      let customDomainResult:
+        | { domain: string; cnameTarget?: string; error?: string }
+        | undefined;
+      if (domain) {
+        const host = normalizeHostname(domain);
+        if (pullZoneResult?.id) {
+          try {
+            const { cnameTarget } = await addHostname(
+              client,
+              pullZoneResult.id,
+              host,
+            );
+            customDomainResult = { domain: host, cnameTarget };
+          } catch (err) {
+            customDomainResult = {
+              domain: host,
+              error: err instanceof Error ? err.message : String(err),
+            };
+          }
+        } else {
+          customDomainResult = {
+            domain: host,
+            error: "Pull zone was not created; cannot attach the domain.",
+          };
+        }
+      }
+
       logger.log(
         JSON.stringify(
           {
-            ...(created ?? { Name: zoneName }),
+            ...(created ? toSafeStorageZone(created) : { Name: zoneName }),
             PullZone: pullZoneResult ?? null,
+            CustomDomain: customDomainResult ?? null,
           },
           null,
           2,
@@ -218,11 +256,11 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       }
     }
 
-    // Offer a custom domain on the new pull zone, reusing the shared DNS + SSL flow.
     if (pullZoneResult?.id) {
       let customDomain = domain;
       if (
         customDomain === undefined &&
+        interactive &&
         (await confirm("Add a custom domain?"))
       ) {
         const { value } = await prompts({
@@ -241,7 +279,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
           sslHint: `bunny storage zone domains ssl ${host} ${zoneName}`,
           retryHint: `bunny storage zone domains add ${host} ${zoneName}`,
           forceSsl: true,
-          interactive: true,
+          interactive,
           verbose,
         });
       }

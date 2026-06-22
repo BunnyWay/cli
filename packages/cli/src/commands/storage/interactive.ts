@@ -1,5 +1,6 @@
 import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
+import type { OutputFormat } from "../../core/types.ts";
 import { spinner } from "../../core/ui.ts";
 import {
   type CoreClient,
@@ -12,6 +13,7 @@ import {
 export async function resolveStorageZoneInteractive(
   client: CoreClient,
   ref: string | undefined,
+  output?: OutputFormat,
 ): Promise<StorageZoneModel> {
   if (ref) {
     const spin = spinner("Resolving storage zone...");
@@ -21,6 +23,14 @@ export async function resolveStorageZoneInteractive(
     } finally {
       spin.stop();
     }
+  }
+
+  // No zone given: only fall back to the picker when we can actually prompt.
+  if (output === "json" || !process.stdout.isTTY) {
+    throw new UserError(
+      "A storage zone is required.",
+      "Pass the zone name or ID.",
+    );
   }
 
   const spin = spinner("Fetching storage zones...");

@@ -56,7 +56,7 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref);
+    const zone = await resolveStorageZoneInteractive(client, ref, output);
     const connection = connectStorageZone(zone);
 
     // A trailing slash deletes a directory and everything under it, recursively.

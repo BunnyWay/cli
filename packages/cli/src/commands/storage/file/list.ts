@@ -42,7 +42,7 @@ export const storageFileListCommand = defineCommand<ListArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref);
+    const zone = await resolveStorageZoneInteractive(client, ref, output);
     const connection = connectStorageZone(zone);
 
     const spin = spinner("Listing files...");
@@ -73,7 +73,6 @@ export const storageFileListCommand = defineCommand<ListArgs>({
       return;
     }
 
-    // Directories first, then files, each sorted by name.
     const sorted = files.sort((a, b) => {
       if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
       return a.objectName.localeCompare(b.objectName);

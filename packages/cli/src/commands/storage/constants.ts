@@ -32,6 +32,7 @@ export function normalizeReplicationRegions(
 ): string[] {
   const primary = primaryCode?.toUpperCase();
   const normalized = regions
+    .flatMap((region) => region.split(","))
     .map((region) => region.trim().toUpperCase())
     .filter(Boolean);
   const unknown = normalized.filter((region) => !REGION_CODES.has(region));

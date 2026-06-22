@@ -52,8 +52,22 @@ test("rclone config is a usable remote block", () => {
   expect(config).toContain("secret_access_key = rw-pass");
 });
 
-test("env format emits AWS-compatible variables", () => {
+test("env format emits shell-quoted AWS-compatible variables", () => {
   const env = renderS3ToolConfig("env", s3Credentials(ZONE, false), "my-zone");
-  expect(env).toContain("AWS_ACCESS_KEY_ID=my-zone");
-  expect(env).toContain("AWS_ENDPOINT_URL=https://de-s3.storage.bunnycdn.com");
+  expect(env).toContain("AWS_ACCESS_KEY_ID='my-zone'");
+  expect(env).toContain(
+    "AWS_ENDPOINT_URL='https://de-s3.storage.bunnycdn.com'",
+  );
+});
+
+test("env format quotes secrets containing shell metacharacters", () => {
+  const zone: StorageZoneModel = {
+    ...ZONE,
+    Password: "a b$(rm -rf /);'\"\n#",
+  };
+  const env = renderS3ToolConfig("env", s3Credentials(zone, false), "my-zone");
+  // Each embedded single quote is closed, escaped, and reopened: '\''
+  expect(env).toContain("AWS_SECRET_ACCESS_KEY='a b$(rm -rf /);'\\''\"\n#'");
+  // The dangerous substitution must not appear unquoted.
+  expect(env).not.toMatch(/AWS_SECRET_ACCESS_KEY=a b/);
 });

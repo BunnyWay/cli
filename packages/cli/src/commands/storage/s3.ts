@@ -39,16 +39,22 @@ export function s3Credentials(
   };
 }
 
+// Single-quote a value for safe shell `eval`: wrap in '...' and escape any embedded quote.
+function shSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
 const TOOL_FORMATTERS: Record<
   S3ToolFormat,
   (creds: S3Credentials, zoneName: string) => string
 > = {
+  // env output is meant for `eval`, so every value must be shell-quoted.
   env: (c) =>
     [
-      `AWS_ACCESS_KEY_ID=${c.accessKeyId}`,
-      `AWS_SECRET_ACCESS_KEY=${c.secretAccessKey}`,
-      `AWS_ENDPOINT_URL=${c.endpoint}`,
-      `AWS_REGION=${c.region}`,
+      `AWS_ACCESS_KEY_ID=${shSingleQuote(c.accessKeyId)}`,
+      `AWS_SECRET_ACCESS_KEY=${shSingleQuote(c.secretAccessKey)}`,
+      `AWS_ENDPOINT_URL=${shSingleQuote(c.endpoint)}`,
+      `AWS_REGION=${shSingleQuote(c.region)}`,
     ].join("\n"),
 
   rclone: (c, zoneName) =>
