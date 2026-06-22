@@ -1,5 +1,6 @@
 import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
+import { loadManifest } from "../../core/manifest.ts";
 import type { OutputFormat } from "../../core/types.ts";
 import { spinner } from "../../core/ui.ts";
 import {
@@ -9,6 +10,7 @@ import {
   resolveStorageZone,
   type StorageZoneModel,
 } from "./api.ts";
+import { STORAGE_MANIFEST, type StorageZoneManifest } from "./constants.ts";
 
 export async function resolveStorageZoneInteractive(
   client: CoreClient,
@@ -20,6 +22,18 @@ export async function resolveStorageZoneInteractive(
     spin.start();
     try {
       return await resolveStorageZone(client, ref);
+    } finally {
+      spin.stop();
+    }
+  }
+
+  // A zone linked via `bunny storage link` stands in for an explicit ref, even unattended.
+  const manifest = loadManifest<StorageZoneManifest>(STORAGE_MANIFEST);
+  if (manifest.id) {
+    const spin = spinner("Loading linked storage zone...");
+    spin.start();
+    try {
+      return await fetchStorageZone(client, manifest.id);
     } finally {
       spin.stop();
     }

@@ -8,34 +8,38 @@ import { connectStorageZone, deleteFile } from "../files-api.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 
 interface RemoveArgs {
-  zone: string;
   path: string;
+  zone?: string;
   force?: boolean;
 }
 
 export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
-  command: "remove <zone> <path>",
+  command: "remove <path>",
   aliases: ["rm"],
   describe: "Delete a file or directory from a storage zone.",
   examples: [
-    ["$0 storage files remove my-zone images/photo.png", "Delete a file"],
+    ["$0 storage files remove images/photo.png", "Delete a file"],
     [
-      "$0 storage files remove my-zone images/ --force",
+      "$0 storage files remove images/ --force",
       "Delete a directory without confirmation",
+    ],
+    [
+      "$0 storage files remove images/photo.png --zone my-zone",
+      "Delete from a specific zone",
     ],
   ],
 
   builder: (yargs) =>
     yargs
-      .positional("zone", {
-        type: "string",
-        describe: "Storage zone name or ID",
-        demandOption: true,
-      })
       .positional("path", {
         type: "string",
         describe: "Path to the file or directory within the zone",
         demandOption: true,
+      })
+      .option("zone", {
+        alias: "z",
+        type: "string",
+        describe: "Storage zone name or ID (defaults to the linked zone)",
       })
       .option("force", {
         alias: "f",
@@ -45,8 +49,8 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
       }),
 
   handler: async ({
-    zone: ref,
     path,
+    zone: ref,
     force,
     profile,
     output,

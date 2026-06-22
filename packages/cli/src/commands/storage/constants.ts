@@ -6,6 +6,14 @@ export interface StorageRegion {
   name: string;
 }
 
+// `.bunny/storage.json` is written by `bunny storage link` and resolved by storage commands.
+export const STORAGE_MANIFEST = "storage.json";
+
+export interface StorageZoneManifest {
+  id: number;
+  name?: string;
+}
+
 // The create API expects uppercase codes (e.g. "DE"), matching what existing zones report.
 export const STORAGE_REGIONS: StorageRegion[] = Object.entries(
   BunnyStorage.regions.StorageRegion,

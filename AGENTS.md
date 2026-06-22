@@ -305,10 +305,11 @@ bunny-cli/
 │           │   │           ├── enable.ts # Enable DNS query logging (optional IP anonymization)
 │           │   │           └── disable.ts # Disable DNS query logging (with confirmation)
 │           │   ├── storage/                 # Experimental (hidden from help and landing page)
-│           │   │   ├── index.ts          # defineNamespace("storage", ...): registers zone + file groups + regions + docs (+ hidden bucket aliases)
+│           │   │   ├── index.ts          # defineNamespace("storage", ...): registers zone + file groups + link + regions + docs (+ hidden bucket aliases)
 │           │   │   ├── api.ts            # CoreClient type, fetchStorageZones/fetchStorageZone, resolveStorageZone (name-or-ID to zone, re-fetched by ID), toSafeStorageZone (strips Password/ReadOnlyPassword; used by every command that emits a raw zone as JSON: show/list/add)
-│           │   │   ├── constants.ts      # STORAGE_REGIONS (from SDK enum; /storagezone/regions API endpoint is not reliable) + replicationChoices/normalizeReplicationRegions (replication uses the same regions minus the primary; the SDK file ZoneSchema is the physical footprint, NOT the create input)
-│           │   │   ├── interactive.ts    # resolveStorageZoneInteractive (arg to zone picker to fetch by ID)
+│           │   │   ├── constants.ts      # STORAGE_REGIONS (from SDK enum; /storagezone/regions API endpoint is not reliable) + replicationChoices/normalizeReplicationRegions (replication uses the same regions minus the primary; the SDK file ZoneSchema is the physical footprint, NOT the create input) + STORAGE_MANIFEST/StorageZoneManifest (.bunny/storage.json, written by storage link)
+│           │   │   ├── interactive.ts    # resolveStorageZoneInteractive: explicit name/ID arg → linked manifest (.bunny/storage.json, fetched by ID even when non-interactive) → zone picker
+│           │   │   ├── link.ts           # Link the current directory to a storage zone (.bunny/storage.json); bunny storage link [zone]
 │           │   │   ├── files-api.ts      # Adapter over @bunny.net/storage-sdk: connectStorageZone (zone → SDK connection, Region→StorageRegion enum + password), listFiles/uploadFile/downloadFile/deleteFile (deleteFile translates the SDK's boolean return into a UserError)
 │           │   │   ├── files-api.test.ts # Tests for region mapping + delete error translation (NOT the SDK's URL building)
 │           │   │   ├── s3.ts             # S3 (closed preview): isS3Enabled (StorageZoneType===1), s3Endpoint (<region>-s3.storage.bunnycdn.com), s3Credentials (name=access key, password=secret), renderS3ToolConfig (rclone/aws/s3cmd/env formatters)
@@ -324,12 +325,12 @@ bunny-cli/
 │           │   │   │   ├── update.ts     # Update zone settings (custom 404, rewrite 404->200, replication); interactive pre-filled editor when no flags, non-interactive under --output json
 │           │   │   │   ├── remove.ts     # Delete a storage zone and its files (alias: rm)
 │           │   │   │   └── hostnames/index.ts  # Mounts core/hostnames createHostnamesCommands as "storage zone domains" (alias hostnames); resolver maps a storage zone (name/ID positional, --pull-zone) to its linked pull zone
-│           │   │   └── file/              # `bunny storage files` (canonical: files; aliases: file)
+│           │   │   └── file/              # `bunny storage files` (canonical: files; aliases: file); zone is the --zone/-z flag (defaults to linked zone), the positional is the file/path
 │           │   │       ├── index.ts      # defineNamespace("files", ...)
-│           │   │       ├── list.ts       # List files in a directory (alias: ls; directories first)
-│           │   │       ├── upload.ts     # Upload a local file (--to, --checksum streams a SHA256, --content-type)
-│           │   │       ├── download.ts   # Download a file to disk (--out)
-│           │   │       └── remove.ts     # Delete a file or directory (alias: rm; trailing slash = recursive)
+│           │   │       ├── list.ts       # List files in a directory (alias: ls; directories first; [path] positional, --zone flag)
+│           │   │       ├── upload.ts     # Upload a local file (<file> positional, --zone, --to, --checksum streams a SHA256, --content-type)
+│           │   │       ├── download.ts   # Download a file to disk (<path> positional, --zone, --out)
+│           │   │       └── remove.ts     # Delete a file or directory (alias: rm; <path> positional, --zone, trailing slash = recursive)
 │           │   ├── registries/
 │           │   │   ├── index.ts          # Manual CommandModule (not defineNamespace) — default handler runs list
 │           │   │   ├── list.ts           # List container registries
@@ -911,7 +912,7 @@ bunny
 │           │                               Enable DNS query logging
 │           └── disable [domain] [--force]  Disable DNS query logging
 ├── storage                                 (experimental, hidden from help and landing page)
-│   │                                       Two resource groups: `zones` (the zone, via core API + account key) and `files` (zone contents, via @bunny.net/storage-sdk + the zone password/region host, resolved automatically). [zone] accepts a name or numeric ID.
+│   │                                       Two resource groups: `zones` (the zone, via core API + account key) and `files` (zone contents, via @bunny.net/storage-sdk + the zone password/region host, resolved automatically). The zone is a name or numeric ID; `zones` commands take it as the `[zone]` positional, `files` commands as the `--zone`/`-z` flag (the positional is the file/path). When the zone is omitted it resolves from a linked zone (`bunny storage link`) then an interactive picker.
 │   ├── zones                               (canonical; aliases: zone; hidden: bucket, buckets)
 │   │   ├── list                            List all storage zones (alias: ls)
 │   │   ├── add         [name] [--region] [--replication] [--pull-zone] [--pull-zone-name] [--domain]  Create a storage zone (prompts for name + region when omitted; offers/--pull-zone creates a pull zone to serve it on the web, then offers/--domain a custom domain via setupHostname; non-interactive under --output json)
@@ -921,11 +922,12 @@ bunny
 │   │   ├── credentials [zone] [--format rclone|aws|s3cmd|env] [--read-only] [--show-secret]  (alias: creds)
 │   │   │                                   S3 credentials for the zone (name = access key, password = secret); --format emits tool config, else table/--output json; table masks the secret unless --show-secret
 │   │   └── domains                         (canonical; alias: hostnames) custom domains on the zone's pull zone; mounts core/hostnames createHostnamesCommands; resolver maps the storage zone to its linked pull zone
-│   ├── files                               (canonical; aliases: file)
-│   │   ├── list        <zone> [path] (alias: ls)  List files in a directory (trailing slash on path)
-│   │   ├── upload      <zone> <file> [--to] [--checksum] [--content-type]  Upload a local file
-│   │   ├── download    <zone> <path> [--out]  Download a file
-│   │   └── remove      <zone> <path> [--force] (alias: rm)  Delete a file or directory (trailing slash = recursive)
+│   ├── files                               (canonical; aliases: file) [--zone|-z] defaults to the linked zone on every file command
+│   │   ├── list        [path] [--zone] (alias: ls)  List files in a directory (trailing slash on path)
+│   │   ├── upload      <file> [--zone] [--to] [--checksum] [--content-type]  Upload a local file
+│   │   ├── download    <path> [--zone] [--out]  Download a file
+│   │   └── remove      <path> [--zone] [--force] (alias: rm)  Delete a file or directory (trailing slash = recursive)
+│   ├── link            [zone]              Link the current directory to a storage zone (.bunny/storage.json); interactive picker when omitted
 │   ├── regions                             List available storage regions (replication uses the same set minus the primary)
 │   └── docs                                Open storage documentation in browser
 ├── db

@@ -10,36 +10,40 @@ import { connectStorageZone, downloadFile } from "../files-api.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 
 interface DownloadArgs {
-  zone: string;
   path: string;
+  zone?: string;
   out?: string;
 }
 
 export const storageFileDownloadCommand = defineCommand<DownloadArgs>({
-  command: "download <zone> <path>",
+  command: "download <path>",
   describe: "Download a file from a storage zone.",
   examples: [
     [
-      "$0 storage files download my-zone images/photo.png",
-      "Download to the working directory",
+      "$0 storage files download images/photo.png",
+      "Download from the linked zone to the working directory",
     ],
     [
-      "$0 storage files download my-zone images/photo.png --out ./local.png",
+      "$0 storage files download images/photo.png --out ./local.png",
       "Download to a specific path",
+    ],
+    [
+      "$0 storage files download images/photo.png --zone my-zone",
+      "Download from a specific zone",
     ],
   ],
 
   builder: (yargs) =>
     yargs
-      .positional("zone", {
-        type: "string",
-        describe: "Storage zone name or ID",
-        demandOption: true,
-      })
       .positional("path", {
         type: "string",
         describe: "Path to the file within the zone",
         demandOption: true,
+      })
+      .option("zone", {
+        alias: "z",
+        type: "string",
+        describe: "Storage zone name or ID (defaults to the linked zone)",
       })
       .option("out", {
         type: "string",
@@ -47,8 +51,8 @@ export const storageFileDownloadCommand = defineCommand<DownloadArgs>({
       }),
 
   handler: async ({
-    zone: ref,
     path,
+    zone: ref,
     out,
     profile,
     output,

@@ -13,32 +13,33 @@ import {
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 
 interface ListArgs {
-  zone: string;
   path?: string;
+  zone?: string;
 }
 
 export const storageFileListCommand = defineCommand<ListArgs>({
-  command: "list <zone> [path]",
+  command: "list [path]",
   aliases: ["ls"],
   describe: "List files in a storage zone directory.",
   examples: [
-    ["$0 storage files list my-zone", "List files at the zone root"],
-    ["$0 storage files list my-zone images/", "List files in a directory"],
+    ["$0 storage files list", "List the linked zone's root"],
+    ["$0 storage files list images/", "List files in a directory"],
+    ["$0 storage files list --zone my-zone", "List another zone's root"],
   ],
 
   builder: (yargs) =>
     yargs
-      .positional("zone", {
-        type: "string",
-        describe: "Storage zone name or ID",
-        demandOption: true,
-      })
       .positional("path", {
         type: "string",
         describe: "Directory path within the zone (defaults to the root)",
+      })
+      .option("zone", {
+        alias: "z",
+        type: "string",
+        describe: "Storage zone name or ID (defaults to the linked zone)",
       }),
 
-  handler: async ({ zone: ref, path, profile, output, verbose, apiKey }) => {
+  handler: async ({ path, zone: ref, profile, output, verbose, apiKey }) => {
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 

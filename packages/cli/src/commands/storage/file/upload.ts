@@ -10,39 +10,39 @@ import { connectStorageZone, uploadFile } from "../files-api.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 
 interface UploadArgs {
-  zone: string;
   file: string;
+  zone?: string;
   to?: string;
   contentType?: string;
   checksum?: boolean;
 }
 
 export const storageFileUploadCommand = defineCommand<UploadArgs>({
-  command: "upload <zone> <file>",
+  command: "upload <file>",
   describe: "Upload a local file to a storage zone.",
   examples: [
-    ["$0 storage files upload my-zone ./photo.png", "Upload to the zone root"],
+    ["$0 storage files upload ./photo.png", "Upload to the linked zone's root"],
     [
-      "$0 storage files upload my-zone ./photo.png --to images/",
+      "$0 storage files upload ./photo.png --to images/",
       "Upload into a directory",
     ],
     [
-      "$0 storage files upload my-zone ./photo.png --checksum",
-      "Upload with server-side SHA256 verification",
+      "$0 storage files upload ./photo.png --zone my-zone",
+      "Upload to a specific zone",
     ],
   ],
 
   builder: (yargs) =>
     yargs
-      .positional("zone", {
-        type: "string",
-        describe: "Storage zone name or ID",
-        demandOption: true,
-      })
       .positional("file", {
         type: "string",
         describe: "Path to the local file to upload",
         demandOption: true,
+      })
+      .option("zone", {
+        alias: "z",
+        type: "string",
+        describe: "Storage zone name or ID (defaults to the linked zone)",
       })
       .option("to", {
         type: "string",
@@ -60,8 +60,8 @@ export const storageFileUploadCommand = defineCommand<UploadArgs>({
       }),
 
   handler: async ({
-    zone: ref,
     file,
+    zone: ref,
     to,
     contentType,
     checksum,
