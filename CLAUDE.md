@@ -26,12 +26,13 @@ test("example", () => {
 
 ## Monorepo structure
 
-This is a Bun workspace monorepo with four packages:
+This is a Bun workspace monorepo with five packages:
 
 - `packages/openapi-client/` (`@bunny.net/openapi-client`) — standalone, type-safe OpenAPI client, zero CLI deps
 - `packages/app-config/` (`@bunny.net/app-config`) — shared Zod schemas, types, and JSON Schema for `bunny.jsonc`
 - `packages/database-shell/` (`@bunny.net/database-shell`) — standalone SQL shell engine (REPL, formatting, masking)
-- `packages/cli/` (`@bunny.net/cli`) — the CLI, depends on all three
+- `packages/sandbox/` (`@bunny.net/sandbox`) — standalone sandbox SDK (create, file buffering, command exec, port exposure) over Magic Containers + SSH
+- `packages/cli/` (`@bunny.net/cli`) — the CLI, depends on the other four
 
 ## Project conventions
 

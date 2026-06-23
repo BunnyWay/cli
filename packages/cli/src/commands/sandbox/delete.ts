@@ -1,10 +1,9 @@
-import { createMcClient } from "@bunny.net/openapi-client";
+import { Sandbox, SandboxError } from "@bunny.net/sandbox";
 import {
   deleteSandbox,
   getSandbox,
   resolveConfig,
 } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
@@ -55,21 +54,33 @@ export const sandboxDeleteCommand = defineCommand<DeleteArgs>({
     }
 
     const config = resolveConfig(profile, apiKey, verbose);
-    const client = createMcClient(clientOptions(config, verbose));
 
     const spin = spinner("Deleting sandbox...");
     spin.start();
 
-    const { error } = await client.DELETE("/apps/{appId}", {
-      params: { path: { appId: record.app_id } },
-    });
-
-    spin.stop();
-
-    if (error) {
-      throw new UserError(`Failed to delete app: ${JSON.stringify(error)}`);
+    try {
+      const sandbox = Sandbox.fromHandle(
+        {
+          appId: record.app_id,
+          name,
+          agentToken: record.agent_token,
+          sshHost: record.ssh_host ?? "",
+        },
+        {
+          apiKey: config.apiKey,
+          apiUrl: config.apiUrl,
+          verbose,
+          onDebug: (msg) => logger.debug(msg, true),
+        },
+      );
+      await sandbox.delete();
+    } catch (err) {
+      spin.stop();
+      if (err instanceof SandboxError) throw new UserError(err.message);
+      throw err;
     }
 
+    spin.stop();
     deleteSandbox(name);
     logger.log(`Sandbox "${name}" deleted.`);
   },
