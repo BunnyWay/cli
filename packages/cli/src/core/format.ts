@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import Table from "cli-table3";
-import { bunny } from "../core/colors.ts";
+import { bunny } from "./colors.ts";
 import type { OutputFormat } from "./types.ts";
 
 /** Resolve a date-like value to a `Date`, or `null` if invalid/missing. */

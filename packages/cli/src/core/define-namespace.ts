@@ -1,5 +1,5 @@
 import type { Argv, CommandModule } from "yargs";
-import { bunny } from "../core/colors.ts";
+import { bunny } from "./colors.ts";
 /**
  * Groups subcommands under a parent namespace. Running the namespace
  * without a subcommand shows help.
@@ -32,13 +32,16 @@ export function defineNamespace(
       for (const sub of subcommands) yargs.command(sub);
       return yargs;
     },
-    handler: () => {
-      yRef.getHelp().then((helpText) => {
+    handler: async () => {
+      try {
+        const helpText = await yRef.getHelp();
         const colored = helpText
           .replace(/^Commands:/m, bunny.bold("Commands:"))
           .replace(/^Options:/m, bunny.bold("Options:"));
         console.log(colored);
-      });
+      } catch (err) {
+        console.error("Failed to load help text:", err);
+      }
     },
   };
 }
