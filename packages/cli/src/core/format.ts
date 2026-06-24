@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import Table from "cli-table3";
 import type { OutputFormat } from "./types.ts";
+import { bunny } from "../core/colors.ts";
 
 /** Resolve a date-like value to a `Date`, or `null` if invalid/missing. */
 function toDate(value: Date | string | null | undefined): Date | null {
@@ -95,7 +96,7 @@ export function formatTable(
 
   // text: borderless aligned columns with bold headers
   const table = new Table({
-    head: headers.map((h) => chalk.bold(h)),
+    head: headers.map((h) => bunny.bold(h)),
     chars: {
       top: "",
       "top-mid": "",
