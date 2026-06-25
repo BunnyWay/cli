@@ -311,7 +311,7 @@ bunny-cli/
 │           │   │           ├── enable.ts # Enable DNS query logging (optional IP anonymization)
 │           │   │           └── disable.ts # Disable DNS query logging (with confirmation)
 │           │   │   └── scripts/          # `dns scripts` — Scriptable DNS scripts (canonical: scripts; alias: script). Reuses the compute API (EdgeScriptType 0); separate from `bunny scripts` (different runtime, no pull zone)
-│           │   │       ├── index.ts      # defineNamespace("scripts", ...) — init/create/deploy/attach/list
+│           │   │       ├── index.ts      # defineNamespace("scripts", ...) — init/create/deploy/attach/link/list
 │           │   │       ├── constants.ts  # DNS_SCRIPT_MANIFEST (".bunny/dns-script.json") + DnsScriptManifest; SCRIPT_TYPE_DNS; inline EXAMPLES (empty/geo/closest/weighted/failover/pullzone); TSCONFIG + TYPES_PACKAGE scaffold strings
 │           │   │       ├── api.ts        # ComputeClient helpers: fetchDnsScripts/fetchDnsScript (type 0), createDnsScript (no pull zone), uploadCode, publishScript
 │           │   │       ├── interactive.ts # resolveDnsScriptId (arg → .bunny/dns-script.json → DNS-script picker)
@@ -319,6 +319,7 @@ bunny-cli/
 │           │   │       ├── create.ts     # Create the remote DNS script (no pull zone), link manifest
 │           │   │       ├── deploy.ts     # Upload code (single file, no build) + publish; prompts for the file when omitted, --skip-publish to stage
 │           │   │       ├── attach.ts     # Bridge: add a SCRIPT record on a zone pointing at the script (confirms before the DNS write)
+│           │   │       ├── link.ts       # Link this directory to an existing DNS script → .bunny/dns-script.json (positional id, else pick interactively; preserves entry)
 │           │   │       └── list.ts       # List DNS scripts (alias: ls)
 │           │   ├── registries/
 │           │   │   ├── index.ts          # Manual CommandModule (not defineNamespace) — default handler runs list

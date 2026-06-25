@@ -3,6 +3,7 @@ import { dnsScriptsAttachCommand } from "./attach.ts";
 import { dnsScriptsCreateCommand } from "./create.ts";
 import { dnsScriptsDeployCommand } from "./deploy.ts";
 import { dnsScriptsInitCommand } from "./init.ts";
+import { dnsScriptsLinkCommand } from "./link.ts";
 import { dnsScriptsListCommand } from "./list.ts";
 
 export const dnsScriptsNamespace = defineNamespace(
@@ -13,6 +14,7 @@ export const dnsScriptsNamespace = defineNamespace(
     dnsScriptsCreateCommand,
     dnsScriptsDeployCommand,
     dnsScriptsAttachCommand,
+    dnsScriptsLinkCommand,
     dnsScriptsListCommand,
   ],
   ["script"],

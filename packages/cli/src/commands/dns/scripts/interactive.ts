@@ -30,7 +30,7 @@ export async function resolveDnsScriptId(
   if (!interactive) {
     throw new UserError(
       "No DNS script ID provided and none linked.",
-      "Pass an ID, or run from a directory created by `bunny dns scripts init`.",
+      "Pass an ID, or link this directory with `bunny dns scripts link`.",
     );
   }
 
