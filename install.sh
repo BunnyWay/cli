@@ -21,6 +21,14 @@ get_arch() {
   esac
 }
 
+has_avx2() {
+  case "$OS" in
+    linux)  grep -qw avx2 /proc/cpuinfo 2>/dev/null ;;
+    darwin) sysctl -n machdep.cpu.leaf7_features 2>/dev/null | grep -qiw avx2 ;;
+    *)      return 1 ;;
+  esac
+}
+
 OS=$(get_os)
 ARCH=$(get_arch)
 
@@ -30,7 +38,14 @@ if [ "$OS" = "unsupported" ] || [ "$ARCH" = "unsupported" ]; then
   exit 1
 fi
 
-BINARY="bunny-${OS}-${ARCH}"
+# The default Bun-compiled binary uses AVX2; pre-Haswell (~2013) x64 CPUs lack it and crash with "Illegal instruction", so fall back to the baseline build.
+VARIANT=""
+if [ "$ARCH" = "x64" ] && ! has_avx2; then
+  VARIANT="-baseline"
+  echo "AVX2 not detected; using baseline build."
+fi
+
+BINARY="bunny-${OS}-${ARCH}${VARIANT}"
 
 # Pinned version uses the tagged release URL; otherwise use the `latest`
 # redirect so we don't hit api.github.com (rate-limited to 60 req/hr).
