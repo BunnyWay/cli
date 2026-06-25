@@ -9,7 +9,8 @@
     "x64"
   ],
   "files": [
-    "bunny"
+    "bunny",
+    "bunny-baseline"
   ],
   "publishConfig": {
     "access": "public"
