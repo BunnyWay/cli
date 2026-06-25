@@ -1,5 +1,6 @@
 import { basename, resolve } from "node:path";
 import { createComputeClient } from "@bunny.net/openapi-client";
+import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
@@ -67,7 +68,18 @@ export const dnsScriptsCreateCommand = defineCommand<CreateArgs>({
     const { profile, output, verbose, apiKey } = args;
     const isInteractive = output !== "json" && process.stdout.isTTY;
 
-    const name = args[ARG_NAME] ?? basename(resolve(process.cwd()));
+    const dirName = basename(resolve(process.cwd()));
+    let name = args[ARG_NAME];
+    if (!name && isInteractive) {
+      const { value } = await prompts({
+        type: "text",
+        name: "value",
+        message: "Script name:",
+        initial: dirName,
+      });
+      name = value;
+    }
+    name ??= dirName;
     if (!name) throw new UserError("Script name is required.");
 
     const config = resolveConfig(profile, apiKey, verbose);
@@ -133,7 +145,7 @@ export const dnsScriptsCreateCommand = defineCommand<CreateArgs>({
     }
 
     logger.log();
-    logger.dim("  Save code:  bunny dns scripts save");
-    logger.dim("  Connect:    bunny dns scripts connect");
+    logger.dim("  Deploy:  bunny dns scripts deploy");
+    logger.dim("  Attach:  bunny dns scripts attach");
   },
 });

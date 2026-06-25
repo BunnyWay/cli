@@ -65,7 +65,7 @@ function packageJson(name: string): string {
  * Writes a `handleQuery` entry file from a chosen example, a tsconfig and
  * package.json wired to the ambient runtime types for editor autocomplete,
  * and a `.bunny/dns-script.json` manifest. Optionally creates the script on
- * bunny.net so it is ready for `bunny dns scripts save`.
+ * bunny.net so it is ready for `bunny dns scripts deploy`.
  *
  * @example
  * ```bash
@@ -242,7 +242,7 @@ export const dnsScriptsInitCommand = defineCommand<InitArgs>({
     logger.log();
     logger.dim(`  cd ${dirName}`);
     if (!created) logger.dim("  Create:   bunny dns scripts create");
-    logger.dim("  Save:     bunny dns scripts save --publish");
-    logger.dim("  Connect:  bunny dns scripts connect");
+    logger.dim("  Deploy:   bunny dns scripts deploy");
+    logger.dim("  Attach:   bunny dns scripts attach");
   },
 });

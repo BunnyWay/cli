@@ -3,6 +3,7 @@ import {
   createCoreClient,
 } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
+import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
@@ -15,8 +16,8 @@ import { resolveDnsScriptId } from "./interactive.ts";
 
 type AddDnsRecordModel = components["schemas"]["AddDnsRecordModel"];
 
-const COMMAND = "connect [domain] [name] [id]";
-const DESCRIPTION = "Point a DNS record at a Scriptable DNS script.";
+const COMMAND = "attach [domain] [name] [id]";
+const DESCRIPTION = "Attach a Scriptable DNS script to a domain.";
 
 const ARG_DOMAIN = "domain";
 const ARG_DOMAIN_DESCRIPTION = "Domain or zone ID (prompted when omitted)";
@@ -27,7 +28,7 @@ const ARG_ID_DESCRIPTION = "DNS script ID (uses the linked script if omitted)";
 const ARG_TTL = "ttl";
 const ARG_TTL_DESCRIPTION = "Time to live in seconds";
 
-interface ConnectArgs {
+interface AttachArgs {
   [ARG_DOMAIN]?: string;
   [ARG_NAME]?: string;
   [ARG_ID]?: number;
@@ -35,7 +36,7 @@ interface ConnectArgs {
 }
 
 /**
- * Connect a Scriptable DNS script to a zone by adding a SCRIPT record that
+ * Attach a Scriptable DNS script to a domain by adding a SCRIPT record that
  * routes the chosen name to the script.
  *
  * This is the bridge between `bunny dns scripts` and the zone's records: a
@@ -45,19 +46,19 @@ interface ConnectArgs {
  * @example
  * ```bash
  * # Interactive: pick a zone and the linked script
- * bunny dns scripts connect
+ * bunny dns scripts attach
  *
  * # Route api.example.com at script 12345
- * bunny dns scripts connect example.com api 12345
+ * bunny dns scripts attach example.com api 12345
  * ```
  */
-export const dnsScriptsConnectCommand = defineCommand<ConnectArgs>({
+export const dnsScriptsAttachCommand = defineCommand<AttachArgs>({
   command: COMMAND,
   describe: DESCRIPTION,
   examples: [
-    ["$0 dns scripts connect", "Pick a zone and the linked script"],
+    ["$0 dns scripts attach", "Pick a zone and the linked script"],
     [
-      "$0 dns scripts connect example.com api 12345",
+      "$0 dns scripts attach example.com api 12345",
       "Route api.example.com at script 12345",
     ],
   ],
@@ -93,7 +94,7 @@ export const dnsScriptsConnectCommand = defineCommand<ConnectArgs>({
     const scriptId = await resolveDnsScriptId(
       computeClient,
       args[ARG_ID],
-      "connect",
+      "attach",
       isInteractive,
     );
     const script = await fetchDnsScript(computeClient, scriptId);
@@ -103,7 +104,17 @@ export const dnsScriptsConnectCommand = defineCommand<ConnectArgs>({
       offerLink: true,
     });
 
-    const name = (args[ARG_NAME] ?? "@").trim();
+    let nameInput = args[ARG_NAME];
+    if (nameInput === undefined && isInteractive) {
+      const { value } = await prompts({
+        type: "text",
+        name: "value",
+        message: "Record name ('@' for apex):",
+        initial: "@",
+      });
+      nameInput = value ?? "@";
+    }
+    const name = (nameInput ?? "@").trim();
     const record: AddDnsRecordModel = {
       Type: RECORD_TYPES.SCRIPT,
       Name: name === "@" ? "" : name,
@@ -121,7 +132,7 @@ export const dnsScriptsConnectCommand = defineCommand<ConnectArgs>({
       }
     }
 
-    const spin = spinner("Connecting...");
+    const spin = spinner("Attaching...");
     spin.start();
     let data: { Id?: number } | undefined;
     try {
@@ -150,7 +161,7 @@ export const dnsScriptsConnectCommand = defineCommand<ConnectArgs>({
     }
 
     logger.success(
-      `Connected ${recordName(record.Name)}.${zone.Domain} to DNS script ${script.Name ?? scriptId}${data?.Id != null ? ` (record ${data.Id})` : ""}.`,
+      `Attached DNS script ${script.Name ?? scriptId} to ${recordName(record.Name)}.${zone.Domain}${data?.Id != null ? ` (record ${data.Id})` : ""}.`,
     );
   },
 });

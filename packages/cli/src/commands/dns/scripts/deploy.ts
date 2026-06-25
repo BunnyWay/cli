@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createComputeClient } from "@bunny.net/openapi-client";
+import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
@@ -16,46 +17,45 @@ import {
 } from "./constants.ts";
 import { resolveDnsScriptId } from "./interactive.ts";
 
-const COMMAND = "save [file] [id]";
-const DESCRIPTION = "Upload DNS script code (without publishing).";
+const COMMAND = "deploy [file] [id]";
+const DESCRIPTION = "Upload DNS script code and publish it.";
 
 const ARG_FILE = "file";
 const ARG_FILE_DESCRIPTION =
   "Path to the script file (defaults to the entry file)";
 const ARG_ID = "id";
 const ARG_ID_DESCRIPTION = "DNS script ID (uses the linked script if omitted)";
-const ARG_PUBLISH = "publish";
-const ARG_PUBLISH_DESCRIPTION = "Publish the uploaded code as the live release";
+const ARG_SKIP_PUBLISH = "skip-publish";
+const ARG_SKIP_PUBLISH_DESCRIPTION = "Upload code without publishing";
 
-interface SaveArgs {
+interface DeployArgs {
   [ARG_FILE]?: string;
   [ARG_ID]?: number;
-  [ARG_PUBLISH]?: boolean;
+  [ARG_SKIP_PUBLISH]?: boolean;
 }
 
 /**
- * Upload DNS script code, creating an unpublished deployment.
+ * Upload DNS script code and publish it as the live release.
  *
  * The file is uploaded as-is: DNS scripts are a single `handleQuery`
- * source file, so there is no build step. Pass `--publish` to promote
- * the upload to the live release in one step, or run
- * `bunny dns scripts publish` afterwards.
+ * source file, so there is no build step. Publishes by default; pass
+ * `--skip-publish` to stage the upload without making it live.
  *
  * @example
  * ```bash
- * # Save the entry file from the linked script's directory
- * bunny dns scripts save
+ * # Deploy the entry file from the linked script's directory
+ * bunny dns scripts deploy
  *
- * # Save and publish a specific file to a specific script
- * bunny dns scripts save handleQuery.js 12345 --publish
+ * # Stage a specific file without publishing
+ * bunny dns scripts deploy handleQuery.js 12345 --skip-publish
  * ```
  */
-export const dnsScriptsSaveCommand = defineCommand<SaveArgs>({
+export const dnsScriptsDeployCommand = defineCommand<DeployArgs>({
   command: COMMAND,
   describe: DESCRIPTION,
   examples: [
-    ["$0 dns scripts save", "Upload the entry file"],
-    ["$0 dns scripts save --publish", "Upload and publish"],
+    ["$0 dns scripts deploy", "Upload and publish the entry file"],
+    ["$0 dns scripts deploy --skip-publish", "Stage without publishing"],
   ],
 
   builder: (yargs) =>
@@ -68,9 +68,9 @@ export const dnsScriptsSaveCommand = defineCommand<SaveArgs>({
         type: "number",
         describe: ARG_ID_DESCRIPTION,
       })
-      .option(ARG_PUBLISH, {
+      .option(ARG_SKIP_PUBLISH, {
         type: "boolean",
-        describe: ARG_PUBLISH_DESCRIPTION,
+        describe: ARG_SKIP_PUBLISH_DESCRIPTION,
       }),
 
   handler: async (args) => {
@@ -78,7 +78,18 @@ export const dnsScriptsSaveCommand = defineCommand<SaveArgs>({
     const isInteractive = output !== "json" && process.stdout.isTTY;
 
     const manifest = loadManifest<DnsScriptManifest>(DNS_SCRIPT_MANIFEST);
-    const file = args[ARG_FILE] ?? manifest.entry ?? DEFAULT_ENTRY;
+    const defaultFile = manifest.entry ?? DEFAULT_ENTRY;
+    let file = args[ARG_FILE];
+    if (file === undefined && isInteractive) {
+      const { value } = await prompts({
+        type: "text",
+        name: "value",
+        message: "File to upload:",
+        initial: defaultFile,
+      });
+      file = value;
+    }
+    file ??= defaultFile;
     const absPath = resolve(file);
     if (!existsSync(absPath)) {
       throw new UserError(
@@ -94,7 +105,7 @@ export const dnsScriptsSaveCommand = defineCommand<SaveArgs>({
     const id = await resolveDnsScriptId(
       client,
       args[ARG_ID],
-      "save to",
+      "deploy to",
       isInteractive,
     );
 
@@ -107,7 +118,7 @@ export const dnsScriptsSaveCommand = defineCommand<SaveArgs>({
     }
     logger.success("Code uploaded.");
 
-    const published = args[ARG_PUBLISH] === true;
+    const published = args[ARG_SKIP_PUBLISH] !== true;
     if (published) {
       const pubSpin = spinner("Publishing...");
       pubSpin.start();
@@ -126,7 +137,7 @@ export const dnsScriptsSaveCommand = defineCommand<SaveArgs>({
 
     if (!published) {
       logger.log();
-      logger.dim("  Publish:  bunny dns scripts publish");
+      logger.dim("  Publish later: bunny dns scripts deploy");
     }
   },
 });

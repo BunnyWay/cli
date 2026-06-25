@@ -311,15 +311,14 @@ bunny-cli/
 │           │   │           ├── enable.ts # Enable DNS query logging (optional IP anonymization)
 │           │   │           └── disable.ts # Disable DNS query logging (with confirmation)
 │           │   │   └── scripts/          # `dns scripts` — Scriptable DNS scripts (canonical: scripts; alias: script). Reuses the compute API (EdgeScriptType 0); separate from `bunny scripts` (different runtime, no pull zone)
-│           │   │       ├── index.ts      # defineNamespace("scripts", ...) — init/create/save/publish/connect/list
+│           │   │       ├── index.ts      # defineNamespace("scripts", ...) — init/create/deploy/attach/list
 │           │   │       ├── constants.ts  # DNS_SCRIPT_MANIFEST (".bunny/dns-script.json") + DnsScriptManifest; SCRIPT_TYPE_DNS; inline EXAMPLES (empty/geo/closest/weighted/failover/pullzone); TSCONFIG + TYPES_PACKAGE scaffold strings
 │           │   │       ├── api.ts        # ComputeClient helpers: fetchDnsScripts/fetchDnsScript (type 0), createDnsScript (no pull zone), uploadCode, publishScript
 │           │   │       ├── interactive.ts # resolveDnsScriptId (arg → .bunny/dns-script.json → DNS-script picker)
 │           │   │       ├── init.ts       # Scaffold a project: example chooser, handleQuery.js + tsconfig + package.json (devDep on @bunny.net/scriptable-dns-types) + manifest; optional --deploy
 │           │   │       ├── create.ts     # Create the remote DNS script (no pull zone), link manifest
-│           │   │       ├── save.ts       # Upload code (single file, no build); --publish to publish in one step
-│           │   │       ├── publish.ts    # Publish the latest uploaded code as the live release
-│           │   │       ├── connect.ts    # Bridge: add a SCRIPT record on a zone pointing at the script (confirms before the DNS write)
+│           │   │       ├── deploy.ts     # Upload code (single file, no build) + publish; prompts for the file when omitted, --skip-publish to stage
+│           │   │       ├── attach.ts     # Bridge: add a SCRIPT record on a zone pointing at the script (confirms before the DNS write)
 │           │   │       └── list.ts       # List DNS scripts (alias: ls)
 │           │   ├── registries/
 │           │   │   ├── index.ts          # Manual CommandModule (not defineNamespace) — default handler runs list

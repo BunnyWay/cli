@@ -1,10 +1,9 @@
 import { defineNamespace } from "../../../core/define-namespace.ts";
-import { dnsScriptsConnectCommand } from "./connect.ts";
+import { dnsScriptsAttachCommand } from "./attach.ts";
 import { dnsScriptsCreateCommand } from "./create.ts";
+import { dnsScriptsDeployCommand } from "./deploy.ts";
 import { dnsScriptsInitCommand } from "./init.ts";
 import { dnsScriptsListCommand } from "./list.ts";
-import { dnsScriptsPublishCommand } from "./publish.ts";
-import { dnsScriptsSaveCommand } from "./save.ts";
 
 export const dnsScriptsNamespace = defineNamespace(
   "scripts",
@@ -12,9 +11,8 @@ export const dnsScriptsNamespace = defineNamespace(
   [
     dnsScriptsInitCommand,
     dnsScriptsCreateCommand,
-    dnsScriptsSaveCommand,
-    dnsScriptsPublishCommand,
-    dnsScriptsConnectCommand,
+    dnsScriptsDeployCommand,
+    dnsScriptsAttachCommand,
     dnsScriptsListCommand,
   ],
   ["script"],
