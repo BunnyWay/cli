@@ -96,7 +96,10 @@ export class Sandbox {
 
     const transport = transportFor(sshHost, agentToken);
     try {
-      await transport.waitUntilReachable(SSH_REACHABLE_TIMEOUT_MS, options.signal);
+      await transport.waitUntilReachable(
+        SSH_REACHABLE_TIMEOUT_MS,
+        options.signal,
+      );
     } catch (err) {
       await deleteApp(client, appId).catch(() => {});
       throw err;
