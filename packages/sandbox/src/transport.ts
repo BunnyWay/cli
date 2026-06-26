@@ -24,6 +24,7 @@ export interface ExecResult {
 export class SshTransport {
   private conn: Client | null = null;
   private connecting: Promise<Client> | null = null;
+  private sftpChannel: Promise<SFTPWrapper> | null = null;
 
   constructor(private readonly config: TransportConfig) {}
 
@@ -100,16 +101,29 @@ export class SshTransport {
     this.conn?.end();
     this.conn = null;
     this.connecting = null;
+    this.sftpChannel = null;
   }
 
-  private async sftp(): Promise<SFTPWrapper> {
-    const conn = await this.ready();
-    return new Promise((resolve, reject) => {
-      conn.sftp((err, sftp) => {
-        if (err) reject(new SandboxError("Failed to open SFTP.", err));
-        else resolve(sftp);
-      });
-    });
+  /** Open the SFTP subsystem once and reuse the channel across operations. */
+  private sftp(): Promise<SFTPWrapper> {
+    if (this.sftpChannel) return this.sftpChannel;
+    this.sftpChannel = this.ready().then(
+      (conn) =>
+        new Promise<SFTPWrapper>((resolve, reject) => {
+          conn.sftp((err, sftp) => {
+            if (err) {
+              this.sftpChannel = null;
+              reject(new SandboxError("Failed to open SFTP.", err));
+              return;
+            }
+            sftp.on("close", () => {
+              this.sftpChannel = null;
+            });
+            resolve(sftp);
+          });
+        }),
+    );
+    return this.sftpChannel;
   }
 
   private ready(): Promise<Client> {
@@ -138,6 +152,7 @@ export class SshTransport {
         })
         .on("close", () => {
           this.conn = null;
+          this.sftpChannel = null;
         })
         .connect(config);
     });

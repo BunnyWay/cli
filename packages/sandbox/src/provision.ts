@@ -168,17 +168,16 @@ export async function createApp(
 
 /** Retry the transient MC registry error, which asks the caller to try again. */
 async function withRegistryRetry<T>(fn: () => Promise<T>): Promise<T> {
-  let lastErr: unknown;
   for (let attempt = 1; attempt <= REGISTRY_RETRIES; attempt++) {
     try {
       return await fn();
     } catch (err) {
-      lastErr = err;
       if (!isRegistryError(err) || attempt === REGISTRY_RETRIES) throw err;
       await sleep(REGISTRY_RETRY_DELAY_MS * attempt);
     }
   }
-  throw lastErr;
+  // Unreachable: the final attempt always rethrows above.
+  throw new SandboxError("Registry retry exhausted.");
 }
 
 /** Detect the catch-all MC registry error so it can be retried. */
@@ -247,6 +246,10 @@ export async function waitForPublicHost(
   const deadline = Date.now() + PUBLIC_HOST_TIMEOUT_MS;
   while (Date.now() < deadline) {
     await sleep(2000);
+    const app = await getApp(client, appId);
+    if (app.status === "failing" || app.status === "suspended") {
+      throw new SandboxError(`Sandbox entered terminal state: ${app.status}`);
+    }
     const { data } = await client.GET("/apps/{appId}/endpoints", {
       params: { path: { appId } },
     });

@@ -25,6 +25,12 @@ describe("buildRemoteCommand", () => {
       }),
     ).toBe("cd '/srv' && sudo NODE_ENV='production' 'node' 'app.js'");
   });
+
+  test("rejects env names with shell metacharacters", () => {
+    expect(() =>
+      buildRemoteCommand({ cmd: "ls", env: { "x; rm -rf /": "1" } }),
+    ).toThrow("Invalid environment variable name");
+  });
 });
 
 describe("resolvePath", () => {

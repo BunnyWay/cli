@@ -101,8 +101,13 @@ export class Sandbox {
       transport,
     );
 
-    for (const port of options.ports ?? []) {
-      await sandbox.exposePort(port);
+    try {
+      for (const port of options.ports ?? []) {
+        await sandbox.exposePort(port);
+      }
+    } catch (err) {
+      await deleteApp(client, appId).catch(() => {});
+      throw err;
     }
     return sandbox;
   }
@@ -241,10 +246,15 @@ function transportFor(sshHost: string, password: string): SshTransport {
   return new SshTransport({ host, port, password });
 }
 
+const ENV_KEY_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
 export function buildRemoteCommand(opts: RunCommandOptions): string {
   const parts: string[] = [`cd ${shellQuote(opts.cwd ?? WORKPLACE)} &&`];
   if (opts.sudo) parts.push("sudo");
   for (const [key, value] of Object.entries(opts.env ?? {})) {
+    if (!ENV_KEY_PATTERN.test(key)) {
+      throw new SandboxError(`Invalid environment variable name: ${key}`);
+    }
     parts.push(`${key}=${shellQuote(value)}`);
   }
   parts.push(shellQuote(opts.cmd));
