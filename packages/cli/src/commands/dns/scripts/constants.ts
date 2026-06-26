@@ -115,6 +115,28 @@ export default function handleQuery(query) {
   },
 ];
 
+/** Answer types a DNS script can return that also have a static record form. */
+export type AnswerKind = "A" | "AAAA" | "CNAME" | "TXT";
+
+const ANSWER_CTOR: Record<AnswerKind, string> = {
+  A: 'new ARecord("203.0.113.10", 30)',
+  AAAA: 'new AaaaRecord("2001:db8::1", 30)',
+  CNAME: 'new CnameRecord("example.com", 30)',
+  TXT: 'new TxtRecord("hello world", 30)',
+};
+
+/** Starter `handleQuery` source returning the given answer type (A by default). */
+export function dnsScriptStarter(kind?: AnswerKind): string {
+  const answer = kind ? ANSWER_CTOR[kind] : ANSWER_CTOR.A;
+  return `${REFERENCE}
+
+/** @param {DnsRequest} query */
+export default function handleQuery(query) {
+  return ${answer};
+}
+`;
+}
+
 /** tsconfig that typechecks a DNS script against the ambient runtime types. */
 export const TSCONFIG = `${JSON.stringify(
   {

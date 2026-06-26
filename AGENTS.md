@@ -287,7 +287,7 @@ bunny-cli/
 │           │   │   ├── record/            # `dns records` — entries within a zone (canonical: records; aliases: record, rec)
 │           │   │   │   ├── index.ts      # defineNamespace("records", ...)
 │           │   │   │   ├── list.ts       # List records in a zone (alias: ls)
-│           │   │   │   ├── add.ts        # Add a record (positional grammar per type, or interactive wizard; --pull-zone/--script; SCRIPT type lists DNS scripts as a picker interactively)
+│           │   │   │   ├── add.ts        # Add a record (positional grammar per type, or interactive wizard; --pull-zone/--script). Interactively, A/AAAA/CNAME/TXT offer static vs script-computed (Scriptable DNS) via pickOrCreateDnsScript — pick or create+seed a DNS script and write a SCRIPT record
 │           │   │   │   ├── update.ts     # Update a record (alias: edit; prompts to pick zone+record when omitted)
 │           │   │   │   ├── remove.ts     # Remove a record (alias: rm; prompts to pick zone+record when omitted)
 │           │   │   │   ├── import.ts     # Import records from a BIND zone file (prompts for zone/file when omitted)

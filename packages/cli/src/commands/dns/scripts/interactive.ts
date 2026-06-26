@@ -3,8 +3,19 @@ import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { loadManifest } from "../../../core/manifest.ts";
 import { spinner } from "../../../core/ui.ts";
-import { type ComputeClient, fetchDnsScripts } from "./api.ts";
-import { DNS_SCRIPT_MANIFEST, type DnsScriptManifest } from "./constants.ts";
+import {
+  type ComputeClient,
+  createDnsScript,
+  fetchDnsScripts,
+  publishScript,
+  uploadCode,
+} from "./api.ts";
+import {
+  type AnswerKind,
+  DNS_SCRIPT_MANIFEST,
+  type DnsScriptManifest,
+  dnsScriptStarter,
+} from "./constants.ts";
 
 /**
  * Resolve a DNS script ID from an explicit value, the linked manifest, or a
@@ -61,4 +72,72 @@ export async function resolveDnsScriptId(
   });
   if (value === undefined) throw new UserError("A DNS script is required.");
   return value;
+}
+
+const CREATE_NEW = -1;
+
+/**
+ * Pick an existing DNS script, or create a new one seeded with starter code so
+ * the record it backs is never dead. Returns the chosen script's id and name.
+ *
+ * Used by `dns records add` when the user opts for a script-computed answer.
+ * A newly created script is uploaded and published with a `handleQuery` that
+ * returns `starterKind` (an A record when omitted).
+ */
+export async function pickOrCreateDnsScript(
+  client: ComputeClient,
+  opts: { starterKind?: AnswerKind; defaultName?: string } = {},
+): Promise<{ id: number; name: string }> {
+  const spin = spinner("Fetching DNS scripts...");
+  spin.start();
+  let scripts: Awaited<ReturnType<typeof fetchDnsScripts>>;
+  try {
+    scripts = await fetchDnsScripts(client);
+  } finally {
+    spin.stop();
+  }
+
+  const { value } = await prompts({
+    type: "select",
+    name: "value",
+    message: "DNS script:",
+    choices: [
+      ...scripts
+        .filter((s) => s.Id != null)
+        .map((s) => ({
+          title: `${s.Name ?? "(unnamed)"} (${s.Id})`,
+          value: s.Id as number,
+        })),
+      { title: "+ Create a new DNS script", value: CREATE_NEW },
+    ],
+  });
+  if (value === undefined) throw new UserError("A DNS script is required.");
+
+  if (value !== CREATE_NEW) {
+    const found = scripts.find((s) => s.Id === value);
+    return { id: value, name: found?.Name ?? String(value) };
+  }
+
+  const { name } = await prompts({
+    type: "text",
+    name: "name",
+    message: "New script name:",
+    initial: opts.defaultName ?? "dns-script",
+  });
+  if (!name) throw new UserError("A script name is required.");
+
+  const createSpin = spinner(`Creating DNS script "${name}"...`);
+  createSpin.start();
+  let created: { id: number; name: string };
+  try {
+    created = await createDnsScript(client, name);
+    await uploadCode(client, created.id, dnsScriptStarter(opts.starterKind));
+    await publishScript(client, created.id);
+  } finally {
+    createSpin.stop();
+  }
+
+  logger.success(`Created DNS script "${created.name}" (${created.id}).`);
+  logger.dim(`  Edit locally: bunny dns scripts link ${created.id}`);
+  return created;
 }
