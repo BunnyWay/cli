@@ -1,4 +1,5 @@
 import type { ClientChannel } from "ssh2";
+import { SandboxError } from "./errors.ts";
 
 export interface LogChunk {
   stream: "stdout" | "stderr";
@@ -34,7 +35,7 @@ export class Command {
   constructor(private readonly stream: ClientChannel) {
     stream.on("data", (d: Buffer) => this.push("stdout", d.toString()));
     stream.stderr.on("data", (d: Buffer) => this.push("stderr", d.toString()));
-    this.done = new Promise((resolve) => {
+    this.done = new Promise((resolve, reject) => {
       stream.on("close", (code: number | null) => {
         this.exitCode = code ?? null;
         this.closed = true;
@@ -43,7 +44,16 @@ export class Command {
         }
         resolve(new CommandFinished(this.exitCode, this._stdout, this._stderr));
       });
+      stream.on("error", (err: Error) => {
+        this.closed = true;
+        for (const w of this.waiters.splice(0)) {
+          w({ done: true, value: undefined });
+        }
+        reject(new SandboxError("Command stream error.", err));
+      });
     });
+    // Keep an unawaited stream error from surfacing as an unhandled rejection.
+    this.done.catch(() => {});
   }
 
   /** Async-iterate stdout and stderr chunks as they arrive. */

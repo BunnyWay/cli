@@ -20,6 +20,15 @@ export interface ExecResult {
   exitCode: number | null;
 }
 
+// ssh2 reports a missing SFTP file as the numeric status NO_SUCH_FILE (2), not a Node ENOENT string.
+const SFTP_NO_SUCH_FILE = 2;
+function isMissingFileError(err: unknown): boolean {
+  const code = (err as { code?: unknown }).code;
+  return (
+    code === "ENOENT" || code === "NO_SUCH_FILE" || code === SFTP_NO_SUCH_FILE
+  );
+}
+
 /** Pure-JS SSH/SFTP transport over a single reused connection. */
 export class SshTransport {
   private conn: Client | null = null;
@@ -29,10 +38,14 @@ export class SshTransport {
   constructor(private readonly config: TransportConfig) {}
 
   /** Connect, retrying until the SSH server accepts connections or timeout. */
-  async waitUntilReachable(timeoutMs: number): Promise<void> {
+  async waitUntilReachable(
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     let lastErr: unknown;
     while (Date.now() < deadline) {
+      signal?.throwIfAborted();
       try {
         await this.ready();
         return;
@@ -90,8 +103,7 @@ export class SshTransport {
     return new Promise((resolve, reject) => {
       sftp.readFile(path, (err, data) => {
         if (!err) return resolve(data);
-        if ((err as NodeJS.ErrnoException).code === "ENOENT")
-          return resolve(null);
+        if (isMissingFileError(err)) return resolve(null);
         reject(new SandboxError(`Failed to read ${path}.`, err));
       });
     });

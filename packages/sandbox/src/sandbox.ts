@@ -45,12 +45,13 @@ export class Sandbox {
   private readonly agentToken: string;
   private readonly sshHost: string;
   private readonly ports: Map<number, string>;
-  private readonly client: McClient;
+  private readonly clientFactory: () => McClient;
+  private clientInstance: McClient | null = null;
   private readonly transport: SshTransport;
 
   private constructor(
     handle: SandboxHandle,
-    client: McClient,
+    clientFactory: () => McClient,
     transport: SshTransport,
   ) {
     this.appId = handle.appId;
@@ -60,8 +61,14 @@ export class Sandbox {
     this.ports = new Map(
       Object.entries(handle.ports ?? {}).map(([p, h]) => [Number(p), h]),
     );
-    this.client = client;
+    this.clientFactory = clientFactory;
     this.transport = transport;
+  }
+
+  // Resolve the MC client lazily so SSH-only reconnects via fromHandle need no API key.
+  private get client(): McClient {
+    this.clientInstance ??= this.clientFactory();
+    return this.clientInstance;
   }
 
   /** Provision a new sandbox and wait until it accepts connections. */
@@ -89,7 +96,7 @@ export class Sandbox {
 
     const transport = transportFor(sshHost, agentToken);
     try {
-      await transport.waitUntilReachable(SSH_REACHABLE_TIMEOUT_MS);
+      await transport.waitUntilReachable(SSH_REACHABLE_TIMEOUT_MS, options.signal);
     } catch (err) {
       await deleteApp(client, appId).catch(() => {});
       throw err;
@@ -97,7 +104,7 @@ export class Sandbox {
 
     const sandbox = new Sandbox(
       { appId, name, agentToken, sshHost },
-      client,
+      () => client,
       transport,
     );
 
@@ -128,7 +135,7 @@ export class Sandbox {
 
     return new Sandbox(
       { appId: options.appId, name, agentToken, sshHost },
-      client,
+      () => client,
       transportFor(sshHost, agentToken),
     );
   }
@@ -137,7 +144,7 @@ export class Sandbox {
   static fromHandle(handle: SandboxHandle, auth: SandboxAuth = {}): Sandbox {
     return new Sandbox(
       handle,
-      mcClient(auth),
+      () => mcClient(auth),
       transportFor(handle.sshHost, handle.agentToken),
     );
   }
@@ -203,6 +210,11 @@ export class Sandbox {
       label,
     );
     const host = await waitForPublicHost(this.client, this.appId, endpointId);
+    if (!host) {
+      throw new SandboxError(
+        `Endpoint "${label ?? `port-${port}`}" was created but its public host is still provisioning. Re-run to fetch the URL once it is ready.`,
+      );
+    }
     this.ports.set(port, host);
     return `https://${host}`;
   }

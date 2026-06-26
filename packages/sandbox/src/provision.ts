@@ -219,6 +219,10 @@ export async function addCdnEndpoint(
   label?: string,
 ): Promise<string> {
   const displayName = label ?? `port-${port}`;
+  // Reuse an endpoint of the same name so retries after a slow host assignment do not conflict.
+  const existing = await findEndpointId(client, appId, displayName);
+  if (existing) return existing;
+
   const { data, error } = await (client as any).POST(
     "/apps/{appId}/containers/{containerId}/endpoints",
     {
@@ -238,11 +242,12 @@ export async function addCdnEndpoint(
   return id;
 }
 
+/** Poll for the endpoint's public host. Returns null if it is not assigned within the window. */
 export async function waitForPublicHost(
   client: McClient,
   appId: string,
   endpointId: string,
-): Promise<string> {
+): Promise<string | null> {
   const deadline = Date.now() + PUBLIC_HOST_TIMEOUT_MS;
   while (Date.now() < deadline) {
     await sleep(2000);
@@ -260,7 +265,23 @@ export async function waitForPublicHost(
     const found = items.find((e) => e.id === endpointId);
     if (found?.publicHost) return found.publicHost;
   }
-  throw new SandboxError("Public host was not assigned in time.");
+  return null;
+}
+
+/** Find an existing endpoint by display name, returning its ID or null. */
+async function findEndpointId(
+  client: McClient,
+  appId: string,
+  displayName: string,
+): Promise<string | null> {
+  const { data } = await client.GET("/apps/{appId}/endpoints", {
+    params: { path: { appId } },
+  });
+  const items = (data?.items ?? []) as Array<{
+    id?: string;
+    displayName?: string;
+  }>;
+  return items.find((e) => e.displayName === displayName)?.id ?? null;
 }
 
 function str(error: unknown): string {
