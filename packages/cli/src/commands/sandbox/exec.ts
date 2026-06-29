@@ -53,7 +53,7 @@ export const sandboxExecCommand = defineCommand<ExecArgs>({
       );
     }
 
-    const remoteCmd = `cd ${cwd} && ${command.join(" ")}`;
+    const remoteCmd = `cd ${JSON.stringify(cwd)} && ${command.join(" ")}`;
 
     const proc = Bun.spawn(sshArgs(record, remoteCmd), {
       stdin: "inherit",
