@@ -56,10 +56,11 @@ export function normalizeReplicationRegions(
 
 export async function confirmAddedReplicationRegions(
   added: string[],
+  opts?: { force?: boolean },
 ): Promise<boolean> {
   if (added.length === 0) return true;
   return confirm(
     `Add replication region(s) ${added.join(", ")}? They cannot be removed once added.`,
-    { initial: true },
+    { force: opts?.force, initial: true },
   );
 }

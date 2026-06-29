@@ -27,6 +27,7 @@ interface ZoneAddArgs {
   pullZone?: boolean;
   pullZoneName?: string;
   domain?: string;
+  force?: boolean;
 }
 
 export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
@@ -70,6 +71,12 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       .option("domain", {
         type: "string",
         describe: "Custom domain to add to the pull zone (implies --pull-zone)",
+      })
+      .option("force", {
+        alias: "f",
+        type: "boolean",
+        default: false,
+        describe: "Skip prompts and confirmations (use flag values only)",
       }),
 
   handler: async ({
@@ -79,6 +86,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     pullZone,
     pullZoneName,
     domain,
+    force,
     profile,
     output,
     verbose,
@@ -95,8 +103,9 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    // JSON output and non-TTY runs stay non-interactive; values must come from flags.
-    const interactive = output !== "json" && process.stdout.isTTY === true;
+    // JSON output, non-TTY, and --force all stay non-interactive; values must come from flags.
+    const interactive =
+      output !== "json" && process.stdout.isTTY === true && !force;
 
     // The region and replication choices both drive storage pricing, so flag it up front.
     if (interactive && (region === undefined || replication === undefined)) {
@@ -156,10 +165,10 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       ? normalizeReplicationRegions(replicationRegions, mainRegion)
       : [];
 
+    // Replicas can't be removed once added, so confirm before creating a zone with any.
     if (
-      interactive &&
       replicationCodes.length &&
-      !(await confirmAddedReplicationRegions(replicationCodes))
+      !(await confirmAddedReplicationRegions(replicationCodes, { force }))
     ) {
       throw new UserError("Creation cancelled.");
     }

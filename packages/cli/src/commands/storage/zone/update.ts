@@ -19,6 +19,7 @@ interface ZoneUpdateArgs {
   custom404Path?: string;
   rewrite404To200?: boolean;
   replication?: string[];
+  force?: boolean;
 }
 
 const FLAG_HINT =
@@ -52,7 +53,14 @@ function settingsFromFlags(
 async function promptSettings(
   zone: StorageZoneModel,
 ): Promise<StorageZoneSettingsModel> {
-  const answers = await prompts([
+  const existing = (zone.ReplicationRegions ?? []).map((r) => r.toUpperCase());
+  if (existing.length)
+    logger.dim(`Already replicated (permanent): ${existing.join(", ")}`);
+  const addable = replicationChoices(zone.Region ?? undefined).filter(
+    (region) => !existing.includes(region.code),
+  );
+
+  const questions: prompts.PromptObject[] = [
     {
       type: "text",
       name: "custom404Path",
@@ -67,24 +75,27 @@ async function promptSettings(
       active: "yes",
       inactive: "no",
     },
-    {
+  ];
+  if (addable.length)
+    questions.push({
       type: "multiselect",
       name: "replication",
-      message: "Replication regions (space to toggle):",
-      choices: replicationChoices(zone.Region ?? undefined).map((region) => ({
+      message:
+        "Add replication regions (permanent once added; space to toggle):",
+      choices: addable.map((region) => ({
         title: `${region.name} (${region.code})`,
         value: region.code,
-        selected: (zone.ReplicationRegions ?? []).includes(region.code),
       })),
-    },
-  ]);
+    });
+
+  const answers = await prompts(questions);
   if (Object.keys(answers).length === 0)
     throw new UserError("Update cancelled.");
 
   return {
     Custom404FilePath: answers.custom404Path || null,
     Rewrite404To200: answers.rewrite404To200,
-    ReplicationZones: answers.replication ?? [],
+    ReplicationZones: [...existing, ...(answers.replication ?? [])],
   };
 }
 
@@ -117,6 +128,13 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
         type: "string",
         array: true,
         describe: "Replication region codes (comma-separated or repeated)",
+      })
+      .option("force", {
+        alias: "f",
+        type: "boolean",
+        default: false,
+        describe:
+          "Skip the confirmation prompt when adding replication regions",
       }),
 
   handler: async (args) => {
@@ -136,15 +154,24 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
       ? settingsFromFlags(args, zone.Region ?? undefined)
       : await promptSettings(zone);
 
-    const interactive = output !== "json" && process.stdout.isTTY === true;
-    if (interactive && settings.ReplicationZones) {
-      const existing = new Set(
-        (zone.ReplicationRegions ?? []).map((r) => r.toUpperCase()),
+    if (settings.ReplicationZones) {
+      const existing = (zone.ReplicationRegions ?? []).map((r) =>
+        r.toUpperCase(),
       );
-      const added = settings.ReplicationZones.filter(
-        (r) => !existing.has(r.toUpperCase()),
-      );
-      if (!(await confirmAddedReplicationRegions(added))) {
+      const requested = settings.ReplicationZones.map((r) => r.toUpperCase());
+      const added = requested.filter((r) => !existing.includes(r));
+      const omitted = existing.filter((r) => !requested.includes(r));
+
+      // Replicas can't be removed, so the final set is always the existing ones plus any new picks.
+      settings.ReplicationZones = [...new Set([...existing, ...requested])];
+
+      if (omitted.length)
+        logger.warn(
+          `Replication regions can't be removed; ${omitted.join(", ")} stays replicated.`,
+        );
+      if (
+        !(await confirmAddedReplicationRegions(added, { force: args.force }))
+      ) {
         logger.log("Cancelled.");
         return;
       }
