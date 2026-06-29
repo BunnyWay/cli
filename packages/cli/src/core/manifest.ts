@@ -42,6 +42,15 @@ export function manifestDir(filename: string): string {
   return join(findRoot(filename), MANIFEST_DIR);
 }
 
+/**
+ * Project root for a manifest: the directory containing `.bunny/<filename>`,
+ * or the current working directory if none is found. Paths stored relative to
+ * the project (such as a script's entry file) should resolve against this.
+ */
+export function manifestRoot(filename: string): string {
+  return findRoot(filename);
+}
+
 /** Load a manifest from `.bunny/<filename>`. Returns empty data if the file doesn't exist. */
 export function loadManifest<T extends object = ManifestData>(
   filename: string,

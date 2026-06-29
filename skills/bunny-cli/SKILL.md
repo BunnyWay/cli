@@ -1,6 +1,6 @@
 ---
 name: bunny-cli
-description: Manage bunny.net resources from the command line (databases, Edge Scripts, authentication, and raw API requests). Use when working with bunny.net (pullzones, databases, storage, Edge Scripts, Magic Containers), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
+description: Manage bunny.net resources from the command line (databases, DNS, Edge Scripts, authentication, and raw API requests). Use when working with bunny.net (pullzones, DNS zones/records, databases, storage, Edge Scripts, Magic Containers), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
 ---
 
 # bunny.net CLI Skill
@@ -39,6 +39,11 @@ bunny db shell
 bunny scripts init
 bunny scripts deploy dist/index.js
 bunny scripts list
+
+# manage DNS
+bunny dns zones add example.com
+bunny dns records add example.com api A 198.51.100.1
+bunny dns records list example.com
 ```
 
 ## Decision Tree
@@ -47,6 +52,7 @@ Use this to route to the correct reference file:
 
 - **Authenticate or switch profiles** -> `references/auth.md`
 - **Database management (create, list, show, link, delete, shell, studio, regions, tokens)** -> `references/database.md`
+- **DNS (zones, records, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)
