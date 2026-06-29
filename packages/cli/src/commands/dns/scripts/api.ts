@@ -82,6 +82,7 @@ export async function publishScript(
   client: ComputeClient,
   id: number,
 ): Promise<void> {
+  // The {id}/publish path has no {uuid} token (and null is skipped anyway), so this publishes the latest release.
   await client.POST("/compute/script/{id}/publish", {
     params: { path: { id, uuid: null } },
     body: {},
