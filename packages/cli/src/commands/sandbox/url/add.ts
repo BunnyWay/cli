@@ -1,6 +1,5 @@
-import { createMcClient } from "@bunny.net/openapi-client";
+import { Sandbox, SandboxError } from "@bunny.net/sandbox";
 import { getSandbox, resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
@@ -45,88 +44,43 @@ export const sandboxUrlAddCommand = defineCommand<AddArgs>({
     if (!record) throw new UserError(`No sandbox named "${name}" found.`);
 
     const config = resolveConfig(profile, apiKey, verbose);
-    const client = createMcClient(clientOptions(config, verbose));
 
-    const spin = spinner("Fetching sandbox info...");
+    const spin = spinner(`Exposing port ${port}...`);
     spin.start();
 
-    // Get the container template ID from the app
-    const { data: app, error: appError } = await client.GET("/apps/{appId}", {
-      params: { path: { appId: record.app_id } },
-    });
-    if (appError || !app) {
-      spin.stop();
-      throw new UserError(`Failed to fetch app: ${JSON.stringify(appError)}`);
-    }
-
-    const containerId = (app as any).containerTemplates?.[0]?.id as
-      | string
-      | undefined;
-    if (!containerId) {
-      spin.stop();
-      throw new UserError("Could not find container template ID.");
-    }
-
-    const displayName = label ?? `port-${port}`;
-    spin.text = `Creating endpoint "${displayName}"...`;
-
-    const { data: ep, error: epError } = await (client as any).POST(
-      "/apps/{appId}/containers/{containerId}/endpoints",
-      {
-        params: { path: { appId: record.app_id, containerId } },
-        body: {
-          displayName,
-          cdn: {
-            isSslEnabled: false,
-            portMappings: [{ containerPort: port, protocols: ["Tcp"] }],
-          },
+    let url: string;
+    try {
+      const sandbox = Sandbox.fromHandle(
+        {
+          appId: record.app_id,
+          name,
+          agentToken: record.agent_token,
+          sshHost: record.ssh_host ?? "",
         },
-      },
-    );
-
-    if (epError) {
-      spin.stop();
-      throw new UserError(
-        `Failed to create endpoint: ${JSON.stringify(epError)}`,
+        {
+          apiKey: config.apiKey,
+          apiUrl: config.apiUrl,
+          verbose,
+          onDebug: (msg) => logger.debug(msg, true),
+        },
       );
-    }
-
-    const endpointId = (ep as any)?.id as string;
-
-    // Poll until publicHost is assigned
-    spin.text = "Waiting for public URL...";
-    const deadline = Date.now() + 60_000;
-    let publicHost: string | null = null;
-    while (Date.now() < deadline) {
-      await Bun.sleep(2000);
-      const { data: list } = await client.GET("/apps/{appId}/endpoints", {
-        params: { path: { appId: record.app_id } },
-      });
-      const found = (list?.items ?? []).find((e: any) => e.id === endpointId);
-      if (found?.publicHost) {
-        publicHost = found.publicHost;
-        break;
-      }
+      url = await sandbox.exposePort(port, label);
+    } catch (err) {
+      spin.stop();
+      if (err instanceof SandboxError) throw new UserError(err.message);
+      throw err;
     }
 
     spin.stop();
 
+    const displayName = label ?? `port-${port}`;
     if (output === "json") {
-      logger.log(
-        JSON.stringify(
-          { id: endpointId, displayName, port, publicHost },
-          null,
-          2,
-        ),
-      );
+      logger.log(JSON.stringify({ displayName, port, url }, null, 2));
       return;
     }
 
     logger.log(`Endpoint "${displayName}" created.`);
     logger.log(`  Port: ${port}`);
-    logger.log(`  ID:   ${endpointId}`);
-    logger.log(
-      `  URL:  ${publicHost ? `https://${publicHost}` : "— (still provisioning)"}`,
-    );
+    logger.log(`  URL:  ${url}`);
   },
 });

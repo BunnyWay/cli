@@ -1,0 +1,70 @@
+export interface SandboxAuth {
+  /** bunny.net API key. Falls back to BUNNYNET_API_KEY when omitted. */
+  apiKey?: string;
+  /** Override the Magic Containers API base URL. */
+  apiUrl?: string;
+  /** Emit request/response debug lines to onDebug. */
+  verbose?: boolean;
+  /** Debug logger callback, used when verbose is true. */
+  onDebug?: (msg: string) => void;
+}
+
+export interface CreateOptions extends SandboxAuth {
+  /** Unique app name. A random name is generated when omitted. */
+  name?: string;
+  /** Region ID to deploy in (e.g. AMS, NY, LA). Defaults to AMS. */
+  region?: string;
+  /** Container ports to expose as public CDN endpoints at creation time. */
+  ports?: number[];
+  /** Default environment variables for the container. */
+  env?: Record<string, string>;
+  /** Persistent volume size in GB. Defaults to 10. */
+  volumeSize?: number;
+  /** Override the container image. Defaults to the bunny sandbox-agent image. */
+  image?: SandboxImage;
+  /** Cancel provisioning. */
+  signal?: AbortSignal;
+}
+
+export interface GetOptions extends SandboxAuth {
+  appId: string;
+}
+
+export interface SandboxImage {
+  registryId: string;
+  namespace: string;
+  name: string;
+  tag: string;
+  /** Pinned sha256 digest. Lets MC skip its flaky create-time registry lookup. */
+  digest?: string;
+}
+
+/** Serializable handle that round-trips a sandbox across processes. */
+export interface SandboxHandle {
+  appId: string;
+  name: string;
+  agentToken: string;
+  sshHost: string;
+  /** Exposed port to public host mappings discovered so far. */
+  ports?: Record<number, string>;
+}
+
+export interface RunCommandOptions {
+  cmd: string;
+  args?: string[];
+  /** Working directory. Defaults to the sandbox workplace. */
+  cwd?: string;
+  /** Extra environment variables for this command only. */
+  env?: Record<string, string>;
+  sudo?: boolean;
+  /** Return immediately with a live Command instead of blocking. */
+  detached?: boolean;
+}
+
+export interface FileToWrite {
+  /** Path inside the sandbox. Relative paths resolve against the workplace. */
+  path: string;
+  content: Buffer | string;
+  /** Unix file mode in octal, e.g. 0o755 for an executable. */
+  mode?: number;
+}
