@@ -131,7 +131,7 @@ export async function createApp(
         imageTag: params.image.tag,
         // A pinned digest lets MC skip its flaky create-time registry lookup.
         ...(params.image.digest ? { imageDigest: params.image.digest } : {}),
-        imagePullPolicy: "ifNotPresent",
+        imagePullPolicy: "always",
         environmentVariables,
         volumeMounts: [{ name: "workplace", mountPath: WORKPLACE }],
         endpoints: [
