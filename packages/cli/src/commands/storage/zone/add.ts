@@ -14,6 +14,7 @@ import { logger } from "../../../core/logger.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
 import { type StorageZoneModel, toSafeStorageZone } from "../api.ts";
 import {
+  confirmAddedReplicationRegions,
   normalizeReplicationRegions,
   replicationChoices,
   STORAGE_REGIONS,
@@ -154,6 +155,14 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     const replicationCodes = replicationRegions
       ? normalizeReplicationRegions(replicationRegions, mainRegion)
       : [];
+
+    if (
+      interactive &&
+      replicationCodes.length &&
+      !(await confirmAddedReplicationRegions(replicationCodes))
+    ) {
+      throw new UserError("Creation cancelled.");
+    }
 
     const spin = spinner("Creating storage zone...");
     spin.start();

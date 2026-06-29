@@ -1,5 +1,6 @@
 import * as BunnyStorage from "@bunny.net/storage-sdk";
 import { UserError } from "../../core/errors.ts";
+import { confirm } from "../../core/ui.ts";
 
 export interface StorageRegion {
   code: string;
@@ -51,4 +52,14 @@ export function normalizeReplicationRegions(
     );
   }
   return normalized.filter((region) => region !== primary);
+}
+
+export async function confirmAddedReplicationRegions(
+  added: string[],
+): Promise<boolean> {
+  if (added.length === 0) return true;
+  return confirm(
+    `Add replication region(s) ${added.join(", ")}? They cannot be removed once added.`,
+    { initial: true },
+  );
 }

@@ -8,6 +8,7 @@ import { logger } from "../../../core/logger.ts";
 import { spinner } from "../../../core/ui.ts";
 import type { StorageZoneModel, StorageZoneSettingsModel } from "../api.ts";
 import {
+  confirmAddedReplicationRegions,
   normalizeReplicationRegions,
   replicationChoices,
 } from "../constants.ts";
@@ -134,6 +135,20 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
     const settings = hasFlags
       ? settingsFromFlags(args, zone.Region ?? undefined)
       : await promptSettings(zone);
+
+    const interactive = output !== "json" && process.stdout.isTTY === true;
+    if (interactive && settings.ReplicationZones) {
+      const existing = new Set(
+        (zone.ReplicationRegions ?? []).map((r) => r.toUpperCase()),
+      );
+      const added = settings.ReplicationZones.filter(
+        (r) => !existing.has(r.toUpperCase()),
+      );
+      if (!(await confirmAddedReplicationRegions(added))) {
+        logger.log("Cancelled.");
+        return;
+      }
+    }
 
     const spin = spinner("Updating storage zone...");
     spin.start();
