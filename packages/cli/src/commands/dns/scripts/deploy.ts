@@ -7,7 +7,7 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { loadManifest } from "../../../core/manifest.ts";
+import { loadManifest, manifestRoot } from "../../../core/manifest.ts";
 import { spinner } from "../../../core/ui.ts";
 import { publishScript, uploadCode } from "./api.ts";
 import {
@@ -90,7 +90,11 @@ export const dnsScriptsDeployCommand = defineCommand<DeployArgs>({
       file = value;
     }
     file ??= defaultFile;
-    const absPath = resolve(file);
+    // The manifest entry is relative to the linked project root; an explicit path stays relative to the cwd.
+    const absPath =
+      file === defaultFile
+        ? resolve(manifestRoot(DNS_SCRIPT_MANIFEST), file)
+        : resolve(file);
     if (!existsSync(absPath)) {
       throw new UserError(
         `File not found: ${file}`,

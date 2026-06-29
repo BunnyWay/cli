@@ -94,6 +94,8 @@ declare class Server {
   longitude: number;
   /** The routing weight of the server in a weighted routing scenario. */
   weight: number;
+  /** Whether the server is currently considered online for health routing. */
+  online: boolean;
 }
 
 /** The uptime status returned by `Monitoring.getStatus`. */
@@ -136,11 +138,14 @@ declare const RoutingEngine: {
   ): Server;
 };
 
-/** Any value the `handleQuery` entry function may return. */
-type DnsAnswer =
+/** A single response object the `handleQuery` entry function may return. */
+type DnsResponse =
   | ARecord
   | AaaaRecord
   | CnameRecord
   | TxtRecord
   | PullZoneRecord
   | Server;
+
+/** Any value the `handleQuery` entry function may return: one response or many. */
+type DnsAnswer = DnsResponse | DnsResponse[];

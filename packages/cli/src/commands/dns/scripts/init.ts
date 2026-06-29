@@ -185,6 +185,7 @@ export const dnsScriptsInitCommand = defineCommand<InitArgs>({
     }
 
     let created: { id: number; name: string } | undefined;
+    const deployExplicit = args[ARG_DEPLOY] === true;
     const shouldDeploy =
       args[ARG_DEPLOY] !== undefined
         ? args[ARG_DEPLOY]
@@ -211,6 +212,8 @@ export const dnsScriptsInitCommand = defineCommand<InitArgs>({
         });
         logger.success(`Created DNS script "${created.name}" (${created.id}).`);
       } catch (err: unknown) {
+        // An explicit --deploy is a hard requirement; only the interactive opt-in degrades to a warning.
+        if (deployExplicit) throw err;
         const message = err instanceof Error ? err.message : "";
         logger.warn(
           message

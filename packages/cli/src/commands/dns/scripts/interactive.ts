@@ -6,6 +6,7 @@ import { spinner } from "../../../core/ui.ts";
 import {
   type ComputeClient,
   createDnsScript,
+  fetchDnsScript,
   fetchDnsScripts,
   publishScript,
   uploadCode,
@@ -30,7 +31,13 @@ export async function resolveDnsScriptId(
   action: string,
   interactive: boolean,
 ): Promise<number> {
-  if (id) return id;
+  if (id !== undefined) {
+    if (!Number.isFinite(id)) {
+      throw new UserError("DNS script ID must be a number.");
+    }
+    await fetchDnsScript(client, id);
+    return id;
+  }
 
   const manifest = loadManifest<DnsScriptManifest>(DNS_SCRIPT_MANIFEST);
   if (manifest.id) {
