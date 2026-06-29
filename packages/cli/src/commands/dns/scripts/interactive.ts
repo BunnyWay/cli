@@ -41,7 +41,9 @@ export async function resolveDnsScriptId(
 
   const manifest = loadManifest<DnsScriptManifest>(DNS_SCRIPT_MANIFEST);
   if (manifest.id) {
-    logger.dim(`Using linked DNS script ${manifest.name ?? manifest.id}.`);
+    // Validate the linked ID; a stale or hand-edited manifest can point at a non-DNS script.
+    const script = await fetchDnsScript(client, manifest.id);
+    logger.dim(`Using linked DNS script ${script.Name ?? manifest.id}.`);
     return manifest.id;
   }
 
