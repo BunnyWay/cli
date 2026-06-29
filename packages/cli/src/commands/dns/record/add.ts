@@ -1,4 +1,7 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
+import {
+  createComputeClient,
+  createCoreClient,
+} from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
@@ -15,6 +18,8 @@ import {
   recordName,
   recordTypeLabel,
 } from "../record-types.ts";
+import type { AnswerKind } from "../scripts/constants.ts";
+import { pickOrCreateDnsScript } from "../scripts/interactive.ts";
 
 type AddDnsRecordModel = components["schemas"]["AddDnsRecordModel"];
 type RecordLinks = Pick<AddDnsRecordModel, "PullZoneId" | "ScriptId">;
@@ -285,7 +290,54 @@ export const dnsAddCommand = defineCommand<AddArgs>({
         name = res.name ?? "@";
       }
 
-      record = await promptRecord(type, name ?? "@");
+      const recName = name ?? "@";
+
+      // Offer a script-computed answer for types a DNS script can return.
+      const SCRIPTABLE_ANSWERS = new Set<number>([
+        RECORD_TYPES.A,
+        RECORD_TYPES.AAAA,
+        RECORD_TYPES.CNAME,
+        RECORD_TYPES.TXT,
+      ]);
+      let useScript = type === RECORD_TYPES.SCRIPT;
+      let starterKind: AnswerKind | undefined;
+      if (!useScript && SCRIPTABLE_ANSWERS.has(type)) {
+        const { source } = await prompts({
+          type: "select",
+          name: "source",
+          message: "Value source:",
+          choices: [
+            { title: "Static value", value: "static" },
+            {
+              title: "Computed by a script (Scriptable DNS)",
+              value: "script",
+            },
+          ],
+        });
+        if (source === undefined)
+          throw new UserError("A value source is required.");
+        if (source === "script") {
+          useScript = true;
+          starterKind = recordTypeLabel(type) as AnswerKind;
+        }
+      }
+
+      if (useScript) {
+        const computeClient = createComputeClient(
+          clientOptions(config, verbose),
+        );
+        const picked = await pickOrCreateDnsScript(computeClient, {
+          starterKind,
+          defaultName: `${zone.Domain ?? "dns"}-script`,
+        });
+        record = {
+          Type: RECORD_TYPES.SCRIPT,
+          Name: recName === "@" ? "" : recName,
+          ScriptId: picked.id,
+        };
+      } else {
+        record = await promptRecord(type, recName);
+      }
 
       if (args.ttl === undefined) {
         const { ttl } = await prompts({
