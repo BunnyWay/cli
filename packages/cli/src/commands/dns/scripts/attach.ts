@@ -7,32 +7,51 @@ import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
+import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
-import { RECORD_TYPES, recordName } from "../record-types.ts";
+import {
+  type DnsRecordModel,
+  formatRecordValue,
+  RECORD_TYPES,
+  recordName,
+  recordTypeLabel,
+} from "../record-types.ts";
 import { fetchDnsScript } from "./api.ts";
 import { resolveDnsScriptId } from "./interactive.ts";
 
 type AddDnsRecordModel = components["schemas"]["AddDnsRecordModel"];
 
-const COMMAND = "attach [domain] [name] [id]";
+const COMMAND = "attach [domain] [name]";
 const DESCRIPTION = "Attach a Scriptable DNS script to a domain.";
 
 const ARG_DOMAIN = "domain";
 const ARG_DOMAIN_DESCRIPTION = "Domain or zone ID (prompted when omitted)";
 const ARG_NAME = "name";
 const ARG_NAME_DESCRIPTION = "Record name (use '@' for the zone apex)";
-const ARG_ID = "id";
-const ARG_ID_DESCRIPTION = "DNS script ID (uses the linked script if omitted)";
+const ARG_SCRIPT = "script";
+const ARG_SCRIPT_DESCRIPTION =
+  "DNS script ID (uses the linked script if omitted)";
 const ARG_TTL = "ttl";
 const ARG_TTL_DESCRIPTION = "Time to live in seconds";
+const ARG_FORCE = "force";
+const ARG_FORCE_DESCRIPTION = "Skip the confirmation prompt";
 
 interface AttachArgs {
   [ARG_DOMAIN]?: string;
   [ARG_NAME]?: string;
-  [ARG_ID]?: number;
+  [ARG_SCRIPT]?: number;
   [ARG_TTL]?: number;
+  [ARG_FORCE]?: boolean;
+}
+
+/** Describe an existing record for a conflict warning. */
+function describeRecord(record: DnsRecordModel): string {
+  const value = formatRecordValue(record);
+  return value
+    ? `${recordTypeLabel(record.Type)} → ${value}`
+    : recordTypeLabel(record.Type);
 }
 
 /**
@@ -49,7 +68,7 @@ interface AttachArgs {
  * bunny dns scripts attach
  *
  * # Route api.example.com at script 12345
- * bunny dns scripts attach example.com api 12345
+ * bunny dns scripts attach example.com api --script 12345
  * ```
  */
 export const dnsScriptsAttachCommand = defineCommand<AttachArgs>({
@@ -58,7 +77,7 @@ export const dnsScriptsAttachCommand = defineCommand<AttachArgs>({
   examples: [
     ["$0 dns scripts attach", "Pick a zone and the linked script"],
     [
-      "$0 dns scripts attach example.com api 12345",
+      "$0 dns scripts attach example.com api --script 12345",
       "Route api.example.com at script 12345",
     ],
   ],
@@ -73,17 +92,23 @@ export const dnsScriptsAttachCommand = defineCommand<AttachArgs>({
         type: "string",
         describe: ARG_NAME_DESCRIPTION,
       })
-      .positional(ARG_ID, {
+      .option(ARG_SCRIPT, {
         type: "number",
-        describe: ARG_ID_DESCRIPTION,
+        describe: ARG_SCRIPT_DESCRIPTION,
       })
       .option(ARG_TTL, {
         type: "number",
         describe: ARG_TTL_DESCRIPTION,
+      })
+      .option(ARG_FORCE, {
+        type: "boolean",
+        default: false,
+        describe: ARG_FORCE_DESCRIPTION,
       }),
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
+    const force = args[ARG_FORCE] ?? false;
     const isInteractive = output !== "json" && process.stdout.isTTY;
 
     const config = resolveConfig(profile, apiKey, verbose);
@@ -93,7 +118,7 @@ export const dnsScriptsAttachCommand = defineCommand<AttachArgs>({
 
     const scriptId = await resolveDnsScriptId(
       computeClient,
-      args[ARG_ID],
+      args[ARG_SCRIPT],
       "attach",
       isInteractive,
     );
@@ -115,21 +140,41 @@ export const dnsScriptsAttachCommand = defineCommand<AttachArgs>({
       nameInput = value ?? "@";
     }
     const name = (nameInput ?? "@").trim();
+    const targetName = name === "@" ? "" : name;
+    const isApex = targetName === "";
+    const hostLabel = isApex ? zone.Domain : `${targetName}.${zone.Domain}`;
+    const scriptLabel = script.Name ?? scriptId;
+
     const record: AddDnsRecordModel = {
       Type: RECORD_TYPES.SCRIPT,
-      Name: name === "@" ? "" : name,
+      Name: targetName,
       ScriptId: scriptId,
     };
     if (args[ARG_TTL] !== undefined) record.Ttl = args[ARG_TTL];
 
-    if (isInteractive) {
-      const ok = await confirm(
-        `Add SCRIPT record ${recordName(record.Name)}.${zone.Domain} -> ${script.Name ?? scriptId}?`,
+    // Records already at this name; surface them so a clobber is never silent.
+    const atName = (zone.Records ?? []).filter(
+      (r) => (r.Name ?? "") === targetName,
+    );
+
+    // Repointing a domain is a silent write; never do it without intent.
+    if (!force && !isInteractive) {
+      throw new UserError(
+        "Refusing to attach a DNS script without confirmation.",
+        "Re-run with --force to attach non-interactively.",
       );
-      if (!ok) {
-        logger.info("Cancelled.");
-        return;
-      }
+    }
+
+    const warning = isApex
+      ? `This repoints the root domain ${zone.Domain} to script ${scriptLabel}.`
+      : `Attach script ${scriptLabel} to ${hostLabel}.`;
+    const conflict = atName.length
+      ? ` ${hostLabel} already has ${atName.map(describeRecord).join(", ")}; the SCRIPT record is added alongside ${atName.length > 1 ? "them" : "it"}.`
+      : "";
+    const ok = await confirm(`${warning}${conflict} Continue?`, { force });
+    if (!ok) {
+      logger.info("Cancelled.");
+      return;
     }
 
     const spin = spinner("Attaching...");
@@ -151,7 +196,7 @@ export const dnsScriptsAttachCommand = defineCommand<AttachArgs>({
             zoneId: zone.Id,
             recordId: data?.Id ?? null,
             scriptId,
-            name: recordName(record.Name),
+            name: recordName(targetName),
           },
           null,
           2,
@@ -161,7 +206,7 @@ export const dnsScriptsAttachCommand = defineCommand<AttachArgs>({
     }
 
     logger.success(
-      `Attached DNS script ${script.Name ?? scriptId} to ${recordName(record.Name)}.${zone.Domain}${data?.Id != null ? ` (record ${data.Id})` : ""}.`,
+      `Attached DNS script ${scriptLabel} to ${hostLabel}${data?.Id != null ? ` (record ${data.Id})` : ""}.`,
     );
   },
 });

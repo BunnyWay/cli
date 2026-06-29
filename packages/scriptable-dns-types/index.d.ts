@@ -121,6 +121,7 @@ declare const GeoDistance: {
   calculate(lat1: number, lon1: number, lat2: number, lon2: number): number;
   calculate(loc1: GeoLocation, loc2: GeoLocation): number;
   calculate(server: Server, location: GeoLocation): number;
+  calculate(location: GeoLocation, server: Server): number;
 };
 
 /** Dynamic geographic routing, weight calculation, and round robin logic. */
