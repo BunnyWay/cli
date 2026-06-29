@@ -74,6 +74,7 @@ This is a Bun workspace monorepo with four packages:
 - **`@bunny.net/openapi-client`** (`packages/openapi-client/`) — Standalone, type-safe OpenAPI client for bunny.net, generated from OpenAPI specs. Zero CLI dependencies. Publishable to npm.
 - **`@bunny.net/app-config`** (`packages/app-config/`) — Shared app configuration schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. Used by the CLI and potentially other tools.
 - **`@bunny.net/database-shell`** (`packages/database-shell/`) — Standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
+- **`@bunny.net/scriptable-dns-types`** (`packages/scriptable-dns-types/`): Ambient TypeScript declarations for the Scriptable DNS runtime globals (`ARecord`, `Monitoring`, `RoutingEngine`, etc.). Types-only, no runtime code: the DNS runtime can't `import`, so these power editor autocomplete and an optional typecheck step. Scaffolded into projects by `bunny dns scripts init`; intended to also feed the dashboard editor. Publishable to npm.
 - **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/app-config`, and `@bunny.net/database-shell`.
 
 ```
@@ -128,6 +129,11 @@ bunny-cli/
 │   │       ├── schema.ts                  # Zod schemas + inferred types (BunnyAppConfig, etc.)
 │   │       ├── convert.ts                 # API ↔ config conversion (apiToConfig, configToAddRequest, configToPatchRequest)
 │   │       └── parse-image-ref.ts         # Docker image reference parser (parseImageRef)
+│   │
+│   ├── scriptable-dns-types/            # @bunny.net/scriptable-dns-types package
+│   │   ├── package.json                 # types-only; exports "./index.d.ts" under the "types" condition
+│   │   ├── index.d.ts                   # Ambient globals: ARecord/AaaaRecord/CnameRecord/TxtRecord/PullZoneRecord/Server, Monitoring/GeoDatabase/GeoDistance/RoutingEngine, DnsRequest/DnsQuery/GeoLocation
+│   │   └── README.md
 │   │
 │   ├── database-shell/                   # @bunny.net/database-shell package
 │   │   ├── package.json                  # bin: { "bsql": "./src/cli.ts" }
@@ -273,7 +279,7 @@ bunny-cli/
 │           │   │       ├── create.ts     # Generate an auth token (read-only/full-access, optional expiry)
 │           │   │       └── invalidate.ts # Invalidate all tokens for a database (with confirmation)
 │           │   ├── dns/                   # Experimental — hidden from help and landing page
-│           │   │   ├── index.ts          # defineNamespace("dns", ...) — registers the records + zones groups (+ hidden domain aliases)
+│           │   │   ├── index.ts          # defineNamespace("dns", ...): registers the records + zones + scripts groups (+ hidden domain aliases)
 │           │   │   ├── api.ts            # CoreClient type, fetchZones/fetchZone, resolveZone (domain-or-ID → zone)
 │           │   │   ├── constants.ts      # DNS_MANIFEST (".bunny/dns.json") + DnsManifest type, written by `dns zones link`
 │           │   │   ├── interactive.ts    # resolveZoneInteractive (arg → .bunny/dns.json manifest → zone picker; offerLink prompts to link a picked zone, skipped under --output json) + resolveRecordInteractive; autoLinkDnsZone (link a zone found in another flow — silent write, confirm before relinking a different zone) reused by scripts custom-domain setup
@@ -281,7 +287,7 @@ bunny-cli/
 │           │   │   ├── record/            # `dns records` — entries within a zone (canonical: records; aliases: record, rec)
 │           │   │   │   ├── index.ts      # defineNamespace("records", ...)
 │           │   │   │   ├── list.ts       # List records in a zone (alias: ls)
-│           │   │   │   ├── add.ts        # Add a record (positional grammar per type, or interactive wizard; --pull-zone/--script)
+│           │   │   │   ├── add.ts        # Add a record (positional grammar per type, or interactive wizard; --pull-zone/--script). Interactively, A/AAAA/CNAME/TXT offer static vs script-computed (Scriptable DNS) via pickOrCreateDnsScript: pick or create+seed a DNS script and write a SCRIPT record
 │           │   │   │   ├── update.ts     # Update a record (alias: edit; prompts to pick zone+record when omitted)
 │           │   │   │   ├── remove.ts     # Remove a record (alias: rm; prompts to pick zone+record when omitted)
 │           │   │   │   ├── import.ts     # Import records from a BIND zone file (prompts for zone/file when omitted)
@@ -304,6 +310,17 @@ bunny-cli/
 │           │   │           ├── index.ts  # defineNamespace("logging", ...)
 │           │   │           ├── enable.ts # Enable DNS query logging (optional IP anonymization)
 │           │   │           └── disable.ts # Disable DNS query logging (with confirmation)
+│           │   │   └── scripts/          # `dns scripts`: Scriptable DNS scripts (canonical: scripts; alias: script). Reuses the compute API (EdgeScriptType 0); separate from `bunny scripts` (different runtime, no pull zone)
+│           │   │       ├── index.ts      # defineNamespace("scripts", ...): init/create/deploy/attach/link/list
+│           │   │       ├── constants.ts  # DNS_SCRIPT_MANIFEST (".bunny/dns-script.json") + DnsScriptManifest; SCRIPT_TYPE_DNS; inline EXAMPLES (empty/geo/closest/weighted/failover/pullzone); TSCONFIG + TYPES_PACKAGE scaffold strings
+│           │   │       ├── api.ts        # ComputeClient helpers: fetchDnsScripts/fetchDnsScript (type 0), createDnsScript (no pull zone), uploadCode, publishScript
+│           │   │       ├── interactive.ts # resolveDnsScriptId (arg → .bunny/dns-script.json → DNS-script picker)
+│           │   │       ├── init.ts       # Scaffold a project: example chooser, handleQuery.js + tsconfig + package.json (devDep on @bunny.net/scriptable-dns-types) + manifest; optional --deploy
+│           │   │       ├── create.ts     # Create the remote DNS script (no pull zone), link manifest
+│           │   │       ├── deploy.ts     # Upload code (single file, no build) + publish; prompts for the file when omitted, --skip-publish to stage
+│           │   │       ├── attach.ts     # Bridge: add a SCRIPT record on a zone pointing at the script. `attach [domain] [name] --script <id>`; always confirms (apex gets a louder root-domain warning, lists existing records at the name), --force skips and is required to write non-interactively
+│           │   │       ├── link.ts       # Link this directory to an existing DNS script → .bunny/dns-script.json (positional id, else pick interactively; preserves entry)
+│           │   │       └── list.ts       # List DNS scripts (alias: ls)
 │           │   ├── storage/                 # Experimental (hidden from help and landing page)
 │           │   │   ├── index.ts          # defineNamespace("storage", ...): registers zone + file groups + link + regions + docs (+ hidden bucket aliases)
 │           │   │   ├── api.ts            # CoreClient type, fetchStorageZones/fetchStorageZone, resolveStorageZone (name-or-ID to zone, re-fetched by ID), toSafeStorageZone (strips Password/ReadOnlyPassword; used by every command that emits a raw zone as JSON: show/list/add)
