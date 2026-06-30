@@ -48,6 +48,10 @@ bun ny apps deploy                          # first run? Imports docker-compose.
 bun ny apps link                            # interactive: pick from existing apps on the account
 bun ny apps link <app-id>                   # link a specific app to this directory (writes .bunny/app.json)
 bun ny apps unlink                          # remove .bunny/app.json
+bun ny dns zones add example.com            # create a zone; prints registrar-aware setup steps (skipped if already delegated)
+bun ny dns zones nameservers example.com    # live-check whether the registrar delegates to bunny
+bun ny dns records preset list              # list DNS record presets (email providers, verification, security)
+bun ny dns records preset google-workspace example.com   # apply a preset record set
 ```
 
 ### Available Scripts
