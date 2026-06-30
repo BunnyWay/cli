@@ -6,11 +6,10 @@ import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
 import type { CoreClient, DnsZoneModel } from "../api.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
-import { recordName, recordTypeLabel } from "../record-types.ts";
 import { type DnsPreset, findPreset, PRESETS } from "./presets.ts";
+import { reviewAndApply } from "./write.ts";
 
 interface PresetArgs {
   name?: string;
@@ -90,70 +89,23 @@ export async function applyPreset(opts: {
 }): Promise<void> {
   const { client, zone, preset, output, provided = {} } = opts;
   // Only plain text drives the interactive prompts; json/csv/... must come fully specified.
-  const interactive = output === "text";
-  const params = await gatherParams(preset, provided, interactive);
+  const params = await gatherParams(preset, provided, output === "text");
   const records = preset.build({ domain: zone.Domain ?? "", params });
 
   if (records.length === 0) {
     throw new UserError("This preset produced no records to add.");
   }
 
-  if (interactive) {
-    logger.log(`This will add ${records.length} record(s) to ${zone.Domain}:`);
-    logger.log("");
-    logger.log(
-      formatTable(
-        ["Type", "Name", "Value", "Priority"],
-        records.map((r) => [
-          recordTypeLabel(r.Type),
-          recordName(r.Name),
-          r.Value ?? "",
-          r.Priority != null ? String(r.Priority) : "",
-        ]),
-        "text",
-      ),
-    );
-    logger.log("");
-
-    if (
-      !(await confirm(`Add these ${records.length} record(s)?`, {
-        initial: true,
-      }))
-    ) {
-      logger.info("Cancelled.");
-      return;
-    }
-  }
-
-  const spin = interactive ? spinner(`Applying ${preset.title}...`) : null;
-  spin?.start();
-  let applied = 0;
-  try {
-    for (const record of records) {
-      await client.PUT("/dnszone/{zoneId}/records", {
-        params: { path: { zoneId: zone.Id as number } },
-        body: record,
-      });
-      applied++;
-    }
-  } catch (err) {
-    // Records are written one by one with no rollback; tell the user how far it got so they can inspect the zone.
-    throw new UserError(
-      `Applied ${applied} of ${records.length} record(s) before failing; ${zone.Domain} may be partially configured.`,
-      err instanceof Error ? err.message : String(err),
-    );
-  } finally {
-    spin?.stop();
-  }
-
-  if (output === "json") {
-    logger.log(JSON.stringify(records, null, 2));
-    return;
-  }
-
-  logger.success(
-    `Applied ${preset.title} to ${zone.Domain}: ${records.length} record(s) added.`,
-  );
+  await reviewAndApply({
+    client,
+    zone,
+    records,
+    output,
+    selectMessage: `Select records to add to ${zone.Domain}:`,
+    spinnerLabel: `Applying ${preset.title}...`,
+    successFor: (n) =>
+      `Applied ${preset.title} to ${zone.Domain}: ${n} record(s) added.`,
+  });
 }
 
 /** Interactive picker grouped by category; returns undefined if the user aborts. */

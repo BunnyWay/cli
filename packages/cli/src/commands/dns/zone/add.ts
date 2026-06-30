@@ -1,4 +1,5 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
+import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
@@ -6,28 +7,98 @@ import {
   checkDelegation,
   expectedNameservers,
 } from "../../../core/dns-nameservers.ts";
+import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { detectRegistrar } from "../../../core/registrar.ts";
 import { spinner } from "../../../core/ui.ts";
-import type { DnsZoneModel } from "../api.ts";
+import type { CoreClient, DnsZoneModel } from "../api.ts";
+import { addRecordInteractive } from "../record/add.ts";
+import { importZoneFile } from "../record/import.ts";
+import { discoverImportableRecords } from "../record/scan-records.ts";
+import { reviewAndApply, writeRecords } from "../record/write.ts";
 
 interface ZoneAddArgs {
   domain: string;
+  import?: boolean;
+}
+
+/** After the scan, let the user keep populating the zone until they continue to nameserver setup. */
+async function offerNextSteps(opts: {
+  client: CoreClient;
+  config: ReturnType<typeof resolveConfig>;
+  verbose: boolean;
+  zone: DnsZoneModel;
+  output: string;
+}): Promise<void> {
+  for (;;) {
+    const { next } = await prompts({
+      type: "select",
+      name: "next",
+      message: "What next?",
+      choices: [
+        { title: "Upload a zone file (BIND)", value: "import" },
+        { title: "Add records manually", value: "manual" },
+        { title: "Continue to nameserver setup", value: "continue" },
+      ],
+    });
+    if (next === undefined || next === "continue") return;
+    try {
+      if (next === "import") {
+        await importZoneFile({
+          client: opts.client,
+          zone: opts.zone,
+          output: opts.output,
+        });
+      } else if (next === "manual") {
+        await addRecordInteractive({
+          client: opts.client,
+          config: opts.config,
+          verbose: opts.verbose,
+          zone: opts.zone,
+          output: opts.output,
+        });
+      }
+    } catch (err) {
+      // Keep the menu alive when a sub-step is cancelled or fails validation.
+      if (err instanceof UserError) logger.warn(err.message);
+      else throw err;
+    }
+    logger.log("");
+  }
 }
 
 export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
   command: "add <domain>",
   describe: "Create a new DNS zone.",
-  examples: [["$0 dns zones add example.com", "Create a zone for example.com"]],
+  examples: [
+    ["$0 dns zones add example.com", "Create a zone for example.com"],
+    [
+      "$0 dns zones add example.com --import",
+      "Create the zone and import existing records without prompting",
+    ],
+  ],
 
   builder: (yargs) =>
-    yargs.positional("domain", {
-      type: "string",
-      describe: "Domain to create the zone for",
-      demandOption: true,
-    }),
+    yargs
+      .positional("domain", {
+        type: "string",
+        describe: "Domain to create the zone for",
+        demandOption: true,
+      })
+      .option("import", {
+        type: "boolean",
+        describe:
+          "Import all scanned records without prompting (--no-import skips the scan and next-steps menu)",
+      }),
 
-  handler: async ({ domain, profile, output, verbose, apiKey }) => {
+  handler: async ({
+    domain,
+    import: doImport,
+    profile,
+    output,
+    verbose,
+    apiKey,
+  }) => {
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
@@ -52,7 +123,32 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
     }
 
     if (output === "json") {
-      logger.log(JSON.stringify(created ?? { Domain: domain }, null, 2));
+      // Scripts opt in explicitly with --import; the scan is best-effort since the zone already exists.
+      let importedRecords: number | undefined;
+      let failedRecords: number | undefined;
+      if (doImport === true && created?.Id != null) {
+        try {
+          const records = await discoverImportableRecords(client, created);
+          const { applied, failures } = records.length
+            ? await writeRecords(client, created, records)
+            : { applied: [], failures: [] };
+          importedRecords = applied.length;
+          failedRecords = failures.length;
+        } catch {}
+      }
+      logger.log(
+        JSON.stringify(
+          {
+            ...(created ?? { Domain: domain }),
+            ...(importedRecords != null
+              ? { ImportedRecords: importedRecords }
+              : {}),
+            ...(failedRecords ? { FailedRecords: failedRecords } : {}),
+          },
+          null,
+          2,
+        ),
+      );
       return;
     }
 
@@ -61,6 +157,45 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
         ? `Created DNS zone ${domain} (ID: ${created.Id}).`
         : `Created DNS zone ${domain}.`,
     );
+
+    if (created?.Id != null && doImport !== false) {
+      let discovered: Awaited<ReturnType<typeof discoverImportableRecords>> =
+        [];
+      let scanError: unknown;
+      const scanSpin = spinner("Scanning for existing DNS records...");
+      scanSpin.start();
+      try {
+        discovered = await discoverImportableRecords(client, created);
+      } catch (err) {
+        scanError = err;
+      } finally {
+        scanSpin.stop();
+      }
+
+      logger.log("");
+      if (scanError) {
+        logger.warn(
+          `Couldn't scan for existing records: ${scanError instanceof Error ? scanError.message : String(scanError)}`,
+        );
+      } else if (discovered.length) {
+        await reviewAndApply({
+          client,
+          zone: created,
+          records: discovered,
+          output,
+          selectMessage: `Found ${discovered.length} existing record(s) for ${domain} at your current provider. Select which to import:`,
+          spinnerLabel: "Importing records...",
+          successFor: (n) => `Imported ${n} record(s) into ${domain}.`,
+          assumeYes: doImport === true,
+        });
+      } else {
+        logger.info(`No existing records found for ${domain}.`);
+      }
+    }
+
+    if (created?.Id != null && doImport === undefined) {
+      await offerNextSteps({ client, config, verbose, zone: created, output });
+    }
 
     // Savvy users often point the registrar at bunny before creating the zone; skip the setup steps when it's already delegated.
     const checkSpin = spinner("Checking nameserver delegation...");
