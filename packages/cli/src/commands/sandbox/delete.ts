@@ -12,6 +12,7 @@ import { confirm, spinner } from "../../core/ui.ts";
 interface DeleteArgs {
   name: string;
   force: boolean;
+  output?: string;
 }
 
 export const sandboxDeleteCommand = defineCommand<DeleteArgs>({
@@ -37,13 +38,13 @@ export const sandboxDeleteCommand = defineCommand<DeleteArgs>({
         describe: "Skip confirmation prompt",
       }),
 
-  handler: async ({ name, force, profile, verbose, apiKey }) => {
+  handler: async ({ name, force, output, profile, verbose, apiKey }) => {
     const record = getSandbox(name);
     if (!record) {
       throw new UserError(`No sandbox named "${name}" found.`);
     }
 
-    if (!force) {
+    if (!force && output !== "json") {
       const ok = await confirm(
         `Delete sandbox "${name}" (app ${record.app_id})?`,
       );
@@ -82,6 +83,12 @@ export const sandboxDeleteCommand = defineCommand<DeleteArgs>({
 
     spin.stop();
     deleteSandbox(name);
+
+    if (output === "json") {
+      logger.log(JSON.stringify({ deleted: true, name }, null, 2));
+      return;
+    }
+
     logger.log(`Sandbox "${name}" deleted.`);
   },
 });
