@@ -123,9 +123,9 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
     }
 
     if (output === "json") {
-      // Scripts opt in explicitly with --import; the scan is best-effort since the zone already exists.
       let importedRecords: number | undefined;
       let failedRecords: number | undefined;
+      let importError: string | undefined;
       if (doImport === true && created?.Id != null) {
         try {
           const records = await discoverImportableRecords(client, created);
@@ -134,7 +134,9 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
             : { applied: [], failures: [] };
           importedRecords = applied.length;
           failedRecords = failures.length;
-        } catch {}
+        } catch (err) {
+          importError = err instanceof Error ? err.message : String(err);
+        }
       }
       logger.log(
         JSON.stringify(
@@ -144,11 +146,19 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
               ? { ImportedRecords: importedRecords }
               : {}),
             ...(failedRecords ? { FailedRecords: failedRecords } : {}),
+            ...(importError ? { ImportError: importError } : {}),
           },
           null,
           2,
         ),
       );
+      // --import is an explicit migration action; fail loudly when it couldn't run.
+      if (importError) {
+        throw new UserError(
+          `Importing records into ${domain} failed.`,
+          importError,
+        );
+      }
       return;
     }
 
@@ -158,7 +168,13 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
         : `Created DNS zone ${domain}.`,
     );
 
-    if (created?.Id != null && doImport !== false) {
+    // Default scan+menu only run with a TTY so `zones add <domain>` stays scriptable; --import forces it.
+    const interactive = Boolean(process.stdin.isTTY);
+
+    if (
+      created?.Id != null &&
+      (doImport === true || (doImport === undefined && interactive))
+    ) {
       let discovered: Awaited<ReturnType<typeof discoverImportableRecords>> =
         [];
       let scanError: unknown;
@@ -193,7 +209,7 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
       }
     }
 
-    if (created?.Id != null && doImport === undefined) {
+    if (created?.Id != null && doImport === undefined && interactive) {
       await offerNextSteps({ client, config, verbose, zone: created, output });
     }
 

@@ -298,7 +298,7 @@ bunny-cli/
 │           │   │       └── invalidate.ts # Invalidate all tokens for a database (with confirmation)
 │           │   ├── dns/                   # Experimental — hidden from help and landing page
 │           │   │   ├── index.ts          # defineNamespace("dns", ...): registers the records + zones + scripts groups (+ hidden domain aliases)
-│           │   │   ├── api.ts            # CoreClient type, fetchZones/fetchZone, resolveZone (domain-or-ID → zone), scanZoneRecords (trigger + poll bunny's server-side record scan via /dnszone/records/scan, returns corrected DnsDiscoveredRecord[] with Flags/Tag; uses DnsRecordScanStatus enum)
+│           │   │   ├── api.ts            # CoreClient type, fetchZones/fetchZone, resolveZone (domain-or-ID → zone), scanZoneRecords (trigger + poll bunny's server-side record scan via /dnszone/records/scan; matches the triggered JobId, falling back to "differs from the prior job" when the trigger omits one; returns corrected DnsDiscoveredRecord[] with Flags/Tag; uses DnsRecordScanStatus enum)
 │           │   │   ├── constants.ts      # DNS_MANIFEST (".bunny/dns.json") + DnsManifest type, written by `dns zones link`
 │           │   │   ├── interactive.ts    # resolveZoneInteractive (arg → .bunny/dns.json manifest → zone picker; offerLink prompts to link a picked zone, skipped under --output json) + resolveRecordInteractive; autoLinkDnsZone (link a zone found in another flow — silent write, confirm before relinking a different zone) reused by scripts custom-domain setup
 │           │   │   ├── record-types.ts   # Re-exports RECORD_TYPES/RECORD_TYPE_META/recordTypeLabel from core/dns-record-types.ts; adds parseRecordType (accepts canonical labels + enum-key names), recordName, formatRecordValue
@@ -312,7 +312,7 @@ bunny-cli/
 │           │   │   │   ├── presets.ts    # Preset catalog (data + pure build fns): google-workspace, microsoft365/outlook, zoho, mailgun, resend, proton, bluesky, dmarc, caa, no-email. findPreset(id|alias)
 │           │   │   │   ├── presets.test.ts # Tests for the pure preset build fns + alias resolution
 │           │   │   │   ├── write.ts      # Shared writeRecords (per-record PUT, resilient: collects {applied, failures} so one bad record can't strand the batch) + reviewAndApply (multiselect pre-checked records in text, write, report partial failures, serialize on json); used by preset.ts, scan.ts, zone/add.ts
-│           │   │   │   ├── scan-records.ts # discoverImportableRecords: scanZoneRecords + map discovered → AddDnsRecordModel (carries Flags/Tag, reconstructs CAA flags/tag from rdata as a fallback), drop SOA/NS, dedupe vs existing records
+│           │   │   │   ├── scan-records.ts # discoverImportableRecords: scanZoneRecords + map discovered → AddDnsRecordModel (carries Flags/Tag, reconstructs CAA flags/tag from rdata as a fallback), drop apex SOA/NS but keep delegated subdomain NS, dedupe vs existing records by type + normalized name/value (trailing-dot/case) + type-specific fields (priority/weight/port/flags/tag)
 │           │   │   │   ├── scan-records.test.ts # Tests for the discovered-record mapping/filter/dedupe
 │           │   │   │   ├── scan.ts       # `records scan [domain]` (--yes): discover the domain's existing records (server-side scan) and reviewAndApply them; reused at zone creation
 │           │   │   │   ├── import.ts     # Import records from a BIND zone file (prompts for zone/file when omitted). Exports importZoneFile reused by zone/add.ts's next-steps menu
@@ -320,7 +320,7 @@ bunny-cli/
 │           │   │   └── zone/              # `dns zones` — the zone itself (canonical: zones; aliases: zone; hidden: domain, domains)
 │           │   │       ├── index.ts      # defineNamespace("zones", ...) + dnsZoneHiddenAliases (domain/domains)
 │           │   │       ├── list.ts       # List all DNS zones (alias: ls); Nameservers column from a live per-zone NS lookup, not bunny's NameserversDetected flag
-│           │   │       ├── add.ts        # Create a DNS zone, auto-scan for the domain's existing records (discoverImportableRecords + reviewAndApply; --import imports all without prompting, --no-import skips scan+menu, best-effort), then offerNextSteps menu (upload a zone file via importZoneFile / add records manually via addRecordInteractive / continue), then print the bunny nameservers to set (naming the registrar via core/registrar.ts when RDAP resolves it)
+│           │   │       ├── add.ts        # Create a DNS zone, auto-scan for the domain's existing records (discoverImportableRecords + reviewAndApply; --import imports all without prompting and surfaces failures as a JSON ImportError + nonzero exit, --no-import skips scan+menu), then offerNextSteps menu (upload a zone file via importZoneFile / add records manually via addRecordInteractive / continue), then print the bunny nameservers (naming the registrar via core/registrar.ts when RDAP resolves it). Default scan+menu are TTY-gated so `zones add <domain>` stays scriptable
 │           │   │       ├── link.ts       # Link this directory to a zone → .bunny/dns.json (arg, else pick interactively)
 │           │   │       ├── unlink.ts     # Remove .bunny/dns.json (alias-free; --force skips confirm)
 │           │   │       ├── show.ts       # Show zone details (nameservers, SOA, DNSSEC, logging, record count)
@@ -913,7 +913,7 @@ bunny
 │   │   └── export      [domain] [--file] [--save]  Export a zone as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
 │   └── zones                               (canonical; aliases: zone; hidden: domain, domains)
 │       ├── list                            List all DNS zones (alias: ls)
-│       ├── add         <domain> [--import]  Create a DNS zone: auto-scan for existing records → import them → next-steps menu (upload a zone file / add records manually / continue), then print the bunny nameservers to set (naming the registrar via RDAP when detectable). --import imports scanned records without prompting (also under --output json); --no-import skips the scan and menu
+│       ├── add         <domain> [--import]  Create a DNS zone: with a TTY, auto-scan for existing records → import them → next-steps menu (upload a zone file / add records manually / continue); then print the bunny nameservers to set (naming the registrar via RDAP when detectable). --import imports scanned records without prompting (also under --output json, surfacing failures); --no-import (and non-TTY default) skips the scan and menu
 │       ├── link        [domain]            Link this directory to a zone → .bunny/dns.json (pick interactively when omitted)
 │       ├── unlink      [--force]           Remove .bunny/dns.json, unlinking this directory
 │       ├── show        [domain]            Show zone details (nameservers, SOA, DNSSEC, logging, record count)

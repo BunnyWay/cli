@@ -72,6 +72,77 @@ describe("discoverImportableRecords", () => {
     expect(caa?.Value).toBe("letsencrypt.org");
   });
 
+  test("keeps delegated subdomain NS records but drops the apex NS", async () => {
+    discovered = [
+      { Type: RECORD_TYPES.NS, Name: "@", Value: "kiki.bunny.net" },
+      { Type: RECORD_TYPES.NS, Name: "dev", Value: "ns1.vendor.com" },
+    ];
+    const records = await discoverImportableRecords({} as never, zone);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      Type: RECORD_TYPES.NS,
+      Name: "dev",
+      Value: "ns1.vendor.com",
+    });
+  });
+
+  test("treats records differing only by a type-specific field as distinct", async () => {
+    const mxZone = {
+      Id: 1,
+      Domain: "example.com",
+      Records: [
+        {
+          Type: RECORD_TYPES.MX,
+          Name: "",
+          Value: "mail.example.com",
+          Priority: 10,
+        },
+      ],
+    } as never;
+    discovered = [
+      {
+        Type: RECORD_TYPES.MX,
+        Name: "@",
+        Value: "mail.example.com",
+        Priority: 10,
+      },
+      {
+        Type: RECORD_TYPES.MX,
+        Name: "@",
+        Value: "mail.example.com",
+        Priority: 20,
+      },
+    ];
+    const records = await discoverImportableRecords({} as never, mxZone);
+    expect(records).toHaveLength(1);
+    expect(records[0]?.Priority).toBe(20);
+  });
+
+  test("dedupes values that differ only by a trailing dot", async () => {
+    const cnameZone = {
+      Id: 1,
+      Domain: "example.com",
+      Records: [
+        { Type: RECORD_TYPES.CNAME, Name: "www", Value: "example.com" },
+      ],
+    } as never;
+    discovered = [
+      { Type: RECORD_TYPES.CNAME, Name: "www", Value: "example.com." },
+    ];
+    expect(
+      await discoverImportableRecords({} as never, cnameZone),
+    ).toHaveLength(0);
+  });
+
+  test("reconstructs CAA records with non-standard tags from rdata", async () => {
+    discovered = [
+      { Type: RECORD_TYPES.CAA, Name: "@", Value: '0 issuevmc "example.com"' },
+    ];
+    const [caa] = await discoverImportableRecords({} as never, zone);
+    expect(caa?.Tag).toBe("issuevmc");
+    expect(caa?.Value).toBe("example.com");
+  });
+
   test("returns nothing when the scan only finds existing/zone-managed records", async () => {
     discovered = [
       { Type: RECORD_TYPES.NS, Name: "@", Value: "ns1.other.com" },

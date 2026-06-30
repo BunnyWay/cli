@@ -56,7 +56,7 @@ export const dnsScanCommand = defineCommand<ScanArgs>({
 
     if (records.length === 0) {
       if (output === "json") {
-        logger.log("[]");
+        logger.log(JSON.stringify({ applied: [], failures: [] }, null, 2));
         return;
       }
       logger.info(`No new records discovered for ${zone.Domain}.`);

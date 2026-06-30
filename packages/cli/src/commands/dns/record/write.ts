@@ -103,6 +103,7 @@ export async function reviewAndApply(opts: {
     spin?.stop();
   }
   const { applied, failures } = result;
+  const allFailed = applied.length === 0 && failures.length > 0;
 
   if (output === "json") {
     logger.log(
@@ -118,20 +119,21 @@ export async function reviewAndApply(opts: {
         2,
       ),
     );
-    return;
+  } else {
+    if (applied.length > 0) logger.success(opts.successFor(applied.length));
+    if (failures.length > 0) {
+      logger.warn(`${failures.length} record(s) couldn't be added:`);
+      for (const f of failures) {
+        logger.warn(`  ${describeRecord(f.record)}: ${f.message}`);
+      }
+    }
   }
 
-  if (applied.length === 0 && failures.length > 0) {
+  // Exit nonzero (in both text and json) when nothing could be written.
+  if (allFailed) {
     throw new UserError(
       `None of the ${failures.length} record(s) could be added to ${zone.Domain}.`,
       failures[0]?.message,
     );
-  }
-  if (applied.length > 0) logger.success(opts.successFor(applied.length));
-  if (failures.length > 0) {
-    logger.warn(`${failures.length} record(s) couldn't be added:`);
-    for (const f of failures) {
-      logger.warn(`  ${describeRecord(f.record)}: ${f.message}`);
-    }
   }
 }

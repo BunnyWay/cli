@@ -23,6 +23,15 @@ export async function scanZoneRecords(
   opts: { timeoutMs?: number; intervalMs?: number } = {},
 ): Promise<DnsDiscoveredRecord[]> {
   const { timeoutMs = 45000, intervalMs = 1500 } = opts;
+  // Remember the prior job so a fresh result is identifiable even if the trigger omits a JobId.
+  let priorJobId: string | undefined;
+  try {
+    const { data } = await client.GET("/dnszone/{zoneId}/records/scan", {
+      params: { path: { zoneId } },
+    });
+    priorJobId = (data as DnsRecordScanJob | undefined)?.JobId ?? undefined;
+  } catch {}
+
   const { data: trigger } = await client.POST("/dnszone/records/scan", {
     body: { ZoneId: zoneId },
   });
@@ -34,8 +43,11 @@ export async function scanZoneRecords(
     });
     // The generated Records type is lossy (drops Flags/Tag); read the corrected shape.
     const data = raw as DnsRecordScanJob | undefined;
-    // Only trust the result once it matches the job we just triggered.
-    if (data && (!jobId || data.JobId === jobId)) {
+    // Match the triggered job by id; without one, accept only a job that differs from the prior result.
+    const isOurJob = jobId
+      ? data?.JobId === jobId
+      : data?.JobId != null && data.JobId !== priorJobId;
+    if (data && isOurJob) {
       if (data.Status === DnsRecordScanStatus.Completed)
         return data.Records ?? [];
       if (data.Status === DnsRecordScanStatus.Failed) {

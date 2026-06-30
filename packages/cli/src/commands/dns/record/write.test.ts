@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { writeRecords } from "./write.ts";
+import { reviewAndApply, writeRecords } from "./write.ts";
 
 const zone = { Id: 1, Domain: "example.com" } as never;
 
@@ -23,5 +23,27 @@ describe("writeRecords", () => {
     expect(result.failures).toHaveLength(1);
     expect(result.failures[0]?.message).toContain("maximum of 50 characters");
     expect(result.failures[0]?.record.Value).toBe("bad");
+  });
+});
+
+describe("reviewAndApply", () => {
+  test("a json run throws (nonzero exit) when every record fails", async () => {
+    const client = {
+      PUT: async () => {
+        throw new Error("boom");
+      },
+    } as never;
+
+    await expect(
+      reviewAndApply({
+        client,
+        zone,
+        records: [{ Value: "x" }] as never,
+        output: "json",
+        selectMessage: "",
+        spinnerLabel: "",
+        successFor: () => "",
+      }),
+    ).rejects.toThrow(/None of the/);
   });
 });
