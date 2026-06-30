@@ -1,7 +1,7 @@
 import { getSandbox } from "../../config/index.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
-import { sshArgs, withSshEnv, WORKPLACE } from "./ssh-exec.ts";
+import { sshArgs, WORKPLACE, withSshEnv } from "./ssh-exec.ts";
 
 export const sandboxSshCommand = defineCommand({
   command: "ssh <name>",
