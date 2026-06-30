@@ -1,7 +1,7 @@
 import { getSandbox } from "../../config/index.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
-import { sshArgs, WORKPLACE } from "./ssh-exec.ts";
+import { sshArgs, sshEnv, WORKPLACE } from "./ssh-exec.ts";
 
 interface ExecArgs {
   name: string;
@@ -61,6 +61,7 @@ export const sandboxExecCommand = defineCommand<ExecArgs>({
       stdin: "inherit",
       stdout: "inherit",
       stderr: "inherit",
+      env: sshEnv(record),
     });
 
     process.exitCode = await proc.exited;

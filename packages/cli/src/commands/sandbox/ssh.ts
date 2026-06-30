@@ -1,7 +1,7 @@
 import { getSandbox } from "../../config/index.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
-import { WORKPLACE } from "./ssh-exec.ts";
+import { sshArgs, sshEnv, WORKPLACE } from "./ssh-exec.ts";
 
 export const sandboxSshCommand = defineCommand({
   command: "ssh <name>",
@@ -28,31 +28,14 @@ export const sandboxSshCommand = defineCommand({
       );
     }
 
-    const [host, portStr] = (
-      record.ssh_host.includes(":")
-        ? record.ssh_host.split(":")
-        : [record.ssh_host, "8023"]
-    ) as [string, string];
-
     const proc = Bun.spawn(
-      [
-        "sshpass",
-        "-p",
-        record.agent_token,
-        "ssh",
-        "-t",
-        "-p",
-        portStr,
-        "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        "UserKnownHostsFile=/dev/null",
-        "-o",
-        "LogLevel=ERROR",
-        `root@${host}`,
-        `cd ${WORKPLACE} && exec bash -l`,
-      ],
-      { stdin: "inherit", stdout: "inherit", stderr: "inherit" },
+      sshArgs(record, `cd ${WORKPLACE} && exec bash -l`, { tty: true }),
+      {
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+        env: sshEnv(record),
+      },
     );
 
     process.exitCode = await proc.exited;
