@@ -339,7 +339,7 @@ describe("configToAddRequest", () => {
     ]);
   });
 
-  test("anycast endpoint stamps type 'iPv4'", () => {
+  test("anycast endpoint stamps type 'ipv4'", () => {
     const req = configToAddRequest({
       version: CURRENT_VERSION,
       app: {
@@ -355,7 +355,7 @@ describe("configToAddRequest", () => {
       },
     });
     const ep = req.containerTemplates?.[0]?.endpoints?.[0];
-    expect(ep?.anycast?.type).toBe("iPv4");
+    expect(ep?.anycast?.type).toBe("ipv4");
     expect(ep?.anycast?.portMappings).toEqual([
       { containerPort: 80, exposedPort: 80 },
     ]);

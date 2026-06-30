@@ -114,7 +114,7 @@ describe("endpointRequestToConfig", () => {
     const ep: EndpointRequest = {
       displayName: "anycast",
       anycast: {
-        type: "iPv4",
+        type: "ipv4",
         portMappings: [{ exposedPort: 9090, containerPort: 9090 }],
       },
     };
