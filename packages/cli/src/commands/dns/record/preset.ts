@@ -15,14 +15,53 @@ import { type DnsPreset, findPreset, PRESETS } from "./presets.ts";
 interface PresetArgs {
   name?: string;
   domain?: string;
+  param?: string[];
 }
 
-/** Prompt for each parameter a preset needs; optional blanks are dropped. */
+/** Parse repeated `--param key=value` flags into a lookup, trimming blanks. */
+function parseParamFlags(flags: string[] | undefined): Record<string, string> {
+  const provided: Record<string, string> = {};
+  for (const entry of flags ?? []) {
+    const eq = entry.indexOf("=");
+    if (eq === -1) {
+      throw new UserError(
+        `Invalid --param "${entry}".`,
+        "Use --param key=value (repeat for multiple values).",
+      );
+    }
+    const key = entry.slice(0, eq).trim();
+    const value = entry.slice(eq + 1).trim();
+    if (key) provided[key] = value;
+  }
+  return provided;
+}
+
+/**
+ * Resolve each parameter a preset needs from provided flags, prompting for the
+ * rest only when interactive. Non-interactive callers must supply required
+ * values via flags; optional blanks are dropped.
+ */
 async function gatherParams(
   preset: DnsPreset,
+  provided: Record<string, string>,
+  interactive: boolean,
 ): Promise<Record<string, string>> {
   const params: Record<string, string> = {};
   for (const param of preset.params) {
+    const supplied = provided[param.key]?.trim();
+    if (supplied) {
+      params[param.key] = supplied;
+      continue;
+    }
+    if (!interactive) {
+      if (!param.optional) {
+        throw new UserError(
+          `Preset "${preset.id}" needs a value for "${param.key}".`,
+          `Pass --param ${param.key}=<value> (${param.message}).`,
+        );
+      }
+      continue;
+    }
     const { value } = await prompts({
       type: "text",
       name: "value",
@@ -41,62 +80,75 @@ async function gatherParams(
   return params;
 }
 
-/** Expand a preset, show what it will add, confirm, then write each record. */
+/** Expand a preset, confirm in text mode, then write each record. */
 export async function applyPreset(opts: {
   client: CoreClient;
   zone: DnsZoneModel;
   preset: DnsPreset;
   output: string;
+  provided?: Record<string, string>;
 }): Promise<void> {
-  const { client, zone, preset, output } = opts;
-  const params = await gatherParams(preset);
+  const { client, zone, preset, output, provided = {} } = opts;
+  // Only plain text drives the interactive prompts; json/csv/... must come fully specified.
+  const interactive = output === "text";
+  const params = await gatherParams(preset, provided, interactive);
   const records = preset.build({ domain: zone.Domain ?? "", params });
 
   if (records.length === 0) {
     throw new UserError("This preset produced no records to add.");
   }
 
-  if (output === "json") {
-    logger.log(JSON.stringify(records, null, 2));
-    return;
+  if (interactive) {
+    logger.log(`This will add ${records.length} record(s) to ${zone.Domain}:`);
+    logger.log("");
+    logger.log(
+      formatTable(
+        ["Type", "Name", "Value", "Priority"],
+        records.map((r) => [
+          recordTypeLabel(r.Type),
+          recordName(r.Name),
+          r.Value ?? "",
+          r.Priority != null ? String(r.Priority) : "",
+        ]),
+        "text",
+      ),
+    );
+    logger.log("");
+
+    if (
+      !(await confirm(`Add these ${records.length} record(s)?`, {
+        initial: true,
+      }))
+    ) {
+      logger.info("Cancelled.");
+      return;
+    }
   }
 
-  logger.log(`This will add ${records.length} record(s) to ${zone.Domain}:`);
-  logger.log("");
-  logger.log(
-    formatTable(
-      ["Type", "Name", "Value", "Priority"],
-      records.map((r) => [
-        recordTypeLabel(r.Type),
-        recordName(r.Name),
-        r.Value ?? "",
-        r.Priority != null ? String(r.Priority) : "",
-      ]),
-      "text",
-    ),
-  );
-  logger.log("");
-
-  if (
-    !(await confirm(`Add these ${records.length} record(s)?`, {
-      initial: true,
-    }))
-  ) {
-    logger.info("Cancelled.");
-    return;
-  }
-
-  const spin = spinner(`Applying ${preset.title}...`);
-  spin.start();
+  const spin = interactive ? spinner(`Applying ${preset.title}...`) : null;
+  spin?.start();
+  let applied = 0;
   try {
     for (const record of records) {
       await client.PUT("/dnszone/{zoneId}/records", {
         params: { path: { zoneId: zone.Id as number } },
         body: record,
       });
+      applied++;
     }
+  } catch (err) {
+    // Records are written one by one with no rollback; tell the user how far it got so they can inspect the zone.
+    throw new UserError(
+      `Applied ${applied} of ${records.length} record(s) before failing; ${zone.Domain} may be partially configured.`,
+      err instanceof Error ? err.message : String(err),
+    );
   } finally {
-    spin.stop();
+    spin?.stop();
+  }
+
+  if (output === "json") {
+    logger.log(JSON.stringify(records, null, 2));
+    return;
   }
 
   logger.success(
@@ -125,8 +177,9 @@ export async function pickAndApplyPreset(opts: {
   zone: DnsZoneModel;
   output: string;
   name?: string;
+  provided?: Record<string, string>;
 }): Promise<void> {
-  const { client, zone, output, name } = opts;
+  const { client, zone, output, name, provided } = opts;
   const preset = name ? findPreset(name) : await pickPreset();
   if (!preset) {
     if (name) {
@@ -137,7 +190,7 @@ export async function pickAndApplyPreset(opts: {
     }
     return;
   }
-  await applyPreset({ client, zone, preset, output });
+  await applyPreset({ client, zone, preset, output, provided });
 }
 
 export const dnsPresetCommand = defineCommand<PresetArgs>({
@@ -150,6 +203,10 @@ export const dnsPresetCommand = defineCommand<PresetArgs>({
       "$0 dns records preset google-workspace example.com",
       "Apply a named preset",
     ],
+    [
+      "$0 dns records preset bluesky example.com --param did=did:plc:abc123",
+      "Apply a preset non-interactively",
+    ],
     ["$0 dns records preset list", "List available presets"],
   ],
 
@@ -159,9 +216,23 @@ export const dnsPresetCommand = defineCommand<PresetArgs>({
         type: "string",
         describe: "Preset id (omit to pick interactively, or 'list' to list)",
       })
-      .positional("domain", { type: "string", describe: "Domain or zone ID" }),
+      .positional("domain", { type: "string", describe: "Domain or zone ID" })
+      .option("param", {
+        type: "string",
+        array: true,
+        describe:
+          "Preset value as key=value (repeatable), e.g. --param did=did:plc:...",
+      }),
 
-  handler: async ({ name, domain, profile, output, verbose, apiKey }) => {
+  handler: async ({
+    name,
+    domain,
+    param,
+    profile,
+    output,
+    verbose,
+    apiKey,
+  }) => {
     if (name === "list") {
       if (output === "json") {
         logger.log(
@@ -196,6 +267,7 @@ export const dnsPresetCommand = defineCommand<PresetArgs>({
       offerLink: true,
     });
 
-    await pickAndApplyPreset({ client, zone, output, name });
+    const provided = parseParamFlags(param);
+    await pickAndApplyPreset({ client, zone, output, name, provided });
   },
 });

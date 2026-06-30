@@ -174,7 +174,11 @@ export const PRESETS: DnsPreset[] = [
     params: [
       { key: "sub", message: "Sending subdomain", initial: "send" },
       { key: "region", message: "Resend/SES region", initial: "us-east-1" },
-      { key: "dkim", message: "resend._domainkey TXT value", optional: true },
+      {
+        key: "dkim",
+        message: "resend._domainkey.<sub> TXT value",
+        optional: true,
+      },
     ],
     build: ({ params }) => {
       const sub = params.sub || "send";
@@ -183,7 +187,9 @@ export const PRESETS: DnsPreset[] = [
         mx(sub, `feedback-smtp.${region}.amazonses.com`, 10),
         txt(sub, "v=spf1 include:amazonses.com ~all"),
       ];
-      if (params.dkim) records.push(txt("resend._domainkey", params.dkim));
+      // Resend expects the DKIM host under the sending subdomain (resend._domainkey.send), not the apex.
+      if (params.dkim)
+        records.push(txt(`resend._domainkey.${sub}`, params.dkim));
       return records;
     },
   },

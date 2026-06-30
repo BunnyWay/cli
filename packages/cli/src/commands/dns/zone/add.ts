@@ -3,7 +3,6 @@ import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import {
-  BUNNY_NAMESERVERS,
   checkDelegation,
   expectedNameservers,
 } from "../../../core/dns-nameservers.ts";
@@ -66,12 +65,10 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
     // Savvy users often point the registrar at bunny before creating the zone; skip the setup steps when it's already delegated.
     const checkSpin = spinner("Checking nameserver delegation...");
     checkSpin.start();
+    const nameservers = expectedNameservers(created ?? {});
     let delegated: boolean;
     try {
-      const { status } = await checkDelegation(
-        domain,
-        expectedNameservers(created ?? {}),
-      );
+      const { status } = await checkDelegation(domain, nameservers);
       delegated = status === "bunny";
     } finally {
       checkSpin.stop();
@@ -90,7 +87,7 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
       `Now update your nameservers at ${registrar ?? "your domain registrar"} to:`,
     );
     logger.log("");
-    for (const ns of BUNNY_NAMESERVERS) logger.log(`  ${ns}`);
+    for (const ns of nameservers) logger.log(`  ${ns}`);
     logger.log("");
     logger.dim(
       `Propagation can take up to 48 hours. Verify with:\n  bunny dns zones ns ${domain}`,

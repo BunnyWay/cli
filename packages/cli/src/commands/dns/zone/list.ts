@@ -4,6 +4,7 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import {
   checkDelegations,
+  type DelegationCheck,
   type DelegationStatus,
   expectedNameservers,
 } from "../../../core/dns-nameservers.ts";
@@ -41,29 +42,37 @@ export const dnsZoneListCommand = defineCommand({
     }
 
     // bunny's NameserversDetected defaults to true on a fresh zone; resolve the real delegation live.
-    let delegation: DelegationStatus[] = [];
+    let checks: DelegationCheck[] = [];
     if (zones.length > 0) {
       const checkSpin = spinner("Checking nameserver delegation...");
       checkSpin.start();
       try {
-        const checks = await checkDelegations(
+        checks = await checkDelegations(
           zones.map((z) => ({
             domain: z.Domain ?? "",
             expected: expectedNameservers(z),
           })),
         );
-        delegation = checks.map((c) => c.status);
       } finally {
         checkSpin.stop();
       }
     }
+    const delegation: DelegationStatus[] = checks.map((c) => c.status);
 
     if (output === "json") {
-      // Overwrite the unreliable API flag with the live result so scripts read the true value.
-      const corrected = zones.map((z, i) => ({
-        ...z,
-        NameserversDetected: delegation[i] === "bunny",
-      }));
+      const corrected = zones.map((z, i) => {
+        const check = checks[i];
+        return {
+          ...z,
+          // Trust the live result only when conclusive; on "unknown" keep the API flag so a transient resolver failure doesn't flip every zone to pending.
+          NameserversDetected:
+            check && check.status !== "unknown"
+              ? check.status === "bunny"
+              : z.NameserversDetected,
+          NameserversDelegation: check?.status ?? "unknown",
+          NameserversResolved: check?.resolved ?? [],
+        };
+      });
       logger.log(JSON.stringify(corrected, null, 2));
       return;
     }

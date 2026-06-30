@@ -52,6 +52,7 @@ bun ny dns zones add example.com            # create a zone; prints registrar-aw
 bun ny dns zones nameservers example.com    # live-check whether the registrar delegates to bunny
 bun ny dns records preset list              # list DNS record presets (email providers, verification, security)
 bun ny dns records preset google-workspace example.com   # apply a preset record set
+bun ny dns records preset bluesky example.com --param did=did:plc:abc123   # apply a preset non-interactively
 ```
 
 ### Available Scripts

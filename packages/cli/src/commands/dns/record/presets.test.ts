@@ -71,6 +71,17 @@ describe("DNS presets", () => {
     ).toBe("_atproto.alice");
   });
 
+  test("resend puts MX, SPF, and DKIM under the sending subdomain", () => {
+    const recs = build("resend", { dkim: "v=DKIM1; p=xyz" });
+    expect(recs.find((r) => r.Type === RECORD_TYPES.MX)?.Name).toBe("send");
+    expect(recs.find((r) => r.Name === "resend._domainkey.send")?.Value).toBe(
+      "v=DKIM1; p=xyz",
+    );
+
+    const custom = build("resend", { sub: "mail", dkim: "v=DKIM1; p=xyz" });
+    expect(custom.some((r) => r.Name === "resend._domainkey.mail")).toBe(true);
+  });
+
   test("no-email uses a null MX and a reject DMARC", () => {
     const recs = build("no-email");
     expect(recs.find((r) => r.Type === RECORD_TYPES.MX)?.Value).toBe(".");

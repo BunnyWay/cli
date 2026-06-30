@@ -6,6 +6,7 @@ import {
   checkDelegation,
   expectedNameservers,
 } from "../../../core/dns-nameservers.ts";
+import { formatKeyValue } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { detectRegistrar } from "../../../core/registrar.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
@@ -61,6 +62,24 @@ export const dnsNameserversCommand = defineCommand<NameserversArgs>({
           },
           null,
           2,
+        ),
+      );
+      return;
+    }
+
+    // csv/table/markdown stay machine-readable; only plain text gets the prose guidance.
+    if (output !== "text") {
+      logger.log(
+        formatKeyValue(
+          [
+            { key: "Domain", value: zoneDomain },
+            { key: "Custom", value: custom ? "Yes" : "No" },
+            { key: "Detected", value: detected ? "Yes" : "No" },
+            { key: "Status", value: status },
+            { key: "Resolved", value: resolved.join(" ") },
+            { key: "Nameservers", value: nameservers.join(" ") },
+          ],
+          output,
         ),
       );
       return;
