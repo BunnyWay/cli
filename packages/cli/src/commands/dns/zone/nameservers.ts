@@ -2,23 +2,25 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
-import { formatKeyValue, formatTable } from "../../../core/format.ts";
+import {
+  checkDelegation,
+  expectedNameservers,
+} from "../../../core/dns-nameservers.ts";
+import { formatKeyValue } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
+import { detectRegistrar } from "../../../core/registrar.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
 
 interface NameserversArgs {
   domain?: string;
 }
 
-// bunny.net delegates every zone to the same two anycast nameservers.
-const BUNNY_DEFAULT_NAMESERVERS = ["kiki.bunny.net", "coco.bunny.net"];
-
 export const dnsNameserversCommand = defineCommand<NameserversArgs>({
   command: "nameservers [domain]",
   aliases: ["ns"],
-  describe: "Show the nameservers to set at your registrar for a zone.",
+  describe: "Check whether a zone is delegated to bunny.net.",
   examples: [
-    ["$0 dns zones nameservers example.com", "Show the zone's nameservers"],
+    ["$0 dns zones nameservers example.com", "Check the zone's delegation"],
     ["$0 dns zones ns example.com --output json", "JSON output"],
   ],
 
@@ -36,21 +38,28 @@ export const dnsNameserversCommand = defineCommand<NameserversArgs>({
       output,
       offerLink: true,
     });
+    const zoneDomain = zone.Domain ?? "";
 
     const custom =
       zone.CustomNameserversEnabled === true &&
       Boolean(zone.Nameserver1 || zone.Nameserver2);
-    const nameservers = custom
-      ? [zone.Nameserver1, zone.Nameserver2].filter((ns): ns is string =>
-          Boolean(ns),
-        )
-      : BUNNY_DEFAULT_NAMESERVERS;
-    const detected = zone.NameserversDetected === true;
+    const nameservers = [...expectedNameservers(zone)];
+
+    // Read the live registrar delegation; bunny's NameserversDetected flag defaults to true on a fresh zone.
+    const { status, resolved } = await checkDelegation(zoneDomain, nameservers);
+    const detected = status === "bunny";
 
     if (output === "json") {
       logger.log(
         JSON.stringify(
-          { domain: zone.Domain, custom, detected, nameservers },
+          {
+            domain: zoneDomain,
+            custom,
+            detected,
+            status,
+            resolved,
+            nameservers,
+          },
           null,
           2,
         ),
@@ -58,31 +67,40 @@ export const dnsNameserversCommand = defineCommand<NameserversArgs>({
       return;
     }
 
-    logger.log(
-      formatKeyValue(
-        [
-          { key: "Zone", value: zone.Domain ?? "" },
-          { key: "Type", value: custom ? "Custom" : "Default (bunny.net)" },
-          { key: "Detected at registrar", value: detected ? "Yes" : "No" },
-        ],
-        output,
-      ),
-    );
-
-    logger.log("");
-    logger.log(
-      formatTable(
-        ["Nameserver"],
-        nameservers.map((ns) => [ns]),
-        output,
-      ),
-    );
-
-    if (!detected) {
-      logger.log("");
-      logger.dim(
-        `Point ${zone.Domain}'s nameservers at the above to delegate it to bunny.net.`,
+    // csv/table/markdown stay machine-readable; only plain text gets the prose guidance.
+    if (output !== "text") {
+      logger.log(
+        formatKeyValue(
+          [
+            { key: "Domain", value: zoneDomain },
+            { key: "Custom", value: custom ? "Yes" : "No" },
+            { key: "Detected", value: detected ? "Yes" : "No" },
+            { key: "Status", value: status },
+            { key: "Resolved", value: resolved.join(" ") },
+            { key: "Nameservers", value: nameservers.join(" ") },
+          ],
+          output,
+        ),
       );
+      return;
     }
+
+    if (detected) {
+      logger.success(
+        `Nameservers detected and pointing to Bunny DNS for ${zoneDomain}.`,
+      );
+      return;
+    }
+
+    const registrar = await detectRegistrar(zoneDomain);
+    logger.log(
+      `Now update your nameservers at ${registrar ?? "your domain registrar"} to:`,
+    );
+    logger.log("");
+    for (const ns of nameservers) logger.log(`  ${ns}`);
+    logger.log("");
+    logger.dim(
+      `Propagation can take up to 48 hours. Verify with:\n  bunny dns zones ns ${zoneDomain}`,
+    );
   },
 });

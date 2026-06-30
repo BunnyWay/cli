@@ -21,13 +21,15 @@ When a zone is chosen via the picker, the command offers to link the directory t
 ## Typical workflows
 
 ```bash
-# Create a zone, then point your registrar at the printed nameservers
+# Create a zone; it prints the nameservers to set and names your registrar.
+# Once you have pointed them, check delegation has taken effect:
 bunny dns zones add example.com
 bunny dns zones nameservers example.com
 
-# Add records
+# Add records, or apply a preset record set (email, verification, security)
 bunny dns records add example.com api A 198.51.100.1
 bunny dns records add example.com '@' MX mail.example.com 10
+bunny dns records preset google-workspace example.com
 bunny dns records list example.com
 
 # Back up and restore a zone as a BIND file
@@ -51,15 +53,20 @@ bunny dns scripts attach example.com api --script <id>
 bunny dns zones add example.com
 ```
 
-Prints the bunny.net nameservers to set at your registrar.
+After creating the zone it checks the live registrar delegation:
+
+- If the domain already points at bunny (common when you set the nameservers first), it just confirms, with no further steps.
+- Otherwise it prints the nameservers to set, naming your registrar when it can detect it (via RDAP), plus how to verify once you have pointed them.
 
 ## `bunny dns zones list` / `show` / `nameservers`
 
 ```bash
 bunny dns zones list                                  # all zones (alias: ls)
 bunny dns zones show example.com                       # zone details
-bunny dns zones nameservers example.com                # nameservers to set at your registrar (alias: ns)
+bunny dns zones nameservers example.com                # check delegation (alias: ns)
 ```
+
+`nameservers` does a live nameserver lookup rather than trusting the API's detection flag (which reads as detected on a brand-new zone). When the registrar already delegates to bunny it confirms; otherwise it shows the nameservers to set at your (named) registrar. `list` shows a `Nameservers` column (`Detected` / `Pending` / `Unknown`) from the same live lookup, and `--output json` overwrites each zone's `NameserversDetected` with the live value.
 
 ## `bunny dns zones remove`: Delete a zone
 
@@ -123,7 +130,7 @@ All record commands operate within a zone (see [Zone resolution](#zone-resolutio
 
 ## `bunny dns records add`: Add a record
 
-Runs an interactive wizard when the type is omitted. Value ordering is per-type (see examples).
+Runs an interactive wizard when the type is omitted. Value ordering is per-type (see examples). The wizard first asks whether to add a single record or apply a preset (see [`bunny dns records preset`](#bunny-dns-records-preset-apply-a-preset-record-set)).
 
 ```bash
 bunny dns records add example.com api A 198.51.100.1
@@ -132,6 +139,32 @@ bunny dns records add example.com '@' SRV 10 0 389 sip.example.com
 bunny dns records add example.com '@' CAA '0 issue "letsencrypt.org"'
 bunny dns records add                                  # interactive wizard
 ```
+
+## `bunny dns records preset`: Apply a preset record set
+
+Applies a curated set of records for a common provider or task in one step. It prompts for the account-specific values (DKIM keys, verification codes, selectors), shows a summary of every record, and confirms before writing. Account-specific secrets cannot be hardcoded, but the record names, types, priorities, and SPF includes are filled in for you.
+
+```bash
+bunny dns records preset                               # pick a preset interactively
+bunny dns records preset list                          # list available presets
+bunny dns records preset google-workspace example.com  # apply a named preset
+bunny dns records preset list --output json
+```
+
+Available presets:
+
+| Preset             | Category       | Records                                                        |
+| ------------------ | -------------- | -------------------------------------------------------------- |
+| `google-workspace` | Email          | MX, SPF; optional DKIM and DMARC (aliases: `gmail`)            |
+| `microsoft365`     | Email          | MX (derived from domain), SPF, autodiscover (alias: `outlook`) |
+| `zoho`             | Email          | MX, SPF; optional verification and DKIM (region-aware)         |
+| `mailgun`          | Email          | SPF, MX, tracking CNAME, optional DKIM (sending subdomain)     |
+| `resend`           | Email          | MX, SPF, optional DKIM (SES-backed)                            |
+| `proton`           | Email          | verification, MX, SPF, optional DKIM CNAMEs                    |
+| `bluesky`          | Verification   | `_atproto` TXT at the apex or a handle subdomain               |
+| `dmarc`            | Email security | a `_dmarc` policy record                                       |
+| `caa`              | Email security | restrict which CAs may issue certificates                      |
+| `no-email`         | Email security | null MX, `-all` SPF, reject DMARC (domains that never mail)    |
 
 | Flag          | Description                           |
 | ------------- | ------------------------------------- |

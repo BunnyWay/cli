@@ -20,6 +20,7 @@ import {
 } from "../record-types.ts";
 import type { AnswerKind } from "../scripts/constants.ts";
 import { pickOrCreateDnsScript } from "../scripts/interactive.ts";
+import { pickAndApplyPreset } from "./preset.ts";
 
 type AddDnsRecordModel = components["schemas"]["AddDnsRecordModel"];
 type RecordLinks = Pick<AddDnsRecordModel, "PullZoneId" | "ScriptId">;
@@ -268,6 +269,25 @@ export const dnsAddCommand = defineCommand<AddArgs>({
 
     let record: AddDnsRecordModel;
     if (interactive) {
+      // Offer a ready-made preset before falling back to building a single record by hand.
+      const { mode } = await prompts({
+        type: "select",
+        name: "mode",
+        message: "What would you like to add?",
+        choices: [
+          { title: "A single record", value: "manual" },
+          {
+            title: "A preset (email providers, verification, security)",
+            value: "preset",
+          },
+        ],
+      });
+      if (mode === undefined) throw new UserError("A choice is required.");
+      if (mode === "preset") {
+        await pickAndApplyPreset({ client, zone, output });
+        return;
+      }
+
       const { typeValue } = await prompts({
         type: "select",
         name: "typeValue",

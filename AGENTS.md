@@ -175,6 +175,7 @@ bunny-cli/
 │           │   ├── client-options.ts     # clientOptions() helper — builds ClientOptions from ResolvedConfig
 │           │   ├── define-command.ts     # Command factory (see "Command Pattern" below)
 │           │   ├── define-namespace.ts   # Namespace/group factory for subcommand trees
+│           │   ├── dns-nameservers.ts    # BUNNY_NAMESERVERS + expectedNameservers(zone) + checkDelegation()/checkDelegations(): reads the parent zone's NS referral (raw UDP query of the registry, not the recursive answer a child host could spoof; falls back to dns.resolveNs when the referral is unreadable), matches the full expected set both ways, ground truth over bunny's NameserversDetected flag which defaults true on a fresh zone; checkDelegations is bounded-concurrency for the zone list
 │           │   ├── dns-record-types.ts   # Canonical DNS record-type name⇄integer map (RECORD_TYPES) + recordTypeLabel(); shared by commands/dns + core/hostnames
 │           │   ├── errors.ts             # Re-exports UserError/ApiError from @bunny.net/openapi-client + ConfigError
 │           │   ├── format.ts             # Shared table/key-value rendering (text, table, csv, markdown)
@@ -191,6 +192,8 @@ bunny-cli/
 │           │   │   └── commands.ts       # createHostnamesCommands(): add/ssl/list/remove factory parameterized by a pull-zone resolver
 │           │   ├── logger.ts             # Chalk-based structured logger
 │           │   ├── manifest.ts           # .bunny/ context file resolution (load, save, resolveManifestId)
+│           │   ├── registrar.ts          # detectRegistrar()/parseRegistrar(): best-effort registrar name via RDAP (used by dns zones add to name the registrar in next-steps)
+│           │   ├── registrar.test.ts     # Tests for parseRegistrar RDAP parsing + legal-suffix tidying
 │           │   ├── stats.ts              # Shared stats rendering: sumChart(), renderBarChart(), formatBucketLabel() (UTC date labels), BAR_WIDTH (used by dns/zone/stats + scripts/stats)
 │           │   ├── stats.test.ts         # Tests for stats helpers
 │           │   ├── types.ts              # GlobalArgs, OutputFormat, and shared type definitions
@@ -301,21 +304,24 @@ bunny-cli/
 │           │   │   ├── record/            # `dns records` — entries within a zone (canonical: records; aliases: record, rec)
 │           │   │   │   ├── index.ts      # defineNamespace("records", ...)
 │           │   │   │   ├── list.ts       # List records in a zone (alias: ls)
-│           │   │   │   ├── add.ts        # Add a record (positional grammar per type, or interactive wizard; --pull-zone/--script). Interactively, A/AAAA/CNAME/TXT offer static vs script-computed (Scriptable DNS) via pickOrCreateDnsScript: pick or create+seed a DNS script and write a SCRIPT record
+│           │   │   │   ├── add.ts        # Add a record (positional grammar per type, or interactive wizard; --pull-zone/--script). Interactive wizard first offers "single record" vs a preset (pickAndApplyPreset); A/AAAA/CNAME/TXT offer static vs script-computed (Scriptable DNS) via pickOrCreateDnsScript: pick or create+seed a DNS script and write a SCRIPT record
 │           │   │   │   ├── update.ts     # Update a record (alias: edit; prompts to pick zone+record when omitted)
 │           │   │   │   ├── remove.ts     # Remove a record (alias: rm; prompts to pick zone+record when omitted)
+│           │   │   │   ├── preset.ts     # `records preset [name] [domain]` (`list` lists; `--param key=value` repeatable for non-interactive runs): pick/apply a preset, gather params (flags then prompts in text mode), summarize, confirm, bulk-write. `--output json` writes then serializes the result; mid-sequence failures report how many records landed. Exports pickAndApplyPreset reused by add.ts
+│           │   │   │   ├── presets.ts    # Preset catalog (data + pure build fns): google-workspace, microsoft365/outlook, zoho, mailgun, resend, proton, bluesky, dmarc, caa, no-email. findPreset(id|alias)
+│           │   │   │   ├── presets.test.ts # Tests for the pure preset build fns + alias resolution
 │           │   │   │   ├── import.ts     # Import records from a BIND zone file (prompts for zone/file when omitted)
 │           │   │   │   └── export.ts     # Export records as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
 │           │   │   └── zone/              # `dns zones` — the zone itself (canonical: zones; aliases: zone; hidden: domain, domains)
 │           │   │       ├── index.ts      # defineNamespace("zones", ...) + dnsZoneHiddenAliases (domain/domains)
-│           │   │       ├── list.ts       # List all DNS zones (alias: ls)
-│           │   │       ├── add.ts        # Create a DNS zone
+│           │   │       ├── list.ts       # List all DNS zones (alias: ls); Nameservers column from a live per-zone NS lookup, not bunny's NameserversDetected flag
+│           │   │       ├── add.ts        # Create a DNS zone, then print the bunny nameservers to set (naming the registrar via core/registrar.ts when RDAP resolves it)
 │           │   │       ├── link.ts       # Link this directory to a zone → .bunny/dns.json (arg, else pick interactively)
 │           │   │       ├── unlink.ts     # Remove .bunny/dns.json (alias-free; --force skips confirm)
 │           │   │       ├── show.ts       # Show zone details (nameservers, SOA, DNSSEC, logging, record count)
 │           │   │       ├── remove.ts     # Delete a DNS zone and its records (alias: rm)
 │           │   │       ├── stats.ts      # Show DNS query statistics (TotalQueriesServed, by-type bar chart in text mode)
-│           │   │       ├── nameservers.ts # Show registrar nameservers (alias: ns; custom if set, else kiki/coco.bunny.net)
+│           │   │       ├── nameservers.ts # Check delegation (alias: ns): live NS lookup; on success a confirmation, otherwise the same "update your nameservers at [registrar]" guidance as zone add
 │           │   │       ├── dnssec/
 │           │   │       │   ├── index.ts  # defineNamespace("dnssec", ...)
 │           │   │       │   ├── enable.ts # Enable DNSSEC, print DS record for the registrar
@@ -896,17 +902,18 @@ bunny
 │   │   ├── update      [domain] [id] [--name] [--value] [--type] [--ttl] [--priority] [--weight] [--port] [--flags] [--tag] [--comment] [--disabled] [--pull-zone] [--script]
 │   │   │                                   Update a DNS record (alias: edit; prompts to pick zone+record when omitted)
 │   │   ├── remove      [domain] [id] [--force]  Remove a DNS record (alias: rm; prompts to pick zone+record when omitted)
+│   │   ├── preset      [name] [domain] [--param key=value]  Apply a preset record set (`preset list` lists; email providers, verification, security; --param repeatable for non-interactive runs)
 │   │   ├── import      [domain] [file]     Import records from a BIND zone file (prompts for zone/file when omitted)
 │   │   └── export      [domain] [--file] [--save]  Export a zone as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
 │   └── zones                               (canonical; aliases: zone; hidden: domain, domains)
 │       ├── list                            List all DNS zones (alias: ls)
-│       ├── add         <domain>            Create a DNS zone
+│       ├── add         <domain>            Create a DNS zone (then prints the bunny nameservers to set, naming the registrar via RDAP when detectable)
 │       ├── link        [domain]            Link this directory to a zone → .bunny/dns.json (pick interactively when omitted)
 │       ├── unlink      [--force]           Remove .bunny/dns.json, unlinking this directory
 │       ├── show        [domain]            Show zone details (nameservers, SOA, DNSSEC, logging, record count)
 │       ├── remove      [domain] [--force]  Delete a DNS zone and its records (alias: rm)
 │       ├── stats       [domain] [--from] [--to]  Show DNS query statistics for a zone (defaults to last 30 days; text mode renders a bar chart)
-│       ├── nameservers [domain] (alias: ns)  Show the nameservers to set at the registrar (custom if enabled, else bunny.net defaults)
+│       ├── nameservers [domain] (alias: ns)  Live-check whether the registrar delegates to bunny.net; confirm on success, else show the nameservers to set at the named registrar
 │       ├── dnssec
 │       │   ├── enable  [domain]            Enable DNSSEC and print the DS record for the registrar
 │       │   └── disable [domain] [--force]  Disable DNSSEC
