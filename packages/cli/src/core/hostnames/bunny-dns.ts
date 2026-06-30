@@ -1,4 +1,5 @@
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
+import { checkDelegation, expectedNameservers } from "../dns-nameservers.ts";
 import { RECORD_TYPES, recordTypeLabel } from "../dns-record-types.ts";
 import { UserError } from "../errors.ts";
 import { logger } from "../logger.ts";
@@ -72,12 +73,18 @@ export async function findBunnyDnsZone(
     (data?.Records ?? []).find((r) => normalize(r.Name ?? "") === recordName) ??
     null;
 
+  // Resolve the live registrar delegation; NameserversDetected defaults to true on a fresh zone.
+  const { status } = await checkDelegation(
+    best.Domain ?? domain,
+    expectedNameservers(data ?? {}),
+  );
+
   return {
     zoneId: best.Id,
     zoneDomain: best.Domain ?? domain,
     recordName,
     existing,
-    delegated: data?.NameserversDetected === true,
+    delegated: status === "bunny",
   };
 }
 

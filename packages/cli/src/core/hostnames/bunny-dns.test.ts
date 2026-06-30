@@ -1,11 +1,27 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import prompts from "prompts";
-import { findBunnyDnsZone, offerBunnyDnsRecord } from "./bunny-dns.ts";
-import type { CoreClient } from "./client.ts";
-import { offerBunnyDnsThenSsl } from "./flow.ts";
+import type { DelegationStatus } from "../dns-nameservers.ts";
 
-type Zone = { Id: number; Domain: string; NameserversDetected?: boolean };
+// Delegation is a live NS lookup; stub it so tests stay hermetic and drive the outcome.
+let delegationStatus: DelegationStatus = "bunny";
+mock.module("../dns-nameservers.ts", () => ({
+  BUNNY_NAMESERVERS: ["kiki.bunny.net", "coco.bunny.net"],
+  expectedNameservers: () => ["kiki.bunny.net", "coco.bunny.net"],
+  checkDelegation: async () => ({ status: delegationStatus, resolved: [] }),
+}));
+
+const { findBunnyDnsZone, offerBunnyDnsRecord } = await import(
+  "./bunny-dns.ts"
+);
+const { offerBunnyDnsThenSsl } = await import("./flow.ts");
+type CoreClient = import("./client.ts").CoreClient;
+
+type Zone = { Id: number; Domain: string };
 type Rec = { Id?: number; Type?: number; Name?: string; Value?: string };
+
+beforeEach(() => {
+  delegationStatus = "bunny";
+});
 
 /** A core client stubbed to serve a fixed set of zones and per-zone records. */
 function fakeClient(
@@ -19,13 +35,7 @@ function fakeClient(
       }
       if (path === "/dnszone/{id}") {
         const id = opts.params.path?.id as number;
-        const zone = zones.find((z) => z.Id === id);
-        return {
-          data: {
-            Records: recordsByZone[id] ?? [],
-            NameserversDetected: zone?.NameserversDetected,
-          },
-        };
+        return { data: { Records: recordsByZone[id] ?? [] } };
       }
       throw new Error(`unexpected GET ${path}`);
     },
@@ -86,20 +96,18 @@ describe("findBunnyDnsZone", () => {
     expect(match?.existing).toBeNull();
   });
 
-  test("reports delegated:true only when nameservers are detected", async () => {
-    const delegated = fakeClient([
-      { Id: 7, Domain: "example.com", NameserversDetected: true },
-    ]);
+  test("reports delegated:true only when the registrar delegates to bunny", async () => {
+    const client = fakeClient([{ Id: 7, Domain: "example.com" }]);
+
+    delegationStatus = "bunny";
     expect(
-      (await findBunnyDnsZone(delegated, "shop.example.com"))?.delegated,
+      (await findBunnyDnsZone(client, "shop.example.com"))?.delegated,
     ).toBe(true);
 
     // A zone in the account but not yet delegated at the registrar isn't live.
-    const undelegated = fakeClient([
-      { Id: 7, Domain: "example.com", NameserversDetected: false },
-    ]);
+    delegationStatus = "other";
     expect(
-      (await findBunnyDnsZone(undelegated, "shop.example.com"))?.delegated,
+      (await findBunnyDnsZone(client, "shop.example.com"))?.delegated,
     ).toBe(false);
   });
 });
@@ -136,10 +144,9 @@ describe("offerBunnyDnsThenSsl", () => {
     // Zone detection succeeds, but the matched record has no Id — once the user
     // confirms the repoint, the failure must propagate, not fall back to manual DNS.
     prompts.inject([true]);
-    const client = fakeClient(
-      [{ Id: 7, Domain: "example.com", NameserversDetected: true }],
-      { 7: [{ Type: 0, Name: "shop", Value: "1.2.3.4" }] },
-    );
+    const client = fakeClient([{ Id: 7, Domain: "example.com" }], {
+      7: [{ Type: 0, Name: "shop", Value: "1.2.3.4" }],
+    });
 
     await expect(
       offerBunnyDnsThenSsl({
@@ -158,21 +165,20 @@ describe("offerBunnyDnsThenSsl", () => {
     // A PULLZONE record on an undelegated zone never resolves publicly — short-circuit
     // rather than entering offerDnsWaitAndSsl, which would poll for the full 10 minutes.
     prompts.inject([true]);
+    delegationStatus = "other";
     let putCalled = false;
     const client = {
       GET: async (path: string) => {
         if (path === "/dnszone") {
           return {
             data: {
-              Items: [
-                { Id: 7, Domain: "example.com", NameserversDetected: false },
-              ],
+              Items: [{ Id: 7, Domain: "example.com" }],
               HasMoreItems: false,
             },
           };
         }
         if (path === "/dnszone/{id}") {
-          return { data: { Records: [], NameserversDetected: false } };
+          return { data: { Records: [] } };
         }
         throw new Error(`unexpected GET ${path}`);
       },

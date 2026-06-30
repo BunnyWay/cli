@@ -3,6 +3,7 @@ import { dnsAddCommand } from "./add.ts";
 import { dnsExportCommand } from "./export.ts";
 import { dnsImportCommand } from "./import.ts";
 import { dnsRecordListCommand } from "./list.ts";
+import { dnsPresetCommand } from "./preset.ts";
 import { dnsRemoveCommand } from "./remove.ts";
 import { dnsUpdateCommand } from "./update.ts";
 
@@ -14,6 +15,7 @@ export const dnsRecordNamespace = defineNamespace(
     dnsAddCommand,
     dnsUpdateCommand,
     dnsRemoveCommand,
+    dnsPresetCommand,
     dnsImportCommand,
     dnsExportCommand,
   ],
