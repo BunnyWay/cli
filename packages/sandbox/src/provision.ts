@@ -143,7 +143,7 @@ export async function createApp(
                 {
                   containerPort: SSH_PORT,
                   exposedPort: SSH_PORT,
-                  protocols: ["Tcp"],
+                  protocols: ["tcp"],
                 },
               ],
             },
