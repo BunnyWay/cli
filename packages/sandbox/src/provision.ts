@@ -268,7 +268,7 @@ export async function waitForPublicHost(
   return null;
 }
 
-/** Find an existing endpoint by display name, returning its ID or null. */
+/** Find an existing CDN endpoint by display name, returning its ID or null. */
 async function findEndpointId(
   client: McClient,
   appId: string,
@@ -279,9 +279,13 @@ async function findEndpointId(
   });
   const items = (data?.items ?? []) as Array<{
     id?: string;
+    type?: string;
     displayName?: string;
   }>;
-  return items.find((e) => e.displayName === displayName)?.id ?? null;
+  return (
+    items.find((e) => e.type === "cdn" && e.displayName === displayName)?.id ??
+    null
+  );
 }
 
 function str(error: unknown): string {
