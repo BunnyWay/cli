@@ -10,10 +10,12 @@ import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { spinner } from "../../../core/ui.ts";
+import type { CoreClient, DnsZoneModel } from "../api.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
 import {
   type DnsRecordTypes,
   parseRecordType,
+  RECORD_TYPE_META,
   RECORD_TYPES,
   recordName,
   recordTypeLabel,
@@ -203,6 +205,133 @@ async function promptRecord(
   return record;
 }
 
+/** Write a single record and report the result (json or a success line). */
+async function writeAndReport(
+  client: CoreClient,
+  zone: DnsZoneModel,
+  record: AddDnsRecordModel,
+  output: string,
+): Promise<void> {
+  const spin = spinner("Adding record...");
+  spin.start();
+  let data: { Id?: number } | undefined;
+  try {
+    ({ data } = await client.PUT("/dnszone/{zoneId}/records", {
+      params: { path: { zoneId: zone.Id as number } },
+      body: record,
+    }));
+  } finally {
+    spin.stop();
+  }
+
+  if (output === "json") {
+    logger.log(JSON.stringify(data, null, 2));
+    return;
+  }
+
+  logger.success(
+    `Added ${recordTypeLabel(record.Type as number)} record ${recordName(record.Name)} to ${zone.Domain}${data?.Id != null ? ` (ID: ${data.Id})` : ""}.`,
+  );
+}
+
+/**
+ * Interactively build and add one record to a zone: pick a type, gather its
+ * fields (with the Scriptable DNS option for A/AAAA/CNAME/TXT), then write it.
+ * Reused by the records `add` wizard and the `zones add` post-scan menu.
+ */
+export async function addRecordInteractive(opts: {
+  client: CoreClient;
+  config: ReturnType<typeof resolveConfig>;
+  verbose: boolean;
+  zone: DnsZoneModel;
+  output: string;
+  name?: string;
+  ttl?: number;
+  comment?: string;
+}): Promise<void> {
+  const { client, config, verbose, zone, output } = opts;
+
+  const { typeValue } = await prompts({
+    type: "select",
+    name: "typeValue",
+    message: "Record type:",
+    choices: RECORD_TYPE_META.map((m) => ({
+      title: m.group === "Bunny" ? `${m.name}  ${m.group}` : m.name,
+      value: m.value,
+    })),
+  });
+  const type = required(typeValue, "Record type");
+
+  let name = opts.name;
+  if (name === undefined) {
+    const res = await prompts({
+      type: "text",
+      name: "name",
+      message: "Record name ('@' for apex):",
+      initial: "@",
+    });
+    name = res.name ?? "@";
+  }
+  const recName = name ?? "@";
+
+  // Offer a script-computed answer for types a DNS script can return.
+  const SCRIPTABLE_ANSWERS = new Set<number>([
+    RECORD_TYPES.A,
+    RECORD_TYPES.AAAA,
+    RECORD_TYPES.CNAME,
+    RECORD_TYPES.TXT,
+  ]);
+  let useScript = type === RECORD_TYPES.SCRIPT;
+  let starterKind: AnswerKind | undefined;
+  if (!useScript && SCRIPTABLE_ANSWERS.has(type)) {
+    const { source } = await prompts({
+      type: "select",
+      name: "source",
+      message: "Value source:",
+      choices: [
+        { title: "Static value", value: "static" },
+        { title: "Computed by a script (Scriptable DNS)", value: "script" },
+      ],
+    });
+    if (source === undefined)
+      throw new UserError("A value source is required.");
+    if (source === "script") {
+      useScript = true;
+      starterKind = recordTypeLabel(type) as AnswerKind;
+    }
+  }
+
+  let record: AddDnsRecordModel;
+  if (useScript) {
+    const computeClient = createComputeClient(clientOptions(config, verbose));
+    const picked = await pickOrCreateDnsScript(computeClient, {
+      starterKind,
+      defaultName: `${zone.Domain ?? "dns"}-script`,
+    });
+    record = {
+      Type: RECORD_TYPES.SCRIPT,
+      Name: recName === "@" ? "" : recName,
+      ScriptId: picked.id,
+    };
+  } else {
+    record = await promptRecord(type, recName);
+  }
+
+  if (opts.ttl === undefined) {
+    const { ttl } = await prompts({
+      type: "number",
+      name: "ttl",
+      message: "TTL (seconds, blank for default):",
+    });
+    if (ttl !== undefined) record.Ttl = ttl;
+  } else {
+    record.Ttl = opts.ttl;
+  }
+  if (opts.comment !== undefined) record.Comment = opts.comment;
+
+  await writeAndReport(client, zone, record, output);
+}
+
 export const dnsAddCommand = defineCommand<AddArgs>({
   command: "add [domain] [name] [type] [values..]",
   describe: "Add a DNS record to a zone (interactive when args are omitted).",
@@ -237,7 +366,7 @@ export const dnsAddCommand = defineCommand<AddArgs>({
       .positional("values", {
         type: "string",
         array: true,
-        describe: "Record value(s) — see examples for per-type ordering",
+        describe: "Record value(s); see examples for per-type ordering",
       })
       .option("ttl", { type: "number", describe: "Time to live in seconds" })
       .option("comment", {
@@ -267,7 +396,6 @@ export const dnsAddCommand = defineCommand<AddArgs>({
       offerLink: true,
     });
 
-    let record: AddDnsRecordModel;
     if (interactive) {
       // Offer a ready-made preset before falling back to building a single record by hand.
       const { mode } = await prompts({
@@ -288,117 +416,29 @@ export const dnsAddCommand = defineCommand<AddArgs>({
         return;
       }
 
-      const { typeValue } = await prompts({
-        type: "select",
-        name: "typeValue",
-        message: "Record type:",
-        choices: Object.values(RECORD_TYPES).map((value) => ({
-          title: recordTypeLabel(value),
-          value,
-        })),
+      await addRecordInteractive({
+        client,
+        config,
+        verbose,
+        zone,
+        output,
+        name: args.name,
+        ttl: args.ttl,
+        comment: args.comment,
       });
-      const type = required(typeValue, "Record type");
-
-      let name = args.name;
-      if (name === undefined) {
-        const res = await prompts({
-          type: "text",
-          name: "name",
-          message: "Record name ('@' for apex):",
-          initial: "@",
-        });
-        name = res.name ?? "@";
-      }
-
-      const recName = name ?? "@";
-
-      // Offer a script-computed answer for types a DNS script can return.
-      const SCRIPTABLE_ANSWERS = new Set<number>([
-        RECORD_TYPES.A,
-        RECORD_TYPES.AAAA,
-        RECORD_TYPES.CNAME,
-        RECORD_TYPES.TXT,
-      ]);
-      let useScript = type === RECORD_TYPES.SCRIPT;
-      let starterKind: AnswerKind | undefined;
-      if (!useScript && SCRIPTABLE_ANSWERS.has(type)) {
-        const { source } = await prompts({
-          type: "select",
-          name: "source",
-          message: "Value source:",
-          choices: [
-            { title: "Static value", value: "static" },
-            {
-              title: "Computed by a script (Scriptable DNS)",
-              value: "script",
-            },
-          ],
-        });
-        if (source === undefined)
-          throw new UserError("A value source is required.");
-        if (source === "script") {
-          useScript = true;
-          starterKind = recordTypeLabel(type) as AnswerKind;
-        }
-      }
-
-      if (useScript) {
-        const computeClient = createComputeClient(
-          clientOptions(config, verbose),
-        );
-        const picked = await pickOrCreateDnsScript(computeClient, {
-          starterKind,
-          defaultName: `${zone.Domain ?? "dns"}-script`,
-        });
-        record = {
-          Type: RECORD_TYPES.SCRIPT,
-          Name: recName === "@" ? "" : recName,
-          ScriptId: picked.id,
-        };
-      } else {
-        record = await promptRecord(type, recName);
-      }
-
-      if (args.ttl === undefined) {
-        const { ttl } = await prompts({
-          type: "number",
-          name: "ttl",
-          message: "TTL (seconds, blank for default):",
-        });
-        if (ttl !== undefined) record.Ttl = ttl;
-      }
-    } else {
-      const type = parseRecordType(args.type as string);
-      const name = args.name ?? "@";
-      const values = (args.values ?? []).map((v) => String(v));
-      record = buildRecord(type, name, values, {
-        PullZoneId: args["pull-zone"],
-        ScriptId: args.script,
-      });
-    }
-
-    if (args.ttl !== undefined) record.Ttl = args.ttl;
-    if (args.comment !== undefined) record.Comment = args.comment;
-
-    const spin = spinner("Adding record...");
-    spin.start();
-    let data: { Id?: number } | undefined;
-    try {
-      ({ data } = await client.PUT("/dnszone/{zoneId}/records", {
-        params: { path: { zoneId: zone.Id as number } },
-        body: record,
-      }));
-    } finally {
-      spin.stop();
-    }
-
-    if (output === "json") {
-      logger.log(JSON.stringify(data, null, 2));
       return;
     }
 
-    logger.success(
-      `Added ${recordTypeLabel(record.Type as number)} record ${recordName(record.Name)} to ${zone.Domain}${data?.Id != null ? ` (ID: ${data.Id})` : ""}.`,
-    );
+    const type = parseRecordType(args.type as string);
+    const name = args.name ?? "@";
+    const values = (args.values ?? []).map((v) => String(v));
+    const record = buildRecord(type, name, values, {
+      PullZoneId: args["pull-zone"],
+      ScriptId: args.script,
+    });
+    if (args.ttl !== undefined) record.Ttl = args.ttl;
+    if (args.comment !== undefined) record.Comment = args.comment;
+
+    await writeAndReport(client, zone, record, output);
   },
 });
