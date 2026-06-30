@@ -159,6 +159,12 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
           importError,
         );
       }
+
+      if (importedRecords === 0 && failedRecords) {
+        throw new UserError(
+          `Importing records into ${domain} failed: none of the ${failedRecords} record(s) could be added.`,
+        );
+      }
       return;
     }
 
