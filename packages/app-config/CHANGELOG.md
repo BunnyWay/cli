@@ -1,5 +1,12 @@
 # @bunny.net/app-config
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [[`18645ed`](https://github.com/BunnyWay/cli/commit/18645edc7736eb5d88f1a8ec038993cc7d2deb12)]:
+  - @bunny.net/openapi-client@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes
