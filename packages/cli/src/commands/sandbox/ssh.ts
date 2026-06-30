@@ -1,7 +1,7 @@
 import { getSandbox } from "../../config/index.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
-import { sshArgs, sshEnv, WORKPLACE } from "./ssh-exec.ts";
+import { sshArgs, withSshEnv, WORKPLACE } from "./ssh-exec.ts";
 
 export const sandboxSshCommand = defineCommand({
   command: "ssh <name>",
@@ -28,16 +28,17 @@ export const sandboxSshCommand = defineCommand({
       );
     }
 
-    const proc = Bun.spawn(
-      sshArgs(record, `cd ${WORKPLACE} && exec bash -l`, { tty: true }),
-      {
-        stdin: "inherit",
-        stdout: "inherit",
-        stderr: "inherit",
-        env: sshEnv(record),
-      },
-    );
-
-    process.exitCode = await proc.exited;
+    process.exitCode = await withSshEnv(record, async (env) => {
+      const proc = Bun.spawn(
+        sshArgs(record, `cd ${WORKPLACE} && exec bash -l`, { tty: true }),
+        {
+          stdin: "inherit",
+          stdout: "inherit",
+          stderr: "inherit",
+          env,
+        },
+      );
+      return proc.exited;
+    });
   },
 });

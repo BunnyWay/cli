@@ -1,3 +1,6 @@
+import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { SandboxRecord } from "../../config/schema.ts";
 
 export const WORKPLACE = "/workplace";
@@ -12,12 +15,7 @@ export function sshArgs(
     sshHost.includes(":") ? sshHost.split(":") : [sshHost, "8023"]
   ) as [string, string];
 
-  // Use `sshpass -e` so the token is read from the SSHPASS env var rather than
-  // passed as `-p <token>`, which would expose it in the process argument list
-  // to any other user on the machine. Callers must spawn with `sshEnv(record)`.
   return [
-    "sshpass",
-    "-e",
     "ssh",
     ...(options.tty ? ["-t"] : []),
     "-p",
@@ -34,22 +32,44 @@ export function sshArgs(
 }
 
 /**
- * Environment for spawning the `sshpass -e` command produced by `sshArgs`.
- * Keeps the agent token out of the process argument list.
+ * Runs `fn` with an environment that makes OpenSSH use a temp askpass helper
+ * to supply the sandbox token. The helper reads BUNNY_SSH_TOKEN so the token
+ * is never written to disk — only held in the process environment.
+ * The temp directory is removed when `fn` resolves or rejects.
+ *
+ * Requires OpenSSH ≥ 8.4 (SSH_ASKPASS_REQUIRE=force). macOS ships ≥ 8.6.
  */
-export function sshEnv(record: SandboxRecord): Record<string, string> {
-  return { ...process.env, SSHPASS: record.agent_token };
+export async function withSshEnv<T>(
+  record: SandboxRecord,
+  fn: (env: Record<string, string>) => Promise<T>,
+): Promise<T> {
+  const dir = await mkdtemp(join(tmpdir(), "bunny-ssh-"));
+  const scriptPath = join(dir, "askpass");
+  await Bun.write(scriptPath, `#!/bin/sh\nprintf '%s' "$BUNNY_SSH_TOKEN"\n`);
+  await chmod(scriptPath, 0o700);
+  try {
+    return await fn({
+      ...process.env,
+      BUNNY_SSH_TOKEN: record.agent_token,
+      SSH_ASKPASS: scriptPath,
+      SSH_ASKPASS_REQUIRE: "force",
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 export async function runSshCommand(
   record: SandboxRecord,
   remoteCmd: string,
 ): Promise<number> {
-  const proc = Bun.spawn(sshArgs(record, remoteCmd), {
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-    env: sshEnv(record),
+  return withSshEnv(record, async (env) => {
+    const proc = Bun.spawn(sshArgs(record, remoteCmd), {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+      env,
+    });
+    return proc.exited;
   });
-  return proc.exited;
 }
