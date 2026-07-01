@@ -62,8 +62,7 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
       .option("show-secret", {
         type: "boolean",
         default: false,
-        describe:
-          "Reveal the secret access key in the table (masked by default)",
+        describe: "Reveal the secret access key (masked by default)",
       }),
 
   handler: async ({
@@ -94,7 +93,19 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
     }
 
     if (output === "json") {
-      logger.log(JSON.stringify(creds, null, 2));
+      // Mask by default like the table; --show-secret opts into the raw key.
+      logger.log(
+        JSON.stringify(
+          {
+            ...creds,
+            secretAccessKey: showSecret
+              ? creds.secretAccessKey
+              : maskSecret(creds.secretAccessKey),
+          },
+          null,
+          2,
+        ),
+      );
       return;
     }
 
