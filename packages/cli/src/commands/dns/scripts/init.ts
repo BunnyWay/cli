@@ -164,7 +164,7 @@ export const dnsScriptsInitCommand = defineCommand<InitArgs>({
         const pm = await pickPackageManager(dirPath);
         if (!pm) {
           logger.warn(
-            "No package manager found on PATH. Install bun, npm, pnpm, or yarn, then run `<pm> install` in the new project.",
+            "No package manager found on PATH. Install bun, npm, pnpm, or yarn, then install dependencies in the new project.",
           );
         } else {
           const spin = spinner(`Installing dependencies (${pm})...`);
