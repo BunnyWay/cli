@@ -18,7 +18,7 @@ Config is stored in (first match wins):
 - `~/.bunnynet.json`
 - `/etc/bunnynet.json`
 
-**When something goes wrong, check auth first** — run a quick `bunny api GET /user` to verify your key works. If using profiles, confirm the right one is active with `--profile`.
+**When something goes wrong, check auth first**: run a quick `bunny api GET /user` to verify your key works. If using profiles, confirm the right one is active with `--profile`.
 
 ## Quick Start
 
@@ -42,7 +42,9 @@ bunny scripts list
 
 # manage DNS
 bunny dns zones add example.com
+bunny dns zones nameservers example.com               # is the registrar delegated to bunny yet?
 bunny dns records add example.com api A 198.51.100.1
+bunny dns records preset google-workspace example.com # apply a preset record set
 bunny dns records list example.com
 ```
 
@@ -52,7 +54,7 @@ Use this to route to the correct reference file:
 
 - **Authenticate or switch profiles** -> `references/auth.md`
 - **Database management (create, list, show, link, delete, shell, studio, regions, tokens)** -> `references/database.md`
-- **DNS (zones, records, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
+- **DNS (zones, delegation checks, records, presets, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)

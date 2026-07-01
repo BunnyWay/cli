@@ -2,10 +2,22 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
+import {
+  checkDelegations,
+  type DelegationCheck,
+  type DelegationStatus,
+  expectedNameservers,
+} from "../../../core/dns-nameservers.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { spinner } from "../../../core/ui.ts";
 import { type DnsZoneModel, fetchZones } from "../api.ts";
+
+const DELEGATION_LABEL: Record<DelegationStatus, string> = {
+  bunny: "Detected",
+  other: "Pending",
+  unknown: "Unknown",
+};
 
 export const dnsZoneListCommand = defineCommand({
   command: "list",
@@ -29,8 +41,39 @@ export const dnsZoneListCommand = defineCommand({
       spin.stop();
     }
 
+    // bunny's NameserversDetected defaults to true on a fresh zone; resolve the real delegation live.
+    let checks: DelegationCheck[] = [];
+    if (zones.length > 0) {
+      const checkSpin = spinner("Checking nameserver delegation...");
+      checkSpin.start();
+      try {
+        checks = await checkDelegations(
+          zones.map((z) => ({
+            domain: z.Domain ?? "",
+            expected: expectedNameservers(z),
+          })),
+        );
+      } finally {
+        checkSpin.stop();
+      }
+    }
+    const delegation: DelegationStatus[] = checks.map((c) => c.status);
+
     if (output === "json") {
-      logger.log(JSON.stringify(zones, null, 2));
+      const corrected = zones.map((z, i) => {
+        const check = checks[i];
+        return {
+          ...z,
+          // Trust the live result only when conclusive; on "unknown" keep the API flag so a transient resolver failure doesn't flip every zone to pending.
+          NameserversDetected:
+            check && check.status !== "unknown"
+              ? check.status === "bunny"
+              : z.NameserversDetected,
+          NameserversDelegation: check?.status ?? "unknown",
+          NameserversResolved: check?.resolved ?? [],
+        };
+      });
+      logger.log(JSON.stringify(corrected, null, 2));
       return;
     }
 
@@ -42,12 +85,12 @@ export const dnsZoneListCommand = defineCommand({
     logger.log(
       formatTable(
         ["ID", "Domain", "Records", "DNSSEC", "Nameservers"],
-        zones.map((z) => [
+        zones.map((z, i) => [
           String(z.Id ?? ""),
           z.Domain ?? "",
           String((z.Records ?? []).length),
           z.DnsSecEnabled ? "Yes" : "No",
-          z.NameserversDetected ? "Detected" : "Pending",
+          DELEGATION_LABEL[delegation[i] ?? "unknown"],
         ]),
         output,
       ),

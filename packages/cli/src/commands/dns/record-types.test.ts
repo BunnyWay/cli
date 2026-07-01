@@ -14,6 +14,13 @@ describe("parseRecordType", () => {
     expect(parseRecordType("  Mx ")).toBe(RECORD_TYPES.MX);
   });
 
+  test("accepts bunny's canonical labels and the spelled-out names", () => {
+    expect(parseRecordType("PZ")).toBe(RECORD_TYPES.PULLZONE);
+    expect(parseRecordType("pullzone")).toBe(RECORD_TYPES.PULLZONE);
+    expect(parseRecordType("RDR")).toBe(RECORD_TYPES.REDIRECT);
+    expect(parseRecordType("scr")).toBe(RECORD_TYPES.SCRIPT);
+  });
+
   test("throws on an unknown type", () => {
     expect(() => parseRecordType("BOGUS")).toThrow(/Unknown record type/);
   });
@@ -23,6 +30,13 @@ describe("recordTypeLabel", () => {
   test("maps enum values back to names", () => {
     expect(recordTypeLabel(RECORD_TYPES.A)).toBe("A");
     expect(recordTypeLabel(RECORD_TYPES.CAA)).toBe("CAA");
+  });
+
+  test("uses bunny's canonical short labels for bunny-specific types", () => {
+    expect(recordTypeLabel(RECORD_TYPES.PULLZONE)).toBe("PZ");
+    expect(recordTypeLabel(RECORD_TYPES.REDIRECT)).toBe("RDR");
+    expect(recordTypeLabel(RECORD_TYPES.SCRIPT)).toBe("SCR");
+    expect(recordTypeLabel(RECORD_TYPES.FLATTEN)).toBe("Flatten");
   });
 
   test("falls back to UNKNOWN", () => {

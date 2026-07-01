@@ -1,5 +1,11 @@
 # @bunny.net/openapi-client
 
+## 0.1.2
+
+### Patch Changes
+
+- [#107](https://github.com/BunnyWay/cli/pull/107) [`18645ed`](https://github.com/BunnyWay/cli/commit/18645edc7736eb5d88f1a8ec038993cc7d2deb12) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): import a domain's existing records when moving to bunny: new `dns records scan [domain]` (server-side record scan, multiselect, bulk-write) and `dns zones add --import` offer the same migration right after creating the zone; a bad record is reported rather than stranding the batch, and CAA flags/tag survive via corrected `DnsDiscoveredRecord` types in `@bunny.net/openapi-client`
+
 ## 0.1.1
 
 ### Patch Changes

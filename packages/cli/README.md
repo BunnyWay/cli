@@ -852,6 +852,134 @@ Open the Edge Scripts documentation in your browser.
 bunny scripts docs
 ```
 
+### `bunny sandbox`
+
+Manage on-demand cloud sandbox environments backed by Bunny Magic Containers. Each sandbox is a fully isolated Ubuntu container with Node.js, Bun, Python, and Claude Code pre-installed. A 10 GB persistent volume is mounted at `/workplace`, your default working directory.
+
+Sandbox credentials (app ID, hostname, SSH endpoint, agent token) are stored in `~/.config/bunnynet.json` so you can reconnect without re-creating.
+
+#### `bunny sandbox create`
+
+Create and start a new sandbox. Waits for the container's SSH port to become reachable before returning.
+
+```bash
+# Create a sandbox with the default name "sandbox"
+bunny sandbox create
+
+# Create a named sandbox
+bunny sandbox create my-sandbox
+
+# Create in a specific region
+bunny sandbox create my-sandbox --region NY
+```
+
+| Flag       | Description                                        | Default |
+| ---------- | -------------------------------------------------- | ------- |
+| `--region` | Region ID to deploy in (e.g. `AMS`, `NY`, `LA`, …) | `AMS`   |
+
+Once ready, the output shows the app ID, public HTTPS hostname, and SSH address.
+
+#### `bunny sandbox list`
+
+List all sandboxes saved in your local config.
+
+```bash
+bunny sandbox list
+bunny sandbox ls          # alias
+```
+
+Columns: Name, App ID, Hostname, SSH.
+
+#### `bunny sandbox delete`
+
+Delete a sandbox and permanently destroy the underlying Magic Containers app.
+
+```bash
+bunny sandbox delete my-sandbox
+
+# Skip the confirmation prompt
+bunny sandbox delete my-sandbox --force
+bunny sandbox rm my-sandbox -f   # alias
+```
+
+| Flag      | Alias | Description              | Default |
+| --------- | ----- | ------------------------ | ------- |
+| `--force` | `-f`  | Skip confirmation prompt | `false` |
+
+#### `bunny sandbox exec`
+
+Run a shell command inside a sandbox over SSH. Defaults to `/workplace` as the working directory.
+
+```bash
+# Run a command
+bunny sandbox exec my-sandbox ls -la
+
+# Run in a different directory
+bunny sandbox exec my-sandbox --cwd /tmp env
+
+# Pipe-friendly: exit code is propagated
+bunny sandbox exec my-sandbox -- cat /etc/os-release
+```
+
+| Flag    | Description                          | Default      |
+| ------- | ------------------------------------ | ------------ |
+| `--cwd` | Working directory inside the sandbox | `/workplace` |
+
+#### `bunny sandbox ssh`
+
+Open a full interactive SSH session. Drops you into a bash shell at `/workplace`. Type `exit` or press Ctrl-D to close.
+
+```bash
+bunny sandbox ssh my-sandbox
+```
+
+#### `bunny sandbox url`
+
+Manage public CDN endpoints for ports running inside a sandbox. Useful for exposing a dev server or API to the internet.
+
+##### `bunny sandbox url add`
+
+Expose a container port as a public HTTPS endpoint. Waits until the URL is provisioned and prints it.
+
+```bash
+# Expose port 3000 (endpoint named "port-3000")
+bunny sandbox url add my-sandbox 3000
+
+# Custom endpoint name
+bunny sandbox url add my-sandbox 8080 --label my-api
+```
+
+| Flag      | Description                   | Default       |
+| --------- | ----------------------------- | ------------- |
+| `--label` | Display name for the endpoint | `port-<port>` |
+
+##### `bunny sandbox url list`
+
+List all user-created endpoints for a sandbox (built-in `api` and `ssh` endpoints are hidden).
+
+```bash
+bunny sandbox url list my-sandbox
+bunny sandbox url ls my-sandbox    # alias
+```
+
+Columns: ID, Name, Type, Port, URL.
+
+##### `bunny sandbox url delete`
+
+Delete a public endpoint by name.
+
+```bash
+bunny sandbox url delete my-sandbox port-3000
+
+# Skip confirmation
+bunny sandbox url delete my-sandbox my-api --force
+bunny sandbox url rm my-sandbox my-api -f   # alias
+```
+
+| Flag      | Alias | Description              | Default |
+| --------- | ----- | ------------------------ | ------- |
+| `--force` | `-f`  | Skip confirmation prompt | `false` |
+
 ### `bunny api`
 
 Make a raw authenticated HTTP request to any bunny.net API endpoint. Auth is handled automatically via your configured API key.

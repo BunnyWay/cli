@@ -1,5 +1,33 @@
 # @bunny.net/cli
 
+## 0.8.1
+
+### Patch Changes
+
+- [#108](https://github.com/BunnyWay/cli/pull/108) [`8c6ae43`](https://github.com/BunnyWay/cli/commit/8c6ae4340b99305acad7e355f533fbc4ba300420) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(dns): `dns scripts init` detects and uses any installed package manager (bun, pnpm, yarn, npm) instead of assuming bun, and warns clearly when none is on PATH
+
+## 0.8.0
+
+### Minor Changes
+
+- [#99](https://github.com/BunnyWay/cli/pull/99) [`6c05e7f`](https://github.com/BunnyWay/cli/commit/6c05e7f046c869dc71484a20231e7855b19d33f6) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - Add @bunny.net/sandbox SDK for programmatic sandbox create, file buffering, command execution, and port exposure; wire sandbox CLI commands onto it
+
+### Patch Changes
+
+- [#97](https://github.com/BunnyWay/cli/pull/97) [`b122269`](https://github.com/BunnyWay/cli/commit/b122269a5f5523302bccccba383460703818ac75) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(install): ship a baseline (non-AVX2) build for older x64 CPUs that crashed with "Illegal instruction" — the installer auto-selects it, and the npm wrapper falls back to it on SIGILL
+
+- [#107](https://github.com/BunnyWay/cli/pull/107) [`18645ed`](https://github.com/BunnyWay/cli/commit/18645edc7736eb5d88f1a8ec038993cc7d2deb12) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): import a domain's existing records when moving to bunny: new `dns records scan [domain]` (server-side record scan, multiselect, bulk-write) and `dns zones add --import` offer the same migration right after creating the zone; a bad record is reported rather than stranding the batch, and CAA flags/tag survive via corrected `DnsDiscoveredRecord` types in `@bunny.net/openapi-client`
+
+- [#107](https://github.com/BunnyWay/cli/pull/107) [`18645ed`](https://github.com/BunnyWay/cli/commit/18645edc7736eb5d88f1a8ec038993cc7d2deb12) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(dns): label the bunny-specific record types with bunny's canonical codes (Pull Zone as PZ, Redirect as RDR, Script as SCR) across listings and pickers, group them under "Bunny" in the interactive type picker, and accept those codes (plus the spelled-out names) when parsing a record type
+
+- [#107](https://github.com/BunnyWay/cli/pull/107) [`18645ed`](https://github.com/BunnyWay/cli/commit/18645edc7736eb5d88f1a8ec038993cc7d2deb12) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): `dns zones add` now scans for existing records automatically, then offers a next-steps menu (upload a zone file, add records manually, or continue to nameserver setup) so you can fully populate the zone before delegating; `--import` imports scanned records without prompting and `--no-import` skips the scan and menu
+
+- [#104](https://github.com/BunnyWay/cli/pull/104) [`1aa67e0`](https://github.com/BunnyWay/cli/commit/1aa67e069adb3d1ec2bc6395414053c2da67e332) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): manage Scriptable DNS scripts (`bunny dns scripts` init/create/deploy/attach/link/list) with ambient runtime types in `@bunny.net/scriptable-dns-types`; `dns records add` offers a static or script-computed answer for A/AAAA/CNAME/TXT
+
+- [#106](https://github.com/BunnyWay/cli/pull/106) [`ff794c3`](https://github.com/BunnyWay/cli/commit/ff794c30ec0cfabc18e5222fda2273b5fe6aacbd) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): verify registrar delegation with a live nameserver lookup (instead of the API's NameserversDetected flag, which defaults to true on a fresh zone) across `dns zones ns`, `dns zones list`, and pull-zone setup; `dns zones add` and `ns` now give registrar-aware setup steps (registrar named via RDAP) and skip them when the domain is already delegated; add `dns records preset` with email, verification, and security presets (Google Workspace, Microsoft 365, Zoho, Mailgun, Resend, Proton, Bluesky, DMARC, CAA, no-email) plus a preset option in the `records add` wizard; color table heads bunny orange
+
+- [#102](https://github.com/BunnyWay/cli/pull/102) [`b4c1bd9`](https://github.com/BunnyWay/cli/commit/b4c1bd9029a8ee296e14a65447c04a6144ec330e) Thanks [@nocanoa](https://github.com/nocanoa)! - Added bunny color to the table head and also the help overview.
+
 ## 0.7.0
 
 ### Minor Changes

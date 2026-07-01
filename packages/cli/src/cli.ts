@@ -12,6 +12,7 @@ import { dnsNamespace } from "./commands/dns/index.ts";
 import { docsCommand } from "./commands/docs.ts";
 import { openCommand } from "./commands/open.ts";
 import { registriesNamespace } from "./commands/registries/index.ts";
+import { sandboxNamespace } from "./commands/sandbox/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
 import { storageNamespace } from "./commands/storage/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
@@ -36,6 +37,7 @@ const experimentalCommands: CommandModule[] = [
   appsNamespace,
   registriesNamespace,
   dnsNamespace,
+  sandboxNamespace,
   storageNamespace,
 ];
 

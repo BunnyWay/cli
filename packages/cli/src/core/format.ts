@@ -87,7 +87,11 @@ export function formatTable(
   const noColorStyle = chalk.level === 0 ? { head: [], border: [] } : {};
 
   if (format === "table") {
-    const table = new Table({ head: headers, style: noColorStyle });
+    // Color heads bunny orange ourselves; cli-table3's own head color is red.
+    const table = new Table({
+      head: headers.map((h) => bunny.bold(h)),
+      style: { head: [], ...noColorStyle },
+    });
     for (const row of rows) {
       table.push(row);
     }

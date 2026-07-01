@@ -1,5 +1,11 @@
 # @bunny.net/database-shell
 
+## 0.2.4
+
+### Patch Changes
+
+- [#97](https://github.com/BunnyWay/cli/pull/97) [`b122269`](https://github.com/BunnyWay/cli/commit/b122269a5f5523302bccccba383460703818ac75) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(bsql): fall back to a baseline (non-AVX2) binary on older x64 CPUs that crashed with "Illegal instruction"
+
 ## 0.2.3
 
 ### Patch Changes
