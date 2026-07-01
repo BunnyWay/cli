@@ -8,6 +8,7 @@ import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { saveManifestAt } from "../../../core/manifest.ts";
+import { pickPackageManager } from "../../../core/package-manager.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
 import { createDnsScript } from "./api.ts";
 import {
@@ -157,29 +158,36 @@ export const dnsScriptsInitCommand = defineCommand<InitArgs>({
 
     if (args[ARG_SKIP_INSTALL] !== true) {
       const install = interactive
-        ? await confirm("Install editor type dependencies with bun?")
+        ? await confirm("Install editor type dependencies?")
         : false;
       if (install) {
-        const spin = spinner("Installing dependencies (bun)...");
-        spin.start();
-        let code = 1;
-        try {
-          const proc = Bun.spawn(["bun", "install"], {
-            cwd: dirPath,
-            stdout: "ignore",
-            stderr: "ignore",
-          });
-          code = await proc.exited;
-        } catch {
-          // bun missing or vanished; warn below.
-        }
-        spin.stop();
-        if (code === 0) {
-          logger.success("Dependencies installed.");
-        } else {
+        const pm = await pickPackageManager(dirPath);
+        if (!pm) {
           logger.warn(
-            "Could not install dependencies. Run `bun install` later.",
+            "No package manager found on PATH. Install bun, npm, pnpm, or yarn, then install dependencies in the new project.",
           );
+        } else {
+          const spin = spinner(`Installing dependencies (${pm})...`);
+          spin.start();
+          let code = 1;
+          try {
+            const proc = Bun.spawn([pm, "install"], {
+              cwd: dirPath,
+              stdout: "ignore",
+              stderr: "ignore",
+            });
+            code = await proc.exited;
+          } catch {
+            // Binary vanished between detection and spawn; warn below.
+          }
+          spin.stop();
+          if (code === 0) {
+            logger.success("Dependencies installed.");
+          } else {
+            logger.warn(
+              `Could not install dependencies. Run \`${pm} install\` later.`,
+            );
+          }
         }
       }
     }

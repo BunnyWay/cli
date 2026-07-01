@@ -39,6 +39,7 @@ jobs:
       cli-version: ${{ steps.check-cli.outputs.version }}
       database-shell-version: ${{ steps.check-database-shell.outputs.version }}
       openapi-client-version: ${{ steps.check-openapi-client.outputs.version }}
+      scriptable-dns-types-version: ${{ steps.check-scriptable-dns-types.outputs.version }}
     steps:
       - uses: actions/checkout@v5
       - name: Check openapi-client version
@@ -46,6 +47,17 @@ jobs:
         run: |
           VERSION=$(node -p "require('./packages/openapi-client/package.json').version")
           PUBLISHED=$(npm view @bunny.net/openapi-client version 2>/dev/null || echo "0.0.0")
+          if [ "$VERSION" != "$PUBLISHED" ]; then
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "New version detected: $VERSION (published: $PUBLISHED)"
+          else
+            echo "No version change: $VERSION"
+          fi
+      - name: Check scriptable-dns-types version
+        id: check-scriptable-dns-types
+        run: |
+          VERSION=$(node -p "require('./packages/scriptable-dns-types/package.json').version")
+          PUBLISHED=$(npm view @bunny.net/scriptable-dns-types version 2>/dev/null || echo "0.0.0")
           if [ "$VERSION" != "$PUBLISHED" ]; then
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "New version detected: $VERSION (published: $PUBLISHED)"
@@ -412,6 +424,26 @@ jobs:
       - name: Publish @bunny.net/openapi-client
         run: |
           cd packages/openapi-client
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-scriptable-dns-types:
+    name: Publish scriptable-dns-types
+    runs-on: ubuntu-latest
+    needs: version
+    if: needs.version.outputs.scriptable-dns-types-version
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish @bunny.net/scriptable-dns-types
+        run: |
+          cd packages/scriptable-dns-types
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
