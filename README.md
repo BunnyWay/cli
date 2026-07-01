@@ -8,6 +8,7 @@ Monorepo for the [bunny.net](https://bunny.net) CLI and supporting packages.
 | ------------------------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------ |
 | [`packages/cli/`](packages/cli/)                                         | `@bunny.net/cli`                     | Command-line interface for bunny.net                         |
 | [`packages/openapi-client/`](packages/openapi-client/)                   | `@bunny.net/openapi-client`          | Standalone, type-safe OpenAPI client for bunny.net           |
+| [`packages/sandbox/`](packages/sandbox/)                                 | `@bunny.net/sandbox`                 | Standalone sandbox SDK over Magic Containers and SSH         |
 | [`packages/app-config/`](packages/app-config/)                           | `@bunny.net/app-config`              | Shared Zod schemas, types, and JSON Schema for `bunny.jsonc` |
 | [`packages/database-shell/`](packages/database-shell/)                   | `@bunny.net/database-shell`          | Standalone interactive SQL shell for libSQL databases        |
 | [`packages/database-openapi/`](packages/database-openapi/)               | `@bunny.net/database-openapi`        | Generate OpenAPI 3.0 specs from a database schema            |
