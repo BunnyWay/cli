@@ -1,5 +1,11 @@
 # @bunny.net/sandbox
 
+## 0.2.1
+
+### Patch Changes
+
+- [#109](https://github.com/BunnyWay/cli/pull/109) [`e7ba811`](https://github.com/BunnyWay/cli/commit/e7ba811f71689df97220b748f3ccaf7a8e6486f2) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Publish @bunny.net/sandbox to npm
+
 ## 0.2.0
 
 ### Minor Changes
