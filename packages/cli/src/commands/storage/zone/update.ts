@@ -1,0 +1,200 @@
+import { createCoreClient } from "@bunny.net/openapi-client";
+import prompts from "prompts";
+import { resolveConfig } from "../../../config/index.ts";
+import { clientOptions } from "../../../core/client-options.ts";
+import { defineCommand } from "../../../core/define-command.ts";
+import { UserError } from "../../../core/errors.ts";
+import { logger } from "../../../core/logger.ts";
+import { spinner } from "../../../core/ui.ts";
+import type { StorageZoneModel, StorageZoneSettingsModel } from "../api.ts";
+import {
+  confirmAddedReplicationRegions,
+  normalizeReplicationRegions,
+  replicationChoices,
+} from "../constants.ts";
+import { resolveStorageZoneInteractive } from "../interactive.ts";
+
+interface ZoneUpdateArgs {
+  zone?: string;
+  custom404Path?: string;
+  rewrite404To200?: boolean;
+  replication?: string[];
+  force?: boolean;
+}
+
+const FLAG_HINT =
+  "Pass at least one of --custom-404-path, --rewrite-404-to-200, --replication.";
+
+function hasAnyFlag(args: ZoneUpdateArgs): boolean {
+  return (
+    args.custom404Path !== undefined ||
+    args.rewrite404To200 !== undefined ||
+    args.replication !== undefined
+  );
+}
+
+function settingsFromFlags(
+  args: ZoneUpdateArgs,
+  primaryCode?: string,
+): StorageZoneSettingsModel {
+  const settings: StorageZoneSettingsModel = {};
+  if (args.custom404Path !== undefined)
+    settings.Custom404FilePath = args.custom404Path;
+  if (args.rewrite404To200 !== undefined)
+    settings.Rewrite404To200 = args.rewrite404To200;
+  if (args.replication !== undefined)
+    settings.ReplicationZones = normalizeReplicationRegions(
+      args.replication,
+      primaryCode,
+    );
+  return settings;
+}
+
+async function promptSettings(
+  zone: StorageZoneModel,
+): Promise<StorageZoneSettingsModel> {
+  const existing = (zone.ReplicationRegions ?? []).map((r) => r.toUpperCase());
+  if (existing.length)
+    logger.dim(`Already replicated (permanent): ${existing.join(", ")}`);
+  const addable = replicationChoices(zone.Region ?? undefined).filter(
+    (region) => !existing.includes(region.code),
+  );
+
+  const questions: prompts.PromptObject[] = [
+    {
+      type: "text",
+      name: "custom404Path",
+      message: "Custom 404 file path (blank for none):",
+      initial: zone.Custom404FilePath ?? "",
+    },
+    {
+      type: "toggle",
+      name: "rewrite404To200",
+      message: "Rewrite 404 to 200?",
+      initial: zone.Rewrite404To200 ?? false,
+      active: "yes",
+      inactive: "no",
+    },
+  ];
+  if (addable.length)
+    questions.push({
+      type: "multiselect",
+      name: "replication",
+      message:
+        "Add replication regions (permanent once added; space to toggle):",
+      choices: addable.map((region) => ({
+        title: `${region.name} (${region.code})`,
+        value: region.code,
+      })),
+    });
+
+  const answers = await prompts(questions);
+  if (Object.keys(answers).length === 0)
+    throw new UserError("Update cancelled.");
+
+  return {
+    Custom404FilePath: answers.custom404Path || null,
+    Rewrite404To200: answers.rewrite404To200,
+    ReplicationZones: [...existing, ...(answers.replication ?? [])],
+  };
+}
+
+export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
+  command: "update [zone]",
+  describe: "Update a storage zone's settings.",
+  examples: [
+    ["$0 storage zones update my-zone", "Edit settings interactively"],
+    [
+      "$0 storage zones update my-zone --custom-404-path /404.html",
+      "Set the custom 404 file non-interactively",
+    ],
+  ],
+
+  builder: (yargs) =>
+    yargs
+      .positional("zone", {
+        type: "string",
+        describe: "Storage zone name or ID",
+      })
+      .option("custom-404-path", {
+        type: "string",
+        describe: "Path to the file returned for missing files",
+      })
+      .option("rewrite-404-to-200", {
+        type: "boolean",
+        describe: "Rewrite 404 responses to 200 for extensionless URLs",
+      })
+      .option("replication", {
+        type: "string",
+        array: true,
+        describe: "Replication region codes (comma-separated or repeated)",
+      })
+      .option("force", {
+        alias: "f",
+        type: "boolean",
+        default: false,
+        describe:
+          "Skip the confirmation prompt when adding replication regions",
+      }),
+
+  handler: async (args) => {
+    const { zone: ref, profile, output, verbose, apiKey } = args;
+    const hasFlags = hasAnyFlag(args);
+
+    // JSON output stays non-interactive; settings must come from flags.
+    if (!hasFlags && output === "json") {
+      throw new UserError("Nothing to update.", FLAG_HINT);
+    }
+
+    const config = resolveConfig(profile, apiKey, verbose);
+    const client = createCoreClient(clientOptions(config, verbose));
+
+    const zone = await resolveStorageZoneInteractive(client, ref, output);
+    const settings = hasFlags
+      ? settingsFromFlags(args, zone.Region ?? undefined)
+      : await promptSettings(zone);
+
+    if (settings.ReplicationZones) {
+      const existing = (zone.ReplicationRegions ?? []).map((r) =>
+        r.toUpperCase(),
+      );
+      const requested = settings.ReplicationZones.map((r) => r.toUpperCase());
+      const added = requested.filter((r) => !existing.includes(r));
+      const omitted = existing.filter((r) => !requested.includes(r));
+
+      // Replicas can't be removed, so the final set is always the existing ones plus any new picks.
+      settings.ReplicationZones = [...new Set([...existing, ...requested])];
+
+      if (omitted.length)
+        logger.warn(
+          `Replication regions can't be removed; ${omitted.join(", ")} stays replicated.`,
+        );
+      if (
+        !(await confirmAddedReplicationRegions(added, { force: args.force }))
+      ) {
+        logger.log("Cancelled.");
+        return;
+      }
+    }
+
+    const spin = spinner("Updating storage zone...");
+    spin.start();
+    try {
+      await client.POST("/storagezone/{id}", {
+        params: { path: { id: zone.Id as number } },
+        body: settings,
+      });
+    } finally {
+      spin.stop();
+    }
+
+    if (output === "json") {
+      logger.log(
+        JSON.stringify({ id: zone.Id, name: zone.Name, settings }, null, 2),
+      );
+      return;
+    }
+
+    logger.success(`Updated storage zone ${zone.Name}.`);
+  },
+});

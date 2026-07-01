@@ -6,8 +6,6 @@ import {
   sumChart,
 } from "./stats.ts";
 
-// --- sumChart ---
-
 describe("sumChart", () => {
   test("sums chart values", () => {
     expect(sumChart({ "2026-05-01": 3, "2026-05-02": 7 })).toBe(10);
@@ -22,8 +20,6 @@ describe("sumChart", () => {
     expect(sumChart({})).toBe(0);
   });
 });
-
-// --- formatBucketLabel ---
 
 describe("formatBucketLabel", () => {
   test("formats a daily UTC bucket as a friendly date", () => {
@@ -51,8 +47,6 @@ describe("formatBucketLabel", () => {
     expect(formatBucketLabel("not-a-date")).toBe("not-a-date");
   });
 });
-
-// --- renderBarChart ---
 
 describe("renderBarChart", () => {
   test("renders one line per row with label and value", () => {

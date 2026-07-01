@@ -36,17 +36,27 @@ export interface HostnamesMountOptions {
   /** Adds resource-targeting flags (e.g. --id, --pull-zone) shared by every subcommand. */
   target?: (yargs: Argv) => Argv;
   /** Optional trailing positional (e.g. `[id]`) appended to every subcommand for targeting the resource. */
-  targetPositional?: { name: string; describe: string };
+  targetPositional?: {
+    name: string;
+    describe: string;
+    type?: "string" | "number";
+  };
   /** Namespace description shown in help. */
   describe?: string;
   /** Hidden namespace aliases (e.g. ["hostnames"]) — they work but stay out of help. */
   hiddenAliases?: string[];
 }
 
-/** Echo back the targeting flags the user passed so copy-paste follow-up hints keep the same scope. */
-function targetSuffix(args: Record<string, unknown>): string {
+/** Echo back the targeting args the user passed so copy-paste follow-up hints keep the same scope. */
+export function targetSuffix(
+  args: Record<string, unknown>,
+  positionalName?: string,
+): string {
   const parts: string[] = [];
-  if (args.id != null) parts.push(`--id ${args.id}`);
+  // The trailing positional (storage zone, or script id) re-targets the resource.
+  if (positionalName && args[positionalName] != null) {
+    parts.push(String(args[positionalName]));
+  }
   if (args["pull-zone"] != null) parts.push(`--pull-zone ${args["pull-zone"]}`);
   return parts.length ? ` ${parts.join(" ")}` : "";
 }
@@ -71,7 +81,7 @@ export function createHostnamesCommands(
   const target = <T>(yargs: Argv<T>): Argv<T> => {
     const withPositional = targetPositional
       ? yargs.positional(targetPositional.name, {
-          type: "number",
+          type: targetPositional.type ?? "number",
           describe: targetPositional.describe,
         })
       : yargs;
@@ -171,6 +181,7 @@ export function createHostnamesCommands(
 
       const sslHint = `bunny ${commandPath} ssl ${hostname}${targetSuffix(
         args as unknown as Record<string, unknown>,
+        targetPositional?.name,
       )}`;
 
       // A requested certificate that failed to issue is a command error, like `ssl`.

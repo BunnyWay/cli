@@ -12,9 +12,7 @@ import { formatKeyValue } from "../../core/format.ts";
 import {
   addHostname,
   normalizeHostname,
-  offerBunnyDnsThenSsl,
-  offerDnsWaitAndSsl,
-  printSslHint,
+  setupHostname,
 } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
@@ -136,64 +134,18 @@ export async function setupCustomDomain(opts: {
   const config = resolveConfig(opts.profile, opts.apiKey, opts.verbose);
   const coreClient = createCoreClient(clientOptions(config, opts.verbose));
   const idSuffix = opts.linked ? "" : ` --id ${opts.scriptId}`;
-  const sslHint = `bunny scripts domains ssl ${opts.domain}${idSuffix}`;
 
-  const spin = spinner(`Adding ${opts.domain}...`);
-  spin.start();
-
-  let cnameTarget: string | undefined;
-  try {
-    ({ cnameTarget } = await addHostname(
-      coreClient,
-      opts.pullZoneId,
-      opts.domain,
-    ));
-  } catch (err) {
-    spin.stop();
-    const message = err instanceof Error ? err.message : String(err);
-    logger.warn(`Couldn't add ${opts.domain}: ${message}`);
-    logger.dim(`  Retry: bunny scripts domains add ${opts.domain}${idSuffix}`);
-    return false;
-  }
-
-  spin.stop();
-  logger.success(`Added ${opts.domain} to pull zone ${opts.pullZoneId}.`);
-
-  if (!cnameTarget) return false;
-
-  // If the domain is on Bunny DNS, offer to add the record (prompted) so SSL can issue right away.
-  if (opts.interactive) {
-    const issued = await offerBunnyDnsThenSsl({
-      coreClient,
-      hostname: opts.domain,
-      pullZoneId: opts.pullZoneId,
-      cnameTarget,
-      forceSsl: true,
-      sslHint,
-      verbose: opts.verbose,
-      // Only link the directory when this is a linked script project.
-      onBunnyDnsZone: opts.linked ? autoLinkDnsZone : undefined,
-    });
-    if (issued !== null) return issued;
-  }
-
-  logger.log();
-  logger.log("Point your DNS at bunny.net to activate it:");
-  logger.accent(`  CNAME  ${opts.domain}  →  ${cnameTarget}`);
-  logger.log();
-
-  if (!opts.interactive) {
-    printSslHint(sslHint);
-    return false;
-  }
-
-  return offerDnsWaitAndSsl({
+  return setupHostname({
     coreClient,
     pullZoneId: opts.pullZoneId,
-    hostname: opts.domain,
-    cnameTarget,
+    domain: opts.domain,
+    sslHint: `bunny scripts domains ssl ${opts.domain}${idSuffix}`,
+    retryHint: `bunny scripts domains add ${opts.domain}${idSuffix}`,
     forceSsl: true,
-    sslHint,
+    interactive: opts.interactive,
+    verbose: opts.verbose,
+    // Only link the directory when this is a linked script project.
+    onBunnyDnsZone: opts.linked ? autoLinkDnsZone : undefined,
   });
 }
 

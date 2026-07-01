@@ -98,7 +98,7 @@ export function formatTable(
     return table.toString();
   }
 
-  // text: borderless aligned columns with bold headers
+  // text: borderless aligned columns with bold bunny-colored headers
   const table = new Table({
     head: headers.map((h) => bunny.bold(h)),
     chars: {
@@ -165,4 +165,11 @@ export function formatBytes(bytes: number): string {
   );
   const value = bytes / 1024 ** i;
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`;
+}
+
+export function maskSecret(secret: string): string {
+  // Revealing the last 4 chars of an 8-or-fewer-char secret exposes half or more, so fully mask it.
+  if (secret.length <= 8) return "•".repeat(8);
+  const tail = secret.slice(-4);
+  return `${"•".repeat(Math.max(secret.length - 4, 4))}${tail}`;
 }
