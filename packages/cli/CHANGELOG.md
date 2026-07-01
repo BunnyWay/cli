@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.8.1
+
+### Patch Changes
+
+- [#108](https://github.com/BunnyWay/cli/pull/108) [`8c6ae43`](https://github.com/BunnyWay/cli/commit/8c6ae4340b99305acad7e355f533fbc4ba300420) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(dns): `dns scripts init` detects and uses any installed package manager (bun, pnpm, yarn, npm) instead of assuming bun, and warns clearly when none is on PATH
+
 ## 0.8.0
 
 ### Minor Changes
