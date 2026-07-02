@@ -77,6 +77,9 @@ export function parseDotenv(text: string): Record<string, string> {
       value.endsWith(quote)
     ) {
       value = value.slice(1, -1);
+    } else {
+      const commentIdx = value.indexOf(" #");
+      if (commentIdx !== -1) value = value.slice(0, commentIdx).trim();
     }
     env[key] = value;
   }
