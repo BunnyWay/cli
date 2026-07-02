@@ -929,14 +929,14 @@ bunny sandbox exec my-sandbox --cwd /tmp env
 bunny sandbox exec my-sandbox -- cat /etc/os-release
 
 # Inject temporary environment variables for this command only
-bunny sandbox exec my-sandbox -e DEBUG=1 -- node app.js
+bunny sandbox exec my-sandbox --env DEBUG=1 -- node app.js
 bunny sandbox exec my-sandbox --env-file .env -- printenv
 ```
 
 | Flag         | Alias | Description                                      | Default      |
 | ------------ | ----- | ------------------------------------------------ | ------------ |
 | `--cwd`      |       | Working directory inside the sandbox             | `/workplace` |
-| `--env`      | `-e`  | Environment variable as `KEY=VALUE` (repeatable) |              |
+| `--env`      |       | Environment variable as `KEY=VALUE` (repeatable) |              |
 | `--env-file` |       | Load environment variables from a dotenv file    |              |
 
 Variables passed here apply only to that single command and are **not** persisted. For persistent variables, use [`bunny sandbox env`](#bunny-sandbox-env).

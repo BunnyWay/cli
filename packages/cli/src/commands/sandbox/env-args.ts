@@ -3,11 +3,16 @@ import { UserError } from "../../core/errors.ts";
 
 const ENV_KEY_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
-/** Add the shared `--env`/`--env-file` options to a command builder. */
-export function withEnvOptions<T>(yargs: Argv<T>): Argv<T> {
+/** Add the shared `--env`/`--env-file` options to a command builder.
+ *  Pass `{ shortAlias: false }` on commands that forward arbitrary argv so that
+ *  `-e` is not consumed by yargs before reaching the remote process. */
+export function withEnvOptions<T>(
+  yargs: Argv<T>,
+  { shortAlias = true }: { shortAlias?: boolean } = {},
+): Argv<T> {
   return yargs
     .option("env", {
-      alias: "e",
+      ...(shortAlias ? { alias: "e" } : {}),
       type: "string",
       array: true,
       describe: "Set an environment variable as KEY=VALUE (repeatable)",

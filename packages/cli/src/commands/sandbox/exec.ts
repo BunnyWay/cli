@@ -20,7 +20,7 @@ export const sandboxExecCommand = defineCommand<ExecArgs>({
       "Run with a working directory",
     ],
     [
-      "$0 sandbox exec my-sandbox -e DEBUG=1 -- node app.js",
+      "$0 sandbox exec my-sandbox --env DEBUG=1 -- node app.js",
       "Run with a temporary environment variable",
     ],
   ],
@@ -45,6 +45,7 @@ export const sandboxExecCommand = defineCommand<ExecArgs>({
           default: WORKPLACE,
           describe: "Working directory inside the sandbox",
         }),
+      { shortAlias: false },
     ),
 
   handler: async ({ name, command, cwd, env, envFile }) => {
