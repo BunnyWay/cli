@@ -75,6 +75,13 @@ export class Sandbox {
 
   /** Provision a new sandbox and wait until it accepts connections. */
   static async create(options: CreateOptions = {}): Promise<Sandbox> {
+    for (const key of Object.keys(options.env ?? {})) {
+      assertValidEnvKey(key);
+      if (RESERVED_ENV_KEYS.has(key)) {
+        throw new SandboxError(`"${key}" is reserved and cannot be set.`);
+      }
+    }
+
     const client = mcClient(options);
     const name = options.name ?? generateName();
     const agentToken = generateToken();

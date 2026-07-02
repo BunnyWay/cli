@@ -5,7 +5,21 @@ import {
   firstContainerId,
   splitHost,
 } from "./provision.ts";
-import { buildRemoteCommand, resolvePath, shellQuote } from "./sandbox.ts";
+import { Sandbox, buildRemoteCommand, resolvePath, shellQuote } from "./sandbox.ts";
+
+describe("Sandbox.create", () => {
+  test("rejects reserved env key AGENT_TOKEN before any network call", async () => {
+    await expect(
+      Sandbox.create({ env: { AGENT_TOKEN: "user-supplied" } }),
+    ).rejects.toThrow('"AGENT_TOKEN" is reserved and cannot be set.');
+  });
+
+  test("rejects invalid env key names before any network call", async () => {
+    await expect(
+      Sandbox.create({ env: { "bad key": "value" } }),
+    ).rejects.toThrow("Invalid environment variable name");
+  });
+});
 
 describe("buildRemoteCommand", () => {
   test("defaults to the workplace and quotes the command", () => {
