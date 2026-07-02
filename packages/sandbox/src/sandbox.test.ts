@@ -5,7 +5,12 @@ import {
   firstContainerId,
   splitHost,
 } from "./provision.ts";
-import { Sandbox, buildRemoteCommand, resolvePath, shellQuote } from "./sandbox.ts";
+import {
+  buildRemoteCommand,
+  resolvePath,
+  Sandbox,
+  shellQuote,
+} from "./sandbox.ts";
 
 describe("Sandbox.create", () => {
   test("rejects reserved env key AGENT_TOKEN before any network call", async () => {
