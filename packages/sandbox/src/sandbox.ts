@@ -286,7 +286,7 @@ export class Sandbox {
     }
     const app = await getApp(this.client, this.appId);
     const env = extractEnv(app);
-    const removed = keys.filter((key) => key in env);
+    const removed = keys.filter((key) => Object.hasOwn(env, key));
     if (removed.length === 0) return [];
 
     const containerId = firstContainerId(app);
