@@ -44,7 +44,7 @@ export const sandboxSshCommand = defineCommand<SshArgs>({
     const prefix = envPrefix(await collectEnv(env, envFile));
     process.exitCode = await withSshEnv(record, async (procEnv) => {
       const proc = Bun.spawn(
-        sshArgs(record, `cd ${WORKPLACE} && ${prefix}exec bash -l`, {
+        sshArgs(record, `cd ${WORKPLACE} && ${prefix}exec /bin/bash -l`, {
           tty: true,
         }),
         {
