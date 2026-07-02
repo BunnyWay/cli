@@ -50,15 +50,15 @@ export const sandboxEnvDeleteCommand = defineCommand<DeleteArgs>({
 
     const missing = keys.filter((key) => !removed.includes(key));
 
-    if (output === "json") {
-      logger.log(JSON.stringify({ removed, missing }, null, 2));
-      return;
-    }
-
     if (removed.length === 0) {
       throw new UserError(
         `No matching variable(s) to remove: ${missing.join(", ")}`,
       );
+    }
+
+    if (output === "json") {
+      logger.log(JSON.stringify({ removed, missing }, null, 2));
+      return;
     }
     logger.log(`Removed ${removed.length} variable(s): ${removed.join(", ")}`);
     if (missing.length > 0) {
