@@ -5,6 +5,22 @@ import type { SandboxRecord } from "../../config/schema.ts";
 
 export const WORKPLACE = "/workplace";
 
+/** Single-quote a value for safe use in a remote shell command. */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * Build an inline `KEY='value' ` prefix that sets env vars for the command
+ * that follows. Returns "" when there are none. Keys are assumed validated.
+ */
+export function envPrefix(env: Record<string, string>): string {
+  const parts = Object.entries(env).map(
+    ([key, value]) => `${key}=${shellQuote(value)}`,
+  );
+  return parts.length ? `${parts.join(" ")} ` : "";
+}
+
 export function sshArgs(
   record: SandboxRecord,
   remoteCmd: string,
