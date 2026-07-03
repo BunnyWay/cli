@@ -867,6 +867,15 @@ Its `package.json` `exports`/`main`/`types` point at `dist/`, so npm consumers g
 - `scripts/build.ts` drives the TypeScript compiler API (using `tsconfig.build.json`) to emit JS + declarations, then copies the generated `.d.ts` files into `dist/generated/` (tsc never emits its inputs, and those files back the `./generated/*` subpath export). `rewriteRelativeImportExtensions` rewrites `./x.ts` → `./x.js` in the emitted **JS**; TypeScript has no equivalent for declaration emit, so an `afterDeclarations` transformer rewrites the `.ts`/`.d.ts` specifiers in the emitted **`.d.ts`** files on the AST.
 - The `publish-openapi-client` job in `release.yml` (gated on a version bump detected via `npm view`) builds, then runs `cd packages/openapi-client && npm publish` (`files` ships `dist` + `README.md`). The package versions independently of the CLI — it is not part of any `fixed` group in `.changeset/config.json`.
 
+### Publishing `@bunny.net/sandbox`
+
+`@bunny.net/sandbox` follows the same compiled-library pattern as `@bunny.net/openapi-client`: `exports`/`main`/`types` point at `dist/`, in-repo tooling resolves it from source via the root `tsconfig.json` `paths` mapping, and `scripts/build.ts` (via `tsconfig.build.json`) emits JS + declarations with the same `.ts` → `.js` specifier rewriting.
+
+Two differences from openapi-client:
+
+- Sandbox depends on `@bunny.net/openapi-client` with `workspace:*`, so the `publish-sandbox` job in `release.yml` uses `bun publish` (not `npm publish`) — bun rewrites `workspace:*` to the local package version in the published tarball; npm would ship the unresolvable `workspace:*` spec verbatim. `bun publish` authenticates via the `NPM_CONFIG_TOKEN` env var.
+- Its `tsconfig.build.json` overrides `paths` to `{}` so openapi-client resolves via its package `exports` (`dist/`) instead of source — otherwise openapi-client's sources would enter the program and violate `rootDir`. The publish job therefore builds openapi-client before building sandbox.
+
 ### CI
 
 Tests and type-checking run on every pull request via `.github/workflows/ci.yml` (`bun run typecheck` and `bun test`).

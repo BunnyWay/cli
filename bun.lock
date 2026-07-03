@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "bun-ny-cli",
@@ -190,6 +191,9 @@
         "@bunny.net/openapi-client": "workspace:*",
         "@types/ssh2": "^1.15.0",
         "ssh2": "^1.16.0",
+      },
+      "devDependencies": {
+        "typescript": "^5",
       },
     },
     "packages/scriptable-dns-types": {
