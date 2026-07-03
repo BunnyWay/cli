@@ -2,18 +2,29 @@
   "name": "@bunny.net/sandbox",
   "version": "0.2.1",
   "type": "module",
-  "module": "src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json"
+  },
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "files": [
-    "src",
+    "dist",
     "README.md"
   ],
   "dependencies": {
     "@bunny.net/openapi-client": "workspace:*",
     "@types/ssh2": "^1.15.0",
     "ssh2": "^1.16.0"
+  },
+  "devDependencies": {
+    "typescript": "^5"
   },
   "publishConfig": {
     "access": "public"
