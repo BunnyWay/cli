@@ -1,9 +1,10 @@
 import { getSandbox } from "../../config/index.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
-import { sshArgs, WORKPLACE, withSshEnv } from "./ssh-exec.ts";
+import { collectEnv, type EnvOptionArgs, withEnvOptions } from "./env-args.ts";
+import { envPrefix, sshArgs, WORKPLACE, withSshEnv } from "./ssh-exec.ts";
 
-interface ExecArgs {
+interface ExecArgs extends EnvOptionArgs {
   name: string;
   command: string[];
   cwd: string;
@@ -18,29 +19,36 @@ export const sandboxExecCommand = defineCommand<ExecArgs>({
       "$0 sandbox exec my-sandbox --cwd /tmp ls -la",
       "Run with a working directory",
     ],
+    [
+      "$0 sandbox exec my-sandbox --env DEBUG=1 -- node app.js",
+      "Run with a temporary environment variable",
+    ],
   ],
 
   builder: (yargs) =>
-    yargs
-      .parserConfiguration({ "unknown-options-as-args": true })
-      .positional("name", {
-        type: "string",
-        demandOption: true,
-        describe: "Sandbox name",
-      })
-      .positional("command", {
-        type: "string",
-        array: true,
-        demandOption: true,
-        describe: "Command to execute",
-      })
-      .option("cwd", {
-        type: "string",
-        default: WORKPLACE,
-        describe: "Working directory inside the sandbox",
-      }),
+    withEnvOptions(
+      yargs
+        .parserConfiguration({ "unknown-options-as-args": true })
+        .positional("name", {
+          type: "string",
+          demandOption: true,
+          describe: "Sandbox name",
+        })
+        .positional("command", {
+          type: "string",
+          array: true,
+          demandOption: true,
+          describe: "Command to execute",
+        })
+        .option("cwd", {
+          type: "string",
+          default: WORKPLACE,
+          describe: "Working directory inside the sandbox",
+        }),
+      { shortAlias: false },
+    ),
 
-  handler: async ({ name, command, cwd }) => {
+  handler: async ({ name, command, cwd, env, envFile }) => {
     const record = getSandbox(name);
     if (!record) {
       throw new UserError(
@@ -53,7 +61,8 @@ export const sandboxExecCommand = defineCommand<ExecArgs>({
       );
     }
 
-    const remoteCmd = `cd ${JSON.stringify(cwd)} && ${command
+    const prefix = envPrefix(await collectEnv(env, envFile));
+    const remoteCmd = `cd ${JSON.stringify(cwd)} && ${prefix}${command
       .map((arg) => JSON.stringify(arg))
       .join(" ")}`;
 

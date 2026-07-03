@@ -1,6 +1,7 @@
 import { defineNamespace } from "../../core/define-namespace.ts";
 import { sandboxCreateCommand } from "./create.ts";
 import { sandboxDeleteCommand } from "./delete.ts";
+import { sandboxEnvNamespace } from "./env/index.ts";
 import { sandboxExecCommand } from "./exec.ts";
 import { sandboxListCommand } from "./list.ts";
 import { sandboxSshCommand } from "./ssh.ts";
@@ -16,5 +17,6 @@ export const sandboxNamespace = defineNamespace(
     sandboxExecCommand,
     sandboxSshCommand,
     sandboxUrlNamespace,
+    sandboxEnvNamespace,
   ],
 );

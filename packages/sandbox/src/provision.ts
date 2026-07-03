@@ -68,6 +68,39 @@ export function extractAgentToken(app: App): string | null {
   return null;
 }
 
+/** Read the first container template's environment variables into a map. */
+export function extractEnv(app: App): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const { name, value } of app.containerTemplates?.[0]
+    ?.environmentVariables ?? []) {
+    if (name) env[name] = value ?? "";
+  }
+  return env;
+}
+
+/**
+ * Replace a container template's environment variables with the given map.
+ * The MC endpoint is a full replacement, so callers must pass the complete
+ * desired set (including reserved keys like AGENT_TOKEN).
+ */
+export async function setContainerEnv(
+  client: McClient,
+  appId: string,
+  containerId: string,
+  env: Record<string, string>,
+): Promise<void> {
+  const { error } = await (client as any).PUT(
+    "/apps/{appId}/containers/{containerId}/env",
+    {
+      params: { path: { appId, containerId } },
+      body: env,
+    },
+  );
+  if (error) {
+    throw new SandboxError(`Failed to update environment: ${str(error)}`);
+  }
+}
+
 export function firstContainerId(app: App): string | null {
   return app.containerTemplates?.[0]?.id ?? null;
 }

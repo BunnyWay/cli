@@ -5,10 +5,11 @@ import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
+import { collectEnv, type EnvOptionArgs, withEnvOptions } from "./env-args.ts";
 
 const DEFAULT_REGION = "AMS";
 
-interface CreateArgs {
+interface CreateArgs extends EnvOptionArgs {
   name?: string;
   region: string;
 }
@@ -23,22 +24,38 @@ export const sandboxCreateCommand = defineCommand<CreateArgs>({
       "$0 sandbox create my-sandbox --region NY",
       "Create a sandbox in New York",
     ],
+    [
+      "$0 sandbox create my-sandbox -e NODE_ENV=production --env-file .env",
+      "Bake environment variables into the sandbox",
+    ],
   ],
 
   builder: (yargs) =>
-    yargs
-      .positional("name", {
-        type: "string",
-        describe: "Name for the sandbox",
-      })
-      .option("region", {
-        type: "string",
-        default: DEFAULT_REGION,
-        describe: "Region ID to deploy the sandbox in (e.g. AMS, NY, LA)",
-      }),
+    withEnvOptions(
+      yargs
+        .positional("name", {
+          type: "string",
+          describe: "Name for the sandbox",
+        })
+        .option("region", {
+          type: "string",
+          default: DEFAULT_REGION,
+          describe: "Region ID to deploy the sandbox in (e.g. AMS, NY, LA)",
+        }),
+    ),
 
-  handler: async ({ profile, verbose, apiKey, name, region, output }) => {
+  handler: async ({
+    profile,
+    verbose,
+    apiKey,
+    name,
+    region,
+    env,
+    envFile,
+    output,
+  }) => {
     const config = resolveConfig(profile, apiKey, verbose);
+    const envVars = await collectEnv(env, envFile);
 
     // JSON output stays non-interactive; the name must come from the positional.
     const interactive = output !== "json";
@@ -66,6 +83,7 @@ export const sandboxCreateCommand = defineCommand<CreateArgs>({
         onDebug: (msg) => logger.debug(msg, true),
         name: sandboxName,
         region,
+        env: envVars,
       });
     } catch (err) {
       spin.stop();

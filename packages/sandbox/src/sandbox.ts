@@ -8,9 +8,11 @@ import {
   deleteApp,
   extractAgentToken,
   extractAnycastHost,
+  extractEnv,
   firstContainerId,
   getApp,
   mcClient,
+  setContainerEnv,
   splitHost,
   WORKPLACE,
   waitForPublicHost,
@@ -73,6 +75,13 @@ export class Sandbox {
 
   /** Provision a new sandbox and wait until it accepts connections. */
   static async create(options: CreateOptions = {}): Promise<Sandbox> {
+    for (const key of Object.keys(options.env ?? {})) {
+      assertValidEnvKey(key);
+      if (RESERVED_ENV_KEYS.has(key)) {
+        throw new SandboxError(`"${key}" is reserved and cannot be set.`);
+      }
+    }
+
     const client = mcClient(options);
     const name = options.name ?? generateName();
     const agentToken = generateToken();
@@ -233,6 +242,62 @@ export class Sandbox {
     return `https://${host}`;
   }
 
+  /** Return the sandbox's persisted environment variables (reserved keys hidden). */
+  async getEnv(): Promise<Record<string, string>> {
+    const env = extractEnv(await getApp(this.client, this.appId));
+    for (const key of RESERVED_ENV_KEYS) delete env[key];
+    return env;
+  }
+
+  /**
+   * Persist environment variables, merging with the existing set. Persisted
+   * vars are baked into the container and survive restarts, unlike the
+   * per-command `env` passed to runCommand. Triggers a redeploy of the
+   * sandbox with the new environment, restarting running processes.
+   */
+  async setEnv(vars: Record<string, string>): Promise<void> {
+    for (const key of Object.keys(vars)) {
+      assertValidEnvKey(key);
+      if (RESERVED_ENV_KEYS.has(key)) {
+        throw new SandboxError(`"${key}" is reserved and cannot be set.`);
+      }
+    }
+    const app = await getApp(this.client, this.appId);
+    const containerId = firstContainerId(app);
+    if (!containerId) {
+      throw new SandboxError("Could not find a container to update.");
+    }
+    await setContainerEnv(this.client, this.appId, containerId, {
+      ...extractEnv(app),
+      ...vars,
+    });
+  }
+
+  /**
+   * Remove persisted environment variables. Returns the keys that were
+   * actually present and removed; keys that were not set are ignored. Triggers
+   * a redeploy of the sandbox only when something was removed.
+   */
+  async unsetEnv(keys: string[]): Promise<string[]> {
+    for (const key of keys) {
+      if (RESERVED_ENV_KEYS.has(key)) {
+        throw new SandboxError(`"${key}" is reserved and cannot be removed.`);
+      }
+    }
+    const app = await getApp(this.client, this.appId);
+    const env = extractEnv(app);
+    const removed = keys.filter((key) => Object.hasOwn(env, key));
+    if (removed.length === 0) return [];
+
+    const containerId = firstContainerId(app);
+    if (!containerId) {
+      throw new SandboxError("Could not find a container to update.");
+    }
+    for (const key of removed) delete env[key];
+    await setContainerEnv(this.client, this.appId, containerId, env);
+    return removed;
+  }
+
   /** Permanently delete the sandbox and its backing app. */
   async delete(): Promise<void> {
     this.transport.close();
@@ -263,13 +328,21 @@ function transportFor(sshHost: string, password: string): SshTransport {
 
 const ENV_KEY_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
+/** Environment variable names the SDK manages and users may not touch. */
+const RESERVED_ENV_KEYS = new Set(["AGENT_TOKEN"]);
+
+/** Throw unless `key` is a valid POSIX environment variable name. */
+export function assertValidEnvKey(key: string): void {
+  if (!ENV_KEY_PATTERN.test(key)) {
+    throw new SandboxError(`Invalid environment variable name: ${key}`);
+  }
+}
+
 export function buildRemoteCommand(opts: RunCommandOptions): string {
   const parts: string[] = [`cd ${shellQuote(opts.cwd ?? WORKPLACE)} &&`];
   if (opts.sudo) parts.push("sudo");
   for (const [key, value] of Object.entries(opts.env ?? {})) {
-    if (!ENV_KEY_PATTERN.test(key)) {
-      throw new SandboxError(`Invalid environment variable name: ${key}`);
-    }
+    assertValidEnvKey(key);
     parts.push(`${key}=${shellQuote(value)}`);
   }
   parts.push(shellQuote(opts.cmd));
