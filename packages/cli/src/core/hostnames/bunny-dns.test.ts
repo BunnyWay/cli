@@ -90,7 +90,7 @@ describe("findBunnyDnsZone", () => {
 
   test("leaves existing null when no record matches the name", async () => {
     const client = fakeClient([{ Id: 7, Domain: "example.com" }], {
-      7: [{ Id: 99, Type: 0, Name: "www", Value: "1.2.3.4" }],
+      7: [{ Id: 99, Type: 0, Name: "www", Value: "192.0.2.4" }],
     });
     const match = await findBunnyDnsZone(client, "shop.example.com");
     expect(match?.existing).toBeNull();
@@ -131,7 +131,7 @@ describe("offerBunnyDnsRecord", () => {
           zoneId: 7,
           zoneDomain: "example.com",
           recordName: "shop",
-          existing: { Type: 0, Name: "shop", Value: "1.2.3.4" },
+          existing: { Type: 0, Name: "shop", Value: "192.0.2.4" },
           delegated: true,
         },
       }),
@@ -145,7 +145,7 @@ describe("offerBunnyDnsThenSsl", () => {
     // confirms the repoint, the failure must propagate, not fall back to manual DNS.
     prompts.inject([true]);
     const client = fakeClient([{ Id: 7, Domain: "example.com" }], {
-      7: [{ Type: 0, Name: "shop", Value: "1.2.3.4" }],
+      7: [{ Type: 0, Name: "shop", Value: "192.0.2.4" }],
     });
 
     await expect(
