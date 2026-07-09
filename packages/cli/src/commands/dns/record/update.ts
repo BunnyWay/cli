@@ -65,17 +65,31 @@ const FIELD_PROMPTS = {
   Flags: { message: "Flags:", kind: "number" },
   Tag: { message: "Tag:", kind: "tag" },
   Comment: { message: "Comment:", kind: "text" },
+  PullZoneId: { message: "Pull zone ID:", kind: "number" },
+  ScriptId: { message: "Edge Script ID:", kind: "number" },
 } as const;
 type PromptableField = keyof typeof FIELD_PROMPTS;
 
 async function promptFieldChanges(
   existing: DnsRecordModel,
 ): Promise<Partial<UpdateDnsRecordModel>> {
-  const fields: { title: string; value: PromptableField | "Disabled" }[] = [
-    { title: `Value (${existing.Value ?? ""})`, value: "Value" },
-    { title: `Name (${recordName(existing.Name)})`, value: "Name" },
-    { title: `TTL (${existing.Ttl ?? "default"})`, value: "Ttl" },
-  ];
+  const fields: { title: string; value: PromptableField | "Disabled" }[] = [];
+  // PullZone/Script records have no Value; their target is the linked resource ID.
+  if (existing.Type === RECORD_TYPES.PULLZONE) {
+    fields.push({
+      title: `Pull zone (${existing.LinkName || "unknown"})`,
+      value: "PullZoneId",
+    });
+  } else if (existing.Type === RECORD_TYPES.SCRIPT) {
+    fields.push({
+      title: `Script (${existing.LinkName || "unknown"})`,
+      value: "ScriptId",
+    });
+  } else {
+    fields.push({ title: `Value (${existing.Value ?? ""})`, value: "Value" });
+  }
+  fields.push({ title: `Name (${recordName(existing.Name)})`, value: "Name" });
+  fields.push({ title: `TTL (${existing.Ttl ?? "default"})`, value: "Ttl" });
   if (existing.Type === RECORD_TYPES.MX || existing.Type === RECORD_TYPES.SRV)
     fields.push({
       title: `Priority (${existing.Priority ?? 0})`,
@@ -117,20 +131,32 @@ async function promptFieldChanges(
       continue;
     }
     const spec = FIELD_PROMPTS[field];
+    // Tag derives its initial from CAA_TAGS below; the linked PullZoneId/ScriptId aren't on the record model.
+    const initial =
+      field === "Name"
+        ? recordName(existing.Name)
+        : field === "PullZoneId" || field === "ScriptId" || field === "Tag"
+          ? undefined
+          : (existing[field] ?? undefined);
     const { value } = await prompts({
       type: spec.kind === "tag" ? "select" : spec.kind,
       name: "value",
       message: spec.message,
       ...(spec.kind === "tag"
-        ? { choices: CAA_TAGS.map((t) => ({ title: t, value: t })) }
-        : {
-            initial:
-              (field === "Name"
-                ? recordName(existing.Name)
-                : existing[field]) ?? undefined,
-          }),
+        ? {
+            choices: CAA_TAGS.map((t) => ({ title: t, value: t })),
+            initial: Math.max(
+              0,
+              CAA_TAGS.findIndex((t) => t === existing.Tag),
+            ),
+          }
+        : { initial }),
     });
-    if (value === undefined) throw new UserError(`${field} is required.`);
+    if (value === undefined) {
+      // Report the prompt's label ("Pull zone ID"), not the model field name ("PullZoneId").
+      const label = spec.message.split(" (")[0]?.replace(/:$/, "");
+      throw new UserError(`${label} is required.`);
+    }
     changes[field] = field === "Name" && value === "@" ? "" : value;
   }
   return changes;
