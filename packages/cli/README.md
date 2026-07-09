@@ -404,8 +404,6 @@ bunny registries remove <registry-id>
 
 ### `bunny dns`
 
-> **Experimental** — hidden from `--help` and the landing page while it stabilizes.
-
 Manage DNS through two resource groups: **`bunny dns record`** (the entries within a zone) and **`bunny dns zone`** (the zone itself — settings, DNSSEC, logging, stats, nameservers). The `[domain]` argument accepts either the zone's domain name or its numeric zone ID, and is optional everywhere — omit it and you'll be prompted to pick a zone. `record update`/`record remove` likewise prompt you to pick a record when the ID is omitted. `record` aliases to `records`/`rec`; `zone` aliases to `zones` (and `domain`/`domains`).
 
 ```bash
@@ -440,6 +438,7 @@ bunny dns record export example.com --save           # write to ./example.com.zo
 # Zones — lifecycle
 bunny dns zone list
 bunny dns zone add example.com
+bunny dns zone add                # prompts for the domain
 bunny dns zone show example.com
 bunny dns zone remove example.com
 

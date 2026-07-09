@@ -25,6 +25,7 @@ const commands: CommandModule[] = [
   authLogoutCommand,
   whoamiCommand,
   dbNamespace,
+  dnsNamespace,
   scriptsNamespace,
   configNamespace,
   docsCommand,
@@ -36,7 +37,6 @@ const commands: CommandModule[] = [
 const experimentalCommands: CommandModule[] = [
   appsNamespace,
   registriesNamespace,
-  dnsNamespace,
   sandboxNamespace,
   storageNamespace,
 ];

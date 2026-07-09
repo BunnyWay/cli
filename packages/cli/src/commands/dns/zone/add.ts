@@ -11,23 +11,69 @@ import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { detectRegistrar } from "../../../core/registrar.ts";
 import { spinner } from "../../../core/ui.ts";
-import type { CoreClient, DnsZoneModel } from "../api.ts";
+import { type CoreClient, type DnsZoneModel, fetchZone } from "../api.ts";
 import { addRecordInteractive } from "../record/add.ts";
 import { importZoneFile } from "../record/import.ts";
 import { discoverImportableRecords } from "../record/scan-records.ts";
 import { reviewAndApply, writeRecords } from "../record/write.ts";
 
 interface ZoneAddArgs {
-  domain: string;
+  domain?: string;
   import?: boolean;
 }
 
-/** After the scan, let the user keep populating the zone until they continue to nameserver setup. */
+async function scanAndImport(opts: {
+  client: CoreClient;
+  zone: DnsZoneModel;
+  domain: string;
+  assumeYes: boolean;
+}): Promise<void> {
+  let discovered: Awaited<ReturnType<typeof discoverImportableRecords>> = [];
+  let scanError: unknown;
+  let zone = opts.zone;
+  const scanSpin = spinner("Scanning for existing DNS records...");
+  scanSpin.start();
+  try {
+    // Re-fetch the zone so records added earlier in the menu aren't offered (and written) again.
+    try {
+      zone = await fetchZone(opts.client, opts.zone.Id as number);
+    } catch {}
+    discovered = await discoverImportableRecords(opts.client, zone);
+  } catch (err) {
+    scanError = err;
+  } finally {
+    scanSpin.stop();
+  }
+
+  logger.log("");
+  if (scanError) {
+    logger.warn(
+      `Couldn't scan for existing records: ${scanError instanceof Error ? scanError.message : String(scanError)}`,
+    );
+  } else if (discovered.length) {
+    await reviewAndApply({
+      client: opts.client,
+      zone,
+      records: discovered,
+      // Callers are always in an interactive text flow; table/csv/markdown must still get the review multiselect.
+      output: "text",
+      selectMessage: `Found ${discovered.length} existing record(s) for ${opts.domain} at your current provider. Select which to import:`,
+      spinnerLabel: "Importing records...",
+      successFor: (n) => `Imported ${n} record(s) into ${opts.domain}.`,
+      assumeYes: opts.assumeYes,
+    });
+  } else {
+    logger.info(`No existing records found for ${opts.domain}.`);
+  }
+}
+
+/** After creating the zone, let the user populate it (scan/upload/manual) until they continue to nameserver setup. */
 async function offerNextSteps(opts: {
   client: CoreClient;
   config: ReturnType<typeof resolveConfig>;
   verbose: boolean;
   zone: DnsZoneModel;
+  domain: string;
   output: string;
 }): Promise<void> {
   for (;;) {
@@ -36,6 +82,10 @@ async function offerNextSteps(opts: {
       name: "next",
       message: "What next?",
       choices: [
+        {
+          title: "Scan for existing records at your current provider",
+          value: "scan",
+        },
         { title: "Upload a zone file (BIND)", value: "import" },
         { title: "Add records manually", value: "manual" },
         { title: "Continue to nameserver setup", value: "continue" },
@@ -43,7 +93,14 @@ async function offerNextSteps(opts: {
     });
     if (next === undefined || next === "continue") return;
     try {
-      if (next === "import") {
+      if (next === "scan") {
+        await scanAndImport({
+          client: opts.client,
+          zone: opts.zone,
+          domain: opts.domain,
+          assumeYes: false,
+        });
+      } else if (next === "import") {
         await importZoneFile({
           client: opts.client,
           zone: opts.zone,
@@ -68,10 +125,11 @@ async function offerNextSteps(opts: {
 }
 
 export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
-  command: "add <domain>",
+  command: "add [domain]",
   describe: "Create a new DNS zone.",
   examples: [
     ["$0 dns zones add example.com", "Create a zone for example.com"],
+    ["$0 dns zones add", "Interactive: prompts for the domain"],
     [
       "$0 dns zones add example.com --import",
       "Create the zone and import existing records without prompting",
@@ -82,17 +140,16 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
     yargs
       .positional("domain", {
         type: "string",
-        describe: "Domain to create the zone for",
-        demandOption: true,
+        describe: "Domain to manage DNS for",
       })
       .option("import", {
         type: "boolean",
         describe:
-          "Import all scanned records without prompting (--no-import skips the scan and next-steps menu)",
+          "Scan and import all existing records without prompting (--no-import skips the records menu)",
       }),
 
   handler: async ({
-    domain,
+    domain: domainArg,
     import: doImport,
     profile,
     output,
@@ -101,6 +158,25 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
   }) => {
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
+
+    const interactive = output !== "json" && Boolean(process.stdin.isTTY);
+
+    let domainInput = domainArg;
+    if (!domainInput && interactive) {
+      const { value } = await prompts({
+        type: "text",
+        name: "value",
+        message: "Domain to manage DNS for:",
+      });
+      domainInput = typeof value === "string" ? value.trim() : value;
+    }
+    if (!domainInput) {
+      throw new UserError(
+        "A domain is required.",
+        "Pass the domain: bunny dns zones add example.com",
+      );
+    }
+    const domain = domainInput;
 
     const spin = spinner("Creating DNS zone...");
     spin.start();
@@ -174,49 +250,26 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
         : `Created DNS zone ${domain}.`,
     );
 
-    // Default scan+menu only run with a TTY so `zones add <domain>` stays scriptable; --import forces it.
-    const interactive = Boolean(process.stdin.isTTY);
-
-    if (
-      created?.Id != null &&
-      (doImport === true || (doImport === undefined && interactive))
-    ) {
-      let discovered: Awaited<ReturnType<typeof discoverImportableRecords>> =
-        [];
-      let scanError: unknown;
-      const scanSpin = spinner("Scanning for existing DNS records...");
-      scanSpin.start();
-      try {
-        discovered = await discoverImportableRecords(client, created);
-      } catch (err) {
-        scanError = err;
-      } finally {
-        scanSpin.stop();
-      }
-
-      logger.log("");
-      if (scanError) {
-        logger.warn(
-          `Couldn't scan for existing records: ${scanError instanceof Error ? scanError.message : String(scanError)}`,
-        );
-      } else if (discovered.length) {
-        await reviewAndApply({
-          client,
-          zone: created,
-          records: discovered,
-          output,
-          selectMessage: `Found ${discovered.length} existing record(s) for ${domain} at your current provider. Select which to import:`,
-          spinnerLabel: "Importing records...",
-          successFor: (n) => `Imported ${n} record(s) into ${domain}.`,
-          assumeYes: doImport === true,
-        });
-      } else {
-        logger.info(`No existing records found for ${domain}.`);
-      }
+    // --import is an explicit migration action: scan and import everything without prompting.
+    if (created?.Id != null && doImport === true) {
+      await scanAndImport({
+        client,
+        zone: created,
+        domain,
+        assumeYes: true,
+      });
     }
 
+    // The records menu only runs with a TTY so `zones add <domain>` stays scriptable.
     if (created?.Id != null && doImport === undefined && interactive) {
-      await offerNextSteps({ client, config, verbose, zone: created, output });
+      await offerNextSteps({
+        client,
+        config,
+        verbose,
+        zone: created,
+        domain,
+        output,
+      });
     }
 
     // Savvy users often point the registrar at bunny before creating the zone; skip the setup steps when it's already delegated.
