@@ -1,5 +1,13 @@
 # @bunny.net/cli
 
+## 0.9.1
+
+### Patch Changes
+
+- [#116](https://github.com/BunnyWay/cli/pull/116) [`aaba878`](https://github.com/BunnyWay/cli/commit/aaba8782b15bdcadf1ffd9a891317c7061a48d33) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(dns): never prompt non-interactively, add an interactive field editor to records update, prompt for missing record values, and reject extra positional values
+
+- [#118](https://github.com/BunnyWay/cli/pull/118) [`93ffdbc`](https://github.com/BunnyWay/cli/commit/93ffdbc2de1833d144d4b0e4ce1f31184d28cf1a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(dns): offer Pull zone/Script ID instead of Value for link records in the records update editor, and pre-select the current CAA tag
+
 ## 0.9.0
 
 ### Minor Changes
