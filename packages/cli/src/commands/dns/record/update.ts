@@ -131,11 +131,11 @@ async function promptFieldChanges(
       continue;
     }
     const spec = FIELD_PROMPTS[field];
-    // The record model doesn't expose the linked PullZoneId/ScriptId, so those prompts start blank.
+    // Tag derives its initial from CAA_TAGS below; the linked PullZoneId/ScriptId aren't on the record model.
     const initial =
       field === "Name"
         ? recordName(existing.Name)
-        : field === "PullZoneId" || field === "ScriptId"
+        : field === "PullZoneId" || field === "ScriptId" || field === "Tag"
           ? undefined
           : (existing[field] ?? undefined);
     const { value } = await prompts({
@@ -152,7 +152,11 @@ async function promptFieldChanges(
           }
         : { initial }),
     });
-    if (value === undefined) throw new UserError(`${field} is required.`);
+    if (value === undefined) {
+      // Report the prompt's label ("Pull zone ID"), not the model field name ("PullZoneId").
+      const label = spec.message.split(" (")[0]?.replace(/:$/, "");
+      throw new UserError(`${label} is required.`);
+    }
     changes[field] = field === "Name" && value === "@" ? "" : value;
   }
   return changes;
