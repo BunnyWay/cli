@@ -5,7 +5,9 @@
     "declaration": true,
     "rewriteRelativeImportExtensions": true,
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    // Drop the root tsconfig's source paths so openapi-client resolves via its dist exports (build it first)
+    "paths": {}
   },
   "exclude": ["src/**/*.test.ts"]
 }
