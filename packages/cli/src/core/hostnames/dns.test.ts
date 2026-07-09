@@ -41,7 +41,9 @@ describe("dnsPointsAt", () => {
   test("falls back to shared A records when no CNAME exists (flattened DNS)", async () => {
     const r = resolver({
       resolve4: async (host) =>
-        host === "shop.example.com" ? ["192.0.2.1", "192.0.2.2"] : ["192.0.2.2"],
+        host === "shop.example.com"
+          ? ["192.0.2.1", "192.0.2.2"]
+          : ["192.0.2.2"],
     });
     expect(
       await dnsPointsAt("shop.example.com", "my-script-e9g0r.b-cdn.net", r),
