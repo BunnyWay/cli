@@ -13,13 +13,13 @@ const SOA = 16;
 const zone = {
   Id: 1,
   Domain: "example.com",
-  Records: [{ Type: RECORD_TYPES.A, Name: "dup", Value: "1.2.3.4" }],
+  Records: [{ Type: RECORD_TYPES.A, Name: "dup", Value: "192.0.2.4" }],
 } as never;
 
 describe("discoverImportableRecords", () => {
   test("maps apex, drops SOA/NS, and skips records that already exist", async () => {
     discovered = [
-      { Type: RECORD_TYPES.A, Name: "@", Value: "1.1.1.1", Ttl: 300 },
+      { Type: RECORD_TYPES.A, Name: "@", Value: "192.0.2.1", Ttl: 300 },
       { Type: RECORD_TYPES.CNAME, Name: "www", Value: "example.com" },
       {
         Type: RECORD_TYPES.MX,
@@ -29,7 +29,7 @@ describe("discoverImportableRecords", () => {
       },
       { Type: SOA, Name: "@", Value: "ns root soa" },
       { Type: RECORD_TYPES.NS, Name: "@", Value: "ns1.other.com" },
-      { Type: RECORD_TYPES.A, Name: "dup", Value: "1.2.3.4" },
+      { Type: RECORD_TYPES.A, Name: "dup", Value: "192.0.2.4" },
     ];
 
     const records = await discoverImportableRecords({} as never, zone);
@@ -147,7 +147,7 @@ describe("discoverImportableRecords", () => {
     discovered = [
       { Type: RECORD_TYPES.NS, Name: "@", Value: "ns1.other.com" },
       { Type: SOA, Name: "@", Value: "soa" },
-      { Type: RECORD_TYPES.A, Name: "dup", Value: "1.2.3.4" },
+      { Type: RECORD_TYPES.A, Name: "dup", Value: "192.0.2.4" },
     ];
     expect(await discoverImportableRecords({} as never, zone)).toHaveLength(0);
   });

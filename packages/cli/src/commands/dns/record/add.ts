@@ -9,10 +9,11 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
+import { isInteractive, spinner } from "../../../core/ui.ts";
 import type { CoreClient, DnsZoneModel } from "../api.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
 import {
+  CAA_TAGS,
   type DnsRecordTypes,
   parseRecordType,
   RECORD_TYPE_META,
@@ -38,6 +39,21 @@ interface AddArgs {
   script?: number;
 }
 
+function rejectExtraValues(
+  type: DnsRecordTypes,
+  values: string[],
+  max: number,
+  grammar: string,
+): void {
+  if (values.length <= max) return;
+  throw new UserError(
+    `${recordTypeLabel(type)} records take ${grammar}; got ${values.length} values.`,
+    max === 1
+      ? "Run the command once per value to add multiple records."
+      : undefined,
+  );
+}
+
 /** Build the request body from positional values, honouring per-type grammar. */
 function buildRecord(
   type: DnsRecordTypes,
@@ -51,6 +67,12 @@ function buildRecord(
   };
 
   if (type === RECORD_TYPES.PULLZONE) {
+    rejectExtraValues(
+      type,
+      values,
+      0,
+      "no positional values (use --pull-zone)",
+    );
     if (links.PullZoneId == null)
       throw new UserError("PullZone records require --pull-zone <id>.");
     record.PullZoneId = links.PullZoneId;
@@ -58,6 +80,7 @@ function buildRecord(
   }
 
   if (type === RECORD_TYPES.SCRIPT) {
+    rejectExtraValues(type, values, 0, "no positional values (use --script)");
     if (links.ScriptId == null)
       throw new UserError("Script records require --script <id>.");
     record.ScriptId = links.ScriptId;
@@ -65,6 +88,7 @@ function buildRecord(
   }
 
   if (type === RECORD_TYPES.MX) {
+    rejectExtraValues(type, values, 2, "<value> <priority>");
     const [value, priority] = values;
     if (!value) throw new UserError("MX records require <value> <priority>.");
     record.Value = value;
@@ -73,6 +97,7 @@ function buildRecord(
   }
 
   if (type === RECORD_TYPES.SRV) {
+    rejectExtraValues(type, values, 4, "<priority> <weight> <port> <target>");
     const [priority, weight, port, target] = values;
     if (!target)
       throw new UserError(
@@ -86,6 +111,7 @@ function buildRecord(
   }
 
   if (type === RECORD_TYPES.CAA) {
+    rejectExtraValues(type, values, 3, "<flags> <tag> <value>");
     let flags: string | undefined;
     let tag: string | undefined;
     let value: string | undefined;
@@ -107,6 +133,7 @@ function buildRecord(
     return record;
   }
 
+  rejectExtraValues(type, values, 1, "a single value");
   const [value] = values;
   if (!value) throw new UserError("A record value is required.");
   record.Value = value;
@@ -182,11 +209,7 @@ async function promptRecord(
         type: "select",
         name: "tag",
         message: "Tag:",
-        choices: [
-          { title: "issue", value: "issue" },
-          { title: "issuewild", value: "issuewild" },
-          { title: "iodef", value: "iodef" },
-        ],
+        choices: CAA_TAGS.map((t) => ({ title: t, value: t })),
       },
       { type: "text", name: "value", message: "Value:" },
     ]);
@@ -389,6 +412,12 @@ export const dnsAddCommand = defineCommand<AddArgs>({
 
     // Interactive when the record type wasn't given positionally.
     const interactive = !args.type;
+    if (interactive && !isInteractive(output)) {
+      throw new UserError(
+        "A record type is required.",
+        "Pass positional args: bunny dns records add example.com api A 198.51.100.1",
+      );
+    }
 
     // Resolve the target zone (prompt with a picker when no domain given).
     const zone = await resolveZoneInteractive(client, args.domain, {
@@ -432,10 +461,22 @@ export const dnsAddCommand = defineCommand<AddArgs>({
     const type = parseRecordType(args.type as string);
     const name = args.name ?? "@";
     const values = (args.values ?? []).map((v) => String(v));
-    const record = buildRecord(type, name, values, {
-      PullZoneId: args["pull-zone"],
-      ScriptId: args.script,
-    });
+    let record: AddDnsRecordModel;
+    try {
+      record = buildRecord(type, name, values, {
+        PullZoneId: args["pull-zone"],
+        ScriptId: args.script,
+      });
+    } catch (err) {
+      if (
+        !(err instanceof UserError) ||
+        values.length > 0 ||
+        !isInteractive(output)
+      ) {
+        throw err;
+      }
+      record = await promptRecord(type, name);
+    }
     if (args.ttl !== undefined) record.Ttl = args.ttl;
     if (args.comment !== undefined) record.Comment = args.comment;
 

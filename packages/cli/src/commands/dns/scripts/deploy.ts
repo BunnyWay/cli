@@ -8,7 +8,7 @@ import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { loadManifest, manifestRoot } from "../../../core/manifest.ts";
-import { spinner } from "../../../core/ui.ts";
+import { isInteractive, spinner } from "../../../core/ui.ts";
 import { publishScript, uploadCode } from "./api.ts";
 import {
   DEFAULT_ENTRY,
@@ -75,12 +75,12 @@ export const dnsScriptsDeployCommand = defineCommand<DeployArgs>({
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
-    const isInteractive = output !== "json" && process.stdout.isTTY;
+    const interactive = isInteractive(output);
 
     const manifest = loadManifest<DnsScriptManifest>(DNS_SCRIPT_MANIFEST);
     const defaultFile = manifest.entry ?? DEFAULT_ENTRY;
     let file = args[ARG_FILE];
-    if (file === undefined && isInteractive) {
+    if (file === undefined && interactive) {
       const { value } = await prompts({
         type: "text",
         name: "value",
@@ -110,7 +110,7 @@ export const dnsScriptsDeployCommand = defineCommand<DeployArgs>({
       client,
       args[ARG_ID],
       "deploy to",
-      isInteractive,
+      interactive,
     );
 
     const spin = spinner("Uploading code...");

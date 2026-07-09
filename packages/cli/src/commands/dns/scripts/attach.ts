@@ -9,7 +9,7 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { confirm, isInteractive, spinner } from "../../../core/ui.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
 import {
   type DnsRecordModel,
@@ -109,7 +109,7 @@ export const dnsScriptsAttachCommand = defineCommand<AttachArgs>({
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
     const force = args[ARG_FORCE] ?? false;
-    const isInteractive = output !== "json" && process.stdout.isTTY;
+    const interactive = isInteractive(output);
 
     const config = resolveConfig(profile, apiKey, verbose);
     const options = clientOptions(config, verbose);
@@ -120,7 +120,7 @@ export const dnsScriptsAttachCommand = defineCommand<AttachArgs>({
       computeClient,
       args[ARG_SCRIPT],
       "attach",
-      isInteractive,
+      interactive,
     );
     const script = await fetchDnsScript(computeClient, scriptId);
 
@@ -130,7 +130,7 @@ export const dnsScriptsAttachCommand = defineCommand<AttachArgs>({
     });
 
     let nameInput = args[ARG_NAME];
-    if (nameInput === undefined && isInteractive) {
+    if (nameInput === undefined && interactive) {
       const { value } = await prompts({
         type: "text",
         name: "value",
@@ -158,7 +158,7 @@ export const dnsScriptsAttachCommand = defineCommand<AttachArgs>({
     );
 
     // Repointing a domain is a silent write; never do it without intent.
-    if (!force && !isInteractive) {
+    if (!force && !interactive) {
       throw new UserError(
         "Refusing to attach a DNS script without confirmation.",
         "Re-run with --force to attach non-interactively.",

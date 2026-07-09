@@ -9,7 +9,7 @@ import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { saveManifestAt } from "../../../core/manifest.ts";
 import { pickPackageManager } from "../../../core/package-manager.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { confirm, isInteractive, spinner } from "../../../core/ui.ts";
 import { createDnsScript } from "./api.ts";
 import {
   DEFAULT_ENTRY,
@@ -110,7 +110,7 @@ export const dnsScriptsInitCommand = defineCommand<InitArgs>({
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
-    const interactive = output !== "json" && process.stdout.isTTY;
+    const interactive = isInteractive(output);
 
     let dirName = args[ARG_NAME];
     if (!dirName && interactive) {

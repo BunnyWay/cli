@@ -300,7 +300,7 @@ bunny-cli/
 │           │   │   ├── index.ts          # defineNamespace("dns", ...): registers the records + zones + scripts groups (+ hidden domain aliases)
 │           │   │   ├── api.ts            # CoreClient type, fetchZones/fetchZone, resolveZone (domain-or-ID → zone), scanZoneRecords (trigger + poll bunny's server-side record scan via /dnszone/records/scan; matches the triggered JobId, falling back to "differs from the prior job" when the trigger omits one; returns corrected DnsDiscoveredRecord[] with Flags/Tag; uses DnsRecordScanStatus enum)
 │           │   │   ├── constants.ts      # DNS_MANIFEST (".bunny/dns.json") + DnsManifest type, written by `dns zones link`
-│           │   │   ├── interactive.ts    # resolveZoneInteractive (arg → .bunny/dns.json manifest → zone picker; offerLink prompts to link a picked zone, skipped under --output json) + resolveRecordInteractive; autoLinkDnsZone (link a zone found in another flow — silent write, confirm before relinking a different zone) reused by scripts custom-domain setup
+│           │   │   ├── interactive.ts    # resolveZoneInteractive (arg → .bunny/dns.json manifest → zone picker; errors instead of prompting when non-interactive (json output or no TTY, see core/ui.ts isInteractive); ignoreManifest forces the picker for `zones link`; offerLink prompts to link a picked zone) + resolveRecordInteractive; autoLinkDnsZone (link a zone found in another flow — silent write, confirm before relinking a different zone) reused by scripts custom-domain setup
 │           │   │   ├── record-types.ts   # Re-exports RECORD_TYPES/RECORD_TYPE_META/recordTypeLabel from core/dns-record-types.ts; adds parseRecordType (accepts canonical labels + enum-key names), recordName, formatRecordValue
 │           │   │   ├── record/            # `dns records` — entries within a zone (canonical: records; aliases: record, rec)
 │           │   │   │   ├── index.ts      # defineNamespace("records", ...)
@@ -955,7 +955,7 @@ bunny
 │   └── remove          <id>                Remove registry
 ├── dns                                     Manage DNS zones and records
 │   │                                       Two resource groups: `records` (entries in a zone) and `zones` (the zone itself).
-│   │                                       Every [domain] is optional — omit it to use the linked zone (`dns zones link` → .bunny/dns.json), else pick interactively (resolveZoneInteractive). Picking a zone interactively offers to link the directory (skipped under --output json; `zones remove` never offers).
+│   │                                       Every [domain] is optional — omit it to use the linked zone (`dns zones link` → .bunny/dns.json), else pick interactively (resolveZoneInteractive; errors instead of prompting under --output json or without a TTY). Picking a zone interactively offers to link the directory (`zones remove` never offers).
 │   ├── records                             (canonical; aliases: record, rec)
 │   │   ├── list        [domain] (alias: ls)  List the records within a zone
 │   │   ├── add         [domain] [name] [type] [values..] [--ttl] [--comment] [--pull-zone] [--script]

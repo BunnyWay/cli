@@ -10,7 +10,7 @@ import {
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { detectRegistrar } from "../../../core/registrar.ts";
-import { spinner } from "../../../core/ui.ts";
+import { isInteractive, spinner } from "../../../core/ui.ts";
 import { type CoreClient, type DnsZoneModel, fetchZone } from "../api.ts";
 import { addRecordInteractive } from "../record/add.ts";
 import { importZoneFile } from "../record/import.ts";
@@ -159,7 +159,7 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const interactive = output !== "json" && Boolean(process.stdin.isTTY);
+    const interactive = isInteractive(output);
 
     let domainInput = domainArg;
     if (!domainInput && interactive) {
