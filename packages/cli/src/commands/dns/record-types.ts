@@ -12,6 +12,8 @@ import { UserError } from "../../core/errors.ts";
 export { type DnsRecordTypes, RECORD_TYPE_META, RECORD_TYPES, recordTypeLabel };
 export type DnsRecordModel = components["schemas"]["DnsRecordModel"];
 
+export const CAA_TAGS = ["issue", "issuewild", "iodef"] as const;
+
 /** Parse a record type label (e.g. "A", "cname", "PZ") to its enum value, or throw. */
 export function parseRecordType(value: string): DnsRecordTypes {
   const parsed = recordTypeFromLabel(value);

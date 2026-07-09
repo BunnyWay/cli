@@ -8,7 +8,7 @@ import { UserError } from "../../../core/errors.ts";
 import { formatKeyValue } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../../core/manifest.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { confirm, isInteractive, spinner } from "../../../core/ui.ts";
 import { createDnsScript } from "./api.ts";
 import {
   DNS_SCRIPT_MANIFEST,
@@ -66,11 +66,11 @@ export const dnsScriptsCreateCommand = defineCommand<CreateArgs>({
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
-    const isInteractive = output !== "json" && process.stdout.isTTY;
+    const interactive = isInteractive(output);
 
     const dirName = basename(resolve(process.cwd()));
     let name = args[ARG_NAME];
-    if (!name && isInteractive) {
+    if (!name && interactive) {
       const { value } = await prompts({
         type: "text",
         name: "value",
@@ -99,7 +99,7 @@ export const dnsScriptsCreateCommand = defineCommand<CreateArgs>({
     let shouldLink: boolean;
     if (linkArg !== undefined) {
       shouldLink = linkArg;
-    } else if (isInteractive && manifest.id && manifest.id !== created.id) {
+    } else if (interactive && manifest.id && manifest.id !== created.id) {
       shouldLink = await confirm(
         `Replace existing link to ${manifest.name ?? manifest.id}?`,
       );

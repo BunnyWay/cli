@@ -5,7 +5,7 @@ import { UserError } from "../errors.ts";
 import { formatTable } from "../format.ts";
 import { logger } from "../logger.ts";
 import type { GlobalArgs } from "../types.ts";
-import { confirm, spinner } from "../ui.ts";
+import { confirm, isInteractive, spinner } from "../ui.ts";
 import {
   addHostname,
   enableSsl,
@@ -150,7 +150,7 @@ export function createHostnamesCommands(
 
       const requestSsl = args.ssl === true;
       const force = args["force-ssl"] !== false;
-      const interactive = args.output !== "json" && process.stdout.isTTY;
+      const interactive = isInteractive(args.output);
 
       const { pullZoneId, coreClient } = await resolveArgs(args);
 

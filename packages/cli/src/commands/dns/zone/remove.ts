@@ -35,7 +35,7 @@ export const dnsZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveZoneInteractive(client, domain);
+    const zone = await resolveZoneInteractive(client, domain, { output });
 
     const confirmed = await confirm(
       `Delete zone ${zone.Domain} and all ${(zone.Records ?? []).length} record(s)?`,
