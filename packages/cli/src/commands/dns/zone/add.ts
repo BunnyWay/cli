@@ -11,7 +11,7 @@ import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { detectRegistrar } from "../../../core/registrar.ts";
 import { spinner } from "../../../core/ui.ts";
-import type { CoreClient, DnsZoneModel } from "../api.ts";
+import { type CoreClient, type DnsZoneModel, fetchZone } from "../api.ts";
 import { addRecordInteractive } from "../record/add.ts";
 import { importZoneFile } from "../record/import.ts";
 import { discoverImportableRecords } from "../record/scan-records.ts";
@@ -26,15 +26,19 @@ async function scanAndImport(opts: {
   client: CoreClient;
   zone: DnsZoneModel;
   domain: string;
-  output: string;
   assumeYes: boolean;
 }): Promise<void> {
   let discovered: Awaited<ReturnType<typeof discoverImportableRecords>> = [];
   let scanError: unknown;
+  let zone = opts.zone;
   const scanSpin = spinner("Scanning for existing DNS records...");
   scanSpin.start();
   try {
-    discovered = await discoverImportableRecords(opts.client, opts.zone);
+    // Re-fetch the zone so records added earlier in the menu aren't offered (and written) again.
+    try {
+      zone = await fetchZone(opts.client, opts.zone.Id as number);
+    } catch {}
+    discovered = await discoverImportableRecords(opts.client, zone);
   } catch (err) {
     scanError = err;
   } finally {
@@ -49,9 +53,10 @@ async function scanAndImport(opts: {
   } else if (discovered.length) {
     await reviewAndApply({
       client: opts.client,
-      zone: opts.zone,
+      zone,
       records: discovered,
-      output: opts.output,
+      // Callers are always in an interactive text flow; table/csv/markdown must still get the review multiselect.
+      output: "text",
       selectMessage: `Found ${discovered.length} existing record(s) for ${opts.domain} at your current provider. Select which to import:`,
       spinnerLabel: "Importing records...",
       successFor: (n) => `Imported ${n} record(s) into ${opts.domain}.`,
@@ -93,7 +98,6 @@ async function offerNextSteps(opts: {
           client: opts.client,
           zone: opts.zone,
           domain: opts.domain,
-          output: opts.output,
           assumeYes: false,
         });
       } else if (next === "import") {
@@ -252,7 +256,6 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
         client,
         zone: created,
         domain,
-        output,
         assumeYes: true,
       });
     }
