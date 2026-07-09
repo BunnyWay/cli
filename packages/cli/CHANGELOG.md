@@ -1,5 +1,22 @@
 # @bunny.net/cli
 
+## 0.9.0
+
+### Minor Changes
+
+- [#114](https://github.com/BunnyWay/cli/pull/114) [`11fbadd`](https://github.com/BunnyWay/cli/commit/11fbadd27c1355f0072f504e208564be73141fc7) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): promote dns out of experimental and onto the main command menu
+
+- [#114](https://github.com/BunnyWay/cli/pull/114) [`11fbadd`](https://github.com/BunnyWay/cli/commit/11fbadd27c1355f0072f504e208564be73141fc7) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): zones add prompts for the domain when omitted
+
+- [#114](https://github.com/BunnyWay/cli/pull/114) [`11fbadd`](https://github.com/BunnyWay/cli/commit/11fbadd27c1355f0072f504e208564be73141fc7) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): zones add asks how to add records (scan existing / upload a BIND zone file / add manually) instead of auto-scanning
+
+- [#111](https://github.com/BunnyWay/cli/pull/111) [`87e2c3d`](https://github.com/BunnyWay/cli/commit/87e2c3d7f8021bece3a27fe371fa5d710a7cdb8e) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - feat(sandbox): add environment variable support
+  - SDK: `Sandbox` gains `getEnv`/`setEnv`/`unsetEnv` to read and persist container env vars after creation (merges with the existing set, preserves reserved keys).
+  - CLI: `sandbox create`, `sandbox exec`, and `sandbox ssh` accept `-e/--env KEY=VALUE` (repeatable) and `--env-file`. Vars on `create` are persisted; on `exec`/`ssh` they are temporary for that invocation.
+  - CLI: new `sandbox env` namespace (`set`/`list`/`delete`) to manage persisted env vars.
+
+- [#98](https://github.com/BunnyWay/cli/pull/98) [`4aa8fbe`](https://github.com/BunnyWay/cli/commit/4aa8fbeecc5c69921abe43116a5f77ff69a178c4) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(storage): add storage zone and file commands with S3-compatible credentials
+
 ## 0.8.1
 
 ### Patch Changes
