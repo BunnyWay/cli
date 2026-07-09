@@ -438,6 +438,7 @@ bunny dns record export example.com --save           # write to ./example.com.zo
 # Zones — lifecycle
 bunny dns zone list
 bunny dns zone add example.com
+bunny dns zone add                # prompts for the domain
 bunny dns zone show example.com
 bunny dns zone remove example.com
 

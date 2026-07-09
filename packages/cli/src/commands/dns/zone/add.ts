@@ -18,7 +18,7 @@ import { discoverImportableRecords } from "../record/scan-records.ts";
 import { reviewAndApply, writeRecords } from "../record/write.ts";
 
 interface ZoneAddArgs {
-  domain: string;
+  domain?: string;
   import?: boolean;
 }
 
@@ -121,10 +121,11 @@ async function offerNextSteps(opts: {
 }
 
 export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
-  command: "add <domain>",
+  command: "add [domain]",
   describe: "Create a new DNS zone.",
   examples: [
     ["$0 dns zones add example.com", "Create a zone for example.com"],
+    ["$0 dns zones add", "Interactive: prompts for the domain"],
     [
       "$0 dns zones add example.com --import",
       "Create the zone and import existing records without prompting",
@@ -135,8 +136,7 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
     yargs
       .positional("domain", {
         type: "string",
-        describe: "Domain to create the zone for",
-        demandOption: true,
+        describe: "Domain to manage DNS for",
       })
       .option("import", {
         type: "boolean",
@@ -145,7 +145,7 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
       }),
 
   handler: async ({
-    domain,
+    domain: domainArg,
     import: doImport,
     profile,
     output,
@@ -154,6 +154,25 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
   }) => {
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
+
+    const interactive = output !== "json" && Boolean(process.stdin.isTTY);
+
+    let domainInput = domainArg;
+    if (!domainInput && interactive) {
+      const { value } = await prompts({
+        type: "text",
+        name: "value",
+        message: "Domain to manage DNS for:",
+      });
+      domainInput = typeof value === "string" ? value.trim() : value;
+    }
+    if (!domainInput) {
+      throw new UserError(
+        "A domain is required.",
+        "Pass the domain: bunny dns zones add example.com",
+      );
+    }
+    const domain = domainInput;
 
     const spin = spinner("Creating DNS zone...");
     spin.start();
@@ -239,7 +258,7 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
     }
 
     // The records menu only runs with a TTY so `zones add <domain>` stays scriptable.
-    if (created?.Id != null && doImport === undefined && process.stdin.isTTY) {
+    if (created?.Id != null && doImport === undefined && interactive) {
       await offerNextSteps({
         client,
         config,
