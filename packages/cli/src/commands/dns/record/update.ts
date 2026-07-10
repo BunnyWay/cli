@@ -145,10 +145,7 @@ async function promptFieldChanges(
       ...(spec.kind === "tag"
         ? {
             choices: CAA_TAGS.map((t) => ({ title: t, value: t })),
-            initial: Math.max(
-              0,
-              CAA_TAGS.findIndex((t) => t === existing.Tag),
-            ),
+            initial: Math.max(0, CAA_TAGS.indexOf(existing.Tag ?? "")),
           }
         : { initial }),
     });
