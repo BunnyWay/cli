@@ -56,11 +56,10 @@ async function resolveStorageZonePullZone(args: {
   const coreClient = createCoreClient(clientOptions(config, args.verbose));
 
   // Explicit ref → linked zone (.bunny/storage.json) → interactive picker, like every other storage command.
-  const zone = await resolveStorageZoneInteractive(
-    coreClient,
-    args.zone,
-    args.output,
-  );
+  const zone = await resolveStorageZoneInteractive(coreClient, args.zone, {
+    output: args.output,
+    offerLink: true,
+  });
   const pullZoneId = resolvePullZoneId(zone, args["pull-zone"]);
 
   return { pullZoneId, coreClient };

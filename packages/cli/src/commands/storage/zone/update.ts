@@ -159,8 +159,10 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref, output, {
+    const zone = await resolveStorageZoneInteractive(client, ref, {
+      output,
       force: args.force,
+      offerLink: true,
     });
     // Flags take full precedence over the editor: a partial set of flags is a partial update.
     const settings = hasFlags
