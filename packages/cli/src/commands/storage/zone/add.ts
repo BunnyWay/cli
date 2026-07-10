@@ -169,7 +169,8 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       replicationCodes.length &&
       !(await confirmAddedReplicationRegions(replicationCodes, { force }))
     ) {
-      throw new UserError("Creation cancelled.");
+      logger.log("Cancelled.");
+      return;
     }
 
     const spin = spinner("Creating storage zone...");
@@ -295,8 +296,8 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
           coreClient: client,
           pullZoneId: pullZoneResult.id,
           domain: host,
-          sslHint: `bunny storage zone domains ssl ${host} ${zoneName}`,
-          retryHint: `bunny storage zone domains add ${host} ${zoneName}`,
+          sslHint: `bunny storage zones domains ssl ${host} ${zoneName}`,
+          retryHint: `bunny storage zones domains add ${host} ${zoneName}`,
           forceSsl: true,
           interactive,
           verbose,

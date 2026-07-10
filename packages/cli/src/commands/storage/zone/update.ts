@@ -38,8 +38,9 @@ function settingsFromFlags(
   primaryCode?: string,
 ): StorageZoneSettingsModel {
   const settings: StorageZoneSettingsModel = {};
+  // An empty value clears the custom 404, matching the prompt's blank-for-none behavior.
   if (args.custom404Path !== undefined)
-    settings.Custom404FilePath = args.custom404Path;
+    settings.Custom404FilePath = args.custom404Path || null;
   if (args.rewrite404To200 !== undefined)
     settings.Rewrite404To200 = args.rewrite404To200;
   if (args.replication !== undefined)
