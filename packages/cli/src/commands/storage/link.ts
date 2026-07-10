@@ -7,7 +7,7 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifest } from "../../core/manifest.ts";
 import type { OutputFormat } from "../../core/types.ts";
-import { spinner } from "../../core/ui.ts";
+import { isInteractive, spinner } from "../../core/ui.ts";
 import {
   fetchStorageZones,
   resolveStorageZone,
@@ -51,7 +51,7 @@ export const storageLinkCommand = defineCommand<LinkArgs>({
     }
 
     // Without a TTY (or in JSON mode) there is no one to answer the picker.
-    if (output === "json" || !process.stdout.isTTY) {
+    if (!isInteractive(output)) {
       throw new UserError(
         "A storage zone is required.",
         "Pass the zone name or ID.",

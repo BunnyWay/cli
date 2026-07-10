@@ -6,7 +6,9 @@ import {
   createHostnamesCommands,
   type ResolvedPullZone,
 } from "../../../../core/hostnames/index.ts";
-import { resolveStorageZone, type StorageZoneModel } from "../../api.ts";
+import type { OutputFormat } from "../../../../core/types.ts";
+import type { StorageZoneModel } from "../../api.ts";
+import { resolveStorageZoneInteractive } from "../../interactive.ts";
 
 // Pick the storage zone's linked pull zone; require --pull-zone when several exist.
 function resolvePullZoneId(zone: StorageZoneModel, flag?: number): number {
@@ -46,19 +48,19 @@ async function resolveStorageZonePullZone(args: {
   profile: string;
   apiKey?: string;
   verbose: boolean;
+  output: OutputFormat;
   zone?: string;
   "pull-zone"?: number;
 }): Promise<ResolvedPullZone> {
   const config = resolveConfig(args.profile, args.apiKey, args.verbose);
   const coreClient = createCoreClient(clientOptions(config, args.verbose));
 
-  if (!args.zone) {
-    throw new UserError(
-      "A storage zone is required.",
-      "Pass the zone name or ID.",
-    );
-  }
-  const zone = await resolveStorageZone(coreClient, args.zone);
+  // Explicit ref → linked zone (.bunny/storage.json) → interactive picker, like every other storage command.
+  const zone = await resolveStorageZoneInteractive(
+    coreClient,
+    args.zone,
+    args.output,
+  );
   const pullZoneId = resolvePullZoneId(zone, args["pull-zone"]);
 
   return { pullZoneId, coreClient };
@@ -84,6 +86,7 @@ export const storageZoneHostnamesCommands = createHostnamesCommands({
       profile: args.profile,
       apiKey: args.apiKey,
       verbose: args.verbose,
+      output: args.output,
       zone: args.zone as string | undefined,
       "pull-zone": args["pull-zone"] as number | undefined,
     }),

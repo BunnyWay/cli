@@ -5,7 +5,7 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
+import { isInteractive, spinner } from "../../../core/ui.ts";
 import type { StorageZoneModel, StorageZoneSettingsModel } from "../api.ts";
 import {
   confirmAddedReplicationRegions,
@@ -88,14 +88,24 @@ async function promptSettings(
       })),
     });
 
-  const answers = await prompts(questions);
-  if (Object.keys(answers).length === 0)
-    throw new UserError("Update cancelled.");
+  // Abort the whole edit on cancel so a mid-flow Ctrl+C never applies partial answers.
+  let cancelled = false;
+  const answers = await prompts(questions, {
+    onCancel: () => {
+      cancelled = true;
+      return false;
+    },
+  });
+  if (cancelled) throw new UserError("Update cancelled.");
 
+  // Omit ReplicationZones when nothing new was picked so the PATCH body leaves replication untouched.
+  const newReplicas: string[] = answers.replication ?? [];
   return {
     Custom404FilePath: answers.custom404Path || null,
     Rewrite404To200: answers.rewrite404To200,
-    ReplicationZones: [...existing, ...(answers.replication ?? [])],
+    ReplicationZones: newReplicas.length
+      ? [...existing, ...newReplicas]
+      : undefined,
   };
 }
 
@@ -133,23 +143,26 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
         alias: "f",
         type: "boolean",
         default: false,
-        describe:
-          "Skip the confirmation prompt when adding replication regions",
+        describe: "Skip prompts and confirmations (use flag values only)",
       }),
 
   handler: async (args) => {
     const { zone: ref, profile, output, verbose, apiKey } = args;
     const hasFlags = hasAnyFlag(args);
 
-    // JSON output stays non-interactive; settings must come from flags.
-    if (!hasFlags && output === "json") {
-      throw new UserError("Nothing to update.", FLAG_HINT);
+    // JSON output, non-TTY, and --force all stay non-interactive; settings must come from flags.
+    const interactive = isInteractive(output) && !args.force;
+    if (!hasFlags && !interactive) {
+      throw new UserError("No changes requested.", FLAG_HINT);
     }
 
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref, output);
+    const zone = await resolveStorageZoneInteractive(client, ref, output, {
+      force: args.force,
+    });
+    // Flags take full precedence over the editor: a partial set of flags is a partial update.
     const settings = hasFlags
       ? settingsFromFlags(args, zone.Region ?? undefined)
       : await promptSettings(zone);
