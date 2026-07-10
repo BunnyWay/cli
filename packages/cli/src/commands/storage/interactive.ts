@@ -2,7 +2,7 @@ import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
 import { loadManifest } from "../../core/manifest.ts";
 import type { OutputFormat } from "../../core/types.ts";
-import { spinner } from "../../core/ui.ts";
+import { isInteractive, spinner } from "../../core/ui.ts";
 import {
   type CoreClient,
   fetchStorageZone,
@@ -40,7 +40,7 @@ export async function resolveStorageZoneInteractive(
   }
 
   // No zone given: only fall back to the picker when we can actually prompt.
-  if (output === "json" || !process.stdout.isTTY) {
+  if (!isInteractive(output)) {
     throw new UserError(
       "A storage zone is required.",
       "Pass the zone name or ID.",

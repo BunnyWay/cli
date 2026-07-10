@@ -5,7 +5,7 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
+import { isInteractive, spinner } from "../../../core/ui.ts";
 import type { StorageZoneModel, StorageZoneSettingsModel } from "../api.ts";
 import {
   confirmAddedReplicationRegions,
@@ -88,9 +88,15 @@ async function promptSettings(
       })),
     });
 
-  const answers = await prompts(questions);
-  if (Object.keys(answers).length === 0)
-    throw new UserError("Update cancelled.");
+  // Abort the whole edit on cancel so a mid-flow Ctrl+C never applies partial answers.
+  let cancelled = false;
+  const answers = await prompts(questions, {
+    onCancel: () => {
+      cancelled = true;
+      return false;
+    },
+  });
+  if (cancelled) throw new UserError("Update cancelled.");
 
   return {
     Custom404FilePath: answers.custom404Path || null,
@@ -133,17 +139,17 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
         alias: "f",
         type: "boolean",
         default: false,
-        describe:
-          "Skip the confirmation prompt when adding replication regions",
+        describe: "Skip prompts and confirmations (use flag values only)",
       }),
 
   handler: async (args) => {
     const { zone: ref, profile, output, verbose, apiKey } = args;
     const hasFlags = hasAnyFlag(args);
 
-    // JSON output stays non-interactive; settings must come from flags.
-    if (!hasFlags && output === "json") {
-      throw new UserError("Nothing to update.", FLAG_HINT);
+    // JSON output, non-TTY, and --force all stay non-interactive; settings must come from flags.
+    const interactive = isInteractive(output) && !args.force;
+    if (!hasFlags && !interactive) {
+      throw new UserError("No changes requested.", FLAG_HINT);
     }
 
     const config = resolveConfig(profile, apiKey, verbose);

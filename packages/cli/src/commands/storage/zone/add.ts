@@ -11,7 +11,7 @@ import {
   setupHostname,
 } from "../../../core/hostnames/index.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { confirm, isInteractive, spinner } from "../../../core/ui.ts";
 import { type StorageZoneModel, toSafeStorageZone } from "../api.ts";
 import {
   confirmAddedReplicationRegions,
@@ -104,8 +104,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     const client = createCoreClient(clientOptions(config, verbose));
 
     // JSON output, non-TTY, and --force all stay non-interactive; values must come from flags.
-    const interactive =
-      output !== "json" && process.stdout.isTTY === true && !force;
+    const interactive = isInteractive(output) && !force;
 
     // The region and replication choices both drive storage pricing, so flag it up front.
     if (interactive && (region === undefined || replication === undefined)) {

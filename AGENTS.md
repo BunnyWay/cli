@@ -364,9 +364,9 @@ bunny-cli/
 │           │   │   │   ├── add.ts        # Create a storage zone (prompts for name + region when omitted; offers/--pull-zone creates a pull zone via core/hostnames createPullZone, then offers/--domain a custom domain via setupHostname). Under --output json it stays non-interactive: --domain is attached via addHostname (no DNS/SSL prompts) and reported in the CustomDomain field (with cnameTarget or error)
 │           │   │   │   ├── show.ts       # Show zone details (region, replication, hostname, usage; adds S3 endpoint rows when S3-enabled)
 │           │   │   │   ├── credentials.ts # S3 credentials / tool config for the zone (alias: creds; --format, --read-only, --show-secret); table masks the secret unless --show-secret, JSON/--format always emit it in full
-│           │   │   │   ├── update.ts     # Update zone settings (custom 404, rewrite 404->200, replication); replication is additive (replicas can't be removed, so existing ones are kept and the prompt only offers new regions, confirming before adding); interactive pre-filled editor when no flags, non-interactive under --output json
+│           │   │   │   ├── update.ts     # Update zone settings (custom 404, rewrite 404->200, replication); replication is additive (replicas can't be removed, so existing ones are kept and the prompt only offers new regions, confirming before adding); interactive pre-filled editor when no flags (a mid-flow cancel aborts the whole edit); --output json/non-TTY/--force require flags and error "No changes requested." without them
 │           │   │   │   ├── remove.ts     # Delete a storage zone and its files (alias: rm)
-│           │   │   │   └── hostnames/index.ts  # Mounts core/hostnames createHostnamesCommands as "storage zone domains" (alias hostnames); resolver maps a storage zone (name/ID positional, --pull-zone) to its linked pull zone
+│           │   │   │   └── hostnames/index.ts  # Mounts core/hostnames createHostnamesCommands as "storage zone domains" (alias hostnames); resolver maps a storage zone (name/ID positional, else linked zone, else picker via resolveStorageZoneInteractive; --pull-zone) to its linked pull zone
 │           │   │   └── file/              # `bunny storage files` (canonical: files; aliases: file); zone is the --zone/-z flag (defaults to linked zone), the positional is the file/path
 │           │   │       ├── index.ts      # defineNamespace("files", ...)
 │           │   │       ├── list.ts       # List files in a directory (alias: ls; directories first; [path] positional, --zone flag)
@@ -989,11 +989,11 @@ bunny
 │   │   ├── list                            List all storage zones (alias: ls)
 │   │   ├── add         [name] [--region] [--replication] [--pull-zone] [--pull-zone-name] [--domain] [--force/-f]  Create a storage zone (prompts for name + region when omitted; offers/--pull-zone creates a pull zone to serve it on the web, then offers/--domain a custom domain via setupHostname; replicas are permanent so adding any is confirmed; --force/--output json skip all prompts and use flag values only)
 │   │   ├── show        [zone]              Show zone details (region, replication, hostname, usage)
-│   │   ├── update      [zone] [--custom-404-path] [--rewrite-404-to-200] [--replication] [--force/-f]  Update zone settings (edits interactively pre-filled when no flags; replication is additive and adding a replica is confirmed unless --force; non-interactive under --output json)
+│   │   ├── update      [zone] [--custom-404-path] [--rewrite-404-to-200] [--replication] [--force/-f]  Update zone settings (edits interactively pre-filled when no flags; replication is additive and adding a replica is confirmed unless --force; --force/--output json/non-TTY require flags and error "No changes requested." without them)
 │   │   ├── remove      [zone] [--force]    Delete a storage zone and its files (alias: rm)
 │   │   ├── credentials [zone] [--format rclone|aws|s3cmd|env] [--read-only] [--show-secret]  (alias: creds)
 │   │   │                                   S3 credentials for the zone (name = access key, password = secret); --format emits tool config, else table/--output json; table masks the secret unless --show-secret
-│   │   └── domains                         (canonical; alias: hostnames) custom domains on the zone's pull zone; mounts core/hostnames createHostnamesCommands; resolver maps the storage zone to its linked pull zone
+│   │   └── domains                         (canonical; alias: hostnames) custom domains on the zone's pull zone; mounts core/hostnames createHostnamesCommands; resolver maps the storage zone (positional, else linked zone, else picker) to its linked pull zone
 │   ├── files                               (canonical; aliases: file) [--zone|-z] defaults to the linked zone on every file command
 │   │   ├── list        [path] [--zone] (alias: ls)  List files in a directory (trailing slash on path)
 │   │   ├── upload      <file> [--zone] [--to] [--checksum] [--content-type]  Upload a local file
