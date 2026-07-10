@@ -16,6 +16,7 @@ export async function resolveStorageZoneInteractive(
   client: CoreClient,
   ref: string | undefined,
   output?: OutputFormat,
+  opts?: { force?: boolean },
 ): Promise<StorageZoneModel> {
   if (ref) {
     const spin = spinner("Resolving storage zone...");
@@ -39,8 +40,8 @@ export async function resolveStorageZoneInteractive(
     }
   }
 
-  // No zone given: only fall back to the picker when we can actually prompt.
-  if (!isInteractive(output)) {
+  // No zone given: only fall back to the picker when we can actually prompt (--force opts out too).
+  if (opts?.force || !isInteractive(output)) {
     throw new UserError(
       "A storage zone is required.",
       "Pass the zone name or ID.",

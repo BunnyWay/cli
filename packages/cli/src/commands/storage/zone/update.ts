@@ -98,10 +98,14 @@ async function promptSettings(
   });
   if (cancelled) throw new UserError("Update cancelled.");
 
+  // Omit ReplicationZones when nothing new was picked so the PATCH body leaves replication untouched.
+  const newReplicas: string[] = answers.replication ?? [];
   return {
     Custom404FilePath: answers.custom404Path || null,
     Rewrite404To200: answers.rewrite404To200,
-    ReplicationZones: [...existing, ...(answers.replication ?? [])],
+    ReplicationZones: newReplicas.length
+      ? [...existing, ...newReplicas]
+      : undefined,
   };
 }
 
@@ -155,7 +159,10 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref, output);
+    const zone = await resolveStorageZoneInteractive(client, ref, output, {
+      force: args.force,
+    });
+    // Flags take full precedence over the editor: a partial set of flags is a partial update.
     const settings = hasFlags
       ? settingsFromFlags(args, zone.Region ?? undefined)
       : await promptSettings(zone);
