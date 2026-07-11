@@ -220,7 +220,8 @@ export class SshTransport {
   /** Rename or move a file or directory. Fails when the destination exists. */
   async rename(from: string, to: string): Promise<void> {
     // OpenSSH's SFTP rename overwrites silently, so guard here (small TOCTOU window accepted).
-    if ((await this.stat(to)) !== null) {
+    // lstat, not stat: a dangling symlink at the destination must still count as taken.
+    if (await this.lexists(to)) {
       throw new SandboxError(`Failed to rename ${from}: ${to} already exists.`);
     }
     const sftp = await this.sftp();
@@ -229,6 +230,18 @@ export class SshTransport {
         if (err) {
           reject(new SandboxError(`Failed to rename ${from} to ${to}.`, err));
         } else resolve();
+      });
+    });
+  }
+
+  /** Whether anything exists at the path, without following symlinks. */
+  private async lexists(path: string): Promise<boolean> {
+    const sftp = await this.sftp();
+    return new Promise((resolve, reject) => {
+      sftp.lstat(path, (err) => {
+        if (!err) return resolve(true);
+        if (isMissingFileError(err)) return resolve(false);
+        reject(new SandboxError(`Failed to stat ${path}.`, err));
       });
     });
   }
