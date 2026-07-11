@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { CommandTimeoutError } from "./errors.ts";
 import {
   extractAgentToken,
   extractAnycastHost,
@@ -12,6 +13,7 @@ import {
   Sandbox,
   shellQuote,
 } from "./sandbox.ts";
+import { collectExec, fileEntryFromAttrs } from "./transport.ts";
 
 describe("Sandbox.create", () => {
   test("rejects reserved env key AGENT_TOKEN before any network call", async () => {
@@ -24,6 +26,146 @@ describe("Sandbox.create", () => {
     await expect(
       Sandbox.create({ env: { "bad key": "value" } }),
     ).rejects.toThrow("Invalid environment variable name");
+  });
+});
+
+describe("Sandbox.runCommand validation", () => {
+  // fromHandle connects lazily, so validation errors surface with no network.
+  const sandbox = Sandbox.fromHandle({
+    appId: "app-1",
+    name: "test",
+    agentToken: "token",
+    sshHost: "192.0.2.1",
+  });
+
+  test("rejects a non-positive timeout before any network call", async () => {
+    await expect(sandbox.runCommand({ cmd: "ls", timeout: 0 })).rejects.toThrow(
+      "timeout must be a positive number",
+    );
+  });
+
+  test("rejects timeout combined with detached", async () => {
+    await expect(
+      sandbox.runCommand({ cmd: "ls", detached: true, timeout: 5000 }),
+    ).rejects.toThrow("not supported with detached");
+  });
+
+  test("rejects signal combined with detached", async () => {
+    await expect(
+      sandbox.runCommand({
+        cmd: "ls",
+        detached: true,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toThrow("not supported with detached");
+  });
+});
+
+function fakeStream() {
+  const listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
+  const stderrListeners: Array<(data: Buffer) => void> = [];
+  return {
+    signals: [] as string[],
+    closed: false,
+    on(event: string, cb: (...args: never[]) => void) {
+      listeners[event] ??= [];
+      listeners[event].push(cb as (...args: unknown[]) => void);
+      return this;
+    },
+    stderr: {
+      on(_event: string, cb: (data: Buffer) => void) {
+        stderrListeners.push(cb);
+        return this;
+      },
+    },
+    signal(name: string) {
+      this.signals.push(name);
+    },
+    close() {
+      this.closed = true;
+    },
+    emit(event: string, ...args: unknown[]) {
+      for (const cb of listeners[event] ?? []) cb(...args);
+    },
+    emitStderr(data: Buffer) {
+      for (const cb of stderrListeners) cb(data);
+    },
+  };
+}
+
+describe("collectExec", () => {
+  test("resolves with collected output on close", async () => {
+    const stream = fakeStream();
+    const pending = collectExec(stream);
+    stream.emit("data", Buffer.from("out"));
+    stream.emitStderr(Buffer.from("err"));
+    stream.emit("close", 0);
+    expect(await pending).toEqual({
+      stdout: "out",
+      stderr: "err",
+      exitCode: 0,
+    });
+  });
+
+  test("times out, kills the remote process, and keeps partial output", async () => {
+    const stream = fakeStream();
+    const pending = collectExec(stream, { timeoutMs: 10 });
+    stream.emit("data", Buffer.from("partial"));
+    const err = await pending.catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CommandTimeoutError);
+    expect((err as CommandTimeoutError).stdout).toBe("partial");
+    expect(stream.signals).toContain("KILL");
+    expect(stream.closed).toBe(true);
+  });
+
+  test("rejects immediately when the signal is already aborted", async () => {
+    const stream = fakeStream();
+    const err = await collectExec(stream, {
+      signal: AbortSignal.abort("stop"),
+    }).catch((e: unknown) => e);
+    expect(err).toBe("stop");
+    expect(stream.closed).toBe(true);
+  });
+
+  test("rejects with the abort reason on mid-flight abort", async () => {
+    const stream = fakeStream();
+    const controller = new AbortController();
+    const pending = collectExec(stream, { signal: controller.signal });
+    controller.abort(new Error("cancelled"));
+    const err = await pending.catch((e: unknown) => e);
+    expect((err as Error).message).toBe("cancelled");
+    expect(stream.signals).toContain("KILL");
+  });
+});
+
+describe("fileEntryFromAttrs", () => {
+  const attrs = (mode: number, kind: "dir" | "link" | "file" | "other") => ({
+    size: 42,
+    mode,
+    isDirectory: () => kind === "dir",
+    isSymbolicLink: () => kind === "link",
+    isFile: () => kind === "file",
+  });
+
+  test("classifies entries and masks the mode to permission bits", () => {
+    expect(fileEntryFromAttrs("src", attrs(0o40755, "dir"))).toEqual({
+      name: "src",
+      type: "directory",
+      size: 42,
+      mode: 0o755,
+    });
+    expect(fileEntryFromAttrs("a.txt", attrs(0o100644, "file"))).toEqual({
+      name: "a.txt",
+      type: "file",
+      size: 42,
+      mode: 0o644,
+    });
+    expect(fileEntryFromAttrs("ln", attrs(0o120777, "link")).type).toBe(
+      "symlink",
+    );
+    expect(fileEntryFromAttrs("sock", attrs(0o140644, "other")).type).toBe(
+      "other",
+    );
   });
 });
 

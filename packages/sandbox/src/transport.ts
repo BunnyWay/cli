@@ -4,7 +4,8 @@ import {
   type ConnectConfig,
   type SFTPWrapper,
 } from "ssh2";
-import { SandboxError } from "./errors.ts";
+import { CommandTimeoutError, SandboxError } from "./errors.ts";
+import type { SandboxFileEntry } from "./types.ts";
 
 export interface TransportConfig {
   host: string;
@@ -18,6 +19,98 @@ export interface ExecResult {
   stdout: string;
   stderr: string;
   exitCode: number | null;
+}
+
+export interface ExecLimits {
+  /** Kill the command and reject with CommandTimeoutError after this many milliseconds. */
+  timeoutMs?: number;
+  /** Abort to kill the command and reject with the signal's reason. */
+  signal?: AbortSignal;
+}
+
+/** Minimal exec-channel surface, kept narrow so tests can fake it. */
+export interface ExecStreamLike {
+  on(event: string, cb: (...args: never[]) => void): unknown;
+  stderr: { on(event: string, cb: (data: Buffer) => void): unknown };
+  signal(name: string): void;
+  close(): void;
+}
+
+/** Collect an exec channel to completion, enforcing the given limits. */
+export function collectExec(
+  stream: ExecStreamLike,
+  limits: ExecLimits = {},
+): Promise<ExecResult> {
+  let stdout = "";
+  let stderr = "";
+  stream.on("data", (d: Buffer) => {
+    stdout += d.toString();
+  });
+  stream.stderr.on("data", (d: Buffer) => {
+    stderr += d.toString();
+  });
+
+  return new Promise((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const cleanup = () => {
+      clearTimeout(timer);
+      limits.signal?.removeEventListener("abort", onAbort);
+    };
+    const kill = () => {
+      try {
+        stream.signal("KILL");
+      } catch {}
+      try {
+        stream.close();
+      } catch {}
+    };
+    const onAbort = () => {
+      cleanup();
+      kill();
+      reject(limits.signal?.reason);
+    };
+    stream.on("error", (err: Error) => {
+      cleanup();
+      reject(err);
+    });
+    stream.on("close", (code: number | null) => {
+      cleanup();
+      resolve({ stdout, stderr, exitCode: code ?? null });
+    });
+    if (limits.signal?.aborted) return onAbort();
+    limits.signal?.addEventListener("abort", onAbort, { once: true });
+    if (limits.timeoutMs !== undefined) {
+      timer = setTimeout(() => {
+        cleanup();
+        kill();
+        reject(new CommandTimeoutError(limits.timeoutMs ?? 0, stdout, stderr));
+      }, limits.timeoutMs);
+    }
+  });
+}
+
+/** SFTP attrs surface used to build a SandboxFileEntry. */
+export interface FileAttrsLike {
+  size?: number;
+  mode: number;
+  isDirectory(): boolean;
+  isSymbolicLink(): boolean;
+  isFile(): boolean;
+}
+
+/** Map SFTP attrs onto a SandboxFileEntry. */
+export function fileEntryFromAttrs(
+  name: string,
+  attrs: FileAttrsLike,
+): SandboxFileEntry {
+  const type = attrs.isDirectory()
+    ? "directory"
+    : attrs.isSymbolicLink()
+      ? "symlink"
+      : attrs.isFile()
+        ? "file"
+        : "other";
+  return { name, type, size: attrs.size ?? 0, mode: attrs.mode & 0o7777 };
 }
 
 // ssh2 reports a missing SFTP file as the numeric status NO_SUCH_FILE (2), not a Node ENOENT string.
@@ -58,22 +151,8 @@ export class SshTransport {
   }
 
   /** Run a command to completion and collect its output. */
-  async exec(command: string): Promise<ExecResult> {
-    const stream = await this.execStream(command);
-    let stdout = "";
-    let stderr = "";
-    stream.on("data", (d: Buffer) => {
-      stdout += d.toString();
-    });
-    stream.stderr.on("data", (d: Buffer) => {
-      stderr += d.toString();
-    });
-    return new Promise((resolve, reject) => {
-      stream.on("error", reject);
-      stream.on("close", (code: number | null) => {
-        resolve({ stdout, stderr, exitCode: code });
-      });
-    });
+  async exec(command: string, limits?: ExecLimits): Promise<ExecResult> {
+    return collectExec(await this.execStream(command), limits);
   }
 
   /** Start a command and return its live channel for streaming. */
@@ -105,6 +184,62 @@ export class SshTransport {
         if (!err) return resolve(data);
         if (isMissingFileError(err)) return resolve(null);
         reject(new SandboxError(`Failed to read ${path}.`, err));
+      });
+    });
+  }
+
+  /** List a directory's entries, sorted by name. */
+  async readDir(path: string): Promise<SandboxFileEntry[]> {
+    const sftp = await this.sftp();
+    return new Promise((resolve, reject) => {
+      sftp.readdir(path, (err, list) => {
+        if (err)
+          return reject(new SandboxError(`Failed to list ${path}.`, err));
+        resolve(
+          list
+            .map((e) => fileEntryFromAttrs(e.filename, e.attrs))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        );
+      });
+    });
+  }
+
+  /** Delete a file. Returns false when it does not exist. */
+  async unlink(path: string): Promise<boolean> {
+    const sftp = await this.sftp();
+    return new Promise((resolve, reject) => {
+      sftp.unlink(path, (err) => {
+        if (!err) return resolve(true);
+        if (isMissingFileError(err)) return resolve(false);
+        reject(new SandboxError(`Failed to delete ${path}.`, err));
+      });
+    });
+  }
+
+  /** Rename or move a file or directory. */
+  async rename(from: string, to: string): Promise<void> {
+    const sftp = await this.sftp();
+    return new Promise((resolve, reject) => {
+      sftp.rename(from, to, (err) => {
+        if (err) {
+          reject(new SandboxError(`Failed to rename ${from} to ${to}.`, err));
+        } else resolve();
+      });
+    });
+  }
+
+  /** Stat a path into a SandboxFileEntry, or null when it does not exist. */
+  async stat(path: string): Promise<SandboxFileEntry | null> {
+    const sftp = await this.sftp();
+    return new Promise((resolve, reject) => {
+      sftp.stat(path, (err, attrs) => {
+        if (!err) {
+          return resolve(
+            fileEntryFromAttrs(path.split("/").pop() || path, attrs),
+          );
+        }
+        if (isMissingFileError(err)) return resolve(null);
+        reject(new SandboxError(`Failed to stat ${path}.`, err));
       });
     });
   }

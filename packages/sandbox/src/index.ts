@@ -1,5 +1,5 @@
 export { Command, CommandFinished, type LogChunk } from "./command.ts";
-export { SandboxError } from "./errors.ts";
+export { CommandTimeoutError, SandboxError } from "./errors.ts";
 export { Sandbox } from "./sandbox.ts";
 export type {
   CreateOptions,
@@ -7,6 +7,7 @@ export type {
   GetOptions,
   RunCommandOptions,
   SandboxAuth,
+  SandboxFileEntry,
   SandboxHandle,
   SandboxImage,
 } from "./types.ts";

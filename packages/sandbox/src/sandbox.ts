@@ -26,6 +26,7 @@ import type {
   GetOptions,
   RunCommandOptions,
   SandboxAuth,
+  SandboxFileEntry,
   SandboxHandle,
 } from "./types.ts";
 
@@ -170,19 +171,38 @@ export class Sandbox {
 
   /** Run a command, blocking for the result unless detached is set. */
   async runCommand(command: string, args?: string[]): Promise<CommandFinished>;
-  async runCommand(command: RunCommandOptions): Promise<Command>;
+  async runCommand(
+    command: RunCommandOptions & { detached: true },
+  ): Promise<Command>;
+  async runCommand(command: RunCommandOptions): Promise<CommandFinished>;
   async runCommand(
     command: string | RunCommandOptions,
     args: string[] = [],
   ): Promise<CommandFinished | Command> {
     const opts: RunCommandOptions =
       typeof command === "string" ? { cmd: command, args } : command;
+    if (
+      opts.timeout !== undefined &&
+      (!Number.isFinite(opts.timeout) || opts.timeout <= 0)
+    ) {
+      throw new SandboxError(
+        "timeout must be a positive number of milliseconds.",
+      );
+    }
+    if (opts.detached && (opts.timeout !== undefined || opts.signal)) {
+      throw new SandboxError(
+        "timeout and signal are not supported with detached; use command.kill().",
+      );
+    }
     const remote = buildRemoteCommand(opts);
 
     if (opts.detached) {
       return new Command(await this.transport.execStream(remote));
     }
-    const { stdout, stderr, exitCode } = await this.transport.exec(remote);
+    const { stdout, stderr, exitCode } = await this.transport.exec(remote, {
+      timeoutMs: opts.timeout,
+      signal: opts.signal,
+    });
     return new CommandFinished(exitCode, stdout, stderr);
   }
 
@@ -203,6 +223,26 @@ export class Sandbox {
   /** Read a file into a Buffer, or null when it does not exist. */
   async readFile(path: string): Promise<Buffer | null> {
     return this.transport.readFile(resolvePath(path));
+  }
+
+  /** List directory entries, sorted by name. Defaults to the workplace. */
+  async listFiles(path = "."): Promise<SandboxFileEntry[]> {
+    return this.transport.readDir(resolvePath(path));
+  }
+
+  /** Delete a file. Returns false when it does not exist. */
+  async deleteFile(path: string): Promise<boolean> {
+    return this.transport.unlink(resolvePath(path));
+  }
+
+  /** Rename or move a file or directory. Fails when the destination exists. */
+  async rename(from: string, to: string): Promise<void> {
+    return this.transport.rename(resolvePath(from), resolvePath(to));
+  }
+
+  /** Whether a file or directory exists at the path. */
+  async exists(path: string): Promise<boolean> {
+    return (await this.transport.stat(resolvePath(path))) !== null;
   }
 
   async mkDir(path: string): Promise<void> {

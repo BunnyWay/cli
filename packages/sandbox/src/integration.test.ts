@@ -37,6 +37,21 @@ suite("sandbox integration", () => {
         // Missing files resolve to null.
         expect(await sandbox.readFile("does-not-exist.txt")).toBeNull();
 
+        // List, rename, and delete round trip.
+        await sandbox.writeFiles([{ path: "dir/a.txt", content: "a" }]);
+        const entries = await sandbox.listFiles("dir");
+        expect(entries.map((e) => e.name)).toContain("a.txt");
+        expect(await sandbox.exists("dir/a.txt")).toBe(true);
+        await sandbox.rename("dir/a.txt", "dir/b.txt");
+        expect(await sandbox.exists("dir/a.txt")).toBe(false);
+        expect(await sandbox.deleteFile("dir/b.txt")).toBe(true);
+        expect(await sandbox.deleteFile("dir/b.txt")).toBe(false);
+
+        // A hanging command rejects once its timeout elapses.
+        await expect(
+          sandbox.runCommand({ cmd: "sleep", args: ["30"], timeout: 2000 }),
+        ).rejects.toThrow("timed out");
+
         // Stream output from a detached command.
         const cmd = await sandbox.runCommand({
           cmd: "sh",

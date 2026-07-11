@@ -75,7 +75,7 @@ This is a Bun workspace monorepo with six packages:
 - **`@bunny.net/app-config`** (`packages/app-config/`) — Shared app configuration schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. Used by the CLI and potentially other tools.
 - **`@bunny.net/database-shell`** (`packages/database-shell/`) — Standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
 - **`@bunny.net/scriptable-dns-types`** (`packages/scriptable-dns-types/`): Ambient TypeScript declarations for the Scriptable DNS runtime globals (`ARecord`, `Monitoring`, `RoutingEngine`, etc.). Types-only, no runtime code: the DNS runtime can't `import`, so these power editor autocomplete and an optional typecheck step. Scaffolded into projects by `bunny dns scripts init`; intended to also feed the dashboard editor. Publishable to npm.
-- **`@bunny.net/sandbox`** (`packages/sandbox/`) — Standalone sandbox SDK. Code-first DX (`Sandbox.create`, `writeFiles`, `runCommand`, `exposePort`, `setEnv`/`getEnv`/`unsetEnv`) over Magic Containers provisioning plus an `ssh2` SSH/SFTP transport. Env vars can be baked in at `create` (persisted), passed per-command via `runCommand({ env })` (temporary), or persisted after creation via `setEnv`. Zero CLI dependencies.
+- **`@bunny.net/sandbox`** (`packages/sandbox/`) — Standalone sandbox SDK. Code-first DX (`Sandbox.create`, `writeFiles`, `runCommand`, `exposePort`, `setEnv`/`getEnv`/`unsetEnv`, `listFiles`/`deleteFile`/`rename`/`exists`) over Magic Containers provisioning plus an `ssh2` SSH/SFTP transport. Blocking `runCommand` accepts `timeout` (rejects with `CommandTimeoutError` carrying partial output) and `signal` for cancellation. Env vars can be baked in at `create` (persisted), passed per-command via `runCommand({ env })` (temporary), or persisted after creation via `setEnv`. Zero CLI dependencies.
 - **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/app-config`, `@bunny.net/database-shell`, `@bunny.net/scriptable-dns-types`, and `@bunny.net/sandbox`.
 
 ```
@@ -157,12 +157,12 @@ bunny-cli/
 │   │   ├── tsconfig.json
 │   │   └── src/
 │   │       ├── index.ts                  # Barrel export: Sandbox, Command, types
-│   │       ├── sandbox.ts                # Sandbox class: create/get/fromHandle, runCommand, writeFiles, readFile, mkDir, exposePort, domain, getEnv/setEnv/unsetEnv (persisted env), delete
+│   │       ├── sandbox.ts                # Sandbox class: create/get/fromHandle, runCommand (timeout/signal), writeFiles, readFile, listFiles, deleteFile, rename, exists, mkDir, exposePort, domain, getEnv/setEnv/unsetEnv (persisted env), delete
 │   │       ├── provision.ts              # Magic Containers app create/poll/endpoints + auth helpers + container env read/replace
-│   │       ├── transport.ts              # ssh2 SSH/SFTP transport (exec, file IO, reachability)
+│   │       ├── transport.ts              # ssh2 SSH/SFTP transport (exec with limits, file IO, reachability)
 │   │       ├── command.ts                # Command (detached, logs()) and CommandFinished
 │   │       ├── types.ts                  # Option and handle types
-│   │       ├── errors.ts                 # SandboxError
+│   │       ├── errors.ts                 # SandboxError, CommandTimeoutError
 │   │       └── sandbox.test.ts           # Tests for pure logic (command building, app extraction)
 │   │
 │   └── cli/                              # @bunny.net/cli package

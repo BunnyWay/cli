@@ -59,6 +59,20 @@ export interface RunCommandOptions {
   sudo?: boolean;
   /** Return immediately with a live Command instead of blocking. */
   detached?: boolean;
+  /** Kill the command and reject with CommandTimeoutError after this many milliseconds. */
+  timeout?: number;
+  /** Abort to kill the command and reject with the signal's reason. */
+  signal?: AbortSignal;
+}
+
+/** A directory entry returned by listFiles. */
+export interface SandboxFileEntry {
+  name: string;
+  type: "file" | "directory" | "symlink" | "other";
+  /** Size in bytes. */
+  size: number;
+  /** Unix permission bits. */
+  mode: number;
 }
 
 export interface FileToWrite {

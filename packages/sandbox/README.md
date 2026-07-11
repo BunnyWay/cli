@@ -55,6 +55,27 @@ const finished = await server.wait();
 console.log(finished.exitCode);
 ```
 
+## Timeouts and cancellation
+
+Blocking commands accept a `timeout` in milliseconds and an `AbortSignal`. On timeout the remote process is killed and the call rejects with `CommandTimeoutError`, which carries the output collected so far:
+
+```ts
+import { CommandTimeoutError } from "@bunny.net/sandbox";
+
+try {
+  await sandbox.runCommand({ cmd: "bun", args: ["run", "build"], timeout: 30_000 });
+} catch (err) {
+  if (err instanceof CommandTimeoutError) console.log(err.stdout, err.stderr);
+}
+
+// Or cancel from an AbortSignal; the call rejects with the abort reason.
+const controller = new AbortController();
+const pending = sandbox.runCommand({ cmd: "sleep", args: ["600"], signal: controller.signal });
+controller.abort();
+```
+
+Detached commands manage their own lifetime instead: use `command.kill()`.
+
 ## Reconnecting
 
 `Sandbox.create` returns a handle you can persist and rebuild later, with no API round trip:
@@ -83,6 +104,10 @@ const sandbox = await Sandbox.get({ apiKey, appId });
 | `sandbox.runCommand({ ..., detached: true })` | Start a command and stream `logs()`.                 |
 | `sandbox.writeFiles(files)`                   | Upload files, creating parent directories.           |
 | `sandbox.readFile(path)`                      | Read a file into a Buffer, or `null` if missing.     |
+| `sandbox.listFiles(path?)`                    | List directory entries, sorted by name.              |
+| `sandbox.deleteFile(path)`                    | Delete a file; `false` if it did not exist.          |
+| `sandbox.rename(from, to)`                    | Rename or move a file or directory.                  |
+| `sandbox.exists(path)`                        | Whether a file or directory exists.                  |
 | `sandbox.mkDir(path)`                         | Create a directory.                                  |
 | `sandbox.exposePort(port, label?)`            | Expose a port as a public CDN URL.                   |
 | `sandbox.domain(port)`                        | Return the URL of an already exposed port.           |
