@@ -225,7 +225,7 @@ export class Sandbox {
     return this.transport.readFile(resolvePath(path));
   }
 
-  /** List directory entries, sorted by name. Defaults to the workplace. */
+  /** List directory entries, sorted by name; [] when the directory does not exist. Defaults to the workplace. */
   async listFiles(path = "."): Promise<SandboxFileEntry[]> {
     return this.transport.readDir(resolvePath(path));
   }

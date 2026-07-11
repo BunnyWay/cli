@@ -188,11 +188,12 @@ export class SshTransport {
     });
   }
 
-  /** List a directory's entries, sorted by name. */
+  /** List a directory's entries, sorted by name. Resolves to [] when the directory does not exist. */
   async readDir(path: string): Promise<SandboxFileEntry[]> {
     const sftp = await this.sftp();
     return new Promise((resolve, reject) => {
       sftp.readdir(path, (err, list) => {
+        if (err && isMissingFileError(err)) return resolve([]);
         if (err)
           return reject(new SandboxError(`Failed to list ${path}.`, err));
         resolve(
@@ -216,8 +217,12 @@ export class SshTransport {
     });
   }
 
-  /** Rename or move a file or directory. */
+  /** Rename or move a file or directory. Fails when the destination exists. */
   async rename(from: string, to: string): Promise<void> {
+    // OpenSSH's SFTP rename overwrites silently, so guard here (small TOCTOU window accepted).
+    if ((await this.stat(to)) !== null) {
+      throw new SandboxError(`Failed to rename ${from}: ${to} already exists.`);
+    }
     const sftp = await this.sftp();
     return new Promise((resolve, reject) => {
       sftp.rename(from, to, (err) => {

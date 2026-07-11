@@ -95,24 +95,24 @@ const sandbox = await Sandbox.get({ apiKey, appId });
 
 ## API
 
-| Method                                        | Description                                          |
-| --------------------------------------------- | ---------------------------------------------------- |
-| `Sandbox.create(options)`                     | Provision a sandbox and wait until SSH is reachable. |
-| `Sandbox.get({ appId })`                      | Retrieve an existing sandbox by app ID.              |
-| `Sandbox.fromHandle(handle)`                  | Rebuild a sandbox from a serialized handle.          |
-| `sandbox.runCommand(cmd, args)`               | Run a command, blocking for the result.              |
-| `sandbox.runCommand({ ..., detached: true })` | Start a command and stream `logs()`.                 |
-| `sandbox.writeFiles(files)`                   | Upload files, creating parent directories.           |
-| `sandbox.readFile(path)`                      | Read a file into a Buffer, or `null` if missing.     |
-| `sandbox.listFiles(path?)`                    | List directory entries, sorted by name.              |
-| `sandbox.deleteFile(path)`                    | Delete a file; `false` if it did not exist.          |
-| `sandbox.rename(from, to)`                    | Rename or move a file or directory.                  |
-| `sandbox.exists(path)`                        | Whether a file or directory exists.                  |
-| `sandbox.mkDir(path)`                         | Create a directory.                                  |
-| `sandbox.exposePort(port, label?)`            | Expose a port as a public CDN URL.                   |
-| `sandbox.domain(port)`                        | Return the URL of an already exposed port.           |
-| `sandbox.delete()`                            | Delete the sandbox and its backing app.              |
-| `sandbox.toHandle()`                          | Serialize the sandbox for reconnection.              |
+| Method                                        | Description                                               |
+| --------------------------------------------- | --------------------------------------------------------- |
+| `Sandbox.create(options)`                     | Provision a sandbox and wait until SSH is reachable.      |
+| `Sandbox.get({ appId })`                      | Retrieve an existing sandbox by app ID.                   |
+| `Sandbox.fromHandle(handle)`                  | Rebuild a sandbox from a serialized handle.               |
+| `sandbox.runCommand(cmd, args)`               | Run a command, blocking for the result.                   |
+| `sandbox.runCommand({ ..., detached: true })` | Start a command and stream `logs()`.                      |
+| `sandbox.writeFiles(files)`                   | Upload files, creating parent directories.                |
+| `sandbox.readFile(path)`                      | Read a file into a Buffer, or `null` if missing.          |
+| `sandbox.listFiles(path?)`                    | List directory entries; `[]` if the directory is missing. |
+| `sandbox.deleteFile(path)`                    | Delete a file; `false` if it did not exist.               |
+| `sandbox.rename(from, to)`                    | Rename or move; fails if the destination exists.          |
+| `sandbox.exists(path)`                        | Whether a file or directory exists.                       |
+| `sandbox.mkDir(path)`                         | Create a directory.                                       |
+| `sandbox.exposePort(port, label?)`            | Expose a port as a public CDN URL.                        |
+| `sandbox.domain(port)`                        | Return the URL of an already exposed port.                |
+| `sandbox.delete()`                            | Delete the sandbox and its backing app.                   |
+| `sandbox.toHandle()`                          | Serialize the sandbox for reconnection.                   |
 
 ## Not yet supported
 

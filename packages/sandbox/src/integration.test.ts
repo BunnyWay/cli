@@ -41,7 +41,13 @@ suite("sandbox integration", () => {
         await sandbox.writeFiles([{ path: "dir/a.txt", content: "a" }]);
         const entries = await sandbox.listFiles("dir");
         expect(entries.map((e) => e.name)).toContain("a.txt");
+        expect(await sandbox.listFiles("no-such-dir")).toEqual([]);
         expect(await sandbox.exists("dir/a.txt")).toBe(true);
+        // Renaming onto an existing file is refused rather than overwriting.
+        await sandbox.writeFiles([{ path: "dir/taken.txt", content: "t" }]);
+        await expect(
+          sandbox.rename("dir/a.txt", "dir/taken.txt"),
+        ).rejects.toThrow("already exists");
         await sandbox.rename("dir/a.txt", "dir/b.txt");
         expect(await sandbox.exists("dir/a.txt")).toBe(false);
         expect(await sandbox.deleteFile("dir/b.txt")).toBe(true);
