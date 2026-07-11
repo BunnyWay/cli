@@ -8,6 +8,7 @@ import {
   deleteApp,
   extractAgentToken,
   extractAnycastHost,
+  extractCdnPorts,
   extractEnv,
   firstContainerId,
   getApp,
@@ -131,7 +132,7 @@ export class Sandbox {
     return sandbox;
   }
 
-  /** Retrieve an existing sandbox by app ID, recovering its connection details. */
+  /** Retrieve an existing sandbox by app ID, recovering its connection details and exposed ports. */
   static async get(options: GetOptions): Promise<Sandbox> {
     const client = mcClient(options);
     const app = await getApp(client, options.appId);
@@ -146,7 +147,13 @@ export class Sandbox {
     const name = (app as { name?: string }).name ?? options.appId;
 
     return new Sandbox(
-      { appId: options.appId, name, agentToken, sshHost },
+      {
+        appId: options.appId,
+        name,
+        agentToken,
+        sshHost,
+        ports: extractCdnPorts(app),
+      },
       () => client,
       transportFor(sshHost, agentToken),
     );

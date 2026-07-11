@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   extractAgentToken,
   extractAnycastHost,
+  extractCdnPorts,
   firstContainerId,
   splitHost,
 } from "./provision.ts";
@@ -82,7 +83,20 @@ describe("app extraction", () => {
       {
         id: "ct-1",
         environmentVariables: [{ name: "AGENT_TOKEN", value: "secret" }],
-        endpoints: [{ type: "anycast", publicHost: "1.2.3.4:8023" }],
+        endpoints: [
+          { type: "anycast", publicHost: "1.2.3.4:8023" },
+          {
+            type: "cdn",
+            publicHost: "app-3000.b-cdn.net",
+            portMappings: [{ containerPort: 3000 }],
+          },
+          {
+            type: "cdn",
+            publicHost: "app-8080.b-cdn.net",
+            portMappings: [{ containerPort: 8080 }],
+          },
+          { type: "cdn", portMappings: [{ containerPort: 9999 }] },
+        ],
       },
     ],
   };
@@ -96,9 +110,19 @@ describe("app extraction", () => {
   test("returns the first container id", () => {
     expect(firstContainerId(app)).toBe("ct-1");
   });
+  test("maps CDN-exposed ports to their public hosts", () => {
+    expect(extractCdnPorts(app)).toEqual({
+      3000: "app-3000.b-cdn.net",
+      8080: "app-8080.b-cdn.net",
+    });
+  });
+  test("skips CDN endpoints whose public host is still provisioning", () => {
+    expect(extractCdnPorts(app)[9999]).toBeUndefined();
+  });
   test("returns null when fields are absent", () => {
     expect(extractAnycastHost({})).toBeNull();
     expect(extractAgentToken({})).toBeNull();
     expect(firstContainerId({})).toBeNull();
+    expect(extractCdnPorts({})).toEqual({});
   });
 });

@@ -20,7 +20,11 @@ type McClient = ReturnType<typeof createMcClient>;
 interface AppContainer {
   id?: string;
   environmentVariables?: Array<{ name?: string; value?: string }>;
-  endpoints?: Array<{ type?: string; publicHost?: string }>;
+  endpoints?: Array<{
+    type?: string;
+    publicHost?: string;
+    portMappings?: Array<{ containerPort?: number }>;
+  }>;
 }
 
 interface App {
@@ -99,6 +103,20 @@ export async function setContainerEnv(
   if (error) {
     throw new SandboxError(`Failed to update environment: ${str(error)}`);
   }
+}
+
+/** Map each CDN-exposed container port to its public host. */
+export function extractCdnPorts(app: App): Record<number, string> {
+  const ports: Record<number, string> = {};
+  for (const ct of app.containerTemplates ?? []) {
+    for (const ep of ct.endpoints ?? []) {
+      if (ep.type !== "cdn" || !ep.publicHost) continue;
+      for (const pm of ep.portMappings ?? []) {
+        if (pm.containerPort != null) ports[pm.containerPort] = ep.publicHost;
+      }
+    }
+  }
+  return ports;
 }
 
 export function firstContainerId(app: App): string | null {
