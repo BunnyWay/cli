@@ -58,7 +58,7 @@ export function verifyKnownHost(
     if (!hosts.split(",").includes(label)) continue;
     hostSeen = true;
     if (lineType !== type) continue;
-    return lineKey === encoded;
+    if (lineKey === encoded) return true;
   }
   if (hostSeen) return false;
 

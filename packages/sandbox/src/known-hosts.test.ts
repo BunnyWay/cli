@@ -73,6 +73,20 @@ describe("verifyKnownHost trust-on-first-use", () => {
     expect(verifyKnownHost("host", 8023, keyB, path)).toBe(false);
   });
 
+  test("accepts a pin that follows a stale mismatched line", () => {
+    const path = storePath();
+    verifyKnownHost("host", 8023, keyB, path);
+    writeFileSync(
+      path,
+      `[host]:8023 ssh-ed25519 ${keyA.toString("base64")}\n` +
+        `[host]:8023 ssh-ed25519 ${keyB.toString("base64")}\n`,
+    );
+    expect(verifyKnownHost("host", 8023, keyB, path)).toBe(true);
+    expect(verifyKnownHost("host", 8023, keyA, path)).toBe(true);
+    const other = hostKey("ssh-ed25519", "DDDD-key-d");
+    expect(verifyKnownHost("host", 8023, other, path)).toBe(false);
+  });
+
   test("uses a bare hostname (no brackets) for the default SSH port", () => {
     const path = storePath();
     verifyKnownHost("host", 22, keyA, path);
