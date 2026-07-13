@@ -26,9 +26,10 @@ function keyType(key: Buffer): string | null {
 /**
  * Trust-on-first-use check for a server host key (`key` is the raw public-key
  * blob).
- * The first key seen for a host and type is recorded and trusted; a later
- * connection presenting a different key for that host is rejected, catching an
- * impostor before the token is sent as the password.
+ * The first key seen for a host is recorded and trusted.
+ * A later connection presenting a different key, or a key type the host was
+ * never pinned with, is rejected, catching an impostor before the token is
+ * sent as the password.
  */
 export function verifyKnownHost(
   host: string,
@@ -47,15 +48,19 @@ export function verifyKnownHost(
   } catch {
     // No file yet — first contact.
   }
+  let hostSeen = false;
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
     const [hosts, lineType, lineKey] = trimmed.split(/\s+/);
     if (!hosts || !lineType || !lineKey) continue;
     // known_hosts allows several comma-separated hosts per line.
-    if (lineType !== type || !hosts.split(",").includes(label)) continue;
+    if (!hosts.split(",").includes(label)) continue;
+    hostSeen = true;
+    if (lineType !== type) continue;
     return lineKey === encoded;
   }
+  if (hostSeen) return false;
 
   try {
     mkdirSync(dirname(path), { recursive: true });

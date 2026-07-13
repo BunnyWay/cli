@@ -48,6 +48,15 @@ describe("verifyKnownHost trust-on-first-use", () => {
     expect(verifyKnownHost("host", 8023, keyB, path)).toBe(false);
   });
 
+  test("rejects a new key type for a known host (algorithm downgrade)", () => {
+    const path = storePath();
+    verifyKnownHost("host", 8023, keyA, path);
+    const rsaKey = hostKey("ssh-rsa", "CCCC-key-c");
+    expect(verifyKnownHost("host", 8023, rsaKey, path)).toBe(false);
+    expect(readFileSync(path, "utf8")).not.toContain("ssh-rsa");
+    expect(verifyKnownHost("host", 8023, keyA, path)).toBe(true);
+  });
+
   test("tracks each host independently", () => {
     const path = storePath();
     verifyKnownHost("host-a", 8023, keyA, path);
