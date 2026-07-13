@@ -19,8 +19,15 @@ export interface HashedLocalFile extends LocalFile {
 export const DEFAULT_UPLOAD_CONCURRENCY = 8;
 const UPLOAD_ATTEMPTS = 3;
 
-/** Dotfiles/dirs and node_modules never ship — they're tooling, not site content. */
+// Dot-directories that carry web-visible content the site must serve.
+const ALLOWED_DOT_ENTRIES = new Set([".well-known"]);
+
+/**
+ * Dotfiles/dirs and node_modules never ship — they're tooling, not site
+ * content — except standards dirs like `.well-known` that must be served.
+ */
 export function shouldSkipEntry(name: string): boolean {
+  if (ALLOWED_DOT_ENTRIES.has(name)) return false;
   return name.startsWith(".") || name === "node_modules";
 }
 
@@ -50,18 +57,39 @@ export function collectFiles(dir: string): LocalFile[] {
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
-/** Streaming SHA-256 for each file — feeds both the deploy ID and upload checksums. */
+async function hashFile(file: LocalFile): Promise<HashedLocalFile> {
+  const hasher = new Bun.CryptoHasher("sha256");
+  for await (const chunk of Bun.file(file.absPath).stream()) {
+    hasher.update(chunk);
+  }
+  return { ...file, sha256: hasher.digest("hex") };
+}
+
+/**
+ * Streaming SHA-256 for each file — feeds both the deploy ID and upload
+ * checksums. Bounded concurrency matches the upload step so large deploys
+ * don't hash one file at a time.
+ */
 export async function hashFiles(
   files: LocalFile[],
 ): Promise<HashedLocalFile[]> {
-  const hashed: HashedLocalFile[] = [];
-  for (const file of files) {
-    const hasher = new Bun.CryptoHasher("sha256");
-    for await (const chunk of Bun.file(file.absPath).stream()) {
-      hasher.update(chunk);
+  const hashed: HashedLocalFile[] = new Array(files.length);
+  const concurrency = Math.max(
+    1,
+    Math.min(DEFAULT_UPLOAD_CONCURRENCY, files.length),
+  );
+
+  let next = 0;
+  const worker = async () => {
+    while (true) {
+      const index = next++;
+      const file = files[index];
+      if (!file) return;
+      hashed[index] = await hashFile(file);
     }
-    hashed.push({ ...file, sha256: hasher.digest("hex") });
-  }
+  };
+
+  await Promise.all(Array.from({ length: concurrency }, worker));
   return hashed;
 }
 

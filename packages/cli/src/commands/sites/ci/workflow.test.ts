@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: asserts on GitHub Actions ${{ }} expressions in the generated workflow
 import { expect, test } from "bun:test";
 import { findPreset } from "./frameworks.ts";
 import { DEPLOY_SITE_ACTION, renderSitesWorkflow } from "./workflow.ts";

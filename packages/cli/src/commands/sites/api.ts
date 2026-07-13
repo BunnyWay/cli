@@ -63,6 +63,15 @@ export function sha256Hex(text: string): string {
   return hasher.digest("hex");
 }
 
+/**
+ * The storage SDK throws a plain Error whose message encodes the HTTP status
+ * (`File not found: ...` for a 404). Only a genuine 404 means "no file"; a
+ * 401/timeout/5xx must propagate so ownership checks never fail open.
+ */
+function isNotFoundError(err: unknown): boolean {
+  return err instanceof Error && /not found/i.test(err.message);
+}
+
 async function downloadText(
   connection: StorageZone,
   path: string,
@@ -70,10 +79,11 @@ async function downloadText(
   try {
     const { stream } = await siteFiles.download(connection, path);
     return await new Response(stream).text();
-  } catch {
-    // Missing file and transient errors both read as "no data" — callers
-    // that need to distinguish should not be writing based on this alone.
-    return null;
+  } catch (err) {
+    // A missing file reads as "no data"; transient/permission errors must
+    // propagate so a caller can't clobber a live site's state on a bad read.
+    if (isNotFoundError(err)) return null;
+    throw err;
   }
 }
 
@@ -95,9 +105,10 @@ export async function readRemoteState(
 /**
  * Write `_bunny/site.json`. When `expectedEtag` is given, the current remote
  * content is re-read first; a mismatch means someone else deployed since we
- * read (e.g. concurrent CI runs). Their deploy records are merged in so no
- * deploy goes missing; our `current`/`previous` win (last promote wins).
- * Returns the new etag.
+ * read (e.g. concurrent CI runs). If the concurrent state is parseable, their
+ * deploy records are merged in so no deploy goes missing and our
+ * `current`/`previous` win (last promote wins). If it's unparseable we abort
+ * rather than blindly overwrite unknown state. Returns the new etag.
  */
 export async function writeRemoteState(
   connection: StorageZone,
@@ -108,20 +119,20 @@ export async function writeRemoteState(
     const current = await downloadText(connection, REMOTE_STATE_PATH);
     if (current !== null && sha256Hex(current) !== expectedEtag) {
       const remote = parseRemoteState(current);
-      if (remote) {
-        const ours = new Set(state.deploys.map((d) => d.id));
-        state.deploys = [
-          ...state.deploys,
-          ...remote.deploys.filter((d) => !ours.has(d.id)),
-        ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        logger.warn(
-          "Remote site state changed since it was read (concurrent deploy?): merged deploy records.",
-        );
-      } else {
-        logger.warn(
-          "Remote site state changed since it was read (concurrent deploy?): overwriting.",
+      if (!remote) {
+        throw new UserError(
+          "Remote site state changed since it was read and is no longer parseable.",
+          "Another process may be writing it. Re-run the command.",
         );
       }
+      const ours = new Set(state.deploys.map((d) => d.id));
+      state.deploys = [
+        ...state.deploys,
+        ...remote.deploys.filter((d) => !ours.has(d.id)),
+      ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      logger.warn(
+        "Remote site state changed since it was read (concurrent deploy?): merged deploy records.",
+      );
     }
   }
   const raw = `${JSON.stringify(state, null, 2)}\n`;
@@ -438,6 +449,8 @@ export async function deleteSiteResources(opts: {
   computeClient: ComputeClient;
   state: RemoteSiteState;
   keepStorage?: boolean;
+  /** The storage connection — needed to tombstone the site marker with --keep-storage. */
+  connection?: StorageZone;
 }): Promise<TeardownResult[]> {
   const { coreClient, computeClient, state } = opts;
   const results: TeardownResult[] = [];
@@ -470,7 +483,21 @@ export async function deleteSiteResources(opts: {
       params: { path: { id: state.scriptId } },
     }),
   );
-  if (!opts.keepStorage) {
+  if (opts.keepStorage) {
+    // The zone survives, so remove its site marker — otherwise list/link/show
+    // rediscover a "site" whose pull zone and router are already gone.
+    if (opts.connection) {
+      try {
+        await siteFiles.remove(opts.connection, REMOTE_STATE_PATH);
+      } catch (err) {
+        logger.warn(
+          `Kept the storage zone but couldn't remove its site marker (${REMOTE_STATE_PATH}): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+  } else {
     await attempt("storage zone", state.storageZoneId, () =>
       coreClient.DELETE("/storagezone/{id}", {
         params: { path: { id: state.storageZoneId } },

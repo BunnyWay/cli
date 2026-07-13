@@ -32,6 +32,8 @@ export interface DeployRecord {
   source: "git" | "content";
   gitSha?: string;
   dirty?: boolean;
+  /** Hash of the deployed bytes; the no-op check keys on this. Absent on pre-v1 records. */
+  contentHash?: string;
   files: number;
   bytes: number;
 }

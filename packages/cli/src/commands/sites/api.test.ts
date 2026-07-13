@@ -3,6 +3,7 @@ import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
 import {
   type ComputeClient,
   createSite,
+  deleteSiteResources,
   fetchSites,
   promoteDeploy,
   readRemoteState,
@@ -225,6 +226,25 @@ test("readRemoteState is null for missing or invalid state", async () => {
   expect(await readRemoteState(connection)).toBeNull();
 });
 
+test("readRemoteState rethrows transient read errors (no fail-open)", async () => {
+  const connection = fakeConnection();
+  siteFiles.download = async () => {
+    throw new Error("Timeout connecting to storage");
+  };
+  await expect(readRemoteState(connection)).rejects.toThrow("Timeout");
+});
+
+test("writeRemoteState refuses to overwrite an unparseable conflict", async () => {
+  const connection = fakeConnection();
+  const etag = await writeRemoteState(connection, fakeState());
+
+  // A concurrent writer left the state unparseable between our read and write.
+  store.set(REMOTE_STATE_PATH, "garbage");
+  await expect(
+    writeRemoteState(connection, fakeState({ current: "aaa" }), etag),
+  ).rejects.toThrow("no longer parseable");
+});
+
 test("writeRemoteState merges concurrent deploy records on an etag mismatch", async () => {
   const connection = fakeConnection();
   const etag = await writeRemoteState(connection, fakeState());
@@ -423,6 +443,30 @@ test("fetchSites keeps only middleware+storage pull zones with matching state", 
 
 test("siteContextFromZone is null for a zone without site state", async () => {
   expect(await siteContextFromZone(ZONE)).toBeNull();
+});
+
+// ---- teardown ----
+
+test("deleteSiteResources removes the site marker when keeping storage", async () => {
+  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
+  store.set("deploys/aaa/index.html", "<h1>hi</h1>");
+  const coreClient = fakeCoreClient({ calls: [] });
+  const computeClient = fakeComputeClient({ calls: [] });
+
+  const results = await deleteSiteResources({
+    coreClient,
+    computeClient,
+    state: fakeState(),
+    keepStorage: true,
+    connection: fakeConnection(),
+  });
+
+  // The storage zone was never deleted…
+  expect(results.some((r) => r.resource === "storage zone")).toBe(false);
+  // …but its site marker is gone, so list/link/show can't rediscover it.
+  expect(store.has(REMOTE_STATE_PATH)).toBe(false);
+  // Deploy files are untouched.
+  expect(store.has("deploys/aaa/index.html")).toBe(true);
 });
 
 // Regression: the live API returns GET /pullzone as a paginated envelope

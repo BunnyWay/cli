@@ -21,7 +21,7 @@ test("contentHashId is order-independent and case-normalizes hashes", () => {
   );
   expect(a).toBe(b);
   expect(a).toBe(c);
-  expect(a).toMatch(/^[0-9a-f]{8}$/);
+  expect(a).toMatch(/^[0-9a-f]{12}$/);
 });
 
 test("contentHashId changes when content or paths change", () => {
@@ -72,6 +72,8 @@ test("clean git repo uses the short sha; dirty tree falls back to content", asyn
   expect(clean.source).toBe("git");
   expect(clean.id).toMatch(/^[0-9a-f]{8,}$/);
   expect(clean.gitSha).toBe(clean.id);
+  // The content hash is always carried, even when the display id is the git sha.
+  expect(clean.contentHash).toBe(contentHashId(FILES));
 
   await Bun.write(join(dir, "new.txt"), "dirty");
   const dirty = await resolveDeployIdentity(dir, FILES);

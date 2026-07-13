@@ -197,15 +197,21 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
     const identity = await resolveDeployIdentity(dir, files);
 
-    const alreadyLive = state.current === identity.id;
-    const skipUpload =
-      !args.force && state.deploys.some((d) => d.id === identity.id);
+    // The no-op check keys on content, not the display id: a rebuilt `dist/`
+    // at the same git sha ships different bytes and must not be skipped.
+    const existing = args.force
+      ? undefined
+      : state.deploys.find((d) => d.contentHash === identity.contentHash);
+    const skipUpload = existing !== undefined;
+    // A skipped deploy reuses the already-uploaded deploy's id — that's where its files live.
+    const deployId = existing?.id ?? identity.id;
+    const alreadyLive = state.current === deployId;
 
     // Nothing to do: the deploy is already uploaded (and live, if --production).
     if (skipUpload && (alreadyLive || !args.production)) {
       const urls = deployUrls(
         site,
-        identity.id,
+        deployId,
         await fetchSystemHost(coreClient, state.pullZoneId),
       );
       if (output === "json") {
@@ -213,7 +219,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           JSON.stringify(
             {
               site: state.name,
-              id: identity.id,
+              id: deployId,
               unchanged: true,
               live: alreadyLive,
               production: urls.production ?? null,
@@ -227,11 +233,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       }
       if (alreadyLive) {
         logger.info(
-          `No changes: deploy ${identity.id} is already live. Use --force to redeploy.`,
+          `No changes: deploy ${deployId} is already live. Use --force to redeploy.`,
         );
       } else {
         logger.info(
-          `No changes: deploy ${identity.id} is already uploaded. Publish it with \`bunny sites deploy --production\`.`,
+          `No changes: deploy ${deployId} is already uploaded. Publish it with \`bunny sites deploy --production\`.`,
         );
       }
       if (urls.preview) logger.log(`  Preview: ${urls.preview}`);
@@ -242,7 +248,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       const uploadSpin = spinner(`Uploading ${files.length} files...`);
       uploadSpin.start();
       try {
-        await uploadDeploy(connection, identity.id, files, {
+        await uploadDeploy(connection, deployId, files, {
           onFileUploaded: (done, total) => {
             uploadSpin.text = `Uploading ${done}/${total} files (${formatBytes(totalBytes)} total)...`;
           },
@@ -253,11 +259,12 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
       // Record the deploy. A re-deployed ID keeps its slot but gets fresh metadata.
       const record: DeployRecord = {
-        id: identity.id,
+        id: deployId,
         createdAt: new Date().toISOString(),
         source: identity.source,
         gitSha: identity.gitSha,
         dirty: identity.dirty,
+        contentHash: identity.contentHash,
         files: files.length,
         bytes: totalBytes,
       };
@@ -267,10 +274,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       ];
     }
     if (args.production) {
-      if (state.current && state.current !== identity.id) {
+      if (state.current && state.current !== deployId) {
         state.previous = state.current;
       }
-      state.current = identity.id;
+      state.current = deployId;
     }
     await writeRemoteState(connection, state, etag);
 
@@ -282,7 +289,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           computeClient,
           coreClient,
           state,
-          deployId: identity.id,
+          deployId,
         });
       } finally {
         promoteSpin.stop();
@@ -291,7 +298,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
     const urls = deployUrls(
       site,
-      identity.id,
+      deployId,
       await fetchSystemHost(coreClient, state.pullZoneId),
     );
 
@@ -300,7 +307,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         JSON.stringify(
           {
             site: state.name,
-            id: identity.id,
+            id: deployId,
             source: identity.source,
             files: files.length,
             bytes: totalBytes,
@@ -316,10 +323,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
 
     if (skipUpload) {
-      logger.success(`Deploy ${identity.id} is now live.`);
+      logger.success(`Deploy ${deployId} is now live.`);
     } else {
       logger.success(
-        `Deployed ${identity.id} (${files.length} files, ${formatBytes(totalBytes)}).`,
+        `Deployed ${deployId} (${files.length} files, ${formatBytes(totalBytes)}).`,
       );
     }
     if (args.production) {
@@ -328,7 +335,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     } else {
       if (urls.preview) logger.info(`Preview: ${urls.preview}`);
       logger.info(
-        `Publish it with \`bunny sites deploy --production\` or \`bunny sites deployments publish ${identity.id}\`.`,
+        `Publish it with \`bunny sites deploy --production\` or \`bunny sites deployments publish ${deployId}\`.`,
       );
     }
 

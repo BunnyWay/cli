@@ -39,6 +39,23 @@ test("parseEnvFile handles comments, blanks, and quotes", () => {
   });
 });
 
+test("parseEnvFile strips inline comments and unescapes inner quotes", () => {
+  const env = parseEnvFile(
+    [
+      "INLINE=value # trailing comment",
+      "HASHINVALUE=a#b",
+      'ESCAPED="value with \\"quotes\\""',
+      'HASHINQUOTES="a # b"',
+    ].join("\n"),
+  );
+  expect(env).toEqual({
+    INLINE: "value",
+    HASHINVALUE: "a#b",
+    ESCAPED: 'value with "quotes"',
+    HASHINQUOTES: "a # b",
+  });
+});
+
 test("runBuildCommand passes env and throws on failure", async () => {
   const dir = mkdtempSync(join(tmpdir(), "bunny-sites-build-"));
   const out = join(dir, "out.txt");

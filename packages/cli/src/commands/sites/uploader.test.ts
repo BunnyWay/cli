@@ -37,12 +37,27 @@ test("shouldSkipEntry excludes dotfiles and node_modules", () => {
   expect(shouldSkipEntry("node_modules")).toBe(true);
   expect(shouldSkipEntry("index.html")).toBe(false);
   expect(shouldSkipEntry("assets")).toBe(false);
+  // Web-visible standards dirs must ship despite the leading dot.
+  expect(shouldSkipEntry(".well-known")).toBe(false);
 });
 
 test("collectFiles walks recursively, skipping excluded entries, sorted", () => {
   const files = collectFiles(tree());
   expect(files.map((f) => f.path)).toEqual(["assets/app.js", "index.html"]);
   expect(files[1]?.size).toBeGreaterThan(0);
+});
+
+test("collectFiles keeps .well-known content", () => {
+  const dir = mkdtempSync(join(tmpdir(), "bunny-sites-wk-"));
+  Bun.write(join(dir, "index.html"), "<h1>hi</h1>");
+  mkdirSync(join(dir, ".well-known"));
+  Bun.write(join(dir, ".well-known", "security.txt"), "Contact: mailto:x@y");
+
+  const files = collectFiles(dir);
+  expect(files.map((f) => f.path)).toEqual([
+    ".well-known/security.txt",
+    "index.html",
+  ]);
 });
 
 test("hashFiles computes the content sha256", async () => {

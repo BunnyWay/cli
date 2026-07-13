@@ -32,6 +32,36 @@ export function parseEnvAssignments(
   return env;
 }
 
+/**
+ * Turn a dotenv value token into its string. Double-quoted values read to the
+ * closing quote, unescaping `\"`/`\\` (a `#` inside stays literal); single
+ * quotes are taken verbatim; unquoted values drop a whitespace-delimited inline
+ * `# comment`.
+ */
+function parseEnvValue(raw: string): string {
+  const value = raw.trim();
+  if (value.startsWith('"')) {
+    let out = "";
+    for (let i = 1; i < value.length; i++) {
+      const ch = value[i];
+      if (ch === "\\" && i + 1 < value.length) {
+        out += value[++i];
+      } else if (ch === '"') {
+        return out;
+      } else {
+        out += ch;
+      }
+    }
+    return out; // unterminated quote — take what we have
+  }
+  if (value.startsWith("'")) {
+    const end = value.indexOf("'", 1);
+    return end === -1 ? value.slice(1) : value.slice(1, end);
+  }
+  const comment = value.search(/\s#/);
+  return (comment === -1 ? value : value.slice(0, comment)).trimEnd();
+}
+
 /** Parse a dotenv-style file: KEY=VALUE lines, `#` comments, optional quotes. */
 export function parseEnvFile(content: string): Record<string, string> {
   const env: Record<string, string> = {};
@@ -42,14 +72,7 @@ export function parseEnvFile(content: string): Record<string, string> {
     if (eq <= 0) continue;
     const name = line.slice(0, eq).trim();
     if (!ENV_NAME_RE.test(name)) continue;
-    let value = line.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    env[name] = value;
+    env[name] = parseEnvValue(line.slice(eq + 1));
   }
   return env;
 }

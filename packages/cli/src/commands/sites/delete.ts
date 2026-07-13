@@ -100,6 +100,7 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
         computeClient,
         state,
         keepStorage: args["keep-storage"],
+        connection: site.connection,
       });
     } finally {
       spin.stop();
@@ -136,7 +137,7 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     }
     if (args["keep-storage"]) {
       logger.info(
-        `Storage zone ${state.storageZoneId} was kept, including all deploy files.`,
+        `Storage zone ${state.storageZoneId} was kept (including all deploy files) but is no longer registered as a site.`,
       );
     }
     if (failures.length > 0) {

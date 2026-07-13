@@ -39,7 +39,7 @@ export async function gitTopLevel(cwd: string): Promise<string | null> {
 
 export async function hasGitHubOrigin(root: string): Promise<boolean> {
   const url = await git(root, ["remote", "get-url", "origin"]);
-  return url !== null && url.includes("github.com");
+  return url?.includes("github.com") ?? false;
 }
 
 export interface ScaffoldResult {

@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: emits GitHub Actions ${{ }} expressions, not JS template strings
 import type { FrameworkPreset, PackageManager } from "./frameworks.ts";
 
 export const SITES_WORKFLOW_PATH = ".github/workflows/bunny-sites.yml";
