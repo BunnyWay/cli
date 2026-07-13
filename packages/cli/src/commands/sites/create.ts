@@ -1,7 +1,9 @@
+import { basename } from "node:path";
 import {
   createComputeClient,
   createCoreClient,
 } from "@bunny.net/openapi-client";
+import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -10,8 +12,15 @@ import { formatKeyValue } from "../../core/format.ts";
 import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifest } from "../../core/manifest.ts";
-import { isInteractive, spinner } from "../../core/ui.ts";
+import { confirm, isInteractive, spinner } from "../../core/ui.ts";
 import { createSite, siteContextFromZone } from "./api.ts";
+import {
+  gitTopLevel,
+  hasGitHubOrigin,
+  offerGitHubSecret,
+  printWorkflowInstructions,
+  scaffoldSitesWorkflow,
+} from "./ci/scaffold.ts";
 import {
   isValidSiteName,
   SITES_MANIFEST,
@@ -20,10 +29,21 @@ import {
 import { setupSiteDomain } from "./domains/index.ts";
 
 interface CreateArgs {
-  name: string;
+  name?: string;
   region?: string;
   domain?: string;
   link?: boolean;
+}
+
+const SITE_NAME_RULES =
+  "Use 3–60 lowercase letters, digits, and dashes (no leading/trailing dash).";
+
+function suggestSiteName(): string | undefined {
+  const base = basename(process.cwd())
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return isValidSiteName(base) ? base : undefined;
 }
 
 /**
@@ -32,9 +52,10 @@ interface CreateArgs {
  * state lives at `_bunny/site.json` inside the storage zone.
  */
 export const sitesCreateCommand = defineCommand<CreateArgs>({
-  command: "create <name>",
+  command: "create [name]",
   describe: "Create a new static site.",
   examples: [
+    ["$0 sites create", "Prompt for a name (defaults to the directory name)"],
     ["$0 sites create my-site", "Create a site served at my-site.b-cdn.net"],
     [
       "$0 sites create my-site --domain example.com",
@@ -48,8 +69,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       .positional("name", {
         type: "string",
         describe:
-          "Site name — becomes the storage zone, pull zone, and <name>.b-cdn.net subdomain",
-        demandOption: true,
+          "Site name — becomes the storage zone, pull zone, and <name>.b-cdn.net subdomain (prompted when omitted)",
       })
       .option("region", {
         type: "string",
@@ -58,7 +78,8 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       })
       .option("domain", {
         type: "string",
-        describe: "Custom domain to attach (with *.preview.<domain> previews)",
+        describe:
+          "Custom domain to attach, with *.preview.<domain> previews (offered interactively when omitted)",
       })
       .option("link", {
         type: "boolean",
@@ -68,16 +89,35 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
-    const name = args.name.toLowerCase();
+    const interactive = isInteractive(output);
+
+    let name = args.name?.trim().toLowerCase();
+    if (!name && interactive) {
+      const suggestion = suggestSiteName();
+      const { value } = await prompts({
+        type: "text",
+        name: "value",
+        message: "Site name:",
+        ...(suggestion ? { initial: suggestion } : {}),
+        validate: (v: string) =>
+          isValidSiteName(String(v).trim().toLowerCase()) || SITE_NAME_RULES,
+      });
+      name = (value as string | undefined)?.trim().toLowerCase();
+    }
+    if (!name) {
+      throw new UserError(
+        "Site name is required.",
+        "Pass one: bunny sites create <name>.",
+      );
+    }
     if (!isValidSiteName(name)) {
       throw new UserError(
-        `"${args.name}" is not a valid site name.`,
-        "Use 3–60 lowercase letters, digits, and dashes (no leading/trailing dash).",
+        `"${args.name ?? name}" is not a valid site name.`,
+        SITE_NAME_RULES,
       );
     }
 
     const domain = args.domain ? normalizeHostname(args.domain) : undefined;
-    const interactive = isInteractive(output);
 
     const config = resolveConfig(profile, apiKey, verbose);
     const options = clientOptions(config, verbose);
@@ -108,28 +148,26 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       });
     }
 
-    // Attach the custom domain last — a domain failure mustn't fail the
-    // create; the site already exists and can be retried via `sites domains add`.
-    let domainError: string | undefined;
-    if (domain) {
-      const site = await siteContextFromZone(result.storageZone);
-      if (site) {
-        try {
-          await setupSiteDomain({
-            coreClient,
-            site,
-            domain,
-            interactive,
-            verbose,
-            json: output === "json",
-          });
-        } catch (err) {
-          domainError = err instanceof Error ? err.message : String(err);
+    if (output === "json") {
+      // --domain is attached non-interactively; a failure still reports the created site.
+      let domainError: string | undefined;
+      if (domain) {
+        const site = await siteContextFromZone(result.storageZone);
+        if (site) {
+          try {
+            await setupSiteDomain({
+              coreClient,
+              site,
+              domain,
+              interactive: false,
+              verbose,
+              json: true,
+            });
+          } catch (err) {
+            domainError = err instanceof Error ? err.message : String(err);
+          }
         }
       }
-    }
-
-    if (output === "json") {
       logger.log(
         JSON.stringify(
           {
@@ -166,11 +204,73 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
         output,
       ),
     );
-    if (domainError) {
+
+    // Custom domain: --domain flag, or offer one interactively (mirrors `scripts create`).
+    let chosenDomain = domain;
+    if (!chosenDomain && interactive) {
       logger.log();
-      logger.warn(`Couldn't finish setting up ${domain}: ${domainError}`);
-      logger.dim(`  Retry later: bunny sites domains add ${domain} ${name}`);
+      const { value } = await prompts({
+        type: "text",
+        name: "value",
+        message: "Custom domain (leave blank to skip):",
+      });
+      chosenDomain = normalizeHostname(value ?? "") || undefined;
     }
+    if (chosenDomain) {
+      // A domain failure mustn't fail the create; the site already exists
+      // and the domain can be retried via `sites domains add`.
+      logger.log();
+      const site = await siteContextFromZone(result.storageZone);
+      if (site) {
+        try {
+          await setupSiteDomain({
+            coreClient,
+            site,
+            domain: chosenDomain,
+            interactive,
+            verbose,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          logger.warn(`Couldn't finish setting up ${chosenDomain}: ${message}`);
+          logger.dim(
+            `  Retry later: bunny sites domains add ${chosenDomain} ${name}`,
+          );
+        }
+      }
+    }
+
+    // GitHub deployments: offer the workflow scaffold when this is a GitHub repo.
+    if (interactive) {
+      const root = await gitTopLevel(process.cwd());
+      if (root && (await hasGitHubOrigin(root))) {
+        logger.log();
+        const setup = await confirm(
+          "Set up GitHub deployments (preview on PRs, production on main)?",
+          { initial: true },
+        );
+        if (setup) {
+          const result = await scaffoldSitesWorkflow({
+            site: name,
+            root,
+            interactive: true,
+          });
+          if (result) {
+            logger.success(
+              `Wrote ${result.path} (${result.preset.label}, deploys ${result.preset.dir}).`,
+            );
+            await offerGitHubSecret({
+              apiKey: config.apiKey,
+              root,
+              interactive,
+            });
+          }
+        } else {
+          await printWorkflowInstructions(name, root);
+        }
+      }
+    }
+
     logger.log();
     logger.dim("  Deploy your site:  bunny sites deploy <dir>");
   },

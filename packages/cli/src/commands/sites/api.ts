@@ -20,7 +20,6 @@ import {
 import {
   CURRENT_DEPLOY_VAR,
   parseRemoteState,
-  REMOTE_ENV_PATH,
   REMOTE_STATE_PATH,
   type RemoteSiteState,
   routerScriptName,
@@ -96,7 +95,8 @@ export async function readRemoteState(
 /**
  * Write `_bunny/site.json`. When `expectedEtag` is given, the current remote
  * content is re-read first; a mismatch means someone else deployed since we
- * read — v1 logs and overwrites (cheap optimistic lock, no hard failure).
+ * read (e.g. concurrent CI runs). Their deploy records are merged in so no
+ * deploy goes missing; our `current`/`previous` win (last promote wins).
  * Returns the new etag.
  */
 export async function writeRemoteState(
@@ -107,9 +107,21 @@ export async function writeRemoteState(
   if (expectedEtag) {
     const current = await downloadText(connection, REMOTE_STATE_PATH);
     if (current !== null && sha256Hex(current) !== expectedEtag) {
-      logger.warn(
-        "Remote site state changed since it was read (concurrent deploy?) — overwriting.",
-      );
+      const remote = parseRemoteState(current);
+      if (remote) {
+        const ours = new Set(state.deploys.map((d) => d.id));
+        state.deploys = [
+          ...state.deploys,
+          ...remote.deploys.filter((d) => !ours.has(d.id)),
+        ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        logger.warn(
+          "Remote site state changed since it was read (concurrent deploy?): merged deploy records.",
+        );
+      } else {
+        logger.warn(
+          "Remote site state changed since it was read (concurrent deploy?): overwriting.",
+        );
+      }
     }
   }
   const raw = `${JSON.stringify(state, null, 2)}\n`;
@@ -119,39 +131,6 @@ export async function writeRemoteState(
   return sha256Hex(raw);
 }
 
-/** Read `_bunny/env.json` (build-time env). Missing file → empty env. */
-export async function readRemoteEnv(
-  connection: StorageZone,
-): Promise<Record<string, string>> {
-  const raw = await downloadText(connection, REMOTE_ENV_PATH);
-  if (raw === null) return {};
-  try {
-    const data = JSON.parse(raw);
-    if (!data || typeof data !== "object" || Array.isArray(data)) return {};
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(data)) {
-      if (typeof value === "string") env[key] = value;
-    }
-    return env;
-  } catch {
-    return {};
-  }
-}
-
-export async function writeRemoteEnv(
-  connection: StorageZone,
-  env: Record<string, string>,
-): Promise<void> {
-  const sorted = Object.fromEntries(
-    Object.entries(env).sort(([a], [b]) => a.localeCompare(b)),
-  );
-  const raw = `${JSON.stringify(sorted, null, 2)}\n`;
-  await siteFiles.upload(connection, REMOTE_ENV_PATH, textStream(raw), {
-    sha256Checksum: sha256Hex(raw).toUpperCase(),
-  });
-}
-
-/** Build a SiteContext from a full storage zone record, or null if it isn't a site. */
 export async function siteContextFromZone(
   zone: StorageZoneModel,
 ): Promise<SiteContext | null> {
@@ -502,7 +481,6 @@ export async function deleteSiteResources(opts: {
   return results;
 }
 
-/** Delete a deploy's files (`deploys/{id}/`) from the storage zone. */
 export async function deleteDeployFiles(
   connection: StorageZone,
   deployId: string,

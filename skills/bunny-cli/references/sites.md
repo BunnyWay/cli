@@ -2,7 +2,7 @@
 
 All site commands live under `bunny sites`. A site is one storage zone (files) + one pull zone (CDN) + one middleware router script, provisioned together by `sites create`. Deploys are immutable directories; promoting or rolling back flips a router env var and purges the cache — no files move, so it's instant.
 
-Most commands accept an optional site (a trailing `[site]` positional, or the `--site` flag on commands whose positionals are taken, like `deploy` and `env`). When omitted, the site resolves in this order:
+Most commands accept an optional site (a trailing `[site]` positional, or the `--site` flag on commands whose positionals are taken, like `deploy`). When omitted, the site resolves in this order:
 
 1. Explicit name or storage zone ID
 2. `.bunny/site.json` manifest (written by `bunny sites link` or `bunny sites create`)
@@ -14,7 +14,8 @@ Most commands accept an optional site (a trailing `[site]` positional, or the `-
 ```bash
 # New site: provision, deploy, iterate
 bunny sites create my-site                 # served at https://my-site.b-cdn.net
-bunny sites deploy ./dist                  # uploads + promotes to production
+bunny sites deploy ./dist                  # uploads to a preview URL
+bunny sites deploy ./dist --production     # uploads + publishes as the live site
 
 # Build-and-deploy in one step (build command from bunny.jsonc or the flag)
 bunny sites deploy --build                 # runs `sites.build`, deploys `sites.dir`
@@ -41,17 +42,18 @@ bunny sites domains add example.com --wait # also attaches *.preview.example.com
 ## `bunny sites create` — Provision a site
 
 ```bash
+bunny sites create                         # prompts for a name (directory-name suggestion), then a custom domain
 bunny sites create my-site
 bunny sites create my-site --region NY
 bunny sites create my-site --domain example.com
 bunny sites create my-site --no-link       # don't write .bunny/site.json
 ```
 
-| Flag       | Description                                                        |
-| ---------- | ------------------------------------------------------------------ |
-| `--region` | Main storage region code (default `DE`)                            |
-| `--domain` | Attach a custom domain (+ `*.preview.<domain>`) after provisioning |
-| `--link`   | Link this directory (default true; `--no-link` to skip)            |
+| Flag       | Description                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------- |
+| `--region` | Main storage region code (default `DE`)                                                                          |
+| `--domain` | Attach a custom domain (+ `*.preview.<domain>`) after provisioning; interactive runs prompt for one when omitted |
+| `--link`   | Link this directory (default true; `--no-link` to skip)                                                          |
 
 Site names become the storage zone, pull zone, and `<name>.b-cdn.net` subdomain: 3–60 lowercase letters, digits, and dashes. Creation is idempotent — a failed create re-runs cleanly, reusing whatever was already provisioned.
 
@@ -60,8 +62,8 @@ Site names become the storage zone, pull zone, and `<name>.b-cdn.net` subdomain:
 ## `bunny sites deploy` — Deploy a directory
 
 ```bash
-bunny sites deploy ./dist
-bunny sites deploy ./dist --no-promote     # upload only; publish later
+bunny sites deploy ./dist                  # preview only
+bunny sites deploy ./dist --production     # publish as the live site (--prod works too)
 bunny sites deploy --build                 # run `sites.build` from bunny.jsonc first
 bunny sites deploy ./out --build "npm run build" --env VITE_FLAG=1
 ```
@@ -72,11 +74,11 @@ bunny sites deploy ./out --build "npm run build" --env VITE_FLAG=1
 | `--build`      | Run a build first (bare flag uses `sites.build` from bunny.jsonc)    |
 | `--env`        | Build-time env override `KEY=VALUE` (repeatable; requires `--build`) |
 | `--env-file`   | Dotenv file of build-time overrides (requires `--build`)             |
-| `--no-promote` | Upload without pointing production at it                             |
+| `--production` | Publish as the live site (alias `--prod`; default is preview only)   |
 | `--force`      | Deploy even when content is unchanged                                |
 | `--site`       | Target site (name or storage zone ID)                                |
 
-With `--build`, the site's remote env (`sites env`) is merged with `--env`/`--env-file` overrides into the build's environment, and the env fingerprint is recorded on the deploy.
+With `--build`, the build runs in your shell environment plus the `--env`/`--env-file` overrides — there is no remote env store; put build-time values in your local `.env` or CI secrets. Deploying already-uploaded content with `--production` skips the upload and just publishes it.
 
 ---
 
@@ -106,16 +108,15 @@ Adding a domain also attaches `*.preview.<domain>` for per-deploy preview URLs (
 
 ---
 
-## `bunny sites env` — Build-time environment variables
+## `bunny sites ci init` — GitHub Actions deployments
 
 ```bash
-bunny sites env set VITE_API_URL "https://api.example.com"
-bunny sites env list                        # values masked; --show reveals
-bunny sites env remove VITE_API_URL
-bunny sites env pull .env.local --force
+bunny sites ci init                         # detect the framework, write .github/workflows/bunny-sites.yml
+bunny sites ci init --framework astro       # skip detection (astro, vite, react-router, next, sveltekit, vitepress, docusaurus, eleventy, jekyll, hugo, static)
+bunny sites ci init --site my-site --force  # overwrite an existing workflow
 ```
 
-**These are build-time values, not a secret store** — anything the build reads can end up in the shipped bundle. They are stored inside the site's storage zone (never served) and merged into `sites deploy --build` runs.
+Writes a workflow that deploys previews on pull requests and publishes to production on merges to `main`, using the `BunnyWay/actions/deploy-site` action with the site name baked in. Framework detection reads `package.json` dependencies, `Gemfile`, or Hugo config; the lockfile picks the package manager for the install steps. Fork PRs are skipped (no secrets there). After writing, the CLI offers to run `gh secret set BUNNY_API_KEY` (or prints the manual steps). `sites create` offers the same scaffold on GitHub repos; declining prints the workflow instead.
 
 ---
 

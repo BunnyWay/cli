@@ -1,6 +1,5 @@
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
-import { sha256Hex } from "./api.ts";
 
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -53,12 +52,6 @@ export function parseEnvFile(content: string): Record<string, string> {
     env[name] = value;
   }
   return env;
-}
-
-/** Stable 8-hex-char fingerprint of a build env, recorded on the deploy. */
-export function envHash(env: Record<string, string>): string {
-  const sorted = Object.entries(env).sort(([a], [b]) => a.localeCompare(b));
-  return sha256Hex(JSON.stringify(sorted)).slice(0, 8);
 }
 
 /**

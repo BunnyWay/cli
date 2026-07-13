@@ -11,18 +11,8 @@ import { UserError } from "../../core/errors.ts";
 import { formatBytes } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
-import {
-  promoteDeploy,
-  readRemoteEnv,
-  type SiteContext,
-  writeRemoteState,
-} from "./api.ts";
-import {
-  envHash,
-  parseEnvAssignments,
-  parseEnvFile,
-  runBuildCommand,
-} from "./build.ts";
+import { promoteDeploy, type SiteContext, writeRemoteState } from "./api.ts";
+import { parseEnvAssignments, parseEnvFile, runBuildCommand } from "./build.ts";
 import { loadSiteConfig } from "./config.ts";
 import {
   type DeployRecord,
@@ -42,8 +32,26 @@ interface DeployArgs extends SiteSelectorArgs {
   build?: string;
   env?: string[];
   "env-file"?: string;
-  promote?: boolean;
+  production?: boolean;
   force?: boolean;
+}
+
+/** System hostname from the pull zone; URLs are informational, so tolerate a fetch failure. */
+async function fetchSystemHost(
+  coreClient: ReturnType<typeof createCoreClient>,
+  pullZoneId: number,
+): Promise<string | undefined> {
+  try {
+    const { data } = await coreClient.GET("/pullzone/{id}", {
+      params: { path: { id: pullZoneId } },
+    });
+    return (
+      (data?.Hostnames ?? []).find((h) => h.IsSystemHostname)?.Value ??
+      undefined
+    );
+  } catch {
+    return undefined;
+  }
 }
 
 /** Production and preview URLs for a deploy, derived from the site's hosts. */
@@ -66,16 +74,20 @@ function deployUrls(
 
 /**
  * Deploy a directory: hash → skip if unchanged → upload to `deploys/{id}/` →
- * record in remote state → promote (env var + cache purge) unless
- * `--no-promote`. With `--build`, runs the build command first with the
- * site's remote env merged with `--env`/`--env-file` overrides.
+ * record in remote state → serve at a preview URL. With `--production`, also
+ * publish it (env var + cache purge) as the live site. With `--build`, runs
+ * the build command first in the caller's environment plus `--env`/`--env-file`
+ * overrides.
  */
 export const sitesDeployCommand = defineCommand<DeployArgs>({
   command: "deploy [dir]",
   describe: "Deploy a directory to a site.",
   examples: [
-    ["$0 sites deploy ./dist", "Deploy and promote to production"],
-    ["$0 sites deploy ./dist --no-promote", "Upload without promoting"],
+    ["$0 sites deploy ./dist", "Deploy to a preview URL"],
+    [
+      "$0 sites deploy ./dist --production",
+      "Deploy and publish as the live site",
+    ],
     ["$0 sites deploy --build", "Run the configured build, then deploy"],
     [
       '$0 sites deploy ./dist --build "npm run build"',
@@ -106,11 +118,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         type: "string",
         describe: "Read build-time env overrides from a dotenv-style file",
       })
-      .option("promote", {
+      .option("production", {
+        alias: "prod",
         type: "boolean",
-        default: true,
-        describe:
-          "Promote the deploy to production (default: true). Use --no-promote to only upload.",
+        default: false,
+        describe: "Publish the deploy as the live site (default: preview only)",
       })
       .option("force", {
         type: "boolean",
@@ -146,7 +158,6 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const { state, connection, etag } = site;
 
     // Build first — the deploy ID must hash the build *output*.
-    let buildEnvHash: string | undefined;
     if (args.build !== undefined) {
       const command = args.build || siteConfig?.config.build;
       if (!command) {
@@ -161,13 +172,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           : {}),
         ...parseEnvAssignments(args.env),
       };
-      const remoteEnv = await readRemoteEnv(connection);
-      const mergedEnv = { ...remoteEnv, ...overrides };
-      buildEnvHash = envHash(mergedEnv);
       await runBuildCommand(
         command,
         siteConfig?.root ?? process.cwd(),
-        mergedEnv,
+        overrides,
       );
     }
 
@@ -189,51 +197,76 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
     const identity = await resolveDeployIdentity(dir, files);
 
-    if (state.current === identity.id && !args.force) {
+    const alreadyLive = state.current === identity.id;
+    const skipUpload =
+      !args.force && state.deploys.some((d) => d.id === identity.id);
+
+    // Nothing to do: the deploy is already uploaded (and live, if --production).
+    if (skipUpload && (alreadyLive || !args.production)) {
+      const urls = deployUrls(
+        site,
+        identity.id,
+        await fetchSystemHost(coreClient, state.pullZoneId),
+      );
       if (output === "json") {
         logger.log(
           JSON.stringify(
-            { site: state.name, id: identity.id, unchanged: true },
+            {
+              site: state.name,
+              id: identity.id,
+              unchanged: true,
+              live: alreadyLive,
+              production: urls.production ?? null,
+              preview: urls.preview ?? null,
+            },
             null,
             2,
           ),
         );
         return;
       }
-      logger.info(
-        `No changes — deploy ${identity.id} is already live. Use --force to redeploy.`,
-      );
+      if (alreadyLive) {
+        logger.info(
+          `No changes: deploy ${identity.id} is already live. Use --force to redeploy.`,
+        );
+      } else {
+        logger.info(
+          `No changes: deploy ${identity.id} is already uploaded. Publish it with \`bunny sites deploy --production\`.`,
+        );
+      }
+      if (urls.preview) logger.log(`  Preview: ${urls.preview}`);
       return;
     }
 
-    const uploadSpin = spinner(`Uploading ${files.length} files...`);
-    uploadSpin.start();
-    try {
-      await uploadDeploy(connection, identity.id, files, {
-        onFileUploaded: (done, total) => {
-          uploadSpin.text = `Uploading ${done}/${total} files (${formatBytes(totalBytes)} total)...`;
-        },
-      });
-    } finally {
-      uploadSpin.stop();
-    }
+    if (!skipUpload) {
+      const uploadSpin = spinner(`Uploading ${files.length} files...`);
+      uploadSpin.start();
+      try {
+        await uploadDeploy(connection, identity.id, files, {
+          onFileUploaded: (done, total) => {
+            uploadSpin.text = `Uploading ${done}/${total} files (${formatBytes(totalBytes)} total)...`;
+          },
+        });
+      } finally {
+        uploadSpin.stop();
+      }
 
-    // Record the deploy. A re-deployed ID keeps its slot but gets fresh metadata.
-    const record: DeployRecord = {
-      id: identity.id,
-      createdAt: new Date().toISOString(),
-      source: identity.source,
-      gitSha: identity.gitSha,
-      dirty: identity.dirty,
-      files: files.length,
-      bytes: totalBytes,
-      envHash: buildEnvHash,
-    };
-    state.deploys = [
-      record,
-      ...state.deploys.filter((d) => d.id !== record.id),
-    ];
-    if (args.promote !== false) {
+      // Record the deploy. A re-deployed ID keeps its slot but gets fresh metadata.
+      const record: DeployRecord = {
+        id: identity.id,
+        createdAt: new Date().toISOString(),
+        source: identity.source,
+        gitSha: identity.gitSha,
+        dirty: identity.dirty,
+        files: files.length,
+        bytes: totalBytes,
+      };
+      state.deploys = [
+        record,
+        ...state.deploys.filter((d) => d.id !== record.id),
+      ];
+    }
+    if (args.production) {
       if (state.current && state.current !== identity.id) {
         state.previous = state.current;
       }
@@ -241,8 +274,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
     await writeRemoteState(connection, state, etag);
 
-    if (args.promote !== false) {
-      const promoteSpin = spinner("Promoting to production...");
+    if (args.production) {
+      const promoteSpin = spinner("Publishing to production...");
       promoteSpin.start();
       try {
         await promoteDeploy({
@@ -256,19 +289,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       }
     }
 
-    // The system hostname comes from the pull zone; tolerate a fetch failure.
-    let systemHost: string | undefined;
-    try {
-      const { data } = await coreClient.GET("/pullzone/{id}", {
-        params: { path: { id: state.pullZoneId } },
-      });
-      systemHost =
-        (data?.Hostnames ?? []).find((h) => h.IsSystemHostname)?.Value ??
-        undefined;
-    } catch {
-      // URLs are informational only.
-    }
-    const urls = deployUrls(site, identity.id, systemHost);
+    const urls = deployUrls(
+      site,
+      identity.id,
+      await fetchSystemHost(coreClient, state.pullZoneId),
+    );
 
     if (output === "json") {
       logger.log(
@@ -279,7 +304,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
             source: identity.source,
             files: files.length,
             bytes: totalBytes,
-            promoted: args.promote !== false,
+            promoted: args.production === true,
             production: urls.production ?? null,
             preview: urls.preview ?? null,
           },
@@ -290,17 +315,22 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       return;
     }
 
-    logger.success(
-      `Deployed ${identity.id} (${files.length} files, ${formatBytes(totalBytes)}).`,
-    );
-    if (args.promote !== false) {
-      if (urls.production) logger.info(`Production: ${urls.production}`);
+    if (skipUpload) {
+      logger.success(`Deploy ${identity.id} is now live.`);
     } else {
-      logger.info(
-        `Uploaded without promoting. Publish it with \`bunny sites deployments publish ${identity.id}\`.`,
+      logger.success(
+        `Deployed ${identity.id} (${files.length} files, ${formatBytes(totalBytes)}).`,
       );
     }
-    if (urls.preview) logger.log(`  Preview:    ${urls.preview}`);
+    if (args.production) {
+      if (urls.production) logger.info(`Production: ${urls.production}`);
+      if (urls.preview) logger.log(`  Preview:    ${urls.preview}`);
+    } else {
+      if (urls.preview) logger.info(`Preview: ${urls.preview}`);
+      logger.info(
+        `Publish it with \`bunny sites deploy --production\` or \`bunny sites deployments publish ${identity.id}\`.`,
+      );
+    }
 
     await offerLink();
   },

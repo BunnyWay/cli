@@ -2,9 +2,8 @@
 export const SITES_MANIFEST = "site.json";
 
 // Remote paths inside the site's storage zone. Everything under `_bunny/` is
-// blocked by the router (403), so state and env never get served.
+// blocked by the router (403), so state never gets served.
 export const REMOTE_STATE_PATH = "_bunny/site.json";
-export const REMOTE_ENV_PATH = "_bunny/env.json";
 
 // Deploys live at `deploys/{id}/...` inside the storage zone.
 export const DEPLOYS_DIR = "deploys";
@@ -35,7 +34,6 @@ export interface DeployRecord {
   dirty?: boolean;
   files: number;
   bytes: number;
-  envHash?: string;
 }
 
 /**

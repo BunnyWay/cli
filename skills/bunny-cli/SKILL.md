@@ -49,7 +49,7 @@ bunny dns records list example.com
 
 # host a static site
 bunny sites create my-site                            # provision (served at my-site.b-cdn.net)
-bunny sites deploy ./dist                             # deploy + promote to production
+bunny sites deploy ./dist --production               # deploy + publish as the live site
 bunny sites deployments publish --previous --force    # instant rollback
 ```
 
@@ -61,7 +61,7 @@ Use this to route to the correct reference file:
 - **Database management (create, list, show, link, delete, shell, studio, regions, tokens)** -> `references/database.md`
 - **DNS (zones, delegation checks, records, presets, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
-- **Static sites (create, deploy, rollback, previews, custom domains, build-time env)** -> `references/sites.md`
+- **Static sites (create, deploy, rollback, previews, custom domains)** -> `references/sites.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)
 

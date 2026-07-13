@@ -2,12 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  envHash,
-  parseEnvAssignments,
-  parseEnvFile,
-  runBuildCommand,
-} from "./build.ts";
+import { parseEnvAssignments, parseEnvFile, runBuildCommand } from "./build.ts";
 
 test("parseEnvAssignments parses KEY=VALUE pairs", () => {
   expect(parseEnvAssignments(["A=1", "B=with=equals", "C_1="])).toEqual({
@@ -42,14 +37,6 @@ test("parseEnvFile handles comments, blanks, and quotes", () => {
     SINGLE: "single",
     SPACED: "spaced-out",
   });
-});
-
-test("envHash is stable across ordering and sensitive to values", () => {
-  const a = envHash({ A: "1", B: "2" });
-  const b = envHash({ B: "2", A: "1" });
-  expect(a).toBe(b);
-  expect(a).toMatch(/^[0-9a-f]{8}$/);
-  expect(envHash({ A: "1", B: "3" })).not.toBe(a);
 });
 
 test("runBuildCommand passes env and throws on failure", async () => {

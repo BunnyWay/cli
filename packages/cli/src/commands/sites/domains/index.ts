@@ -35,7 +35,6 @@ async function resolveSitePullZone(
   return { pullZoneId: site.state.pullZoneId, coreClient };
 }
 
-/** True for hostnames that are themselves preview infrastructure. */
 function isPreviewHost(hostname: string): boolean {
   return (
     hostname.startsWith("*.") ||

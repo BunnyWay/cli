@@ -111,7 +111,7 @@ Work items, in dependency order:
 1. **`deploy-id.ts`** — pure functions, easy unit tests: `gitShaId()` (shell out via `Bun.spawn` to `git rev-parse --short HEAD`, detect dirty tree with `git status --porcelain`), `contentHashId(files)` (sorted path+sha256 merkle → 8 hex chars).
 2. **`uploader.ts`** — walk dir (v1: upload everything except dotfiles); per-file streaming SHA-256 via `Bun.CryptoHasher("sha256")` → `UploadOptions.sha256Checksum` (the `storage/file/upload.ts` pattern); 8-way concurrent `uploadFile` with retry/backoff; progress via `spinner()` from `core/ui.ts` + `progressBar()`/`formatBytes()` from `core/format.ts` (stderr, so `--output json` stays clean).
 3. **Remote state read-modify-write** in `api.ts` — `downloadFile` `_bunny/site.json`, append deploy record, re-upload. Include a `stateChecksum` field checked before write (cheap optimistic lock; log-and-overwrite on mismatch in v1). Reading the storage zone for `connectStorageZone` must go through `fetchStorageZone`/`resolveStorageZone` (they return the full record with `Password`).
-4. **`deploy.ts`** — resolve site (flag → manifest → picker with offer-to-link, mirroring `selectScript` in `scripts/interactive.ts`) → compute ID → short-circuit if ID equals `current` ("no changes") → upload to `/deploys/{id}/` → update state → promote (env var + `POST /pullzone/{id}/purgeCache`) unless `--no-promote` → print production + preview URLs via `hostnameUrl`.
+4. **`deploy.ts`** — resolve site (flag → manifest → picker with offer-to-link, mirroring `selectScript` in `scripts/interactive.ts`) → compute ID → short-circuit if ID is already uploaded ("no changes") → upload to `/deploys/{id}/` → update state → preview URL by default; `--production`/`--prod` promotes (env var + `POST /pullzone/{id}/purgeCache`) → print production + preview URLs via `hostnameUrl`.
 5. **`deployments list`** — table `["ID", "Age", "Git", "Source", "Files", "Size", "Status"]` with `● ACTIVE` marker (the `scripts/deployments/list.ts` style, `formatDateTime` for dates); `--output json` free via the shared flag.
 6. **`deployments publish`** — reuse the `scripts/deployments/publish.ts` confirm/`--force` UX; update env var, purge, swap `current`/`previous` in state. `--previous` is sugar for instant rollback.
 
@@ -141,14 +141,12 @@ Edge cases handled explicitly:
 - Nameservers not pointed at Bunny yet — `checkDelegation`/`expectedNameservers` from `core/dns-nameservers.ts` detect it (that's how `bunny-dns.ts` sets `match.delegated`); print NS instructions (use `detectRegistrar` from `core/registrar.ts` to name the registrar) and exit 0 with a "re-run when propagated" hint.
 - A preexisting conflicting record at the apex — `offerBunnyDnsRecord` already handles repointing with a prompt; surface it clearly.
 
-## Phase 4 — Env vars + builds
+## Phase 4 — Builds
 
-**Commands:** `sites env set/list/remove/pull`, plus `deploy --build [cmd]`
+**Commands:** `deploy --build [cmd]` (a remote `sites env` store was built here, then dropped: sites deploys prebuilt files, so the caller's environment is the source of truth)
 
-- Env store at `_bunny/env.json` (already 403-blocked by the router), read/write through `downloadFile`/`uploadFile`; values echoed masked in `list` via `maskSecret()` from `core/format.ts` unless `--show`.
-- `deploy --build`: merge remote env + `--env`/`--env-file` overrides → spawn build command via `Bun.spawn` (from flag or `bunny.jsonc`) with merged environment → then the normal deploy path on the output dir. Record `envHash` in the deploy entry.
+- `deploy --build`: spawn the build command via `Bun.spawn` (from flag or `bunny.jsonc`) in the caller's environment plus `--env`/`--env-file` overrides → then the normal deploy path on the output dir.
 - **`bunny.jsonc` support:** add an optional top-level `sites` block to `BunnyAppConfigSchema` in `packages/app-config/src/schema.ts` — `sites: SitesConfigSchema.optional()` with `{ name?, dir?, build? }`, exported sub-schema + `z.infer` type, mirroring `ProbeConfigSchema` et al. Regenerate `generated/schema.json` via `packages/app-config/scripts/generate-schema.ts` (`z.toJSONSchema(..., { target: "draft-2020-12" })`). `saveConfig`'s re-keying (`$schema`, `version`, `...rest`) preserves the new key automatically; consider bumping `CURRENT_VERSION` (date-versioned). Separate changeset, minor bump for `@bunny.net/app-config`.
-- Loud docs + CLI warning: build-time env is baked into the bundle; **not a secret store**.
 
 ## Phase 5 — Polish + ship
 

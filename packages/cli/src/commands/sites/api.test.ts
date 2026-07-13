@@ -5,14 +5,12 @@ import {
   createSite,
   fetchSites,
   promoteDeploy,
-  readRemoteEnv,
   readRemoteState,
   siteContextFromZone,
   siteFiles,
   writeRemoteState,
 } from "./api.ts";
 import {
-  REMOTE_ENV_PATH,
   REMOTE_STATE_PATH,
   type RemoteSiteState,
   STATE_VERSION,
@@ -227,28 +225,39 @@ test("readRemoteState is null for missing or invalid state", async () => {
   expect(await readRemoteState(connection)).toBeNull();
 });
 
-test("writeRemoteState overwrites (with a warning) on an etag mismatch", async () => {
+test("writeRemoteState merges concurrent deploy records on an etag mismatch", async () => {
   const connection = fakeConnection();
   const etag = await writeRemoteState(connection, fakeState());
 
-  // Simulate a concurrent deploy changing the remote state.
-  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState({ current: "zzz" })));
+  // Simulate a concurrent deploy landing between our read and write.
+  const theirs = {
+    id: "zzz",
+    createdAt: "2026-01-02T00:00:00.000Z",
+    source: "git" as const,
+    files: 1,
+    bytes: 10,
+  };
+  store.set(
+    REMOTE_STATE_PATH,
+    JSON.stringify(fakeState({ current: "zzz", deploys: [theirs] })),
+  );
 
-  await writeRemoteState(connection, fakeState({ current: "aaa" }), etag);
+  const ours = {
+    id: "aaa",
+    createdAt: "2026-01-03T00:00:00.000Z",
+    source: "git" as const,
+    files: 1,
+    bytes: 10,
+  };
+  await writeRemoteState(
+    connection,
+    fakeState({ current: "aaa", deploys: [ours] }),
+    etag,
+  );
   const read = await readRemoteState(connection);
+  // Our promote wins, but their deploy record survives the race.
   expect(read?.state.current).toBe("aaa");
-});
-
-test("readRemoteEnv tolerates missing and malformed files", async () => {
-  const connection = fakeConnection();
-  expect(await readRemoteEnv(connection)).toEqual({});
-
-  store.set(REMOTE_ENV_PATH, "{broken");
-  expect(await readRemoteEnv(connection)).toEqual({});
-
-  store.set(REMOTE_ENV_PATH, JSON.stringify({ A: "1", B: 2, C: "3" }));
-  // Non-string values are dropped, not crashed on.
-  expect(await readRemoteEnv(connection)).toEqual({ A: "1", C: "3" });
+  expect(read?.state.deploys.map((d) => d.id)).toEqual(["aaa", "zzz"]);
 });
 
 // ---- provisioning ----
