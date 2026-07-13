@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { createMcClient } from "@bunny.net/openapi-client";
-import { Command, CommandFinished } from "./command.ts";
+import { Command, CommandFinished, type LogChunk } from "./command.ts";
 import { SandboxError } from "./errors.ts";
 import { removeKnownHost } from "./known-hosts.ts";
 import {
@@ -22,11 +22,14 @@ import {
 } from "./provision.ts";
 import { SshTransport } from "./transport.ts";
 import type {
+  BlockingCommandOptions,
   CreateOptions,
+  DetachedCommandOptions,
   FileToWrite,
   GetOptions,
   RunCommandOptions,
   SandboxAuth,
+  SandboxFileEntry,
   SandboxHandle,
 } from "./types.ts";
 
@@ -171,7 +174,12 @@ export class Sandbox {
 
   /** Run a command, blocking for the result unless detached is set. */
   async runCommand(command: string, args?: string[]): Promise<CommandFinished>;
-  async runCommand(command: RunCommandOptions): Promise<Command>;
+  async runCommand(command: DetachedCommandOptions): Promise<Command>;
+  async runCommand(command: BlockingCommandOptions): Promise<CommandFinished>;
+  // Options not statically known to be blocking or detached get the union.
+  async runCommand(
+    command: RunCommandOptions,
+  ): Promise<CommandFinished | Command>;
   async runCommand(
     command: string | RunCommandOptions,
     args: string[] = [],
@@ -181,9 +189,42 @@ export class Sandbox {
     const remote = buildRemoteCommand(opts);
 
     if (opts.detached) {
+      // The types forbid this, but un-typechecked callers can still pass blocking-only options.
+      const stray = opts as unknown as Partial<BlockingCommandOptions>;
+      if (
+        stray.timeout !== undefined ||
+        stray.signal ||
+        stray.onStdout ||
+        stray.onStderr
+      ) {
+        throw new SandboxError(
+          "timeout, signal, onStdout, and onStderr are not supported with detached; use command.kill() and command.logs().",
+        );
+      }
       return new Command(await this.transport.execStream(remote));
     }
-    const { stdout, stderr, exitCode } = await this.transport.exec(remote);
+
+    if (
+      opts.timeout !== undefined &&
+      (!Number.isFinite(opts.timeout) || opts.timeout <= 0)
+    ) {
+      throw new SandboxError(
+        "timeout must be a positive number of milliseconds.",
+      );
+    }
+    const { onStdout, onStderr } = opts;
+    const onData =
+      onStdout || onStderr
+        ? ({ stream, data }: LogChunk) => {
+            if (stream === "stdout") onStdout?.(data);
+            else onStderr?.(data);
+          }
+        : undefined;
+    const { stdout, stderr, exitCode } = await this.transport.exec(remote, {
+      timeoutMs: opts.timeout,
+      signal: opts.signal,
+      onData,
+    });
     return new CommandFinished(exitCode, stdout, stderr);
   }
 
@@ -204,6 +245,26 @@ export class Sandbox {
   /** Read a file into a Buffer, or null when it does not exist. */
   async readFile(path: string): Promise<Buffer | null> {
     return this.transport.readFile(resolvePath(path));
+  }
+
+  /** List directory entries, sorted by name; [] when the directory does not exist. Defaults to the workplace. */
+  async listFiles(path = "."): Promise<SandboxFileEntry[]> {
+    return this.transport.readDir(resolvePath(path));
+  }
+
+  /** Delete a file. Returns false when it does not exist. */
+  async deleteFile(path: string): Promise<boolean> {
+    return this.transport.unlink(resolvePath(path));
+  }
+
+  /** Rename or move a file or directory. Fails when the destination exists. */
+  async rename(from: string, to: string): Promise<void> {
+    return this.transport.rename(resolvePath(from), resolvePath(to));
+  }
+
+  /** Whether a file or directory exists at the path. */
+  async exists(path: string): Promise<boolean> {
+    return (await this.transport.stat(resolvePath(path))) !== null;
   }
 
   async mkDir(path: string): Promise<void> {
@@ -317,6 +378,18 @@ export class Sandbox {
   /** Close the SSH connection without deleting the sandbox. */
   disconnect(): void {
     this.transport.close();
+  }
+
+  /**
+   * `using` / `await using` release the SSH connection but deliberately do
+   * NOT delete the sandbox — call `delete()` explicitly to tear one down.
+   */
+  [Symbol.dispose](): void {
+    this.disconnect();
+  }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    this.disconnect();
   }
 
   /** Serialize the sandbox so another process can reconnect via fromHandle. */

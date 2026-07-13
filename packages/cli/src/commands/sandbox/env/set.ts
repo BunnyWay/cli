@@ -4,7 +4,7 @@ import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { spinner } from "../../../core/ui.ts";
 import { collectEnv } from "../env-args.ts";
-import { sandboxFromName } from "./resolve.ts";
+import { sandboxFromName } from "../resolve.ts";
 
 interface SetArgs {
   name: string;
