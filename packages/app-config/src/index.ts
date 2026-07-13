@@ -16,6 +16,7 @@ export type {
   EndpointConfig,
   ProbeConfig,
   RegionsConfig,
+  SiteConfig,
   VolumeConfig,
 } from "./schema.ts";
 export {
@@ -26,5 +27,6 @@ export {
   normalizeRegions,
   ProbeConfigSchema,
   RegionsConfigSchema,
+  SiteConfigSchema,
   VolumeConfigSchema,
 } from "./schema.ts";

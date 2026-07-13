@@ -210,6 +210,21 @@
       },
       "required": ["name", "containers"],
       "additionalProperties": false
+    },
+    "sites": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "dir": {
+          "type": "string"
+        },
+        "build": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "required": ["version", "app"],

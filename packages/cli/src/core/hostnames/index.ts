@@ -21,6 +21,7 @@ export {
 } from "./client.ts";
 export {
   createHostnamesCommands,
+  type HostnameHookContext,
   type HostnameResolver,
   type HostnamesMountOptions,
 } from "./commands.ts";

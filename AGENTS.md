@@ -373,6 +373,32 @@ bunny-cli/
 │           │   │       ├── upload.ts     # Upload a local file (<file> positional, --zone, --to, --checksum streams a SHA256, --content-type)
 │           │   │       ├── download.ts   # Download a file to disk (<path> positional, --zone, --out)
 │           │   │       └── remove.ts     # Delete a file or directory (alias: rm; <path> positional, --zone, trailing slash = recursive)
+│           │   ├── sites/                 # Experimental (hidden from help and landing page) — static-site hosting (storage zone + pull zone + middleware router)
+│           │   │   ├── index.ts          # defineNamespace("sites", ...): create/list/show/deploy/deployments/domains/env/link/unlink/upgrade/delete
+│           │   │   ├── constants.ts      # SITES_MANIFEST (.bunny/site.json), REMOTE_STATE_PATH/REMOTE_ENV_PATH (_bunny/*.json), RemoteSiteState/DeployRecord types, parseRemoteState (shape-checked; null = not a site), previewHostname/previewWildcard/deployPrefix helpers, deploy-ID + site-name validators
+│           │   │   ├── constants.test.ts # parseRemoteState round-trip/rejection + helper tests
+│           │   │   ├── api.ts            # siteFiles IO seam (connect/download/upload/remove — swap in tests instead of mock.module), remote state read/write (sha256 etag optimistic lock: warn + overwrite on mismatch), remote env read/write, siteContextFromZone, fetchSites (pull zone listing → middleware+storage candidates → per-zone state verification), createSite (idempotent provisioning: storage zone → router script code+publish+CURRENT_DEPLOY → pull zone + MiddlewareScriptId attach → state), promoteDeploy (env var PUT + purgeCache POST), deleteSiteResources (pull zone → script → storage zone, best-effort), deleteDeployFiles
+│           │   │   ├── api.test.ts       # In-memory siteFiles store + path-branching fake clients: state round-trip, etag conflict, env tolerance, createSite fresh/resume/already-exists, promote, fetchSites filtering
+│           │   │   ├── interactive.ts    # selectSite: explicit ref → .bunny/site.json → bunny.jsonc sites.name → picker (offerLink like scripts); siteOptionBuilder (--site) + sitePositionalBuilder ([site])
+│           │   │   ├── config.ts         # loadSiteConfig: lenient bunny.jsonc reader — validates ONLY the `sites` block (SiteConfigSchema from @bunny.net/app-config), so sites-only configs work without an `app` block
+│           │   │   ├── router/source.ts  # ROUTER_VERSION + routerSource(): the middleware Edge Script attached to the pull zone. Host → deploy dir mapping (apex → CURRENT_DEPLOY, dpl-{id}.preview.* → that deploy), /_bunny/* → 403, /deploys/* passthrough (path previews), trailing-slash → index.html, X-Robots-Tag: noindex on preview hosts
+│           │   │   ├── deploy-id.ts      # gitIdentity (short sha + dirty check via Bun.spawn), contentHashId (sorted path+sha256 merkle → 8 hex), resolveDeployIdentity (clean git → sha, else content hash)
+│           │   │   ├── deploy-id.test.ts # Hash determinism + real temp git repos (clean → sha, dirty → content hash)
+│           │   │   ├── uploader.ts       # collectFiles (recursive walk, skips dotfiles/node_modules, sorted), hashFiles (streaming sha256), uploadDeploy (8-way concurrency, per-file checksum, 3-attempt backoff retry) via siteFiles.upload
+│           │   │   ├── uploader.test.ts  # Walk/skip/hash tests + upload paths/checksums/retry via siteFiles swap
+│           │   │   ├── build.ts          # parseEnvAssignments/parseEnvFile/envHash + runBuildCommand (Bun.spawn shell, merged env, throws on non-zero exit)
+│           │   │   ├── build.test.ts     # Env parsing + hash stability + real build spawn success/failure
+│           │   │   ├── create.ts         # bunny sites create <name>: createSite + manifest link + optional --domain via setupSiteDomain (domain failure warns, never fails the create)
+│           │   │   ├── list.ts           # List sites (name, URL, deploy count, current)
+│           │   │   ├── show.ts           # Site details + hostname/SSL table + router-outdated warning
+│           │   │   ├── deploy.ts         # bunny sites deploy [dir]: optional build → hash → no-op if unchanged → upload deploys/{id}/ → state update → promote unless --no-promote → production/preview URLs
+│           │   │   ├── link.ts           # Link directory to a site (.bunny/site.json)
+│           │   │   ├── unlink.ts         # Remove .bunny/site.json
+│           │   │   ├── upgrade.ts        # Republish the router at ROUTER_VERSION + bump state.routerVersion
+│           │   │   ├── delete.ts         # Delete a site (typed-name confirm; --keep-storage; drops .bunny/site.json if it pointed here)
+│           │   │   ├── deployments/      # list (● Live/○ Previous), publish [id]|--previous (alias promote; confirm + promote + current/previous swap), prune --keep N (pruneVictims never drops current/previous) + prune.test.ts
+│           │   │   ├── domains/index.ts  # Mounts core/hostnames createHostnamesCommands as "sites domains" with onAdded/onRemoved hooks: apex add also attaches *.preview.<apex> (attachPreviewWildcard, best-effort SSL) + records state.domain; remove takes the wildcard down too. setupSiteDomain composes setupHostname + wildcard for create --domain
+│           │   │   └── env/              # set/list/remove/pull over _bunny/env.json (masked list unless --show; pull refuses to overwrite without --force) + pull.test.ts (toDotenv quoting)
 │           │   ├── registries/
 │           │   │   ├── index.ts          # Manual CommandModule (not defineNamespace) — default handler runs list
 │           │   │   ├── list.ts           # List container registries
@@ -1059,6 +1085,33 @@ bunny
 │   ├── show            [id]                Show Edge Script details (uses linked script if omitted)
 │   └── stats           [id] [--from] [--to] [--hourly] [--link]
 │                                           Show usage statistics (requests/CPU/cost totals + bar chart; defaults to last 30 days). No ID → linked script → interactive picker (offers to link; --no-link skips). JSON output skips the picker and errors.
+├── sites                                   (experimental — hidden from help and landing page)
+│   │                                       Static-site hosting: one storage zone (files) + one pull zone (CDN) + one middleware router script per site. Deploys are immutable directories (`deploys/{id}/`); promote/rollback flips the router's CURRENT_DEPLOY env var + purges the cache — no files move. Site state lives at `_bunny/site.json` in the storage zone (403-blocked by the router); `.bunny/site.json` is the local pointer. Site resolution everywhere: explicit ref → .bunny/site.json → `sites.name` in bunny.jsonc → interactive picker (offers to link).
+│   ├── create          <name> [--region] [--domain] [--link]
+│   │                                       Provision a site (idempotent — a failed create re-runs cleanly; each resource is looked up by name first). --domain also attaches *.preview.<domain> for per-deploy previews.
+│   ├── list            (alias: ls)         List sites (middleware+storage pull zones with matching remote state)
+│   ├── show            [site]              Show resources, domains (with SSL state), current deploy; warns when a newer router is available
+│   ├── deploy          [dir] [--site] [--build [cmd]] [--env K=V] [--env-file] [--no-promote] [--force]
+│   │                                       Deploy a directory: git short-sha ID when the tree is clean, content hash otherwise; identical IDs are no-ops. [dir] defaults to `sites.dir` in bunny.jsonc, then cwd (dotfiles + node_modules excluded). --build runs the command (or `sites.build`) with remote env + overrides merged. Prints production + preview URLs.
+│   ├── deployments
+│   │   ├── list        [site] (alias: ls)  List deploys (● Live / ○ Previous markers, created, source, files, size)
+│   │   ├── publish     [id] [--previous] [--site] [--force]  (alias: promote)
+│   │   │                                   Promote a past deploy — instant rollback (--previous = the previous deploy)
+│   │   └── prune       [--keep N] [--site] [--force]  Delete old deploys (never current/previous; default keeps 5)
+│   ├── domains                             (hidden alias: hostnames) — mounts core/hostnames createHostnamesCommands with a sites resolver
+│   │   ├── add         <domain> [site] [--ssl] [--wait] [--no-force-ssl]  Add a domain; also attaches *.preview.<domain> + records the domain in site state (onAdded hook)
+│   │   ├── ssl         <domain> [site]     Issue a free SSL certificate
+│   │   ├── list        [site] (alias: ls)  List domains
+│   │   └── remove      <domain> [site] [--force]  Remove a domain (also removes its *.preview wildcard, onRemoved hook)
+│   ├── env                                 Build-time env stored at `_bunny/env.json` (NOT runtime env, NOT a secret store — values are baked into build output)
+│   │   ├── set         [name] [value] [--site]  Set a variable (prompts when omitted)
+│   │   ├── list        [--show] [--site]   List variables (masked unless --show)
+│   │   ├── remove      <name> [--site] [--force]  Remove a variable (alias: rm)
+│   │   └── pull        [file] [--site] [--force]  Write env to a dotenv file (default .env; refuses to overwrite)
+│   ├── link            [site]              Link this directory to a site → .bunny/site.json
+│   ├── unlink                              Remove .bunny/site.json
+│   ├── upgrade         [site] [--force]    Republish the router script at the CLI's ROUTER_VERSION
+│   └── delete          [site] [--force] [--keep-storage]  Delete pull zone → router → storage zone (typed-name confirmation; best-effort so re-runs finish a partial delete)
 ├── docs                                    Open bunny.net documentation in browser
 ├── open               [--print]            Open bunny.net dashboard in browser (or print URL)
 ├── --profile, -p       <string>            Profile to use (default: "default")
@@ -1257,6 +1310,7 @@ Commands that operate on a specific remote resource (e.g. a script, an app) can 
 ### How it works
 
 - **`.bunny/script.json`** (gitignored) — links the current directory to a remote Edge Script.
+- **`.bunny/site.json`** (gitignored) — links the current directory to a site (the site's storage zone ID). Written by `bunny sites link`/`create`; the site's own state (resource triple, deploys, current/previous) lives remotely at `_bunny/site.json` inside the storage zone, so the local manifest is only a pointer.
 - The manifest is machine-managed: written by `bunny scripts link`, read by other script commands.
 - `resolveManifestId()` in `packages/cli/src/core/manifest.ts` handles the resolution: explicit ID flag → manifest file → error with hint.
 - `findRoot()` walks up the directory tree to find `.bunny/`, so it works from subdirectories.

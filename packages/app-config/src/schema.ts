@@ -67,6 +67,17 @@ export const RegionsConfigSchema = z.union([
   }),
 ]);
 
+/**
+ * Static-site config (`bunny sites`). All fields are optional: `name` links
+ * the directory to a site, `dir` is the deploy root, and `build` is the
+ * command `bunny sites deploy --build` runs before uploading.
+ */
+export const SiteConfigSchema = z.object({
+  name: z.string().optional(),
+  dir: z.string().optional(),
+  build: z.string().optional(),
+});
+
 export const BunnyAppConfigSchema = z.object({
   $schema: z.string().optional(),
   version: VersionSchema,
@@ -77,9 +88,11 @@ export const BunnyAppConfigSchema = z.object({
     regions: RegionsConfigSchema.optional(),
     containers: z.record(z.string(), ContainerConfigSchema),
   }),
+  sites: SiteConfigSchema.optional(),
 });
 
 export type BunnyAppConfig = z.infer<typeof BunnyAppConfigSchema>;
+export type SiteConfig = z.infer<typeof SiteConfigSchema>;
 export type ContainerConfig = z.infer<typeof ContainerConfigSchema>;
 export type EndpointConfig = z.infer<typeof EndpointConfigSchema>;
 export type VolumeConfig = z.infer<typeof VolumeConfigSchema>;

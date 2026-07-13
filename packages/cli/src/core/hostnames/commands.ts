@@ -8,6 +8,7 @@ import type { GlobalArgs } from "../types.ts";
 import { confirm, isInteractive, spinner } from "../ui.ts";
 import {
   addHostname,
+  type CoreClient,
   enableSsl,
   fetchPullZoneHostnames,
   hostnameUrl,
@@ -25,6 +26,16 @@ import {
 export type HostnameResolver = (
   args: GlobalArgs & Record<string, unknown>,
 ) => Promise<ResolvedPullZone>;
+
+/** Context passed to the {@link HostnamesMountOptions.onAdded}/`onRemoved` hooks. */
+export interface HostnameHookContext {
+  coreClient: CoreClient;
+  pullZoneId: number;
+  hostname: string;
+  /** The zone's system hostname — the CNAME target (add only). */
+  cnameTarget?: string;
+  args: GlobalArgs & Record<string, unknown>;
+}
 
 export interface HostnamesMountOptions {
   /** Command breadcrumb used in examples and follow-up hints, e.g. "scripts domains". */
@@ -45,6 +56,14 @@ export interface HostnamesMountOptions {
   describe?: string;
   /** Hidden namespace aliases (e.g. ["hostnames"]) — they work but stay out of help. */
   hiddenAliases?: string[];
+  /**
+   * Runs after a domain is added (before the SSL/DNS follow-up) — lets a
+   * resource attach companion hostnames or persist the domain. The hook must
+   * handle its own errors; a companion failure shouldn't fail the add.
+   */
+  onAdded?: (ctx: HostnameHookContext) => Promise<void>;
+  /** Runs after a domain is removed — the counterpart of {@link onAdded}. */
+  onRemoved?: (ctx: HostnameHookContext) => Promise<void>;
 }
 
 /** Echo back the targeting args the user passed so copy-paste follow-up hints keep the same scope. */
@@ -164,6 +183,16 @@ export function createHostnamesCommands(
       );
 
       spin.stop();
+
+      if (opts.onAdded) {
+        await opts.onAdded({
+          coreClient,
+          pullZoneId,
+          hostname,
+          cnameTarget: systemHostname,
+          args: args as unknown as GlobalArgs & Record<string, unknown>,
+        });
+      }
 
       let sslIssued = false;
       let sslError: string | undefined;
@@ -496,6 +525,15 @@ export function createHostnamesCommands(
       });
 
       removeSpin.stop();
+
+      if (opts.onRemoved) {
+        await opts.onRemoved({
+          coreClient,
+          pullZoneId,
+          hostname,
+          args: args as unknown as GlobalArgs & Record<string, unknown>,
+        });
+      }
 
       if (args.output === "json") {
         logger.log(

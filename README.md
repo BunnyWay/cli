@@ -55,6 +55,13 @@ bun ny dns records scan example.com         # scan for the domain's existing rec
 bun ny dns records preset list              # list DNS record presets (email providers, verification, security)
 bun ny dns records preset google-workspace example.com   # apply a preset record set
 bun ny dns records preset bluesky example.com --param did=did:plc:abc123   # apply a preset non-interactively
+bun ny sites create my-site                 # provision a static site (storage zone + pull zone + edge router)
+bun ny sites deploy ./dist                  # deploy a directory and promote it to production
+bun ny sites deploy --build                 # run `sites.build` from bunny.jsonc, then deploy `sites.dir`
+bun ny sites deployments list               # list deploys with the live one marked
+bun ny sites deployments publish --previous # instant rollback to the previous deploy
+bun ny sites domains add example.com        # attach a custom domain (+ *.preview.example.com for previews)
+bun ny sites env set VITE_API_URL https://api.example.com   # build-time env (not a secret store)
 ```
 
 ### Available Scripts
