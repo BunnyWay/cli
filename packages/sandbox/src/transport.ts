@@ -4,6 +4,7 @@ import {
   type ConnectConfig,
   type SFTPWrapper,
 } from "ssh2";
+import type { LogChunk } from "./command.ts";
 import { CommandTimeoutError, SandboxError } from "./errors.ts";
 import type { SandboxFileEntry } from "./types.ts";
 
@@ -27,7 +28,7 @@ export interface ExecLimits {
   /** Abort to kill the command and reject with the signal's reason. */
   signal?: AbortSignal;
   /** Called with each output chunk as it arrives, before the buffered result resolves. */
-  onData?: (chunk: { stream: "stdout" | "stderr"; data: string }) => void;
+  onData?: (chunk: LogChunk) => void;
 }
 
 /** Minimal exec-channel surface, kept narrow so tests can fake it. */
@@ -85,17 +86,18 @@ export function collectExec(
     });
     if (limits.signal?.aborted) return onAbort();
     limits.signal?.addEventListener("abort", onAbort, { once: true });
-    if (limits.timeoutMs !== undefined) {
+    const { timeoutMs } = limits;
+    if (timeoutMs !== undefined) {
       timer = setTimeout(() => {
         cleanup();
         kill();
-        reject(new CommandTimeoutError(limits.timeoutMs ?? 0, stdout, stderr));
-      }, limits.timeoutMs);
+        reject(new CommandTimeoutError(timeoutMs, stdout, stderr));
+      }, timeoutMs);
     }
   });
 }
 
-/** SFTP attrs surface used to build a SandboxFileEntry. */
+/** Minimal SFTP attrs surface, kept narrow so tests can fake it. */
 export interface FileAttrsLike {
   size?: number;
   mode: number;
@@ -104,7 +106,6 @@ export interface FileAttrsLike {
   isFile(): boolean;
 }
 
-/** Map SFTP attrs onto a SandboxFileEntry. */
 export function fileEntryFromAttrs(
   name: string,
   attrs: FileAttrsLike,

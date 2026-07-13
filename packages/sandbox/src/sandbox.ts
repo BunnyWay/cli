@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { createMcClient } from "@bunny.net/openapi-client";
-import { Command, CommandFinished } from "./command.ts";
+import { Command, CommandFinished, type LogChunk } from "./command.ts";
 import { SandboxError } from "./errors.ts";
 import {
   addCdnEndpoint,
@@ -189,9 +189,13 @@ export class Sandbox {
         "timeout must be a positive number of milliseconds.",
       );
     }
-    if (opts.detached && (opts.timeout !== undefined || opts.signal)) {
+    const { onStdout, onStderr } = opts;
+    if (
+      opts.detached &&
+      (opts.timeout !== undefined || opts.signal || onStdout || onStderr)
+    ) {
       throw new SandboxError(
-        "timeout and signal are not supported with detached; use command.kill().",
+        "timeout, signal, onStdout, and onStderr are not supported with detached; use command.kill() and command.logs().",
       );
     }
     const remote = buildRemoteCommand(opts);
@@ -200,10 +204,10 @@ export class Sandbox {
       return new Command(await this.transport.execStream(remote));
     }
     const onData =
-      opts.onStdout || opts.onStderr
-        ? (chunk: { stream: "stdout" | "stderr"; data: string }) => {
-            if (chunk.stream === "stdout") opts.onStdout?.(chunk.data);
-            else opts.onStderr?.(chunk.data);
+      onStdout || onStderr
+        ? ({ stream, data }: LogChunk) => {
+            if (stream === "stdout") onStdout?.(data);
+            else onStderr?.(data);
           }
         : undefined;
     const { stdout, stderr, exitCode } = await this.transport.exec(remote, {
@@ -365,10 +369,8 @@ export class Sandbox {
   }
 
   /**
-   * Release the SSH connection when the sandbox leaves a `using` /
-   * `await using` scope. This mirrors `disconnect()` and deliberately does
-   * NOT delete the sandbox — the backing app keeps running. Call `delete()`
-   * explicitly to tear down an ephemeral sandbox.
+   * `using` / `await using` release the SSH connection but deliberately do
+   * NOT delete the sandbox — call `delete()` explicitly to tear one down.
    */
   [Symbol.dispose](): void {
     this.disconnect();
