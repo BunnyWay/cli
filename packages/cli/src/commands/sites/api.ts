@@ -181,6 +181,52 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+const PULL_ZONE_PAGE_SIZE = 1000;
+
+interface PullZonePage {
+  Items?: PullZone[];
+  CurrentPage?: number;
+  HasMoreItems?: boolean;
+}
+
+/**
+ * List pull zones, tolerating both response shapes: the plain array the
+ * OpenAPI spec documents, and the `{ Items, CurrentPage, HasMoreItems }`
+ * envelope the live API actually returns for some queries (e.g. `search`).
+ */
+async function fetchPullZones(
+  client: CoreClient,
+  search?: string,
+): Promise<PullZone[]> {
+  const all: PullZone[] = [];
+  let page: number | undefined;
+  while (true) {
+    const { data } = await client.GET("/pullzone", {
+      params: {
+        query: {
+          ...(search !== undefined ? { search } : {}),
+          ...(page !== undefined ? { page } : {}),
+          perPage: PULL_ZONE_PAGE_SIZE,
+        },
+      },
+    });
+
+    const raw = data as unknown;
+    if (Array.isArray(raw)) {
+      // A plain array is the complete result set.
+      all.push(...(raw as PullZone[]));
+      return all;
+    }
+
+    const envelope = (raw ?? {}) as PullZonePage;
+    const items = envelope.Items ?? [];
+    all.push(...items);
+    // Empty page guards against a server that never clears HasMoreItems.
+    if (!envelope.HasMoreItems || items.length === 0) return all;
+    page = (envelope.CurrentPage ?? 0) + 1;
+  }
+}
+
 /**
  * Discover the account's sites.
  *
@@ -189,8 +235,7 @@ async function mapWithConcurrency<T, R>(
  * the candidates; only those get the per-zone state read.
  */
 export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
-  const { data } = await client.GET("/pullzone");
-  const candidates = (data ?? []).filter(
+  const candidates = (await fetchPullZones(client)).filter(
     (pz: PullZone) => pz.MiddlewareScriptId != null && pz.StorageZoneId != null,
   );
 
@@ -238,10 +283,7 @@ async function findPullZoneByName(
   client: CoreClient,
   name: string,
 ): Promise<PullZone | undefined> {
-  const { data } = await client.GET("/pullzone", {
-    params: { query: { search: name } },
-  });
-  return (data ?? []).find(
+  return (await fetchPullZones(client, name)).find(
     (pz) => (pz.Name ?? "").toLowerCase() === name.toLowerCase(),
   );
 }

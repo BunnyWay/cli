@@ -90,13 +90,22 @@ function fakeCoreClient(opts: {
   calls: Call[];
   storageZones?: StorageZoneModel[];
   pullZones?: Array<Record<string, unknown>>;
+  /**
+   * Return GET /pullzone as the live API's paginated envelope
+   * (`{ Items, CurrentPage, HasMoreItems }`) instead of the plain array
+   * the spec documents. `pageSize` splits the items across pages.
+   */
+  pullZoneEnvelope?: boolean;
+  pageSize?: number;
 }): CoreClient {
   const zones = opts.storageZones ?? [];
   const pullZones = opts.pullZones ?? [];
   return {
     GET: async (
       path: string,
-      options?: { params?: { path?: { id?: number }; query?: unknown } },
+      options?: {
+        params?: { path?: { id?: number }; query?: { page?: number } };
+      },
     ) => {
       opts.calls.push({ method: "GET", path, params: options?.params });
       if (path === "/storagezone") return { data: zones };
@@ -104,7 +113,20 @@ function fakeCoreClient(opts: {
         const zone = zones.find((z) => z.Id === options?.params?.path?.id);
         return { data: zone };
       }
-      if (path === "/pullzone") return { data: pullZones };
+      if (path === "/pullzone") {
+        if (!opts.pullZoneEnvelope) return { data: pullZones };
+        const pageSize = opts.pageSize ?? Math.max(pullZones.length, 1);
+        const page = options?.params?.query?.page ?? 0;
+        const start = page * pageSize;
+        return {
+          data: {
+            Items: pullZones.slice(start, start + pageSize),
+            CurrentPage: page,
+            TotalItems: pullZones.length,
+            HasMoreItems: start + pageSize < pullZones.length,
+          },
+        };
+      }
       throw new Error(`unexpected GET ${path}`);
     },
     POST: async (
@@ -392,4 +414,47 @@ test("fetchSites keeps only middleware+storage pull zones with matching state", 
 
 test("siteContextFromZone is null for a zone without site state", async () => {
   expect(await siteContextFromZone(ZONE)).toBeNull();
+});
+
+// Regression: the live API returns GET /pullzone as a paginated envelope
+// ({ Items, CurrentPage, HasMoreItems }) — the spec's plain array is a lie
+// for some queries (e.g. ?search=). createSite crashed on `.find` here.
+
+test("createSite handles the paginated /pullzone envelope", async () => {
+  const coreClient = fakeCoreClient({ calls: [], pullZoneEnvelope: true });
+  const computeClient = fakeComputeClient({ calls: [] });
+
+  const result = await createSite({
+    coreClient,
+    computeClient,
+    name: "my-site",
+    region: "DE",
+  });
+
+  expect(result.state.pullZoneId).toBe(30);
+  expect(result.reused.pullZone).toBe(false);
+});
+
+test("fetchSites pages through the /pullzone envelope", async () => {
+  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
+  const coreClient = fakeCoreClient({
+    calls: [],
+    storageZones: [ZONE],
+    pullZones: [
+      { Id: 31, Name: "not-a-site", StorageZoneId: 10 },
+      {
+        Id: 30,
+        Name: "my-site",
+        MiddlewareScriptId: 20,
+        StorageZoneId: 10,
+        Hostnames: [{ IsSystemHostname: true, Value: "my-site.b-cdn.net" }],
+      },
+    ],
+    pullZoneEnvelope: true,
+    pageSize: 1, // force a second page
+  });
+
+  const sites = await fetchSites(coreClient);
+  expect(sites).toHaveLength(1);
+  expect(sites[0]?.state.name).toBe("my-site");
 });
