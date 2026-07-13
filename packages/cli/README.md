@@ -404,8 +404,6 @@ bunny registries remove <registry-id>
 
 ### `bunny dns`
 
-> **Experimental** — hidden from `--help` and the landing page while it stabilizes.
-
 Manage DNS through two resource groups: **`bunny dns record`** (the entries within a zone) and **`bunny dns zone`** (the zone itself — settings, DNSSEC, logging, stats, nameservers). The `[domain]` argument accepts either the zone's domain name or its numeric zone ID, and is optional everywhere — omit it and you'll be prompted to pick a zone. `record update`/`record remove` likewise prompt you to pick a record when the ID is omitted. `record` aliases to `records`/`rec`; `zone` aliases to `zones` (and `domain`/`domains`).
 
 ```bash
@@ -440,6 +438,7 @@ bunny dns record export example.com --save           # write to ./example.com.zo
 # Zones — lifecycle
 bunny dns zone list
 bunny dns zone add example.com
+bunny dns zone add                # prompts for the domain
 bunny dns zone show example.com
 bunny dns zone remove example.com
 
@@ -473,6 +472,71 @@ Positional value ordering for `record add` follows the record type: `A`/`AAAA`/`
 | `--from`, `--to`                                                                                    | `zone stats`                                                                  | Date range (defaults to the last 30 days)                            |
 | `--anonymize-ip`, `--anonymization`                                                                 | `zone logging enable`                                                         | Anonymize client IPs in logs (`onedigit` \| `drop`)                  |
 | `--force`                                                                                           | `record remove`, `zone remove`, `zone dnssec disable`, `zone logging disable` | Skip the confirmation prompt                                         |
+
+### `bunny storage`
+
+> **Experimental**: hidden from `--help` and the landing page while it stabilizes.
+
+Manage Edge Storage through two resource groups: **`bunny storage zone`** (the zone itself: create, list, inspect, update, delete) and **`bunny storage file`** (the files within a zone). Zone management uses the account API key; file operations use the zone's own password and a region-specific host, both resolved automatically from the zone. The `[zone]` argument accepts either the zone name or its numeric ID. `zone` aliases to `zones` (and `bucket`/`buckets`); `file` aliases to `files`.
+
+A storage zone only holds files; a **pull zone** is what serves them on the web. `zone add` offers to create one (origin set to the new storage zone) and then to add a custom domain, or pass `--pull-zone`/`--domain` to do it non-interactively. Custom domains live on the pull zone and are managed with `bunny storage zone domains`.
+
+```bash
+# Zones (lifecycle)
+bunny storage zone list
+bunny storage zone add                                # interactive: prompts for name and region
+bunny storage zone add my-zone --region DE
+bunny storage zone add my-zone --region NY --replication LA,SG
+bunny storage zone add my-zone --region DE --pull-zone   # also create a pull zone to serve it on the web
+bunny storage zone add my-zone --region DE --domain cdn.example.com   # pull zone + custom domain
+bunny storage zone show my-zone
+bunny storage zone update my-zone                     # interactive: edit settings, pre-filled with current values
+bunny storage zone update my-zone --custom-404-path /404.html
+bunny storage zone remove my-zone
+
+# List the available storage regions
+bunny storage regions
+
+# S3-compatible credentials (for zones with S3 preview access)
+bunny storage zone credentials my-zone                # show endpoint + access key (secret masked)
+bunny storage zone credentials my-zone --show-secret  # reveal the secret access key
+bunny storage zone credentials my-zone --read-only    # use the read-only password as the secret
+bunny storage zone credentials my-zone --format rclone >> ~/.config/rclone/rclone.conf
+eval "$(bunny storage zone credentials my-zone --format env)"   # AWS-compatible env vars
+
+# Files: list, upload, download, delete (paths are relative to the zone root)
+bunny storage file list my-zone
+bunny storage file list my-zone images/
+bunny storage file upload my-zone ./photo.png --to images/
+bunny storage file upload my-zone ./photo.png --checksum --content-type image/png
+bunny storage file download my-zone images/photo.png --out ./local.png
+bunny storage file remove my-zone images/photo.png
+bunny storage file remove my-zone images/ --force   # trailing slash removes a directory
+
+# Custom domains on the zone's pull zone
+bunny storage zone domains list my-zone
+bunny storage zone domains add cdn.example.com my-zone
+bunny storage zone domains ssl cdn.example.com my-zone
+bunny storage zone domains remove cdn.example.com my-zone
+
+# Open the storage documentation
+bunny storage docs
+```
+
+A trailing slash on a `file` path denotes a directory: `file list my-zone images/` lists that directory, and `file remove my-zone images/` deletes it and its contents recursively. Edge Storage file operations are powered by the [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage).
+
+bunny.net's S3-compatible API is in closed preview and is opt-in per zone (it cannot be enabled on an existing zone). When a zone has access, `bunny storage zone show` surfaces its S3 endpoint, and `bunny storage zone credentials` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table masks the secret by default; pass `--show-secret` to reveal it (`--output json` and `--format` always emit it in full, since they're meant to be consumed by tools). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
+
+| Flag                                                                               | Commands                     | Description                                                                                                                        |
+| ---------------------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `--region`, `--replication`                                                        | `zone add`                   | Primary region code, plus optional replication regions (any storage region except the primary; run `storage regions` to list them) |
+| `--pull-zone`, `--pull-zone-name`, `--domain`                                      | `zone add`                   | Also create a pull zone (what serves the stored files on the web) and optionally a custom domain; interactively, `add` offers both |
+| `--custom-404-path`, `--rewrite-404-to-200`, `--replication`                       | `zone update`                | Edit zone settings (see `bunny storage zone update --help`)                                                                        |
+| `--format` (`rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only`, `--show-secret` | `zone credentials`           | Emit S3 config for a tool; use the read-only password as the secret; reveal the masked secret in the table                         |
+| `--to`                                                                             | `file upload`                | Remote path; a trailing slash uploads into that directory                                                                          |
+| `--checksum`, `--content-type`                                                     | `file upload`                | Send a SHA256 checksum for server-side verification; set the stored content type                                                   |
+| `--out`                                                                            | `file download`              | Local destination path (defaults to the file name)                                                                                 |
+| `--force`                                                                          | `zone remove`, `file remove` | Skip the confirmation prompt                                                                                                       |
 
 ### `bunny scripts`
 
@@ -785,6 +849,204 @@ Open the Edge Scripts documentation in your browser.
 
 ```bash
 bunny scripts docs
+```
+
+### `bunny sandbox`
+
+Manage on-demand cloud sandbox environments backed by Bunny Magic Containers. Each sandbox is a fully isolated Ubuntu container with Node.js, Bun, Python, and Claude Code pre-installed. A 10 GB persistent volume is mounted at `/workplace`, your default working directory.
+
+Sandbox credentials (app ID, hostname, SSH endpoint, agent token) are stored in `~/.config/bunnynet.json` so you can reconnect without re-creating.
+
+#### `bunny sandbox create`
+
+Create and start a new sandbox. Waits for the container's SSH port to become reachable before returning.
+
+```bash
+# Create a sandbox with the default name "sandbox"
+bunny sandbox create
+
+# Create a named sandbox
+bunny sandbox create my-sandbox
+
+# Create in a specific region
+bunny sandbox create my-sandbox --region NY
+
+# Bake in environment variables (persisted for the sandbox's lifetime)
+bunny sandbox create my-sandbox -e NODE_ENV=production -e PORT=8080
+bunny sandbox create my-sandbox --env-file .env
+```
+
+| Flag         | Alias | Description                                        | Default |
+| ------------ | ----- | -------------------------------------------------- | ------- |
+| `--region`   |       | Region ID to deploy in (e.g. `AMS`, `NY`, `LA`, …) | `AMS`   |
+| `--env`      | `-e`  | Environment variable as `KEY=VALUE` (repeatable)   |         |
+| `--env-file` |       | Load environment variables from a dotenv file      |         |
+
+Variables set at creation are baked into the container and persist across restarts. Values from `--env` override those loaded from `--env-file`. To change them later, use [`bunny sandbox env`](#bunny-sandbox-env).
+
+Once ready, the output shows the app ID, public HTTPS hostname, and SSH address.
+
+#### `bunny sandbox list`
+
+List all sandboxes saved in your local config.
+
+```bash
+bunny sandbox list
+bunny sandbox ls          # alias
+```
+
+Columns: Name, App ID, Hostname, SSH.
+
+#### `bunny sandbox delete`
+
+Delete a sandbox and permanently destroy the underlying Magic Containers app.
+
+```bash
+bunny sandbox delete my-sandbox
+
+# Skip the confirmation prompt
+bunny sandbox delete my-sandbox --force
+bunny sandbox rm my-sandbox -f   # alias
+```
+
+| Flag      | Alias | Description              | Default |
+| --------- | ----- | ------------------------ | ------- |
+| `--force` | `-f`  | Skip confirmation prompt | `false` |
+
+#### `bunny sandbox exec`
+
+Run a shell command inside a sandbox over SSH. Defaults to `/workplace` as the working directory.
+
+```bash
+# Run a command
+bunny sandbox exec my-sandbox ls -la
+
+# Run in a different directory
+bunny sandbox exec my-sandbox --cwd /tmp env
+
+# Pipe-friendly: exit code is propagated
+bunny sandbox exec my-sandbox -- cat /etc/os-release
+
+# Inject temporary environment variables for this command only
+bunny sandbox exec my-sandbox --env DEBUG=1 -- node app.js
+bunny sandbox exec my-sandbox --env-file .env -- printenv
+```
+
+| Flag         | Alias | Description                                      | Default      |
+| ------------ | ----- | ------------------------------------------------ | ------------ |
+| `--cwd`      |       | Working directory inside the sandbox             | `/workplace` |
+| `--env`      |       | Environment variable as `KEY=VALUE` (repeatable) |              |
+| `--env-file` |       | Load environment variables from a dotenv file    |              |
+
+Variables passed here apply only to that single command and are **not** persisted. For persistent variables, use [`bunny sandbox env`](#bunny-sandbox-env).
+
+#### `bunny sandbox ssh`
+
+Open a full interactive SSH session. Drops you into a bash shell at `/workplace`. Type `exit` or press Ctrl-D to close.
+
+```bash
+bunny sandbox ssh my-sandbox
+
+# Set temporary environment variables for the session
+bunny sandbox ssh my-sandbox -e DEBUG=1 --env-file .env
+```
+
+| Flag         | Alias | Description                                      | Default |
+| ------------ | ----- | ------------------------------------------------ | ------- |
+| `--env`      | `-e`  | Environment variable as `KEY=VALUE` (repeatable) |         |
+| `--env-file` |       | Load environment variables from a dotenv file    |         |
+
+Variables apply only to the session and are not persisted.
+
+#### `bunny sandbox url`
+
+Manage public CDN endpoints for ports running inside a sandbox. Useful for exposing a dev server or API to the internet.
+
+##### `bunny sandbox url add`
+
+Expose a container port as a public HTTPS endpoint. Waits until the URL is provisioned and prints it.
+
+```bash
+# Expose port 3000 (endpoint named "port-3000")
+bunny sandbox url add my-sandbox 3000
+
+# Custom endpoint name
+bunny sandbox url add my-sandbox 8080 --label my-api
+```
+
+| Flag      | Description                   | Default       |
+| --------- | ----------------------------- | ------------- |
+| `--label` | Display name for the endpoint | `port-<port>` |
+
+##### `bunny sandbox url list`
+
+List all user-created endpoints for a sandbox (built-in `api` and `ssh` endpoints are hidden).
+
+```bash
+bunny sandbox url list my-sandbox
+bunny sandbox url ls my-sandbox    # alias
+```
+
+Columns: ID, Name, Type, Port, URL.
+
+##### `bunny sandbox url delete`
+
+Delete a public endpoint by name.
+
+```bash
+bunny sandbox url delete my-sandbox port-3000
+
+# Skip confirmation
+bunny sandbox url delete my-sandbox my-api --force
+bunny sandbox url rm my-sandbox my-api -f   # alias
+```
+
+| Flag      | Alias | Description              | Default |
+| --------- | ----- | ------------------------ | ------- |
+| `--force` | `-f`  | Skip confirmation prompt | `false` |
+
+#### `bunny sandbox env`
+
+Manage a sandbox's **persistent** environment variables, the ones baked into the container. Unlike the temporary `--env` passed to `exec`/`ssh`, these survive across sessions. Changing them redeploys the sandbox with the new environment (running processes restart).
+
+##### `bunny sandbox env set`
+
+Set one or more persistent variables, merging with the existing set.
+
+```bash
+# Set a single variable
+bunny sandbox env set my-sandbox NODE_ENV=production
+
+# Set several at once
+bunny sandbox env set my-sandbox API_URL=https://api.example.com LOG_LEVEL=debug
+
+# Load from a dotenv file
+bunny sandbox env set my-sandbox --env-file .env
+```
+
+| Flag         | Description                                   | Default |
+| ------------ | --------------------------------------------- | ------- |
+| `--env-file` | Load environment variables from a dotenv file |         |
+
+##### `bunny sandbox env list`
+
+List the sandbox's persistent variables. The internal `AGENT_TOKEN` is hidden.
+
+```bash
+bunny sandbox env list my-sandbox
+bunny sandbox env ls my-sandbox    # alias
+```
+
+Columns: Name, Value.
+
+##### `bunny sandbox env delete`
+
+Remove one or more persistent variables. Names that are not set are reported and skipped; if none match, the command errors and nothing is redeployed.
+
+```bash
+bunny sandbox env delete my-sandbox NODE_ENV
+bunny sandbox env rm my-sandbox API_URL LOG_LEVEL    # alias
+bunny sandbox env unset my-sandbox API_URL           # alias
 ```
 
 ### `bunny api`

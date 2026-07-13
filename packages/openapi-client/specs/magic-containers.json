@@ -3808,7 +3808,7 @@
         "additionalProperties": false
       },
       "AnycastIpProtocolVersion": {
-        "enum": ["iPv4"],
+        "enum": ["ipv4"],
         "type": "string"
       },
       "AppListItem": {

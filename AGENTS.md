@@ -69,13 +69,14 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 
 ## Project Structure
 
-This is a Bun workspace monorepo with four packages:
+This is a Bun workspace monorepo with six packages:
 
 - **`@bunny.net/openapi-client`** (`packages/openapi-client/`) — Standalone, type-safe OpenAPI client for bunny.net, generated from OpenAPI specs. Zero CLI dependencies. Publishable to npm.
 - **`@bunny.net/app-config`** (`packages/app-config/`) — Shared app configuration schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. Used by the CLI and potentially other tools.
 - **`@bunny.net/database-shell`** (`packages/database-shell/`) — Standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
 - **`@bunny.net/scriptable-dns-types`** (`packages/scriptable-dns-types/`): Ambient TypeScript declarations for the Scriptable DNS runtime globals (`ARecord`, `Monitoring`, `RoutingEngine`, etc.). Types-only, no runtime code: the DNS runtime can't `import`, so these power editor autocomplete and an optional typecheck step. Scaffolded into projects by `bunny dns scripts init`; intended to also feed the dashboard editor. Publishable to npm.
-- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/app-config`, and `@bunny.net/database-shell`.
+- **`@bunny.net/sandbox`** (`packages/sandbox/`) — Standalone sandbox SDK. Code-first DX (`Sandbox.create`, `writeFiles`, `runCommand`, `exposePort`, `setEnv`/`getEnv`/`unsetEnv`) over Magic Containers provisioning plus an `ssh2` SSH/SFTP transport. Env vars can be baked in at `create` (persisted), passed per-command via `runCommand({ env })` (temporary), or persisted after creation via `setEnv`. Zero CLI dependencies.
+- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/app-config`, `@bunny.net/database-shell`, `@bunny.net/scriptable-dns-types`, and `@bunny.net/sandbox`.
 
 ```
 bunny-cli/
@@ -96,9 +97,10 @@ bunny-cli/
 │   │   ├── scripts/
 │   │   │   └── update-specs.ts           # Downloads latest specs from bunny.net endpoints
 │   │   └── src/
-│   │       ├── index.ts                  # Barrel export: clients, errors, ClientOptions type
+│   │       ├── index.ts                  # Barrel export: clients, errors, ClientOptions type, DNS scan type corrections
 │   │       ├── middleware.ts             # authMiddleware(options) — dependency-inverted (no CLI imports)
 │   │       ├── errors.ts                 # UserError, ApiError classes
+│   │       ├── dns.ts                    # Hand-authored corrections for lossy generated DNS types: DnsDiscoveredRecord (adds Flags/Tag the scan returns but generation drops), DnsRecordScanJob/Trigger, DnsRecordScanStatus enum. Pattern for enriching generated types.
 │   │       ├── core-client.ts            # createCoreClient(options) — Core API
 │   │       ├── compute-client.ts         # createComputeClient(options) — Edge Scripting
 │   │       ├── db-client.ts              # createDbClient(options) — Database
@@ -150,6 +152,19 @@ bunny-cli/
 │   │       ├── types.ts                  # ShellLogger, ShellOptions, PrintMode
 │   │       └── shell.test.ts            # Tests for shell utilities
 │   │
+│   ├── sandbox/                          # @bunny.net/sandbox package
+│   │   ├── package.json
+│   │   ├── tsconfig.json
+│   │   └── src/
+│   │       ├── index.ts                  # Barrel export: Sandbox, Command, types
+│   │       ├── sandbox.ts                # Sandbox class: create/get/fromHandle, runCommand, writeFiles, readFile, mkDir, exposePort, domain, getEnv/setEnv/unsetEnv (persisted env), delete
+│   │       ├── provision.ts              # Magic Containers app create/poll/endpoints + auth helpers + container env read/replace
+│   │       ├── transport.ts              # ssh2 SSH/SFTP transport (exec, file IO, reachability)
+│   │       ├── command.ts                # Command (detached, logs()) and CommandFinished
+│   │       ├── types.ts                  # Option and handle types
+│   │       ├── errors.ts                 # SandboxError
+│   │       └── sandbox.test.ts           # Tests for pure logic (command building, app extraction)
+│   │
 │   └── cli/                              # @bunny.net/cli package
 │       ├── package.json
 │       ├── tsconfig.json
@@ -161,22 +176,25 @@ bunny-cli/
 │           │   ├── client-options.ts     # clientOptions() helper — builds ClientOptions from ResolvedConfig
 │           │   ├── define-command.ts     # Command factory (see "Command Pattern" below)
 │           │   ├── define-namespace.ts   # Namespace/group factory for subcommand trees
-│           │   ├── dns-record-types.ts   # Canonical DNS record-type name⇄integer map (RECORD_TYPES) + recordTypeLabel(); shared by commands/dns + core/hostnames
+│           │   ├── dns-nameservers.ts    # BUNNY_NAMESERVERS + expectedNameservers(zone) + checkDelegation()/checkDelegations(): reads the parent zone's NS referral (raw UDP query of the registry, not the recursive answer a child host could spoof; falls back to dns.resolveNs when the referral is unreadable), matches the full expected set both ways, ground truth over bunny's NameserversDetected flag which defaults true on a fresh zone; checkDelegations is bounded-concurrency for the zone list
+│           │   ├── dns-record-types.ts   # Canonical DNS record-type name⇄integer map (RECORD_TYPES) + RECORD_TYPE_META (dashboard taxonomy: short label, friendly name, Standard/Bunny group) + recordTypeLabel() (bunny's canonical labels: PZ/RDR/SCR/Flatten for the bunny-specific types) + recordTypeFromLabel() (parses canonical labels and enum-key names); shared by commands/dns + core/hostnames
 │           │   ├── errors.ts             # Re-exports UserError/ApiError from @bunny.net/openapi-client + ConfigError
 │           │   ├── format.ts             # Shared table/key-value rendering (text, table, csv, markdown)
 │           │   ├── format.test.ts        # Tests for format utilities
 │           │   ├── hostnames/            # Reusable pull-zone hostname feature (mounted by scripts; apps next)
 │           │   │   ├── index.ts          # Re-exports client helpers, DNS/flow helpers + createHostnamesCommands
-│           │   │   ├── client.ts         # hostnameUrl(), normalizeHostname(), addHostname(), fetchPullZoneHostnames(), enableSsl() + Hostname/ResolvedPullZone types
+│           │   │   ├── client.ts         # hostnameUrl(), normalizeHostname(), addHostname(), fetchPullZoneHostnames(), enableSsl(), createPullZone() (storage-zone origin) + Hostname/ResolvedPullZone types
 │           │   │   ├── client.test.ts    # Tests for hostnameUrl() scheme logic
 │           │   │   ├── dns.ts            # dnsPointsAt()/anyResolverPointsAt(): DNS checks (CNAME or flattened A records) via system + public (1.1.1.1/8.8.8.8) resolvers, injectable for tests
 │           │   │   ├── dns.test.ts       # Tests for DNS matching + multi-resolver checks with fake resolvers
-│           │   │   ├── flow.ts           # offerDnsWaitAndSsl(): poll DNS + opportunistically attempt SSL issuance (~30s) since bunny's resolvers decide validation; printSslHint(). dnsAlreadyLive skips the poll (Bunny DNS record already live). offerBunnyDnsThenSsl() takes an optional onBunnyDnsZone(zone) callback fired when the hostname is on Bunny DNS (lets the command layer link the directory)
+│           │   │   ├── flow.ts           # offerDnsWaitAndSsl(): poll DNS + opportunistically attempt SSL issuance (~30s) since bunny's resolvers decide validation; printSslHint(). dnsAlreadyLive skips the poll (Bunny DNS record already live). offerBunnyDnsThenSsl() takes an optional onBunnyDnsZone(zone) callback fired when the hostname is on Bunny DNS (lets the command layer link the directory). setupHostname(): resource-agnostic add-hostname -> DNS -> SSL orchestration (caller supplies sslHint/retryHint); used by scripts setupCustomDomain and storage zone add
 │           │   │   ├── bunny-dns.ts       # findBunnyDnsZone()/offerBunnyDnsRecord(): detect a hostname inside an account Bunny DNS zone, then add/repoint a PullZone record (always confirmed) so SSL can issue immediately
 │           │   │   ├── bunny-dns.test.ts  # Tests for longest-suffix zone matching + record-name derivation with a fake core client
 │           │   │   └── commands.ts       # createHostnamesCommands(): add/ssl/list/remove factory parameterized by a pull-zone resolver
 │           │   ├── logger.ts             # Chalk-based structured logger
 │           │   ├── manifest.ts           # .bunny/ context file resolution (load, save, resolveManifestId)
+│           │   ├── registrar.ts          # detectRegistrar()/parseRegistrar(): best-effort registrar name via RDAP (used by dns zones add to name the registrar in next-steps)
+│           │   ├── registrar.test.ts     # Tests for parseRegistrar RDAP parsing + legal-suffix tidying
 │           │   ├── stats.ts              # Shared stats rendering: sumChart(), renderBarChart(), formatBucketLabel() (UTC date labels), BAR_WIDTH (used by dns/zone/stats + scripts/stats)
 │           │   ├── stats.test.ts         # Tests for stats helpers
 │           │   ├── types.ts              # GlobalArgs, OutputFormat, and shared type definitions
@@ -278,30 +296,37 @@ bunny-cli/
 │           │   │       ├── index.ts      # defineNamespace("tokens", ...) — registers token commands
 │           │   │       ├── create.ts     # Generate an auth token (read-only/full-access, optional expiry)
 │           │   │       └── invalidate.ts # Invalidate all tokens for a database (with confirmation)
-│           │   ├── dns/                   # Experimental — hidden from help and landing page
+│           │   ├── dns/
 │           │   │   ├── index.ts          # defineNamespace("dns", ...): registers the records + zones + scripts groups (+ hidden domain aliases)
-│           │   │   ├── api.ts            # CoreClient type, fetchZones/fetchZone, resolveZone (domain-or-ID → zone)
+│           │   │   ├── api.ts            # CoreClient type, fetchZones/fetchZone, resolveZone (domain-or-ID → zone), scanZoneRecords (trigger + poll bunny's server-side record scan via /dnszone/records/scan; matches the triggered JobId, falling back to "differs from the prior job" when the trigger omits one; returns corrected DnsDiscoveredRecord[] with Flags/Tag; uses DnsRecordScanStatus enum)
 │           │   │   ├── constants.ts      # DNS_MANIFEST (".bunny/dns.json") + DnsManifest type, written by `dns zones link`
-│           │   │   ├── interactive.ts    # resolveZoneInteractive (arg → .bunny/dns.json manifest → zone picker; offerLink prompts to link a picked zone, skipped under --output json) + resolveRecordInteractive; autoLinkDnsZone (link a zone found in another flow — silent write, confirm before relinking a different zone) reused by scripts custom-domain setup
-│           │   │   ├── record-types.ts   # Re-exports RECORD_TYPES/recordTypeLabel from core/dns-record-types.ts; adds parseRecordType, recordName, formatRecordValue
+│           │   │   ├── interactive.ts    # resolveZoneInteractive (arg → .bunny/dns.json manifest → zone picker; errors instead of prompting when non-interactive (json output or no TTY, see core/ui.ts isInteractive); ignoreManifest forces the picker for `zones link`; offerLink prompts to link a picked zone) + resolveRecordInteractive; autoLinkDnsZone (link a zone found in another flow — silent write, confirm before relinking a different zone) reused by scripts custom-domain setup
+│           │   │   ├── record-types.ts   # Re-exports RECORD_TYPES/RECORD_TYPE_META/recordTypeLabel from core/dns-record-types.ts; adds parseRecordType (accepts canonical labels + enum-key names), recordName, formatRecordValue
 │           │   │   ├── record/            # `dns records` — entries within a zone (canonical: records; aliases: record, rec)
 │           │   │   │   ├── index.ts      # defineNamespace("records", ...)
 │           │   │   │   ├── list.ts       # List records in a zone (alias: ls)
-│           │   │   │   ├── add.ts        # Add a record (positional grammar per type, or interactive wizard; --pull-zone/--script). Interactively, A/AAAA/CNAME/TXT offer static vs script-computed (Scriptable DNS) via pickOrCreateDnsScript: pick or create+seed a DNS script and write a SCRIPT record
+│           │   │   │   ├── add.ts        # Add a record (positional grammar per type, or interactive wizard; --pull-zone/--script). Interactive wizard first offers "single record" vs a preset (pickAndApplyPreset); A/AAAA/CNAME/TXT offer static vs script-computed (Scriptable DNS) via pickOrCreateDnsScript: pick or create+seed a DNS script and write a SCRIPT record. Exports addRecordInteractive (the single-record wizard) reused by zone/add.ts's next-steps menu
 │           │   │   │   ├── update.ts     # Update a record (alias: edit; prompts to pick zone+record when omitted)
 │           │   │   │   ├── remove.ts     # Remove a record (alias: rm; prompts to pick zone+record when omitted)
-│           │   │   │   ├── import.ts     # Import records from a BIND zone file (prompts for zone/file when omitted)
+│           │   │   │   ├── preset.ts     # `records preset [name] [domain]` (`list` lists; `--param key=value` repeatable for non-interactive runs): pick/apply a preset, gather params (flags then prompts in text mode), summarize, confirm, bulk-write. `--output json` writes then serializes the result; mid-sequence failures report how many records landed. Exports pickAndApplyPreset reused by add.ts
+│           │   │   │   ├── presets.ts    # Preset catalog (data + pure build fns): google-workspace, microsoft365/outlook, zoho, mailgun, resend, proton, bluesky, dmarc, caa, no-email. findPreset(id|alias)
+│           │   │   │   ├── presets.test.ts # Tests for the pure preset build fns + alias resolution
+│           │   │   │   ├── write.ts      # Shared writeRecords (per-record PUT, resilient: collects {applied, failures} so one bad record can't strand the batch) + reviewAndApply (multiselect pre-checked records in text, write, report partial failures, serialize on json); used by preset.ts, scan.ts, zone/add.ts
+│           │   │   │   ├── scan-records.ts # discoverImportableRecords: scanZoneRecords + map discovered → AddDnsRecordModel (carries Flags/Tag, reconstructs CAA flags/tag from rdata as a fallback), drop apex SOA/NS but keep delegated subdomain NS, dedupe vs existing records by type + normalized name/value (trailing-dot/case) + type-specific fields (priority/weight/port/flags/tag)
+│           │   │   │   ├── scan-records.test.ts # Tests for the discovered-record mapping/filter/dedupe
+│           │   │   │   ├── scan.ts       # `records scan [domain]` (--yes): discover the domain's existing records (server-side scan) and reviewAndApply them; reused at zone creation
+│           │   │   │   ├── import.ts     # Import records from a BIND zone file (prompts for zone/file when omitted). Exports importZoneFile reused by zone/add.ts's next-steps menu
 │           │   │   │   └── export.ts     # Export records as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
 │           │   │   └── zone/              # `dns zones` — the zone itself (canonical: zones; aliases: zone; hidden: domain, domains)
 │           │   │       ├── index.ts      # defineNamespace("zones", ...) + dnsZoneHiddenAliases (domain/domains)
-│           │   │       ├── list.ts       # List all DNS zones (alias: ls)
-│           │   │       ├── add.ts        # Create a DNS zone
+│           │   │       ├── list.ts       # List all DNS zones (alias: ls); Nameservers column from a live per-zone NS lookup, not bunny's NameserversDetected flag
+│           │   │       ├── add.ts        # Create a DNS zone (prompts for the domain when omitted; required non-interactively), then offerNextSteps menu (scan for existing records via scanAndImport: discoverImportableRecords + reviewAndApply / upload a zone file via importZoneFile / add records manually via addRecordInteractive / continue); --import scans and imports all without prompting and surfaces failures as a JSON ImportError + nonzero exit, --no-import skips the menu; then print the bunny nameservers (naming the registrar via core/registrar.ts when RDAP resolves it). Menu is TTY-gated so `zones add <domain>` stays scriptable
 │           │   │       ├── link.ts       # Link this directory to a zone → .bunny/dns.json (arg, else pick interactively)
 │           │   │       ├── unlink.ts     # Remove .bunny/dns.json (alias-free; --force skips confirm)
 │           │   │       ├── show.ts       # Show zone details (nameservers, SOA, DNSSEC, logging, record count)
 │           │   │       ├── remove.ts     # Delete a DNS zone and its records (alias: rm)
 │           │   │       ├── stats.ts      # Show DNS query statistics (TotalQueriesServed, by-type bar chart in text mode)
-│           │   │       ├── nameservers.ts # Show registrar nameservers (alias: ns; custom if set, else kiki/coco.bunny.net)
+│           │   │       ├── nameservers.ts # Check delegation (alias: ns): live NS lookup; on success a confirmation, otherwise the same "update your nameservers at [registrar]" guidance as zone add
 │           │   │       ├── dnssec/
 │           │   │       │   ├── index.ts  # defineNamespace("dnssec", ...)
 │           │   │       │   ├── enable.ts # Enable DNSSEC, print DS record for the registrar
@@ -321,6 +346,33 @@ bunny-cli/
 │           │   │       ├── attach.ts     # Bridge: add a SCRIPT record on a zone pointing at the script. `attach [domain] [name] --script <id>`; always confirms (apex gets a louder root-domain warning, lists existing records at the name), --force skips and is required to write non-interactively
 │           │   │       ├── link.ts       # Link this directory to an existing DNS script → .bunny/dns-script.json (positional id, else pick interactively; preserves entry)
 │           │   │       └── list.ts       # List DNS scripts (alias: ls)
+│           │   ├── storage/                 # Experimental (hidden from help and landing page)
+│           │   │   ├── index.ts          # defineNamespace("storage", ...): registers zone + file groups + link + regions + docs (+ hidden bucket aliases)
+│           │   │   ├── api.ts            # CoreClient type, fetchStorageZones/fetchStorageZone, resolveStorageZone (name-or-ID to zone, re-fetched by ID), toSafeStorageZone (strips Password/ReadOnlyPassword; used by every command that emits a raw zone as JSON: show/list/add)
+│           │   │   ├── constants.ts      # STORAGE_REGIONS (from SDK enum; /storagezone/regions API endpoint is not reliable) + replicationChoices/normalizeReplicationRegions (replication uses the same regions minus the primary; the SDK file ZoneSchema is the physical footprint, NOT the create input) + STORAGE_MANIFEST/StorageZoneManifest (.bunny/storage.json, written by storage link)
+│           │   │   ├── interactive.ts    # resolveStorageZoneInteractive: explicit name/ID arg → linked manifest (.bunny/storage.json, fetched by ID even when non-interactive) → zone picker
+│           │   │   ├── link.ts           # Link the current directory to a storage zone (.bunny/storage.json); bunny storage link [zone]
+│           │   │   ├── files-api.ts      # Adapter over @bunny.net/storage-sdk: connectStorageZone (zone → SDK connection, Region→StorageRegion enum + password), listFiles/uploadFile/downloadFile/deleteFile (deleteFile translates the SDK's boolean return into a UserError)
+│           │   │   ├── files-api.test.ts # Tests for region mapping + delete error translation (NOT the SDK's URL building)
+│           │   │   ├── s3.ts             # S3 (closed preview): isS3Enabled (StorageZoneType===1), s3Endpoint (<region>-s3.storage.bunnycdn.com), s3Credentials (name=access key, password=secret), renderS3ToolConfig (rclone/aws/s3cmd/env formatters)
+│           │   │   ├── s3.test.ts        # Tests for S3 derivation + tool-config formatters
+│           │   │   ├── docs.ts           # Open storage docs (bunny storage docs)
+│           │   │   ├── regions.ts        # List available storage regions (bunny storage regions)
+│           │   │   ├── zone/              # `bunny storage zones` (canonical: zones; aliases: zone; hidden: bucket, buckets)
+│           │   │   │   ├── index.ts      # defineNamespace("zones", ...) + storageZoneHiddenAliases (bucket/buckets)
+│           │   │   │   ├── list.ts       # List all storage zones (alias: ls)
+│           │   │   │   ├── add.ts        # Create a storage zone (prompts for name + region when omitted; offers/--pull-zone creates a pull zone via core/hostnames createPullZone, then offers/--domain a custom domain via setupHostname). Under --output json it stays non-interactive: --domain is attached via addHostname (no DNS/SSL prompts) and reported in the CustomDomain field (with cnameTarget or error)
+│           │   │   │   ├── show.ts       # Show zone details (region, replication, hostname, usage; adds S3 endpoint rows when S3-enabled)
+│           │   │   │   ├── credentials.ts # S3 credentials / tool config for the zone (alias: creds; --format, --read-only, --show-secret); table masks the secret unless --show-secret, JSON/--format always emit it in full
+│           │   │   │   ├── update.ts     # Update zone settings (custom 404, rewrite 404->200, replication); replication is additive (replicas can't be removed, so existing ones are kept and the prompt only offers new regions, confirming before adding); interactive pre-filled editor when no flags (a mid-flow cancel aborts the whole edit); --output json/non-TTY/--force require flags and error "No changes requested." without them
+│           │   │   │   ├── remove.ts     # Delete a storage zone and its files (alias: rm)
+│           │   │   │   └── hostnames/index.ts  # Mounts core/hostnames createHostnamesCommands as "storage zone domains" (alias hostnames); resolver maps a storage zone (name/ID positional, else linked zone, else picker via resolveStorageZoneInteractive; --pull-zone) to its linked pull zone
+│           │   │   └── file/              # `bunny storage files` (canonical: files; aliases: file); zone is the --zone/-z flag (defaults to linked zone), the positional is the file/path
+│           │   │       ├── index.ts      # defineNamespace("files", ...)
+│           │   │       ├── list.ts       # List files in a directory (alias: ls; directories first; [path] positional, --zone flag)
+│           │   │       ├── upload.ts     # Upload a local file (<file> positional, --zone, --to, --checksum streams a SHA256, --content-type)
+│           │   │       ├── download.ts   # Download a file to disk (<path> positional, --zone, --out)
+│           │   │       └── remove.ts     # Delete a file or directory (alias: rm; <path> positional, --zone, trailing slash = recursive)
 │           │   ├── registries/
 │           │   │   ├── index.ts          # Manual CommandModule (not defineNamespace) — default handler runs list
 │           │   │   ├── list.ts           # List container registries
@@ -356,6 +408,25 @@ bunny-cli/
 │           │           ├── remove.ts     # Remove environment variable
 │           │           └── pull.ts       # Pull environment variables to .env file
 │           │
+│           ├── sandbox/                  # `sandbox`: ephemeral dev sandboxes over @bunny.net/sandbox
+│           │   ├── index.ts              # defineNamespace("sandbox", ...) — registers all sandbox commands
+│           │   ├── create.ts             # Create a sandbox (--region, -e/--env + --env-file bake persisted env vars in)
+│           │   ├── list.ts               # List sandboxes
+│           │   ├── delete.ts             # Delete a sandbox and its MC app (--force)
+│           │   ├── exec.ts               # Run a command via SSH (-e/--env + --env-file inject temporary env vars)
+│           │   ├── ssh.ts                # Open an interactive SSH shell (-e/--env + --env-file inject temporary env vars)
+│           │   ├── ssh-exec.ts           # Shared SSH helpers: sshArgs, withSshEnv (askpass token), envPrefix (inline KEY='v' assignments)
+│           │   ├── env-args.ts           # Shared -e/--env + --env-file parsing: withEnvOptions, collectEnv, parseDotenv, splitPair
+│           │   ├── url/                   # `sandbox url`: expose/list/delete public CDN endpoints for a port
+│           │   │   ├── index.ts          # defineNamespace("url", ...)
+│           │   │   └── add.ts / list.ts / delete.ts
+│           │   └── env/                   # `sandbox env`: persisted env vars (survive restart, unlike exec/ssh temp env)
+│           │       ├── index.ts          # defineNamespace("env", ...)
+│           │       ├── resolve.ts        # sandboxFromName(): rebuild a Sandbox handle from the stored record for API calls
+│           │       ├── set.ts            # Persist vars (KEY=VALUE pairs or --env-file), merges with existing
+│           │       ├── list.ts           # List persisted vars (AGENT_TOKEN hidden)
+│           │       └── delete.ts         # Remove persisted vars (aliases: rm, unset)
+│           │
 │           └── utils/                    # Shared utility functions
 │
 ├── package.json                          # Workspace root (workspaces: ["packages/*"])
@@ -366,7 +437,7 @@ bunny-cli/
 
 ### Conventions
 
-- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/app-config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/cli/` is the CLI.
+- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/app-config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
 - **API clients use `ClientOptions`** — an options object with `apiKey`, `baseUrl`, `verbose`, `userAgent`, and `onDebug`. The CLI provides a `clientOptions(config, verbose)` helper to build this from `ResolvedConfig`.
 - **One command per file.** Each file in `commands/` exports a single command or namespace.
 - **Commands are grouped by domain** in subdirectories (`config/`, `db/`, `scripts/`).
@@ -377,6 +448,7 @@ bunny-cli/
 - **Config logic lives in `packages/cli/src/config/`** — schema, file resolution, and profile management.
 - **Error classes are split.** `UserError` and `ApiError` live in `@bunny.net/openapi-client` (the SDK needs them). `ConfigError` lives in the CLI and extends `UserError`. The CLI's `errors.ts` re-exports `UserError` and `ApiError` from `@bunny.net/openapi-client`.
 - **Import API clients from `@bunny.net/openapi-client`**, not relative paths. Import generated types from `@bunny.net/openapi-client/generated/<spec>.d.ts`.
+- **Mask secrets in human output; reveal only behind an explicit flag.** Any sensitive value (API keys, passwords, S3 secret keys, auth tokens) must be masked in the default table/text output and shown in full only when the user opts in with a flag (e.g. `--show-secret`). Use `maskSecret()` from `core/format.ts` for the masked form (it keeps the last 4 characters for identification). Machine-readable output is the exception because it exists to be consumed by tools: `--output json` and tool-config `--format` emit full values. Never print a secret the user did not explicitly ask to see. Reference: `storage zones credentials` masks the S3 secret access key by default and reveals it with `--show-secret`, while never leaking it from inspect/list commands (see `toSafeStorageZone`).
 - **Pull-zone settings are exposed via "Hybrid D" across surfaces.** Scripts and apps are backed by a pull zone, which has a large settings surface (hostnames, caching, edge rules, origin, security, purge, CORS, optimizer, logging, …). To keep each owner's help legible:
   - **Flatten only first-class groups** directly into the owner — picked by user mental model, kept to one or two. `scripts domains` is the flattened group (a custom domain is "my site's address," not a CDN setting).
   - **Group the long tail** under a `pullzone` sub-namespace within the owner (e.g. `scripts pullzone <setting>`), so the owner's top-level help gains one line, not ten. Curate per owner — don't expose settings that don't apply (a script _is_ its pull zone's origin, so no origin-URL command under `scripts`).
@@ -814,6 +886,15 @@ Its `package.json` `exports`/`main`/`types` point at `dist/`, so npm consumers g
 - `scripts/build.ts` drives the TypeScript compiler API (using `tsconfig.build.json`) to emit JS + declarations, then copies the generated `.d.ts` files into `dist/generated/` (tsc never emits its inputs, and those files back the `./generated/*` subpath export). `rewriteRelativeImportExtensions` rewrites `./x.ts` → `./x.js` in the emitted **JS**; TypeScript has no equivalent for declaration emit, so an `afterDeclarations` transformer rewrites the `.ts`/`.d.ts` specifiers in the emitted **`.d.ts`** files on the AST.
 - The `publish-openapi-client` job in `release.yml` (gated on a version bump detected via `npm view`) builds, then runs `cd packages/openapi-client && npm publish` (`files` ships `dist` + `README.md`). The package versions independently of the CLI — it is not part of any `fixed` group in `.changeset/config.json`.
 
+### Publishing `@bunny.net/sandbox`
+
+`@bunny.net/sandbox` follows the same compiled-library pattern as `@bunny.net/openapi-client`: `exports`/`main`/`types` point at `dist/`, in-repo tooling resolves it from source via the root `tsconfig.json` `paths` mapping, and `scripts/build.ts` (via `tsconfig.build.json`) emits JS + declarations with the same `.ts` → `.js` specifier rewriting.
+
+Two differences from openapi-client:
+
+- Sandbox depends on `@bunny.net/openapi-client` with `workspace:*`, so the `publish-sandbox` job in `release.yml` uses `bun publish` (not `npm publish`) — bun rewrites `workspace:*` to the local package version in the published tarball; npm would ship the unresolvable `workspace:*` spec verbatim. `bun publish` authenticates via the `NPM_CONFIG_TOKEN` env var.
+- Its `tsconfig.build.json` overrides `paths` to `{}` so openapi-client resolves via its package `exports` (`dist/`) instead of source — otherwise openapi-client's sources would enter the program and violate `rootDir`. The publish job therefore builds openapi-client before building sandbox.
+
 ### CI
 
 Tests and type-checking run on every pull request via `.github/workflows/ci.yml` (`bun run typecheck` and `bun test`).
@@ -872,9 +953,9 @@ bunny
 │   ├── update          <id> [--name] [--username] [--password]
 │   │                                       Update registry name and/or rotate credentials
 │   └── remove          <id>                Remove registry
-├── dns                                     (experimental — hidden from help and landing page)
+├── dns                                     Manage DNS zones and records
 │   │                                       Two resource groups: `records` (entries in a zone) and `zones` (the zone itself).
-│   │                                       Every [domain] is optional — omit it to use the linked zone (`dns zones link` → .bunny/dns.json), else pick interactively (resolveZoneInteractive). Picking a zone interactively offers to link the directory (skipped under --output json; `zones remove` never offers).
+│   │                                       Every [domain] is optional — omit it to use the linked zone (`dns zones link` → .bunny/dns.json), else pick interactively (resolveZoneInteractive; errors instead of prompting under --output json or without a TTY). Picking a zone interactively offers to link the directory (`zones remove` never offers).
 │   ├── records                             (canonical; aliases: record, rec)
 │   │   ├── list        [domain] (alias: ls)  List the records within a zone
 │   │   ├── add         [domain] [name] [type] [values..] [--ttl] [--comment] [--pull-zone] [--script]
@@ -882,17 +963,19 @@ bunny
 │   │   ├── update      [domain] [id] [--name] [--value] [--type] [--ttl] [--priority] [--weight] [--port] [--flags] [--tag] [--comment] [--disabled] [--pull-zone] [--script]
 │   │   │                                   Update a DNS record (alias: edit; prompts to pick zone+record when omitted)
 │   │   ├── remove      [domain] [id] [--force]  Remove a DNS record (alias: rm; prompts to pick zone+record when omitted)
+│   │   ├── preset      [name] [domain] [--param key=value]  Apply a preset record set (`preset list` lists; email providers, verification, security; --param repeatable for non-interactive runs)
+│   │   ├── scan        [domain] [--yes]    Scan for the domain's existing records (bunny server-side scan) and import them (--yes skips the confirm)
 │   │   ├── import      [domain] [file]     Import records from a BIND zone file (prompts for zone/file when omitted)
 │   │   └── export      [domain] [--file] [--save]  Export a zone as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
 │   └── zones                               (canonical; aliases: zone; hidden: domain, domains)
 │       ├── list                            List all DNS zones (alias: ls)
-│       ├── add         <domain>            Create a DNS zone
+│       ├── add         [domain] [--import]  Create a DNS zone (prompts for the domain when omitted): with a TTY, prompt how to add records (scan for existing records / upload a zone file / add records manually / continue); then print the bunny nameservers to set (naming the registrar via RDAP when detectable). --import scans and imports all existing records without prompting (also under --output json, surfacing failures); --no-import (and non-TTY default) skips the menu
 │       ├── link        [domain]            Link this directory to a zone → .bunny/dns.json (pick interactively when omitted)
 │       ├── unlink      [--force]           Remove .bunny/dns.json, unlinking this directory
 │       ├── show        [domain]            Show zone details (nameservers, SOA, DNSSEC, logging, record count)
 │       ├── remove      [domain] [--force]  Delete a DNS zone and its records (alias: rm)
 │       ├── stats       [domain] [--from] [--to]  Show DNS query statistics for a zone (defaults to last 30 days; text mode renders a bar chart)
-│       ├── nameservers [domain] (alias: ns)  Show the nameservers to set at the registrar (custom if enabled, else bunny.net defaults)
+│       ├── nameservers [domain] (alias: ns)  Live-check whether the registrar delegates to bunny.net; confirm on success, else show the nameservers to set at the named registrar
 │       ├── dnssec
 │       │   ├── enable  [domain]            Enable DNSSEC and print the DS record for the registrar
 │       │   └── disable [domain] [--force]  Disable DNSSEC
@@ -900,6 +983,25 @@ bunny
 │           ├── enable  [domain] [--anonymize-ip] [--anonymization onedigit|drop]
 │           │                               Enable DNS query logging
 │           └── disable [domain] [--force]  Disable DNS query logging
+├── storage                                 (experimental, hidden from help and landing page)
+│   │                                       Two resource groups: `zones` (the zone, via core API + account key) and `files` (zone contents, via @bunny.net/storage-sdk + the zone password/region host, resolved automatically). The zone is a name or numeric ID; `zones` commands take it as the `[zone]` positional, `files` commands as the `--zone`/`-z` flag (the positional is the file/path). When the zone is omitted it resolves from a linked zone (`bunny storage link`) then an interactive picker.
+│   ├── zones                               (canonical; aliases: zone; hidden: bucket, buckets)
+│   │   ├── list                            List all storage zones (alias: ls)
+│   │   ├── add         [name] [--region] [--replication] [--pull-zone] [--pull-zone-name] [--domain] [--force/-f]  Create a storage zone (prompts for name + region when omitted; offers/--pull-zone creates a pull zone to serve it on the web, then offers/--domain a custom domain via setupHostname; replicas are permanent so adding any is confirmed; --force/--output json skip all prompts and use flag values only)
+│   │   ├── show        [zone]              Show zone details (region, replication, hostname, usage)
+│   │   ├── update      [zone] [--custom-404-path] [--rewrite-404-to-200] [--replication] [--force/-f]  Update zone settings (edits interactively pre-filled when no flags; replication is additive and adding a replica is confirmed unless --force; --force/--output json/non-TTY require flags and error "No changes requested." without them)
+│   │   ├── remove      [zone] [--force]    Delete a storage zone and its files (alias: rm)
+│   │   ├── credentials [zone] [--format rclone|aws|s3cmd|env] [--read-only] [--show-secret]  (alias: creds)
+│   │   │                                   S3 credentials for the zone (name = access key, password = secret); --format emits tool config, else table/--output json; table masks the secret unless --show-secret
+│   │   └── domains                         (canonical; alias: hostnames) custom domains on the zone's pull zone; mounts core/hostnames createHostnamesCommands; resolver maps the storage zone (positional, else linked zone, else picker) to its linked pull zone
+│   ├── files                               (canonical; aliases: file) [--zone|-z] defaults to the linked zone on every file command
+│   │   ├── list        [path] [--zone] (alias: ls)  List files in a directory (trailing slash on path)
+│   │   ├── upload      <file> [--zone] [--to] [--checksum] [--content-type]  Upload a local file
+│   │   ├── download    <path> [--zone] [--out]  Download a file
+│   │   └── remove      <path> [--zone] [--force] (alias: rm)  Delete a file or directory (trailing slash = recursive)
+│   ├── link            [zone]              Link the current directory to a storage zone (.bunny/storage.json); interactive picker when omitted
+│   ├── regions                             List available storage regions (replication uses the same set minus the primary)
+│   └── docs                                Open storage documentation in browser
 ├── db
 │   ├── create          [--name] [--primary] [--replicas] [--storage-region]
 │   │                                       Create a new database

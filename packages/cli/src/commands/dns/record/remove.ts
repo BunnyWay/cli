@@ -49,7 +49,7 @@ export const dnsRemoveCommand = defineCommand<RemoveArgs>({
       output,
       offerLink: true,
     });
-    const record = await resolveRecordInteractive(zone, id, "remove");
+    const record = await resolveRecordInteractive(zone, id, "remove", output);
 
     const label = `${recordTypeLabel(record.Type)} ${recordName(record.Name)} → ${formatRecordValue(record)}`;
     const confirmed = await confirm(`Remove ${label}?`, { force });

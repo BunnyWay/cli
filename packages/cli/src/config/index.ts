@@ -2,7 +2,11 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { logger } from "../core/logger.ts";
 import { findConfigFile, getConfigWritePath } from "./paths.ts";
-import { type ConfigFile, ConfigFileSchema } from "./schema.ts";
+import {
+  type ConfigFile,
+  ConfigFileSchema,
+  type SandboxRecord,
+} from "./schema.ts";
 
 export interface ResolvedConfig {
   apiKey: string;
@@ -76,7 +80,7 @@ function saveConfigFile(data: ConfigFile, filePath?: string): void {
 }
 
 export function setProfile(profile: string, apiKey: string): void {
-  const existing = loadConfigFile() ?? { profiles: {} };
+  const existing = loadConfigFile() ?? { profiles: {}, sandboxes: {} };
 
   existing.profiles[profile] = {
     api_key: apiKey,
@@ -96,4 +100,21 @@ export function deleteProfile(profile: string): void {
 export function profileExists(profile: string): boolean {
   const file = loadConfigFile();
   return !!file?.profiles[profile];
+}
+
+export function getSandbox(name: string): SandboxRecord | null {
+  return loadConfigFile()?.sandboxes?.[name] ?? null;
+}
+
+export function setSandbox(name: string, record: SandboxRecord): void {
+  const existing = loadConfigFile() ?? { profiles: {}, sandboxes: {} };
+  existing.sandboxes[name] = record;
+  saveConfigFile(existing);
+}
+
+export function deleteSandbox(name: string): void {
+  const existing = loadConfigFile();
+  if (!existing) return;
+  delete existing.sandboxes[name];
+  saveConfigFile(existing);
 }

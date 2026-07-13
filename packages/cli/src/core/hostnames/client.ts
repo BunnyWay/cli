@@ -109,6 +109,31 @@ export function liveHostnames(hostnames: Hostname[]): {
   };
 }
 
+// PullZoneOriginType: 2 = StorageZone.
+const ORIGIN_TYPE_STORAGE_ZONE = 2;
+
+/** Create a pull zone served from a storage zone, with delivery enabled in every geo region. */
+export async function createPullZone(
+  client: CoreClient,
+  name: string,
+  storageZoneId: number,
+): Promise<components["schemas"]["PullZoneModel"]> {
+  const { data } = await client.POST("/pullzone", {
+    body: {
+      Name: name,
+      StorageZoneId: storageZoneId,
+      OriginType: ORIGIN_TYPE_STORAGE_ZONE,
+      EnableGeoZoneUS: true,
+      EnableGeoZoneEU: true,
+      EnableGeoZoneASIA: true,
+      EnableGeoZoneSA: true,
+      EnableGeoZoneAF: true,
+    },
+  });
+  if (!data) throw new UserError(`Failed to create pull zone ${name}.`);
+  return data;
+}
+
 /** Add a hostname to a pull zone, returning the zone's hostnames and the CNAME target to point DNS at. */
 export async function addHostname(
   client: CoreClient,

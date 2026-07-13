@@ -37,6 +37,14 @@ export async function confirm(
   return confirmed ?? false;
 }
 
+export function isInteractive(output?: string): boolean {
+  return (
+    output !== "json" &&
+    Boolean(process.stdin.isTTY) &&
+    Boolean(process.stdout.isTTY)
+  );
+}
+
 /** Creates an ora spinner. Automatically silenced in non-TTY environments. */
 export function spinner(text: string) {
   return ora({ text, isSilent: !process.stdout.isTTY });

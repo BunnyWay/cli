@@ -7,6 +7,7 @@ export {
 export {
   addHostname,
   type CoreClient,
+  createPullZone,
   enableSsl,
   fetchHostnamesForZones,
   fetchPullZoneHostnames,
@@ -34,4 +35,5 @@ export {
   offerBunnyDnsThenSsl,
   offerDnsWaitAndSsl,
   printSslHint,
+  setupHostname,
 } from "./flow.ts";

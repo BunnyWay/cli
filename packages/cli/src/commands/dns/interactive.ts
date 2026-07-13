@@ -3,7 +3,7 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
 import type { OutputFormat } from "../../core/types.ts";
-import { confirm, spinner } from "../../core/ui.ts";
+import { confirm, isInteractive, spinner } from "../../core/ui.ts";
 import {
   type CoreClient,
   type DnsRecordModel,
@@ -58,12 +58,17 @@ export async function autoLinkDnsZone(zone: {
  *
  * When `offerLink` is set and the zone is chosen via the picker (not an
  * explicit ref or the existing manifest), offer to link the directory to it.
- * The offer is skipped under `--output json` so machine output stays clean.
+ * Pass `ignoreManifest` to always pick (used when (re)linking a directory).
+ * Never prompts non-interactively (json output or no TTY): errors instead.
  */
 export async function resolveZoneInteractive(
   client: CoreClient,
   ref: string | undefined,
-  opts: { output?: OutputFormat; offerLink?: boolean } = {},
+  opts: {
+    output?: OutputFormat;
+    offerLink?: boolean;
+    ignoreManifest?: boolean;
+  } = {},
 ): Promise<DnsZoneModel> {
   if (ref) {
     const spin = spinner("Resolving zone...");
@@ -76,17 +81,26 @@ export async function resolveZoneInteractive(
   }
 
   // Fall back to a directory linked with `bunny dns zones link` before prompting.
-  const manifest = loadManifest<DnsManifest>(DNS_MANIFEST);
-  if (manifest.id) {
-    const spin = spinner("Loading linked zone...");
-    spin.start();
-    try {
-      const zone = await fetchZone(client, manifest.id);
-      logger.dim(`Using linked zone ${zone.Domain}.`);
-      return zone;
-    } finally {
-      spin.stop();
+  if (!opts.ignoreManifest) {
+    const manifest = loadManifest<DnsManifest>(DNS_MANIFEST);
+    if (manifest.id) {
+      const spin = spinner("Loading linked zone...");
+      spin.start();
+      try {
+        const zone = await fetchZone(client, manifest.id);
+        logger.dim(`Using linked zone ${zone.Domain}.`);
+        return zone;
+      } finally {
+        spin.stop();
+      }
     }
+  }
+
+  if (!isInteractive(opts.output)) {
+    throw new UserError(
+      "A zone is required.",
+      "Pass a domain (e.g. example.com) or link one with `bunny dns zones link`.",
+    );
   }
 
   const spin = spinner("Fetching zones...");
@@ -122,7 +136,8 @@ export async function resolveZoneInteractive(
     resolveSpin.stop();
   }
 
-  if (opts.offerLink && opts.output !== "json") {
+  // The picker only runs interactively, so the link offer can't taint machine output.
+  if (opts.offerLink) {
     await maybeLinkZone(zone);
   }
   return zone;
@@ -130,12 +145,13 @@ export async function resolveZoneInteractive(
 
 /**
  * Return the record matching `id`, or prompt the user to pick one from the
- * zone when no ID is given.
+ * zone when no ID is given. Never prompts non-interactively: errors instead.
  */
 export async function resolveRecordInteractive(
   zone: DnsZoneModel,
   id: number | undefined,
   action: string,
+  output?: OutputFormat,
 ): Promise<DnsRecordModel> {
   const records = zone.Records ?? [];
 
@@ -148,6 +164,13 @@ export async function resolveRecordInteractive(
 
   if (records.length === 0) {
     throw new UserError(`No records in ${zone.Domain}.`);
+  }
+
+  if (!isInteractive(output)) {
+    throw new UserError(
+      "A record ID is required.",
+      `Find IDs with \`bunny dns records list ${zone.Domain}\`.`,
+    );
   }
 
   const { record } = await prompts({

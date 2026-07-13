@@ -120,7 +120,7 @@ function containerConfigToRequest(
     imageNamespace,
     imageTag,
     imageRegistryId: config.registry ?? "",
-    imagePullPolicy: "ifNotPresent",
+    imagePullPolicy: "always",
   };
 
   if (config.command) {
@@ -162,7 +162,7 @@ function endpointConfigToRequest(ep: EndpointConfig): EndpointRequest {
     };
   } else if (ep.type === "anycast") {
     req.anycast = {
-      type: "iPv4",
+      type: "ipv4",
       portMappings: (ep.ports ?? []).map((p) => ({
         containerPort: p.container,
         exposedPort: p.public,

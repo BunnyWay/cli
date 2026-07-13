@@ -1,15 +1,23 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
+import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
+import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
+import { isInteractive, spinner } from "../../../core/ui.ts";
 import {
   resolveRecordInteractive,
   resolveZoneInteractive,
 } from "../interactive.ts";
-import { parseRecordType, recordName } from "../record-types.ts";
+import {
+  CAA_TAGS,
+  type DnsRecordModel,
+  parseRecordType,
+  RECORD_TYPES,
+  recordName,
+} from "../record-types.ts";
 
 type UpdateDnsRecordModel = components["schemas"]["UpdateDnsRecordModel"];
 
@@ -29,6 +37,126 @@ interface UpdateArgs {
   disabled?: boolean;
   "pull-zone"?: number;
   script?: number;
+}
+
+const FIELD_FLAGS = [
+  "name",
+  "value",
+  "type",
+  "ttl",
+  "priority",
+  "weight",
+  "port",
+  "flags",
+  "tag",
+  "comment",
+  "disabled",
+  "pull-zone",
+  "script",
+] as const;
+
+const FIELD_PROMPTS = {
+  Value: { message: "Value:", kind: "text" },
+  Name: { message: "Record name ('@' for apex):", kind: "text" },
+  Ttl: { message: "TTL (seconds):", kind: "number" },
+  Priority: { message: "Priority:", kind: "number" },
+  Weight: { message: "Weight:", kind: "number" },
+  Port: { message: "Port:", kind: "number" },
+  Flags: { message: "Flags:", kind: "number" },
+  Tag: { message: "Tag:", kind: "tag" },
+  Comment: { message: "Comment:", kind: "text" },
+  PullZoneId: { message: "Pull zone ID:", kind: "number" },
+  ScriptId: { message: "Edge Script ID:", kind: "number" },
+} as const;
+type PromptableField = keyof typeof FIELD_PROMPTS;
+
+async function promptFieldChanges(
+  existing: DnsRecordModel,
+): Promise<Partial<UpdateDnsRecordModel>> {
+  const fields: { title: string; value: PromptableField | "Disabled" }[] = [];
+  // PullZone/Script records have no Value; their target is the linked resource ID.
+  if (existing.Type === RECORD_TYPES.PULLZONE) {
+    fields.push({
+      title: `Pull zone (${existing.LinkName || "unknown"})`,
+      value: "PullZoneId",
+    });
+  } else if (existing.Type === RECORD_TYPES.SCRIPT) {
+    fields.push({
+      title: `Script (${existing.LinkName || "unknown"})`,
+      value: "ScriptId",
+    });
+  } else {
+    fields.push({ title: `Value (${existing.Value ?? ""})`, value: "Value" });
+  }
+  fields.push({ title: `Name (${recordName(existing.Name)})`, value: "Name" });
+  fields.push({ title: `TTL (${existing.Ttl ?? "default"})`, value: "Ttl" });
+  if (existing.Type === RECORD_TYPES.MX || existing.Type === RECORD_TYPES.SRV)
+    fields.push({
+      title: `Priority (${existing.Priority ?? 0})`,
+      value: "Priority",
+    });
+  if (existing.Type === RECORD_TYPES.SRV) {
+    fields.push({ title: `Weight (${existing.Weight ?? 0})`, value: "Weight" });
+    fields.push({ title: `Port (${existing.Port ?? 0})`, value: "Port" });
+  }
+  if (existing.Type === RECORD_TYPES.CAA) {
+    fields.push({ title: `Flags (${existing.Flags ?? 0})`, value: "Flags" });
+    fields.push({ title: `Tag (${existing.Tag ?? ""})`, value: "Tag" });
+  }
+  fields.push({
+    title: `Comment (${existing.Comment || "none"})`,
+    value: "Comment",
+  });
+  fields.push({
+    title: existing.Disabled ? "Enable the record" : "Disable the record",
+    value: "Disabled",
+  });
+
+  const { picked } = await prompts({
+    type: "multiselect",
+    name: "picked",
+    message: "Fields to change:",
+    choices: fields,
+    hint: "Space to toggle, Enter to confirm",
+    instructions: false,
+  });
+  if (!picked || picked.length === 0) {
+    throw new UserError("No changes requested.");
+  }
+
+  const changes: Partial<UpdateDnsRecordModel> = {};
+  for (const field of picked as (PromptableField | "Disabled")[]) {
+    if (field === "Disabled") {
+      changes.Disabled = !existing.Disabled;
+      continue;
+    }
+    const spec = FIELD_PROMPTS[field];
+    // Tag derives its initial from CAA_TAGS below; the linked PullZoneId/ScriptId aren't on the record model.
+    const initial =
+      field === "Name"
+        ? recordName(existing.Name)
+        : field === "PullZoneId" || field === "ScriptId" || field === "Tag"
+          ? undefined
+          : (existing[field] ?? undefined);
+    const { value } = await prompts({
+      type: spec.kind === "tag" ? "select" : spec.kind,
+      name: "value",
+      message: spec.message,
+      ...(spec.kind === "tag"
+        ? {
+            choices: CAA_TAGS.map((t) => ({ title: t, value: t })),
+            initial: Math.max(0, CAA_TAGS.indexOf(existing.Tag ?? "")),
+          }
+        : { initial }),
+    });
+    if (value === undefined) {
+      // Report the prompt's label ("Pull zone ID"), not the model field name ("PullZoneId").
+      const label = spec.message.split(" (")[0]?.replace(/:$/, "");
+      throw new UserError(`${label} is required.`);
+    }
+    changes[field] = field === "Name" && value === "@" ? "" : value;
+  }
+  return changes;
 }
 
 export const dnsUpdateCommand = defineCommand<UpdateArgs>({
@@ -85,8 +213,16 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
       output,
       offerLink: true,
     });
-    const existing = await resolveRecordInteractive(zone, id, "update");
+    const existing = await resolveRecordInteractive(zone, id, "update", output);
     const recordId = existing.Id as number;
+
+    const hasFieldFlags = FIELD_FLAGS.some((f) => args[f] !== undefined);
+    if (!hasFieldFlags && !isInteractive(output)) {
+      throw new UserError(
+        "No changes requested.",
+        "Pass at least one field flag, e.g. --value 198.51.100.2 or --ttl 3600.",
+      );
+    }
 
     // Seed from the existing record so unspecified fields (including advanced settings) are preserved.
     const body: UpdateDnsRecordModel = {
@@ -115,6 +251,8 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
     if (existing.Accelerated && existing.AcceleratedPullZoneId != null) {
       body.PullZoneId = existing.AcceleratedPullZoneId;
     }
+
+    if (!hasFieldFlags) Object.assign(body, await promptFieldChanges(existing));
 
     if (args.name !== undefined) body.Name = args.name === "@" ? "" : args.name;
     if (args.value !== undefined) body.Value = args.value;
