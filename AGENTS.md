@@ -415,11 +415,13 @@ bunny-cli/
 │           │   ├── delete.ts             # Delete a sandbox and its MC app (--force)
 │           │   ├── exec.ts               # Run a command via SSH (-e/--env + --env-file inject temporary env vars; --timeout kills after N seconds, exit 124)
 │           │   ├── cp.ts                 # Copy a file to/from a sandbox over SFTP (<sandbox>:<path> picks direction)
-│           │   ├── ls.ts                 # List files in a sandbox directory over SFTP (bare name = /workplace, or <sandbox>:<path>)
 │           │   ├── resolve.ts            # Shared helpers: parseRemoteRef, sandboxFromName (rebuild a Sandbox from the stored record), connectSandbox (requires SSH endpoint)
 │           │   ├── ssh.ts                # Open an interactive SSH shell (-e/--env + --env-file inject temporary env vars)
 │           │   ├── ssh-exec.ts           # Shared SSH helpers: sshArgs, withSshEnv (askpass token), envPrefix (inline KEY='v' assignments)
 │           │   ├── env-args.ts           # Shared -e/--env + --env-file parsing: withEnvOptions, collectEnv, parseDotenv, splitPair
+│           │   ├── files/                 # `sandbox files` (alias: file): file operations over SFTP
+│           │   │   ├── index.ts          # defineNamespace("files", ...)
+│           │   │   └── list.ts           # List files in a sandbox directory (alias: ls; bare name = /workplace, or <sandbox>:<path>)
 │           │   ├── url/                   # `sandbox url`: expose/list/delete public CDN endpoints for a port
 │           │   │   ├── index.ts          # defineNamespace("url", ...)
 │           │   │   └── add.ts / list.ts / delete.ts

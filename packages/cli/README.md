@@ -892,6 +892,7 @@ List all sandboxes saved in your local config.
 
 ```bash
 bunny sandbox list
+bunny sandbox ls          # alias
 ```
 
 Columns: Name, App ID, Hostname, SSH.
@@ -966,23 +967,24 @@ bunny sandbox cp my-sandbox:/workplace/out.log ./logs/
 
 Uploads preserve the local file's Unix mode (so executables stay executable). Only single files are supported — directory and sandbox-to-sandbox copies are not.
 
-#### `bunny sandbox ls`
+#### `bunny sandbox files`
 
-List the files in a sandbox directory over SFTP. A bare sandbox name lists `/workplace`; use `<sandbox>:<path>` for a specific directory (relative paths resolve against `/workplace`).
+Manage files inside a sandbox over SFTP. A bare sandbox name targets `/workplace`; use `<sandbox>:<path>` for a specific directory (relative paths resolve against `/workplace`).
 
 ```bash
 # List /workplace
-bunny sandbox ls my-sandbox
+bunny sandbox files list my-sandbox
+bunny sandbox files ls my-sandbox    # alias
 
 # List a specific directory
-bunny sandbox ls my-sandbox:/workplace/src
-bunny sandbox ls my-sandbox:src
+bunny sandbox files ls my-sandbox:/workplace/src
+bunny sandbox files ls my-sandbox:src
 
 # Machine-readable listing (name, type, size, mode)
-bunny sandbox ls my-sandbox --output json
+bunny sandbox files ls my-sandbox --output json
 ```
 
-Columns: Name, Type (`file`/`directory`/`symlink`/`other`), Size, Mode (octal permissions).
+Columns: Name, Type (`file`/`directory`/`symlink`/`other`), Size, Mode (octal permissions). To copy files in and out, use [`bunny sandbox cp`](#bunny-sandbox-cp).
 
 #### `bunny sandbox ssh`
 

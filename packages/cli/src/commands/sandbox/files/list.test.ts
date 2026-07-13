@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseLsTarget } from "./ls.ts";
+import { parseLsTarget } from "./list.ts";
 
 describe("parseLsTarget", () => {
   test("a bare sandbox name lists the workplace", () => {

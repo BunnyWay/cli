@@ -1,12 +1,12 @@
 import { SandboxError, type SandboxFileEntry } from "@bunny.net/sandbox";
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
-import { formatBytes, formatTable } from "../../core/format.ts";
-import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
-import { connectSandbox, parseRemoteRef, type RemoteRef } from "./resolve.ts";
+import { defineCommand } from "../../../core/define-command.ts";
+import { UserError } from "../../../core/errors.ts";
+import { formatBytes, formatTable } from "../../../core/format.ts";
+import { logger } from "../../../core/logger.ts";
+import { spinner } from "../../../core/ui.ts";
+import { connectSandbox, parseRemoteRef, type RemoteRef } from "../resolve.ts";
 
-interface LsArgs {
+interface ListArgs {
   target: string;
 }
 
@@ -15,13 +15,14 @@ export function parseLsTarget(target: string): RemoteRef {
   return parseRemoteRef(target) ?? { sandbox: target, path: "." };
 }
 
-export const sandboxLsCommand = defineCommand<LsArgs>({
-  command: "ls <target>",
+export const sandboxFilesListCommand = defineCommand<ListArgs>({
+  command: "list <target>",
+  aliases: ["ls"],
   describe: "List files in a sandbox directory.",
   examples: [
-    ["$0 sandbox ls my-sandbox", "List /workplace"],
-    ["$0 sandbox ls my-sandbox:/workplace/src", "List a directory"],
-    ["$0 sandbox ls my-sandbox:src --output json", "List as JSON"],
+    ["$0 sandbox files ls my-sandbox", "List /workplace"],
+    ["$0 sandbox files ls my-sandbox:/workplace/src", "List a directory"],
+    ["$0 sandbox files ls my-sandbox:src --output json", "List as JSON"],
   ],
 
   builder: (yargs) =>

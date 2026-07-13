@@ -4,8 +4,8 @@ import { sandboxCreateCommand } from "./create.ts";
 import { sandboxDeleteCommand } from "./delete.ts";
 import { sandboxEnvNamespace } from "./env/index.ts";
 import { sandboxExecCommand } from "./exec.ts";
+import { sandboxFilesNamespace } from "./files/index.ts";
 import { sandboxListCommand } from "./list.ts";
-import { sandboxLsCommand } from "./ls.ts";
 import { sandboxSshCommand } from "./ssh.ts";
 import { sandboxUrlNamespace } from "./url/index.ts";
 
@@ -18,7 +18,7 @@ export const sandboxNamespace = defineNamespace(
     sandboxDeleteCommand,
     sandboxExecCommand,
     sandboxCpCommand,
-    sandboxLsCommand,
+    sandboxFilesNamespace,
     sandboxSshCommand,
     sandboxUrlNamespace,
     sandboxEnvNamespace,
