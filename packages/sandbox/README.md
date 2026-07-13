@@ -36,6 +36,20 @@ await sandbox.delete();
 
 Authentication comes from the `apiKey` option or the `BUNNYNET_API_KEY` environment variable.
 
+## Streaming output
+
+For a blocking command, pass `onStdout` / `onStderr` to observe output as it arrives while still awaiting the buffered result:
+
+```ts
+const result = await sandbox.runCommand({
+  cmd: "npm",
+  args: ["install"],
+  onStdout: (chunk) => process.stdout.write(chunk),
+  onStderr: (chunk) => process.stderr.write(chunk),
+});
+console.log(result.exitCode);
+```
+
 ## Long-running commands
 
 Pass `detached: true` to start a process and stream its output:
@@ -71,6 +85,19 @@ Or look a sandbox up by its app ID, recovering its connection details from the A
 ```ts
 const sandbox = await Sandbox.get({ apiKey, appId });
 ```
+
+## Automatic cleanup
+
+A sandbox implements `Symbol.dispose` / `Symbol.asyncDispose`, so `using` and `await using` release the SSH connection when the handle leaves scope:
+
+```ts
+{
+  await using sandbox = await Sandbox.create({ apiKey });
+  await sandbox.runCommand("echo", ["hi"]);
+} // connection closed here
+```
+
+Disposal calls `disconnect()` — it releases the connection but does **not** delete the sandbox. Call `delete()` explicitly to tear down an ephemeral sandbox.
 
 ## API
 

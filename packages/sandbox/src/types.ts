@@ -59,6 +59,10 @@ export interface RunCommandOptions {
   sudo?: boolean;
   /** Return immediately with a live Command instead of blocking. */
   detached?: boolean;
+  /** Called with stdout chunks as they arrive. Blocking mode only. */
+  onStdout?: (chunk: string) => void;
+  /** Called with stderr chunks as they arrive. Blocking mode only. */
+  onStderr?: (chunk: string) => void;
 }
 
 export interface FileToWrite {

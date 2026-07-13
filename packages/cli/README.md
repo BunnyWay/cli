@@ -940,6 +940,29 @@ bunny sandbox exec my-sandbox --env-file .env -- printenv
 
 Variables passed here apply only to that single command and are **not** persisted. For persistent variables, use [`bunny sandbox env`](#bunny-sandbox-env).
 
+#### `bunny sandbox cp`
+
+Copy a file between your machine and a sandbox over SFTP. Exactly one of the two paths must reference a sandbox as `<sandbox>:<path>`; the other is a local path. Remote paths follow the same rules as elsewhere — relative paths resolve against `/workplace`.
+
+```bash
+# Upload a file into the sandbox
+bunny sandbox cp ./app.js my-sandbox:/workplace/app.js
+
+# Upload relative to /workplace
+bunny sandbox cp ./app.js my-sandbox:app.js
+
+# A trailing slash on the destination keeps the source filename
+bunny sandbox cp ./app.js my-sandbox:/workplace/src/
+
+# Download a file from the sandbox
+bunny sandbox cp my-sandbox:/workplace/out.log ./out.log
+
+# Download into an existing directory (keeps the source filename)
+bunny sandbox cp my-sandbox:/workplace/out.log ./logs/
+```
+
+Uploads preserve the local file's Unix mode (so executables stay executable). Sandbox-to-sandbox copies are not supported.
+
 #### `bunny sandbox ssh`
 
 Open a full interactive SSH session. Drops you into a bash shell at `/workplace`. Type `exit` or press Ctrl-D to close.

@@ -27,6 +27,37 @@ describe("Sandbox.create", () => {
   });
 });
 
+describe("disposal", () => {
+  const handle = {
+    appId: "app-1",
+    name: "s",
+    agentToken: "t",
+    sshHost: "1.2.3.4:8023",
+  };
+
+  test("await using disconnects without deleting the sandbox", async () => {
+    let disconnected = false;
+    {
+      await using sandbox = Sandbox.fromHandle(handle);
+      sandbox.disconnect = () => {
+        disconnected = true;
+      };
+    }
+    expect(disconnected).toBe(true);
+  });
+
+  test("using disconnects synchronously", () => {
+    let disconnected = false;
+    {
+      using sandbox = Sandbox.fromHandle(handle);
+      sandbox.disconnect = () => {
+        disconnected = true;
+      };
+    }
+    expect(disconnected).toBe(true);
+  });
+});
+
 describe("buildRemoteCommand", () => {
   test("defaults to the workplace and quotes the command", () => {
     expect(buildRemoteCommand({ cmd: "ls", args: ["-la"] })).toBe(

@@ -57,16 +57,27 @@ export class SshTransport {
     throw new SandboxError("Sandbox SSH did not become reachable.", lastErr);
   }
 
-  /** Run a command to completion and collect its output. */
-  async exec(command: string): Promise<ExecResult> {
+  /**
+   * Run a command to completion and collect its output. When `onData` is
+   * provided it is invoked with each chunk as it streams in, before the
+   * buffered result resolves.
+   */
+  async exec(
+    command: string,
+    onData?: (chunk: { stream: "stdout" | "stderr"; data: string }) => void,
+  ): Promise<ExecResult> {
     const stream = await this.execStream(command);
     let stdout = "";
     let stderr = "";
     stream.on("data", (d: Buffer) => {
-      stdout += d.toString();
+      const data = d.toString();
+      stdout += data;
+      onData?.({ stream: "stdout", data });
     });
     stream.stderr.on("data", (d: Buffer) => {
-      stderr += d.toString();
+      const data = d.toString();
+      stderr += data;
+      onData?.({ stream: "stderr", data });
     });
     return new Promise((resolve, reject) => {
       stream.on("error", reject);
