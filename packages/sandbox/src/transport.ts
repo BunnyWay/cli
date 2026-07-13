@@ -26,6 +26,8 @@ export interface ExecLimits {
   timeoutMs?: number;
   /** Abort to kill the command and reject with the signal's reason. */
   signal?: AbortSignal;
+  /** Called with each output chunk as it arrives, before the buffered result resolves. */
+  onData?: (chunk: { stream: "stdout" | "stderr"; data: string }) => void;
 }
 
 /** Minimal exec-channel surface, kept narrow so tests can fake it. */
@@ -44,10 +46,14 @@ export function collectExec(
   let stdout = "";
   let stderr = "";
   stream.on("data", (d: Buffer) => {
-    stdout += d.toString();
+    const data = d.toString();
+    stdout += data;
+    limits.onData?.({ stream: "stdout", data });
   });
   stream.stderr.on("data", (d: Buffer) => {
-    stderr += d.toString();
+    const data = d.toString();
+    stderr += data;
+    limits.onData?.({ stream: "stderr", data });
   });
 
   return new Promise((resolve, reject) => {

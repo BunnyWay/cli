@@ -199,9 +199,17 @@ export class Sandbox {
     if (opts.detached) {
       return new Command(await this.transport.execStream(remote));
     }
+    const onData =
+      opts.onStdout || opts.onStderr
+        ? (chunk: { stream: "stdout" | "stderr"; data: string }) => {
+            if (chunk.stream === "stdout") opts.onStdout?.(chunk.data);
+            else opts.onStderr?.(chunk.data);
+          }
+        : undefined;
     const { stdout, stderr, exitCode } = await this.transport.exec(remote, {
       timeoutMs: opts.timeout,
       signal: opts.signal,
+      onData,
     });
     return new CommandFinished(exitCode, stdout, stderr);
   }
@@ -354,6 +362,20 @@ export class Sandbox {
   /** Close the SSH connection without deleting the sandbox. */
   disconnect(): void {
     this.transport.close();
+  }
+
+  /**
+   * Release the SSH connection when the sandbox leaves a `using` /
+   * `await using` scope. This mirrors `disconnect()` and deliberately does
+   * NOT delete the sandbox — the backing app keeps running. Call `delete()`
+   * explicitly to tear down an ephemeral sandbox.
+   */
+  [Symbol.dispose](): void {
+    this.disconnect();
+  }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    this.disconnect();
   }
 
   /** Serialize the sandbox so another process can reconnect via fromHandle. */

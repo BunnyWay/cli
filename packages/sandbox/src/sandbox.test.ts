@@ -136,6 +136,20 @@ describe("collectExec", () => {
     expect((err as Error).message).toBe("cancelled");
     expect(stream.signals).toContain("KILL");
   });
+
+  test("streams chunks to onData as they arrive", async () => {
+    const stream = fakeStream();
+    const chunks: Array<{ stream: string; data: string }> = [];
+    const pending = collectExec(stream, { onData: (c) => chunks.push(c) });
+    stream.emit("data", Buffer.from("out"));
+    stream.emitStderr(Buffer.from("err"));
+    stream.emit("close", 0);
+    await pending;
+    expect(chunks).toEqual([
+      { stream: "stdout", data: "out" },
+      { stream: "stderr", data: "err" },
+    ]);
+  });
 });
 
 describe("fileEntryFromAttrs", () => {
@@ -166,6 +180,37 @@ describe("fileEntryFromAttrs", () => {
     expect(fileEntryFromAttrs("sock", attrs(0o140644, "other")).type).toBe(
       "other",
     );
+  });
+});
+
+describe("disposal", () => {
+  const handle = {
+    appId: "app-1",
+    name: "s",
+    agentToken: "t",
+    sshHost: "1.2.3.4:8023",
+  };
+
+  test("await using disconnects without deleting the sandbox", async () => {
+    let disconnected = false;
+    {
+      await using sandbox = Sandbox.fromHandle(handle);
+      sandbox.disconnect = () => {
+        disconnected = true;
+      };
+    }
+    expect(disconnected).toBe(true);
+  });
+
+  test("using disconnects synchronously", () => {
+    let disconnected = false;
+    {
+      using sandbox = Sandbox.fromHandle(handle);
+      sandbox.disconnect = () => {
+        disconnected = true;
+      };
+    }
+    expect(disconnected).toBe(true);
   });
 });
 

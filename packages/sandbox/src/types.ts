@@ -63,6 +63,10 @@ export interface RunCommandOptions {
   timeout?: number;
   /** Abort to kill the command and reject with the signal's reason. */
   signal?: AbortSignal;
+  /** Called with stdout chunks as they arrive. Blocking mode only. */
+  onStdout?: (chunk: string) => void;
+  /** Called with stderr chunks as they arrive. Blocking mode only. */
+  onStderr?: (chunk: string) => void;
 }
 
 /** A directory entry returned by listFiles. */
