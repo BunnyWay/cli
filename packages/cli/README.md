@@ -961,7 +961,7 @@ bunny sandbox cp my-sandbox:/workplace/out.log ./out.log
 bunny sandbox cp my-sandbox:/workplace/out.log ./logs/
 ```
 
-Uploads preserve the local file's Unix mode (so executables stay executable). Sandbox-to-sandbox copies are not supported.
+Uploads preserve the local file's Unix mode (so executables stay executable). Only single files are supported — directory and sandbox-to-sandbox copies are not.
 
 #### `bunny sandbox ssh`
 

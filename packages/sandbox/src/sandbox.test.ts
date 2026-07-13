@@ -59,6 +59,15 @@ describe("Sandbox.runCommand validation", () => {
       }),
     ).rejects.toThrow("not supported with detached");
   });
+
+  test("rejects output callbacks combined with detached", async () => {
+    await expect(
+      sandbox.runCommand({ cmd: "ls", detached: true, onStdout: () => {} }),
+    ).rejects.toThrow("not supported with detached");
+    await expect(
+      sandbox.runCommand({ cmd: "ls", detached: true, onStderr: () => {} }),
+    ).rejects.toThrow("not supported with detached");
+  });
 });
 
 function fakeStream() {

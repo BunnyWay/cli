@@ -83,13 +83,12 @@ export const sandboxCpCommand = defineCommand<CpArgs>({
         "Sandbox-to-sandbox copies are not supported. One side must be a local path.",
       );
     }
-    if (!srcRemote && !destRemote) {
+    const ref = srcRemote ?? destRemote;
+    if (!ref) {
       throw new UserError(
         "One path must reference a sandbox as <sandbox>:<path>.",
       );
     }
-
-    const ref = (srcRemote ?? destRemote) as RemoteRef;
     const record = getSandbox(ref.sandbox);
     if (!record) {
       throw new UserError(
@@ -125,37 +124,39 @@ export const sandboxCpCommand = defineCommand<CpArgs>({
     let from: string;
     let to: string;
     try {
-      if (destRemote) {
-        // Local -> sandbox.
+      if (uploading) {
         const local = source;
-        const file = Bun.file(local);
-        if (!(await file.exists())) {
+        const info = await stat(local).catch(() => null);
+        if (!info) {
           throw new UserError(`Local file not found: ${local}`);
         }
+        if (info.isDirectory()) {
+          throw new UserError(
+            `${local} is a directory. Only single files can be copied.`,
+          );
+        }
         // A trailing slash on the remote path means "into this directory".
-        const remotePath = destRemote.path.endsWith("/")
-          ? `${destRemote.path}${basename(local)}`
-          : destRemote.path;
-        const content = Buffer.from(await file.arrayBuffer());
-        const mode = (await stat(local)).mode & 0o777;
-        await sandbox.writeFiles([{ path: remotePath, content, mode }]);
+        const remotePath = ref.path.endsWith("/")
+          ? `${ref.path}${basename(local)}`
+          : ref.path;
+        const content = Buffer.from(await Bun.file(local).arrayBuffer());
+        await sandbox.writeFiles([
+          { path: remotePath, content, mode: info.mode & 0o777 },
+        ]);
         from = local;
         to = `${ref.sandbox}:${remotePath}`;
       } else {
-        // Sandbox -> local.
-        const content = await sandbox.readFile((srcRemote as RemoteRef).path);
+        const content = await sandbox.readFile(ref.path);
         if (content === null) {
-          throw new UserError(
-            `File not found in sandbox: ${(srcRemote as RemoteRef).path}`,
-          );
+          throw new UserError(`File not found in sandbox: ${ref.path}`);
         }
         // An existing local directory (or trailing slash) means "into it".
         const localPath =
           dest.endsWith("/") || (await isDirectory(dest))
-            ? join(dest, basename((srcRemote as RemoteRef).path))
+            ? join(dest, basename(ref.path))
             : dest;
         await Bun.write(localPath, content);
-        from = `${ref.sandbox}:${(srcRemote as RemoteRef).path}`;
+        from = `${ref.sandbox}:${ref.path}`;
         to = localPath;
       }
     } catch (err) {
