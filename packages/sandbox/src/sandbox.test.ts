@@ -14,6 +14,7 @@ import {
   shellQuote,
 } from "./sandbox.ts";
 import { collectExec, fileEntryFromAttrs } from "./transport.ts";
+import type { RunCommandOptions } from "./types.ts";
 
 describe("Sandbox.create", () => {
   test("rejects reserved env key AGENT_TOKEN before any network call", async () => {
@@ -44,9 +45,15 @@ describe("Sandbox.runCommand validation", () => {
     );
   });
 
+  // The union type forbids these statically; the casts stand in for
+  // un-typechecked JS callers, which the runtime guard still protects.
   test("rejects timeout combined with detached", async () => {
     await expect(
-      sandbox.runCommand({ cmd: "ls", detached: true, timeout: 5000 }),
+      sandbox.runCommand({
+        cmd: "ls",
+        detached: true,
+        timeout: 5000,
+      } as RunCommandOptions),
     ).rejects.toThrow("not supported with detached");
   });
 
@@ -56,16 +63,24 @@ describe("Sandbox.runCommand validation", () => {
         cmd: "ls",
         detached: true,
         signal: new AbortController().signal,
-      }),
+      } as RunCommandOptions),
     ).rejects.toThrow("not supported with detached");
   });
 
   test("rejects output callbacks combined with detached", async () => {
     await expect(
-      sandbox.runCommand({ cmd: "ls", detached: true, onStdout: () => {} }),
+      sandbox.runCommand({
+        cmd: "ls",
+        detached: true,
+        onStdout: () => {},
+      } as RunCommandOptions),
     ).rejects.toThrow("not supported with detached");
     await expect(
-      sandbox.runCommand({ cmd: "ls", detached: true, onStderr: () => {} }),
+      sandbox.runCommand({
+        cmd: "ls",
+        detached: true,
+        onStderr: () => {},
+      } as RunCommandOptions),
     ).rejects.toThrow("not supported with detached");
   });
 });
@@ -158,6 +173,21 @@ describe("collectExec", () => {
       { stream: "stdout", data: "out" },
       { stream: "stderr", data: "err" },
     ]);
+  });
+
+  test("stops streaming to onData once the promise has settled", async () => {
+    const stream = fakeStream();
+    const chunks: Array<{ stream: string; data: string }> = [];
+    const pending = collectExec(stream, {
+      timeoutMs: 5,
+      onData: (c) => chunks.push(c),
+    });
+    stream.emit("data", Buffer.from("before"));
+    await expect(pending).rejects.toThrow(CommandTimeoutError);
+    // Chunks still buffered in the channel arrive after rejection.
+    stream.emit("data", Buffer.from("after"));
+    stream.emitStderr(Buffer.from("late-err"));
+    expect(chunks).toEqual([{ stream: "stdout", data: "before" }]);
   });
 });
 

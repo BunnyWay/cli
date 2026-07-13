@@ -21,7 +21,9 @@ import {
 } from "./provision.ts";
 import { SshTransport } from "./transport.ts";
 import type {
+  BlockingCommandOptions,
   CreateOptions,
+  DetachedCommandOptions,
   FileToWrite,
   GetOptions,
   RunCommandOptions,
@@ -171,16 +173,36 @@ export class Sandbox {
 
   /** Run a command, blocking for the result unless detached is set. */
   async runCommand(command: string, args?: string[]): Promise<CommandFinished>;
+  async runCommand(command: DetachedCommandOptions): Promise<Command>;
+  async runCommand(command: BlockingCommandOptions): Promise<CommandFinished>;
+  // Options not statically known to be blocking or detached get the union.
   async runCommand(
-    command: RunCommandOptions & { detached: true },
-  ): Promise<Command>;
-  async runCommand(command: RunCommandOptions): Promise<CommandFinished>;
+    command: RunCommandOptions,
+  ): Promise<CommandFinished | Command>;
   async runCommand(
     command: string | RunCommandOptions,
     args: string[] = [],
   ): Promise<CommandFinished | Command> {
     const opts: RunCommandOptions =
       typeof command === "string" ? { cmd: command, args } : command;
+    const remote = buildRemoteCommand(opts);
+
+    if (opts.detached) {
+      // The types forbid this, but un-typechecked callers can still pass blocking-only options.
+      const stray = opts as unknown as Partial<BlockingCommandOptions>;
+      if (
+        stray.timeout !== undefined ||
+        stray.signal ||
+        stray.onStdout ||
+        stray.onStderr
+      ) {
+        throw new SandboxError(
+          "timeout, signal, onStdout, and onStderr are not supported with detached; use command.kill() and command.logs().",
+        );
+      }
+      return new Command(await this.transport.execStream(remote));
+    }
+
     if (
       opts.timeout !== undefined &&
       (!Number.isFinite(opts.timeout) || opts.timeout <= 0)
@@ -190,19 +212,6 @@ export class Sandbox {
       );
     }
     const { onStdout, onStderr } = opts;
-    if (
-      opts.detached &&
-      (opts.timeout !== undefined || opts.signal || onStdout || onStderr)
-    ) {
-      throw new SandboxError(
-        "timeout, signal, onStdout, and onStderr are not supported with detached; use command.kill() and command.logs().",
-      );
-    }
-    const remote = buildRemoteCommand(opts);
-
-    if (opts.detached) {
-      return new Command(await this.transport.execStream(remote));
-    }
     const onData =
       onStdout || onStderr
         ? ({ stream, data }: LogChunk) => {

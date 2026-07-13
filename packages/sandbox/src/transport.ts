@@ -46,20 +46,24 @@ export function collectExec(
 ): Promise<ExecResult> {
   let stdout = "";
   let stderr = "";
+  // Chunks buffered in the channel can still arrive after a timeout/abort
+  // settles the promise; keep them out of onData once settled.
+  let settled = false;
   stream.on("data", (d: Buffer) => {
     const data = d.toString();
     stdout += data;
-    limits.onData?.({ stream: "stdout", data });
+    if (!settled) limits.onData?.({ stream: "stdout", data });
   });
   stream.stderr.on("data", (d: Buffer) => {
     const data = d.toString();
     stderr += data;
-    limits.onData?.({ stream: "stderr", data });
+    if (!settled) limits.onData?.({ stream: "stderr", data });
   });
 
   return new Promise((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const cleanup = () => {
+      settled = true;
       clearTimeout(timer);
       limits.signal?.removeEventListener("abort", onAbort);
     };
@@ -159,6 +163,9 @@ export class SshTransport {
 
   /** Run a command to completion and collect its output. */
   async exec(command: string, limits?: ExecLimits): Promise<ExecResult> {
+    // Don't open a channel (and start the command) for an already-cancelled call.
+    // An abort mid-open is caught by collectExec, which kills the fresh channel.
+    limits?.signal?.throwIfAborted();
     return collectExec(await this.execStream(command), limits);
   }
 
