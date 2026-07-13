@@ -1,4 +1,9 @@
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -13,6 +18,16 @@ export function sandboxKnownHostsPath(): string {
 /** OpenSSH known_hosts label; non-default ports are bracketed. */
 function hostLabel(host: string, port: number): string {
   return port === 22 ? host : `[${host}]:${port}`;
+}
+
+/** Split a known_hosts line into its host list and trailing fields, or null for blanks and comments. */
+function knownHostsFields(
+  line: string,
+): { hosts: string; fields: string[] } | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith("#")) return null;
+  const [hosts, ...fields] = trimmed.split(/\s+/);
+  return hosts ? { hosts, fields } : null;
 }
 
 /** Algorithm name from the front of an SSH public-key blob, or null if malformed. */
@@ -50,12 +65,12 @@ export function verifyKnownHost(
   }
   let hostSeen = false;
   for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const [hosts, lineType, lineKey] = trimmed.split(/\s+/);
-    if (!hosts || !lineType || !lineKey) continue;
+    const parsed = knownHostsFields(line);
+    if (!parsed) continue;
+    const [lineType, lineKey] = parsed.fields;
+    if (!lineType || !lineKey) continue;
     // known_hosts allows several comma-separated hosts per line.
-    if (!hosts.split(",").includes(label)) continue;
+    if (!parsed.hosts.split(",").includes(label)) continue;
     hostSeen = true;
     if (lineType !== type) continue;
     if (lineKey === encoded) return true;
@@ -70,4 +85,50 @@ export function verifyKnownHost(
     // Can't persist (e.g. read-only home): trust it anyway, like OpenSSH accept-new — no cross-run pin.
   }
   return true;
+}
+
+/**
+ * Forget a host's pinned key.
+ */
+export function removeKnownHost(
+  host: string,
+  port: number,
+  path: string = sandboxKnownHostsPath(),
+): void {
+  const label = hostLabel(host, port);
+
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch {
+    return;
+  }
+
+  const kept: string[] = [];
+  let changed = false;
+  for (const line of text.split("\n")) {
+    const parsed = knownHostsFields(line);
+    if (!parsed) {
+      kept.push(line);
+      continue;
+    }
+    const labels = parsed.hosts.split(",");
+    if (!labels.includes(label)) {
+      kept.push(line);
+      continue;
+    }
+    changed = true;
+    // Keep the line for any other hosts it lists; drop it only when this was the last.
+    const rest = labels.filter((h) => h !== label);
+    if (rest.length > 0) {
+      kept.push(line.replace(parsed.hosts, () => rest.join(",")));
+    }
+  }
+  if (!changed) return;
+
+  try {
+    writeFileSync(path, kept.join("\n"), { mode: 0o600 });
+  } catch {
+    // A stale pin is harmless; the next connect re-checks it.
+  }
 }

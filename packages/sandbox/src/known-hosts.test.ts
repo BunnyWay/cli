@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { verifyKnownHost } from "./known-hosts.ts";
+import { removeKnownHost, verifyKnownHost } from "./known-hosts.ts";
 
 const dirs: string[] = [];
 function storePath(): string {
@@ -98,5 +98,61 @@ describe("verifyKnownHost trust-on-first-use", () => {
     expect(verifyKnownHost("host", 8023, Buffer.from([1, 2]), path)).toBe(
       false,
     );
+  });
+});
+
+describe("removeKnownHost", () => {
+  test("drops a host's pin so the next connection re-pins it", () => {
+    const path = storePath();
+    verifyKnownHost("host", 8023, keyA, path);
+    removeKnownHost("host", 8023, path);
+    expect(readFileSync(path, "utf8")).not.toContain("host");
+    expect(verifyKnownHost("host", 8023, keyB, path)).toBe(true);
+  });
+
+  test("only removes the targeted host and port", () => {
+    const path = storePath();
+    verifyKnownHost("host-a", 8023, keyA, path);
+    verifyKnownHost("host-b", 8023, keyB, path);
+    removeKnownHost("host-a", 8023, path);
+    const text = readFileSync(path, "utf8");
+    expect(text).not.toContain("[host-a]:8023");
+    expect(text).toContain("[host-b]:8023");
+    expect(verifyKnownHost("host-b", 8023, keyB, path)).toBe(true);
+  });
+
+  test("removes every entry recorded for the host", () => {
+    const path = storePath();
+    verifyKnownHost("host", 8023, keyA, path);
+    const rsaKey = hostKey("ssh-rsa", "CCCC-key-c");
+    writeFileSync(
+      path,
+      `[host]:8023 ssh-ed25519 ${keyA.toString("base64")}\n` +
+        `[host]:8023 ssh-rsa ${rsaKey.toString("base64")}\n`,
+    );
+    removeKnownHost("host", 8023, path);
+    expect(readFileSync(path, "utf8").trim()).toBe("");
+  });
+
+  test("keeps other aliases sharing a comma-separated line", () => {
+    const path = storePath();
+    verifyKnownHost("host", 8023, keyA, path); // creates the dir
+    writeFileSync(
+      path,
+      `[host]:8023,[alias]:8023 ssh-ed25519 ${keyA.toString("base64")}\n`,
+    );
+    removeKnownHost("host", 8023, path);
+    const text = readFileSync(path, "utf8");
+    expect(text).not.toContain("[host]:8023");
+    expect(text).toBe(`[alias]:8023 ssh-ed25519 ${keyA.toString("base64")}\n`);
+    expect(verifyKnownHost("alias", 8023, keyA, path)).toBe(true);
+  });
+
+  test("is a no-op when the host is absent or the file is missing", () => {
+    const path = storePath();
+    expect(() => removeKnownHost("host", 8023, path)).not.toThrow();
+    verifyKnownHost("host", 8023, keyA, path);
+    removeKnownHost("other", 8023, path);
+    expect(readFileSync(path, "utf8")).toContain("[host]:8023");
   });
 });

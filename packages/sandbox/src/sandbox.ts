@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { createMcClient } from "@bunny.net/openapi-client";
 import { Command, CommandFinished } from "./command.ts";
 import { SandboxError } from "./errors.ts";
+import { removeKnownHost } from "./known-hosts.ts";
 import {
   addCdnEndpoint,
   createApp,
@@ -309,6 +310,8 @@ export class Sandbox {
   async delete(): Promise<void> {
     this.transport.close();
     await deleteApp(this.client, this.appId);
+    const { host, port } = splitHost(this.sshHost);
+    removeKnownHost(host, port);
   }
 
   /** Close the SSH connection without deleting the sandbox. */
