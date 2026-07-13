@@ -20,7 +20,7 @@ describe("sshArgs host-key verification", () => {
 
   test("uses trust-on-first-use against the shared known-hosts file", () => {
     expect(joined).toContain("StrictHostKeyChecking=accept-new");
-    expect(args).toContain(`UserKnownHostsFile=${sandboxKnownHostsPath()}`);
+    expect(args).toContain(`UserKnownHostsFile="${sandboxKnownHostsPath()}"`);
   });
 
   test("keeps entries plaintext so the SDK can parse the shared file", () => {

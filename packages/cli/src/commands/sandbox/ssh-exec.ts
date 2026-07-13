@@ -41,7 +41,7 @@ export function sshArgs(
     "-o",
     "StrictHostKeyChecking=accept-new",
     "-o",
-    `UserKnownHostsFile=${sandboxKnownHostsPath()}`,
+    `UserKnownHostsFile="${sandboxKnownHostsPath()}"`,
     // Plaintext entries so the SDK's parser can read the shared file.
     "-o",
     "HashKnownHosts=no",
