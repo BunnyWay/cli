@@ -50,6 +50,8 @@ const result = await sandbox.runCommand({
 console.log(result.exitCode);
 ```
 
+These options apply to blocking commands only — the types enforce it. Detached commands stream via `command.logs()` instead.
+
 ## Long-running commands
 
 Pass `detached: true` to start a process and stream its output:
@@ -88,7 +90,28 @@ const pending = sandbox.runCommand({ cmd: "sleep", args: ["600"], signal: contro
 controller.abort();
 ```
 
+A signal that is already aborted rejects before the SSH channel opens, so the remote command never starts.
+
 Detached commands manage their own lifetime instead: use `command.kill()`.
+
+## Environment variables
+
+Variables can be baked in at creation (persisted for the sandbox's lifetime), passed per command (temporary), or persisted after creation:
+
+```ts
+// Baked in at creation.
+const sandbox = await Sandbox.create({ apiKey, env: { NODE_ENV: "production" } });
+
+// For a single command only.
+await sandbox.runCommand({ cmd: "node", args: ["app.js"], env: { DEBUG: "1" } });
+
+// Persisted after creation (merges with the existing set).
+await sandbox.setEnv({ PORT: "8080" });
+console.log(await sandbox.getEnv()); // { NODE_ENV: "production", PORT: "8080" }
+await sandbox.unsetEnv(["PORT"]); // ["PORT"]
+```
+
+`setEnv` and `unsetEnv` redeploy the sandbox with the new environment, restarting running processes. The volume at `/workplace` persists across the restart.
 
 ## Reconnecting
 
@@ -138,6 +161,10 @@ Disposal calls `disconnect()` — it releases the connection but does **not** de
 | `sandbox.mkDir(path)`                         | Create a directory.                                       |
 | `sandbox.exposePort(port, label?)`            | Expose a port as a public CDN URL.                        |
 | `sandbox.domain(port)`                        | Return the URL of an already exposed port.                |
+| `sandbox.getEnv()`                            | Read the persisted environment variables.                 |
+| `sandbox.setEnv(vars)`                        | Persist environment variables (redeploys).                |
+| `sandbox.unsetEnv(keys)`                      | Remove persisted variables; returns the removed keys.     |
+| `sandbox.disconnect()`                        | Close the SSH connection without deleting the sandbox.    |
 | `sandbox.delete()`                            | Delete the sandbox and its backing app.                   |
 | `sandbox.toHandle()`                          | Serialize the sandbox for reconnection.                   |
 
