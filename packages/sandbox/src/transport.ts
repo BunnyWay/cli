@@ -4,8 +4,8 @@ import {
   type ConnectConfig,
   type SFTPWrapper,
 } from "ssh2";
-import { SandboxError } from "./errors.ts";
-import { verifyKnownHost } from "./known-hosts.ts";
+import { HostKeyVerificationError, SandboxError } from "./errors.ts";
+import { hostKeyMismatchError, verifyKnownHost } from "./known-hosts.ts";
 
 export interface TransportConfig {
   host: string;
@@ -51,6 +51,7 @@ export class SshTransport {
         await this.ready();
         return;
       } catch (err) {
+        if (err instanceof HostKeyVerificationError) throw err;
         lastErr = err;
         await new Promise((r) => setTimeout(r, 3000));
       }
@@ -143,13 +144,17 @@ export class SshTransport {
     if (this.conn) return Promise.resolve(this.conn);
     if (this.connecting) return this.connecting;
 
+    let hostKeyRejected = false;
     const config: ConnectConfig = {
       host: this.config.host,
       port: this.config.port,
       username: this.config.username ?? "root",
       password: this.config.password,
-      hostVerifier: (key: Buffer) =>
-        verifyKnownHost(this.config.host, this.config.port, key),
+      hostVerifier: (key: Buffer) => {
+        const ok = verifyKnownHost(this.config.host, this.config.port, key);
+        hostKeyRejected = !ok;
+        return ok;
+      },
       readyTimeout: 15_000,
     };
 
@@ -163,7 +168,11 @@ export class SshTransport {
         })
         .on("error", (err) => {
           this.connecting = null;
-          reject(new SandboxError("SSH connection failed.", err));
+          reject(
+            hostKeyRejected
+              ? hostKeyMismatchError(this.config.host, this.config.port, err)
+              : new SandboxError("SSH connection failed.", err),
+          );
         })
         .on("close", () => {
           this.conn = null;

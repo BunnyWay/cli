@@ -4,3 +4,7 @@ export class SandboxError extends Error {
     this.name = "SandboxError";
   }
 }
+
+export class HostKeyVerificationError extends SandboxError {
+  override name = "HostKeyVerificationError";
+}

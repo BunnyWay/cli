@@ -1,5 +1,5 @@
 export { Command, CommandFinished, type LogChunk } from "./command.ts";
-export { SandboxError } from "./errors.ts";
+export { HostKeyVerificationError, SandboxError } from "./errors.ts";
 export { Sandbox } from "./sandbox.ts";
 export type {
   CreateOptions,

@@ -6,6 +6,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { HostKeyVerificationError } from "./errors.ts";
 
 /**
  * The known-hosts file shared by the CLI and libssh2.
@@ -85,6 +86,21 @@ export function verifyKnownHost(
     // Can't persist (e.g. read-only home): trust it anyway, like OpenSSH accept-new — no cross-run pin.
   }
   return true;
+}
+
+/** User-facing error for a host key that verifyKnownHost refused. */
+export function hostKeyMismatchError(
+  host: string,
+  port: number,
+  cause?: unknown,
+): HostKeyVerificationError {
+  const label = hostLabel(host, port);
+  return new HostKeyVerificationError(
+    `Host key verification failed for ${label}: the server's key does not match the one pinned in ${sandboxKnownHostsPath()}. ` +
+      `This can happen when the sandbox was recreated, but it can also mean the connection is being intercepted. ` +
+      `If you trust the new key, remove the ${label} line from that file and reconnect.`,
+    cause,
+  );
 }
 
 /**
