@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseRemoteRef } from "./cp.ts";
+import { parseRemoteRef } from "./resolve.ts";
 
 describe("parseRemoteRef", () => {
   test("parses a sandbox reference with an absolute path", () => {

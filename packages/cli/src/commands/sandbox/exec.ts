@@ -1,17 +1,21 @@
 import { getSandbox } from "../../config/index.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
+import { logger } from "../../core/logger.ts";
 import { collectEnv, type EnvOptionArgs, withEnvOptions } from "./env-args.ts";
 import { envPrefix, sshArgs, WORKPLACE, withSshEnv } from "./ssh-exec.ts";
 
 interface ExecArgs extends EnvOptionArgs {
   name: string;
-  command: string[];
+  command?: string[];
+  /** Arguments after a `--` separator, populated by yargs. */
+  "--"?: string[];
   cwd: string;
+  timeout?: number;
 }
 
 export const sandboxExecCommand = defineCommand<ExecArgs>({
-  command: "exec <name> <command..>",
+  command: "exec <name> [command..]",
   describe: "Run a shell command inside a sandbox via SSH.",
   examples: [
     ["$0 sandbox exec my-sandbox uname -a", "Run a command"],
@@ -23,12 +27,19 @@ export const sandboxExecCommand = defineCommand<ExecArgs>({
       "$0 sandbox exec my-sandbox --env DEBUG=1 -- node app.js",
       "Run with a temporary environment variable",
     ],
+    [
+      "$0 sandbox exec my-sandbox --timeout 30 -- bun run build",
+      "Kill the command after 30 seconds",
+    ],
   ],
 
   builder: (yargs) =>
     withEnvOptions(
       yargs
-        .parserConfiguration({ "unknown-options-as-args": true })
+        .parserConfiguration({
+          "unknown-options-as-args": true,
+          "populate--": true,
+        })
         .positional("name", {
           type: "string",
           demandOption: true,
@@ -37,18 +48,31 @@ export const sandboxExecCommand = defineCommand<ExecArgs>({
         .positional("command", {
           type: "string",
           array: true,
-          demandOption: true,
           describe: "Command to execute",
         })
         .option("cwd", {
           type: "string",
           default: WORKPLACE,
           describe: "Working directory inside the sandbox",
+        })
+        .option("timeout", {
+          type: "number",
+          describe:
+            "Close the SSH connection and exit 124 after this many seconds",
         }),
       { shortAlias: false },
     ),
 
-  handler: async ({ name, command, cwd, env, envFile }) => {
+  handler: async (args) => {
+    const { name, cwd, env, envFile, timeout } = args;
+    // The command may arrive as positionals, after a `--` separator, or both.
+    const command = [...(args.command ?? []), ...(args["--"] ?? [])];
+    if (command.length === 0) {
+      throw new UserError("No command given. Usage: exec <name> <command..>");
+    }
+    if (timeout !== undefined && (!Number.isFinite(timeout) || timeout <= 0)) {
+      throw new UserError("--timeout must be a positive number of seconds.");
+    }
     const record = getSandbox(name);
     if (!record) {
       throw new UserError(
@@ -73,7 +97,21 @@ export const sandboxExecCommand = defineCommand<ExecArgs>({
         stderr: "inherit",
         env,
       });
-      return proc.exited;
+      let timedOut = false;
+      const timer =
+        timeout === undefined
+          ? undefined
+          : setTimeout(() => {
+              timedOut = true;
+              proc.kill();
+            }, timeout * 1000);
+      const exitCode = await proc.exited;
+      clearTimeout(timer);
+      if (timedOut) {
+        logger.error(`Command timed out after ${timeout}s.`);
+        return 124;
+      }
+      return exitCode;
     });
   },
 });

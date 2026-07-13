@@ -892,7 +892,6 @@ List all sandboxes saved in your local config.
 
 ```bash
 bunny sandbox list
-bunny sandbox ls          # alias
 ```
 
 Columns: Name, App ID, Hostname, SSH.
@@ -930,13 +929,17 @@ bunny sandbox exec my-sandbox -- cat /etc/os-release
 # Inject temporary environment variables for this command only
 bunny sandbox exec my-sandbox --env DEBUG=1 -- node app.js
 bunny sandbox exec my-sandbox --env-file .env -- printenv
+
+# Give up after 30 seconds (exit code 124)
+bunny sandbox exec my-sandbox --timeout 30 -- bun run build
 ```
 
-| Flag         | Alias | Description                                      | Default      |
-| ------------ | ----- | ------------------------------------------------ | ------------ |
-| `--cwd`      |       | Working directory inside the sandbox             | `/workplace` |
-| `--env`      |       | Environment variable as `KEY=VALUE` (repeatable) |              |
-| `--env-file` |       | Load environment variables from a dotenv file    |              |
+| Flag         | Alias | Description                                                     | Default      |
+| ------------ | ----- | --------------------------------------------------------------- | ------------ |
+| `--cwd`      |       | Working directory inside the sandbox                            | `/workplace` |
+| `--env`      |       | Environment variable as `KEY=VALUE` (repeatable)                |              |
+| `--env-file` |       | Load environment variables from a dotenv file                   |              |
+| `--timeout`  |       | Close the SSH connection and exit `124` after this many seconds |              |
 
 Variables passed here apply only to that single command and are **not** persisted. For persistent variables, use [`bunny sandbox env`](#bunny-sandbox-env).
 
@@ -962,6 +965,24 @@ bunny sandbox cp my-sandbox:/workplace/out.log ./logs/
 ```
 
 Uploads preserve the local file's Unix mode (so executables stay executable). Only single files are supported — directory and sandbox-to-sandbox copies are not.
+
+#### `bunny sandbox ls`
+
+List the files in a sandbox directory over SFTP. A bare sandbox name lists `/workplace`; use `<sandbox>:<path>` for a specific directory (relative paths resolve against `/workplace`).
+
+```bash
+# List /workplace
+bunny sandbox ls my-sandbox
+
+# List a specific directory
+bunny sandbox ls my-sandbox:/workplace/src
+bunny sandbox ls my-sandbox:src
+
+# Machine-readable listing (name, type, size, mode)
+bunny sandbox ls my-sandbox --output json
+```
+
+Columns: Name, Type (`file`/`directory`/`symlink`/`other`), Size, Mode (octal permissions).
 
 #### `bunny sandbox ssh`
 

@@ -1,41 +1,15 @@
 import { stat } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { Sandbox, SandboxError } from "@bunny.net/sandbox";
-import { getSandbox, resolveConfig } from "../../config/index.ts";
+import { SandboxError } from "@bunny.net/sandbox";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
+import { connectSandbox, parseRemoteRef } from "./resolve.ts";
 
 interface CpArgs {
   source: string;
   dest: string;
-}
-
-interface RemoteRef {
-  sandbox: string;
-  path: string;
-}
-
-/**
- * Parse a `sandbox:path` reference. Returns null for local paths — an
- * absolute/relative path, a `~` path, or anything whose prefix looks like a
- * directory rather than a sandbox name.
- */
-export function parseRemoteRef(ref: string): RemoteRef | null {
-  const idx = ref.indexOf(":");
-  if (idx <= 0) return null;
-  const sandbox = ref.slice(0, idx);
-  const path = ref.slice(idx + 1);
-  if (!path) return null;
-  if (
-    sandbox.includes("/") ||
-    sandbox.includes(".") ||
-    sandbox.startsWith("~")
-  ) {
-    return null;
-  }
-  return { sandbox, path };
 }
 
 async function isDirectory(path: string): Promise<boolean> {
@@ -89,33 +63,7 @@ export const sandboxCpCommand = defineCommand<CpArgs>({
         "One path must reference a sandbox as <sandbox>:<path>.",
       );
     }
-    const record = getSandbox(ref.sandbox);
-    if (!record) {
-      throw new UserError(
-        `No sandbox named "${ref.sandbox}" found. Run: bunny sandbox create ${ref.sandbox}`,
-      );
-    }
-    if (!record.ssh_host) {
-      throw new UserError(
-        `Sandbox "${ref.sandbox}" has no SSH endpoint recorded. Re-create it.`,
-      );
-    }
-
-    const config = resolveConfig(profile, apiKey, verbose);
-    const sandbox = Sandbox.fromHandle(
-      {
-        appId: record.app_id,
-        name: ref.sandbox,
-        agentToken: record.agent_token,
-        sshHost: record.ssh_host,
-      },
-      {
-        apiKey: config.apiKey,
-        apiUrl: config.apiUrl,
-        verbose,
-        onDebug: (msg) => logger.debug(msg, true),
-      },
-    );
+    const sandbox = connectSandbox(ref.sandbox, profile, apiKey, verbose);
 
     const uploading = Boolean(destRemote);
     const spin = spinner(uploading ? "Uploading..." : "Downloading...");

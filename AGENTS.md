@@ -413,8 +413,10 @@ bunny-cli/
 │           │   ├── create.ts             # Create a sandbox (--region, -e/--env + --env-file bake persisted env vars in)
 │           │   ├── list.ts               # List sandboxes
 │           │   ├── delete.ts             # Delete a sandbox and its MC app (--force)
-│           │   ├── exec.ts               # Run a command via SSH (-e/--env + --env-file inject temporary env vars)
-│           │   ├── cp.ts                 # Copy a file to/from a sandbox over SFTP (<sandbox>:<path>); parseRemoteRef picks direction
+│           │   ├── exec.ts               # Run a command via SSH (-e/--env + --env-file inject temporary env vars; --timeout kills after N seconds, exit 124)
+│           │   ├── cp.ts                 # Copy a file to/from a sandbox over SFTP (<sandbox>:<path> picks direction)
+│           │   ├── ls.ts                 # List files in a sandbox directory over SFTP (bare name = /workplace, or <sandbox>:<path>)
+│           │   ├── resolve.ts            # Shared helpers: parseRemoteRef, sandboxFromName (rebuild a Sandbox from the stored record), connectSandbox (requires SSH endpoint)
 │           │   ├── ssh.ts                # Open an interactive SSH shell (-e/--env + --env-file inject temporary env vars)
 │           │   ├── ssh-exec.ts           # Shared SSH helpers: sshArgs, withSshEnv (askpass token), envPrefix (inline KEY='v' assignments)
 │           │   ├── env-args.ts           # Shared -e/--env + --env-file parsing: withEnvOptions, collectEnv, parseDotenv, splitPair
@@ -423,7 +425,6 @@ bunny-cli/
 │           │   │   └── add.ts / list.ts / delete.ts
 │           │   └── env/                   # `sandbox env`: persisted env vars (survive restart, unlike exec/ssh temp env)
 │           │       ├── index.ts          # defineNamespace("env", ...)
-│           │       ├── resolve.ts        # sandboxFromName(): rebuild a Sandbox handle from the stored record for API calls
 │           │       ├── set.ts            # Persist vars (KEY=VALUE pairs or --env-file), merges with existing
 │           │       ├── list.ts           # List persisted vars (AGENT_TOKEN hidden)
 │           │       └── delete.ts         # Remove persisted vars (aliases: rm, unset)

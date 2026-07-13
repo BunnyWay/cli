@@ -5,7 +5,6 @@ import { logger } from "../../core/logger.ts";
 
 export const sandboxListCommand = defineCommand({
   command: "list",
-  aliases: ["ls"],
   describe: "List all sandboxes.",
   examples: [["$0 sandbox list", "List all sandboxes"]],
 
