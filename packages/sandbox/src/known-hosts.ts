@@ -45,8 +45,8 @@ export function verifyKnownHost(
   let text = "";
   try {
     text = readFileSync(path, "utf8");
-  } catch {
-    // No file yet — first contact.
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") return false;
   }
   let hostSeen = false;
   for (const line of text.split("\n")) {
