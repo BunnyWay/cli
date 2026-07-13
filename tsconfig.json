@@ -20,7 +20,10 @@
       "@bunny.net/openapi-client/generated/*": [
         "./packages/openapi-client/src/generated/*"
       ],
-      "@bunny.net/sandbox": ["./packages/sandbox/src/index.ts"]
+      "@bunny.net/sandbox": ["./packages/sandbox/src/index.ts"],
+      "@bunny.net/sandbox/known-hosts": [
+        "./packages/sandbox/src/known-hosts.ts"
+      ]
     },
 
     // Best practices

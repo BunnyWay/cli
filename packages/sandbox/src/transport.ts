@@ -5,6 +5,7 @@ import {
   type SFTPWrapper,
 } from "ssh2";
 import { SandboxError } from "./errors.ts";
+import { verifyKnownHost } from "./known-hosts.ts";
 
 export interface TransportConfig {
   host: string;
@@ -147,6 +148,8 @@ export class SshTransport {
       port: this.config.port,
       username: this.config.username ?? "root",
       password: this.config.password,
+      hostVerifier: (key: Buffer) =>
+        verifyKnownHost(this.config.host, this.config.port, key),
       readyTimeout: 15_000,
     };
 
