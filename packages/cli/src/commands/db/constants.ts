@@ -13,6 +13,9 @@ export const DATABASE_MANIFEST = "database.json";
 /** Page size used when paginating the database list endpoint. */
 export const DB_PAGE_SIZE = 100;
 
+/** Maximum length the backend accepts for a database name. */
+export const DB_NAME_MAX_LENGTH = 16;
+
 /** Default lifetime for tokens minted by `db shell` / `db studio`. */
 export const TOKEN_TTL_MINUTES = 30;
 
