@@ -14,6 +14,7 @@ import { fetchRegionConfig, generateToken } from "./api.ts";
 import {
   DATABASE_MANIFEST,
   type DatabaseManifest,
+  DB_NAME_MAX_LENGTH,
   ENV_DATABASE_AUTH_TOKEN,
   ENV_DATABASE_URL,
 } from "./constants.ts";
@@ -142,6 +143,11 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       name = value;
     }
     if (!name) throw new UserError("Database name is required.");
+    if (name.length > DB_NAME_MAX_LENGTH) {
+      throw new UserError(
+        `Database name must be ${DB_NAME_MAX_LENGTH} characters or fewer (got ${name.length}).`,
+      );
+    }
 
     // Fetch available regions from config
     const configSpin = spinner("Fetching available regions...");

@@ -1309,7 +1309,7 @@ The manifest path mirrors `bunny scripts link` — both write to `.bunny/<resour
 
 **Lifecycle integration:**
 
-- `bunny db create` — after creating the database, prompts "Link this directory to <name>?" and (on yes) writes the manifest. If a link already exists it shows what will be replaced. The follow-up flow (link → token → save-env) exposes three flags for non-interactive control: `--link`/`--no-link`, `--token`/`--no-token`, `--save-env`/`--no-save-env`. When a flag is provided the prompt is skipped; in `--output json` mode prompts are suppressed entirely so flags become the only way to opt in. The JSON output then includes `linked`, `token`, and `saved_to_env` fields reflecting what happened.
+- `bunny db create` — the name is validated client-side against `DB_NAME_MAX_LENGTH` (16) before any API call, since longer names make the backend 500 instead of returning a validation error. After creating the database, prompts "Link this directory to <name>?" and (on yes) writes the manifest. If a link already exists it shows what will be replaced. The follow-up flow (link → token → save-env) exposes three flags for non-interactive control: `--link`/`--no-link`, `--token`/`--no-token`, `--save-env`/`--no-save-env`. When a flag is provided the prompt is skipped; in `--output json` mode prompts are suppressed entirely so flags become the only way to opt in. The JSON output then includes `linked`, `token`, and `saved_to_env` fields reflecting what happened.
 - `bunny db delete` — after deleting the database, if `.bunny/database.json` points at the deleted ID it is removed silently via `removeManifest()` (no prompt — a manifest pointing at a deleted DB is unambiguously stale).
 
 ### `bunny.jsonc` (app config)
