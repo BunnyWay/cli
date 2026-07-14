@@ -141,8 +141,9 @@ export function renderSitesWorkflow(opts: {
     "",
     `      - uses: ${DEPLOY_SITE_ACTION}`,
     "        with:",
-    `          site: ${site}`,
-    `          directory: ${preset.dir}`,
+    // Quote the interpolated values so they're always inert YAML scalars.
+    `          site: ${JSON.stringify(site)}`,
+    `          directory: ${JSON.stringify(preset.dir)}`,
     "          production: ${{ github.event_name == 'push' }}",
     "          api_key: ${{ secrets.BUNNY_API_KEY }}",
   ];

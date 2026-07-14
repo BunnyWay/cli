@@ -5,7 +5,11 @@ import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
 import { deleteDeployFiles, writeRemoteState } from "../api.ts";
-import { DEFAULT_KEEP_DEPLOYS, type DeployRecord } from "../constants.ts";
+import {
+  DEFAULT_KEEP_DEPLOYS,
+  type DeployRecord,
+  isValidDeployId,
+} from "../constants.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -105,6 +109,11 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       for (const [index, victim] of victims.entries()) {
         spin.text = `Pruning ${victim.id} (${index + 1}/${victims.length})...`;
         try {
+          // Never interpolate an unvalidated ID into a storage path.
+          if (!isValidDeployId(victim.id)) {
+            failures.push({ id: victim.id, error: "Invalid deploy ID." });
+            continue;
+          }
           await deleteDeployFiles(connection, victim.id);
           pruned.add(victim.id);
         } catch (err) {

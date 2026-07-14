@@ -18,8 +18,8 @@ test("astro + bun workflow builds with bun and deploys dist", () => {
   expect(yml).toContain("uses: oven-sh/setup-bun@v2");
   expect(yml).toContain("run: bun run build");
   expect(yml).toContain(`uses: ${DEPLOY_SITE_ACTION}`);
-  expect(yml).toContain("site: my-site");
-  expect(yml).toContain("directory: dist");
+  expect(yml).toContain('site: "my-site"');
+  expect(yml).toContain('directory: "dist"');
   // Preview by default; production only on pushes to main.
   expect(yml).toContain("production: ${{ github.event_name == 'push' }}");
   // Fork PRs are skipped, not failed.
@@ -36,7 +36,7 @@ test("jekyll workflow uses ruby and deploys _site", () => {
   });
   expect(yml).toContain("uses: ruby/setup-ruby@v1");
   expect(yml).toContain("run: bundle exec jekyll build");
-  expect(yml).toContain("directory: _site");
+  expect(yml).toContain('directory: "_site"');
   expect(yml).not.toContain("setup-node");
 });
 
@@ -47,7 +47,7 @@ test("static workflow has no build step", () => {
     packageManager: "npm",
   });
   expect(yml).not.toContain("run: npm");
-  expect(yml).toContain("directory: .");
+  expect(yml).toContain('directory: "."');
 });
 
 test("nuxt runs its build override via the package manager's exec runner", () => {
@@ -58,7 +58,7 @@ test("nuxt runs its build override via the package manager's exec runner", () =>
   });
   expect(yml).toContain("run: bun install --frozen-lockfile");
   expect(yml).toContain("run: bunx nuxi generate");
-  expect(yml).toContain("directory: .output/public");
+  expect(yml).toContain('directory: ".output/public"');
   expect(yml).not.toContain("run: bun run build");
 });
 
@@ -71,7 +71,7 @@ test("mkdocs uses the python toolchain and deploys site", () => {
   expect(yml).toContain("uses: actions/setup-python@v5");
   expect(yml).toContain("run: pip install -r requirements.txt");
   expect(yml).toContain("run: mkdocs build");
-  expect(yml).toContain("directory: site");
+  expect(yml).toContain('directory: "site"');
   expect(yml).not.toContain("setup-node");
 });
 
@@ -91,7 +91,18 @@ test("zola installs the zola binary and blazor uses dotnet", () => {
   });
   expect(blazor).toContain("uses: actions/setup-dotnet@v4");
   expect(blazor).toContain("run: dotnet publish -c Release");
-  expect(blazor).toContain("directory: bin/Release/net8.0/publish/wwwroot");
+  expect(blazor).toContain('directory: "bin/Release/net8.0/publish/wwwroot"');
+});
+
+test("interpolated site name is a quoted, inert YAML scalar", () => {
+  const yml = renderSitesWorkflow({
+    site: "evil\n      run: rm -rf /",
+    preset: preset("static"),
+    packageManager: "npm",
+  });
+  // The newline is encoded inside the quoted scalar, never a new YAML line.
+  expect(yml).toContain('site: "evil\\n      run: rm -rf /"');
+  expect(yml).not.toContain("\n      run: rm -rf /\n");
 });
 
 test("npm and pnpm projects get the matching install steps", () => {

@@ -41,6 +41,13 @@ test("parseRemoteState rejects garbage", () => {
   expect(
     parseRemoteState(JSON.stringify({ ...validState, deploys: {} })),
   ).toBeNull();
+  // A tampered name that isn't a legal zone name is rejected outright, so it
+  // can't reach storage paths or generated CI YAML.
+  expect(
+    parseRemoteState(
+      JSON.stringify({ ...validState, name: "evil\n      run: rm -rf /" }),
+    ),
+  ).toBeNull();
 });
 
 test("deploy path and preview host helpers", () => {

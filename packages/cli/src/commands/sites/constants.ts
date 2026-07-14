@@ -110,6 +110,9 @@ export function parseRemoteState(raw: string): RemoteSiteState | null {
   if (
     typeof s.version !== "number" ||
     typeof s.name !== "string" ||
+    // A tampered/corrupt name would flow into storage paths and generated CI
+    // YAML unquoted; reject state whose name isn't a legal zone name.
+    !isValidSiteName(s.name) ||
     typeof s.storageZoneId !== "number" ||
     typeof s.pullZoneId !== "number" ||
     typeof s.scriptId !== "number" ||
