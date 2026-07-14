@@ -34,7 +34,7 @@ bunny sites domains add example.com --wait # also attaches *.preview.example.com
 ## Deploy IDs and previews
 
 - The deploy ID is the **git short-sha** when the working tree is clean, otherwise an 8-char **content hash**. Re-deploying identical content is a no-op (`--force` overrides).
-- Every deploy stays addressable: `https://<host>/deploys/<id>/` (path preview) and, once a custom domain exists, `https://dpl-<id>.preview.<domain>` (subdomain preview, served with `X-Robots-Tag: noindex`).
+- Every deploy stays addressable: `https://<host>/deploys/<id>/` (path preview) and, once a custom domain exists, `https://dpl-<id>.preview.<domain>` (subdomain preview). The router rewrites root-absolute asset URLs in path-preview HTML (via HTMLRewriter), so sites whose assets use absolute paths (Jekyll, most SSGs) render correctly under the `/deploys/<id>/` subpath. Both preview forms are served `X-Robots-Tag: noindex`.
 - Dotfiles and `node_modules` are never uploaded.
 
 ---
@@ -80,6 +80,11 @@ bunny sites deploy ./out --build "npm run build" --env VITE_FLAG=1
 
 With `--build`, the build runs in your shell environment plus the `--env`/`--env-file` overrides — there is no remote env store; put build-time values in your local `.env` or CI secrets. Deploying already-uploaded content with `--production` skips the upload and just publishes it.
 
+Interactive `deploy` adds two conveniences (both skipped under `--output json`):
+
+- **No linked site** → it offers to create a new site or pick an existing one, then links it (goes straight to create when the account has no sites).
+- **No `--build`** → it offers to run a build first: the configured `sites.build`, else a detected framework build (same detection as `ci init`), else a `package.json` `build` script. Confirming builds first, and when no `[dir]` was given it deploys the framework's output directory.
+
 ---
 
 ## `bunny sites deployments` — List, publish, prune
@@ -124,10 +129,12 @@ Writes a workflow that deploys previews on pull requests and publishes to produc
 
 ```bash
 bunny sites list
-bunny sites show                            # resources, domains, current deploy; warns on old router
+bunny sites show                            # resources, domains, current deploy
+bunny sites open                            # open the live URL in the browser (--print emits it)
+bunny sites ssl --no-force-ssl              # toggle Force HTTPS on the <name>.b-cdn.net system host
 bunny sites link my-site                    # .bunny/site.json
 bunny sites unlink
-bunny sites upgrade                         # republish the router at the CLI's latest version
+bunny sites upgrade-router                  # republish the router with the CLI's current source
 bunny sites delete my-site                  # typed-name confirmation; --keep-storage keeps files
 ```
 
