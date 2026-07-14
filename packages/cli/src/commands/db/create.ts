@@ -34,6 +34,14 @@ async function getCdnServerToken(): Promise<string | null> {
   }
 }
 
+/** Validate a database name; returns an error message, or null when valid. */
+function validateDbName(name: string): string | null {
+  if (name.length > DB_NAME_MAX_LENGTH) {
+    return `Database name must be ${DB_NAME_MAX_LENGTH} characters or fewer (got ${name.length}).`;
+  }
+  return null;
+}
+
 const COMMAND = "create";
 const DESCRIPTION = "Create a new database.";
 
@@ -139,15 +147,13 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         type: "text",
         name: "value",
         message: "Database name:",
+        validate: (v: string) => validateDbName(v) ?? true,
       });
       name = value;
     }
     if (!name) throw new UserError("Database name is required.");
-    if (name.length > DB_NAME_MAX_LENGTH) {
-      throw new UserError(
-        `Database name must be ${DB_NAME_MAX_LENGTH} characters or fewer (got ${name.length}).`,
-      );
-    }
+    const nameError = validateDbName(name);
+    if (nameError) throw new UserError(nameError);
 
     // Fetch available regions from config
     const configSpin = spinner("Fetching available regions...");
