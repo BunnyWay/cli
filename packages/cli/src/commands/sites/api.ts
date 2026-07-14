@@ -25,7 +25,7 @@ import {
   routerScriptName,
   STATE_VERSION,
 } from "./constants.ts";
-import { ROUTER_VERSION, routerSource } from "./router/source.ts";
+import { routerSource } from "./router/source.ts";
 
 export type ComputeClient = ReturnType<typeof createComputeClient>;
 type PullZone = components["schemas"]["PullZoneModel"];
@@ -446,7 +446,6 @@ export async function createSite(
     storageZoneId,
     pullZoneId: pullZone.Id,
     scriptId,
-    routerVersion: ROUTER_VERSION,
     deploys: [],
   };
   const connection = siteFiles.connect(storageZone);
@@ -617,6 +616,7 @@ export async function deleteSiteResources(opts: {
     }
   };
 
+  // The pull zone references both the script and the storage zone, so it goes first.
   await attempt("pull zone", state.pullZoneId, () =>
     coreClient.DELETE("/pullzone/{id}", {
       params: { path: { id: state.pullZoneId } },

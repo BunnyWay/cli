@@ -1,0 +1,36 @@
+import { expect, test } from "bun:test";
+import { routerSource } from "./source.ts";
+
+test("routerSource wires up the preview machinery", () => {
+  const src = routerSource();
+  expect(src).toContain("bunny sites router");
+  // Serves the promoted deploy at the apex and per-deploy path previews.
+  expect(src).toContain("process.env.CURRENT_DEPLOY");
+  expect(src).toContain('url.pathname = "/deploys/" + deploy + target;');
+  // Flags previews so the response phase rewrites their HTML (and never production's).
+  expect(src).toContain('const PREVIEW_HEADER = "x-bunny-preview";');
+  expect(src).toContain("new HTMLRewriter()");
+  expect(src).toContain("X-Robots-Tag");
+});
+
+// Mirrors the router's withDeploy() so a regression in the rewrite rule is caught here.
+function withDeploy(id: string, value: string): string {
+  if (!value.startsWith("/") || value.startsWith("//")) return value;
+  if (value.startsWith("/deploys/")) return value;
+  return `/deploys/${id}${value}`;
+}
+
+test("withDeploy prefixes only root-absolute, un-prefixed paths", () => {
+  expect(withDeploy("abcd", "/assets/main.css")).toBe(
+    "/deploys/abcd/assets/main.css",
+  );
+  // Already prefixed — left alone (idempotent).
+  expect(withDeploy("abcd", "/deploys/abcd/x.js")).toBe("/deploys/abcd/x.js");
+  // Protocol-relative, absolute, relative, and anchors are untouched.
+  expect(withDeploy("abcd", "//cdn.example.com/x.js")).toBe(
+    "//cdn.example.com/x.js",
+  );
+  expect(withDeploy("abcd", "https://x.com/a.css")).toBe("https://x.com/a.css");
+  expect(withDeploy("abcd", "assets/main.css")).toBe("assets/main.css");
+  expect(withDeploy("abcd", "#section")).toBe("#section");
+});

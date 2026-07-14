@@ -18,7 +18,6 @@ import {
   type RemoteSiteState,
   STATE_VERSION,
 } from "./constants.ts";
-import { ROUTER_VERSION } from "./router/source.ts";
 
 // ---- in-memory storage-file store (replaces the storage SDK) ----
 
@@ -86,7 +85,6 @@ function fakeState(overrides?: Partial<RemoteSiteState>): RemoteSiteState {
     storageZoneId: 10,
     pullZoneId: 30,
     scriptId: 20,
-    routerVersion: ROUTER_VERSION,
     deploys: [],
     ...overrides,
   };
@@ -108,6 +106,7 @@ function fakeCoreClient(opts: {
 }): CoreClient {
   const zones = opts.storageZones ?? [];
   const pullZones = opts.pullZones ?? [];
+  let nextPullZoneId = 30;
   return {
     GET: async (
       path: string,
@@ -169,10 +168,11 @@ function fakeCoreClient(opts: {
         return { data: zone };
       }
       if (path === "/pullzone") {
+        const name = (options?.body as { Name: string }).Name;
         const pz = {
-          Id: 30,
-          Name: (options?.body as { Name: string }).Name,
-          Hostnames: [{ IsSystemHostname: true, Value: "my-site.b-cdn.net" }],
+          Id: nextPullZoneId++,
+          Name: name,
+          Hostnames: [{ IsSystemHostname: true, Value: `${name}.b-cdn.net` }],
         };
         pullZones.push(pz);
         return { data: pz };
@@ -198,6 +198,7 @@ function fakeComputeClient(opts: {
   scripts?: Array<{ Id: number; Name: string }>;
 }): ComputeClient {
   const scripts = opts.scripts ?? [];
+  let nextScriptId = 20;
   return {
     GET: async (path: string) => {
       opts.calls.push({ method: "GET", path });
@@ -208,7 +209,7 @@ function fakeComputeClient(opts: {
       opts.calls.push({ method: "POST", path, body: options?.body });
       if (path === "/compute/script") {
         const script = {
-          Id: 20,
+          Id: nextScriptId++,
           Name: (options?.body as { Name: string }).Name,
         };
         scripts.push(script);
@@ -216,12 +217,24 @@ function fakeComputeClient(opts: {
       }
       return { data: {} };
     },
-    PUT: async (path: string, options?: { body?: unknown }) => {
-      opts.calls.push({ method: "PUT", path, body: options?.body });
+    PUT: async (
+      path: string,
+      options?: { params?: unknown; body?: unknown },
+    ) => {
+      opts.calls.push({
+        method: "PUT",
+        path,
+        params: options?.params as Record<string, unknown>,
+        body: options?.body,
+      });
       return { data: {} };
     },
-    DELETE: async (path: string) => {
-      opts.calls.push({ method: "DELETE", path });
+    DELETE: async (path: string, options?: { params?: unknown }) => {
+      opts.calls.push({
+        method: "DELETE",
+        path,
+        params: options?.params as Record<string, unknown>,
+      });
       return { data: undefined };
     },
   } as unknown as ComputeClient;
@@ -334,11 +347,15 @@ test("createSite provisions storage zone → router → pull zone → state", as
   );
   expect(envSet?.body).toEqual({ Name: "CURRENT_DEPLOY", DefaultValue: "" });
 
-  // The pull zone is created from the storage zone and the router is attached.
-  const pzCreate = coreCalls.find(
+  // Exactly one pull zone (production) is created; the router is attached.
+  const pzCreates = coreCalls.filter(
     (c) => c.method === "POST" && c.path === "/pullzone",
   );
-  expect(pzCreate?.body).toMatchObject({ Name: "my-site", StorageZoneId: 10 });
+  expect(pzCreates).toHaveLength(1);
+  expect(pzCreates[0]?.body).toMatchObject({
+    Name: "my-site",
+    StorageZoneId: 10,
+  });
   const attach = coreCalls.find(
     (c) => c.method === "POST" && c.path === "/pullzone/{id}",
   );
@@ -353,6 +370,11 @@ test("createSite provisions storage zone → router → pull zone → state", as
     ForceSSL: true,
   });
 
+  // Exactly one middleware script (the router) is created.
+  expect(computePaths.filter((p) => p === "POST /compute/script")).toHaveLength(
+    1,
+  );
+
   // Remote state marks the zone as a site.
   const written = await readRemoteState(fakeConnection());
   expect(written?.state).toMatchObject({
@@ -360,7 +382,6 @@ test("createSite provisions storage zone → router → pull zone → state", as
     storageZoneId: 10,
     pullZoneId: 30,
     scriptId: 20,
-    routerVersion: ROUTER_VERSION,
   });
 });
 
@@ -567,6 +588,30 @@ test("deleteSiteResources removes the site marker when keeping storage", async (
   expect(store.has(REMOTE_STATE_PATH)).toBe(false);
   // Deploy files are untouched.
   expect(store.has("deploys/aaa/index.html")).toBe(true);
+});
+
+test("deleteSiteResources deletes the pull zone, router, and storage zone", async () => {
+  const coreCalls: Call[] = [];
+  const computeCalls: Call[] = [];
+  const coreClient = fakeCoreClient({ calls: coreCalls });
+  const computeClient = fakeComputeClient({ calls: computeCalls });
+
+  const results = await deleteSiteResources({
+    coreClient,
+    computeClient,
+    state: fakeState(),
+  });
+
+  const deletedPullZoneIds = coreCalls
+    .filter((c) => c.method === "DELETE" && c.path === "/pullzone/{id}")
+    .map((c) => (c.params as { path: { id: number } }).path.id);
+  expect(deletedPullZoneIds).toEqual([30]);
+  const deletedScriptIds = computeCalls
+    .filter((c) => c.method === "DELETE" && c.path === "/compute/script/{id}")
+    .map((c) => (c.params as { path: { id: number } }).path.id);
+  expect(deletedScriptIds).toEqual([20]);
+  // Pull zone + router script + storage zone.
+  expect(results.filter((r) => r.deleted)).toHaveLength(3);
 });
 
 // Regression: the live API returns GET /pullzone as a paginated envelope

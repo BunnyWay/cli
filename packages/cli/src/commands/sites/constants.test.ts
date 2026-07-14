@@ -15,17 +15,11 @@ const validState: RemoteSiteState = {
   storageZoneId: 1,
   pullZoneId: 2,
   scriptId: 3,
-  routerVersion: 1,
   deploys: [],
 };
 
 test("parseRemoteState round-trips a valid state", () => {
   expect(parseRemoteState(JSON.stringify(validState))).toEqual(validState);
-});
-
-test("parseRemoteState defaults routerVersion for legacy state", () => {
-  const { routerVersion: _rv, ...legacy } = validState;
-  expect(parseRemoteState(JSON.stringify(legacy))?.routerVersion).toBe(0);
 });
 
 test("parseRemoteState rejects garbage", () => {

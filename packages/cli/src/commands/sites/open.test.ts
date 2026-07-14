@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import type { Hostname } from "../../core/hostnames/index.ts";
 import { type RemoteSiteState, STATE_VERSION } from "./constants.ts";
 import { siteLiveUrl } from "./open.ts";
-import { ROUTER_VERSION } from "./router/source.ts";
 
 function state(overrides?: Partial<RemoteSiteState>): RemoteSiteState {
   return {
@@ -11,7 +10,6 @@ function state(overrides?: Partial<RemoteSiteState>): RemoteSiteState {
     storageZoneId: 10,
     pullZoneId: 30,
     scriptId: 20,
-    routerVersion: ROUTER_VERSION,
     deploys: [],
     ...overrides,
   };

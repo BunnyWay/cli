@@ -35,6 +35,7 @@ import {
   selectSite,
   siteOptionBuilder,
 } from "./interactive.ts";
+import { createLinkedSite, promptSiteName } from "./provision.ts";
 import { collectFiles, hashFiles, uploadDeploy } from "./uploader.ts";
 
 interface DeployArgs extends SiteSelectorArgs {
@@ -46,7 +47,14 @@ interface DeployArgs extends SiteSelectorArgs {
   force?: boolean;
 }
 
-/** Production and preview URLs for a deploy, derived from the site's hosts. */
+/**
+ * Production and preview URLs for a deploy, derived from the site's hosts.
+ *
+ * With a custom domain the preview is an isolated per-deploy subdomain
+ * (`dpl-{id}.preview.{domain}`); otherwise it's the immutable `/deploys/{id}/`
+ * path on the system host, which the router's HTMLRewriter makes render
+ * correctly even for root-absolute asset URLs.
+ */
 function deployUrls(
   site: SiteContext,
   deployId: string,
@@ -144,12 +152,14 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       site: args.site,
       link: args.link,
       output,
+      offerCreate: async () => {
+        const name = await promptSiteName(undefined, true);
+        return createLinkedSite({ coreClient, computeClient, name });
+      },
     });
     const { state, connection, etag } = site;
 
-    // Build before hashing — the deploy ID must key on the build *output*, and a
-    // first build may be what creates the deploy directory. When no build is
-    // detected, `autoDir` stays undefined and the explicit/default dir is used.
+    // Build before hashing so the deploy ID keys on the output (and a first build can create the dir).
     let autoDir: string | undefined;
     if (args.build !== undefined) {
       const command = args.build || siteConfig?.config.build;
@@ -173,8 +183,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         ? { command: configured, label: "the configured build" }
         : await resolveAutoBuild(root);
       if (auto) {
-        // A detected framework fixes its output dir; target it unless one was
-        // given, whether or not the build runs (they may have built already).
+        // Target the framework's output dir unless one was given (whether or not the build runs).
         if (explicitDir === undefined && "dir" in auto) autoDir = auto.dir;
         const prompt = configured
           ? `Run ${auto.label} (\`${auto.command}\`) before deploying?`

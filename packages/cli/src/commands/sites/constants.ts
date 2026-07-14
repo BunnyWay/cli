@@ -50,7 +50,6 @@ export interface RemoteSiteState {
   storageZoneId: number;
   pullZoneId: number;
   scriptId: number;
-  routerVersion: number;
   /** Primary custom domain (apex), when one has been attached. */
   domain?: string;
   current?: string;
@@ -61,6 +60,21 @@ export interface RemoteSiteState {
 /** Storage-zone path prefix for a deploy, without a trailing slash. */
 export function deployPrefix(deployId: string): string {
   return `${DEPLOYS_DIR}/${deployId}`;
+}
+
+/** Pick the deploys beyond the newest `keep`, never the current or previous. */
+export function pruneVictims(
+  deploys: DeployRecord[],
+  keep: number,
+  current?: string,
+  previous?: string,
+): DeployRecord[] {
+  const sorted = [...deploys].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
+  return sorted
+    .slice(Math.max(0, keep))
+    .filter((d) => d.id !== current && d.id !== previous);
 }
 
 /** The preview hostname for a deploy on a custom domain. */
@@ -120,8 +134,5 @@ export function parseRemoteState(raw: string): RemoteSiteState | null {
   ) {
     return null;
   }
-  const state = s as unknown as RemoteSiteState;
-  // Older state files may predate router versioning.
-  if (typeof state.routerVersion !== "number") state.routerVersion = 0;
-  return state;
+  return s as unknown as RemoteSiteState;
 }

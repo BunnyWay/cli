@@ -19,7 +19,6 @@ import {
   selectSite,
   sitePositionalBuilder,
 } from "./interactive.ts";
-import { ROUTER_VERSION } from "./router/source.ts";
 
 type ShowArgs = SiteSelectorArgs;
 
@@ -56,14 +55,11 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
       spin.stop();
     }
 
-    const routerOutdated = state.routerVersion < ROUTER_VERSION;
-
     if (output === "json") {
       logger.log(
         JSON.stringify(
           {
             ...state,
-            routerOutdated,
             hostnames: hostnames.map(toSafeHostname),
           },
           null,
@@ -81,10 +77,6 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
           { key: "Storage zone", value: String(state.storageZoneId) },
           { key: "Pull zone", value: String(state.pullZoneId) },
           { key: "Router script", value: String(state.scriptId) },
-          {
-            key: "Router version",
-            value: `${state.routerVersion}${routerOutdated ? ` (v${ROUTER_VERSION} available)` : ""}`,
-          },
           { key: "Domain", value: state.domain ?? "—" },
           { key: "Current deploy", value: state.current ?? "—" },
           {
@@ -114,13 +106,6 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
           ]),
           output,
         ),
-      );
-    }
-
-    if (routerOutdated) {
-      logger.log();
-      logger.warn(
-        `A newer site router (v${ROUTER_VERSION}) is available. Run \`bunny sites upgrade-router\` to update.`,
       );
     }
 

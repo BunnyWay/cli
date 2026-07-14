@@ -80,10 +80,17 @@ export interface SelectedSite {
  * Precedence: explicit ref (flag or positional) → `.bunny/site.json` →
  * `sites.name` in bunny.jsonc → interactive picker. Non-interactive runs
  * without a resolvable site fail with a hint instead of hanging on a prompt.
+ *
+ * `offerCreate` (deploy only) adds a "new site" branch to the picker: it runs
+ * when the account has no sites, or when the user picks "a new site" over the
+ * existing list. It returns a ready, already-linked context.
  */
 export async function selectSite(
   client: CoreClient,
-  args: SiteSelectorArgs & { output: OutputFormat },
+  args: SiteSelectorArgs & {
+    output: OutputFormat;
+    offerCreate?: () => Promise<SiteContext>;
+  },
 ): Promise<SelectedSite> {
   const noLink = async () => {};
 
@@ -149,7 +156,26 @@ export async function selectSite(
     spin.stop();
   }
 
-  if (sites.length === 0) {
+  // Deploy offers to create a site here; other commands only pick an existing one.
+  if (args.offerCreate) {
+    if (sites.length === 0) {
+      return { site: await args.offerCreate(), offerLink: noLink };
+    }
+    const { mode } = await prompts({
+      type: "select",
+      name: "mode",
+      message: "Deploy to:",
+      choices: [
+        { title: "A new site", value: "new" },
+        { title: "An existing site", value: "existing" },
+      ],
+      initial: 0,
+    });
+    if (!mode) throw new UserError("A site is required.");
+    if (mode === "new") {
+      return { site: await args.offerCreate(), offerLink: noLink };
+    }
+  } else if (sites.length === 0) {
     throw new UserError(
       "No sites found in your account.",
       "Create one with `bunny sites create <name>`.",

@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
-import type { DeployRecord } from "../constants.ts";
-import { pruneVictims } from "./prune.ts";
+import { type DeployRecord, pruneVictims } from "../constants.ts";
 
 function deploy(id: string, createdAt: string): DeployRecord {
   return { id, createdAt, source: "content", files: 1, bytes: 1 };

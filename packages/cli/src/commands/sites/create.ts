@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import {
   createComputeClient,
   createCoreClient,
@@ -7,7 +6,6 @@ import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
 import { formatKeyValue } from "../../core/format.ts";
 import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
@@ -21,29 +19,15 @@ import {
   printWorkflowInstructions,
   scaffoldSitesWorkflow,
 } from "./ci/scaffold.ts";
-import {
-  isValidSiteName,
-  SITES_MANIFEST,
-  type SiteManifest,
-} from "./constants.ts";
+import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 import { setupSiteDomain } from "./domains/index.ts";
+import { promptSiteName } from "./provision.ts";
 
 interface CreateArgs {
   name?: string;
   region?: string;
   domain?: string;
   link?: boolean;
-}
-
-const SITE_NAME_RULES =
-  "Use 3–60 lowercase letters, digits, and dashes (no leading/trailing dash).";
-
-function suggestSiteName(): string | undefined {
-  const base = basename(process.cwd())
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return isValidSiteName(base) ? base : undefined;
 }
 
 /**
@@ -91,31 +75,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
     const { profile, output, verbose, apiKey } = args;
     const interactive = isInteractive(output);
 
-    let name = args.name?.trim().toLowerCase();
-    if (!name && interactive) {
-      const suggestion = suggestSiteName();
-      const { value } = await prompts({
-        type: "text",
-        name: "value",
-        message: "Site name:",
-        ...(suggestion ? { initial: suggestion } : {}),
-        validate: (v: string) =>
-          isValidSiteName(String(v).trim().toLowerCase()) || SITE_NAME_RULES,
-      });
-      name = (value as string | undefined)?.trim().toLowerCase();
-    }
-    if (!name) {
-      throw new UserError(
-        "Site name is required.",
-        "Pass one: bunny sites create <name>.",
-      );
-    }
-    if (!isValidSiteName(name)) {
-      throw new UserError(
-        `"${args.name ?? name}" is not a valid site name.`,
-        SITE_NAME_RULES,
-      );
-    }
+    const name = await promptSiteName(args.name, interactive);
 
     const domain = args.domain ? normalizeHostname(args.domain) : undefined;
 

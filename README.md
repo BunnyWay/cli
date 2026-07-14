@@ -56,8 +56,9 @@ bun ny dns records preset list              # list DNS record presets (email pro
 bun ny dns records preset google-workspace example.com   # apply a preset record set
 bun ny dns records preset bluesky example.com --param did=did:plc:abc123   # apply a preset non-interactively
 bun ny sites create my-site                 # provision a static site (storage zone + pull zone + edge router)
-bun ny sites deploy                         # detect the framework and offer to run its build, then deploy the output
-bun ny sites deploy ./dist                  # deploy a directory to a preview URL
+bun ny sites deploy                         # no linked site? offers to create one or pick an existing; detects the framework, offers to build, then deploys
+bun ny sites deploy ./dist                  # deploy to an immutable preview URL (<name>.b-cdn.net/deploys/<id>/); the router's HTMLRewriter keeps root-absolute assets working
+bun ny sites deployments prune              # delete old deploys (keeps the newest 5, never current/previous)
 bun ny sites deploy ./dist --production     # deploy and publish as the live site (--prod works too)
 bun ny sites deploy --build                 # run `sites.build` from bunny.jsonc, then deploy `sites.dir`
 bun ny sites deployments list               # list deploys with the live one marked

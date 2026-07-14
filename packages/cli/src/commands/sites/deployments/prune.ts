@@ -7,8 +7,8 @@ import { confirm, spinner } from "../../../core/ui.ts";
 import { deleteDeployFiles, writeRemoteState } from "../api.ts";
 import {
   DEFAULT_KEEP_DEPLOYS,
-  type DeployRecord,
   isValidDeployId,
+  pruneVictims,
 } from "../constants.ts";
 import {
   type SiteSelectorArgs,
@@ -19,21 +19,6 @@ import {
 interface PruneArgs extends SiteSelectorArgs {
   keep?: number;
   force?: boolean;
-}
-
-/** Pick the deploys to delete: everything beyond the newest `keep`, never current/previous. */
-export function pruneVictims(
-  deploys: DeployRecord[],
-  keep: number,
-  current?: string,
-  previous?: string,
-): DeployRecord[] {
-  const sorted = [...deploys].sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt),
-  );
-  return sorted
-    .slice(Math.max(0, keep))
-    .filter((d) => d.id !== current && d.id !== previous);
 }
 
 export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
