@@ -1,7 +1,7 @@
 import type { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { UserError } from "../../core/errors.ts";
-import { createPullZone } from "../../core/hostnames/index.ts";
+import { ApiError, UserError } from "../../core/errors.ts";
+import { createPullZone, setForceSsl } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { fetchScripts } from "../scripts/api.ts";
 import { SCRIPT_TYPE_MIDDLEWARE } from "../scripts/constants.ts";
@@ -278,6 +278,20 @@ async function findPullZoneByName(
   );
 }
 
+/**
+ * A create failed because the globally-unique name is already taken (usually by
+ * another account, so the pre-create by-name lookup couldn't see it). Reported
+ * as a 409, or on some endpoints a 400 whose message says the name is in use.
+ */
+function isNameTaken(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  if (err.status === 409) return true;
+  return (
+    err.status === 400 &&
+    /already (exists|taken|in use)|not available|is taken/i.test(err.message)
+  );
+}
+
 export interface CreateSiteOptions {
   coreClient: CoreClient;
   computeClient: ComputeClient;
@@ -321,9 +335,20 @@ export async function createSite(
     }
     reused.storageZone = true;
   } else {
-    const { data } = await coreClient.POST("/storagezone", {
-      body: { Name: name, Region: region, ReplicationRegions: null },
-    });
+    let data: StorageZoneModel | undefined;
+    try {
+      ({ data } = await coreClient.POST("/storagezone", {
+        body: { Name: name, Region: region, ReplicationRegions: null },
+      }));
+    } catch (err) {
+      if (isNameTaken(err)) {
+        throw new UserError(
+          `The storage zone name "${name}" is already taken.`,
+          "Storage zone names are global across bunny.net. Choose a different site name.",
+        );
+      }
+      throw err;
+    }
     if (!data?.Id) {
       throw new UserError(`Failed to create storage zone "${name}".`);
     }
@@ -378,7 +403,17 @@ export async function createSite(
   if (pullZone) {
     reused.pullZone = true;
   } else {
-    pullZone = await createPullZone(coreClient, name, storageZoneId);
+    try {
+      pullZone = await createPullZone(coreClient, name, storageZoneId);
+    } catch (err) {
+      if (isNameTaken(err)) {
+        throw new UserError(
+          `The pull zone name "${name}" is already taken.`,
+          "Pull zone names are global across bunny.net. Choose a different site name.",
+        );
+      }
+      throw err;
+    }
   }
   if (pullZone.Id == null) {
     throw new UserError(`Pull zone "${name}" has no ID.`);
@@ -387,6 +422,21 @@ export async function createSite(
     params: { path: { id: pullZone.Id } },
     body: { MiddlewareScriptId: scriptId },
   });
+
+  // Force HTTPS on the <name>.b-cdn.net system host: it already carries bunny's
+  // wildcard cert, so this just redirects HTTP. Best-effort — never fail create.
+  const systemHostname = (pullZone.Hostnames ?? []).find(
+    (h) => h.IsSystemHostname,
+  )?.Value;
+  if (systemHostname) {
+    try {
+      await setForceSsl(coreClient, pullZone.Id, systemHostname, true);
+    } catch (err) {
+      logger.warn(
+        `Couldn't force HTTPS on ${systemHostname}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
 
   // 4. Remote state — from here on the zone identifies as a site.
   step("Writing site state...");
@@ -412,9 +462,98 @@ export async function createSite(
   };
 }
 
+/** The pull zone's system hostname (`*.b-cdn.net`), or undefined on any failure. */
+export async function fetchSystemHostname(
+  coreClient: CoreClient,
+  pullZoneId: number,
+): Promise<string | undefined> {
+  try {
+    const { data } = await coreClient.GET("/pullzone/{id}", {
+      params: { path: { id: pullZoneId } },
+    });
+    return (
+      (data?.Hostnames ?? []).find((h) => h.IsSystemHostname)?.Value ??
+      undefined
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+// Promote timing. `CURRENT_DEPLOY` is accepted by the control plane instantly
+// but reaches the edge nodes asynchronously, so we confirm the edge is serving
+// a deploy before the follow-up purge, then settle briefly so the value has
+// landed everywhere.
+const PROBE_TIMEOUT_MS = 4000;
+const PROPAGATION_DEADLINE_MS = 20_000;
+const PROPAGATION_INTERVAL_MS = 1500;
+const SETTLE_FLOOR_MS = 2500;
+
+/**
+ * The CDN-probe seam. Tests swap these so promote runs without real network or
+ * real timers.
+ */
+export const promoteVerification = {
+  /** Probe the live site through the CDN; resolves to the HTTP status code. */
+  probe: async (url: string): Promise<number> => {
+    const res = await fetch(url, {
+      cache: "no-store",
+      redirect: "manual",
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    });
+    return res.status;
+  },
+  wait: (ms: number): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
+};
+
+/**
+ * Wait until the edge serves a real deploy for this site. The router returns
+ * the "no deploys yet" placeholder as a 404 while `CURRENT_DEPLOY` is unset or
+ * unpropagated, so any non-404 means a deploy is being served. Best-effort: if
+ * the system hostname can't be resolved we skip probing and just settle.
+ */
+async function waitForEdgePropagation(
+  coreClient: CoreClient,
+  state: RemoteSiteState,
+  deployId: string,
+): Promise<void> {
+  const host = await fetchSystemHostname(coreClient, state.pullZoneId);
+  const start = Date.now();
+  if (host) {
+    const deadline = start + PROPAGATION_DEADLINE_MS;
+    let attempt = 0;
+    while (Date.now() < deadline) {
+      try {
+        // A unique query per attempt keeps each probe out of the CDN cache so a
+        // stale placeholder can't mask a propagated deploy.
+        const status = await promoteVerification.probe(
+          `https://${host}/?__bunny_promote=${deployId}-${attempt++}`,
+        );
+        if (status !== 404) break;
+      } catch {
+        // Edge briefly unreachable (DNS/warmup) — keep trying until the deadline.
+      }
+      await promoteVerification.wait(PROPAGATION_INTERVAL_MS);
+    }
+  }
+  // Give the env var a moment to reach every node before the follow-up purge,
+  // so re-promotes don't re-cache the outgoing deploy's assets.
+  const elapsed = Date.now() - start;
+  if (elapsed < SETTLE_FLOOR_MS) {
+    await promoteVerification.wait(SETTLE_FLOOR_MS - elapsed);
+  }
+}
+
 /**
  * Point production at a deploy: update the router's `CURRENT_DEPLOY` env var
  * (takes effect without republishing code) and purge the pull zone cache.
+ *
+ * The env var reaches the edge asynchronously, so a single purge races it: a
+ * request during the propagation window re-caches the old deploy (or, on a
+ * first deploy, the 404 placeholder — the "styles broken until it settles"
+ * failure). We purge, wait for the edge to serve the deploy, then purge again
+ * so nothing stale survives.
  */
 export async function promoteDeploy(opts: {
   computeClient: ComputeClient;
@@ -422,14 +561,19 @@ export async function promoteDeploy(opts: {
   state: RemoteSiteState;
   deployId: string;
 }): Promise<void> {
+  const purge = () =>
+    opts.coreClient.POST("/pullzone/{id}/purgeCache", {
+      params: { path: { id: opts.state.pullZoneId } },
+      body: {},
+    });
+
   await opts.computeClient.PUT("/compute/script/{id}/variables", {
     params: { path: { id: opts.state.scriptId } },
     body: { Name: CURRENT_DEPLOY_VAR, DefaultValue: opts.deployId },
   });
-  await opts.coreClient.POST("/pullzone/{id}/purgeCache", {
-    params: { path: { id: opts.state.pullZoneId } },
-    body: {},
-  });
+  await purge();
+  await waitForEdgePropagation(opts.coreClient, opts.state, opts.deployId);
+  await purge();
 }
 
 export interface TeardownResult {

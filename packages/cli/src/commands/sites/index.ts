@@ -7,20 +7,24 @@ import { sitesDeploymentsNamespace } from "./deployments/index.ts";
 import { sitesDomainsCommands } from "./domains/index.ts";
 import { sitesLinkCommand } from "./link.ts";
 import { sitesListCommand } from "./list.ts";
+import { sitesOpenCommand } from "./open.ts";
 import { sitesShowCommand } from "./show.ts";
+import { sitesSslCommand } from "./ssl.ts";
 import { sitesUnlinkCommand } from "./unlink.ts";
-import { sitesUpgradeCommand } from "./upgrade.ts";
+import { sitesUpgradeRouterCommand } from "./upgrade-router.ts";
 
 export const sitesNamespace = defineNamespace("sites", false, [
   sitesCreateCommand,
   sitesListCommand,
   sitesShowCommand,
+  sitesOpenCommand,
   sitesDeployCommand,
   sitesDeploymentsNamespace,
   ...sitesDomainsCommands,
+  sitesSslCommand,
   sitesCiNamespace,
   sitesLinkCommand,
   sitesUnlinkCommand,
-  sitesUpgradeCommand,
+  sitesUpgradeRouterCommand,
   sitesDeleteCommand,
 ]);

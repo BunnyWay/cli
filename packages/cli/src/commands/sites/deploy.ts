@@ -10,9 +10,19 @@ import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { formatBytes } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
-import { promoteDeploy, type SiteContext, writeRemoteState } from "./api.ts";
-import { parseEnvAssignments, parseEnvFile, runBuildCommand } from "./build.ts";
+import { confirm, isInteractive, spinner } from "../../core/ui.ts";
+import {
+  fetchSystemHostname,
+  promoteDeploy,
+  type SiteContext,
+  writeRemoteState,
+} from "./api.ts";
+import {
+  parseEnvAssignments,
+  parseEnvFile,
+  resolveAutoBuild,
+  runBuildCommand,
+} from "./build.ts";
 import { loadSiteConfig } from "./config.ts";
 import {
   type DeployRecord,
@@ -34,24 +44,6 @@ interface DeployArgs extends SiteSelectorArgs {
   "env-file"?: string;
   production?: boolean;
   force?: boolean;
-}
-
-/** System hostname from the pull zone; URLs are informational, so tolerate a fetch failure. */
-async function fetchSystemHost(
-  coreClient: ReturnType<typeof createCoreClient>,
-  pullZoneId: number,
-): Promise<string | undefined> {
-  try {
-    const { data } = await coreClient.GET("/pullzone/{id}", {
-      params: { path: { id: pullZoneId } },
-    });
-    return (
-      (data?.Hostnames ?? []).find((h) => h.IsSystemHostname)?.Value ??
-      undefined
-    );
-  } catch {
-    return undefined;
-  }
 }
 
 /** Production and preview URLs for a deploy, derived from the site's hosts. */
@@ -133,11 +125,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
     const siteConfig = loadSiteConfig();
+    const root = siteConfig?.root ?? process.cwd();
+    const explicitDir = args.dir ?? siteConfig?.config.dir;
 
-    const dir = resolve(args.dir ?? siteConfig?.config.dir ?? ".");
-    if (!existsSync(dir) || !statSync(dir).isDirectory()) {
-      throw new UserError(`Directory not found: ${dir}`);
-    }
     if (args.build === undefined && (args.env?.length || args["env-file"])) {
       throw new UserError(
         "--env/--env-file only apply to builds.",
@@ -157,7 +147,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     });
     const { state, connection, etag } = site;
 
-    // Build first — the deploy ID must hash the build *output*.
+    // Build before hashing — the deploy ID must key on the build *output*, and a
+    // first build may be what creates the deploy directory. When no build is
+    // detected, `autoDir` stays undefined and the explicit/default dir is used.
+    let autoDir: string | undefined;
     if (args.build !== undefined) {
       const command = args.build || siteConfig?.config.build;
       if (!command) {
@@ -172,11 +165,32 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           : {}),
         ...parseEnvAssignments(args.env),
       };
-      await runBuildCommand(
-        command,
-        siteConfig?.root ?? process.cwd(),
-        overrides,
-      );
+      await runBuildCommand(command, root, overrides);
+    } else if (isInteractive(output)) {
+      // No --build: offer to run the configured build, else a detected one.
+      const configured = siteConfig?.config.build;
+      const auto = configured
+        ? { command: configured, label: "the configured build" }
+        : await resolveAutoBuild(root);
+      if (auto) {
+        // A detected framework fixes its output dir; target it unless one was
+        // given, whether or not the build runs (they may have built already).
+        if (explicitDir === undefined && "dir" in auto) autoDir = auto.dir;
+        const prompt = configured
+          ? `Run ${auto.label} (\`${auto.command}\`) before deploying?`
+          : `Detected ${auto.label}. Run \`${auto.command}\` before deploying?`;
+        if (await confirm(prompt, { initial: true })) {
+          await runBuildCommand(auto.command, root, {});
+        }
+      }
+    }
+
+    const dir = resolve(explicitDir ?? autoDir ?? ".");
+    if (autoDir && explicitDir === undefined) {
+      logger.info(`Deploying detected output directory: ${autoDir}`);
+    }
+    if (!existsSync(dir) || !statSync(dir).isDirectory()) {
+      throw new UserError(`Directory not found: ${dir}`);
     }
 
     const hashSpin = spinner("Hashing files...");
@@ -212,7 +226,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       const urls = deployUrls(
         site,
         deployId,
-        await fetchSystemHost(coreClient, state.pullZoneId),
+        await fetchSystemHostname(coreClient, state.pullZoneId),
       );
       if (output === "json") {
         logger.log(
@@ -299,7 +313,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const urls = deployUrls(
       site,
       deployId,
-      await fetchSystemHost(coreClient, state.pullZoneId),
+      await fetchSystemHostname(coreClient, state.pullZoneId),
     );
 
     if (output === "json") {

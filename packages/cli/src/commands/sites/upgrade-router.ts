@@ -23,12 +23,15 @@ interface UpgradeArgs extends SiteSelectorArgs {
  * Republish the site's router script at the CLI's current version. Deploys and
  * env vars are untouched — only the router code changes.
  */
-export const sitesUpgradeCommand = defineCommand<UpgradeArgs>({
-  command: "upgrade [site]",
+export const sitesUpgradeRouterCommand = defineCommand<UpgradeArgs>({
+  command: "upgrade-router [site]",
   describe: "Upgrade a site's router script to the latest version.",
   examples: [
-    ["$0 sites upgrade", "Upgrade the linked site's router"],
-    ["$0 sites upgrade my-site --force", "Republish even when up to date"],
+    ["$0 sites upgrade-router", "Upgrade the linked site's router"],
+    [
+      "$0 sites upgrade-router my-site --force",
+      "Republish even when up to date",
+    ],
   ],
 
   builder: (yargs) =>

@@ -102,7 +102,7 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
       logger.log();
       logger.log(
         formatTable(
-          ["Domain", "Type", "SSL"],
+          ["Domain", "Type", "SSL", "Force SSL"],
           hostnames.map((h) => [
             hostnameUrl(h.Value ?? "", {
               hasCertificate: h.HasCertificate,
@@ -110,6 +110,7 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
             }),
             h.IsSystemHostname ? "System" : "Custom",
             h.HasCertificate ? "Yes" : "No",
+            h.ForceSSL ? "Yes" : "No",
           ]),
           output,
         ),
@@ -119,7 +120,7 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
     if (routerOutdated) {
       logger.log();
       logger.warn(
-        `A newer site router (v${ROUTER_VERSION}) is available. Run \`bunny sites upgrade\` to update.`,
+        `A newer site router (v${ROUTER_VERSION}) is available. Run \`bunny sites upgrade-router\` to update.`,
       );
     }
 

@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, expect, test } from "bun:test";
+import { ApiError } from "../../core/errors.ts";
 import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
 import {
   type ComputeClient,
@@ -6,6 +7,7 @@ import {
   deleteSiteResources,
   fetchSites,
   promoteDeploy,
+  promoteVerification,
   readRemoteState,
   siteContextFromZone,
   siteFiles,
@@ -22,9 +24,13 @@ import { ROUTER_VERSION } from "./router/source.ts";
 
 const store = new Map<string, string>();
 const original = { ...siteFiles };
+const originalVerification = { ...promoteVerification };
 
 beforeEach(() => {
   store.clear();
+  // Promote probes the CDN and sleeps between attempts; keep tests offline and fast.
+  promoteVerification.wait = async () => {};
+  promoteVerification.probe = async () => 200;
   siteFiles.connect = (zone) =>
     ({ zoneName: zone.Name }) as unknown as ReturnType<
       typeof siteFiles.connect
@@ -50,6 +56,7 @@ beforeEach(() => {
 
 afterAll(() => {
   Object.assign(siteFiles, original);
+  Object.assign(promoteVerification, originalVerification);
 });
 
 // ---- fake clients: object literals branching on the path string ----
@@ -96,6 +103,8 @@ function fakeCoreClient(opts: {
    */
   pullZoneEnvelope?: boolean;
   pageSize?: number;
+  /** Throw this from POST /storagezone or POST /pullzone (a taken name). */
+  createError?: { path: "/storagezone" | "/pullzone"; error: ApiError };
 }): CoreClient {
   const zones = opts.storageZones ?? [];
   const pullZones = opts.pullZones ?? [];
@@ -111,6 +120,15 @@ function fakeCoreClient(opts: {
       if (path === "/storagezone/{id}") {
         const zone = zones.find((z) => z.Id === options?.params?.path?.id);
         return { data: zone };
+      }
+      if (path === "/pullzone/{id}") {
+        const pz = pullZones.find((p) => p.Id === options?.params?.path?.id);
+        return {
+          data: pz ?? {
+            Id: options?.params?.path?.id,
+            Hostnames: [{ IsSystemHostname: true, Value: "my-site.b-cdn.net" }],
+          },
+        };
       }
       if (path === "/pullzone") {
         if (!opts.pullZoneEnvelope) return { data: pullZones };
@@ -138,6 +156,9 @@ function fakeCoreClient(opts: {
         params: options?.params as Record<string, unknown>,
         body: options?.body,
       });
+      if (opts.createError && path === opts.createError.path) {
+        throw opts.createError.error;
+      }
       if (path === "/storagezone") {
         const zone = {
           ...ZONE,
@@ -157,6 +178,7 @@ function fakeCoreClient(opts: {
         return { data: pz };
       }
       if (path === "/pullzone/{id}") return { data: {} };
+      if (path === "/pullzone/{id}/setForceSSL") return { data: undefined };
       if (path === "/pullzone/{id}/purgeCache") return { data: undefined };
       throw new Error(`unexpected POST ${path}`);
     },
@@ -322,6 +344,15 @@ test("createSite provisions storage zone → router → pull zone → state", as
   );
   expect(attach?.body).toEqual({ MiddlewareScriptId: 20 });
 
+  // The system host redirects HTTP → HTTPS out of the box.
+  const forceSsl = coreCalls.find(
+    (c) => c.method === "POST" && c.path === "/pullzone/{id}/setForceSSL",
+  );
+  expect(forceSsl?.body).toEqual({
+    Hostname: "my-site.b-cdn.net",
+    ForceSSL: true,
+  });
+
   // Remote state marks the zone as a site.
   const written = await readRemoteState(fakeConnection());
   expect(written?.state).toMatchObject({
@@ -388,6 +419,43 @@ test("createSite refuses to re-provision an existing site", async () => {
   ).rejects.toThrow('Site "my-site" already exists.');
 });
 
+test("createSite reports a globally-taken storage zone name clearly", async () => {
+  // The name is free on this account (findStorageZoneByName sees nothing) but
+  // taken globally, so the create POST comes back 409.
+  const coreClient = fakeCoreClient({
+    calls: [],
+    createError: {
+      path: "/storagezone",
+      error: new ApiError(
+        "Conflict. The resource already exists or is in use.",
+        409,
+      ),
+    },
+  });
+  const computeClient = fakeComputeClient({ calls: [] });
+
+  await expect(
+    createSite({ coreClient, computeClient, name: "my-site", region: "DE" }),
+  ).rejects.toThrow('The storage zone name "my-site" is already taken.');
+});
+
+test("createSite reports a globally-taken pull zone name clearly", async () => {
+  // Storage zone and router provision fine; the pull zone name is taken (a 400
+  // whose message says so on this endpoint).
+  const coreClient = fakeCoreClient({
+    calls: [],
+    createError: {
+      path: "/pullzone",
+      error: new ApiError("The name is already taken.", 400),
+    },
+  });
+  const computeClient = fakeComputeClient({ calls: [] });
+
+  await expect(
+    createSite({ coreClient, computeClient, name: "my-site", region: "DE" }),
+  ).rejects.toThrow('The pull zone name "my-site" is already taken.');
+});
+
 // ---- promote ----
 
 test("promoteDeploy sets CURRENT_DEPLOY and purges the pull zone cache", async () => {
@@ -408,8 +476,40 @@ test("promoteDeploy sets CURRENT_DEPLOY and purges the pull zone cache", async (
     Name: "CURRENT_DEPLOY",
     DefaultValue: "a1b2c3d4",
   });
-  const purge = coreCalls.find((c) => c.path === "/pullzone/{id}/purgeCache");
-  expect(purge?.params).toEqual({ path: { id: 30 } });
+  // Purged twice: once immediately, once after the edge picks up the new deploy.
+  const purges = coreCalls.filter(
+    (c) => c.path === "/pullzone/{id}/purgeCache",
+  );
+  expect(purges).toHaveLength(2);
+  expect(purges[0]?.params).toEqual({ path: { id: 30 } });
+});
+
+test("promoteDeploy waits for the edge to serve a deploy before the final purge", async () => {
+  const coreCalls: Call[] = [];
+  const coreClient = fakeCoreClient({ calls: coreCalls });
+  const computeClient = fakeComputeClient({ calls: [] });
+
+  // The edge returns the 404 placeholder until CURRENT_DEPLOY propagates.
+  const statuses = [404, 404, 200];
+  const probed: string[] = [];
+  promoteVerification.probe = async (url) => {
+    probed.push(url);
+    return statuses.shift() ?? 200;
+  };
+
+  await promoteDeploy({
+    computeClient,
+    coreClient,
+    state: fakeState(),
+    deployId: "a1b2c3d4",
+  });
+
+  // Kept probing past the placeholder, then purged a second time.
+  expect(probed.length).toBe(3);
+  expect(probed[0]).toContain("my-site.b-cdn.net");
+  expect(
+    coreCalls.filter((c) => c.path === "/pullzone/{id}/purgeCache"),
+  ).toHaveLength(2);
 });
 
 // ---- discovery ----

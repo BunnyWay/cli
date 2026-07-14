@@ -144,6 +144,26 @@ export function findPreset(id: string): FrameworkPreset | undefined {
   return FRAMEWORK_PRESETS.find((p) => p.id === id);
 }
 
+// Runner for a project-local binary, mirroring the CI workflow's PM_EXEC.
+const PM_EXEC: Record<PackageManager, string> = {
+  bun: "bunx",
+  pnpm: "pnpm exec",
+  yarn: "yarn",
+  npm: "npx",
+};
+
+/** The build command to run locally for a preset, or null for the static (no-build) preset. */
+export function presetBuildCommand(
+  preset: FrameworkPreset,
+  pm: PackageManager,
+): string | null {
+  if (preset.toolchain === "none") return null;
+  if (preset.toolchain === "js") {
+    return preset.build ? `${PM_EXEC[pm]} ${preset.build}` : `${pm} run build`;
+  }
+  return preset.build ?? null;
+}
+
 // Ordered most-specific first: meta-frameworks depend on vite, so vite goes last.
 // Blazor's compiled toolchain is selectable via --framework but not auto-detected.
 const JS_DETECTORS: Array<[dependency: string, presetId: string]> = [

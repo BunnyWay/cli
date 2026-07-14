@@ -2,7 +2,12 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { detectFramework, detectPackageManager } from "./frameworks.ts";
+import {
+  detectFramework,
+  detectPackageManager,
+  findPreset,
+  presetBuildCommand,
+} from "./frameworks.ts";
 
 function tempRepo(files: Record<string, string>): string {
   const dir = mkdtempSync(join(tmpdir(), "bunny-sites-ci-"));
@@ -96,6 +101,27 @@ test("detectFramework spots Hugo from hugo.toml", async () => {
 test("detectFramework is undefined for unknown projects", async () => {
   const dir = tempRepo({ "index.html": "<h1>hi</h1>" });
   expect(await detectFramework(dir)).toBeUndefined();
+});
+
+test("presetBuildCommand runs the package.json build for plain js presets", () => {
+  const vite = findPreset("vite");
+  expect(presetBuildCommand(vite as never, "pnpm")).toBe("pnpm run build");
+});
+
+test("presetBuildCommand runs an explicit js build via the package runner", () => {
+  const nuxt = findPreset("nuxt");
+  expect(presetBuildCommand(nuxt as never, "bun")).toBe("bunx nuxi generate");
+  expect(presetBuildCommand(nuxt as never, "npm")).toBe("npx nuxi generate");
+});
+
+test("presetBuildCommand runs non-js builds directly", () => {
+  const hugo = findPreset("hugo");
+  expect(presetBuildCommand(hugo as never, "npm")).toBe("hugo --minify");
+});
+
+test("presetBuildCommand returns null for the static preset", () => {
+  const staticPreset = findPreset("static");
+  expect(presetBuildCommand(staticPreset as never, "npm")).toBeNull();
 });
 
 test("detectPackageManager reads the lockfile", async () => {
