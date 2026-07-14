@@ -157,9 +157,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         return createLinkedSite({ coreClient, computeClient, name });
       },
     });
-    const { state, connection, etag } = site;
+    const { state, connection } = site;
 
-    // Build before hashing so the deploy ID keys on the output (and a first build can create the dir).
+    let etag = site.etag;
+
     let autoDir: string | undefined;
     if (args.build !== undefined) {
       const command = args.build || siteConfig?.config.build;
@@ -295,14 +296,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         record,
         ...state.deploys.filter((d) => d.id !== record.id),
       ];
+      etag = await writeRemoteState(connection, state, etag);
     }
-    if (args.production) {
-      if (state.current && state.current !== deployId) {
-        state.previous = state.current;
-      }
-      state.current = deployId;
-    }
-    await writeRemoteState(connection, state, etag);
 
     if (args.production) {
       const promoteSpin = spinner("Publishing to production...");
@@ -314,6 +309,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           state,
           deployId,
         });
+        if (state.current && state.current !== deployId) {
+          state.previous = state.current;
+        }
+        state.current = deployId;
+        etag = await writeRemoteState(connection, state, etag);
       } finally {
         promoteSpin.stop();
       }
