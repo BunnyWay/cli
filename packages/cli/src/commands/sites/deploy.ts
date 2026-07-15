@@ -19,6 +19,7 @@ import {
   writeRemoteState,
 } from "./api.ts";
 import { resolveAutoBuild, runBuildCommand } from "./build.ts";
+import { detectFramework } from "./ci/frameworks.ts";
 import { loadSiteConfig } from "./config.ts";
 import {
   type DeployRecord,
@@ -85,7 +86,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       yargs.positional("dir", {
         type: "string",
         describe:
-          "Directory to deploy (defaults to `sites.dir` in bunny.jsonc, then the current directory)",
+          "Directory to deploy (defaults to `sites.dir` in bunny.jsonc, then the detected framework's output dir when building, then the current directory)",
       }),
     )
       .option("build", {
@@ -153,6 +154,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           "No build command configured.",
           'Pass one (`--build "npm run build"`) or set `sites.build` in bunny.jsonc.',
         );
+      }
+      // No dir given: target the detected framework's output dir, not the repo root the build ran in.
+      if (explicitDir === undefined) {
+        autoDir = (await detectFramework(root))?.dir;
       }
       const overrides = await collectEnv(args.env, args["env-file"]);
       await runBuildCommand(command, root, overrides);
