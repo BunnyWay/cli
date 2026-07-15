@@ -37,11 +37,11 @@ bunny sandbox create my-sandbox -e NODE_ENV=production --env-file .env
 bunny sandbox create my-sandbox -e ANTHROPIC_API_KEY=sk-ant-...   # ready for Claude Code
 ```
 
-| Flag         | Alias | Description                                       | Default |
-| ------------ | ----- | ------------------------------------------------- | ------- |
-| `--region`   |       | Region ID to deploy in (e.g. `AMS`, `NY`, `LA`)   | `AMS`   |
-| `--env`      | `-e`  | Environment variable as `KEY=VALUE` (repeatable)  |         |
-| `--env-file` |       | Load environment variables from a dotenv file     |         |
+| Flag         | Alias | Description                                      | Default |
+| ------------ | ----- | ------------------------------------------------ | ------- |
+| `--region`   |       | Region ID to deploy in (e.g. `AMS`, `NY`, `LA`)  | `AMS`   |
+| `--env`      | `-e`  | Environment variable as `KEY=VALUE` (repeatable) |         |
+| `--env-file` |       | Load environment variables from a dotenv file    |         |
 
 Variables set at creation are baked into the container and persist across restarts; `--env` overrides `--env-file`. Output shows the app ID, public HTTPS hostname, and SSH address.
 
