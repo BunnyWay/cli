@@ -129,7 +129,9 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
         deployId: targetId,
       });
       markCurrent(state, targetId);
-      await writeRemoteState(connection, state, etag);
+      await writeRemoteState(connection, state, etag, {
+        promotedTo: targetId,
+      });
     });
 
     if (output === "json") {

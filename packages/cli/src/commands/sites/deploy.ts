@@ -277,7 +277,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           deployId,
         });
         markCurrent(state, deployId);
-        etag = await writeRemoteState(connection, state, etag);
+        etag = await writeRemoteState(connection, state, etag, {
+          promotedTo: deployId,
+        });
       });
     }
 

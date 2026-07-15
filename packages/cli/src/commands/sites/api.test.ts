@@ -309,10 +309,46 @@ test("writeRemoteState merges concurrent deploy records on an etag mismatch", as
     connection,
     fakeState({ current: "aaa", deploys: [ours] }),
     etag,
+    { promotedTo: "aaa" },
   );
   const read = await readRemoteState(connection);
-  // Our promote wins, but their deploy record survives the race.
+  // Our promote wins, their deploy record survives, and their promote becomes the rollback target.
   expect(read?.state.current).toBe("aaa");
+  expect(read?.state.previous).toBe("zzz");
+  expect(read?.state.deploys.map((d) => d.id)).toEqual(["aaa", "zzz"]);
+});
+
+test("a non-promoting write adopts the concurrent writer's current/previous", async () => {
+  const connection = fakeConnection();
+  const etag = await writeRemoteState(connection, fakeState());
+
+  // A concurrent promote lands between our read and write.
+  const theirs = {
+    id: "zzz",
+    createdAt: "2026-01-02T00:00:00.000Z",
+    source: "git" as const,
+    files: 1,
+    bytes: 10,
+  };
+  store.set(
+    REMOTE_STATE_PATH,
+    JSON.stringify(
+      fakeState({ current: "zzz", previous: "yyy", deploys: [theirs] }),
+    ),
+  );
+
+  const ours = {
+    id: "aaa",
+    createdAt: "2026-01-03T00:00:00.000Z",
+    source: "git" as const,
+    files: 1,
+    bytes: 10,
+  };
+  // A preview-only deploy: its stale in-memory pointers must not reverse the promote.
+  await writeRemoteState(connection, fakeState({ deploys: [ours] }), etag);
+  const read = await readRemoteState(connection);
+  expect(read?.state.current).toBe("zzz");
+  expect(read?.state.previous).toBe("yyy");
   expect(read?.state.deploys.map((d) => d.id)).toEqual(["aaa", "zzz"]);
 });
 

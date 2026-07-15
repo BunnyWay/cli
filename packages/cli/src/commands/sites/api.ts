@@ -98,11 +98,15 @@ export async function readRemoteState(
   return { state, etag: sha256Hex(raw) };
 }
 
-// Write `_bunny/site.json` (returns the new etag). On an `expectedEtag` mismatch a parseable concurrent state has its deploys merged in (last promote wins); an unparseable one aborts rather than overwrite.
+// Write `_bunny/site.json` (returns the new etag). On an `expectedEtag` mismatch a parseable concurrent state is reconciled: deploy records merge, and the current/previous pointers follow `promotedTo` (last promote wins; a non-promoting writer adopts the concurrent pointers rather than clobber them with its stale read). An unparseable conflict aborts rather than overwrite.
 export async function writeRemoteState(
   connection: StorageZone,
   state: RemoteSiteState,
   expectedEtag?: string,
+  opts?: {
+    /** Deploy this writer just promoted to production; omit when the write doesn't change `current`. */
+    promotedTo?: string;
+  },
 ): Promise<string> {
   if (expectedEtag) {
     const current = await downloadText(connection, REMOTE_STATE_PATH);
@@ -119,6 +123,17 @@ export async function writeRemoteState(
         ...state.deploys,
         ...remote.deploys.filter((d) => !ours.has(d.id)),
       ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      if (opts?.promotedTo) {
+        // Our promote wins (it set CURRENT_DEPLOY last), and the concurrent writer's production deploy becomes the rollback target.
+        state.current = opts.promotedTo;
+        state.previous =
+          remote.current && remote.current !== opts.promotedTo
+            ? remote.current
+            : remote.previous;
+      } else {
+        state.current = remote.current;
+        state.previous = remote.previous;
+      }
       logger.warn(
         "Remote site state changed since it was read (concurrent deploy?): merged deploy records.",
       );
