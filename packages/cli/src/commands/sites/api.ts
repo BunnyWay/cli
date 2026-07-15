@@ -1,8 +1,12 @@
 import type { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { mapWithConcurrency } from "../../core/concurrency.ts";
-import { ApiError, UserError } from "../../core/errors.ts";
-import { createPullZone, setForceSsl } from "../../core/hostnames/index.ts";
+import { ApiError, errorMessage, UserError } from "../../core/errors.ts";
+import {
+  createPullZone,
+  setForceSsl,
+  systemHostname,
+} from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { fetchScripts } from "../scripts/api.ts";
 import { SCRIPT_TYPE_MIDDLEWARE } from "../scripts/constants.ts";
@@ -74,7 +78,6 @@ async function downloadText(
     const { stream } = await siteFiles.download(connection, path);
     return await new Response(stream).text();
   } catch (err) {
-    // A missing file reads as "no data"; other errors propagate so a bad read can't clobber live state.
     if (isNotFoundError(err)) return null;
     throw err;
   }
@@ -196,9 +199,7 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
         return {
           state: context.state,
           storageZone: zone,
-          systemHostname:
-            (pz.Hostnames ?? []).find((h) => h.IsSystemHostname)?.Value ??
-            undefined,
+          systemHostname: systemHostname(pz.Hostnames),
         };
       } catch {
         return null;
@@ -369,15 +370,13 @@ export async function createSite(
   });
 
   // Force HTTPS on the <name>.b-cdn.net system host (already on bunny's wildcard cert, so this just redirects HTTP); best-effort.
-  const systemHostname = (pullZone.Hostnames ?? []).find(
-    (h) => h.IsSystemHostname,
-  )?.Value;
-  if (systemHostname) {
+  const systemHost = systemHostname(pullZone.Hostnames);
+  if (systemHost) {
     try {
-      await setForceSsl(coreClient, pullZone.Id, systemHostname, true);
+      await setForceSsl(coreClient, pullZone.Id, systemHost, true);
     } catch (err) {
       logger.warn(
-        `Couldn't force HTTPS on ${systemHostname}: ${err instanceof Error ? err.message : err}`,
+        `Couldn't force HTTPS on ${systemHost}: ${errorMessage(err)}`,
       );
     }
   }
@@ -398,9 +397,7 @@ export async function createSite(
   return {
     state,
     storageZone,
-    systemHostname:
-      (pullZone.Hostnames ?? []).find((h) => h.IsSystemHostname)?.Value ??
-      undefined,
+    systemHostname: systemHostname(pullZone.Hostnames),
     reused,
   };
 }
@@ -414,10 +411,7 @@ export async function fetchSystemHostname(
     const { data } = await coreClient.GET("/pullzone/{id}", {
       params: { path: { id: pullZoneId } },
     });
-    return (
-      (data?.Hostnames ?? []).find((h) => h.IsSystemHostname)?.Value ??
-      undefined
-    );
+    return systemHostname(data?.Hostnames);
   } catch {
     return undefined;
   }
@@ -525,16 +519,10 @@ export async function deleteSiteResources(opts: {
       await fn();
       results.push({ resource, id, deleted: true });
     } catch (err) {
-      results.push({
-        resource,
-        id,
-        deleted: false,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      results.push({ resource, id, deleted: false, error: errorMessage(err) });
     }
   };
 
-  // The pull zone references both the script and the storage zone, so it goes first.
   await attempt("pull zone", state.pullZoneId, () =>
     coreClient.DELETE("/pullzone/{id}", {
       params: { path: { id: state.pullZoneId } },
@@ -552,9 +540,7 @@ export async function deleteSiteResources(opts: {
         await siteFiles.remove(opts.connection, REMOTE_STATE_PATH);
       } catch (err) {
         logger.warn(
-          `Kept the storage zone but couldn't remove its site marker (${REMOTE_STATE_PATH}): ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+          `Kept the storage zone but couldn't remove its site marker (${REMOTE_STATE_PATH}): ${errorMessage(err)}`,
         );
       }
     }

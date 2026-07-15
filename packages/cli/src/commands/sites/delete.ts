@@ -2,13 +2,12 @@ import {
   createComputeClient,
   createCoreClient,
 } from "@bunny.net/openapi-client";
-import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, removeManifest } from "../../core/manifest.ts";
-import { confirm, withSpinner } from "../../core/ui.ts";
+import { confirm, confirmTyped, withSpinner } from "../../core/ui.ts";
 import { deleteSiteResources } from "./api.ts";
 import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 import {
@@ -66,25 +65,14 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     const what = args["keep-storage"]
       ? "its pull zone and router"
       : "its pull zone, router, and ALL deploy files";
-    const confirmed = await confirm(
-      `Delete site "${state.name}" (${what})? This cannot be undone.`,
-      { force },
-    );
+    const confirmed =
+      (await confirm(
+        `Delete site "${state.name}" (${what})? This cannot be undone.`,
+        { force },
+      )) && (await confirmTyped(state.name, { force }));
     if (!confirmed) {
       logger.log("Cancelled.");
       return;
-    }
-
-    if (!force) {
-      const { value } = await prompts({
-        type: "text",
-        name: "value",
-        message: `Type "${state.name}" to confirm:`,
-      });
-      if (value !== state.name) {
-        logger.log("Cancelled.");
-        return;
-      }
     }
 
     const results = await withSpinner("Deleting site resources...", () =>

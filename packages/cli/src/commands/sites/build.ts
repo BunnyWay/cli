@@ -1,10 +1,10 @@
-import { join } from "node:path";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import {
   detectFramework,
   detectPackageManager,
   presetBuildCommand,
+  readPackageJson,
 } from "./ci/frameworks.ts";
 
 export interface AutoBuild {
@@ -32,19 +32,6 @@ export async function resolveAutoBuild(
     return { command: `${pm} run build`, label: "a package.json build script" };
   }
   return null;
-}
-
-async function readPackageJson(
-  root: string,
-): Promise<Record<string, unknown> | null> {
-  try {
-    return (await Bun.file(join(root, "package.json")).json()) as Record<
-      string,
-      unknown
-    >;
-  } catch {
-    return null;
-  }
 }
 
 // Run the build command in a shell with the merged environment, streaming output; throws on non-zero exit so a broken build never deploys.

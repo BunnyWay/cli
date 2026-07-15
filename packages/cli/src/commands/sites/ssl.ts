@@ -6,6 +6,7 @@ import { UserError } from "../../core/errors.ts";
 import {
   fetchPullZoneHostnames,
   setForceSsl,
+  systemHostname,
 } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { withSpinner } from "../../core/ui.ts";
@@ -51,7 +52,7 @@ export const sitesSslCommand = defineCommand<SslArgs>({
 
     const systemHost = await withSpinner("Updating Force SSL...", async () => {
       const hostnames = await fetchPullZoneHostnames(client, state.pullZoneId);
-      const host = hostnames.find((h) => h.IsSystemHostname)?.Value;
+      const host = systemHostname(hostnames);
       if (!host) {
         throw new UserError(
           `Couldn't find the system hostname for "${state.name}".`,

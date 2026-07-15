@@ -178,12 +178,12 @@ bunny-cli/
 │           │   ├── define-namespace.ts   # Namespace/group factory for subcommand trees
 │           │   ├── dns-nameservers.ts    # BUNNY_NAMESERVERS + expectedNameservers(zone) + checkDelegation()/checkDelegations(): reads the parent zone's NS referral (raw UDP query of the registry, not the recursive answer a child host could spoof; falls back to dns.resolveNs when the referral is unreadable), matches the full expected set both ways, ground truth over bunny's NameserversDetected flag which defaults true on a fresh zone; checkDelegations is bounded-concurrency for the zone list
 │           │   ├── dns-record-types.ts   # Canonical DNS record-type name⇄integer map (RECORD_TYPES) + RECORD_TYPE_META (dashboard taxonomy: short label, friendly name, Standard/Bunny group) + recordTypeLabel() (bunny's canonical labels: PZ/RDR/SCR/Flatten for the bunny-specific types) + recordTypeFromLabel() (parses canonical labels and enum-key names); shared by commands/dns + core/hostnames
-│           │   ├── errors.ts             # Re-exports UserError/ApiError from @bunny.net/openapi-client + ConfigError
+│           │   ├── errors.ts             # Re-exports UserError/ApiError from @bunny.net/openapi-client + ConfigError + errorMessage()
 │           │   ├── format.ts             # Shared table/key-value rendering (text, table, csv, markdown)
 │           │   ├── format.test.ts        # Tests for format utilities
 │           │   ├── hostnames/            # Reusable pull-zone hostname feature (mounted by scripts; apps next)
 │           │   │   ├── index.ts          # Re-exports client helpers, DNS/flow helpers + createHostnamesCommands
-│           │   │   ├── client.ts         # hostnameUrl(), normalizeHostname(), addHostname(), fetchPullZoneHostnames(), enableSsl(), createPullZone() (storage-zone origin) + Hostname/ResolvedPullZone types
+│           │   │   ├── client.ts         # hostnameUrl(), normalizeHostname(), addHostname(), fetchPullZoneHostnames(), enableSsl(), createPullZone() (storage-zone origin), systemHostname() + Hostname/ResolvedPullZone types
 │           │   │   ├── client.test.ts    # Tests for hostnameUrl() scheme logic
 │           │   │   ├── dns.ts            # dnsPointsAt()/anyResolverPointsAt(): DNS checks (CNAME or flattened A records) via system + public (1.1.1.1/8.8.8.8) resolvers, injectable for tests
 │           │   │   ├── dns.test.ts       # Tests for DNS matching + multi-resolver checks with fake resolvers
@@ -198,7 +198,7 @@ bunny-cli/
 │           │   ├── stats.ts              # Shared stats rendering: sumChart(), renderBarChart(), formatBucketLabel() (UTC date labels), BAR_WIDTH (used by dns/zone/stats + scripts/stats)
 │           │   ├── stats.test.ts         # Tests for stats helpers
 │           │   ├── types.ts              # GlobalArgs, OutputFormat, and shared type definitions
-│           │   ├── ui.ts                 # readPassword(), confirm(), spinner() wrappers
+│           │   ├── ui.ts                 # readPassword(), confirm(), confirmTyped(), spinner() wrappers
 │           │   └── version.ts            # VERSION constant from package.json
 │           │
 │           ├── config/
@@ -380,14 +380,14 @@ bunny-cli/
 │           │   │   ├── api.ts            # siteFiles IO seam (connect/download/upload/remove; swap in tests instead of mock.module), remote state read/write (sha256 etag optimistic lock: concurrent deploy records merge on mismatch, ours win per id), siteContextFromZone, fetchSites (pull zone listing → middleware+storage candidates → per-zone state verification), createSite (idempotent provisioning: storage zone → router script code+publish+CURRENT_DEPLOY → pull zone + MiddlewareScriptId attach → state), promoteDeploy (env var PUT + purgeCache POST), deleteSiteResources (pull zone → script → storage zone, best-effort), deleteDeployFiles
 │           │   │   ├── api.test.ts       # In-memory siteFiles store + path-branching fake clients: state round-trip, etag conflict, createSite fresh/resume/already-exists, promote, fetchSites filtering
 │           │   │   ├── interactive.ts    # selectSite: explicit ref → .bunny/site.json → bunny.jsonc sites.name → picker (offerLink like scripts); optional offerCreate (deploy only) adds a new-vs-existing prompt, and creates straight away when the account has no sites; siteOptionBuilder (--site) + sitePositionalBuilder ([site])
-│           │   │   ├── provision.ts       # promptSiteName (normalize/validate, directory-name suggestion; shared with create.ts) + createLinkedSite (createSite + manifest link → SiteContext, skipping create's domain/CI prompts) for the deploy picker's new-site branch
+│           │   │   ├── provision.ts       # promptSiteName (normalize/validate, directory-name suggestion) + createSiteWithProgress (createSite under a step-tracking spinner; shared with create.ts) + createLinkedSite (create + manifest link → SiteContext, skipping create's domain/CI prompts) for the deploy picker's new-site branch
 │           │   │   ├── config.ts         # loadSiteConfig: lenient bunny.jsonc reader; validates ONLY the `sites` block (SiteConfigSchema from @bunny.net/app-config), so sites-only configs work without an `app` block
 │           │   │   ├── router/source.ts  # routerSource: the middleware Edge Script (one script per site; no version tracking; upgrade-router just republishes the latest). apex → CURRENT_DEPLOY, dpl-{id}.preview.{domain} → that deploy, /deploys/{id}/ passthrough (path preview) flagged with x-bunny-preview header, /_bunny/* → 403, trailing-slash → index.html. onOriginResponse: HTMLRewriter rewrites root-absolute href/src/srcset in flagged path-preview HTML → /deploys/{id}/… (so Jekyll/SSG assets render on one PZ; each deploy's assets get a unique cache key), and X-Robots-Tag: noindex on all previews. Production HTML is never rewritten (no header), so promote doesn't churn its cache
 │           │   │   ├── deploy-id.ts      # gitIdentity (short sha + dirty check via Bun.spawn), contentHashId (sorted path+sha256 merkle → 8 hex), resolveDeployIdentity (clean git → sha, else content hash)
 │           │   │   ├── deploy-id.test.ts # Hash determinism + real temp git repos (clean → sha, dirty → content hash)
 │           │   │   ├── uploader.ts       # collectFiles (recursive walk, skips dotfiles/node_modules, sorted), hashFiles (streaming sha256), uploadDeploy (8-way concurrency, per-file checksum, 3-attempt backoff retry) via siteFiles.upload
 │           │   │   ├── uploader.test.ts  # Walk/skip/hash tests + upload paths/checksums/retry via siteFiles swap
-│           │   │   ├── build.ts          # parseEnvAssignments/parseEnvFile + runBuildCommand (Bun.spawn shell, caller env + overrides, throws on non-zero exit)
+│           │   │   ├── build.ts          # resolveAutoBuild (framework preset or package.json build script, via ci/frameworks detection) + runBuildCommand (Bun.spawn shell, caller env + overrides, throws on non-zero exit)
 │           │   │   ├── build.test.ts     # Env parsing + real build spawn success/failure
 │           │   │   ├── create.ts         # bunny sites create [name] (prompted, directory-name suggestion): createSite (storage + router + pull zone; forces HTTPS on the system host, best-effort) + manifest link + custom domain via setupSiteDomain (--domain flag, offered interactively when omitted; domain failure warns, never fails the create)
 │           │   │   ├── list.ts           # List sites (name, URL, deploy count, current)

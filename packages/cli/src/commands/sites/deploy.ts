@@ -196,12 +196,12 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const identity = await resolveDeployIdentity(dir, files);
 
     // The no-op check keys on content, not the display id, so a rebuilt `dist/` at the same git sha isn't wrongly skipped.
-    const existing = args.force
+    const alreadyUploaded = args.force
       ? undefined
       : state.deploys.find((d) => d.contentHash === identity.contentHash);
-    const skipUpload = existing !== undefined;
+    const skipUpload = alreadyUploaded !== undefined;
     // A skipped deploy reuses the already-uploaded deploy's id; that's where its files live.
-    const deployId = existing?.id ?? identity.id;
+    const deployId = alreadyUploaded?.id ?? identity.id;
     const alreadyLive = state.current === deployId;
 
     // Nothing to do: the deploy is already uploaded (and live, if --production).

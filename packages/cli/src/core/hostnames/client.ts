@@ -91,7 +91,15 @@ export async function fetchHostnamesForZones(
   return results.flat();
 }
 
-/** Pick the system-preferred live URL plus any custom-domain URLs from a hostname list. */
+export function systemHostname(
+  hostnames:
+    | Array<Pick<Hostname, "IsSystemHostname" | "Value">>
+    | null
+    | undefined,
+): string | undefined {
+  return hostnames?.find((h) => h.IsSystemHostname)?.Value ?? undefined;
+}
+
 export function liveHostnames(hostnames: Hostname[]): {
   primary?: string;
   customs: string[];
@@ -145,9 +153,7 @@ export async function addHostname(
     body: { Hostname: hostname },
   });
   const hostnames = await fetchPullZoneHostnames(client, pullZoneId);
-  const cnameTarget = hostnames
-    .find((h) => h.IsSystemHostname)
-    ?.Value?.replace(/^https?:\/\//i, "");
+  const cnameTarget = systemHostname(hostnames)?.replace(/^https?:\/\//i, "");
   return { hostnames, cnameTarget };
 }
 

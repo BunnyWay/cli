@@ -37,6 +37,19 @@ export async function confirm(
   return confirmed ?? false;
 }
 
+export async function confirmTyped(
+  expected: string,
+  opts?: { force?: boolean },
+): Promise<boolean> {
+  if (opts?.force) return true;
+  const { value } = await prompts({
+    type: "text",
+    name: "value",
+    message: `Type "${expected}" to confirm:`,
+  });
+  return value === expected;
+}
+
 export function isInteractive(output?: string): boolean {
   return (
     output !== "json" &&

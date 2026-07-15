@@ -2,6 +2,7 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
+import { errorMessage } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, withSpinner } from "../../../core/ui.ts";
 import { deleteDeployFiles, writeRemoteState } from "../api.ts";
@@ -100,10 +101,7 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
           await deleteDeployFiles(connection, victim.id);
           pruned.add(victim.id);
         } catch (err) {
-          failures.push({
-            id: victim.id,
-            error: err instanceof Error ? err.message : String(err),
-          });
+          failures.push({ id: victim.id, error: errorMessage(err) });
         }
       }
       // Only forget deploys whose files are actually gone.

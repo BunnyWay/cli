@@ -7,6 +7,7 @@ import { withSpinner } from "../../core/ui.ts";
 import type { CoreClient } from "../storage/api.ts";
 import {
   type ComputeClient,
+  type CreateSiteResult,
   createSite,
   type SiteContext,
   siteContextFromZone,
@@ -60,14 +61,14 @@ export async function promptSiteName(
   return name;
 }
 
-// Create a site and link this directory to it (the provisioning-only path behind the deploy picker's "new site" branch); skips the custom-domain and CI prompts `sites create` adds.
-export async function createLinkedSite(opts: {
+/** Run {@link createSite} under a spinner whose text tracks each provisioning step. */
+export async function createSiteWithProgress(opts: {
   coreClient: CoreClient;
   computeClient: ComputeClient;
   name: string;
   region?: string;
-}): Promise<SiteContext> {
-  const result = await withSpinner(`Creating site "${opts.name}"...`, (spin) =>
+}): Promise<CreateSiteResult> {
+  return withSpinner(`Creating site "${opts.name}"...`, (spin) =>
     createSite({
       coreClient: opts.coreClient,
       computeClient: opts.computeClient,
@@ -78,6 +79,15 @@ export async function createLinkedSite(opts: {
       },
     }),
   );
+}
+
+export async function createLinkedSite(opts: {
+  coreClient: CoreClient;
+  computeClient: ComputeClient;
+  name: string;
+  region?: string;
+}): Promise<SiteContext> {
+  const result = await createSiteWithProgress(opts);
 
   saveManifest<SiteManifest>(SITES_MANIFEST, {
     id: result.state.storageZoneId,

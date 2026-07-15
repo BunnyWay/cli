@@ -190,9 +190,14 @@ const JS_DETECTORS: Array<[dependency: string, presetId: string]> = [
   ["vite", "vite"],
 ];
 
-async function readJson(path: string): Promise<Record<string, unknown> | null> {
+export async function readPackageJson(
+  root: string,
+): Promise<Record<string, unknown> | null> {
   try {
-    return (await Bun.file(path).json()) as Record<string, unknown>;
+    return (await Bun.file(join(root, "package.json")).json()) as Record<
+      string,
+      unknown
+    >;
   } catch {
     return null;
   }
@@ -219,7 +224,7 @@ async function exists(path: string): Promise<boolean> {
 export async function detectFramework(
   root: string,
 ): Promise<FrameworkPreset | undefined> {
-  const pkg = await readJson(join(root, "package.json"));
+  const pkg = await readPackageJson(root);
   if (pkg) {
     const deps = {
       ...(pkg.dependencies as Record<string, string> | undefined),

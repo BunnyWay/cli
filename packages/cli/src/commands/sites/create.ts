@@ -6,13 +6,14 @@ import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
+import { errorMessage } from "../../core/errors.ts";
 import { formatKeyValue } from "../../core/format.ts";
 import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifest } from "../../core/manifest.ts";
-import { confirm, isInteractive, withSpinner } from "../../core/ui.ts";
+import { confirm, isInteractive } from "../../core/ui.ts";
 import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
-import { createSite, siteContextFromZone } from "./api.ts";
+import { siteContextFromZone } from "./api.ts";
 import {
   gitTopLevel,
   hasGitHubOrigin,
@@ -22,7 +23,7 @@ import {
 } from "./ci/scaffold.ts";
 import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 import { setupSiteDomain } from "./domains/index.ts";
-import { promptSiteName } from "./provision.ts";
+import { createSiteWithProgress, promptSiteName } from "./provision.ts";
 
 interface CreateArgs {
   name?: string;
@@ -53,7 +54,7 @@ async function attachDomainToCreatedSite(opts: {
     });
     return undefined;
   } catch (err) {
-    return err instanceof Error ? err.message : String(err);
+    return errorMessage(err);
   }
 }
 
@@ -107,17 +108,12 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
     const coreClient = createCoreClient(options);
     const computeClient = createComputeClient(options);
 
-    const result = await withSpinner(`Creating site "${name}"...`, (spin) =>
-      createSite({
-        coreClient,
-        computeClient,
-        name,
-        region: (args.region ?? "DE").toUpperCase(),
-        onStep: (message) => {
-          spin.text = message;
-        },
-      }),
-    );
+    const result = await createSiteWithProgress({
+      coreClient,
+      computeClient,
+      name,
+      region: args.region,
+    });
 
     if (args.link !== false) {
       saveManifest<SiteManifest>(SITES_MANIFEST, {

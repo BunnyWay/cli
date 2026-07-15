@@ -18,6 +18,7 @@ export {
   type ResolvedPullZone,
   type SafeHostname,
   setForceSsl,
+  systemHostname,
   toSafeHostname,
 } from "./client.ts";
 export {

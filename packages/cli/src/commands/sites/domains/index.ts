@@ -1,6 +1,7 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
+import { errorMessage } from "../../../core/errors.ts";
 import {
   addHostname,
   type CoreClient,
@@ -51,9 +52,7 @@ async function recordSiteDomain(
     site.state.domain = domain;
     site.etag = await writeRemoteState(site.connection, site.state, site.etag);
   } catch (err) {
-    logger.warn(
-      `Couldn't update the site state: ${err instanceof Error ? err.message : err}`,
-    );
+    logger.warn(`Couldn't update the site state: ${errorMessage(err)}`);
   }
 }
 
@@ -96,9 +95,7 @@ export async function attachPreviewWildcard(opts: {
     }
   } catch (err) {
     if (!opts.json) {
-      logger.warn(
-        `Couldn't add ${wildcard}: ${err instanceof Error ? err.message : err}`,
-      );
+      logger.warn(`Couldn't add ${wildcard}: ${errorMessage(err)}`);
       logger.dim("  Previews will use /deploys/<id>/ paths until it's added.");
     }
   }

@@ -1,12 +1,11 @@
 import { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
-import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
 import { resolveManifestId } from "../../core/manifest.ts";
-import { confirm, spinner } from "../../core/ui.ts";
+import { confirm, confirmTyped, spinner } from "../../core/ui.ts";
 import { fetchScript } from "./api.ts";
 import { SCRIPT_MANIFEST } from "./constants.ts";
 
@@ -89,27 +88,15 @@ export const scriptsDeleteCommand = defineCommand<DeleteArgs>({
 
     fetchSpin.stop();
 
-    const confirmed = await confirm(
-      `Delete Edge Script "${script.Name}" (${id})? This cannot be undone.`,
-      { force },
-    );
+    const confirmed =
+      (await confirm(
+        `Delete Edge Script "${script.Name}" (${id})? This cannot be undone.`,
+        { force },
+      )) && (await confirmTyped(script.Name ?? "", { force }));
 
     if (!confirmed) {
       logger.log("Cancelled.");
       return;
-    }
-
-    if (!force) {
-      const { value } = await prompts({
-        type: "text",
-        name: "value",
-        message: `Type "${script.Name}" to confirm:`,
-      });
-
-      if (value !== script.Name) {
-        logger.log("Cancelled.");
-        return;
-      }
     }
 
     const deleteSpin = spinner("Deleting Edge Script...");
