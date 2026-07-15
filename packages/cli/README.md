@@ -855,6 +855,8 @@ bunny scripts docs
 
 Manage on-demand cloud sandbox environments backed by Bunny Magic Containers. Each sandbox is a fully isolated Ubuntu container with Node.js, Bun, Python, and Claude Code pre-installed. A 10 GB persistent volume is mounted at `/workplace`, your default working directory.
 
+Claude Code is pre-installed but needs your own Anthropic credentials before it can do anything: pass an API key at create time (`-e ANTHROPIC_API_KEY=sk-ant-...` or `--env-file .env`), or run `claude` inside the sandbox and complete the login prompt it prints. Either way the credentials persist for the life of the sandbox.
+
 Sandbox credentials (app ID, hostname, SSH endpoint, agent token) are stored in `~/.config/bunnynet.json` so you can reconnect without re-creating.
 
 #### `bunny sandbox create`
@@ -874,6 +876,9 @@ bunny sandbox create my-sandbox --region NY
 # Bake in environment variables (persisted for the sandbox's lifetime)
 bunny sandbox create my-sandbox -e NODE_ENV=production -e PORT=8080
 bunny sandbox create my-sandbox --env-file .env
+
+# Give Claude Code your Anthropic API key at create time
+bunny sandbox create my-sandbox -e ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 | Flag         | Alias | Description                                        | Default |
