@@ -52,6 +52,8 @@ BunnySDK.net.http
   .servePullZone()
   .onOriginRequest(async (ctx) => {
     const url = new URL(ctx.request.url);
+    // Storage serves no directory indexes: expand \`/dir/\` to \`/dir/index.html\` on every route, path previews included.
+    if (url.pathname.endsWith("/")) url.pathname += "index.html";
     const path = url.pathname;
 
     // Internal site metadata (state, env) is never served.
@@ -63,11 +65,11 @@ BunnySDK.net.http
     const headers = new Headers(ctx.request.headers);
     headers.delete(PREVIEW_HEADER);
 
-    // Path preview: flag the request so the response phase rewrites its HTML for this deploy.
+    // Path preview: serve the deploy dir directly, flagging the request so the response phase rewrites its HTML.
     if (path === "/deploys" || path.startsWith("/deploys/")) {
       const match = DEPLOY_PATH.exec(path);
       if (match) headers.set(PREVIEW_HEADER, match[1].toLowerCase());
-      return new Request(ctx.request, { headers });
+      return new Request(new Request(url.toString(), ctx.request), { headers });
     }
 
     const preview = PREVIEW_HOST.exec(url.hostname);
@@ -82,9 +84,7 @@ BunnySDK.net.http
       });
     }
 
-    let target = path;
-    if (target.endsWith("/")) target += "index.html";
-    url.pathname = "/deploys/" + deploy + target;
+    url.pathname = "/deploys/" + deploy + path;
     return new Request(new Request(url.toString(), ctx.request), { headers });
   })
   .onOriginResponse(async (ctx) => {
