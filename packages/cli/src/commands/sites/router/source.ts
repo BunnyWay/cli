@@ -59,12 +59,14 @@ BunnySDK.net.http
       return new Response("Forbidden", { status: 403 });
     }
 
+    // The preview flag is router-internal: a client-sent one is stripped, or it would poison cached production HTML with preview rewrites.
+    const headers = new Headers(ctx.request.headers);
+    headers.delete(PREVIEW_HEADER);
+
     // Path preview: flag the request so the response phase rewrites its HTML for this deploy.
     if (path === "/deploys" || path.startsWith("/deploys/")) {
       const match = DEPLOY_PATH.exec(path);
-      if (!match) return;
-      const headers = new Headers(ctx.request.headers);
-      headers.set(PREVIEW_HEADER, match[1].toLowerCase());
+      if (match) headers.set(PREVIEW_HEADER, match[1].toLowerCase());
       return new Request(ctx.request, { headers });
     }
 
@@ -83,7 +85,7 @@ BunnySDK.net.http
     let target = path;
     if (target.endsWith("/")) target += "index.html";
     url.pathname = "/deploys/" + deploy + target;
-    return new Request(url.toString(), ctx.request);
+    return new Request(new Request(url.toString(), ctx.request), { headers });
   })
   .onOriginResponse(async (ctx) => {
     const previewId = ctx.request.headers.get(PREVIEW_HEADER);

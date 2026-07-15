@@ -1,5 +1,5 @@
 ---
-"@bunny.net/cli": minor
+"@bunny.net/cli": patch
 ---
 
 feat(sites): new `bunny sites` namespace for static-site hosting. `sites create` provisions a storage zone + pull zone + middleware router per site, prompting for the name (directory-name suggestion) and a custom domain when run interactively (Bunny DNS record, nameserver guidance, DNS wait + SSL); `sites deploy` uploads immutable deploys (git-sha or content-hash IDs, no-op when unchanged) to preview URLs, and `--production`/`--prod` publishes the live site by flipping the router's `CURRENT_DEPLOY` env var + purging the cache; `sites deployments list/publish/prune` cover rollback and cleanup; `sites domains` attaches custom domains plus a `*.preview.<domain>` wildcard for per-deploy preview URLs; `sites ci init` (also offered by `sites create` on GitHub repos) scaffolds a GitHub Actions workflow with framework detection: previews on PRs, production on merges to main; `sites link/unlink/show/upgrade/delete` round out the lifecycle. Concurrent deploys merge remote state records instead of overwriting. Site state lives at `_bunny/site.json` inside the storage zone (403-blocked by the router). The shared hostnames factory gains optional `onAdded`/`onRemoved` hooks.

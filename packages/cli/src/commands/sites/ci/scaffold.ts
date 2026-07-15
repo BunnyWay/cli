@@ -146,15 +146,13 @@ export async function offerGitHubSecret(opts: {
       { initial: true },
     );
     if (proceed) {
-      const proc = Bun.spawn(
-        [gh, "secret", "set", "BUNNY_API_KEY", "--body", opts.apiKey],
-        {
-          cwd: opts.root,
-          stdout: "ignore",
-          stderr: "pipe",
-          stdin: "ignore",
-        },
-      );
+      // The key goes via stdin, never argv: process arguments are visible in `ps`.
+      const proc = Bun.spawn([gh, "secret", "set", "BUNNY_API_KEY"], {
+        cwd: opts.root,
+        stdout: "ignore",
+        stderr: "pipe",
+        stdin: new Blob([opts.apiKey]),
+      });
       const [code, err] = await Promise.all([
         proc.exited,
         new Response(proc.stderr).text(),

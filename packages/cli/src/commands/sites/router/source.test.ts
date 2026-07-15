@@ -9,6 +9,8 @@ test("routerSource wires up the preview machinery", () => {
   expect(src).toContain('url.pathname = "/deploys/" + deploy + target;');
   // Flags previews so the response phase rewrites their HTML (and never production's).
   expect(src).toContain('const PREVIEW_HEADER = "x-bunny-preview";');
+  // Client-sent preview flags must be stripped, or they'd poison cached production HTML.
+  expect(src).toContain("headers.delete(PREVIEW_HEADER);");
   expect(src).toContain("new HTMLRewriter()");
   expect(src).toContain("X-Robots-Tag");
 });
