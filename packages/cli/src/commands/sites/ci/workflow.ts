@@ -1,5 +1,9 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: emits GitHub Actions ${{ }} expressions, not JS template strings
-import type { FrameworkPreset, PackageManager } from "./frameworks.ts";
+import {
+  type FrameworkPreset,
+  type PackageManager,
+  presetBuildCommand,
+} from "./frameworks.ts";
 
 export const SITES_WORKFLOW_PATH = ".github/workflows/bunny-sites.yml";
 
@@ -37,19 +41,9 @@ const JS_SETUP: Record<PackageManager, string[]> = {
   ],
 };
 
-// Runner for a project-local binary, used by presets that override the build command.
-const PM_EXEC: Record<PackageManager, string> = {
-  bun: "bunx",
-  pnpm: "pnpm exec",
-  yarn: "yarn",
-  npm: "npx",
-};
-
 function jsSteps(preset: FrameworkPreset, pm: PackageManager): string[] {
-  const build = preset.build
-    ? `      - run: ${PM_EXEC[pm]} ${preset.build}`
-    : `      - run: ${pm} run build`;
-  return [...JS_SETUP[pm], build];
+  const build = presetBuildCommand(preset, pm) ?? `${pm} run build`;
+  return [...JS_SETUP[pm], `      - run: ${build}`];
 }
 
 function buildSteps(
@@ -104,10 +98,7 @@ function buildSteps(
   }
 }
 
-/**
- * Render the GitHub Actions workflow: previews on PRs, production on pushes
- * to main, deployed via the BunnyWay/actions deploy-site action.
- */
+// Render the GitHub Actions workflow: previews on PRs, production on pushes to main, via the BunnyWay/actions deploy-site action.
 export function renderSitesWorkflow(opts: {
   site: string;
   preset: FrameworkPreset;

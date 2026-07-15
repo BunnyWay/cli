@@ -144,8 +144,8 @@ export function findPreset(id: string): FrameworkPreset | undefined {
   return FRAMEWORK_PRESETS.find((p) => p.id === id);
 }
 
-// Runner for a project-local binary, mirroring the CI workflow's PM_EXEC.
-const PM_EXEC: Record<PackageManager, string> = {
+// Runner for a project-local binary; shared by the local build and the emitted CI workflow.
+export const PM_EXEC: Record<PackageManager, string> = {
   bun: "bunx",
   pnpm: "pnpm exec",
   yarn: "yarn",
@@ -164,8 +164,7 @@ export function presetBuildCommand(
   return preset.build ?? null;
 }
 
-// Ordered most-specific first: meta-frameworks depend on vite, so vite goes last.
-// Blazor's compiled toolchain is selectable via --framework but not auto-detected.
+// Ordered most-specific first (meta-frameworks depend on vite, so vite goes last); Blazor is selectable via --framework but not auto-detected.
 const JS_DETECTORS: Array<[dependency: string, presetId: string]> = [
   ["@analogjs/platform", "analog"],
   ["astro", "astro"],

@@ -13,7 +13,7 @@ import {
   toSafeHostname,
 } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { withSpinner } from "../../core/ui.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -44,16 +44,10 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
     });
     const { state } = site;
 
-    const spin = spinner("Fetching hostnames...");
-    spin.start();
-    let hostnames: Awaited<ReturnType<typeof fetchPullZoneHostnames>> = [];
-    try {
-      hostnames = await fetchPullZoneHostnames(client, state.pullZoneId);
-    } catch {
-      // Hostnames are informational — a fetch failure shouldn't hide the site.
-    } finally {
-      spin.stop();
-    }
+    // Hostnames are informational; a fetch failure shouldn't hide the site.
+    const hostnames = await withSpinner("Fetching hostnames...", () =>
+      fetchPullZoneHostnames(client, state.pullZoneId).catch(() => []),
+    );
 
     if (output === "json") {
       logger.log(
@@ -77,13 +71,13 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
           { key: "Storage zone", value: String(state.storageZoneId) },
           { key: "Pull zone", value: String(state.pullZoneId) },
           { key: "Router script", value: String(state.scriptId) },
-          { key: "Domain", value: state.domain ?? "—" },
-          { key: "Current deploy", value: state.current ?? "—" },
+          { key: "Domain", value: state.domain ?? "-" },
+          { key: "Current deploy", value: state.current ?? "-" },
           {
             key: "Deployed",
-            value: current ? formatDateTime(current.createdAt) : "—",
+            value: current ? formatDateTime(current.createdAt) : "-",
           },
-          { key: "Previous deploy", value: state.previous ?? "—" },
+          { key: "Previous deploy", value: state.previous ?? "-" },
           { key: "Deploys", value: String(state.deploys.length) },
         ],
         output,

@@ -1,13 +1,13 @@
 # Static Sites Commands
 
-All site commands live under `bunny sites`. A site is one storage zone (files) + one pull zone (CDN) + one middleware router script, provisioned together by `sites create`. Deploys are immutable directories; promoting or rolling back flips a router env var and purges the cache — no files move, so it's instant.
+All site commands live under `bunny sites`. A site is one storage zone (files) + one pull zone (CDN) + one middleware router script, provisioned together by `sites create`. Deploys are immutable directories; promoting or rolling back flips a router env var and purges the cache; no files move, so it's instant.
 
 Most commands accept an optional site (a trailing `[site]` positional, or the `--site` flag on commands whose positionals are taken, like `deploy`). When omitted, the site resolves in this order:
 
 1. Explicit name or storage zone ID
 2. `.bunny/site.json` manifest (written by `bunny sites link` or `bunny sites create`)
 3. `sites.name` in `bunny.jsonc`
-4. Interactive prompt (suppressed in `--output json` mode — pass a site or link the directory in CI)
+4. Interactive prompt (suppressed in `--output json` mode; pass a site or link the directory in CI)
 
 ## Typical workflows
 
@@ -39,7 +39,7 @@ bunny sites domains add example.com --wait # also attaches *.preview.example.com
 
 ---
 
-## `bunny sites create` — Provision a site
+## `bunny sites create`; Provision a site
 
 ```bash
 bunny sites create                         # prompts for a name (directory-name suggestion), then a custom domain
@@ -55,11 +55,11 @@ bunny sites create my-site --no-link       # don't write .bunny/site.json
 | `--domain` | Attach a custom domain (+ `*.preview.<domain>`) after provisioning; interactive runs prompt for one when omitted |
 | `--link`   | Link this directory (default true; `--no-link` to skip)                                                          |
 
-Site names become the storage zone, pull zone, and `<name>.b-cdn.net` subdomain: 3–60 lowercase letters, digits, and dashes. Creation is idempotent — a failed create re-runs cleanly, reusing whatever was already provisioned.
+Site names become the storage zone, pull zone, and `<name>.b-cdn.net` subdomain: 3-60 lowercase letters, digits, and dashes. Creation is idempotent; a failed create re-runs cleanly, reusing whatever was already provisioned.
 
 ---
 
-## `bunny sites deploy` — Deploy a directory
+## `bunny sites deploy`; Deploy a directory
 
 ```bash
 bunny sites deploy ./dist                  # preview only
@@ -78,7 +78,7 @@ bunny sites deploy ./out --build "npm run build" --env VITE_FLAG=1
 | `--force`      | Deploy even when content is unchanged                                |
 | `--site`       | Target site (name or storage zone ID)                                |
 
-With `--build`, the build runs in your shell environment plus the `--env`/`--env-file` overrides — there is no remote env store; put build-time values in your local `.env` or CI secrets. Deploying already-uploaded content with `--production` skips the upload and just publishes it.
+With `--build`, the build runs in your shell environment plus the `--env`/`--env-file` overrides; there is no remote env store; put build-time values in your local `.env` or CI secrets. Deploying already-uploaded content with `--production` skips the upload and just publishes it.
 
 Interactive `deploy` adds two conveniences (both skipped under `--output json`):
 
@@ -87,7 +87,7 @@ Interactive `deploy` adds two conveniences (both skipped under `--output json`):
 
 ---
 
-## `bunny sites deployments` — List, publish, prune
+## `bunny sites deployments`; List, publish, prune
 
 ```bash
 bunny sites deployments list
@@ -96,11 +96,11 @@ bunny sites deployments publish --previous  # instant rollback
 bunny sites deployments prune --keep 10     # never prunes current/previous
 ```
 
-`publish` (alias `promote`) flips production to a past deploy — the files are already on the CDN, so this is instant plus a cache purge.
+`publish` (alias `promote`) flips production to a past deploy; the files are already on the CDN, so this is instant plus a cache purge.
 
 ---
 
-## `bunny sites domains` — Custom domains
+## `bunny sites domains`; Custom domains
 
 ```bash
 bunny sites domains add example.com --wait  # wait for DNS, then issue SSL
@@ -109,11 +109,11 @@ bunny sites domains list
 bunny sites domains remove example.com
 ```
 
-Adding a domain also attaches `*.preview.<domain>` for per-deploy preview URLs (removing it takes the wildcard down too). If the domain is on a Bunny DNS zone in the account, the CLI offers to create the records; otherwise it prints the CNAME target. The wildcard certificate may need DNS in place before it can issue — re-run `bunny sites domains ssl "*.preview.<domain>"` once DNS is live.
+Adding a domain also attaches `*.preview.<domain>` for per-deploy preview URLs (removing it takes the wildcard down too). If the domain is on a Bunny DNS zone in the account, the CLI offers to create the records; otherwise it prints the CNAME target. The wildcard certificate may need DNS in place before it can issue; re-run `bunny sites domains ssl "*.preview.<domain>"` once DNS is live.
 
 ---
 
-## `bunny sites ci init` — GitHub Actions deployments
+## `bunny sites ci init`; GitHub Actions deployments
 
 ```bash
 bunny sites ci init                         # detect the framework, write .github/workflows/bunny-sites.yml
@@ -155,5 +155,5 @@ An optional `sites` block configures the deploy defaults (validated on its own, 
 ## CI / agents
 
 - Pass `--force` on anything with a confirmation (publish, prune, remove, delete).
-- Pass the site explicitly (or commit `bunny.jsonc` with `sites.name`) — the interactive picker is disabled under `--output json`.
+- Pass the site explicitly (or commit `bunny.jsonc` with `sites.name`); the interactive picker is disabled under `--output json`.
 - `--output json` on every command emits machine-readable results (deploy prints `{ id, production, preview, promoted }`).

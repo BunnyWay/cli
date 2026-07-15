@@ -8,7 +8,7 @@ import {
   setForceSsl,
 } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { withSpinner } from "../../core/ui.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -19,11 +19,7 @@ interface SslArgs extends SiteSelectorArgs {
   "force-ssl"?: boolean;
 }
 
-/**
- * Toggle Force SSL (HTTP→HTTPS redirect) on the site's `<name>.b-cdn.net`
- * system host. It always carries bunny's wildcard certificate, so no cert is
- * issued here. Custom domains are managed via `sites domains ssl`.
- */
+// Toggle Force SSL (HTTP->HTTPS) on the site's `<name>.b-cdn.net` system host (always on bunny's wildcard cert, so no cert is issued); custom domains use `sites domains ssl`.
 export const sitesSslCommand = defineCommand<SslArgs>({
   command: "ssl [site]",
   describe: "Force HTTPS on a site's <name>.b-cdn.net address.",
@@ -53,21 +49,17 @@ export const sitesSslCommand = defineCommand<SslArgs>({
     const { site } = await selectSite(client, { site: ref, link, output });
     const { state } = site;
 
-    const spin = spinner("Updating Force SSL...");
-    spin.start();
-    let systemHost: string | null | undefined;
-    try {
+    const systemHost = await withSpinner("Updating Force SSL...", async () => {
       const hostnames = await fetchPullZoneHostnames(client, state.pullZoneId);
-      systemHost = hostnames.find((h) => h.IsSystemHostname)?.Value;
-      if (!systemHost) {
+      const host = hostnames.find((h) => h.IsSystemHostname)?.Value;
+      if (!host) {
         throw new UserError(
           `Couldn't find the system hostname for "${state.name}".`,
         );
       }
-      await setForceSsl(client, state.pullZoneId, systemHost, force);
-    } finally {
-      spin.stop();
-    }
+      await setForceSsl(client, state.pullZoneId, host, force);
+      return host;
+    });
 
     if (output === "json") {
       logger.log(

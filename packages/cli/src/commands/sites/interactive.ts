@@ -4,7 +4,7 @@ import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
 import type { OutputFormat } from "../../core/types.ts";
-import { confirm, isInteractive, spinner } from "../../core/ui.ts";
+import { confirm, isInteractive, withSpinner } from "../../core/ui.ts";
 import {
   type CoreClient,
   fetchStorageZone,
@@ -66,25 +66,11 @@ async function contextFromRef(
 
 export interface SelectedSite {
   site: SiteContext;
-  /**
-   * Offer to link the directory to the site — only when it was chosen via the
-   * interactive picker. A no-op otherwise, so commands can always call it
-   * after their own output.
-   */
+  // Offer to link the directory to the site (only when chosen via the interactive picker); a no-op otherwise, so commands can always call it.
   offerLink: () => Promise<void>;
 }
 
-/**
- * Resolve the site a command acts on.
- *
- * Precedence: explicit ref (flag or positional) → `.bunny/site.json` →
- * `sites.name` in bunny.jsonc → interactive picker. Non-interactive runs
- * without a resolvable site fail with a hint instead of hanging on a prompt.
- *
- * `offerCreate` (deploy only) adds a "new site" branch to the picker: it runs
- * when the account has no sites, or when the user picks "a new site" over the
- * existing list. It returns a ready, already-linked context.
- */
+// Resolve the site a command acts on, in precedence order: explicit ref, `.bunny/site.json`, `sites.name` in bunny.jsonc, interactive picker (non-interactive runs fail with a hint instead of hanging). `offerCreate` (deploy only) adds a "new site" branch returning a ready, already-linked context.
 export async function selectSite(
   client: CoreClient,
   args: SiteSelectorArgs & {
@@ -95,49 +81,39 @@ export async function selectSite(
   const noLink = async () => {};
 
   if (args.site) {
-    const spin = spinner("Resolving site...");
-    spin.start();
-    try {
-      return {
-        site: await contextFromRef(client, args.site),
-        offerLink: noLink,
-      };
-    } finally {
-      spin.stop();
-    }
+    const ref = args.site;
+    return {
+      site: await withSpinner("Resolving site...", () =>
+        contextFromRef(client, ref),
+      ),
+      offerLink: noLink,
+    };
   }
 
   const manifest = loadManifest<SiteManifest>(SITES_MANIFEST);
   if (manifest.id) {
-    const spin = spinner("Loading linked site...");
-    spin.start();
-    try {
-      const zone = await fetchStorageZone(client, manifest.id);
-      const context = await siteContextFromZone(zone);
-      if (!context) {
-        throw new UserError(
-          `The linked storage zone ${manifest.id} is no longer a bunny site.`,
-          "Run `bunny sites unlink`, then link or create a site.",
-        );
-      }
-      return { site: context, offerLink: noLink };
-    } finally {
-      spin.stop();
+    const id = manifest.id;
+    const context = await withSpinner("Loading linked site...", async () =>
+      siteContextFromZone(await fetchStorageZone(client, id)),
+    );
+    if (!context) {
+      throw new UserError(
+        `The linked storage zone ${id} is no longer a bunny site.`,
+        "Run `bunny sites unlink`, then link or create a site.",
+      );
     }
+    return { site: context, offerLink: noLink };
   }
 
   const configured = loadSiteConfig()?.config.name;
   if (configured) {
-    const spin = spinner(`Resolving site "${configured}" from bunny.jsonc...`);
-    spin.start();
-    try {
-      return {
-        site: await contextFromRef(client, configured),
-        offerLink: noLink,
-      };
-    } finally {
-      spin.stop();
-    }
+    return {
+      site: await withSpinner(
+        `Resolving site "${configured}" from bunny.jsonc...`,
+        () => contextFromRef(client, configured),
+      ),
+      offerLink: noLink,
+    };
   }
 
   if (!isInteractive(args.output)) {
@@ -147,14 +123,9 @@ export async function selectSite(
     );
   }
 
-  const spin = spinner("Fetching sites...");
-  spin.start();
-  let sites: Awaited<ReturnType<typeof fetchSites>>;
-  try {
-    sites = await fetchSites(client);
-  } finally {
-    spin.stop();
-  }
+  const sites = await withSpinner("Fetching sites...", () =>
+    fetchSites(client),
+  );
 
   // Deploy offers to create a site here; other commands only pick an existing one.
   if (args.offerCreate) {

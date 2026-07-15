@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { routerSource } from "./source.ts";
 
 test("routerSource wires up the preview machinery", () => {
-  const src = routerSource();
+  const src = routerSource;
   expect(src).toContain("bunny sites router");
   // Serves the promoted deploy at the apex and per-deploy path previews.
   expect(src).toContain("process.env.CURRENT_DEPLOY");
@@ -24,7 +24,7 @@ test("withDeploy prefixes only root-absolute, un-prefixed paths", () => {
   expect(withDeploy("abcd", "/assets/main.css")).toBe(
     "/deploys/abcd/assets/main.css",
   );
-  // Already prefixed — left alone (idempotent).
+  // Already prefixed; left alone (idempotent).
   expect(withDeploy("abcd", "/deploys/abcd/x.js")).toBe("/deploys/abcd/x.js");
   // Protocol-relative, absolute, relative, and anchors are untouched.
   expect(withDeploy("abcd", "//cdn.example.com/x.js")).toBe(

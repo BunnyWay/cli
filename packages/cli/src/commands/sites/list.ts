@@ -4,7 +4,7 @@ import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { withSpinner } from "../../core/ui.ts";
 import { fetchSites } from "./api.ts";
 
 export const sitesListCommand = defineCommand({
@@ -20,14 +20,9 @@ export const sitesListCommand = defineCommand({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const spin = spinner("Fetching sites...");
-    spin.start();
-    let sites: Awaited<ReturnType<typeof fetchSites>>;
-    try {
-      sites = await fetchSites(client);
-    } finally {
-      spin.stop();
-    }
+    const sites = await withSpinner("Fetching sites...", () =>
+      fetchSites(client),
+    );
 
     if (output === "json") {
       logger.log(
@@ -64,9 +59,9 @@ export const sitesListCommand = defineCommand({
             ? `https://${s.state.domain}`
             : s.systemHostname
               ? `https://${s.systemHostname}`
-              : "—",
+              : "-",
           String(s.state.deploys.length),
-          s.state.current ?? "—",
+          s.state.current ?? "-",
         ]),
         output,
       ),

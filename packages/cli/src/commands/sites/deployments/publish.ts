@@ -7,8 +7,9 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { confirm, withSpinner } from "../../../core/ui.ts";
 import { promoteDeploy, writeRemoteState } from "../api.ts";
+import { markCurrent } from "../constants.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -21,10 +22,7 @@ interface PublishArgs extends SiteSelectorArgs {
   force?: boolean;
 }
 
-/**
- * Publish (promote) a past deploy as production — instant rollback. Flips the
- * router's env var and purges the CDN cache; no files move.
- */
+// Publish (promote) a past deploy as production: flips the router's env var and purges the cache, no files move (instant rollback).
 export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
   command: "publish [id]",
   aliases: ["promote"],
@@ -123,23 +121,16 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       return;
     }
 
-    const spin = spinner("Publishing...");
-    spin.start();
-    try {
+    await withSpinner("Publishing...", async () => {
       await promoteDeploy({
         computeClient,
         coreClient,
         state,
         deployId: targetId,
       });
-      if (state.current && state.current !== targetId) {
-        state.previous = state.current;
-      }
-      state.current = targetId;
+      markCurrent(state, targetId);
       await writeRemoteState(connection, state, etag);
-    } finally {
-      spin.stop();
-    }
+    });
 
     if (output === "json") {
       logger.log(

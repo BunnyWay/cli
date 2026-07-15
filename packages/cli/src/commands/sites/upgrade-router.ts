@@ -6,7 +6,7 @@ import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { withSpinner } from "../../core/ui.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -16,10 +16,7 @@ import { routerSource } from "./router/source.ts";
 
 type UpgradeArgs = SiteSelectorArgs;
 
-/**
- * Republish the site's router script with the CLI's current source. Deploys and
- * env vars are untouched — only the router code changes.
- */
+// Republish the site's router script with the CLI's current source; deploys and env vars are untouched, only the router code changes.
 export const sitesUpgradeRouterCommand = defineCommand<UpgradeArgs>({
   command: "upgrade-router [site]",
   describe: "Republish a site's router script with the latest version.",
@@ -44,20 +41,16 @@ export const sitesUpgradeRouterCommand = defineCommand<UpgradeArgs>({
     });
     const { state } = site;
 
-    const spin = spinner("Republishing router...");
-    spin.start();
-    try {
+    await withSpinner("Republishing router...", async () => {
       await computeClient.POST("/compute/script/{id}/code", {
         params: { path: { id: state.scriptId } },
-        body: { Code: routerSource() },
+        body: { Code: routerSource },
       });
       await computeClient.POST("/compute/script/{id}/publish", {
         params: { path: { id: state.scriptId, uuid: null } },
         body: {},
       });
-    } finally {
-      spin.stop();
-    }
+    });
 
     if (output === "json") {
       logger.log(

@@ -29,8 +29,7 @@ export const sitesLinkCommand = defineCommand<LinkArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    // `link: true` makes the picker's offerLink a no-op prompt-wise, but we
-    // save explicitly below so the ref/manifest paths also link.
+    // link always saves the manifest itself below, so the picker's offerLink is irrelevant here.
     const { site } = await selectSite(client, {
       site: ref,
       link: false,

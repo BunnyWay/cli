@@ -5,7 +5,7 @@ import { sitesDeploymentsPublishCommand } from "./publish.ts";
 
 export const sitesDeploymentsNamespace = defineNamespace(
   "deployments",
-  "Manage a site's deploys — list, publish (roll back), prune.",
+  "Manage a site's deploys; list, publish (roll back), prune.",
   [
     sitesDeploymentsListCommand,
     sitesDeploymentsPublishCommand,

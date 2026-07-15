@@ -32,7 +32,7 @@ export interface HostnameHookContext {
   coreClient: CoreClient;
   pullZoneId: number;
   hostname: string;
-  /** The zone's system hostname — the CNAME target (add only). */
+  /** The zone's system hostname: the CNAME target (add only). */
   cnameTarget?: string;
   args: GlobalArgs & Record<string, unknown>;
 }
@@ -57,12 +57,12 @@ export interface HostnamesMountOptions {
   /** Hidden namespace aliases (e.g. ["hostnames"]) — they work but stay out of help. */
   hiddenAliases?: string[];
   /**
-   * Runs after a domain is added (before the SSL/DNS follow-up) — lets a
+   * Runs after a domain is added (before the SSL/DNS follow-up); lets a
    * resource attach companion hostnames or persist the domain. The hook must
    * handle its own errors; a companion failure shouldn't fail the add.
    */
   onAdded?: (ctx: HostnameHookContext) => Promise<void>;
-  /** Runs after a domain is removed — the counterpart of {@link onAdded}. */
+  /** Runs after a domain is removed; the counterpart of {@link onAdded}. */
   onRemoved?: (ctx: HostnameHookContext) => Promise<void>;
 }
 

@@ -3,7 +3,7 @@ import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { confirm, withSpinner } from "../../../core/ui.ts";
 import { deleteDeployFiles, writeRemoteState } from "../api.ts";
 import {
   DEFAULT_KEEP_DEPLOYS,
@@ -87,9 +87,7 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
     }
 
     const failures: Array<{ id: string; error: string }> = [];
-    const spin = spinner("Pruning deploys...");
-    spin.start();
-    try {
+    await withSpinner("Pruning deploys...", async (spin) => {
       const pruned = new Set<string>();
       for (const [index, victim] of victims.entries()) {
         spin.text = `Pruning ${victim.id} (${index + 1}/${victims.length})...`;
@@ -111,9 +109,7 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       // Only forget deploys whose files are actually gone.
       state.deploys = state.deploys.filter((d) => !pruned.has(d.id));
       await writeRemoteState(connection, state, etag);
-    } finally {
-      spin.stop();
-    }
+    });
 
     const prunedIds = victims
       .filter((v) => !failures.some((f) => f.id === v.id))

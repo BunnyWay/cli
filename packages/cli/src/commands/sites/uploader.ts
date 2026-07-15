@@ -1,5 +1,6 @@
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { mapWithConcurrency } from "../../core/concurrency.ts";
 import { UserError } from "../../core/errors.ts";
 import type { StorageZone } from "../storage/files-api.ts";
 import { siteFiles } from "./api.ts";
@@ -22,10 +23,7 @@ const UPLOAD_ATTEMPTS = 3;
 // Dot-directories that carry web-visible content the site must serve.
 const ALLOWED_DOT_ENTRIES = new Set([".well-known"]);
 
-/**
- * Dotfiles/dirs and node_modules never ship — they're tooling, not site
- * content — except standards dirs like `.well-known` that must be served.
- */
+// Dotfiles/dirs and node_modules never ship (tooling, not content), except standards dirs like `.well-known` that must be served.
 export function shouldSkipEntry(name: string): boolean {
   if (ALLOWED_DOT_ENTRIES.has(name)) return false;
   return name.startsWith(".") || name === "node_modules";
@@ -65,32 +63,11 @@ async function hashFile(file: LocalFile): Promise<HashedLocalFile> {
   return { ...file, sha256: hasher.digest("hex") };
 }
 
-/**
- * Streaming SHA-256 for each file — feeds both the deploy ID and upload
- * checksums. Bounded concurrency matches the upload step so large deploys
- * don't hash one file at a time.
- */
+// Streaming SHA-256 per file feeds both the deploy ID and upload checksums; concurrency matches the upload step.
 export async function hashFiles(
   files: LocalFile[],
 ): Promise<HashedLocalFile[]> {
-  const hashed: HashedLocalFile[] = new Array(files.length);
-  const concurrency = Math.max(
-    1,
-    Math.min(DEFAULT_UPLOAD_CONCURRENCY, files.length),
-  );
-
-  let next = 0;
-  const worker = async () => {
-    while (true) {
-      const index = next++;
-      const file = files[index];
-      if (!file) return;
-      hashed[index] = await hashFile(file);
-    }
-  };
-
-  await Promise.all(Array.from({ length: concurrency }, worker));
-  return hashed;
+  return mapWithConcurrency(files, DEFAULT_UPLOAD_CONCURRENCY, hashFile);
 }
 
 async function withRetries<T>(fn: () => Promise<T>): Promise<T> {
@@ -113,10 +90,7 @@ export interface UploadDeployOptions {
   onFileUploaded?: (done: number, total: number, file: HashedLocalFile) => void;
 }
 
-/**
- * Upload a deploy's files to `deploys/{id}/...` with bounded concurrency,
- * per-file SHA-256 checksums (server-verified), and retry with backoff.
- */
+// Upload a deploy's files to `deploys/{id}/...` with bounded concurrency, server-verified per-file SHA-256 checksums, and retry with backoff.
 export async function uploadDeploy(
   connection: StorageZone,
   deployId: string,
@@ -124,22 +98,15 @@ export async function uploadDeploy(
   opts?: UploadDeployOptions,
 ): Promise<void> {
   if (files.length === 0) {
-    throw new UserError("Nothing to upload — the deploy has no files.");
+    throw new UserError("Nothing to upload; the deploy has no files.");
   }
 
   const prefix = deployPrefix(deployId);
-  const concurrency = Math.max(
-    1,
-    Math.min(opts?.concurrency ?? DEFAULT_UPLOAD_CONCURRENCY, files.length),
-  );
-
-  let next = 0;
   let done = 0;
-  const worker = async () => {
-    while (true) {
-      const index = next++;
-      const file = files[index];
-      if (!file) return;
+  await mapWithConcurrency(
+    files,
+    opts?.concurrency ?? DEFAULT_UPLOAD_CONCURRENCY,
+    async (file) => {
       await withRetries(() =>
         siteFiles.upload(
           connection,
@@ -150,8 +117,6 @@ export async function uploadDeploy(
       );
       done++;
       opts?.onFileUploaded?.(done, files.length, file);
-    }
-  };
-
-  await Promise.all(Array.from({ length: concurrency }, worker));
+    },
+  );
 }

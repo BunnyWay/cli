@@ -8,18 +8,11 @@ const CONFIG_FILENAME = "bunny.jsonc";
 
 export interface LoadedSiteConfig {
   config: SiteConfig;
-  /** Directory containing bunny.jsonc — `sites.dir` resolves against this. */
+  /** Directory containing bunny.jsonc; `sites.dir` resolves against this. */
   root: string;
 }
 
-/**
- * Read the optional `sites` block from `bunny.jsonc`, walking up from cwd.
- *
- * Only the `sites` key is validated — a bunny.jsonc that also (or only)
- * describes an app is fine, and a file without a `sites` block returns null.
- * This deliberately doesn't run the full app schema, so a sites-only
- * `{ "sites": { ... } }` file works without declaring an app.
- */
+// Read the optional `sites` block from `bunny.jsonc` (walking up from cwd); only that block is validated, so a sites-only file works without an `app` block and a file with no `sites` block returns null.
 export function loadSiteConfig(): LoadedSiteConfig | null {
   let dir = resolve(process.cwd());
   while (true) {

@@ -1,19 +1,16 @@
 // `.bunny/site.json` is written by `bunny sites link`/`create` and resolved by sites commands.
 export const SITES_MANIFEST = "site.json";
 
-// Remote paths inside the site's storage zone. Everything under `_bunny/` is
-// blocked by the router (403), so state never gets served.
+// Site state path; everything under `_bunny/` is router-blocked (403) so state is never served.
 export const REMOTE_STATE_PATH = "_bunny/site.json";
 
 // Deploys live at `deploys/{id}/...` inside the storage zone.
 export const DEPLOYS_DIR = "deploys";
 
-// Preview hosts are `dpl-{id}.preview.{domain}` — a namespaced wildcard that
-// can't shadow user subdomains.
+// Preview hosts are `dpl-{id}.preview.{domain}`; a namespaced wildcard that can't shadow user subdomains.
 export const PREVIEW_LABEL = "preview";
 
-// The router env var that selects the production deploy. Updating it is the
-// promote/rollback lever — no code republish needed.
+// Router env var selecting the production deploy; updating it is the promote/rollback lever (no republish).
 export const CURRENT_DEPLOY_VAR = "CURRENT_DEPLOY";
 
 export const STATE_VERSION = 1;
@@ -21,7 +18,7 @@ export const STATE_VERSION = 1;
 export const DEFAULT_KEEP_DEPLOYS = 5;
 
 export interface SiteManifest {
-  /** The site's storage zone ID — the site's identity. */
+  /** The site's storage zone ID; the site's identity. */
   id: number;
   name?: string;
 }
@@ -38,12 +35,7 @@ export interface DeployRecord {
   bytes: number;
 }
 
-/**
- * The remote site state stored at `_bunny/site.json` in the storage zone.
- * It is the source of truth for what a site is (its resource triple) and
- * what has been deployed; the local `.bunny/site.json` manifest is only a
- * pointer to the storage zone.
- */
+// Source of truth (at `_bunny/site.json`) for a site's resource triple and deploys; `.bunny/site.json` is just a local pointer to it.
 export interface RemoteSiteState {
   version: number;
   name: string;
@@ -60,6 +52,14 @@ export interface RemoteSiteState {
 /** Storage-zone path prefix for a deploy, without a trailing slash. */
 export function deployPrefix(deployId: string): string {
   return `${DEPLOYS_DIR}/${deployId}`;
+}
+
+/** Point production at `deployId`, remembering the outgoing deploy as previous. */
+export function markCurrent(state: RemoteSiteState, deployId: string): void {
+  if (state.current && state.current !== deployId) {
+    state.previous = state.current;
+  }
+  state.current = deployId;
 }
 
 /** Pick the deploys beyond the newest `keep`, never the current or previous. */
@@ -87,13 +87,12 @@ export function previewWildcard(domain: string): string {
   return `*.${PREVIEW_LABEL}.${domain}`;
 }
 
-/** Router script name for a site — namespaced so `sites create` can find it on re-run. */
+/** Router script name for a site; namespaced so `sites create` can find it on re-run. */
 export function routerScriptName(siteName: string): string {
   return `${siteName}-router`;
 }
 
-// Deploy IDs are git short-shas or content hashes: lowercase hex-ish tokens.
-// The router's preview-host regex and the storage path layout both rely on this.
+// Deploy IDs are git short-shas or content hashes (lowercase hex-ish); the router regex and storage paths rely on this.
 const DEPLOY_ID_RE = /^[a-z0-9]{4,40}$/;
 
 export function isValidDeployId(id: string): boolean {
@@ -107,11 +106,7 @@ export function isValidSiteName(name: string): boolean {
   return SITE_NAME_RE.test(name);
 }
 
-/**
- * Parse and shape-check remote state. Returns null for anything that isn't a
- * state file this CLI understands — a missing field means "not a site", not
- * a crash.
- */
+// Parse and shape-check remote state; returns null (not a crash) for anything that isn't a state file this CLI understands.
 export function parseRemoteState(raw: string): RemoteSiteState | null {
   let data: unknown;
   try {
@@ -124,8 +119,7 @@ export function parseRemoteState(raw: string): RemoteSiteState | null {
   if (
     typeof s.version !== "number" ||
     typeof s.name !== "string" ||
-    // A tampered/corrupt name would flow into storage paths and generated CI
-    // YAML unquoted; reject state whose name isn't a legal zone name.
+    // Reject an illegal name: it would flow unquoted into storage paths and generated CI YAML.
     !isValidSiteName(s.name) ||
     typeof s.storageZoneId !== "number" ||
     typeof s.pullZoneId !== "number" ||

@@ -22,10 +22,7 @@ interface CiInitArgs extends SiteSelectorArgs {
   force?: boolean;
 }
 
-/**
- * Scaffold `.github/workflows/bunny-sites.yml`: previews on PRs, production
- * on merges to main, via the BunnyWay/actions deploy-site action.
- */
+// Scaffold `.github/workflows/bunny-sites.yml`: previews on PRs, production on merges to main, via the BunnyWay/actions deploy-site action.
 export const sitesCiInitCommand = defineCommand<CiInitArgs>({
   command: "init",
   describe: "Add a GitHub Actions workflow that deploys this site.",

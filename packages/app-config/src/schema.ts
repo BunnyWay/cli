@@ -67,11 +67,7 @@ export const RegionsConfigSchema = z.union([
   }),
 ]);
 
-/**
- * Static-site config (`bunny sites`). All fields are optional: `name` links
- * the directory to a site, `dir` is the deploy root, and `build` is the
- * command `bunny sites deploy --build` runs before uploading.
- */
+// Static-site config (`bunny sites`), all optional: `name` links the directory to a site, `dir` is the deploy root, `build` is the command `sites deploy --build` runs.
 export const SiteConfigSchema = z.object({
   name: z.string().optional(),
   dir: z.string().optional(),

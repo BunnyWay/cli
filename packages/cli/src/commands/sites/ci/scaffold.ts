@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import prompts from "prompts";
 import { UserError } from "../../../core/errors.ts";
+import { runGit } from "../../../core/git.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm } from "../../../core/ui.ts";
 import {
@@ -14,31 +15,13 @@ import {
 } from "./frameworks.ts";
 import { renderSitesWorkflow, SITES_WORKFLOW_PATH } from "./workflow.ts";
 
-async function git(cwd: string, args: string[]): Promise<string | null> {
-  try {
-    const proc = Bun.spawn(["git", ...args], {
-      cwd,
-      stdout: "pipe",
-      stderr: "ignore",
-      stdin: "ignore",
-    });
-    const [code, out] = await Promise.all([
-      proc.exited,
-      new Response(proc.stdout).text(),
-    ]);
-    return code === 0 ? out.trim() : null;
-  } catch {
-    return null;
-  }
-}
-
 /** The repo root, or null when `cwd` isn't inside a git repository. */
 export async function gitTopLevel(cwd: string): Promise<string | null> {
-  return git(cwd, ["rev-parse", "--show-toplevel"]);
+  return runGit(cwd, ["rev-parse", "--show-toplevel"]);
 }
 
 export async function hasGitHubOrigin(root: string): Promise<boolean> {
-  const url = await git(root, ["remote", "get-url", "origin"]);
+  const url = await runGit(root, ["remote", "get-url", "origin"]);
   return url?.includes("github.com") ?? false;
 }
 
@@ -89,11 +72,7 @@ async function resolvePreset(
   return fallback;
 }
 
-/**
- * Write `.github/workflows/bunny-sites.yml` for a site. Returns null when the
- * user declines to overwrite an existing file; throws when non-interactive and
- * the file exists without `force`.
- */
+// Write `.github/workflows/bunny-sites.yml`; returns null when the user declines to overwrite an existing file, throws when non-interactive and it exists without `force`.
 export async function scaffoldSitesWorkflow(opts: {
   site: string;
   root: string;
@@ -154,10 +133,7 @@ export function printSecretHint(): void {
   logger.dim("  (or GitHub repo Settings -> Secrets and variables -> Actions)");
 }
 
-/**
- * Offer to add the BUNNY_API_KEY repo secret via the `gh` CLI (prompted).
- * Falls back to printing the manual steps when declined or unavailable.
- */
+// Offer to add the BUNNY_API_KEY repo secret via the `gh` CLI (prompted); falls back to printing the manual steps when declined or unavailable.
 export async function offerGitHubSecret(opts: {
   apiKey: string | undefined;
   root: string;

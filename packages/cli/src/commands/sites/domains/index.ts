@@ -15,8 +15,7 @@ import { type SiteContext, writeRemoteState } from "../api.ts";
 import { PREVIEW_LABEL, previewWildcard } from "../constants.ts";
 import { selectSite } from "../interactive.ts";
 
-// The hooks run in the same invocation as `resolve`, so the resolved site is
-// cached here — a CLI process handles exactly one command.
+// The hooks run in the same invocation as `resolve`, so the resolved site is cached here (a CLI process handles exactly one command).
 let resolvedSite: SiteContext | null = null;
 
 async function resolveSitePullZone(
@@ -58,11 +57,7 @@ async function recordSiteDomain(
   }
 }
 
-/**
- * Attach the `*.preview.<domain>` wildcard that serves per-deploy previews.
- * Best-effort by design: the apex is already added, and the wildcard can be
- * retried by re-running `sites domains add`.
- */
+// Attach the `*.preview.<domain>` wildcard that serves per-deploy previews; best-effort, since the apex is already added and this can be retried via `sites domains add`.
 export async function attachPreviewWildcard(opts: {
   coreClient: CoreClient;
   pullZoneId: number;
@@ -95,7 +90,7 @@ export async function attachPreviewWildcard(opts: {
       // Wildcard certs need DNS in place (DNS-01); issue later, don't block.
       if (!opts.json) {
         logger.dim(
-          `  Preview HTTPS pending — once DNS is live: bunny sites domains ssl "${wildcard}"`,
+          `  Preview HTTPS pending; once DNS is live: bunny sites domains ssl "${wildcard}"`,
         );
       }
     }
@@ -109,11 +104,7 @@ export async function attachPreviewWildcard(opts: {
   }
 }
 
-/**
- * Full custom-domain setup for a site — used by `sites create --domain`.
- * Interactive runs get the DNS-wait/SSL flow; JSON runs just attach and
- * report. The preview wildcard and state update happen in both.
- */
+// Full custom-domain setup for a site (used by `sites create --domain`): interactive runs get the DNS-wait/SSL flow, JSON runs just attach and report; the preview wildcard and state update happen in both.
 export async function setupSiteDomain(opts: {
   coreClient: CoreClient;
   site: SiteContext;
@@ -188,7 +179,7 @@ export const sitesDomainsCommands = createHostnamesCommands({
         body: { Hostname: previewWildcard(hostname) },
       });
     } catch {
-      // Already gone (or never added) — nothing to clean up.
+      // Already gone (or never added); nothing to clean up.
     }
     if (resolvedSite?.state.domain === hostname) {
       await recordSiteDomain(resolvedSite, undefined);

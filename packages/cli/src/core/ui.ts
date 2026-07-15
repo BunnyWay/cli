@@ -50,6 +50,20 @@ export function spinner(text: string) {
   return ora({ text, isSilent: !process.stdout.isTTY });
 }
 
+/** Run `fn` under a started spinner, stopping it whatever happens; `fn` may update `spin.text`. */
+export async function withSpinner<T>(
+  text: string,
+  fn: (spin: ReturnType<typeof spinner>) => Promise<T>,
+): Promise<T> {
+  const spin = spinner(text);
+  spin.start();
+  try {
+    return await fn(spin);
+  } finally {
+    spin.stop();
+  }
+}
+
 /** Open a URL in the user's default browser. */
 export function openBrowser(url: string) {
   const cmds: Record<string, string[]> = {

@@ -37,11 +37,12 @@ beforeEach(() => {
   siteFiles.download = async (_zone, path) => {
     const content = store.get(path);
     if (content === undefined) throw new Error("404 Not Found");
+    // Bun's Blob stream is web-standard; cast to the SDK's exact download return type.
     return {
       stream: new Blob([content]).stream(),
       response: new Response(content),
       length: content.length,
-    };
+    } as Awaited<ReturnType<typeof siteFiles.download>>;
   };
   siteFiles.upload = async (_zone, path, stream) => {
     store.set(path, await new Response(stream).text());
@@ -388,7 +389,7 @@ test("createSite provisions storage zone → router → pull zone → state", as
 test("createSite re-run reuses existing resources and converges", async () => {
   const coreCalls: Call[] = [];
   const computeCalls: Call[] = [];
-  // Everything already exists — but no remote state (a half-finished create).
+  // Everything already exists; but no remote state (a half-finished create).
   const coreClient = fakeCoreClient({
     calls: coreCalls,
     storageZones: [ZONE],
@@ -549,7 +550,7 @@ test("fetchSites keeps only middleware+storage pull zones with matching state", 
         StorageZoneId: 10,
         Hostnames: [{ IsSystemHostname: true, Value: "my-site.b-cdn.net" }],
       },
-      // Plain storage pull zone — no middleware, never fetched.
+      // Plain storage pull zone; no middleware, never fetched.
       { Id: 31, Name: "not-a-site", StorageZoneId: 10 },
       // Middleware pull zone whose state points elsewhere.
       { Id: 32, Name: "other", MiddlewareScriptId: 9, StorageZoneId: 10 },
@@ -615,7 +616,7 @@ test("deleteSiteResources deletes the pull zone, router, and storage zone", asyn
 });
 
 // Regression: the live API returns GET /pullzone as a paginated envelope
-// ({ Items, CurrentPage, HasMoreItems }) — the spec's plain array is a lie
+// ({ Items, CurrentPage, HasMoreItems }); the spec's plain array is a lie
 // for some queries (e.g. ?search=). createSite crashed on `.find` here.
 
 test("createSite handles the paginated /pullzone envelope", async () => {

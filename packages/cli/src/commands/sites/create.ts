@@ -10,7 +10,8 @@ import { formatKeyValue } from "../../core/format.ts";
 import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifest } from "../../core/manifest.ts";
-import { confirm, isInteractive, spinner } from "../../core/ui.ts";
+import { confirm, isInteractive, withSpinner } from "../../core/ui.ts";
+import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
 import { createSite, siteContextFromZone } from "./api.ts";
 import {
   gitTopLevel,
@@ -30,11 +31,33 @@ interface CreateArgs {
   link?: boolean;
 }
 
-/**
- * Create a new static site: a storage zone (files), a pull zone (CDN), and a
- * middleware router script that maps hosts to deploy directories. The site's
- * state lives at `_bunny/site.json` inside the storage zone.
- */
+// Attach a custom domain to a just-created site; returns an error message on failure (never throws).
+async function attachDomainToCreatedSite(opts: {
+  coreClient: CoreClient;
+  storageZone: StorageZoneModel;
+  domain: string;
+  interactive: boolean;
+  verbose: boolean;
+  json?: boolean;
+}): Promise<string | undefined> {
+  const site = await siteContextFromZone(opts.storageZone);
+  if (!site) return undefined;
+  try {
+    await setupSiteDomain({
+      coreClient: opts.coreClient,
+      site,
+      domain: opts.domain,
+      interactive: opts.interactive,
+      verbose: opts.verbose,
+      json: opts.json,
+    });
+    return undefined;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
+// Create a static site: a storage zone (files), a pull zone (CDN), and a middleware router script mapping hosts to deploy dirs; state lives at `_bunny/site.json` in the storage zone.
 export const sitesCreateCommand = defineCommand<CreateArgs>({
   command: "create [name]",
   describe: "Create a new static site.",
@@ -53,7 +76,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       .positional("name", {
         type: "string",
         describe:
-          "Site name — becomes the storage zone, pull zone, and <name>.b-cdn.net subdomain (prompted when omitted)",
+          "Site name; becomes the storage zone, pull zone, and <name>.b-cdn.net subdomain (prompted when omitted)",
       })
       .option("region", {
         type: "string",
@@ -84,11 +107,8 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
     const coreClient = createCoreClient(options);
     const computeClient = createComputeClient(options);
 
-    const spin = spinner(`Creating site "${name}"...`);
-    spin.start();
-    let result: Awaited<ReturnType<typeof createSite>>;
-    try {
-      result = await createSite({
+    const result = await withSpinner(`Creating site "${name}"...`, (spin) =>
+      createSite({
         coreClient,
         computeClient,
         name,
@@ -96,10 +116,8 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
         onStep: (message) => {
           spin.text = message;
         },
-      });
-    } finally {
-      spin.stop();
-    }
+      }),
+    );
 
     if (args.link !== false) {
       saveManifest<SiteManifest>(SITES_MANIFEST, {
@@ -109,25 +127,17 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
     }
 
     if (output === "json") {
-      // --domain is attached non-interactively; a failure still reports the created site.
-      let domainError: string | undefined;
-      if (domain) {
-        const site = await siteContextFromZone(result.storageZone);
-        if (site) {
-          try {
-            await setupSiteDomain({
-              coreClient,
-              site,
-              domain,
-              interactive: false,
-              verbose,
-              json: true,
-            });
-          } catch (err) {
-            domainError = err instanceof Error ? err.message : String(err);
-          }
-        }
-      }
+      // --domain is attached non-interactively; a failure is reported but doesn't fail the create.
+      const domainError = domain
+        ? await attachDomainToCreatedSite({
+            coreClient,
+            storageZone: result.storageZone,
+            domain,
+            interactive: false,
+            verbose,
+            json: true,
+          })
+        : undefined;
       logger.log(
         JSON.stringify(
           {
@@ -144,7 +154,6 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
           2,
         ),
       );
-      if (domainError) process.exit(1);
       return;
     }
 
@@ -177,26 +186,22 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       chosenDomain = normalizeHostname(value ?? "") || undefined;
     }
     if (chosenDomain) {
-      // A domain failure mustn't fail the create; the site already exists
-      // and the domain can be retried via `sites domains add`.
+      // A domain failure mustn't fail the create; the site already exists and the domain can be retried via `sites domains add`.
       logger.log();
-      const site = await siteContextFromZone(result.storageZone);
-      if (site) {
-        try {
-          await setupSiteDomain({
-            coreClient,
-            site,
-            domain: chosenDomain,
-            interactive,
-            verbose,
-          });
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          logger.warn(`Couldn't finish setting up ${chosenDomain}: ${message}`);
-          logger.dim(
-            `  Retry later: bunny sites domains add ${chosenDomain} ${name}`,
-          );
-        }
+      const domainError = await attachDomainToCreatedSite({
+        coreClient,
+        storageZone: result.storageZone,
+        domain: chosenDomain,
+        interactive,
+        verbose,
+      });
+      if (domainError) {
+        logger.warn(
+          `Couldn't finish setting up ${chosenDomain}: ${domainError}`,
+        );
+        logger.dim(
+          `  Retry later: bunny sites domains add ${chosenDomain} ${name}`,
+        );
       }
     }
 
@@ -210,14 +215,14 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
           { initial: true },
         );
         if (setup) {
-          const result = await scaffoldSitesWorkflow({
+          const scaffold = await scaffoldSitesWorkflow({
             site: name,
             root,
             interactive: true,
           });
-          if (result) {
+          if (scaffold) {
             logger.success(
-              `Wrote ${result.path} (${result.preset.label}, deploys ${result.preset.dir}).`,
+              `Wrote ${scaffold.path} (${scaffold.preset.label}, deploys ${scaffold.preset.dir}).`,
             );
             await offerGitHubSecret({
               apiKey: config.apiKey,

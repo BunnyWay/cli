@@ -8,7 +8,7 @@ import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, removeManifest } from "../../core/manifest.ts";
-import { confirm, spinner } from "../../core/ui.ts";
+import { confirm, withSpinner } from "../../core/ui.ts";
 import { deleteSiteResources } from "./api.ts";
 import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 import {
@@ -22,16 +22,12 @@ interface DeleteArgs extends SiteSelectorArgs {
   "keep-storage"?: boolean;
 }
 
-/**
- * Delete a site: its pull zone, router script, and (unless --keep-storage)
- * the storage zone with every deploy in it. Requires typing the site name
- * to confirm unless --force is passed.
- */
+// Delete a site: its pull zone, router script, and (unless --keep-storage) the storage zone with every deploy; requires typing the name to confirm unless --force.
 export const sitesDeleteCommand = defineCommand<DeleteArgs>({
   command: "delete [site]",
   describe: "Delete a site and its resources.",
   examples: [
-    ["$0 sites delete my-site", "Interactive — double confirmation"],
+    ["$0 sites delete my-site", "Interactive; double confirmation"],
     ["$0 sites delete my-site --force", "Skip confirmation"],
     [
       "$0 sites delete my-site --keep-storage",
@@ -91,20 +87,15 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
       }
     }
 
-    const spin = spinner("Deleting site resources...");
-    spin.start();
-    let results: Awaited<ReturnType<typeof deleteSiteResources>>;
-    try {
-      results = await deleteSiteResources({
+    const results = await withSpinner("Deleting site resources...", () =>
+      deleteSiteResources({
         coreClient,
         computeClient,
         state,
         keepStorage: args["keep-storage"],
         connection: site.connection,
-      });
-    } finally {
-      spin.stop();
-    }
+      }),
+    );
 
     // Only drop the local link when it pointed at this site.
     const manifest = loadManifest<SiteManifest>(SITES_MANIFEST);

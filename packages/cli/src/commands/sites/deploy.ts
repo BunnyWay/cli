@@ -7,26 +7,23 @@ import {
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
+import { collectEnv } from "../../core/env.ts";
 import { UserError } from "../../core/errors.ts";
 import { formatBytes } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
-import { confirm, isInteractive, spinner } from "../../core/ui.ts";
+import { confirm, isInteractive, withSpinner } from "../../core/ui.ts";
 import {
   fetchSystemHostname,
   promoteDeploy,
   type SiteContext,
   writeRemoteState,
 } from "./api.ts";
-import {
-  parseEnvAssignments,
-  parseEnvFile,
-  resolveAutoBuild,
-  runBuildCommand,
-} from "./build.ts";
+import { resolveAutoBuild, runBuildCommand } from "./build.ts";
 import { loadSiteConfig } from "./config.ts";
 import {
   type DeployRecord,
   deployPrefix,
+  markCurrent,
   previewHostname,
 } from "./constants.ts";
 import { resolveDeployIdentity } from "./deploy-id.ts";
@@ -47,14 +44,7 @@ interface DeployArgs extends SiteSelectorArgs {
   force?: boolean;
 }
 
-/**
- * Production and preview URLs for a deploy, derived from the site's hosts.
- *
- * With a custom domain the preview is an isolated per-deploy subdomain
- * (`dpl-{id}.preview.{domain}`); otherwise it's the immutable `/deploys/{id}/`
- * path on the system host, which the router's HTMLRewriter makes render
- * correctly even for root-absolute asset URLs.
- */
+// Production and preview URLs for a deploy: with a custom domain the preview is `dpl-{id}.preview.{domain}`, else the `/deploys/{id}/` path the router's HTMLRewriter renders correctly.
 function deployUrls(
   site: SiteContext,
   deployId: string,
@@ -72,13 +62,7 @@ function deployUrls(
   };
 }
 
-/**
- * Deploy a directory: hash → skip if unchanged → upload to `deploys/{id}/` →
- * record in remote state → serve at a preview URL. With `--production`, also
- * publish it (env var + cache purge) as the live site. With `--build`, runs
- * the build command first in the caller's environment plus `--env`/`--env-file`
- * overrides.
- */
+// Deploy a directory: hash, skip if unchanged, upload to `deploys/{id}/`, record state, serve a preview URL; `--production` also publishes it live, `--build` runs the build first with `--env`/`--env-file` overrides.
 export const sitesDeployCommand = defineCommand<DeployArgs>({
   command: "deploy [dir]",
   describe: "Deploy a directory to a site.",
@@ -170,12 +154,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           'Pass one (`--build "npm run build"`) or set `sites.build` in bunny.jsonc.',
         );
       }
-      const overrides = {
-        ...(args["env-file"]
-          ? parseEnvFile(await Bun.file(resolve(args["env-file"])).text())
-          : {}),
-        ...parseEnvAssignments(args.env),
-      };
+      const overrides = await collectEnv(args.env, args["env-file"]);
       await runBuildCommand(command, root, overrides);
     } else if (isInteractive(output)) {
       // No --build: offer to run the configured build, else a detected one.
@@ -203,17 +182,12 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       throw new UserError(`Directory not found: ${dir}`);
     }
 
-    const hashSpin = spinner("Hashing files...");
-    hashSpin.start();
-    let files: Awaited<ReturnType<typeof hashFiles>>;
-    try {
-      files = await hashFiles(collectFiles(dir));
-    } finally {
-      hashSpin.stop();
-    }
+    const files = await withSpinner("Hashing files...", () =>
+      hashFiles(collectFiles(dir)),
+    );
     if (files.length === 0) {
       throw new UserError(
-        `Nothing to deploy — ${dir} has no files.`,
+        `Nothing to deploy; ${dir} has no files.`,
         "Dotfiles and node_modules are excluded.",
       );
     }
@@ -221,13 +195,12 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
     const identity = await resolveDeployIdentity(dir, files);
 
-    // The no-op check keys on content, not the display id: a rebuilt `dist/`
-    // at the same git sha ships different bytes and must not be skipped.
+    // The no-op check keys on content, not the display id, so a rebuilt `dist/` at the same git sha isn't wrongly skipped.
     const existing = args.force
       ? undefined
       : state.deploys.find((d) => d.contentHash === identity.contentHash);
     const skipUpload = existing !== undefined;
-    // A skipped deploy reuses the already-uploaded deploy's id — that's where its files live.
+    // A skipped deploy reuses the already-uploaded deploy's id; that's where its files live.
     const deployId = existing?.id ?? identity.id;
     const alreadyLive = state.current === deployId;
 
@@ -269,17 +242,13 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
 
     if (!skipUpload) {
-      const uploadSpin = spinner(`Uploading ${files.length} files...`);
-      uploadSpin.start();
-      try {
-        await uploadDeploy(connection, deployId, files, {
+      await withSpinner(`Uploading ${files.length} files...`, (spin) =>
+        uploadDeploy(connection, deployId, files, {
           onFileUploaded: (done, total) => {
-            uploadSpin.text = `Uploading ${done}/${total} files (${formatBytes(totalBytes)} total)...`;
+            spin.text = `Uploading ${done}/${total} files (${formatBytes(totalBytes)} total)...`;
           },
-        });
-      } finally {
-        uploadSpin.stop();
-      }
+        }),
+      );
 
       // Record the deploy. A re-deployed ID keeps its slot but gets fresh metadata.
       const record: DeployRecord = {
@@ -300,23 +269,16 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
 
     if (args.production) {
-      const promoteSpin = spinner("Publishing to production...");
-      promoteSpin.start();
-      try {
+      await withSpinner("Publishing to production...", async () => {
         await promoteDeploy({
           computeClient,
           coreClient,
           state,
           deployId,
         });
-        if (state.current && state.current !== deployId) {
-          state.previous = state.current;
-        }
-        state.current = deployId;
+        markCurrent(state, deployId);
         etag = await writeRemoteState(connection, state, etag);
-      } finally {
-        promoteSpin.stop();
-      }
+      });
     }
 
     const urls = deployUrls(
