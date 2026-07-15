@@ -15,6 +15,8 @@ export function withEnvOptions<T>(
       ...(shortAlias ? { alias: "e" } : {}),
       type: "string",
       array: true,
+      // One value per flag; a greedy array would swallow `-- <command>`.
+      nargs: 1,
       describe: "Set an environment variable as KEY=VALUE (repeatable)",
     })
     .option("env-file", {

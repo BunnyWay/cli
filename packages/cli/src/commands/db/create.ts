@@ -14,6 +14,7 @@ import { fetchRegionConfig, generateToken } from "./api.ts";
 import {
   DATABASE_MANIFEST,
   type DatabaseManifest,
+  DB_NAME_MAX_LENGTH,
   ENV_DATABASE_AUTH_TOKEN,
   ENV_DATABASE_URL,
 } from "./constants.ts";
@@ -31,6 +32,14 @@ async function getCdnServerToken(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Validate a database name; returns an error message, or null when valid. */
+function validateDbName(name: string): string | null {
+  if (name.length > DB_NAME_MAX_LENGTH) {
+    return `Database name must be ${DB_NAME_MAX_LENGTH} characters or fewer (got ${name.length}).`;
+  }
+  return null;
 }
 
 const COMMAND = "create";
@@ -138,10 +147,13 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         type: "text",
         name: "value",
         message: "Database name:",
+        validate: (v: string) => validateDbName(v) ?? true,
       });
       name = value;
     }
     if (!name) throw new UserError("Database name is required.");
+    const nameError = validateDbName(name);
+    if (nameError) throw new UserError(nameError);
 
     // Fetch available regions from config
     const configSpin = spinner("Fetching available regions...");
