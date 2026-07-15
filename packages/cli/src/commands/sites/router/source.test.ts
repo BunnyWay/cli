@@ -8,7 +8,9 @@ test("routerSource wires up the preview machinery", () => {
   expect(src).toContain("process.env.CURRENT_DEPLOY");
   expect(src).toContain('url.pathname = "/deploys/" + deploy + path;');
   // Directory URLs expand to index.html before any branching, so path previews get it too.
-  expect(src).toContain('if (url.pathname.endsWith("/")) url.pathname += "index.html";');
+  expect(src).toContain(
+    'if (url.pathname.endsWith("/")) url.pathname += "index.html";',
+  );
   // Flags previews so the response phase rewrites their HTML (and never production's).
   expect(src).toContain('const PREVIEW_HEADER = "x-bunny-preview";');
   // Client-sent preview flags must be stripped, or they'd poison cached production HTML.
