@@ -2,15 +2,15 @@
 
 All sandbox commands live under `bunny sandbox`. Each sandbox is a fully isolated Ubuntu container (Bunny Magic Containers) with Node.js, Bun, Python, and Claude Code pre-installed. A 10 GB persistent volume is mounted at `/workplace`, the default working directory; relative remote paths resolve against it.
 
-Sandbox credentials (app ID, hostname, SSH endpoint, agent token) are stored in the local config (`~/.config/bunnynet.json`), so commands reference sandboxes by name.
+Sandbox credentials (app ID, SSH endpoint, agent token) are stored in the CLI's local config (same candidate paths as in SKILL.md), so commands reference sandboxes by name.
 
-Claude Code is pre-installed but needs the user's own Anthropic credentials: bake an API key in at create time (`-e ANTHROPIC_API_KEY=...` or `--env-file .env`), set it later with `bunny sandbox env set`, or run `claude` inside the sandbox and complete the login prompt. Credentials persist for the life of the sandbox.
+Claude Code is pre-installed but needs the user's own Anthropic credentials: bake an API key in at create time (prefer `--env-file .env` so the key stays out of shell history), set it later with `bunny sandbox env set`, or run `claude` inside the sandbox and complete the login prompt. Both paths survive restarts and redeploys: baked env vars live on the container, and interactive login writes to `/workplace/.claude` (the image pins `CLAUDE_CONFIG_DIR` there) on the persistent volume.
 
 ## Typical workflows
 
 ```bash
 # Create, run a command, expose a dev server, tear down
-bunny sandbox create my-sandbox -e ANTHROPIC_API_KEY=sk-ant-...
+bunny sandbox create my-sandbox --env-file .env   # .env holds ANTHROPIC_API_KEY for Claude Code
 bunny sandbox exec my-sandbox -- bun install
 bunny sandbox url add my-sandbox 3000        # public HTTPS URL for port 3000
 bunny sandbox delete my-sandbox --force
@@ -34,7 +34,7 @@ bunny sandbox create                                   # interactive: prompts fo
 bunny sandbox create my-sandbox
 bunny sandbox create my-sandbox --region NY
 bunny sandbox create my-sandbox -e NODE_ENV=production --env-file .env
-bunny sandbox create my-sandbox -e ANTHROPIC_API_KEY=sk-ant-...   # ready for Claude Code
+bunny sandbox create my-sandbox --env-file .env   # bake in ANTHROPIC_API_KEY for Claude Code
 ```
 
 | Flag         | Alias | Description                                      | Default |
@@ -43,7 +43,7 @@ bunny sandbox create my-sandbox -e ANTHROPIC_API_KEY=sk-ant-...   # ready for Cl
 | `--env`      | `-e`  | Environment variable as `KEY=VALUE` (repeatable) |         |
 | `--env-file` |       | Load environment variables from a dotenv file    |         |
 
-Variables set at creation are baked into the container and persist across restarts; `--env` overrides `--env-file`. Output shows the app ID, public HTTPS hostname, and SSH address.
+Variables set at creation are baked into the container and persist across restarts; `--env` overrides `--env-file`. Output shows the app ID and SSH address; public URLs come later via `bunny sandbox url add`.
 
 ---
 
@@ -98,7 +98,7 @@ Copy a single file between the local machine and a sandbox over SFTP. Exactly on
 bunny sandbox cp ./app.js my-sandbox:/workplace/app.js
 bunny sandbox cp ./app.js my-sandbox:app.js            # relative to /workplace
 bunny sandbox cp ./app.js my-sandbox:/workplace/src/   # trailing slash keeps the filename
-bunny sandbox cp my-sandbox:/workplace/out.log ./logs/
+bunny sandbox cp my-sandbox:/workplace/out.log ./logs/   # ./logs must already exist
 ```
 
 ---

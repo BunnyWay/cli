@@ -855,9 +855,9 @@ bunny scripts docs
 
 Manage on-demand cloud sandbox environments backed by Bunny Magic Containers. Each sandbox is a fully isolated Ubuntu container with Node.js, Bun, Python, and Claude Code pre-installed. A 10 GB persistent volume is mounted at `/workplace`, your default working directory.
 
-Claude Code is pre-installed but needs your own Anthropic credentials before it can do anything: pass an API key at create time (`-e ANTHROPIC_API_KEY=sk-ant-...` or `--env-file .env`), or run `claude` inside the sandbox and complete the login prompt it prints. Either way the credentials persist for the life of the sandbox.
+Claude Code is pre-installed but needs your own Anthropic credentials before it can do anything: pass an API key at create time (prefer `--env-file .env` so the key stays out of your shell history), or run `claude` inside the sandbox and complete the login prompt it prints. Both survive restarts and redeploys: baked env vars live on the container, and the login flow writes to `/workplace/.claude` on the persistent volume.
 
-Sandbox credentials (app ID, hostname, SSH endpoint, agent token) are stored in `~/.config/bunnynet.json` so you can reconnect without re-creating.
+Sandbox credentials (app ID, SSH endpoint, agent token) are stored in `~/.config/bunnynet.json` so you can reconnect without re-creating.
 
 #### `bunny sandbox create`
 
@@ -877,8 +877,8 @@ bunny sandbox create my-sandbox --region NY
 bunny sandbox create my-sandbox -e NODE_ENV=production -e PORT=8080
 bunny sandbox create my-sandbox --env-file .env
 
-# Give Claude Code your Anthropic API key at create time
-bunny sandbox create my-sandbox -e ANTHROPIC_API_KEY=sk-ant-...
+# Give Claude Code your Anthropic API key at create time (.env holds ANTHROPIC_API_KEY)
+bunny sandbox create my-sandbox --env-file .env
 ```
 
 | Flag         | Alias | Description                                        | Default |
@@ -889,7 +889,7 @@ bunny sandbox create my-sandbox -e ANTHROPIC_API_KEY=sk-ant-...
 
 Variables set at creation are baked into the container and persist across restarts. Values from `--env` override those loaded from `--env-file`. To change them later, use [`bunny sandbox env`](#bunny-sandbox-env).
 
-Once ready, the output shows the app ID, public HTTPS hostname, and SSH address.
+Once ready, the output shows the app ID and SSH address. Public URLs come later via [`bunny sandbox url add`](#bunny-sandbox-url-add).
 
 #### `bunny sandbox list`
 
@@ -900,7 +900,7 @@ bunny sandbox list
 bunny sandbox ls          # alias
 ```
 
-Columns: Name, App ID, Hostname, SSH.
+Columns: Name, App ID, SSH.
 
 #### `bunny sandbox delete`
 
