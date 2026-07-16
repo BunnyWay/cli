@@ -8,9 +8,11 @@ import {
   splitHost,
 } from "./provision.ts";
 import {
+  appNameFor,
   buildRemoteCommand,
   resolvePath,
   Sandbox,
+  sandboxNameFor,
   shellQuote,
 } from "./sandbox.ts";
 import { collectExec, fileEntryFromAttrs } from "./transport.ts";
@@ -27,6 +29,27 @@ describe("Sandbox.create", () => {
     await expect(
       Sandbox.create({ env: { "bad key": "value" } }),
     ).rejects.toThrow("Invalid environment variable name");
+  });
+});
+
+describe("app naming", () => {
+  test("appNameFor prefixes the sandbox name", () => {
+    expect(appNameFor("my-box")).toBe("sandbox-my-box");
+  });
+
+  test("appNameFor always prefixes, even names that already start with sandbox-", () => {
+    expect(appNameFor("sandbox-my-box")).toBe("sandbox-sandbox-my-box");
+  });
+
+  test("sandboxNameFor strips one prefix, round-tripping appNameFor", () => {
+    expect(sandboxNameFor(appNameFor("my-box"))).toBe("my-box");
+    expect(sandboxNameFor(appNameFor("sandbox-my-box"))).toBe(
+      "sandbox-my-box",
+    );
+  });
+
+  test("sandboxNameFor leaves unprefixed app names alone", () => {
+    expect(sandboxNameFor("legacy-app")).toBe("legacy-app");
   });
 });
 

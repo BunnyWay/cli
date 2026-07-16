@@ -157,7 +157,7 @@ bunny-cli/
 │   │   ├── tsconfig.json
 │   │   └── src/
 │   │       ├── index.ts                  # Barrel export: Sandbox, Command, types
-│   │       ├── sandbox.ts                # Sandbox class: create/get/fromHandle, runCommand (timeout/signal/onStdout/onStderr), writeFiles, readFile, listFiles, deleteFile, rename, exists, mkDir, exposePort, domain, getEnv/setEnv/unsetEnv (persisted env), delete, disconnect, Symbol.dispose/asyncDispose
+│   │       ├── sandbox.ts                # Sandbox class: create/get/fromHandle, runCommand (timeout/signal/onStdout/onStderr), writeFiles, readFile, listFiles, deleteFile, rename, exists, mkDir, exposePort, domain, getEnv/setEnv/unsetEnv (persisted env), delete, disconnect, Symbol.dispose/asyncDispose; backing MC app is named `sandbox-<name>` (appNameFor/sandboxNameFor)
 │   │       ├── provision.ts              # Magic Containers app create/poll/endpoints + auth helpers + container env read/replace
 │   │       ├── transport.ts              # ssh2 SSH/SFTP transport (exec with limits, file IO, reachability)
 │   │       ├── command.ts                # Command (detached, logs()) and CommandFinished

@@ -37,6 +37,8 @@ type McClient = ReturnType<typeof createMcClient>;
 
 const DEFAULT_REGION = "AMS";
 const DEFAULT_VOLUME_GB = 10;
+/** Prefix that marks the backing MC app as sandbox-owned. */
+const APP_NAME_PREFIX = "sandbox-";
 const SSH_REACHABLE_TIMEOUT_MS = 120_000;
 const DEFAULT_IMAGE = {
   registryId: "1156",
@@ -92,7 +94,7 @@ export class Sandbox {
     const agentToken = generateToken();
 
     const appId = await createApp(client, {
-      name,
+      name: appNameFor(name),
       region: options.region ?? DEFAULT_REGION,
       agentToken,
       volumeSize: options.volumeSize ?? DEFAULT_VOLUME_GB,
@@ -148,7 +150,8 @@ export class Sandbox {
         "Could not recover sandbox credentials from the app.",
       );
     }
-    const name = (app as { name?: string }).name ?? options.appId;
+    const appName = (app as { name?: string }).name;
+    const name = appName ? sandboxNameFor(appName) : options.appId;
 
     return new Sandbox(
       {
@@ -448,5 +451,17 @@ function generateToken(): string {
 }
 
 function generateName(): string {
-  return `sandbox-${randomBytes(4).toString("hex")}`;
+  return randomBytes(4).toString("hex");
+}
+
+/** MC app name for a sandbox: always `sandbox-<name>`. */
+export function appNameFor(name: string): string {
+  return `${APP_NAME_PREFIX}${name}`;
+}
+
+/** Recover the sandbox name from an MC app name by stripping one prefix. */
+export function sandboxNameFor(appName: string): string {
+  return appName.startsWith(APP_NAME_PREFIX)
+    ? appName.slice(APP_NAME_PREFIX.length)
+    : appName;
 }
