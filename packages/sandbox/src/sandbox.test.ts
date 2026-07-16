@@ -43,9 +43,7 @@ describe("app naming", () => {
 
   test("sandboxNameFor strips one prefix, round-tripping appNameFor", () => {
     expect(sandboxNameFor(appNameFor("my-box"))).toBe("my-box");
-    expect(sandboxNameFor(appNameFor("sandbox-my-box"))).toBe(
-      "sandbox-my-box",
-    );
+    expect(sandboxNameFor(appNameFor("sandbox-my-box"))).toBe("sandbox-my-box");
   });
 
   test("sandboxNameFor leaves unprefixed app names alone", () => {
