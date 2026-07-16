@@ -1,6 +1,6 @@
 ---
 name: bunny-cli
-description: Manage bunny.net resources from the command line (databases, DNS, Edge Scripts, authentication, and raw API requests). Use when working with bunny.net (pullzones, DNS zones/records, databases, storage, Edge Scripts, Magic Containers), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
+description: Manage bunny.net resources from the command line (databases, DNS, Edge Scripts, sandboxes, authentication, and raw API requests). Use when working with bunny.net (pullzones, DNS zones/records, databases, storage, Edge Scripts, Magic Containers, cloud sandboxes), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
 ---
 
 # bunny.net CLI Skill
@@ -40,6 +40,11 @@ bunny scripts init
 bunny scripts deploy dist/index.js
 bunny scripts list
 
+# manage cloud sandboxes (isolated containers with Claude Code inside)
+bunny sandbox create my-sandbox -e ANTHROPIC_API_KEY=sk-ant-...
+bunny sandbox exec my-sandbox -- bun install
+bunny sandbox url add my-sandbox 3000
+
 # manage DNS
 bunny dns zones add example.com
 bunny dns zones nameservers example.com               # is the registrar delegated to bunny yet?
@@ -56,6 +61,7 @@ Use this to route to the correct reference file:
 - **Database management (create, list, show, link, delete, shell, studio, regions, tokens)** -> `references/database.md`
 - **DNS (zones, delegation checks, records, presets, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
+- **Sandboxes (create, exec, ssh, cp, files, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)
 
