@@ -30,6 +30,8 @@ import {
   type RemoteSiteState,
   routerScriptName,
   STATE_VERSION,
+  siteResourcePattern,
+  suffixedResourceName,
 } from "./constants.ts";
 import { routerSource } from "./router/source.ts";
 
@@ -227,26 +229,36 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
     .sort((a, b) => a.state.name.localeCompare(b.state.name));
 }
 
-async function findStorageZoneByName(
+// Account storage zones whose name is `{name}-{suffix}` (or bare `{name}` from pre-suffix CLIs), re-fetched by ID because search results may omit the zone password.
+async function findSiteStorageZones(
   client: CoreClient,
   name: string,
-): Promise<StorageZoneModel | undefined> {
+): Promise<StorageZoneModel[]> {
   const { data } = await client.GET("/storagezone", {
     params: { query: { search: name } },
   });
-  const match = (data ?? []).find(
-    (zone) => (zone.Name ?? "").toLowerCase() === name.toLowerCase(),
+  const pattern = siteResourcePattern(name);
+  const matches = (data ?? []).filter((zone) => pattern.test(zone.Name ?? ""));
+  return Promise.all(
+    matches
+      .filter((zone) => zone.Id != null)
+      .map((zone) => fetchStorageZone(client, zone.Id as number)),
   );
-  // Re-fetch by ID: search results may omit the zone password.
-  return match?.Id ? fetchStorageZone(client, match.Id) : undefined;
 }
 
-async function findPullZoneByName(
+// The site's pull zone on a resumed create: prefer the one already pointing at the storage zone, else a bare legacy `{name}` zone.
+async function findSitePullZone(
   client: CoreClient,
   name: string,
+  storageZoneId: number,
 ): Promise<PullZone | undefined> {
-  return (await fetchPullZones(client, name)).find(
-    (pz) => (pz.Name ?? "").toLowerCase() === name.toLowerCase(),
+  const pattern = siteResourcePattern(name);
+  const candidates = (await fetchPullZones(client, name)).filter((pz) =>
+    pattern.test(pz.Name ?? ""),
+  );
+  return (
+    candidates.find((pz) => pz.StorageZoneId === storageZoneId) ??
+    candidates.find((pz) => (pz.Name ?? "").toLowerCase() === name)
   );
 }
 
@@ -285,37 +297,44 @@ export async function createSite(
   const reused = { storageZone: false, script: false, pullZone: false };
 
   // 1. Storage zone; the site's identity.
+  // A stateless name-pattern match is a half-finished create to resume; one carrying this site's state already is the site.
   step("Creating storage zone...");
-  let storageZone = await findStorageZoneByName(coreClient, name);
-  if (storageZone) {
-    const existing = await siteContextFromZone(storageZone);
-    if (existing) {
+  let storageZone: StorageZoneModel | undefined;
+  for (const zone of await findSiteStorageZones(coreClient, name)) {
+    const existing = await siteContextFromZone(zone);
+    if (existing?.state.name === name) {
       throw new UserError(
         `Site "${name}" already exists.`,
         `Run \`bunny sites link ${name}\` to use it from this directory.`,
       );
     }
+    if (!existing && !storageZone) storageZone = zone;
+  }
+  if (storageZone) {
     reused.storageZone = true;
   } else {
-    let data: StorageZoneModel | undefined;
-    try {
-      ({ data } = await coreClient.POST("/storagezone", {
-        body: { Name: name, Region: region, ReplicationRegions: null },
-      }));
-    } catch (err) {
-      if (isNameTaken(err)) {
-        throw new UserError(
-          `The storage zone name "${name}" is already taken.`,
-          "Storage zone names are global across bunny.net. Choose a different site name.",
-        );
+    // The suffix keeps the globally-unique name from colliding with other accounts; retry fresh suffixes on the off chance one still does.
+    for (let attempt = 0; !storageZone && attempt < 3; attempt++) {
+      const zoneName = suffixedResourceName(name);
+      try {
+        const { data } = await coreClient.POST("/storagezone", {
+          body: { Name: zoneName, Region: region, ReplicationRegions: null },
+        });
+        if (!data?.Id) {
+          throw new UserError(`Failed to create storage zone "${zoneName}".`);
+        }
+        // Re-fetch for the full record (including the zone password).
+        storageZone = await fetchStorageZone(coreClient, data.Id);
+      } catch (err) {
+        if (!isNameTaken(err)) throw err;
       }
-      throw err;
     }
-    if (!data?.Id) {
-      throw new UserError(`Failed to create storage zone "${name}".`);
+    if (!storageZone) {
+      throw new UserError(
+        `Couldn't find an available storage zone name for "${name}".`,
+        "Re-run the command, or choose a different site name.",
+      );
     }
-    // Re-fetch for the full record (including the zone password).
-    storageZone = await fetchStorageZone(coreClient, data.Id);
   }
   const storageZoneId = storageZone.Id;
   if (storageZoneId == null) {
@@ -323,8 +342,10 @@ export async function createSite(
   }
 
   // 2. Router script (middleware); code/publish/env-var are idempotent, so they always run and a resumed create converges.
+  // Named after the zone so a resume finds it.
   step("Creating router script...");
-  const scriptName = routerScriptName(name);
+  const resourceName = storageZone.Name ?? name;
+  const scriptName = routerScriptName(resourceName);
   let scriptId = (await fetchScripts(computeClient)).find(
     (s) => s.Name === scriptName,
   )?.Id;
@@ -359,21 +380,30 @@ export async function createSite(
   });
 
   // 3. Pull zone with the storage origin, router attached.
+  // Namd like the storage zone; a fresh suffix on collision keeps the create moving(nothing keys on the names matching).
   step("Creating pull zone...");
-  let pullZone = await findPullZoneByName(coreClient, name);
+  let pullZone = await findSitePullZone(coreClient, name, storageZoneId);
   if (pullZone) {
     reused.pullZone = true;
   } else {
-    try {
-      pullZone = await createPullZone(coreClient, name, storageZoneId);
-    } catch (err) {
-      if (isNameTaken(err)) {
-        throw new UserError(
-          `The pull zone name "${name}" is already taken.`,
-          "Pull zone names are global across bunny.net. Choose a different site name.",
+    let pullZoneName = resourceName;
+    for (let attempt = 0; !pullZone && attempt < 3; attempt++) {
+      try {
+        pullZone = await createPullZone(
+          coreClient,
+          pullZoneName,
+          storageZoneId,
         );
+      } catch (err) {
+        if (!isNameTaken(err)) throw err;
+        pullZoneName = suffixedResourceName(name);
       }
-      throw err;
+    }
+    if (!pullZone) {
+      throw new UserError(
+        `Couldn't find an available pull zone name for "${name}".`,
+        "Re-run the command, or choose a different site name.",
+      );
     }
   }
   if (pullZone.Id == null) {

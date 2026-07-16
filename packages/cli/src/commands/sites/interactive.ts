@@ -49,19 +49,45 @@ export function sitePositionalBuilder<T>(
     }) as Argv<T & SiteSelectorArgs>;
 }
 
+// Resolve a ref to a site: a storage zone ID/name directly, else by site name (zone names carry a random suffix, so the site name usually isn't one).
 async function contextFromRef(
   client: CoreClient,
   ref: string,
 ): Promise<SiteContext> {
-  const zone = await resolveStorageZone(client, ref);
-  const context = await siteContextFromZone(zone);
-  if (!context) {
+  let zone: Awaited<ReturnType<typeof resolveStorageZone>> | undefined;
+  try {
+    zone = await resolveStorageZone(client, ref);
+  } catch {
+    zone = undefined;
+  }
+  if (zone) {
+    const context = await siteContextFromZone(zone);
+    if (context) return context;
+  }
+
+  const matches = (await fetchSites(client)).filter(
+    (s) => s.state.name.toLowerCase() === ref.toLowerCase(),
+  );
+  if (matches.length > 1) {
+    throw new UserError(
+      `Multiple sites are named "${ref}".`,
+      "Pass the storage zone ID instead (see `bunny sites list`).",
+    );
+  }
+  const summary = matches[0];
+  const context = summary && (await siteContextFromZone(summary.storageZone));
+  if (context) return context;
+
+  if (zone) {
     throw new UserError(
       `Storage zone "${zone.Name}" is not a bunny site.`,
       "Create one with `bunny sites create <name>`.",
     );
   }
-  return context;
+  throw new UserError(
+    `No site found for "${ref}".`,
+    "Run `bunny sites list` to see your sites, or create one with `bunny sites create <name>`.",
+  );
 }
 
 export interface SelectedSite {

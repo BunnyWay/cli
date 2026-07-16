@@ -99,11 +99,39 @@ export function isValidDeployId(id: string): boolean {
   return DEPLOY_ID_RE.test(id);
 }
 
-// Site names become storage zone / pull zone names (and the b-cdn.net subdomain).
-const SITE_NAME_RE = /^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/;
+// Site names become `sites-{name}-{suffix}` zone names; 3-47 chars keeps those within zone-name limits.
+const SITE_NAME_RE = /^[a-z0-9][a-z0-9-]{1,45}[a-z0-9]$/;
 
 export function isValidSiteName(name: string): boolean {
   return SITE_NAME_RE.test(name);
+}
+
+// Marks the zones as sites-managed in the dashboard; discovery doesn't key on it (that's pull zone shape + state).
+export const RESOURCE_PREFIX = "sites-";
+
+const RESOURCE_SUFFIX_LENGTH = 6;
+const RESOURCE_SUFFIX_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+// Zone names are global across bunny.net, so the random suffix keeps creates from colliding with other accounts' zones.
+export function randomResourceSuffix(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(RESOURCE_SUFFIX_LENGTH));
+  return Array.from(
+    bytes,
+    (b) => RESOURCE_SUFFIX_CHARS[b % RESOURCE_SUFFIX_CHARS.length],
+  ).join("");
+}
+
+/** A site's storage/pull zone name: `sites-{name}-{suffix}`. */
+export function suffixedResourceName(siteName: string): string {
+  return `${RESOURCE_PREFIX}${siteName}-${randomResourceSuffix()}`;
+}
+
+/** Matches a site's zone names: `sites-{name}-{suffix}`, or bare `{name}` from pre-suffix CLIs. */
+export function siteResourcePattern(siteName: string): RegExp {
+  return new RegExp(
+    `^(${RESOURCE_PREFIX}${siteName}-[a-z0-9]{${RESOURCE_SUFFIX_LENGTH}}|${siteName})$`,
+    "i",
+  );
 }
 
 // Parse and shape-check remote state; returns null (not a crash) for anything that isn't a state file this CLI understands.

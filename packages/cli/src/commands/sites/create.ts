@@ -64,7 +64,10 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
   describe: "Create a new static site.",
   examples: [
     ["$0 sites create", "Prompt for a name (defaults to the directory name)"],
-    ["$0 sites create my-site", "Create a site served at my-site.b-cdn.net"],
+    [
+      "$0 sites create my-site",
+      "Create a site served at sites-my-site-<suffix>.b-cdn.net",
+    ],
     [
       "$0 sites create my-site --domain example.com",
       "Create and attach a custom domain",
@@ -77,7 +80,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       .positional("name", {
         type: "string",
         describe:
-          "Site name; becomes the storage zone, pull zone, and <name>.b-cdn.net subdomain (prompted when omitted)",
+          "Site name; the storage zone, pull zone, and b-cdn.net subdomain become sites-<name>-xxxxxx (prompted when omitted)",
       })
       .option("region", {
         type: "string",

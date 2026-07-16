@@ -13,7 +13,7 @@ Most commands accept an optional site (a trailing `[site]` positional, or the `-
 
 ```bash
 # New site: provision, deploy, iterate
-bunny sites create my-site                 # served at https://my-site.b-cdn.net
+bunny sites create my-site                 # served at https://sites-my-site-<suffix>.b-cdn.net
 bunny sites deploy ./dist                  # uploads to a preview URL
 bunny sites deploy ./dist --production     # uploads + publishes as the live site
 
@@ -55,7 +55,7 @@ bunny sites create my-site --no-link       # don't write .bunny/site.json
 | `--domain` | Attach a custom domain (+ `*.preview.<domain>`) after provisioning; interactive runs prompt for one when omitted |
 | `--link`   | Link this directory (default true; `--no-link` to skip)                                                          |
 
-Site names become the storage zone, pull zone, and `<name>.b-cdn.net` subdomain: 3-60 lowercase letters, digits, and dashes. Creation is idempotent; a failed create re-runs cleanly, reusing whatever was already provisioned.
+Site names are 3-47 lowercase letters, digits, and dashes. The storage zone, pull zone, and b-cdn.net subdomain become `sites-<name>-xxxxxx` (a `sites-` prefix marking them in the dashboard, plus a shared random suffix since zone names are global across bunny.net); commands still take the clean site name. Creation is idempotent; a failed create re-runs cleanly, reusing whatever was already provisioned.
 
 ---
 
@@ -131,7 +131,7 @@ Writes a workflow that deploys previews on pull requests and publishes to produc
 bunny sites list
 bunny sites show                            # resources, domains, current deploy
 bunny sites open                            # open the live URL in the browser (--print emits it)
-bunny sites ssl --no-force-ssl              # toggle Force HTTPS on the <name>.b-cdn.net system host
+bunny sites ssl --no-force-ssl              # toggle Force HTTPS on the site's b-cdn.net system host
 bunny sites link my-site                    # .bunny/site.json
 bunny sites unlink
 bunny sites upgrade-router                  # republish the router with the CLI's current source

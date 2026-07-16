@@ -7,6 +7,8 @@ import {
   previewHostname,
   previewWildcard,
   type RemoteSiteState,
+  siteResourcePattern,
+  suffixedResourceName,
 } from "./constants.ts";
 
 const validState: RemoteSiteState = {
@@ -68,4 +70,19 @@ test("isValidSiteName enforces zone-name rules", () => {
   expect(isValidSiteName("-leading")).toBe(false);
   expect(isValidSiteName("trailing-")).toBe(false);
   expect(isValidSiteName("ab")).toBe(false); // too short
+  expect(isValidSiteName("a".repeat(47))).toBe(true);
+  expect(isValidSiteName("a".repeat(48))).toBe(false);
+});
+
+test("suffixed resource names round-trip through the site pattern", () => {
+  const zoneName = suffixedResourceName("my-site");
+  expect(zoneName).toMatch(/^sites-my-site-[a-z0-9]{6}$/);
+  const pattern = siteResourcePattern("my-site");
+  expect(pattern.test(zoneName)).toBe(true);
+  expect(pattern.test("my-site")).toBe(true); // bare pre-suffix zone
+  expect(pattern.test("my-site-abcdef")).toBe(false); // suffix without the prefix
+  expect(pattern.test("sites-my-site")).toBe(false); // prefix without a suffix
+  expect(pattern.test("sites-my-site-abcdef1")).toBe(false); // suffix too long
+  expect(pattern.test("sites-my-site2-abcdef")).toBe(false); // different site
+  expect(siteResourcePattern("other").test(zoneName)).toBe(false);
 });

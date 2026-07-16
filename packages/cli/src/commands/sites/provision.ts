@@ -19,7 +19,7 @@ import {
 } from "./constants.ts";
 
 export const SITE_NAME_RULES =
-  "Use 3-60 lowercase letters, digits, and dashes (no leading/trailing dash).";
+  "Use 3-47 lowercase letters, digits, and dashes (no leading/trailing dash).";
 
 /** Best-effort site name from the current directory, or undefined if it can't be one. */
 export function suggestSiteName(): string | undefined {

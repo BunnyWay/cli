@@ -102,8 +102,12 @@ function fakeCoreClient(opts: {
    */
   pullZoneEnvelope?: boolean;
   pageSize?: number;
-  /** Throw this from POST /storagezone or POST /pullzone (a taken name). */
-  createError?: { path: "/storagezone" | "/pullzone"; error: ApiError };
+  /** Throw this from POST /storagezone or POST /pullzone (a taken name); `times` bounds how often (default: always). */
+  createError?: {
+    path: "/storagezone" | "/pullzone";
+    error: ApiError;
+    times?: number;
+  };
 }): CoreClient {
   const zones = opts.storageZones ?? [];
   const pullZones = opts.pullZones ?? [];
@@ -157,7 +161,13 @@ function fakeCoreClient(opts: {
         body: options?.body,
       });
       if (opts.createError && path === opts.createError.path) {
-        throw opts.createError.error;
+        if (
+          opts.createError.times === undefined ||
+          opts.createError.times > 0
+        ) {
+          if (opts.createError.times !== undefined) opts.createError.times--;
+          throw opts.createError.error;
+        }
       }
       if (path === "/storagezone") {
         const zone = {
@@ -372,13 +382,24 @@ test("createSite provisions storage zone → router → pull zone → state", as
     script: false,
     pullZone: false,
   });
-  expect(result.systemHostname).toBe("my-site.b-cdn.net");
+
+  // Zone names are globally unique, so both carry a shared random suffix.
+  const zoneCreate = coreCalls.find(
+    (c) => c.method === "POST" && c.path === "/storagezone",
+  );
+  const zoneName = (zoneCreate?.body as { Name: string }).Name;
+  expect(zoneName).toMatch(/^sites-my-site-[a-z0-9]{6}$/);
+  expect(result.systemHostname).toBe(`${zoneName}.b-cdn.net`);
 
   // The router script is uploaded, published, and gets CURRENT_DEPLOY="".
   const computePaths = computeCalls.map((c) => `${c.method} ${c.path}`);
   expect(computePaths).toContain("POST /compute/script");
   expect(computePaths).toContain("POST /compute/script/{id}/code");
   expect(computePaths).toContain("POST /compute/script/{id}/publish");
+  const scriptCreate = computeCalls.find(
+    (c) => c.path === "/compute/script" && c.method === "POST",
+  );
+  expect(scriptCreate?.body).toMatchObject({ Name: `${zoneName}-router` });
   const envSet = computeCalls.find(
     (c) => c.path === "/compute/script/{id}/variables",
   );
@@ -390,7 +411,7 @@ test("createSite provisions storage zone → router → pull zone → state", as
   );
   expect(pzCreates).toHaveLength(1);
   expect(pzCreates[0]?.body).toMatchObject({
-    Name: "my-site",
+    Name: zoneName,
     StorageZoneId: 10,
   });
   const attach = coreCalls.find(
@@ -403,7 +424,7 @@ test("createSite provisions storage zone → router → pull zone → state", as
     (c) => c.method === "POST" && c.path === "/pullzone/{id}/setForceSSL",
   );
   expect(forceSsl?.body).toEqual({
-    Hostname: "my-site.b-cdn.net",
+    Hostname: `${zoneName}.b-cdn.net`,
     ForceSSL: true,
   });
 
@@ -467,6 +488,43 @@ test("createSite re-run reuses existing resources and converges", async () => {
   expect(await readRemoteState(fakeConnection())).not.toBeNull();
 });
 
+test("createSite resumes a half-created suffixed site", async () => {
+  const coreCalls: Call[] = [];
+  const computeCalls: Call[] = [];
+  const suffixed = { ...ZONE, Name: "sites-my-site-abc123" };
+  const coreClient = fakeCoreClient({
+    calls: coreCalls,
+    storageZones: [suffixed],
+    pullZones: [
+      {
+        Id: 30,
+        Name: "sites-my-site-abc123",
+        StorageZoneId: 10,
+        Hostnames: [],
+      },
+    ],
+  });
+  const computeClient = fakeComputeClient({
+    calls: computeCalls,
+    scripts: [{ Id: 20, Name: "sites-my-site-abc123-router" }],
+  });
+
+  const result = await createSite({
+    coreClient,
+    computeClient,
+    name: "my-site",
+    region: "DE",
+  });
+
+  expect(result.reused).toEqual({
+    storageZone: true,
+    script: true,
+    pullZone: true,
+  });
+  // The site keeps its clean display name; only the zones carry the suffix.
+  expect(result.state.name).toBe("my-site");
+});
+
 test("createSite refuses to re-provision an existing site", async () => {
   store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
   const coreClient = fakeCoreClient({ calls: [], storageZones: [ZONE] });
@@ -477,11 +535,23 @@ test("createSite refuses to re-provision an existing site", async () => {
   ).rejects.toThrow('Site "my-site" already exists.');
 });
 
-test("createSite reports a globally-taken storage zone name clearly", async () => {
-  // The name is free on this account (findStorageZoneByName sees nothing) but
-  // taken globally, so the create POST comes back 409.
+test("createSite refuses to re-provision an existing suffixed site", async () => {
+  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
+  const suffixed = { ...ZONE, Name: "sites-my-site-abc123" };
+  const coreClient = fakeCoreClient({ calls: [], storageZones: [suffixed] });
+  const computeClient = fakeComputeClient({ calls: [] });
+
+  await expect(
+    createSite({ coreClient, computeClient, name: "my-site", region: "DE" }),
+  ).rejects.toThrow('Site "my-site" already exists.');
+});
+
+test("createSite gives up after every storage zone suffix collides", async () => {
+  // Every suffixed candidate comes back 409 (in practice: the API rejecting the
+  // name for another reason the taken-name check matches).
+  const coreCalls: Call[] = [];
   const coreClient = fakeCoreClient({
-    calls: [],
+    calls: coreCalls,
     createError: {
       path: "/storagezone",
       error: new ApiError(
@@ -494,12 +564,46 @@ test("createSite reports a globally-taken storage zone name clearly", async () =
 
   await expect(
     createSite({ coreClient, computeClient, name: "my-site", region: "DE" }),
-  ).rejects.toThrow('The storage zone name "my-site" is already taken.');
+  ).rejects.toThrow(
+    'Couldn\'t find an available storage zone name for "my-site".',
+  );
+  // Each attempt used a fresh suffixed candidate.
+  const attempts = coreCalls
+    .filter((c) => c.method === "POST" && c.path === "/storagezone")
+    .map((c) => (c.body as { Name: string }).Name);
+  expect(attempts).toHaveLength(3);
+  for (const name of attempts)
+    expect(name).toMatch(/^sites-my-site-[a-z0-9]{6}$/);
 });
 
-test("createSite reports a globally-taken pull zone name clearly", async () => {
-  // Storage zone and router provision fine; the pull zone name is taken (a 400
-  // whose message says so on this endpoint).
+test("createSite retries the pull zone with a fresh suffix when the name is taken", async () => {
+  const coreCalls: Call[] = [];
+  const coreClient = fakeCoreClient({
+    calls: coreCalls,
+    createError: {
+      path: "/pullzone",
+      error: new ApiError("The name is already taken.", 400),
+      times: 1,
+    },
+  });
+  const computeClient = fakeComputeClient({ calls: [] });
+
+  const result = await createSite({
+    coreClient,
+    computeClient,
+    name: "my-site",
+    region: "DE",
+  });
+
+  const attempts = coreCalls
+    .filter((c) => c.method === "POST" && c.path === "/pullzone")
+    .map((c) => (c.body as { Name: string }).Name);
+  expect(attempts).toHaveLength(2);
+  expect(attempts[1]).toMatch(/^sites-my-site-[a-z0-9]{6}$/);
+  expect(result.reused.pullZone).toBe(false);
+});
+
+test("createSite gives up after every pull zone suffix collides", async () => {
   const coreClient = fakeCoreClient({
     calls: [],
     createError: {
@@ -511,7 +615,9 @@ test("createSite reports a globally-taken pull zone name clearly", async () => {
 
   await expect(
     createSite({ coreClient, computeClient, name: "my-site", region: "DE" }),
-  ).rejects.toThrow('The pull zone name "my-site" is already taken.');
+  ).rejects.toThrow(
+    'Couldn\'t find an available pull zone name for "my-site".',
+  );
 });
 
 // ---- promote ----
