@@ -11,6 +11,7 @@ import { dbNamespace } from "./commands/db/index.ts";
 import { dnsNamespace } from "./commands/dns/index.ts";
 import { docsCommand } from "./commands/docs.ts";
 import { openCommand } from "./commands/open.ts";
+import { pzNamespace } from "./commands/pz/index.ts";
 import { registriesNamespace } from "./commands/registries/index.ts";
 import { sandboxNamespace } from "./commands/sandbox/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
@@ -27,6 +28,7 @@ const commands: CommandModule[] = [
   dbNamespace,
   dnsNamespace,
   scriptsNamespace,
+  pzNamespace,
   configNamespace,
   docsCommand,
   openCommand,
