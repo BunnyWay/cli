@@ -857,7 +857,7 @@ Manage on-demand cloud sandbox environments backed by Bunny Magic Containers. Ea
 
 Claude Code is pre-installed but needs your own Anthropic credentials before it can do anything: pass an API key at create time (prefer `--env-file .env` so the key stays out of your shell history), or run `claude` inside the sandbox and complete the login prompt it prints. Both survive restarts and redeploys: baked env vars live on the container, and the login flow writes to `/workplace/.claude` on the persistent volume.
 
-Sandbox credentials (app ID, SSH endpoint, agent token) are stored in `~/.config/bunnynet.json` so you can reconnect without re-creating.
+Sandbox credentials (app ID, SSH endpoint, agent token) are stored in the CLI's local config file (`~/.config/bunnynet.json` by default) so you can reconnect without re-creating.
 
 #### `bunny sandbox create`
 
