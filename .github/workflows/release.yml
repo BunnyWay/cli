@@ -37,7 +37,6 @@ jobs:
     if: needs.changesets.outputs.hasChangesets == 'false'
     outputs:
       cli-version: ${{ steps.check-cli.outputs.version }}
-      config-version: ${{ steps.check-config.outputs.version }}
       database-shell-version: ${{ steps.check-database-shell.outputs.version }}
       openapi-client-version: ${{ steps.check-openapi-client.outputs.version }}
       sandbox-version: ${{ steps.check-sandbox.outputs.version }}
@@ -49,17 +48,6 @@ jobs:
         run: |
           VERSION=$(node -p "require('./packages/openapi-client/package.json').version")
           PUBLISHED=$(npm view @bunny.net/openapi-client version 2>/dev/null || echo "0.0.0")
-          if [ "$VERSION" != "$PUBLISHED" ]; then
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "New version detected: $VERSION (published: $PUBLISHED)"
-          else
-            echo "No version change: $VERSION"
-          fi
-      - name: Check config version
-        id: check-config
-        run: |
-          VERSION=$(node -p "require('./packages/config/package.json').version")
-          PUBLISHED=$(npm view @bunny.net/config version 2>/dev/null || echo "0.0.0")
           if [ "$VERSION" != "$PUBLISHED" ]; then
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "New version detected: $VERSION (published: $PUBLISHED)"
@@ -475,33 +463,6 @@ jobs:
       - name: Publish @bunny.net/sandbox
         run: |
           cd packages/sandbox
-          bun publish --access public
-        env:
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  publish-config:
-    name: Publish config
-    runs-on: ubuntu-latest
-    needs: version
-    if: needs.version.outputs.config-version
-    steps:
-      - uses: actions/checkout@v5
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.3.11"
-      - run: bun install
-
-      # Config's build type-checks against openapi-client's package exports (dist/), so build it first.
-      - name: Build openapi-client
-        run: bun run --filter @bunny.net/openapi-client build
-
-      - name: Build package
-        run: bun run --filter @bunny.net/config build
-
-      # bun publish (not npm) rewrites the workspace:* dependency on @bunny.net/openapi-client to a real version.
-      - name: Publish @bunny.net/config
-        run: |
-          cd packages/config
           bun publish --access public
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}

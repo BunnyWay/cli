@@ -931,16 +931,7 @@ Two differences from openapi-client:
 - Sandbox depends on `@bunny.net/openapi-client` with `workspace:*`, so the `publish-sandbox` job in `release.yml` uses `bun publish` (not `npm publish`) — bun rewrites `workspace:*` to the local package version in the published tarball; npm would ship the unresolvable `workspace:*` spec verbatim. `bun publish` authenticates via the `NPM_CONFIG_TOKEN` env var.
 - Its `tsconfig.build.json` overrides `paths` to `{}` so openapi-client resolves via its package `exports` (`dist/`) instead of source — otherwise openapi-client's sources would enter the program and violate `rootDir`. The publish job therefore builds openapi-client before building sandbox.
 
-### Publishing `@bunny.net/config`
-
-`@bunny.net/config` follows the same compiled-library pattern as `@bunny.net/sandbox`: `exports`/`main`/`types` point at `dist/`, in-repo tooling resolves it from source via the root `tsconfig.json` `paths` mapping, and `tsconfig.build.json` (`rewriteRelativeImportExtensions`, plain `tsc`, `paths` overridden to `{}`) emits JS + declarations. Like sandbox, it depends on `@bunny.net/openapi-client` with `workspace:*`, so the `publish-config` job in `release.yml` builds openapi-client first, then builds config, then runs `bun publish` (which rewrites `workspace:*` to a real version; authenticates via `NPM_CONFIG_TOKEN`).
-
-Two config-specific notes:
-
-- Its `build` script runs `generate:schema` before `tsc`, so the published `generated/schema.json` (shipped via `files`, not `dist`) always matches the Zod schemas. The `./schema.json` subpath export and the `$schema` reference written into `bunny.jsonc` both resolve to that file.
-- `tsconfig.build.json` sets `include: ["src"]` so the package-root `scripts/generate-schema.ts` stays out of the compiled program (it would otherwise violate `rootDir: src`).
-
-The CLI bundles config at compile time (`bun build --compile`), so the CLI itself does not consume the published package — publishing exists for external tools that read or write `bunny.jsonc`.
+`@bunny.net/config` is a private workspace package (not published); the CLI consumes it from source via the workspace symlink.
 
 ### CI
 

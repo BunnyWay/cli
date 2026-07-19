@@ -74,9 +74,6 @@
         "@bunny.net/openapi-client": "workspace:*",
         "zod": "^4.3.6",
       },
-      "devDependencies": {
-        "typescript": "^5",
-      },
     },
     "packages/database-adapter-libsql": {
       "name": "@bunny.net/database-adapter-libsql",
