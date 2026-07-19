@@ -74,19 +74,30 @@ export const SiteConfigSchema = z.object({
   build: z.string().optional(),
 });
 
-export const BunnyAppConfigSchema = z.object({
+// The `app` block: Magic Containers deploy intent (name, scaling, regions, containers).
+export const AppConfigSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  scaling: z.object({ min: z.number(), max: z.number() }).optional(),
+  regions: RegionsConfigSchema.optional(),
+  containers: z.record(z.string(), ContainerConfigSchema),
+});
+
+// The whole `bunny.jsonc` file; every resource block is optional so app-only, sites-only, and combined files all validate.
+export const BunnyConfigSchema = z.object({
   $schema: z.string().optional(),
   version: VersionSchema,
-  app: z.object({
-    id: z.string().optional(),
-    name: z.string(),
-    scaling: z.object({ min: z.number(), max: z.number() }).optional(),
-    regions: RegionsConfigSchema.optional(),
-    containers: z.record(z.string(), ContainerConfigSchema),
-  }),
+  app: AppConfigSchema.optional(),
   sites: SiteConfigSchema.optional(),
 });
 
+// `BunnyConfigSchema` narrowed to require the `app` block; used by the apps commands and API conversion.
+export const BunnyAppConfigSchema = BunnyConfigSchema.extend({
+  app: AppConfigSchema,
+});
+
+export type BunnyConfig = z.infer<typeof BunnyConfigSchema>;
+export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type BunnyAppConfig = z.infer<typeof BunnyAppConfigSchema>;
 export type SiteConfig = z.infer<typeof SiteConfigSchema>;
 export type ContainerConfig = z.infer<typeof ContainerConfigSchema>;

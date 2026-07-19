@@ -72,11 +72,11 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 This is a Bun workspace monorepo with six packages:
 
 - **`@bunny.net/openapi-client`** (`packages/openapi-client/`) — Standalone, type-safe OpenAPI client for bunny.net, generated from OpenAPI specs. Zero CLI dependencies. Publishable to npm.
-- **`@bunny.net/app-config`** (`packages/app-config/`) — Shared app configuration schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. Used by the CLI and potentially other tools.
+- **`@bunny.net/config`** (`packages/config/`) — Shared `bunny.jsonc` schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. The root `BunnyConfigSchema` has optional `app` (Magic Containers) and `sites` (static sites) blocks; `BunnyAppConfigSchema` narrows it to require `app`. Used by the CLI and potentially other tools.
 - **`@bunny.net/database-shell`** (`packages/database-shell/`) — Standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
 - **`@bunny.net/scriptable-dns-types`** (`packages/scriptable-dns-types/`): Ambient TypeScript declarations for the Scriptable DNS runtime globals (`ARecord`, `Monitoring`, `RoutingEngine`, etc.). Types-only, no runtime code: the DNS runtime can't `import`, so these power editor autocomplete and an optional typecheck step. Scaffolded into projects by `bunny dns scripts init`; intended to also feed the dashboard editor. Publishable to npm.
 - **`@bunny.net/sandbox`** (`packages/sandbox/`) — Standalone sandbox SDK. Code-first DX (`Sandbox.create`, `writeFiles`, `runCommand`, `exposePort`, `setEnv`/`getEnv`/`unsetEnv`, `listFiles`/`deleteFile`/`rename`/`exists`) over Magic Containers provisioning plus an `ssh2` SSH/SFTP transport. Blocking `runCommand` accepts `timeout` (rejects with `CommandTimeoutError` carrying partial output), `signal` for cancellation, and `onStdout`/`onStderr` callbacks for live output. Env vars can be baked in at `create` (persisted), passed per-command via `runCommand({ env })` (temporary), or persisted after creation via `setEnv`. The handle implements `Symbol.dispose`/`Symbol.asyncDispose` so `using`/`await using` release the SSH connection (without deleting the sandbox). Zero CLI dependencies.
-- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/app-config`, `@bunny.net/database-shell`, `@bunny.net/scriptable-dns-types`, and `@bunny.net/sandbox`.
+- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/config`, `@bunny.net/database-shell`, `@bunny.net/scriptable-dns-types`, and `@bunny.net/sandbox`.
 
 ```
 bunny-cli/
@@ -119,7 +119,7 @@ bunny-cli/
 │   │           ├── storage.d.ts
 │   │           └── stream.d.ts
 │   │
-│   ├── app-config/                        # @bunny.net/app-config package
+│   ├── config/                            # @bunny.net/config package
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   ├── scripts/
@@ -128,7 +128,7 @@ bunny-cli/
 │   │   │   └── schema.json                # JSON Schema for bunny.jsonc (committed)
 │   │   └── src/
 │   │       ├── index.ts                   # Barrel export: schemas, types, conversion functions
-│   │       ├── schema.ts                  # Zod schemas + inferred types (BunnyAppConfig, etc.)
+│   │       ├── schema.ts                  # Zod schemas + inferred types: BunnyConfigSchema (root; optional app + sites), AppConfigSchema, SiteConfigSchema, BunnyAppConfigSchema (app required)
 │   │       ├── convert.ts                 # API ↔ config conversion (apiToConfig, configToAddRequest, configToPatchRequest)
 │   │       └── parse-image-ref.ts         # Docker image reference parser (parseImageRef)
 │   │
@@ -191,6 +191,9 @@ bunny-cli/
 │           │   │   ├── bunny-dns.ts       # findBunnyDnsZone()/offerBunnyDnsRecord(): detect a hostname inside an account Bunny DNS zone, then add/repoint a PullZone record (always confirmed) so SSL can issue immediately
 │           │   │   ├── bunny-dns.test.ts  # Tests for longest-suffix zone matching + record-name derivation with a fake core client
 │           │   │   └── commands.ts       # createHostnamesCommands(): add/ssl/list/remove factory parameterized by a pull-zone resolver
+│           │   ├── bunny-config.ts       # Shared bunny.jsonc discovery + raw read (findConfigRoot, configPath, configExists, readBunnyConfig); used by apps/ and sites/ config.ts
+│           │   ├── jsonc.ts              # syncJsonc(): surgical JSONC editing that preserves comments, key order, and sibling blocks
+│           │   ├── jsonc.test.ts         # Tests for syncJsonc (comment/formatting preservation, key add/remove)
 │           │   ├── logger.ts             # Chalk-based structured logger
 │           │   ├── manifest.ts           # .bunny/ context file resolution (load, save, resolveManifestId)
 │           │   ├── registrar.ts          # detectRegistrar()/parseRegistrar(): best-effort registrar name via RDAP (used by dns zones add to name the registrar in next-steps)
@@ -211,7 +214,7 @@ bunny-cli/
 │           │   │   ├── APPS.md           # Apps documentation (while experimental)
 │           │   │   ├── index.ts          # defineNamespace("apps", false) — hidden, registers all app commands
 │           │   │   ├── constants.ts      # Status label maps + APP_MANIFEST filename + AppManifest interface (consumed via core/manifest.ts)
-│           │   │   ├── config.ts         # bunny.jsonc file I/O (saveConfig strips transient `image`/`registry`/`app.id` via stripTransientFields), re-exports from @bunny.net/app-config; provides resolveAppId, resolveContainerId, resolveContainerRegistry
+│           │   │   ├── config.ts         # bunny.jsonc app I/O over core/bunny-config.ts + core/jsonc.ts (loadConfig requires an `app` block; saveConfig strips transient `image`/`registry`/`app.id` via stripTransientFields and edits existing files surgically), re-exports from @bunny.net/config; provides resolveAppId, resolveContainerId, resolveContainerRegistry
 │           │   │   ├── docker.ts         # Docker + registry helpers (build, push, dockerLogin, ensureRegistryLogin, dockerHasCredentials, ghDockerLogin, generateTag, promptRegistry, resolveRegistryForImage, getConfigSuggestions, imageHostname, parseDockerfileExposedPorts/readDockerfileExposedPorts, findDockerfiles/isDockerfileName/defaultContainerNameFromDockerfile/assignContainerNamesToDockerfiles for monorepo Dockerfile discovery)
 │           │   │   ├── suggestions.ts    # Shared endpoint/env-var suggestion prompting (confirmEndpointSuggestions, endpointRequestToConfig, promptSuggestedEnv, filterNewEndpointSuggestions, filterNewEnvSuggestions) - used by walkthrough.ts and deploy.ts (post-push)
 │           │   │   ├── init.ts           # Scaffold bunny.jsonc (detects Dockerfile, prompts for registry)
@@ -381,7 +384,7 @@ bunny-cli/
 │           │   │   ├── api.test.ts       # In-memory siteFiles store + path-branching fake clients: state round-trip, etag conflict, createSite fresh/resume/already-exists, promote, fetchSites filtering
 │           │   │   ├── interactive.ts    # selectSite: explicit ref (storage zone ID/name, falling back to a state.name match since zone names carry a suffix) → .bunny/site.json → bunny.jsonc sites.name → picker (offerLink like scripts); optional offerCreate (deploy only) adds a new-vs-existing prompt, and creates straight away when the account has no sites; siteOptionBuilder (--site) + sitePositionalBuilder ([site])
 │           │   │   ├── provision.ts       # promptSiteName (normalize/validate, directory-name suggestion) + createSiteWithProgress (createSite under a step-tracking spinner; shared with create.ts) + createLinkedSite (create + manifest link → SiteContext, skipping create's domain/CI prompts) for the deploy picker's new-site branch
-│           │   │   ├── config.ts         # loadSiteConfig: lenient bunny.jsonc reader; validates ONLY the `sites` block (SiteConfigSchema from @bunny.net/app-config), so sites-only configs work without an `app` block
+│           │   │   ├── config.ts         # loadSiteConfig: reads bunny.jsonc via core/bunny-config.ts and validates ONLY the `sites` block (SiteConfigSchema from @bunny.net/config), so sites-only configs work without an `app` block or `version`
 │           │   │   ├── router/source.ts  # routerSource: the middleware Edge Script (one script per site; no version tracking; upgrade-router just republishes the latest). apex → CURRENT_DEPLOY, dpl-{id}.preview.{domain} → that deploy, /deploys/{id}/ passthrough (path preview) flagged with x-bunny-preview header, /_bunny/* → 403 (client-sent x-bunny-preview headers are stripped; the flag is router-internal), trailing-slash → index.html. onOriginResponse: HTMLRewriter rewrites root-absolute href/src/srcset in flagged path-preview HTML → /deploys/{id}/… (so Jekyll/SSG assets render on one PZ; each deploy's assets get a unique cache key), and X-Robots-Tag: noindex on all previews. Production HTML is never rewritten (no header), so promote doesn't churn its cache
 │           │   │   ├── deploy-id.ts      # gitIdentity (short sha + dirty check via Bun.spawn), contentHashId (sorted path+sha256 merkle → 8 hex), resolveDeployIdentity (clean git → sha, else content hash)
 │           │   │   ├── deploy-id.test.ts # Hash determinism + real temp git repos (clean → sha, dirty → content hash)
@@ -470,7 +473,7 @@ bunny-cli/
 
 ### Conventions
 
-- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/app-config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
+- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
 - **API clients use `ClientOptions`** — an options object with `apiKey`, `baseUrl`, `verbose`, `userAgent`, and `onDebug`. The CLI provides a `clientOptions(config, verbose)` helper to build this from `ResolvedConfig`.
 - **One command per file.** Each file in `commands/` exports a single command or namespace.
 - **Commands are grouped by domain** in subdirectories (`config/`, `db/`, `scripts/`).
@@ -921,12 +924,23 @@ Its `package.json` `exports`/`main`/`types` point at `dist/`, so npm consumers g
 
 ### Publishing `@bunny.net/sandbox`
 
-`@bunny.net/sandbox` follows the same compiled-library pattern as `@bunny.net/openapi-client`: `exports`/`main`/`types` point at `dist/`, in-repo tooling resolves it from source via the root `tsconfig.json` `paths` mapping, and `scripts/build.ts` (via `tsconfig.build.json`) emits JS + declarations with the same `.ts` → `.js` specifier rewriting.
+`@bunny.net/sandbox` follows the same compiled-library pattern as `@bunny.net/openapi-client`: `exports`/`main`/`types` point at `dist/`, in-repo tooling resolves it from source via the root `tsconfig.json` `paths` mapping, and `tsconfig.build.json` (plain `tsc` with `rewriteRelativeImportExtensions`, no `scripts/build.ts`) emits JS + declarations. Unlike openapi-client it has no declaration transformer, so emitted `.d.ts` keep their `.ts` import specifiers, which TypeScript resolves to the sibling `.d.ts` at the consumer.
 
 Two differences from openapi-client:
 
 - Sandbox depends on `@bunny.net/openapi-client` with `workspace:*`, so the `publish-sandbox` job in `release.yml` uses `bun publish` (not `npm publish`) — bun rewrites `workspace:*` to the local package version in the published tarball; npm would ship the unresolvable `workspace:*` spec verbatim. `bun publish` authenticates via the `NPM_CONFIG_TOKEN` env var.
 - Its `tsconfig.build.json` overrides `paths` to `{}` so openapi-client resolves via its package `exports` (`dist/`) instead of source — otherwise openapi-client's sources would enter the program and violate `rootDir`. The publish job therefore builds openapi-client before building sandbox.
+
+### Publishing `@bunny.net/config`
+
+`@bunny.net/config` follows the same compiled-library pattern as `@bunny.net/sandbox`: `exports`/`main`/`types` point at `dist/`, in-repo tooling resolves it from source via the root `tsconfig.json` `paths` mapping, and `tsconfig.build.json` (`rewriteRelativeImportExtensions`, plain `tsc`, `paths` overridden to `{}`) emits JS + declarations. Like sandbox, it depends on `@bunny.net/openapi-client` with `workspace:*`, so the `publish-config` job in `release.yml` builds openapi-client first, then builds config, then runs `bun publish` (which rewrites `workspace:*` to a real version; authenticates via `NPM_CONFIG_TOKEN`).
+
+Two config-specific notes:
+
+- Its `build` script runs `generate:schema` before `tsc`, so the published `generated/schema.json` (shipped via `files`, not `dist`) always matches the Zod schemas. The `./schema.json` subpath export and the `$schema` reference written into `bunny.jsonc` both resolve to that file.
+- `tsconfig.build.json` sets `include: ["src"]` so the package-root `scripts/generate-schema.ts` stays out of the compiled program (it would otherwise violate `rootDir: src`).
+
+The CLI bundles config at compile time (`bun build --compile`), so the CLI itself does not consume the published package — publishing exists for external tools that read or write `bunny.jsonc`.
 
 ### CI
 
@@ -1379,11 +1393,11 @@ The `.bunny/` manifest and `bunny.jsonc` serve different purposes:
 | Committed | No (gitignored)                              | Yes                                                |
 | Shared    | No (per-developer)                           | Yes (team-wide)                                    |
 
-`bunny.jsonc` supports a `$schema` property for editor autocompletion, pointing to the JSON Schema generated by `@bunny.net/app-config`:
+`bunny.jsonc` supports a `$schema` property for editor autocompletion, pointing to the JSON Schema generated by `@bunny.net/config`:
 
 ```jsonc
 {
-  "$schema": "./node_modules/@bunny.net/app-config/generated/schema.json",
+  "$schema": "./node_modules/@bunny.net/config/generated/schema.json",
   "version": "2026-05-11",
   "app": {
     "name": "my-app",
@@ -1395,9 +1409,9 @@ The `.bunny/` manifest and `bunny.jsonc` serve different purposes:
 }
 ```
 
-`version` is an ISO date string. The CLI requires it on load — if a config is missing `version`, `loadConfig` throws a `UserError` with a hint to regenerate via `bunny apps pull`. There is no migration runner yet; when the first breaking shape change ships, that PR introduces one alongside its transform.
+`version` is an ISO date string. The apps flow requires it on load — if a config is missing `version`, `loadConfig` throws a `UserError` with a hint to regenerate via `bunny apps pull`. (The sites flow is lenient: a sites-only file needs neither `version` nor an `app` block.) There is no migration runner yet; when the first breaking shape change ships, that PR introduces one alongside its transform.
 
-Schemas and types are defined in `@bunny.net/app-config` using Zod. The CLI's `config.ts` handles file I/O (parsing JSONC, validating with Zod, writing with `$schema` + `version` injection) and resolution helpers (`resolveAppId`, `resolveContainerId`).
+Schemas and types are defined in `@bunny.net/config` using Zod. `core/bunny-config.ts` owns `bunny.jsonc` discovery + raw read (shared by the apps and sites flows). The apps `config.ts` layers validation, resolution helpers (`resolveAppId`, `resolveContainerId`), and writes: a new file is serialized fresh with `$schema` + `version` first, while an existing file is edited surgically via `core/jsonc.ts` (`syncJsonc`) so comments, key order, and a sibling `sites` block survive.
 
 **Persistence model.** Three layers, with strict roles:
 
@@ -1409,7 +1423,7 @@ To keep these consistent and stop file churn on every deploy, `saveConfig` (`app
 
 `resolveAppId` and `resolveContainerRegistry` in `apps/config.ts` read from the manifest first, then fall back to legacy `app.id` / `container.registry` in `bunny.jsonc` with a one-time deprecation warning. Existing pre-manifest configs continue to work; the next save naturally migrates them by stripping the legacy fields once the manifest carries the same data.
 
-In-memory mutations during a deploy run (`targetContainer.image = imageRef`) are still required so `configToAddRequest` / `configToPatchRequest` can read the ref within the same run - they just don't make it to disk. Registry IDs for the API body are supplied via the new `RegistryMap` argument to `configToAddRequest` / `configToPatchRequest` (`@bunny.net/app-config`), sourced from the manifest at the call site.
+In-memory mutations during a deploy run (`targetContainer.image = imageRef`) are still required so `configToAddRequest` / `configToPatchRequest` can read the ref within the same run - they just don't make it to disk. Registry IDs for the API body are supplied via the new `RegistryMap` argument to `configToAddRequest` / `configToPatchRequest` (`@bunny.net/config`), sourced from the manifest at the call site.
 
 ---
 

@@ -11,7 +11,9 @@ export {
 export { parseImageRef } from "./parse-image-ref.ts";
 // Types
 export type {
+  AppConfig,
   BunnyAppConfig,
+  BunnyConfig,
   ContainerConfig,
   EndpointConfig,
   ProbeConfig,
@@ -20,7 +22,9 @@ export type {
   VolumeConfig,
 } from "./schema.ts";
 export {
+  AppConfigSchema,
   BunnyAppConfigSchema,
+  BunnyConfigSchema,
   ContainerConfigSchema,
   CURRENT_VERSION,
   EndpointConfigSchema,

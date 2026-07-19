@@ -1,0 +1,43 @@
+{
+  "name": "@bunny.net/config",
+  "version": "0.1.2",
+  "description": "Shared Zod schemas, types, JSON Schema, and API conversion for the bunny.jsonc config file.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "generate:schema": "bun run scripts/generate-schema.ts",
+    "build": "rm -rf dist && bun run generate:schema && tsc -p tsconfig.build.json"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema.json": "./generated/schema.json"
+  },
+  "files": [
+    "dist",
+    "generated",
+    "README.md"
+  ],
+  "keywords": [
+    "bunny",
+    "config",
+    "bunny.jsonc",
+    "schema",
+    "zod"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@bunny.net/openapi-client": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

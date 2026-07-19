@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/@bunny.net/config/generated/schema.json",
+  "version": "2026-05-11",
+  "sites": {
+    // Links this directory to a site created with `bunny sites create acme-app`, so deploys need no --site flag.
+    "name": "acme-app",
+    // `bunny sites deploy --build` runs this before uploading.
+    "build": "npm run build",
+    // Vite writes to dist/; the deploy root.
+    "dir": "dist"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/@bunny.net/config/generated/schema.json",
+  "version": "2026-05-11",
+  // One bunny.jsonc can hold both a Magic Containers `app` and a static `sites` block.
+  // `bunny apps deploy` reads `app`; `bunny sites deploy` reads `sites`. Each ignores the other.
+  "app": {
+    "name": "acme-api",
+    "regions": ["DE"],
+    "containers": {
+      "api": {
+        "image": "ghcr.io/acme/api:latest",
+        "endpoints": [
+          {
+            "type": "cdn",
+            "ssl": true,
+            "ports": [{ "public": 443, "container": 8080 }]
+          }
+        ]
+      }
+    }
+  },
+  "sites": {
+    "name": "acme-www",
+    "build": "npm run build",
+    "dir": "dist"
+  }
+}

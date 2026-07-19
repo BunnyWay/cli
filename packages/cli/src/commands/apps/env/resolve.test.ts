@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CURRENT_VERSION } from "@bunny.net/app-config";
+import { CURRENT_VERSION } from "@bunny.net/config";
 import { useTempDir } from "../../../test-utils/temp-dir.ts";
 import type { BunnyAppConfig } from "../config.ts";
 import { resolveContainerEnv } from "./resolve.ts";

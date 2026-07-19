@@ -227,6 +227,6 @@
       "additionalProperties": false
     }
   },
-  "required": ["version", "app"],
+  "required": ["version"],
   "additionalProperties": false
 }

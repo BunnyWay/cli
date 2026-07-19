@@ -1,26 +1,30 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import {
-  type BunnyAppConfig,
-  BunnyAppConfigSchema,
-} from "@bunny.net/app-config";
+import { join } from "node:path";
+import { type BunnyAppConfig, BunnyAppConfigSchema } from "@bunny.net/config";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
-import { parse as parseJsonc } from "jsonc-parser";
+import {
+  CONFIG_FILENAME,
+  configExists,
+  configPath,
+  readBunnyConfig,
+} from "../../core/bunny-config.ts";
 import { UserError } from "../../core/errors.ts";
+import { syncJsonc } from "../../core/jsonc.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest } from "../../core/manifest.ts";
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 
 type Application = components["schemas"]["Application"];
 
-const CONFIG_FILENAME = "bunny.jsonc";
+// The `$schema` reference written into `bunny.jsonc`; resolves in a consumer's node_modules for editor validation.
+const SCHEMA_REF = "./node_modules/@bunny.net/config/generated/schema.json";
 
 // Re-export types and conversion functions for convenience
 export type {
   BunnyAppConfig,
   ContainerConfig,
   RegionsConfig,
-} from "@bunny.net/app-config";
+} from "@bunny.net/config";
 export {
   apiToConfig,
   CURRENT_VERSION,
@@ -28,44 +32,35 @@ export {
   configToPatchRequest,
   normalizeRegions,
   parseImageRef,
-} from "@bunny.net/app-config";
-
-function findConfigRoot(): string {
-  let dir = resolve(process.cwd());
-
-  while (true) {
-    if (existsSync(join(dir, CONFIG_FILENAME))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) return process.cwd();
-    dir = parent;
-  }
-}
+} from "@bunny.net/config";
+// `bunny.jsonc` discovery lives in core so apps and sites share one walk-up.
+export { configExists };
 
 /**
  * Load and parse the app config.
  *
  * When `explicitPath` is given (e.g. from `--config <path>`), that file
  * is loaded verbatim. Otherwise we walk up from cwd looking for
- * `bunny.jsonc`.
+ * `bunny.jsonc`. The `app` block is required here (see `BunnyAppConfigSchema`);
+ * a sites-only file is read via `sites/config.ts` instead.
  */
 export function loadConfig(explicitPath?: string): BunnyAppConfig {
-  const jsoncPath = explicitPath ?? join(findConfigRoot(), CONFIG_FILENAME);
-
-  if (!existsSync(jsoncPath)) {
+  const found = readBunnyConfig(explicitPath);
+  if (!found) {
     throw new UserError(
-      `No config file found at ${jsoncPath}.`,
+      `No config file found at ${configPath(explicitPath)}.`,
       "Run `bunny apps init` first, or pass --config <path>.",
     );
   }
 
-  const raw = parseJsonc(readFileSync(jsoncPath, "utf-8"));
-  if (raw && typeof raw === "object" && !("version" in raw)) {
+  const { data, path } = found;
+  if (data && typeof data === "object" && !("version" in data)) {
     throw new UserError(
-      `${jsoncPath} is missing the \`version\` field.`,
+      `${path} is missing the \`version\` field.`,
       "Run `bunny apps pull` to regenerate it from the remote app.",
     );
   }
-  return BunnyAppConfigSchema.parse(raw);
+  return BunnyAppConfigSchema.parse(data);
 }
 
 /**
@@ -116,32 +111,24 @@ export function stripTransientFields(data: BunnyAppConfig): BunnyAppConfig {
  * Transient fields (see {@link stripTransientFields}) are removed before
  * write - callers can freely mutate the in-memory `image` field during a
  * deploy without polluting the on-disk config.
+ *
+ * An existing file is edited surgically (see {@link syncJsonc}), so comments,
+ * key order, and any sibling blocks (such as `sites`) are preserved. A new
+ * file is serialized fresh, starting with $schema → version → app.
  */
 export function saveConfig(data: BunnyAppConfig, explicitPath?: string): void {
   const path = explicitPath ?? join(process.cwd(), CONFIG_FILENAME);
   const cleaned = stripTransientFields(data);
 
-  // Re-key the object so the file always starts with $schema → version → app.
+  // Re-key so a freshly written file starts with $schema → version → app.
   const { $schema: _schema, version, ...rest } = cleaned;
-  const output = {
-    $schema: "./node_modules/@bunny.net/app-config/generated/schema.json",
-    version,
-    ...rest,
-  };
+  const output = { $schema: SCHEMA_REF, version, ...rest };
 
-  writeFileSync(path, `${JSON.stringify(output, null, 2)}\n`);
-}
-
-/**
- * Check whether an app config exists.
- *
- * When `explicitPath` is given we check that exact file; otherwise we
- * walk up from cwd looking for `bunny.jsonc`.
- */
-export function configExists(explicitPath?: string): boolean {
-  if (explicitPath) return existsSync(explicitPath);
-  const root = findConfigRoot();
-  return existsSync(join(root, CONFIG_FILENAME));
+  if (existsSync(path)) {
+    writeFileSync(path, syncJsonc(readFileSync(path, "utf-8"), output));
+  } else {
+    writeFileSync(path, `${JSON.stringify(output, null, 2)}\n`);
+  }
 }
 
 /**
