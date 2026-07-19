@@ -8,7 +8,7 @@ export interface LoadedSiteConfig {
   root: string;
 }
 
-// Read the optional `sites` block from `bunny.jsonc` (walking up from cwd); only that block is validated, so a sites-only file works without an `app` block (or even a `version`) and a file with no `sites` block returns null.
+// Read the `sites` block from `bunny.jsonc`, validating only that block so a sites-only file needs no `app` (or `version`); returns null when no file or no `sites` block.
 export function loadSiteConfig(): LoadedSiteConfig | null {
   const found = readBunnyConfig();
   if (!found) return null;

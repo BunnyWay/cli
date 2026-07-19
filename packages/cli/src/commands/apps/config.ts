@@ -41,8 +41,8 @@ export { configExists };
  *
  * When `explicitPath` is given (e.g. from `--config <path>`), that file
  * is loaded verbatim. Otherwise we walk up from cwd looking for
- * `bunny.jsonc`. The `app` block is required here (see `BunnyAppConfigSchema`);
- * a sites-only file is read via `sites/config.ts` instead.
+ * `bunny.jsonc`. The `app` block is required here; a sites-only file is
+ * read via `sites/config.ts` instead.
  */
 export function loadConfig(explicitPath?: string): BunnyAppConfig {
   const found = readBunnyConfig(explicitPath);
@@ -112,9 +112,8 @@ export function stripTransientFields(data: BunnyAppConfig): BunnyAppConfig {
  * write - callers can freely mutate the in-memory `image` field during a
  * deploy without polluting the on-disk config.
  *
- * An existing file is edited surgically (see {@link syncJsonc}), so comments,
- * key order, and any sibling blocks (such as `sites`) are preserved. A new
- * file is serialized fresh, starting with $schema → version → app.
+ * An existing file is edited surgically (see {@link syncJsonc}) to preserve
+ * comments and a sibling `sites` block; a new file is serialized fresh.
  */
 export function saveConfig(data: BunnyAppConfig, explicitPath?: string): void {
   const path = explicitPath ?? join(process.cwd(), CONFIG_FILENAME);

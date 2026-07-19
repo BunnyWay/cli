@@ -63,6 +63,17 @@ function deployUrls(
   };
 }
 
+// A CLI path arg is cwd-relative; `sites.dir` and the detected output dir are relative to the bunny.jsonc root, where the build runs.
+export function resolveDeployDir(
+  argDir: string | undefined,
+  configDir: string | undefined,
+  autoDir: string | undefined,
+  root: string,
+): string {
+  if (argDir !== undefined) return resolve(argDir);
+  return resolve(root, configDir ?? autoDir ?? ".");
+}
+
 // Deploy a directory: hash, skip if unchanged, upload to `deploys/{id}/`, record state, serve a preview URL; `--production` also publishes it live, `--build` runs the build first with `--env`/`--env-file` overrides.
 export const sitesDeployCommand = defineCommand<DeployArgs>({
   command: "deploy [dir]",
@@ -179,7 +190,12 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       }
     }
 
-    const dir = resolve(explicitDir ?? autoDir ?? ".");
+    const dir = resolveDeployDir(
+      args.dir,
+      siteConfig?.config.dir,
+      autoDir,
+      root,
+    );
     if (autoDir && explicitDir === undefined) {
       logger.info(`Deploying detected output directory: ${autoDir}`);
     }

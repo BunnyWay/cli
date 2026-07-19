@@ -2,7 +2,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { parse as parseJsonc } from "jsonc-parser";
 
-// The single `bunny.jsonc` resource file; holds the optional `app` and `sites` blocks (see `@bunny.net/config`).
 export const CONFIG_FILENAME = "bunny.jsonc";
 
 // Walk up from cwd to the directory holding `bunny.jsonc`, or null when none exists.
@@ -37,7 +36,7 @@ export interface RawBunnyConfig {
   root: string;
 }
 
-// Locate and parse `bunny.jsonc` (walking up from cwd unless an explicit path is given); returns null when the file doesn't exist. Callers apply their own schema validation.
+// Locate and parse `bunny.jsonc` (walking up from cwd unless a path is given), or null when absent. Callers validate the shape they need.
 export function readBunnyConfig(explicitPath?: string): RawBunnyConfig | null {
   const path = configPath(explicitPath);
   if (!existsSync(path)) return null;

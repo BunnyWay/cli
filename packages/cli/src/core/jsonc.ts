@@ -11,12 +11,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// Arrays and primitives are compared whole; both are JSON-safe here so serialization order is stable.
 function equalLeaf(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-// Return `text` with the value at `path` reconciled to `desired`, recursing into objects so comments and formatting on untouched keys survive. Each edit is applied before the next is computed so offsets stay valid.
+// Reconcile the value at `path` to `desired`, recursing into objects so comments and formatting on unchanged keys survive.
 function reconcile(
   text: string,
   path: (string | number)[],
@@ -48,14 +47,7 @@ function reconcile(
   );
 }
 
-/**
- * Surgically edit JSONC `text` so it matches `desired`, preserving comments,
- * key order, and formatting on everything that didn't change. New keys are
- * appended; keys absent from `desired` are removed.
- *
- * Falls back to a fresh serialization when `text` isn't a JSON object (empty
- * file, array, or garbage) so callers always get a valid result.
- */
+// Edit JSONC `text` to match `desired`, preserving comments and formatting on unchanged keys; fresh-serializes when `text` isn't a JSON object.
 export function syncJsonc(
   text: string,
   desired: Record<string, unknown>,

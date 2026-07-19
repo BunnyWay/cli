@@ -184,7 +184,6 @@ test("saveConfig preserves comments and a sibling sites block on an existing fil
     string,
     any
   >;
-  // Transient fields stripped, the hand-authored sites block survives.
   expect(parsed.app.id).toBeUndefined();
   expect(parsed.app.containers.api.registry).toBeUndefined();
   expect(parsed.app.containers.api.dockerfile).toBe("Dockerfile");

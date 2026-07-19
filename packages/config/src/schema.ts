@@ -74,7 +74,7 @@ export const SiteConfigSchema = z.object({
   build: z.string().optional(),
 });
 
-// The `app` block: Magic Containers deploy intent (name, scaling, regions, containers).
+// The `app` block: Magic Containers deploy intent.
 export const AppConfigSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
