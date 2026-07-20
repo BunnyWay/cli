@@ -5,6 +5,10 @@ export class SandboxError extends Error {
   }
 }
 
+export class HostKeyVerificationError extends SandboxError {
+  override name = "HostKeyVerificationError";
+}
+
 /** Thrown when a command exceeds its timeout. Carries the output collected so far. */
 export class CommandTimeoutError extends SandboxError {
   constructor(

@@ -1,6 +1,7 @@
-import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { sandboxKnownHostsPath } from "@bunny.net/sandbox/known-hosts";
 import type { SandboxRecord } from "../../config/schema.ts";
 
 export const WORKPLACE = "/workplace";
@@ -36,10 +37,14 @@ export function sshArgs(
     ...(options.tty ? ["-t"] : []),
     "-p",
     portStr,
+    // Trust the host key on first contact, in the dedicated file the SDK also uses.
     "-o",
-    "StrictHostKeyChecking=no",
+    "StrictHostKeyChecking=accept-new",
     "-o",
-    "UserKnownHostsFile=/dev/null",
+    `UserKnownHostsFile="${sandboxKnownHostsPath()}"`,
+    // Plaintext entries so the SDK's parser can read the shared file.
+    "-o",
+    "HashKnownHosts=no",
     "-o",
     "LogLevel=ERROR",
     `root@${host}`,
@@ -59,6 +64,8 @@ export async function withSshEnv<T>(
   record: SandboxRecord,
   fn: (env: Record<string, string>) => Promise<T>,
 ): Promise<T> {
+  // ssh writes the known-hosts file but won't create its parent directory.
+  await mkdir(dirname(sandboxKnownHostsPath()), { recursive: true });
   const dir = await mkdtemp(join(tmpdir(), "bunny-ssh-"));
   const scriptPath = join(dir, "askpass");
   await Bun.write(scriptPath, `#!/bin/sh\nprintf '%s' "$BUNNY_SSH_TOKEN"\n`);

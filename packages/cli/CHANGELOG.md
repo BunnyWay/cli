@@ -1,5 +1,29 @@
 # @bunny.net/cli
 
+## 0.10.1
+
+### Patch Changes
+
+- [#128](https://github.com/BunnyWay/cli/pull/128) [`f6b64a3`](https://github.com/BunnyWay/cli/commit/f6b64a3a414aefe059fbcf1ec6b0003b0dd1d04d) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - Sandbox is now visible on the CLI root help and landing page, with create examples in the README and root help. The backing Magic Containers app is now named `sandbox-<name>` so sandboxes are recognizable in the MC dashboard; default generated sandbox names dropped their `sandbox-` prefix accordingly.
+
+## 0.10.0
+
+### Minor Changes
+
+- [#122](https://github.com/BunnyWay/cli/pull/122) [`27a1929`](https://github.com/BunnyWay/cli/commit/27a1929c0e3b8973c2c11cf4e19dba9f3360c43a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sandbox): add `bunny sandbox files list` (alias: `ls`) to list files in a sandbox directory over SFTP (bare name lists `/workplace`, or `<sandbox>:<path>`), and `--timeout` on `bunny sandbox exec` to close the SSH connection and exit 124 after N seconds.
+
+### Patch Changes
+
+- [#122](https://github.com/BunnyWay/cli/pull/122) [`27a1929`](https://github.com/BunnyWay/cli/commit/27a1929c0e3b8973c2c11cf4e19dba9f3360c43a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sandbox): add `bunny sandbox cp` to copy files between your machine and a sandbox over SFTP (`<sandbox>:<path>` on either side). Uploads preserve the local file mode; a trailing slash or existing directory keeps the source filename.
+
+- [#122](https://github.com/BunnyWay/cli/pull/122) [`27a1929`](https://github.com/BunnyWay/cli/commit/27a1929c0e3b8973c2c11cf4e19dba9f3360c43a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sandbox): `sandbox exec` now honors the documented `-- <command>` separator, and a repeatable `--env` flag no longer greedily swallows the command that follows it
+
+- [#124](https://github.com/BunnyWay/cli/pull/124) [`9e31add`](https://github.com/BunnyWay/cli/commit/9e31add7c64acdf9b31b60ac149598e80715e670) Thanks [@jedisct1](https://github.com/jedisct1)! - fix(sandbox): verify a sandbox's SSH host key before sending a token, pinning it in a known-hosts store to prevent credential disclosure to an impersonating server
+
+- [#126](https://github.com/BunnyWay/cli/pull/126) [`fc8181a`](https://github.com/BunnyWay/cli/commit/fc8181aeffa89f8ea3b3fddddd0456c673c9993c) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(db): validate database name length before create
+
+- [#119](https://github.com/BunnyWay/cli/pull/119) [`dfbe849`](https://github.com/BunnyWay/cli/commit/dfbe849881a4446d2092aa9148fe0b552b1b6663) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(storage): shared TTY detection, non-interactive guard and cancel handling for zones update, aligned --force semantics, and linked-zone fallback for domains commands
+
 ## 0.9.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/sandbox",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -12,6 +12,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./known-hosts": {
+      "types": "./dist/known-hosts.d.ts",
+      "import": "./dist/known-hosts.js"
     }
   },
   "files": [

@@ -82,7 +82,10 @@ export const storageFileUploadCommand = defineCommand<UploadArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref, output);
+    const zone = await resolveStorageZoneInteractive(client, ref, {
+      output,
+      offerLink: true,
+    });
     const connection = connectStorageZone(zone);
 
     const spin = spinner(`Uploading ${remotePath}...`);

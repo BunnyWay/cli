@@ -34,7 +34,10 @@ export const storageZoneShowCommand = defineCommand<ShowArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref, output);
+    const zone = await resolveStorageZoneInteractive(client, ref, {
+      output,
+      offerLink: true,
+    });
 
     if (output === "json") {
       logger.log(JSON.stringify(toSafeStorageZone(zone), null, 2));

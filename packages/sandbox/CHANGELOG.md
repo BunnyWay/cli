@@ -1,5 +1,23 @@
 # @bunny.net/sandbox
 
+## 0.3.2
+
+### Patch Changes
+
+- [#128](https://github.com/BunnyWay/cli/pull/128) [`f6b64a3`](https://github.com/BunnyWay/cli/commit/f6b64a3a414aefe059fbcf1ec6b0003b0dd1d04d) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - Sandbox is now visible on the CLI root help and landing page, with create examples in the README and root help. The backing Magic Containers app is now named `sandbox-<name>` so sandboxes are recognizable in the MC dashboard; default generated sandbox names dropped their `sandbox-` prefix accordingly.
+
+## 0.3.1
+
+### Patch Changes
+
+- [`ad79781`](https://github.com/BunnyWay/cli/commit/ad797813d850fd39df048f8e1cfa3c0cc3598fcd) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sandbox): Sandbox.get() recovers exposed port mappings from CDN endpoints so domain() works after reconnect
+
+- [#124](https://github.com/BunnyWay/cli/pull/124) [`9e31add`](https://github.com/BunnyWay/cli/commit/9e31add7c64acdf9b31b60ac149598e80715e670) Thanks [@jedisct1](https://github.com/jedisct1)! - fix(sandbox): verify a sandbox's SSH host key before sending a token, pinning it in a known-hosts store to prevent credential disclosure to an impersonating server
+
+- [#122](https://github.com/BunnyWay/cli/pull/122) [`27a1929`](https://github.com/BunnyWay/cli/commit/27a1929c0e3b8973c2c11cf4e19dba9f3360c43a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sandbox): stream blocking command output via `onStdout`/`onStderr` callbacks (composes with `timeout`/`signal`), and support `using`/`await using` (Symbol.dispose/asyncDispose) to release the SSH connection when a sandbox leaves scope.
+
+- [#122](https://github.com/BunnyWay/cli/pull/122) [`27a1929`](https://github.com/BunnyWay/cli/commit/27a1929c0e3b8973c2c11cf4e19dba9f3360c43a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sandbox): runCommand timeout and AbortSignal cancellation, plus listFiles, deleteFile, rename, and exists file operations
+
 ## 0.3.0
 
 ### Minor Changes

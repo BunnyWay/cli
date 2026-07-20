@@ -49,6 +49,7 @@ bun ny apps deploy                          # first run? Imports docker-compose.
 bun ny apps link                            # interactive: pick from existing apps on the account
 bun ny apps link <app-id>                   # link a specific app to this directory (writes .bunny/app.json)
 bun ny apps unlink                          # remove .bunny/app.json
+bun ny sandbox create my-sandbox            # create an ephemeral dev sandbox (backed by a Magic Containers app)
 bun ny dns zones add example.com            # create a zone, then choose how to add records (scan existing / upload a BIND zone file / add manually) before registrar setup steps
 bun ny dns zones nameservers example.com    # live-check whether the registrar delegates to bunny
 bun ny dns records scan example.com         # scan for the domain's existing records and import them

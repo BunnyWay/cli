@@ -1,9 +1,12 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
+import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
+import { loadManifest, removeManifest } from "../../../core/manifest.ts";
 import { confirm, spinner } from "../../../core/ui.ts";
+import { STORAGE_MANIFEST, type StorageZoneManifest } from "../constants.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 
 interface ZoneRemoveArgs {
@@ -38,7 +41,7 @@ export const storageZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref, output);
+    const zone = await resolveStorageZoneInteractive(client, ref, { output });
 
     const confirmed = await confirm(
       `Delete storage zone ${zone.Name} and all ${zone.FilesStored ?? 0} file(s)? This cannot be undone.`,
@@ -47,6 +50,19 @@ export const storageZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
     if (!confirmed) {
       logger.log("Cancelled.");
       return;
+    }
+
+    // Second confirmation: deleting a zone destroys its files, so require typing the name unless --force.
+    if (!force) {
+      const { value } = await prompts({
+        type: "text",
+        name: "value",
+        message: `Type "${zone.Name}" to confirm:`,
+      });
+      if (value !== (zone.Name ?? "")) {
+        logger.log("Cancelled.");
+        return;
+      }
     }
 
     const removeSpin = spinner("Deleting storage zone...");
@@ -58,6 +74,11 @@ export const storageZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
     } finally {
       removeSpin.stop();
     }
+
+    // Drop a manifest that pointed at the deleted zone so later commands don't resolve a ghost.
+    const manifest = loadManifest<StorageZoneManifest>(STORAGE_MANIFEST);
+    const unlinked = manifest.id === zone.Id;
+    if (unlinked) removeManifest(STORAGE_MANIFEST);
 
     if (output === "json") {
       logger.log(
@@ -71,5 +92,6 @@ export const storageZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
     }
 
     logger.success(`Deleted storage zone ${zone.Name}.`);
+    if (unlinked) logger.dim(`Removed stale .bunny/${STORAGE_MANIFEST}.`);
   },
 });

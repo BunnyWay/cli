@@ -61,6 +61,6 @@ export async function confirmAddedReplicationRegions(
   if (added.length === 0) return true;
   return confirm(
     `Add replication region(s) ${added.join(", ")}? They cannot be removed once added.`,
-    { force: opts?.force, initial: true },
+    { force: opts?.force },
   );
 }
