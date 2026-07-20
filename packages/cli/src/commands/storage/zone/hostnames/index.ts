@@ -27,7 +27,7 @@ function resolvePullZoneId(zone: StorageZoneModel, flag?: number): number {
   if (zones.length === 0) {
     throw new UserError(
       `Storage zone ${zone.Name} has no pull zone.`,
-      'Create one with "bunny storage zone add --pull-zone".',
+      'Create one with "bunny storage zones add --pull-zone".',
     );
   }
 
@@ -56,18 +56,17 @@ async function resolveStorageZonePullZone(args: {
   const coreClient = createCoreClient(clientOptions(config, args.verbose));
 
   // Explicit ref → linked zone (.bunny/storage.json) → interactive picker, like every other storage command.
-  const zone = await resolveStorageZoneInteractive(
-    coreClient,
-    args.zone,
-    args.output,
-  );
+  const zone = await resolveStorageZoneInteractive(coreClient, args.zone, {
+    output: args.output,
+    offerLink: true,
+  });
   const pullZoneId = resolvePullZoneId(zone, args["pull-zone"]);
 
   return { pullZoneId, coreClient };
 }
 
 export const storageZoneHostnamesCommands = createHostnamesCommands({
-  commandPath: "storage zone domains",
+  commandPath: "storage zones domains",
   namespace: "domains",
   describe: "Manage custom domains for a storage zone's pull zone.",
   hiddenAliases: ["hostnames"],
