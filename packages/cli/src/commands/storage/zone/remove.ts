@@ -59,7 +59,7 @@ export const storageZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
         name: "value",
         message: `Type "${zone.Name}" to confirm:`,
       });
-      if (value !== zone.Name) {
+      if (value !== (zone.Name ?? "")) {
         logger.log("Cancelled.");
         return;
       }

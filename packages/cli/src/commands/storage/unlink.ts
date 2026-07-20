@@ -1,7 +1,8 @@
 import { defineCommand } from "../../core/define-command.ts";
+import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, removeManifest } from "../../core/manifest.ts";
-import { confirm } from "../../core/ui.ts";
+import { confirm, isInteractive } from "../../core/ui.ts";
 import { STORAGE_MANIFEST, type StorageZoneManifest } from "./constants.ts";
 
 interface UnlinkArgs {
@@ -34,6 +35,13 @@ export const storageUnlinkCommand = defineCommand<UnlinkArgs>({
     }
 
     if (!force) {
+      // Non-interactive (json output or no TTY) can't answer the prompt; require --force instead of silently no-op.
+      if (!isInteractive(output)) {
+        throw new UserError(
+          "Unlinking requires confirmation.",
+          "Re-run with --force to unlink non-interactively.",
+        );
+      }
       const confirmed = await confirm(
         `Unlink from ${existing.name ?? existing.id}?`,
       );
