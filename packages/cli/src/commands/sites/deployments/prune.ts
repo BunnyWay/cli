@@ -106,7 +106,9 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       }
       // Only forget deploys whose files are actually gone.
       state.deploys = state.deploys.filter((d) => !pruned.has(d.id));
-      await writeRemoteState(connection, state, etag);
+      await writeRemoteState(connection, state, etag, {
+        removedIds: [...pruned],
+      });
     });
 
     const prunedIds = victims

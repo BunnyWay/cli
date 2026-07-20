@@ -100,7 +100,7 @@ export async function readRemoteState(
   return { state, etag: sha256Hex(raw) };
 }
 
-// Write `_bunny/site.json` (returns the new etag). On an `expectedEtag` mismatch a parseable concurrent state is reconciled: deploy records merge, and the current/previous pointers follow `promotedTo` (last promote wins; a non-promoting writer adopts the concurrent pointers rather than clobber them with its stale read). An unparseable conflict aborts rather than overwrite.
+// Write `_bunny/site.json` (returns the new etag). On an `expectedEtag` mismatch a parseable concurrent state is reconciled: deploy records merge (minus any `removedIds` this writer intentionally deleted, so a prune racing a deploy doesn't resurrect pruned records), and the current/previous pointers follow `promotedTo` (last promote wins; a non-promoting writer adopts the concurrent pointers rather than clobber them with its stale read). An unparseable conflict aborts rather than overwrite.
 export async function writeRemoteState(
   connection: StorageZone,
   state: RemoteSiteState,
@@ -108,6 +108,8 @@ export async function writeRemoteState(
   opts?: {
     /** Deploy this writer just promoted to production; omit when the write doesn't change `current`. */
     promotedTo?: string;
+    /** Deploy IDs this writer intentionally removed (e.g. prune); the conflict merge must not resurrect them from concurrent state. */
+    removedIds?: readonly string[];
   },
 ): Promise<string> {
   if (expectedEtag) {
@@ -121,9 +123,10 @@ export async function writeRemoteState(
         );
       }
       const ours = new Set(state.deploys.map((d) => d.id));
+      const removed = new Set(opts?.removedIds ?? []);
       state.deploys = [
         ...state.deploys,
-        ...remote.deploys.filter((d) => !ours.has(d.id)),
+        ...remote.deploys.filter((d) => !ours.has(d.id) && !removed.has(d.id)),
       ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       if (opts?.promotedTo) {
         // Our promote wins (it set CURRENT_DEPLOY last), and the concurrent writer's production deploy becomes the rollback target.

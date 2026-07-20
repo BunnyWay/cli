@@ -362,6 +362,38 @@ test("a non-promoting write adopts the concurrent writer's current/previous", as
   expect(read?.state.deploys.map((d) => d.id)).toEqual(["aaa", "zzz"]);
 });
 
+test("writeRemoteState does not resurrect intentionally removed deploys on a prune/deploy race", async () => {
+  const connection = fakeConnection();
+  const kept = {
+    id: "keep",
+    createdAt: "2026-01-03T00:00:00.000Z",
+    source: "content" as const,
+    files: 1,
+    bytes: 10,
+  };
+  const victim = { ...kept, id: "old", createdAt: "2026-01-01T00:00:00.000Z" };
+  const etag = await writeRemoteState(
+    connection,
+    fakeState({ deploys: [kept, victim] }),
+  );
+
+  // A racing deploy re-writes the pre-prune state (still holding the victim) and adds its own record.
+  const fresh = { ...kept, id: "new", createdAt: "2026-01-04T00:00:00.000Z" };
+  store.set(
+    REMOTE_STATE_PATH,
+    JSON.stringify(fakeState({ deploys: [fresh, kept, victim] })),
+  );
+
+  // Prune deleted `old`'s files and dropped it from state; it reports the removal.
+  await writeRemoteState(connection, fakeState({ deploys: [kept] }), etag, {
+    removedIds: ["old"],
+  });
+
+  const read = await readRemoteState(connection);
+  // The racing deploy's record survives; the pruned one is not restored to point at deleted files.
+  expect(read?.state.deploys.map((d) => d.id).sort()).toEqual(["keep", "new"]);
+});
+
 // ---- provisioning ----
 
 test("createSite provisions storage zone → router → pull zone → state", async () => {
