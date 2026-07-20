@@ -34,7 +34,33 @@ export async function resolveAutoBuild(
   return null;
 }
 
-// Run the build command in a shell with the merged environment, streaming output; throws on non-zero exit so a broken build never deploys.
+export interface RequestedBuild {
+  command: string;
+  /** Framework label when the command came from detection, for the log line. */
+  label?: string;
+  /** Build output dir relative to the repo root, when the framework fixes one. */
+  dir?: string;
+}
+
+export async function resolveRequestedBuild(
+  flag: string,
+  configured: string | undefined,
+  root: string,
+): Promise<RequestedBuild> {
+  const explicit = flag || configured;
+  if (explicit) {
+    return { command: explicit, dir: (await detectFramework(root))?.dir };
+  }
+  const auto = await resolveAutoBuild(root);
+  if (!auto) {
+    throw new UserError(
+      "No build command configured and none detected.",
+      'Pass one (`--build "npm run build"`) or set `sites.build` in bunny.jsonc.',
+    );
+  }
+  return auto;
+}
+
 export async function runBuildCommand(
   command: string,
   cwd: string,

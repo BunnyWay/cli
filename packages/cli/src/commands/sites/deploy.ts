@@ -18,8 +18,12 @@ import {
   type SiteContext,
   writeRemoteState,
 } from "./api.ts";
-import { resolveAutoBuild, runBuildCommand } from "./build.ts";
-import { detectFramework } from "./ci/frameworks.ts";
+import {
+  type RequestedBuild,
+  resolveAutoBuild,
+  resolveRequestedBuild,
+  runBuildCommand,
+} from "./build.ts";
 import { loadSiteConfig } from "./config.ts";
 import {
   type DeployRecord,
@@ -103,7 +107,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       .option("build", {
         type: "string",
         describe:
-          "Run a build first. Pass a command, or use the bare flag to run `sites.build` from bunny.jsonc",
+          "Run a build first. Pass a command, or use the bare flag to run `sites.build` from bunny.jsonc (else the detected framework's build)",
       })
       .option("env", {
         type: "string",
@@ -139,6 +143,15 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       );
     }
 
+    let requestedBuild: RequestedBuild | undefined;
+    if (args.build !== undefined) {
+      requestedBuild = await resolveRequestedBuild(
+        args.build,
+        siteConfig?.config.build,
+        root,
+      );
+    }
+
     const config = resolveConfig(profile, apiKey, verbose);
     const options = clientOptions(config, verbose);
     const coreClient = createCoreClient(options);
@@ -158,20 +171,13 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     let etag = site.etag;
 
     let autoDir: string | undefined;
-    if (args.build !== undefined) {
-      const command = args.build || siteConfig?.config.build;
-      if (!command) {
-        throw new UserError(
-          "No build command configured.",
-          'Pass one (`--build "npm run build"`) or set `sites.build` in bunny.jsonc.',
-        );
-      }
+    if (requestedBuild) {
+      if (requestedBuild.label)
+        logger.info(`Detected ${requestedBuild.label}.`);
       // No dir given: target the detected framework's output dir, not the repo root the build ran in.
-      if (explicitDir === undefined) {
-        autoDir = (await detectFramework(root))?.dir;
-      }
+      if (explicitDir === undefined) autoDir = requestedBuild.dir;
       const overrides = await collectEnv(args.env, args["env-file"]);
-      await runBuildCommand(command, root, overrides);
+      await runBuildCommand(requestedBuild.command, root, overrides);
     } else if (isInteractive(output)) {
       // No --build: offer to run the configured build, else a detected one.
       const configured = siteConfig?.config.build;

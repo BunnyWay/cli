@@ -71,7 +71,7 @@ bunny sites deploy ./out --build "npm run build" --env VITE_FLAG=1
 | Flag           | Description                                                          |
 | -------------- | -------------------------------------------------------------------- |
 | `[dir]`        | Directory to deploy (default: `sites.dir` in bunny.jsonc, then cwd)  |
-| `--build`      | Run a build first (bare flag uses `sites.build` from bunny.jsonc)    |
+| `--build`      | Run a build first (bare flag: `sites.build`, else a detected build)  |
 | `--env`        | Build-time env override `KEY=VALUE` (repeatable; requires `--build`) |
 | `--env-file`   | Dotenv file of build-time overrides (requires `--build`)             |
 | `--production` | Publish as the live site (alias `--prod`; default is preview only)   |
