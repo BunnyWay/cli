@@ -1,24 +1,33 @@
+import { z } from "zod";
 import type { Database2, DBLiveStatus } from "./api.ts";
 
-export interface DatabaseRegion {
-  code: string;
-  /** Display name from the region config; falls back to the code when unknown. */
-  name: string;
-}
+export const DatabaseRegionSchema = z.object({
+  code: z.string(),
+  name: z
+    .string()
+    .describe(
+      "Display name from the region config; falls back to the code when unknown.",
+    ),
+});
+
+export type DatabaseRegion = z.infer<typeof DatabaseRegionSchema>;
 
 /** Stable view of a database, with region codes resolved to names. */
-export interface Database {
-  id: string;
-  name: string;
-  url: string;
-  /** `active` while the database is live, otherwise `idle`. */
-  status: "active" | "idle";
-  storageRegion: string;
-  primaryRegion: DatabaseRegion | null;
-  replicaRegions: DatabaseRegion[];
-  sizeBytes: number;
-  maxSizeBytes: number;
-}
+export const DatabaseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  url: z.string(),
+  status: z
+    .enum(["active", "idle"])
+    .describe("`active` while the database is live, otherwise `idle`."),
+  storageRegion: z.string(),
+  primaryRegion: DatabaseRegionSchema.nullable(),
+  replicaRegions: z.array(DatabaseRegionSchema),
+  sizeBytes: z.number(),
+  maxSizeBytes: z.number(),
+});
+
+export type Database = z.infer<typeof DatabaseSchema>;
 
 export function toDatabase(
   db: Database2,

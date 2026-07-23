@@ -1,5 +1,6 @@
 /**
- * The two non-CLI surfaces, side by side.
+ * What a host other than the CLI sees: the registry, an action's published
+ * schema, and a run through the same entry point the CLI uses.
  *
  *   bun run packages/actions/examples/registry-tour.ts
  *
@@ -8,26 +9,46 @@
 import {
   actions,
   createActionContext,
+  describeAction,
+  flatName,
+  inputJsonSchema,
   listActions,
+  outputJsonSchema,
+  requireAction,
   runAction,
 } from "../src/index.ts";
-import { toMcpTools } from "../src/mcp.ts";
 
 // Surface 1: an agent importing the registry as its curated tool set.
 console.log("Registry:");
 for (const action of actions) {
-  const flag = action.destructive ? "destructive" : "read-only";
-  console.log(`  ${action.name.padEnd(22)} ${flag.padEnd(12)} ${action.title}`);
+  console.log(
+    `  ${action.name.padEnd(22)} ${action.kind.padEnd(12)} ${action.title}`,
+  );
 }
 
-// An agent running unattended can take the safe half of the registry.
-const unattended = listActions({ destructive: false }).map((a) => a.name);
+// An agent running unattended can take the read-only slice of the registry,
+// minus anything that returns credentials or touches the local filesystem.
+const unattended = listActions({ kind: "read", localFiles: false })
+  .filter((action) => !action.sensitive)
+  .map((a) => a.name);
 console.log(`\nSafe to run unattended: ${unattended.join(", ")}\n`);
 
-// Surface 2: what an MCP server would answer tools/list with.
-const tool = toMcpTools().find((t) => t.name === "bunny_storage_zones_create");
-console.log("MCP tool descriptor for storage.zones.create:");
-console.log(JSON.stringify(tool, null, 2));
+// Surface 2: what a tool server would publish for one action.
+const create = requireAction("storage.zones.create");
+console.log(`Tool definition for ${create.name}:`);
+console.log(
+  JSON.stringify(
+    {
+      name: flatName(create, "bunny"),
+      title: create.title,
+      description: describeAction(create),
+      inputSchema: inputJsonSchema(create),
+      outputSchema: outputJsonSchema(create),
+    },
+    null,
+    2,
+  ),
+);
 
 // Both surfaces call the same entry point, with the same validation.
 const ctx = createActionContext({

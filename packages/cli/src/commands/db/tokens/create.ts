@@ -138,8 +138,6 @@ export const dbTokensCreateCommand = defineActionCommand({
         describe: "Skip confirmation prompts",
       }),
 
-  // Generating a token is the explicit intent of the command.
-  skipConfirm: true,
   progress: "Generating token...",
 
   prepare: async (args, ctx) => {

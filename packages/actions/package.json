@@ -5,8 +5,7 @@
   "type": "module",
   "module": "src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./mcp": "./src/mcp.ts"
+    ".": "./src/index.ts"
   },
   "dependencies": {
     "@bunny.net/openapi-client": "workspace:*",

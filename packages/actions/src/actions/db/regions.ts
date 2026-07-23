@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Action } from "../../define-action.ts";
 import { defineAction } from "../../define-action.ts";
 import { fetchDatabaseWithRegions, fetchRegionConfig } from "./api.ts";
-import type { DatabaseRegion } from "./model.ts";
+import { type DatabaseRegion, DatabaseRegionSchema } from "./model.ts";
 
 type PossibleRegion = components["schemas"]["PossibleRegion"];
 
@@ -20,15 +20,19 @@ const regionCodes = z
   .describe('Region codes, e.g. `["FR", "DE"]`.');
 
 /** A region a database can be placed in, with the continent group used for grouping choices. */
-export interface AvailableRegion extends DatabaseRegion {
-  group: string | null;
-}
+export const AvailableRegionSchema = DatabaseRegionSchema.extend({
+  group: z.string().nullable(),
+});
 
-export interface AvailableRegions {
-  primary: AvailableRegion[];
-  replica: AvailableRegion[];
-  storage: AvailableRegion[];
-}
+export type AvailableRegion = z.infer<typeof AvailableRegionSchema>;
+
+export const AvailableRegionsSchema = z.object({
+  primary: z.array(AvailableRegionSchema),
+  replica: z.array(AvailableRegionSchema),
+  storage: z.array(AvailableRegionSchema),
+});
+
+export type AvailableRegions = z.infer<typeof AvailableRegionsSchema>;
 
 function toAvailable(
   regions: { id: string; name: string; group?: string | null }[],
@@ -46,7 +50,8 @@ export const dbRegionsAvailable = defineAction({
   description:
     "List the regions a database can use, split into primary, replica, and storage regions.",
   schema: z.strictObject({}),
-  destructive: false,
+  kind: "read",
+  resultSchema: AvailableRegionsSchema,
   run: async (ctx): Promise<AvailableRegions> => {
     ctx.progress("Fetching available regions...");
     const config = await fetchRegionConfig(ctx.clients.db, {
@@ -60,13 +65,18 @@ export const dbRegionsAvailable = defineAction({
   },
 });
 
-export interface SuggestedRegions {
-  primaryRegions: string[];
-  replicaRegions: string[];
-  storageRegion: string | null;
-  /** False when the caller's location could not be detected and defaults were used instead. */
-  detected: boolean;
-}
+export const SuggestedRegionsSchema = z.object({
+  primaryRegions: z.array(z.string()),
+  replicaRegions: z.array(z.string()),
+  storageRegion: z.string().nullable(),
+  detected: z
+    .boolean()
+    .describe(
+      "False when the caller's location could not be detected and defaults were used instead.",
+    ),
+});
+
+export type SuggestedRegions = z.infer<typeof SuggestedRegionsSchema>;
 
 /** Discover the CDN server token by hitting a Bunny CDN edge; identifies the closest POP. */
 async function cdnServerToken(signal?: AbortSignal): Promise<string | null> {
@@ -89,7 +99,8 @@ export const dbRegionsSuggest = defineAction({
       .default(false)
       .describe("Suggest one region with no replication instead of a spread."),
   }),
-  destructive: false,
+  kind: "read",
+  resultSchema: SuggestedRegionsSchema,
   examples: [
     [{}, "Suggest a replicated placement"],
     [{ single: true }, "Suggest a single region"],
@@ -150,7 +161,11 @@ export const dbRegionsList = defineAction({
   description:
     "List the primary and replica regions a database is currently placed in.",
   schema: z.strictObject({ database: databaseRef }),
-  destructive: false,
+  kind: "read",
+  resultSchema: z.object({
+    primary: z.array(DatabaseRegionSchema),
+    replica: z.array(DatabaseRegionSchema),
+  }),
   run: async (
     ctx,
     input,
@@ -175,11 +190,13 @@ export const dbRegionsList = defineAction({
   },
 });
 
-export interface DatabaseRegions {
-  database: string;
-  primary: DatabaseRegion[];
-  replica: DatabaseRegion[];
-}
+export const DatabaseRegionsSchema = z.object({
+  database: z.string(),
+  primary: z.array(DatabaseRegionSchema),
+  replica: z.array(DatabaseRegionSchema),
+});
+
+export type DatabaseRegions = z.infer<typeof DatabaseRegionsSchema>;
 
 export const dbRegionsSet = defineAction({
   name: "db.regions.set",
@@ -191,7 +208,8 @@ export const dbRegionsSet = defineAction({
     primaryRegions: regionCodes.min(1),
     replicaRegions: regionCodes.default([]),
   }),
-  destructive: true,
+  kind: "destructive",
+  resultSchema: DatabaseRegionsSchema,
   examples: [
     [
       { database: "db_01KCH", primaryRegions: ["FR"], replicaRegions: ["UK"] },

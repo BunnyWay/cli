@@ -1,6 +1,7 @@
 import { type Dirent, existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
+import { registryTypeForServer } from "@bunny.net/actions";
 import type { createMcClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import prompts from "prompts";
@@ -682,6 +683,8 @@ export async function createRegistry(
   const { data: result } = await client.POST("/registries", {
     body: {
       displayName,
+      // The display name is usually the image hostname; ghcr.io needs type gitHub or app saves 500.
+      type: registryTypeForServer(displayName),
       ...(userName && password
         ? { passwordCredentials: { userName, password } }
         : {}),

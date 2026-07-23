@@ -8,7 +8,7 @@ Monorepo for the [bunny.net](https://bunny.net) CLI and supporting packages.
 | ------------------------------------------------------------------------ | ------------------------------------ | -------------------------------------------------------------------------- |
 | [`packages/cli/`](packages/cli/)                                         | `@bunny.net/cli`                     | Command-line interface for bunny.net                                       |
 | [`packages/openapi-client/`](packages/openapi-client/)                   | `@bunny.net/openapi-client`          | Standalone, type-safe OpenAPI client for bunny.net                         |
-| [`packages/actions/`](packages/actions/)                                 | `@bunny.net/actions`                 | Headless actions shared by the CLI, MCP tools, and agents                  |
+| [`packages/actions/`](packages/actions/)                                 | `@bunny.net/actions`                 | Headless actions shared by the CLI and agents                              |
 | [`packages/sandbox/`](packages/sandbox/)                                 | `@bunny.net/sandbox`                 | Standalone sandbox SDK over Magic Containers and SSH                       |
 | [`packages/config/`](packages/config/)                                   | `@bunny.net/config`                  | Shared Zod schemas, types, and JSON Schema for `bunny.jsonc` (app + sites) |
 | [`packages/database-shell/`](packages/database-shell/)                   | `@bunny.net/database-shell`          | Standalone interactive SQL shell for libSQL databases                      |

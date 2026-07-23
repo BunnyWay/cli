@@ -1,5 +1,6 @@
 import { UserError } from "@bunny.net/openapi-client";
 import * as BunnyStorage from "@bunny.net/storage-sdk";
+import { z } from "zod";
 import type { StorageZoneModel } from "./api.ts";
 
 // The SDK types its upload stream as node:stream/web; borrow that exact type so casts stay in sync.
@@ -73,16 +74,21 @@ export async function deleteFile(
 }
 
 /** JSON-safe view of a stored file. Drops the SDK's `_tag` marker and lazy `data()` loader. */
-export interface StorageFileEntry {
-  name: string;
-  /** Zone-relative path, ready to pass back to download/remove (e.g. `images/photo.png`). */
-  path: string;
-  isDirectory: boolean;
-  size: number;
-  contentType: string | null;
-  checksum: string | null;
-  lastChanged: string | null;
-}
+export const StorageFileEntrySchema = z.object({
+  name: z.string(),
+  path: z
+    .string()
+    .describe(
+      "Zone-relative path, ready to pass back to download/remove (e.g. `images/photo.png`).",
+    ),
+  isDirectory: z.boolean(),
+  size: z.number(),
+  contentType: z.string().nullable(),
+  checksum: z.string().nullable(),
+  lastChanged: z.string().nullable(),
+});
+
+export type StorageFileEntry = z.infer<typeof StorageFileEntrySchema>;
 
 // The API reports `path` as `/<zone>/<dir>/`; strip the zone so the result is usable as input.
 function zoneRelativeDirectory(file: StorageFile): string {

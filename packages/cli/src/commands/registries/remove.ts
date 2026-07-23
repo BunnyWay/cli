@@ -1,22 +1,13 @@
-import { createMcClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
+import { registriesDelete } from "@bunny.net/actions";
+import { defineActionCommand } from "../../core/define-action-command.ts";
 import { logger } from "../../core/logger.ts";
-import { confirm, spinner } from "../../core/ui.ts";
+import { confirm } from "../../core/ui.ts";
 
-const COMMAND = "remove <registry-id>";
-const DESCRIPTION = "Remove a container registry.";
-
-interface RemoveArgs {
-  "registry-id": number;
-  force?: boolean;
-}
-
-export const registryRemoveCommand = defineCommand<RemoveArgs>({
-  command: COMMAND,
-  describe: DESCRIPTION,
+export const registryRemoveCommand = defineActionCommand({
+  action: registriesDelete,
+  command: "remove <registry-id>",
+  describe: "Remove a container registry.",
+  progress: "Removing registry...",
 
   builder: (yargs) =>
     yargs
@@ -31,46 +22,12 @@ export const registryRemoveCommand = defineCommand<RemoveArgs>({
         describe: "Skip confirmation prompt",
       }),
 
-  handler: async ({
-    "registry-id": registryId,
-    force,
-    profile,
-    output,
-    verbose,
-    apiKey,
-  }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createMcClient(clientOptions(config, verbose));
+  prepare: async (args) => ({
+    input: { registry: args["registry-id"] },
+    confirm: () => confirm("Remove this registry?", { force: args.force }),
+  }),
 
-    if (!force) {
-      const confirmed = await confirm("Remove this registry?");
-      if (!confirmed) {
-        logger.log("Remove cancelled.");
-        return;
-      }
-    }
-
-    const spin = spinner("Removing registry...");
-    spin.start();
-
-    const { data: result } = await client.DELETE("/registries/{registryId}", {
-      params: { path: { registryId } },
-    });
-
-    spin.stop();
-
-    if (output === "json") {
-      logger.log(JSON.stringify(result, null, 2));
-      return;
-    }
-
-    if (result?.status === "inUse") {
-      throw new UserError(
-        "Registry is in use by one or more apps.",
-        `Apps using this registry: ${result.applications?.join(", ") ?? "unknown"}`,
-      );
-    }
-
+  render: () => {
     logger.success("Registry removed.");
   },
 });

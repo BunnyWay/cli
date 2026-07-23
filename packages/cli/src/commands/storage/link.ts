@@ -1,6 +1,5 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
+import { actionContext } from "../../core/action-context.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
 import {
@@ -28,7 +27,8 @@ export const storageLinkCommand = defineCommand<LinkArgs>({
 
   handler: async ({ zone: ref, profile, output, verbose, apiKey }) => {
     const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+    // Linking writes .bunny/storage.json, so the command owns it; only the lookup is shared.
+    const client = actionContext(config, { verbose }).clients.core;
 
     // Always re-pick: linking is how the manifest changes, so the existing one must not short-circuit.
     const zone = await resolveStorageZoneInteractive(client, ref, {

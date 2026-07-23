@@ -1,27 +1,33 @@
 import { UserError } from "@bunny.net/openapi-client";
+import { z } from "zod";
 import type { StorageZoneModel } from "./api.ts";
 
 /**
  * Stable, credential-free view of a storage zone.
  *
- * Actions return this rather than the raw API model so the CLI, MCP tools, and
+ * Actions return this rather than the raw API model so the CLI, other hosts, and
  * agents all see the same field names regardless of API-side naming churn.
+ * Defined as a Zod schema so a host can publish it as the action's output schema.
  */
-export interface StorageZone {
-  id: number;
-  name: string;
-  region: string;
-  replicationRegions: string[];
-  hostname: string | null;
-  filesStored: number;
-  storageUsed: number;
-  dateModified: string | null;
-  s3: {
-    enabled: boolean;
-    /** Only set when S3 compatibility is enabled on the zone. */
-    endpoint: string | null;
-  };
-}
+export const StorageZoneSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  region: z.string().describe("Main region code, e.g. `DE`."),
+  replicationRegions: z.array(z.string()),
+  hostname: z.string().nullable(),
+  filesStored: z.number(),
+  storageUsed: z.number().describe("Bytes used across all regions."),
+  dateModified: z.string().nullable(),
+  s3: z.object({
+    enabled: z.boolean(),
+    endpoint: z
+      .string()
+      .nullable()
+      .describe("Only set when S3 compatibility is enabled on the zone."),
+  }),
+});
+
+export type StorageZone = z.infer<typeof StorageZoneSchema>;
 
 export function isS3Enabled(zone: StorageZoneModel): boolean {
   return zone.StorageZoneType === 1;
@@ -32,12 +38,14 @@ export function s3Endpoint(zone: StorageZoneModel): string {
   return `https://${(zone.Region ?? "").toLowerCase()}-s3.storage.bunnycdn.com`;
 }
 
-export interface S3Credentials {
-  endpoint: string;
-  region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-}
+export const S3CredentialsSchema = z.object({
+  endpoint: z.string(),
+  region: z.string(),
+  accessKeyId: z.string(),
+  secretAccessKey: z.string(),
+});
+
+export type S3Credentials = z.infer<typeof S3CredentialsSchema>;
 
 export function s3Credentials(
   zone: StorageZoneModel,

@@ -1,5 +1,9 @@
-import { mkdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdir, stat, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { UserError } from "@bunny.net/openapi-client";
 import { z } from "zod";
 import type { ActionContext } from "../../context.ts";
@@ -12,10 +16,13 @@ import {
   downloadFile,
   listFiles,
   type StorageFileEntry,
+  StorageFileEntrySchema,
   type StorageZoneConnection,
   toStorageFileEntry,
   uploadFile,
 } from "./files-api.ts";
+
+// This file uses node:fs/node:crypto (not Bun.file) so the package stays importable from Node hosts.
 
 const zoneRef = z
   .string()
@@ -53,7 +60,8 @@ export const storageFilesList = defineAction({
       .default("")
       .describe("Directory to list. Defaults to the zone root."),
   }),
-  destructive: false,
+  kind: "read",
+  resultSchema: z.array(StorageFileEntrySchema),
   examples: [
     [{ zone: "my-assets" }, "List the zone root"],
     [{ zone: "my-assets", path: "images/" }, "List a directory"],
@@ -71,12 +79,14 @@ export const storageFilesList = defineAction({
   },
 });
 
-export interface UploadedFile {
-  zone: string;
-  path: string;
-  size: number;
-  uploaded: true;
-}
+export const UploadedFileSchema = z.object({
+  zone: z.string(),
+  path: z.string(),
+  size: z.number(),
+  uploaded: z.literal(true),
+});
+
+export type UploadedFile = z.infer<typeof UploadedFileSchema>;
 
 export const storageFilesUpload = defineAction({
   name: "storage.files.upload",
@@ -96,7 +106,9 @@ export const storageFilesUpload = defineAction({
       .default(false)
       .describe("Send a SHA256 checksum so the server verifies the upload."),
   }),
-  destructive: true,
+  kind: "write",
+  resultSchema: UploadedFileSchema,
+  localFiles: true,
   examples: [
     [
       { zone: "my-assets", source: "./photo.png", path: "images/photo.png" },
@@ -104,16 +116,21 @@ export const storageFilesUpload = defineAction({
     ],
   ],
   run: async (ctx, input): Promise<UploadedFile> => {
-    const source = Bun.file(input.source);
-    if (!(await source.exists())) {
+    const source = await stat(input.source).catch(() => null);
+    if (!source?.isFile()) {
       throw new UserError(`File not found: ${input.source}`);
     }
 
     const { connection, name } = await connect(ctx, input.zone);
 
     ctx.progress(`Uploading ${input.path}...`);
-    const sha256Checksum = input.checksum ? await sha256(source) : undefined;
-    await uploadFile(connection, input.path, source.stream(), {
+    const sha256Checksum = input.checksum
+      ? await sha256(input.source)
+      : undefined;
+    const contents = Readable.toWeb(
+      createReadStream(input.source),
+    ) as ReadableStream<Uint8Array>;
+    await uploadFile(connection, input.path, contents, {
       contentType: input.contentType,
       sha256Checksum,
     });
@@ -122,13 +139,14 @@ export const storageFilesUpload = defineAction({
   },
 });
 
-export interface DownloadedFile {
-  zone: string;
-  path: string;
-  /** Local path the file was written to. */
-  destination: string;
-  size: number;
-}
+export const DownloadedFileSchema = z.object({
+  zone: z.string(),
+  path: z.string(),
+  destination: z.string().describe("Local path the file was written to."),
+  size: z.number(),
+});
+
+export type DownloadedFile = z.infer<typeof DownloadedFileSchema>;
 
 export const storageFilesDownload = defineAction({
   name: "storage.files.download",
@@ -140,7 +158,9 @@ export const storageFilesDownload = defineAction({
     path: remotePath,
     destination: z.string().min(1).describe("Local path to write the file to."),
   }),
-  destructive: false,
+  kind: "read",
+  resultSchema: DownloadedFileSchema,
+  localFiles: true,
   examples: [
     [
       {
@@ -156,23 +176,20 @@ export const storageFilesDownload = defineAction({
 
     ctx.progress(`Downloading ${input.path}...`);
     // Stream to disk so multi-GB objects don't have to fit in memory.
-    // FileSink, unlike Bun.write, won't create the parent dir for the destination.
     await mkdir(dirname(input.destination), { recursive: true });
     const { stream } = await downloadFile(connection, input.path);
-    const sink = Bun.file(input.destination).writer();
     let size = 0;
-    try {
+    async function* counted(): AsyncGenerator<Uint8Array> {
       for await (const chunk of stream) {
-        sink.write(chunk);
         size += chunk.byteLength;
+        yield chunk;
       }
-      await sink.end();
+    }
+    try {
+      await pipeline(counted(), createWriteStream(input.destination));
     } catch (err) {
       // Don't leave a truncated file behind on a failed download.
-      await Promise.resolve(sink.end()).catch(() => {});
-      await Bun.file(input.destination)
-        .unlink()
-        .catch(() => {});
+      await unlink(input.destination).catch(() => {});
       throw err;
     }
 
@@ -185,11 +202,13 @@ export const storageFilesDownload = defineAction({
   },
 });
 
-export interface DeletedFile {
-  zone: string;
-  path: string;
-  deleted: true;
-}
+export const DeletedFileSchema = z.object({
+  zone: z.string(),
+  path: z.string(),
+  deleted: z.literal(true),
+});
+
+export type DeletedFile = z.infer<typeof DeletedFileSchema>;
 
 export const storageFilesDelete = defineAction({
   name: "storage.files.delete",
@@ -197,7 +216,8 @@ export const storageFilesDelete = defineAction({
   description:
     "Delete a file from a storage zone. A trailing slash deletes a directory and everything under it.",
   schema: z.strictObject({ zone: zoneRef, path: remotePath }),
-  destructive: true,
+  kind: "destructive",
+  resultSchema: DeletedFileSchema,
   examples: [
     [{ zone: "my-assets", path: "images/photo.png" }, "Delete one file"],
     [
@@ -216,9 +236,9 @@ export const storageFilesDelete = defineAction({
 });
 
 // Hash in a streaming pass to avoid buffering the whole file in memory.
-async function sha256(source: ReturnType<typeof Bun.file>): Promise<string> {
-  const hasher = new Bun.CryptoHasher("sha256");
-  for await (const chunk of source.stream()) hasher.update(chunk);
+async function sha256(path: string): Promise<string> {
+  const hasher = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hasher.update(chunk);
   return hasher.digest("hex").toUpperCase();
 }
 

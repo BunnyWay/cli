@@ -1,8 +1,9 @@
 import { UserError } from "@bunny.net/openapi-client";
 import { dbActions } from "./actions/db/index.ts";
+import { registriesActions } from "./actions/registries/index.ts";
 import { storageActions } from "./actions/storage/index.ts";
 import type { ActionContext } from "./context.ts";
-import type { Action } from "./define-action.ts";
+import type { Action, ActionKind } from "./define-action.ts";
 
 function index(all: Action[]): Map<string, Action> {
   const map = new Map<string, Action>();
@@ -17,7 +18,7 @@ function index(all: Action[]): Map<string, Action> {
 
 /** Every action, sorted by name. This is the curated surface an agent gets. */
 export const actions: readonly Action[] = Object.freeze(
-  [...storageActions, ...dbActions].sort((a, b) =>
+  [...storageActions, ...dbActions, ...registriesActions].sort((a, b) =>
     a.name.localeCompare(b.name),
   ),
 );
@@ -40,21 +41,26 @@ export function requireAction(name: string): Action {
 }
 
 export interface ActionFilter {
-  /** Restrict to (non-)destructive actions. Omit for both. */
-  destructive?: boolean;
+  /** Restrict to one effect kind, e.g. `read` for an unattended agent. Omit for all. */
+  kind?: ActionKind;
   /** Dotted prefix, e.g. `storage` or `storage.zones`. */
   namespace?: string;
+  /** `false` excludes actions that touch the local filesystem; for remote hosts. */
+  localFiles?: boolean;
 }
 
 export function listActions(filter: ActionFilter = {}): Action[] {
   return actions.filter((action) => {
-    if (
-      filter.destructive !== undefined &&
-      action.destructive !== filter.destructive
-    ) {
+    if (filter.kind !== undefined && action.kind !== filter.kind) {
       return false;
     }
     if (filter.namespace && !action.name.startsWith(`${filter.namespace}.`)) {
+      return false;
+    }
+    if (
+      filter.localFiles !== undefined &&
+      Boolean(action.localFiles) !== filter.localFiles
+    ) {
       return false;
     }
     return true;

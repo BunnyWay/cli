@@ -2,16 +2,19 @@ import {
   type ClientOptions,
   createCoreClient,
   createDbClient,
+  createMcClient,
   UserError,
 } from "@bunny.net/openapi-client";
 
 export type CoreClient = ReturnType<typeof createCoreClient>;
 export type DbClient = ReturnType<typeof createDbClient>;
+export type McClient = ReturnType<typeof createMcClient>;
 
 /** API clients an action may reach for. Created on first access, then reused. */
 export interface ActionClients {
   readonly core: CoreClient;
   readonly db: DbClient;
+  readonly mc: McClient;
 }
 
 export interface ActionContextOptions {
@@ -23,10 +26,10 @@ export interface ActionContextOptions {
   apiKey?: string | (() => string);
   /** Override the API base URL (self-hosted or staging endpoints). */
   apiUrl?: string;
-  /** Identifies the caller in request logs, e.g. `bunny-cli/0.10.1` or `bunny-mcp/0.1.0`. */
+  /** Identifies the caller in request logs, e.g. `bunny-cli/0.10.1`. */
   userAgent?: string;
   signal?: AbortSignal;
-  /** Coarse "what am I doing now" updates. The host renders them (spinner, log line, MCP notification). */
+  /** Coarse "what am I doing now" updates. The host renders them (spinner, log line, progress event). */
   onProgress?: (message: string) => void;
   /** Request/response tracing from the API clients. */
   onDebug?: (message: string) => void;
@@ -87,6 +90,9 @@ export function createActionContext(
     },
     get db() {
       return lazy("db", createDbClient);
+    },
+    get mc() {
+      return lazy("mc", createMcClient);
     },
   };
 

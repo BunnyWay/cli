@@ -41,12 +41,6 @@ interface ActionCommandDef<A, Schema extends z.ZodObject, Result> {
     args: A & GlobalArgs,
     ctx: ActionContext,
   ) => Promise<Prepared<Schema> | typeof CANCELLED>;
-  /**
-   * Declares that this destructive action needs no prompt, because running the
-   * command is itself the intent (uploading a file, creating a resource).
-   * `grep skipConfirm` lists every mutation the CLI performs unprompted.
-   */
-  skipConfirm?: true;
   /** Spinner text while the action runs. Action progress messages replace it. */
   progress?: string;
   /** CLI-local follow-up such as manifest cleanup. Runs for every output format. */
@@ -70,7 +64,7 @@ interface ActionCommandDef<A, Schema extends z.ZodObject, Result> {
  *
  * The action owns the API work and the result shape; the command owns the UX -
  * flags, prompts, confirmation, spinner, and rendering. `--output json` prints
- * the action result verbatim, so a CLI run and an MCP tool call return the same
+ * the action result verbatim, so a CLI run and any other host return the same
  * document for the same operation.
  *
  * @example
@@ -112,9 +106,9 @@ export function defineActionCommand<A, Schema extends z.ZodObject, Result>(
         return;
       }
 
-      if (def.action.destructive && !prepared.confirm && !def.skipConfirm) {
+      if (def.action.kind === "destructive" && !prepared.confirm) {
         throw new Error(
-          `Action "${def.action.name}" is destructive, so ${def.command} must return a confirm() from prepare() or set skipConfirm.`,
+          `Action "${def.action.name}" is destructive, so ${def.command} must return a confirm() from prepare().`,
         );
       }
 

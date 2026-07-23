@@ -8,15 +8,22 @@ const databaseRef = z
   .min(1)
   .describe("Database ID, e.g. `db_01KCHBG8C5KSFGG0VRNFQ7EK7X`.");
 
-export interface DatabaseToken {
-  database: string;
-  token: string;
-  authorization: "full-access" | "read-only";
-  /** RFC 3339 expiry, or null when the token never expires. */
-  expiresAt: string | null;
-  /** The database connection URL, so a caller can save both together. */
-  databaseUrl: string;
-}
+export const DatabaseTokenSchema = z.object({
+  database: z.string(),
+  token: z.string(),
+  authorization: z.enum(["full-access", "read-only"]),
+  expiresAt: z
+    .string()
+    .nullable()
+    .describe("RFC 3339 expiry, or null when the token never expires."),
+  databaseUrl: z
+    .string()
+    .describe(
+      "The database connection URL, so a caller can save both together.",
+    ),
+});
+
+export type DatabaseToken = z.infer<typeof DatabaseTokenSchema>;
 
 export const dbTokensCreate = defineAction({
   name: "db.tokens.create",
@@ -37,7 +44,8 @@ export const dbTokensCreate = defineAction({
         "RFC 3339 expiry timestamp. Null means the token never expires.",
       ),
   }),
-  destructive: true,
+  kind: "write",
+  resultSchema: DatabaseTokenSchema,
   sensitive: true,
   examples: [
     [{ database: "db_01KCH" }, "A full-access token that never expires"],
@@ -65,10 +73,12 @@ export const dbTokensCreate = defineAction({
   },
 });
 
-export interface InvalidatedTokens {
-  database: string;
-  invalidated: true;
-}
+export const InvalidatedTokensSchema = z.object({
+  database: z.string(),
+  invalidated: z.literal(true),
+});
+
+export type InvalidatedTokens = z.infer<typeof InvalidatedTokensSchema>;
 
 export const dbTokensInvalidate = defineAction({
   name: "db.tokens.invalidate",
@@ -76,7 +86,8 @@ export const dbTokensInvalidate = defineAction({
   description:
     "Revoke every auth token for a database at once. Existing connections using those tokens stop working immediately.",
   schema: z.strictObject({ database: databaseRef }),
-  destructive: true,
+  kind: "destructive",
+  resultSchema: InvalidatedTokensSchema,
   examples: [[{ database: "db_01KCH" }, "Revoke all tokens for a database"]],
   run: async (ctx, input): Promise<InvalidatedTokens> => {
     ctx.progress("Revoking tokens...");

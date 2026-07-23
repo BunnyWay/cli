@@ -1,4 +1,4 @@
-// Storage zone API access lives in @bunny.net/actions so the CLI, MCP tools, and
+// Storage zone API access lives in @bunny.net/actions so the CLI and any other host
 // agents all read zones the same way. Re-exported here for existing call sites.
 export type {
   CoreClient,

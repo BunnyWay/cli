@@ -1,4 +1,4 @@
-import type { createDbClient } from "@bunny.net/openapi-client";
+import type { DbClient } from "@bunny.net/actions";
 import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
 import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
@@ -42,7 +42,7 @@ export function findDbUrlFromEnv(): string | undefined {
  * Throws if no databases exist or the `.env` URL doesn't match any database.
  */
 export async function resolveDbId(
-  client: ReturnType<typeof createDbClient>,
+  client: DbClient,
   databaseId: Database["id"] | undefined,
 ): Promise<ResolvedDb> {
   if (databaseId) return { id: databaseId, source: "argument" };

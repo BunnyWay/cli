@@ -72,7 +72,7 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 This is a Bun workspace monorepo with seven packages:
 
 - **`@bunny.net/openapi-client`** (`packages/openapi-client/`) — Standalone, type-safe OpenAPI client for bunny.net, generated from OpenAPI specs. Zero CLI dependencies. Publishable to npm.
-- **`@bunny.net/actions`** (`packages/actions/`): headless action layer. one definition per operation (`{ name, description, schema, destructive, run(ctx, input) }`) with Zod input schemas and normalized result shapes. No prompting, no printing. Wrapped by the CLI as yargs commands, convertible to MCP tools via `@bunny.net/actions/mcp`, and importable directly by agents as a curated registry. See "Action Layer" below.
+- **`@bunny.net/actions`** (`packages/actions/`): headless action layer. one definition per operation (`{ name, description, schema, kind, run(ctx, input) }`) with Zod input schemas and normalized Zod result shapes. No prompting, no printing, `node:` builtins only (runs on Bun and Node). Wrapped by the CLI as yargs commands, publishable as tool definitions by any host (JSON Schema conversion lives in `src/schema.ts`), and importable directly by agents as a curated registry. See "Action Layer" below.
 - **`@bunny.net/config`** (`packages/config/`) — Shared `bunny.jsonc` schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. The root `BunnyConfigSchema` has optional `app` (Magic Containers) and `sites` (static sites) blocks; `BunnyAppConfigSchema` narrows it to require `app`. Used by the CLI and potentially other tools.
 - **`@bunny.net/database-shell`** (`packages/database-shell/`) — Standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
 - **`@bunny.net/scriptable-dns-types`** (`packages/scriptable-dns-types/`): Ambient TypeScript declarations for the Scriptable DNS runtime globals (`ARecord`, `Monitoring`, `RoutingEngine`, etc.). Types-only, no runtime code: the DNS runtime can't `import`, so these power editor autocomplete and an optional typecheck step. Scaffolded into projects by `bunny dns scripts init`; intended to also feed the dashboard editor. Publishable to npm.
@@ -154,13 +154,13 @@ bunny-cli/
 │   │       └── shell.test.ts            # Tests for shell utilities
 │   │
 │   ├── actions/                          # @bunny.net/actions package
-│   │   ├── package.json                  # exports "." (registry) and "./mcp" (tool descriptors)
+│   │   ├── package.json                  # single "." export: the registry, context, and schema helpers
 │   │   └── src/
 │   │       ├── index.ts                  # Barrel export: defineAction, registry, context, action + result types
-│   │       ├── define-action.ts          # defineAction(): name validation + invoke() that Zod-validates input first; destructive + sensitive flags
+│   │       ├── define-action.ts          # defineAction(): name validation + invoke() that Zod-validates input first; kind + resultSchema + sensitive/localFiles metadata
 │   │       ├── context.ts                # createActionContext(): lazy memoized core/db clients, signal, progress/debug callbacks, injectable clients for tests
 │   │       ├── registry.ts               # actions[] (sorted, duplicate-checked) + getAction/requireAction/listActions/runAction
-│   │       ├── mcp.ts                    # toMcpTools()/toMcpTool()/actionForToolName(): Zod → JSON Schema + readOnly/destructive annotations
+│   │       ├── schema.ts                 # inputJsonSchema()/outputJsonSchema()/toStructuredResult()/describeAction()/flatName(): what a tool host needs to publish an action
 │   │       └── actions/
 │   │           ├── storage/
 │   │           │   ├── index.ts          # storage.regions.list, storage.zones.list/get/create/update/delete/credentials
@@ -502,7 +502,7 @@ bunny-cli/
 
 ### Conventions
 
-- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/actions/` is the headless action layer shared by the CLI, MCP tools, and agents; `packages/config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
+- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/actions/` is the headless action layer shared by the CLI and agents; `packages/config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
 - **API clients use `ClientOptions`** — an options object with `apiKey`, `baseUrl`, `verbose`, `userAgent`, and `onDebug`. The CLI provides a `clientOptions(config, verbose)` helper to build this from `ResolvedConfig`.
 - **One command per file.** Each file in `commands/` exports a single command or namespace.
 - **Commands are grouped by domain** in subdirectories (`config/`, `db/`, `scripts/`).
@@ -592,17 +592,20 @@ Namespaces automatically enforce `demandCommand(1)` so that running `bunny db` w
 
 ## Action Layer
 
-`@bunny.net/actions` holds the work; the CLI holds the experience. One action definition backs three surfaces: a yargs command, an MCP tool, and a direct import in an agent.
+`@bunny.net/actions` holds the work; the CLI holds the experience. One action definition backs every surface: a yargs command, a tool published by some other host, and a direct import in an agent.
+
+**Target architecture: total abstraction.** Every remote operation lives in an action (the repository/adapter layer); a CLI command is glue: flags in, prompts and confirmations, action invocation, rendering out. Command modules must not create API clients or call endpoints directly. This is enforced by `packages/cli/src/core/actions-boundary.test.ts`, a ratchet test with an explicit `PENDING_MIGRATION` allowlist: new direct client use fails the test, and migrating a family removes its entries (the list only shrinks). Currently migrated: `storage`, `db`, `registries`. Host-inherent flows stay in the CLI even at the end state: `auth login` (browser + local OAuth callback), docker build/push in `apps deploy`, interactive pickers, and `.env`/`bunny.jsonc` writes.
 
 ### `defineAction(def)`
 
 ```typescript
 export const storageZonesDelete = defineAction({
-  name: "storage.zones.delete", // dotted, lowercase, unique; `bunny_storage_zones_delete` as an MCP tool
+  name: "storage.zones.delete", // dotted, lowercase, unique; flattens to `bunny_storage_zones_delete`
   title: "Delete a storage zone", // optional human label
   description: "Permanently delete a storage zone and every file in it...",
   schema: z.strictObject({ zone: zoneRef }), // object schemas only; `.describe()` every field
-  destructive: true, // drives CLI confirmation + MCP destructiveHint
+  kind: "destructive", // read | write | destructive; drives CLI confirmation + host annotations
+  resultSchema: DeletedStorageZoneSchema, // declarative result shape; published as the output schema
   examples: [[{ zone: "my-assets" }, "Delete a zone and all of its files"]],
   run: async (ctx, input) => ({ id, name, deleted: true }), // plain serializable data
 });
@@ -611,12 +614,13 @@ export const storageZonesDelete = defineAction({
 Rules that keep the three surfaces honest:
 
 - **Actions never prompt and never print.** No `prompts`, no `logger`, no spinners. Progress is reported with `ctx.progress(message)` and the host decides how to show it.
-- **Actions return normalized data, not raw API models.** `toStorageZone`/`toDatabase` map PascalCase API payloads to a stable camelCase shape, strip credentials, and resolve region codes to names. This shape is the contract every surface sees.
-- **Input is validated before `run`.** `action.invoke(ctx, input)` Zod-parses first and rejects with a `UserError` naming the offending field.
-- **`destructive` is declared, not inferred.** Anything that creates, mutates, or deletes remote state sets it; `defineActionCommand` refuses to run such an action without a confirmation (or an explicit `skipConfirm`).
+- **Actions return normalized data, not raw API models.** `toStorageZone`/`toDatabase` map PascalCase API payloads to a stable camelCase shape, strip credentials, and resolve region codes to names. Each shape is a Zod schema (`StorageZoneSchema`, `DatabaseSchema`, ...) with the type inferred from it; this is the contract every surface sees.
+- **Input is validated before `run`.** `action.invoke(ctx, input)` Zod-parses first and rejects with a `UserError` naming the offending field. Results are NOT validated against `resultSchema`; it is declarative.
+- **`kind` is declared, not inferred.** `read` touches nothing (safe unattended), `write` creates or updates remote state (invoking it is intent enough; `storage.files.upload`, `db.tokens.create`), `destructive` deletes data or cannot be undone. `defineActionCommand` refuses to run a destructive action without a confirmation.
 - **`sensitive` marks credential-bearing results.** `storage.zones.credentials` and `db.tokens.create` return a secret in full; the flag lets a host mask or withhold it. Masking is the host's call, never the action's: the action always returns the real value.
+- **`localFiles` marks host-local path inputs.** `storage.files.upload`/`download` read or write the local disk; a remote host filters them out with `listActions({ localFiles: false })`. These are the only actions allowed to touch the filesystem, and they do it through `node:fs` so the package stays Node-portable.
 
-`ActionContext` (from `createActionContext`) carries credentials, lazily created memoized API clients (`ctx.clients.core`, `ctx.clients.db`), an optional `AbortSignal`, and `progress`/`debug` callbacks. Pass `clients` to inject fakes in tests.
+`ActionContext` (from `createActionContext`) carries credentials, lazily created memoized API clients (`ctx.clients.core`, `ctx.clients.db`, `ctx.clients.mc`), an optional `AbortSignal`, and `progress`/`debug` callbacks. Pass `clients` to inject fakes in tests.
 
 ### `defineActionCommand(def)`
 
@@ -646,24 +650,26 @@ export const storageZoneRemoveCommand = defineActionCommand({
 });
 ```
 
-`--output json` prints the action result verbatim and skips `render`, so a CLI run and an MCP tool call return the same document. Four optional hooks cover the cases a single `render` can't:
+`--output json` prints the action result verbatim and skips `render`, so a CLI run and any other host return the same document. Destructive actions must return a `confirm()` from `prepare`; `write` actions may (e.g. `storage zones update` confirms replication additions) but are not forced to. Three optional hooks cover the cases a single `render` can't:
 
-- `skipConfirm: true`: a destructive action whose intent is the command itself (`storage files upload`, `db tokens create`). Grep `skipConfirm` to audit every unprompted mutation.
 - `emit(result, args)`: take over printing ahead of json and render; return true when handled. Used by `storage zones credentials --format rclone`.
 - `json(result, args)`: reshape before the json print, e.g. to mask a secret the action returns in full.
 - `after(result, args)`: CLI-local follow-up (manifest/.env cleanup). Runs for every format, so gate on `output === "json"` when it would prompt.
 
 Commands that need orchestration beyond a single action stay on `defineCommand` and call `action.invoke(ctx, input)` directly: `storage zones add` (create zone + pull zone + domain), `db create` (create + link + token + save-env), `db tokens invalidate` (revoke + regenerate), and the `db regions add/remove/update` trio (read current placement, then `db.regions.set` the merged result). Build the context with `actionContext(config, { verbose })` and reach for `ctx.clients` when the command still needs a raw client.
 
-### MCP conversion
+### Publishing actions to another host
 
-`@bunny.net/actions/mcp` turns the registry into tool descriptors: `toMcpTools()` for `tools/list`, `actionForToolName(name)` to dispatch `tools/call`. Zod becomes JSON Schema via `z.toJSONSchema`, `title`/`description`/`examples` become the tool description, and `destructive` becomes `readOnlyHint`/`destructiveHint`. There is no MCP server in this repo yet; the conversion and its tests are what a server would consume.
+`src/schema.ts` derives what a tool host needs from an action: `inputJsonSchema()` and `outputJsonSchema()` (Zod via `z.toJSONSchema`), `describeAction()` (description plus examples and the `sensitive`/`localFiles` caveats, for formats with no field for them), `flatName()` (`storage.zones.list` to `bunny_storage_zones_list`), and `toStructuredResult()` to wrap a result to match its output schema. Array results are wrapped as `{ result }`, since structured output is usually required to be an object. Mapping `kind` onto a protocol's annotations is the host's job.
+
+The CLI is the only host in this repo today. A second one (a `bunny mcp` command, a service, an agent runtime) should live in its own package or command and import these helpers rather than re-deriving them.
 
 ### Adding an action
 
 1. Define it under `packages/actions/src/actions/<namespace>/index.ts` and add it to that namespace's exported array (the registry picks it up and enforces unique names).
 2. Put shared API calls in the namespace's `api.ts` and the normalized shape in `model.ts`. If the CLI already has that helper, move it here and re-export from the CLI module so existing call sites keep working.
 3. Wrap it with `defineActionCommand` in `packages/cli/src/commands/...`.
+4. When the wrap removes a command's last direct client use, delete its entry from `PENDING_MIGRATION` in `core/actions-boundary.test.ts`.
 
 ---
 

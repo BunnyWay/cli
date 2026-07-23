@@ -1,47 +1,28 @@
-import { createMcClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
+import { registriesList } from "@bunny.net/actions";
+import { defineActionCommand } from "../../core/define-action-command.ts";
 import { formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
 
-const COMMAND = "list";
-const DESCRIPTION = "List container registries.";
-
-export const registryListCommand = defineCommand({
-  command: COMMAND,
-  describe: DESCRIPTION,
+export const registryListCommand = defineActionCommand({
+  action: registriesList,
+  command: "list",
+  describe: "List container registries.",
   aliases: ["ls"],
+  progress: "Fetching registries...",
 
-  handler: async ({ profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createMcClient(clientOptions(config, verbose));
+  prepare: async () => ({ input: {} }),
 
-    const spin = spinner("Fetching registries...");
-    spin.start();
-
-    const { data } = await client.GET("/registries");
-
-    spin.stop();
-
-    const registries = data?.items ?? [];
-
-    if (output === "json") {
-      logger.log(JSON.stringify(registries, null, 2));
-      return;
-    }
-
+  render: (registries, { output }) => {
     if (registries.length === 0) {
       logger.info("No registries configured.");
       return;
     }
 
     const rows = registries.map((r) => [
-      String(r.id ?? ""),
-      r.displayName ?? "",
-      r.hostName ?? "",
-      r.userName ?? "",
+      String(r.id),
+      r.name,
+      r.hostname ?? "",
+      r.username ?? "",
     ]);
 
     logger.log(

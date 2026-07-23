@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Action } from "../../define-action.ts";
 import { defineAction } from "../../define-action.ts";
 import { fetchDatabase, fetchRegionConfig, regionNameMap } from "./api.ts";
-import { type Database, toDatabase } from "./model.ts";
+import { type Database, DatabaseSchema, toDatabase } from "./model.ts";
 
 type PossibleRegion = components["schemas"]["PossibleRegion"];
 
@@ -45,7 +45,8 @@ export const dbCreate = defineAction({
         "Storage region code. Derived from the first primary region when omitted.",
       ),
   }),
-  destructive: true,
+  kind: "write",
+  resultSchema: DatabaseSchema,
   examples: [
     [{ name: "my-app", primaryRegions: ["FR"] }, "A single-region database"],
     [
@@ -94,13 +95,18 @@ export const dbCreate = defineAction({
   },
 });
 
-export interface DeletedDatabase {
-  id: string;
-  name: string;
-  /** The connection URL of the deleted database, so a caller can clean up matching .env entries. */
-  url: string;
-  deleted: true;
-}
+export const DeletedDatabaseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  url: z
+    .string()
+    .describe(
+      "The connection URL of the deleted database, so a caller can clean up matching .env entries.",
+    ),
+  deleted: z.literal(true),
+});
+
+export type DeletedDatabase = z.infer<typeof DeletedDatabaseSchema>;
 
 export const dbDelete = defineAction({
   name: "db.delete",
@@ -108,7 +114,8 @@ export const dbDelete = defineAction({
   description:
     "Permanently delete a database, including all data, tokens, and configuration. This cannot be undone.",
   schema: z.strictObject({ database: databaseRef }),
-  destructive: true,
+  kind: "destructive",
+  resultSchema: DeletedDatabaseSchema,
   examples: [[{ database: "db_01KCH" }, "Delete a database"]],
   run: async (ctx, input): Promise<DeletedDatabase> => {
     ctx.progress("Fetching database...");
@@ -126,21 +133,23 @@ export const dbDelete = defineAction({
   },
 });
 
-export interface DatabaseUsage {
-  database: string;
-  name: string;
-  from: string;
-  to: string;
-  rowsRead: number;
-  rowsWritten: number;
-  queries: number;
-  avgLatencyMs: number;
-  storage: {
-    bytes: number;
-    maxBytes: number;
-    percent: number;
-  };
-}
+export const DatabaseUsageSchema = z.object({
+  database: z.string(),
+  name: z.string(),
+  from: z.string(),
+  to: z.string(),
+  rowsRead: z.number(),
+  rowsWritten: z.number(),
+  queries: z.number(),
+  avgLatencyMs: z.number(),
+  storage: z.object({
+    bytes: z.number(),
+    maxBytes: z.number(),
+    percent: z.number(),
+  }),
+});
+
+export type DatabaseUsage = z.infer<typeof DatabaseUsageSchema>;
 
 /** Sum a chart's [timestamp, value] datapoints. */
 function sumDatapoints(data: (string | number)[][]): number {
@@ -163,7 +172,8 @@ export const dbUsage = defineAction({
       .optional()
       .describe("End of the range as an RFC 3339 timestamp. Defaults to now."),
   }),
-  destructive: false,
+  kind: "read",
+  resultSchema: DatabaseUsageSchema,
   examples: [[{ database: "db_01KCH" }, "Usage for the last 30 days"]],
   run: async (ctx, input): Promise<DatabaseUsage> => {
     const now = Date.now();

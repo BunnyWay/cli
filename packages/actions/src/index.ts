@@ -18,14 +18,20 @@ export {
 export { dbActions, dbGet, dbList } from "./actions/db/index.ts";
 export type { DatabaseUsage, DeletedDatabase } from "./actions/db/lifecycle.ts";
 export {
+  DatabaseUsageSchema,
   DB_NAME_MAX_LENGTH,
+  DeletedDatabaseSchema,
   dbCreate,
   dbDelete,
   dbLifecycleActions,
   dbUsage,
 } from "./actions/db/lifecycle.ts";
 export type { Database, DatabaseRegion } from "./actions/db/model.ts";
-export { toDatabase } from "./actions/db/model.ts";
+export {
+  DatabaseRegionSchema,
+  DatabaseSchema,
+  toDatabase,
+} from "./actions/db/model.ts";
 export type {
   AvailableRegion,
   AvailableRegions,
@@ -33,19 +39,46 @@ export type {
   SuggestedRegions,
 } from "./actions/db/regions.ts";
 export {
+  AvailableRegionSchema,
+  AvailableRegionsSchema,
+  DatabaseRegionsSchema,
   dbRegionActions,
   dbRegionsAvailable,
   dbRegionsList,
   dbRegionsSet,
   dbRegionsSuggest,
   requirePrimaryRegion,
+  SuggestedRegionsSchema,
 } from "./actions/db/regions.ts";
 export type { DatabaseToken, InvalidatedTokens } from "./actions/db/tokens.ts";
 export {
+  DatabaseTokenSchema,
   dbTokenActions,
   dbTokensCreate,
   dbTokensInvalidate,
+  InvalidatedTokensSchema,
 } from "./actions/db/tokens.ts";
+export type {
+  ContainerRegistryModel,
+  RegistryType,
+} from "./actions/registries/api.ts";
+export {
+  fetchRegistries,
+  fetchRegistry,
+  registryTypeForServer,
+} from "./actions/registries/api.ts";
+export type { DeletedRegistry } from "./actions/registries/index.ts";
+export {
+  DeletedRegistrySchema,
+  registriesActions,
+  registriesCreate,
+  registriesDelete,
+  registriesGet,
+  registriesList,
+  registriesUpdate,
+} from "./actions/registries/index.ts";
+export type { Registry } from "./actions/registries/model.ts";
+export { RegistrySchema, toRegistry } from "./actions/registries/model.ts";
 export type {
   SafeStorageZone,
   StorageZoneModel,
@@ -63,11 +96,14 @@ export type {
   UploadedFile,
 } from "./actions/storage/files.ts";
 export {
+  DeletedFileSchema,
+  DownloadedFileSchema,
   storageFileActions,
   storageFilesDelete,
   storageFilesDownload,
   storageFilesList,
   storageFilesUpload,
+  UploadedFileSchema,
 } from "./actions/storage/files.ts";
 export type {
   StorageFile,
@@ -80,6 +116,7 @@ export {
   deleteFile,
   downloadFile,
   listFiles,
+  StorageFileEntrySchema,
   toStorageFileEntry,
   uploadFile,
 } from "./actions/storage/files-api.ts";
@@ -89,6 +126,9 @@ export type {
   StorageZoneUpdateResult,
 } from "./actions/storage/index.ts";
 export {
+  DeletedStorageZoneSchema,
+  StorageZoneCredentialsSchema,
+  StorageZoneUpdateResultSchema,
   storageActions,
   storageRegionsList,
   storageZonesCreate,
@@ -101,6 +141,8 @@ export {
 export type { S3Credentials, StorageZone } from "./actions/storage/model.ts";
 export {
   isS3Enabled,
+  S3CredentialsSchema,
+  StorageZoneSchema,
   s3Credentials,
   s3Endpoint,
   toStorageZone,
@@ -112,6 +154,7 @@ export {
   replicationChoices,
   STORAGE_REGION_CODES,
   STORAGE_REGIONS,
+  StorageRegionSchema,
 } from "./actions/storage/regions.ts";
 export type {
   ActionClients,
@@ -119,9 +162,14 @@ export type {
   ActionContextOptions,
   CoreClient,
   DbClient,
+  McClient,
 } from "./context.ts";
 export { createActionContext } from "./context.ts";
-export type { Action, ActionDefinition } from "./define-action.ts";
+export type {
+  Action,
+  ActionDefinition,
+  ActionKind,
+} from "./define-action.ts";
 export { defineAction } from "./define-action.ts";
 export type { ActionFilter } from "./registry.ts";
 export {
@@ -131,3 +179,10 @@ export {
   requireAction,
   runAction,
 } from "./registry.ts";
+export {
+  describeAction,
+  flatName,
+  inputJsonSchema,
+  outputJsonSchema,
+  toStructuredResult,
+} from "./schema.ts";

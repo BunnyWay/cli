@@ -1,7 +1,6 @@
-import { createDbClient } from "@bunny.net/openapi-client";
 import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
+import { actionContext } from "../../core/action-context.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
@@ -58,7 +57,8 @@ export const dbLinkCommand = defineCommand<LinkArgs>({
     apiKey,
   }) => {
     const config = resolveConfig(profile, apiKey, verbose);
-    const client = createDbClient(clientOptions(config, verbose));
+    // Linking writes .bunny/database.json, so the command owns it; only the lookup is shared.
+    const client = actionContext(config, { verbose }).clients.db;
 
     if (databaseIdArg) {
       const spin = spinner("Fetching database...");

@@ -11,8 +11,9 @@ import {
 import { storageFileActions } from "./files.ts";
 import {
   isS3Enabled,
-  type S3Credentials,
+  S3CredentialsSchema,
   type StorageZone,
+  StorageZoneSchema,
   s3Credentials,
   toStorageZone,
 } from "./model.ts";
@@ -21,6 +22,7 @@ import {
   STORAGE_REGION_CODES,
   STORAGE_REGIONS,
   type StorageRegion,
+  StorageRegionSchema,
 } from "./regions.ts";
 
 const zoneRef = z
@@ -34,7 +36,8 @@ export const storageRegionsList = defineAction({
   description:
     "List the regions a storage zone can be created in. Replication uses the same set, minus the zone's main region.",
   schema: z.strictObject({}),
-  destructive: false,
+  kind: "read",
+  resultSchema: z.array(StorageRegionSchema),
   run: async (): Promise<StorageRegion[]> => STORAGE_REGIONS,
 });
 
@@ -50,7 +53,8 @@ export const storageZonesList = defineAction({
       .optional()
       .describe("Only return zones whose name matches this term."),
   }),
-  destructive: false,
+  kind: "read",
+  resultSchema: z.array(StorageZoneSchema),
   examples: [
     [{}, "List all storage zones"],
     [{ search: "assets" }, "Find zones with `assets` in the name"],
@@ -71,7 +75,8 @@ export const storageZonesGet = defineAction({
   description:
     "Get one storage zone by name or ID, including replication regions and S3 compatibility.",
   schema: z.strictObject({ zone: zoneRef }),
-  destructive: false,
+  kind: "read",
+  resultSchema: StorageZoneSchema,
   examples: [[{ zone: "my-assets" }, "Look a zone up by name"]],
   run: async (ctx, { zone }): Promise<StorageZone> => {
     ctx.progress("Resolving storage zone...");
@@ -103,7 +108,8 @@ export const storageZonesCreate = defineAction({
         "Region codes to replicate to. Each adds storage cost and cannot be removed later.",
       ),
   }),
-  destructive: true,
+  kind: "write",
+  resultSchema: StorageZoneSchema,
   examples: [
     [{ name: "my-assets", region: "DE" }, "Create a zone in Falkenstein"],
     [
@@ -131,11 +137,13 @@ export const storageZonesCreate = defineAction({
   },
 });
 
-export interface DeletedStorageZone {
-  id: number;
-  name: string;
-  deleted: true;
-}
+export const DeletedStorageZoneSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  deleted: z.literal(true),
+});
+
+export type DeletedStorageZone = z.infer<typeof DeletedStorageZoneSchema>;
 
 export const storageZonesDelete = defineAction({
   name: "storage.zones.delete",
@@ -143,7 +151,8 @@ export const storageZonesDelete = defineAction({
   description:
     "Permanently delete a storage zone and every file in it. This cannot be undone.",
   schema: z.strictObject({ zone: zoneRef }),
-  destructive: true,
+  kind: "destructive",
+  resultSchema: DeletedStorageZoneSchema,
   examples: [[{ zone: "my-assets" }, "Delete a zone and all of its files"]],
   run: async (ctx, { zone }): Promise<DeletedStorageZone> => {
     ctx.progress("Resolving storage zone...");
@@ -161,13 +170,21 @@ export const storageZonesDelete = defineAction({
   },
 });
 
-export interface StorageZoneUpdateResult {
-  zone: StorageZone;
-  /** Replication regions this update added. */
-  replicationAdded: string[];
-  /** Existing replication regions the input left out; they stay, because replication cannot be removed. */
-  replicationKept: string[];
-}
+export const StorageZoneUpdateResultSchema = z.object({
+  zone: StorageZoneSchema,
+  replicationAdded: z
+    .array(z.string())
+    .describe("Replication regions this update added."),
+  replicationKept: z
+    .array(z.string())
+    .describe(
+      "Existing replication regions the input left out; they stay, because replication cannot be removed.",
+    ),
+});
+
+export type StorageZoneUpdateResult = z.infer<
+  typeof StorageZoneUpdateResultSchema
+>;
 
 export const storageZonesUpdate = defineAction({
   name: "storage.zones.update",
@@ -194,7 +211,8 @@ export const storageZonesUpdate = defineAction({
         "Region codes to replicate to. Merged with the existing set; each addition is permanent.",
       ),
   }),
-  destructive: true,
+  kind: "write",
+  resultSchema: StorageZoneUpdateResultSchema,
   examples: [
     [
       { zone: "my-assets", custom404FilePath: "/404.html" },
@@ -261,12 +279,19 @@ export const storageZonesUpdate = defineAction({
   },
 });
 
-export interface StorageZoneCredentials extends S3Credentials {
-  zone: string;
-  /** False when the zone has no S3 preview access; the keys still work for the Edge Storage API. */
-  s3Enabled: boolean;
-  readOnly: boolean;
-}
+export const StorageZoneCredentialsSchema = S3CredentialsSchema.extend({
+  zone: z.string(),
+  s3Enabled: z
+    .boolean()
+    .describe(
+      "False when the zone has no S3 preview access; the keys still work for the Edge Storage API.",
+    ),
+  readOnly: z.boolean(),
+});
+
+export type StorageZoneCredentials = z.infer<
+  typeof StorageZoneCredentialsSchema
+>;
 
 export const storageZonesCredentials = defineAction({
   name: "storage.zones.credentials",
@@ -280,7 +305,8 @@ export const storageZonesCredentials = defineAction({
       .default(false)
       .describe("Return the zone's read-only password instead of read-write."),
   }),
-  destructive: false,
+  kind: "read",
+  resultSchema: StorageZoneCredentialsSchema,
   sensitive: true,
   examples: [
     [{ zone: "my-assets" }, "Read-write credentials"],

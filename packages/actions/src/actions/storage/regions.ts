@@ -1,10 +1,13 @@
 import { UserError } from "@bunny.net/openapi-client";
 import * as BunnyStorage from "@bunny.net/storage-sdk";
+import { z } from "zod";
 
-export interface StorageRegion {
-  code: string;
-  name: string;
-}
+export const StorageRegionSchema = z.object({
+  code: z.string().describe("Region code the create API accepts, e.g. `DE`."),
+  name: z.string(),
+});
+
+export type StorageRegion = z.infer<typeof StorageRegionSchema>;
 
 // The create API expects uppercase codes (e.g. "DE"), matching what existing zones report.
 export const STORAGE_REGIONS: StorageRegion[] = Object.entries(

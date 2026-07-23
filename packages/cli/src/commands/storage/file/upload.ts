@@ -47,9 +47,6 @@ export const storageFileUploadCommand = defineActionCommand({
         describe: "Send a SHA256 checksum so the server verifies the upload",
       }),
 
-  // Overwriting is the point of an upload; running the command is the intent.
-  skipConfirm: true,
-
   prepare: async (args, ctx) => {
     // A bare --to uses the path as-is; a trailing slash means "into this directory".
     const to = args.to;

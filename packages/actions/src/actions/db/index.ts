@@ -9,7 +9,7 @@ import {
   regionNameMap,
 } from "./api.ts";
 import { dbLifecycleActions } from "./lifecycle.ts";
-import { type Database, toDatabase } from "./model.ts";
+import { type Database, DatabaseSchema, toDatabase } from "./model.ts";
 import { dbRegionActions } from "./regions.ts";
 import { dbTokenActions } from "./tokens.ts";
 
@@ -19,7 +19,8 @@ export const dbList = defineAction({
   description:
     "List every database on the account with its status, primary region, and size.",
   schema: z.strictObject({}),
-  destructive: false,
+  kind: "read",
+  resultSchema: z.array(DatabaseSchema),
   examples: [[{}, "List all databases"]],
   run: async (ctx): Promise<Database[]> => {
     ctx.progress("Fetching databases...");
@@ -56,7 +57,8 @@ export const dbGet = defineAction({
       .min(1)
       .describe("Database ID, e.g. `db_01KCHBG8C5KSFGG0VRNFQ7EK7X`."),
   }),
-  destructive: false,
+  kind: "read",
+  resultSchema: DatabaseSchema,
   examples: [
     [{ database: "db_01KCHBG8C5KSFGG0VRNFQ7EK7X" }, "Show one database"],
   ],

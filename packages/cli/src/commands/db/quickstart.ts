@@ -1,14 +1,13 @@
-import { createDbClient } from "@bunny.net/openapi-client";
+import { dbTokensCreate, fetchDatabase } from "@bunny.net/actions";
 import chalk from "chalk";
 import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
+import { actionContext } from "../../core/action-context.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { withSpinner } from "../../core/ui.ts";
 import { readEnvValue } from "../../utils/env-file.ts";
-import { generateToken } from "./api.ts";
 import {
   ARG_DATABASE_ID,
   ENV_DATABASE_AUTH_TOKEN,
@@ -127,40 +126,34 @@ export const dbQuickstartCommand = defineCommand<{
     let token = tokenArg;
     let dbName: string | undefined;
 
-    // Resolve URL and token from API if not provided via flags
+    // Resolve URL and token from the API if not provided via flags
     if (!url || !token) {
       const config = resolveConfig(profile, apiKey, verbose);
-      const client = createDbClient(clientOptions(config, verbose));
+      const ctx = actionContext(config, { verbose });
 
-      const { id: databaseId } = await resolveDbId(client, databaseIdArg);
+      const { id: databaseId } = await resolveDbId(
+        ctx.clients.db,
+        databaseIdArg,
+      );
 
-      const spin = spinner("Fetching database details...");
-      spin.start();
+      // The snippet needs the name, which the token action doesn't return.
+      const [db, session] = await withSpinner(
+        "Fetching database details...",
+        () =>
+          Promise.all([
+            fetchDatabase(ctx.clients.db, databaseId),
+            token
+              ? undefined
+              : dbTokensCreate.invoke(ctx, {
+                  database: databaseId,
+                  expiresAt: null,
+                }),
+          ]),
+      );
 
-      const fetches: Promise<any>[] = [
-        client.GET("/v2/databases/{db_id}", {
-          params: { path: { db_id: databaseId } },
-        }),
-      ];
-
-      if (!token) {
-        spin.text = "Generating token...";
-        fetches.push(
-          generateToken(client, databaseId, {
-            authorization: "full-access",
-            expiresAt: null,
-          }),
-        );
-      }
-
-      const [dbResult, tokenResult] = await Promise.all(fetches);
-
-      spin.stop();
-
-      const db = dbResult.data?.db;
-      dbName = db?.name;
-      if (!url) url = db?.url;
-      if (!token && tokenResult) token = tokenResult.token;
+      dbName = db.name;
+      url ??= db.url;
+      token ??= session?.token;
     }
 
     if (!url || !token) {

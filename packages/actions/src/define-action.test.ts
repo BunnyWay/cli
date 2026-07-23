@@ -7,7 +7,7 @@ const echo = defineAction({
   name: "test.echo",
   description: "Echo the input back, for tests.",
   schema: z.strictObject({ value: z.string().min(1) }),
-  destructive: false,
+  kind: "read",
   run: async (_ctx, input) => input.value,
 });
 
@@ -28,7 +28,7 @@ test("invoke defaults missing input to an empty object", async () => {
     name: "test.noargs",
     description: "Takes no input at all.",
     schema: z.strictObject({}),
-    destructive: false,
+    kind: "read",
     run: async () => "ok",
   });
   expect(await noArgs.invoke(createActionContext(), undefined)).toBe("ok");
@@ -40,7 +40,7 @@ test("action names must be dotted and lowercase", () => {
       name: "storageZonesList",
       description: "Bad name.",
       schema: z.strictObject({}),
-      destructive: false,
+      kind: "read",
       run: async () => null,
     }),
   ).toThrow(/Invalid action name/);
