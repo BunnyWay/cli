@@ -157,19 +157,24 @@ bunny-cli/
 │   │   ├── package.json                  # exports "." (registry) and "./mcp" (tool descriptors)
 │   │   └── src/
 │   │       ├── index.ts                  # Barrel export: defineAction, registry, context, action + result types
-│   │       ├── define-action.ts          # defineAction(): name validation + invoke() that Zod-validates input first
+│   │       ├── define-action.ts          # defineAction(): name validation + invoke() that Zod-validates input first; destructive + sensitive flags
 │   │       ├── context.ts                # createActionContext(): lazy memoized core/db clients, signal, progress/debug callbacks, injectable clients for tests
 │   │       ├── registry.ts               # actions[] (sorted, duplicate-checked) + getAction/requireAction/listActions/runAction
 │   │       ├── mcp.ts                    # toMcpTools()/toMcpTool()/actionForToolName(): Zod → JSON Schema + readOnly/destructive annotations
 │   │       └── actions/
 │   │           ├── storage/
-│   │           │   ├── index.ts          # storage.regions.list, storage.zones.list/get/create/delete
+│   │           │   ├── index.ts          # storage.regions.list, storage.zones.list/get/create/update/delete/credentials
+│   │           │   ├── files.ts          # storage.files.list/upload/download/delete
 │   │           │   ├── api.ts            # fetchStorageZones/fetchStorageZone/resolveStorageZone/toSafeStorageZone (moved out of the CLI)
-│   │           │   ├── model.ts          # StorageZone normalized shape + toStorageZone/isS3Enabled/s3Endpoint
+│   │           │   ├── files-api.ts      # connect/list/upload/download/delete over @bunny.net/storage-sdk + StorageFileEntry (moved out of the CLI)
+│   │           │   ├── model.ts          # StorageZone normalized shape + toStorageZone/isS3Enabled/s3Endpoint/s3Credentials
 │   │           │   └── regions.ts        # STORAGE_REGIONS/STORAGE_REGION_CODES + replication normalization
 │   │           └── db/
-│   │               ├── index.ts          # db.list, db.get
-│   │               ├── api.ts            # fetchDatabase/fetchAllDatabases/fetchRegionConfig/fetchLiveStatus/regionNameMap (moved out of the CLI)
+│   │               ├── index.ts          # db.list, db.get; aggregates the lifecycle/regions/tokens action arrays
+│   │               ├── lifecycle.ts      # db.create, db.delete, db.usage
+│   │               ├── regions.ts        # db.regions.available/suggest/list/set (set replaces the region set wholesale)
+│   │               ├── tokens.ts         # db.tokens.create/invalidate
+│   │               ├── api.ts            # fetchDatabase/fetchAllDatabases/fetchRegionConfig/fetchLiveStatus/generateToken/regionNameMap (moved out of the CLI)
 │   │               └── model.ts          # Database normalized shape + toDatabase (region codes resolved to names)
 │   │
 │   ├── sandbox/                          # @bunny.net/sandbox package
@@ -608,7 +613,8 @@ Rules that keep the three surfaces honest:
 - **Actions never prompt and never print.** No `prompts`, no `logger`, no spinners. Progress is reported with `ctx.progress(message)` and the host decides how to show it.
 - **Actions return normalized data, not raw API models.** `toStorageZone`/`toDatabase` map PascalCase API payloads to a stable camelCase shape, strip credentials, and resolve region codes to names. This shape is the contract every surface sees.
 - **Input is validated before `run`.** `action.invoke(ctx, input)` Zod-parses first and rejects with a `UserError` naming the offending field.
-- **`destructive` is declared, not inferred.** Anything that creates, mutates, or deletes remote state sets it; `defineActionCommand` refuses to run such an action without a confirmation.
+- **`destructive` is declared, not inferred.** Anything that creates, mutates, or deletes remote state sets it; `defineActionCommand` refuses to run such an action without a confirmation (or an explicit `skipConfirm`).
+- **`sensitive` marks credential-bearing results.** `storage.zones.credentials` and `db.tokens.create` return a secret in full; the flag lets a host mask or withhold it. Masking is the host's call, never the action's: the action always returns the real value.
 
 `ActionContext` (from `createActionContext`) carries credentials, lazily created memoized API clients (`ctx.clients.core`, `ctx.clients.db`), an optional `AbortSignal`, and `progress`/`debug` callbacks. Pass `clients` to inject fakes in tests.
 
@@ -640,7 +646,14 @@ export const storageZoneRemoveCommand = defineActionCommand({
 });
 ```
 
-`--output json` prints the action result verbatim and skips `render`, so a CLI run and an MCP tool call return the same document. Commands that need orchestration beyond a single action (`storage zones add`, which also creates a pull zone and attaches a domain) stay on `defineCommand` and call `action.invoke(ctx, input)` directly.
+`--output json` prints the action result verbatim and skips `render`, so a CLI run and an MCP tool call return the same document. Four optional hooks cover the cases a single `render` can't:
+
+- `skipConfirm: true`: a destructive action whose intent is the command itself (`storage files upload`, `db tokens create`). Grep `skipConfirm` to audit every unprompted mutation.
+- `emit(result, args)`: take over printing ahead of json and render; return true when handled. Used by `storage zones credentials --format rclone`.
+- `json(result, args)`: reshape before the json print, e.g. to mask a secret the action returns in full.
+- `after(result, args)`: CLI-local follow-up (manifest/.env cleanup). Runs for every format, so gate on `output === "json"` when it would prompt.
+
+Commands that need orchestration beyond a single action stay on `defineCommand` and call `action.invoke(ctx, input)` directly: `storage zones add` (create zone + pull zone + domain), `db create` (create + link + token + save-env), `db tokens invalidate` (revoke + regenerate), and the `db regions add/remove/update` trio (read current placement, then `db.regions.set` the merged result). Build the context with `actionContext(config, { verbose })` and reach for `ctx.clients` when the command still needs a raw client.
 
 ### MCP conversion
 

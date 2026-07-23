@@ -1,8 +1,8 @@
-import { createDbClient } from "@bunny.net/openapi-client";
+import { dbRegionsSet } from "@bunny.net/actions";
 import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
 import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
+import { actionContext } from "../../../core/action-context.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
@@ -82,7 +82,9 @@ export const dbRegionsAddCommand = defineCommand<AddArgs>({
     apiKey,
   }) => {
     const config = resolveConfig(profile, apiKey, verbose);
-    const client = createDbClient(clientOptions(config, verbose));
+    // Reads the current regions here, then hands the merged set to the set action.
+    const ctx = actionContext(config, { verbose });
+    const client = ctx.clients.db;
 
     const { id: databaseId } = await resolveDbId(client, databaseIdArg);
 
@@ -154,30 +156,27 @@ export const dbRegionsAddCommand = defineCommand<AddArgs>({
       return;
     }
 
-    // Merge with existing regions
-    const updatedPrimary = [...db.primary_regions, ...newPrimary];
-    const updatedReplicas = [...db.replicas_regions, ...newReplicas];
-
+    // Merge with existing regions and set the full result.
     const updateSpin = spinner("Updating regions...");
     updateSpin.start();
-
-    const { data: updated } = await client.PATCH("/v2/databases/{db_id}", {
-      params: { path: { db_id: databaseId } },
-      body: {
-        primary_regions: updatedPrimary,
-        replicas_regions: updatedReplicas,
-      },
-    });
-
-    updateSpin.stop();
+    let updated: Awaited<ReturnType<typeof dbRegionsSet.invoke>>;
+    try {
+      updated = await dbRegionsSet.invoke(ctx, {
+        database: databaseId,
+        primaryRegions: [...db.primary_regions, ...newPrimary],
+        replicaRegions: [...db.replicas_regions, ...newReplicas],
+      });
+    } finally {
+      updateSpin.stop();
+    }
 
     if (output === "json") {
       logger.log(
         JSON.stringify(
           {
             db_id: databaseId,
-            primary_regions: updated?.db?.primary_regions ?? updatedPrimary,
-            replicas_regions: updated?.db?.replicas_regions ?? updatedReplicas,
+            primary_regions: updated.primary.map((r) => r.code),
+            replicas_regions: updated.replica.map((r) => r.code),
           },
           null,
           2,

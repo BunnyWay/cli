@@ -1,10 +1,8 @@
-import { createDbClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
+import { dbDelete } from "@bunny.net/actions";
+import { defineActionCommand } from "../../core/define-action-command.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, removeManifest } from "../../core/manifest.ts";
-import { confirm, confirmTyped, spinner } from "../../core/ui.ts";
+import { confirm, confirmTyped } from "../../core/ui.ts";
 import { readEnvValue, removeEnvValue } from "../../utils/env-file.ts";
 import { fetchDatabase } from "./api.ts";
 import {
@@ -21,11 +19,6 @@ const DESCRIPTION = "Delete a database.";
 
 const ARG_FORCE = "force";
 const ARG_FORCE_ALIAS = "f";
-
-interface DeleteArgs {
-  [ARG_DATABASE_ID]?: string;
-  [ARG_FORCE]?: boolean;
-}
 
 /**
  * Permanently delete a database.
@@ -49,7 +42,8 @@ interface DeleteArgs {
  * bunny db delete db_01KCHBG8C5KSFGG0VRNFQ7EK7X --force --output json
  * ```
  */
-export const dbDeleteCommand = defineCommand<DeleteArgs>({
+export const dbDeleteCommand = defineActionCommand({
+  action: dbDelete,
   command: COMMAND,
   describe: DESCRIPTION,
   examples: [
@@ -75,76 +69,49 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
         describe: "Skip confirmation prompts",
       }),
 
-  handler: async ({
-    [ARG_DATABASE_ID]: databaseIdArg,
-    force,
-    profile,
-    output,
-    verbose,
-    apiKey,
-  }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createDbClient(clientOptions(config, verbose));
+  progress: "Deleting database...",
 
-    const { id: databaseId, source } = await resolveDbId(client, databaseIdArg);
+  prepare: async (args, ctx) => {
+    const { id, source } = await resolveDbId(
+      ctx.clients.db,
+      args[ARG_DATABASE_ID],
+    );
 
-    // Fetch database details so we can show/confirm the name
-    const fetchSpin = spinner("Fetching database...");
-    fetchSpin.start();
-
-    const db = await fetchDatabase(client, databaseId);
-
-    fetchSpin.stop();
+    // Fetch the database so the confirmation can show and verify its name.
+    const db = await fetchDatabase(ctx.clients.db, id);
 
     if (source === "env") {
-      logger.dim(`Database: ${db.name} (${databaseId}, from .env)`);
+      logger.dim(`Database: ${db.name} (${id}, from .env)`);
     } else if (source === "manifest") {
-      logger.dim(
-        `Database: ${db.name} (${databaseId}, from .bunny/database.json)`,
-      );
+      logger.dim(`Database: ${db.name} (${id}, from .bunny/database.json)`);
     }
 
-    const confirmed =
-      (await confirm(
-        `Delete database "${db.name}" (${databaseId})? This cannot be undone.`,
-        { force },
-      )) && (await confirmTyped(db.name, { force }));
+    return {
+      input: { database: id },
+      confirm: async () =>
+        (await confirm(
+          `Delete database "${db.name}" (${id})? This cannot be undone.`,
+          { force: args.force },
+        )) && confirmTyped(db.name, { force: args.force }),
+    };
+  },
 
-    if (!confirmed) {
-      logger.log("Cancelled.");
-      return;
-    }
+  // Clean up the manifest and .env entries that pointed at the deleted database.
+  // Skipped for json output, which must stay silent and unprompted.
+  after: async (result, { output }) => {
+    if (output === "json") return;
 
-    const deleteSpin = spinner("Deleting database...");
-    deleteSpin.start();
-
-    await client.DELETE("/v2/databases/{db_id}", {
-      params: { path: { db_id: databaseId } },
-    });
-
-    deleteSpin.stop();
-
-    if (output === "json") {
-      logger.log(JSON.stringify({ db_id: databaseId, deleted: true }, null, 2));
-      return;
-    }
-
-    logger.success(`Database "${db.name}" (${databaseId}) deleted.`);
-
-    // Clean up the .bunny/database.json manifest if it pointed at this DB
     const manifest = loadManifest<DatabaseManifest>(DATABASE_MANIFEST);
-    if (manifest.id === databaseId) {
+    if (manifest.id === result.id) {
       removeManifest(DATABASE_MANIFEST);
       logger.dim(`Removed stale .bunny/database.json.`);
     }
 
-    // Offer to clean up .env if it references the deleted database
     const envUrl = readEnvValue(ENV_DATABASE_URL);
-    if (envUrl && db.url && envUrl.value === db.url) {
+    if (envUrl && result.url && envUrl.value === result.url) {
       const shouldClean = await confirm(
         `Remove ${ENV_DATABASE_URL} from ${envUrl.envPath}?`,
       );
-
       if (shouldClean) {
         removeEnvValue(ENV_DATABASE_URL, envUrl.envPath);
         const envToken = readEnvValue(ENV_DATABASE_AUTH_TOKEN);
@@ -158,5 +125,11 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
         }
       }
     }
+  },
+
+  json: (result) => ({ db_id: result.id, deleted: true }),
+
+  render: (result) => {
+    logger.success(`Database "${result.name}" (${result.id}) deleted.`);
   },
 });

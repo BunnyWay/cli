@@ -92,19 +92,36 @@ Prints the registry an agent would import, the MCP descriptor a server would ret
 
 ## Current actions
 
-| Action                 | Destructive | Notes                                  |
-| ---------------------- | ----------- | -------------------------------------- |
-| `storage.regions.list` | no          | Static; needs no credentials           |
-| `storage.zones.list`   | no          | Optional `search` filter               |
-| `storage.zones.get`    | no          | Accepts a name or numeric ID           |
-| `storage.zones.create` | yes         | Region enum is published in the schema |
-| `storage.zones.delete` | yes         | Deletes every file in the zone         |
-| `db.list`              | no          | Live status and region names resolved  |
-| `db.get`               | no          | By database ID                         |
+Flags: **D** destructive (mutates remote state), **S** sensitive (result carries credentials).
+
+| Action                      | D   | S   | Notes                                        |
+| --------------------------- | --- | --- | -------------------------------------------- |
+| `storage.regions.list`      |     |     | Static; needs no credentials                 |
+| `storage.zones.list`        |     |     | Optional `search` filter                     |
+| `storage.zones.get`         |     |     | Accepts a name or numeric ID                 |
+| `storage.zones.create`      | ✓   |     | Region enum is published in the schema       |
+| `storage.zones.update`      | ✓   |     | Merges replication (removal is impossible)   |
+| `storage.zones.delete`      | ✓   |     | Deletes every file in the zone               |
+| `storage.zones.credentials` |     | ✓   | Returns the zone password in full            |
+| `storage.files.list`        |     |     | One directory, not recursive                 |
+| `storage.files.upload`      | ✓   |     | Overwrites; streams from disk                |
+| `storage.files.download`    |     |     | Streams to disk, creating parent dirs        |
+| `storage.files.delete`      | ✓   |     | Trailing slash deletes a directory tree      |
+| `db.list`                   |     |     | Live status and region names resolved        |
+| `db.get`                    |     |     | By database ID                               |
+| `db.create`                 | ✓   |     | Derives the storage region when omitted      |
+| `db.delete`                 | ✓   |     | Returns the URL so callers can clean up env  |
+| `db.usage`                  |     |     | Rows, queries, latency, storage over a range |
+| `db.regions.available`      |     |     | Primary/replica/storage placement options    |
+| `db.regions.suggest`        |     |     | Placement from the caller's edge location    |
+| `db.regions.list`           |     |     | A database's current placement               |
+| `db.regions.set`            | ✓   |     | Replaces the region set wholesale            |
+| `db.tokens.create`          | ✓   | ✓   | Shown once; returns the db URL too           |
+| `db.tokens.invalidate`      | ✓   |     | Revokes every token at once                  |
 
 ## Result shapes
 
-Actions return normalized, credential-free data (`StorageZone`, `Database`) rather than raw API models: camelCase keys, region codes resolved to names, storage-zone passwords stripped. That shape is the contract the CLI's `--output json`, an MCP tool result, and an agent all see.
+Actions return normalized, credential-free data (`StorageZone`, `Database`, `StorageFileEntry`) rather than raw API models: camelCase keys, region codes resolved to names, storage-zone passwords stripped, file paths made zone-relative so they feed straight back into the next call. That shape is the contract the CLI's `--output json`, an MCP tool result, and an agent all see. The two `sensitive` actions are the deliberate exception: they return a credential in full, and it is the host's job to mask or withhold it.
 
 ## Known trade-offs in this PoC
 

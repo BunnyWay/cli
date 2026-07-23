@@ -1,26 +1,16 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import { storageZonesCredentials } from "@bunny.net/actions";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { formatKeyValue, maskSecret } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 import {
-  isS3Enabled,
   renderS3ToolConfig,
   S3_TOOL_FORMATS,
   type S3ToolFormat,
-  s3Credentials,
 } from "../s3.ts";
 
-interface CredentialsArgs {
-  zone?: string;
-  format?: S3ToolFormat;
-  readOnly?: boolean;
-  showSecret?: boolean;
-}
-
-export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
+export const storageZoneCredentialsCommand = defineActionCommand({
+  action: storageZonesCredentials,
   command: "credentials [zone]",
   aliases: ["creds"],
   describe: "Show S3 credentials for a storage zone, or config for an S3 tool.",
@@ -65,53 +55,42 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
         describe: "Reveal the secret access key (masked by default)",
       }),
 
-  handler: async ({
-    zone: ref,
-    format,
-    readOnly,
-    showSecret,
-    profile,
-    output,
-    verbose,
-    apiKey,
-  }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+  progress: "Fetching credentials...",
 
-    const zone = await resolveStorageZoneInteractive(client, ref, {
-      output,
-      offerLink: true,
-    });
-    const creds = s3Credentials(zone, readOnly ?? false);
+  prepare: async (args, ctx) => {
+    const zone = await resolveStorageZoneInteractive(
+      ctx.clients.core,
+      args.zone,
+      { output: args.output, offerLink: true },
+    );
+    return {
+      input: { zone: String(zone.Id), readOnly: args["read-only"] },
+    };
+  },
 
-    if (!isS3Enabled(zone)) {
+  after: (creds) => {
+    if (!creds.s3Enabled) {
       logger.warn(
-        `S3 is not enabled on ${zone.Name}. These credentials only work once it has S3 preview access.`,
+        `S3 is not enabled on ${creds.zone}. These credentials only work once it has S3 preview access.`,
       );
     }
+  },
 
-    if (format) {
-      logger.log(renderS3ToolConfig(format, creds, zone.Name as string));
-      return;
-    }
+  // A tool config is the whole point of --format, so it wins over --output.
+  emit: (creds, args) => {
+    const format = args.format as S3ToolFormat | undefined;
+    if (!format) return false;
+    logger.log(renderS3ToolConfig(format, creds, creds.zone));
+    return true;
+  },
 
-    if (output === "json") {
-      // Mask by default like the table; --show-secret opts into the raw key.
-      logger.log(
-        JSON.stringify(
-          {
-            ...creds,
-            secretAccessKey: showSecret
-              ? creds.secretAccessKey
-              : maskSecret(creds.secretAccessKey),
-          },
-          null,
-          2,
-        ),
-      );
-      return;
-    }
+  // The action returns the secret in full; masking it is this surface's decision.
+  json: (creds, args) =>
+    args["show-secret"]
+      ? creds
+      : { ...creds, secretAccessKey: maskSecret(creds.secretAccessKey) },
 
+  render: (creds, args) => {
     logger.log(
       formatKeyValue(
         [
@@ -120,15 +99,15 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
           { key: "Access Key ID", value: creds.accessKeyId },
           {
             key: "Secret Access Key",
-            value: showSecret
+            value: args["show-secret"]
               ? creds.secretAccessKey
               : maskSecret(creds.secretAccessKey),
           },
         ],
-        output,
+        args.output,
       ),
     );
-    if (showSecret) {
+    if (args["show-secret"]) {
       logger.warn("Treat the secret access key like a password.");
     } else {
       logger.dim("Secret masked. Pass --show-secret to reveal it.");

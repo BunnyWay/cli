@@ -41,10 +41,26 @@ interface ActionCommandDef<A, Schema extends z.ZodObject, Result> {
     args: A & GlobalArgs,
     ctx: ActionContext,
   ) => Promise<Prepared<Schema> | typeof CANCELLED>;
+  /**
+   * Declares that this destructive action needs no prompt, because running the
+   * command is itself the intent (uploading a file, creating a resource).
+   * `grep skipConfirm` lists every mutation the CLI performs unprompted.
+   */
+  skipConfirm?: true;
   /** Spinner text while the action runs. Action progress messages replace it. */
   progress?: string;
   /** CLI-local follow-up such as manifest cleanup. Runs for every output format. */
   after?: (result: Result, args: A & GlobalArgs) => void | Promise<void>;
+  /**
+   * Take over printing entirely, ahead of both json and {@link ActionCommandDef.render}.
+   * Return true once it has printed. For alternate emitters like `--format rclone`.
+   */
+  emit?: (result: Result, args: A & GlobalArgs) => boolean;
+  /**
+   * Reshape the result before it is printed as JSON, e.g. to mask a secret the
+   * action returns in full. Defaults to printing the result as-is.
+   */
+  json?: (result: Result, args: A & GlobalArgs) => unknown;
   /** Render for humans. `--output json` prints the action result instead and skips this. */
   render: (result: Result, args: A & GlobalArgs) => void;
 }
@@ -96,9 +112,9 @@ export function defineActionCommand<A, Schema extends z.ZodObject, Result>(
         return;
       }
 
-      if (def.action.destructive && !prepared.confirm) {
+      if (def.action.destructive && !prepared.confirm && !def.skipConfirm) {
         throw new Error(
-          `Action "${def.action.name}" is destructive, so ${def.command} must return a confirm() from prepare().`,
+          `Action "${def.action.name}" is destructive, so ${def.command} must return a confirm() from prepare() or set skipConfirm.`,
         );
       }
 
@@ -117,8 +133,11 @@ export function defineActionCommand<A, Schema extends z.ZodObject, Result>(
 
       await def.after?.(result, args);
 
+      if (def.emit?.(result, args)) return;
+
       if (args.output === "json") {
-        logger.log(JSON.stringify(result, null, 2));
+        const payload = def.json ? def.json(result, args) : result;
+        logger.log(JSON.stringify(payload, null, 2));
         return;
       }
 

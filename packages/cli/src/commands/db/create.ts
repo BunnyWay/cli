@@ -1,8 +1,8 @@
-import { createDbClient } from "@bunny.net/openapi-client";
+import { dbCreate, dbTokensCreate } from "@bunny.net/actions";
 import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
 import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
+import { actionContext } from "../../core/action-context.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { formatKeyValue } from "../../core/format.ts";
@@ -10,7 +10,7 @@ import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import { readEnvValue, writeEnvValue } from "../../utils/env-file.ts";
-import { fetchRegionConfig, generateToken } from "./api.ts";
+import { fetchRegionConfig } from "./api.ts";
 import {
   DATABASE_MANIFEST,
   type DatabaseManifest,
@@ -138,7 +138,10 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
     const config = resolveConfig(profile, apiKey, verbose);
-    const client = createDbClient(clientOptions(config, verbose));
+    // The database is created by an action; region prompting and the link/token/
+    // save-env orchestration around it stays here, where it can prompt.
+    const ctx = actionContext(config, { verbose });
+    const client = ctx.clients.db;
 
     // Step 1: Database name
     let name = args.name;
@@ -163,7 +166,6 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
 
     configSpin.stop();
 
-    const storageRegions = regionConfig.storage_region_available;
     const availablePrimary = regionConfig.primary_regions;
     const availableReplicas = regionConfig.replica_regions;
 
@@ -298,53 +300,30 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       }
     }
 
-    // Resolve storage region: explicit override, optimal endpoint, or auto-detect from first primary
-    if (!storageRegion) {
-      const firstPrimary = availablePrimary.find(
-        (r) => r.id === primaryRegions[0],
-      );
-      const matchingStorage = storageRegions.find(
-        (s) => s.group === firstPrimary?.group,
-      );
-      storageRegion = matchingStorage?.id ?? storageRegions[0]?.id ?? "";
-    }
-
-    // Create database
+    // Create the database (the action derives the storage region when omitted).
     const createSpin = spinner("Creating database...");
     createSpin.start();
-
-    const { data } = await client.POST("/v2/databases", {
-      body: {
+    let db: Awaited<ReturnType<typeof dbCreate.invoke>>;
+    try {
+      db = await dbCreate.invoke(ctx, {
         name,
-        storage_region: storageRegion,
-        primary_regions: primaryRegions,
-        replicas_regions: replicasRegions,
-      },
-    });
-
-    if (!data?.db_id) {
+        storageRegion,
+        primaryRegions,
+        replicaRegions: replicasRegions,
+      });
+    } finally {
       createSpin.stop();
-      throw new UserError("Failed to create database.");
     }
 
-    // Fetch full database details to get the URL
-    createSpin.text = "Fetching database details...";
-
-    const { data: dbDetails } = await client.GET("/v2/databases/{db_id}", {
-      params: { path: { db_id: data.db_id } },
-    });
-
-    createSpin.stop();
-
-    const db = dbDetails?.db;
+    const databaseId = db.id;
     const isInteractive = output !== "json";
 
     if (isInteractive) {
       const entries = [
-        { key: "ID", value: data.db_id },
-        { key: "Name", value: db?.name ?? name ?? "" },
+        { key: "ID", value: databaseId },
+        { key: "Name", value: db.name },
       ];
-      if (db?.url) {
+      if (db.url) {
         entries.push({ key: "URL", value: db.url });
       }
 
@@ -357,8 +336,8 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     // Offer to link the current directory to the new database
     const existingLink = loadManifest<DatabaseManifest>(DATABASE_MANIFEST);
     const linkPrompt = existingLink.id
-      ? `Link this directory to "${db?.name ?? name}"? (replaces existing link to ${existingLink.name ?? existingLink.id})`
-      : `Link this directory to "${db?.name ?? name}"?`;
+      ? `Link this directory to "${db.name}"? (replaces existing link to ${existingLink.name ?? existingLink.id})`
+      : `Link this directory to "${db.name}"?`;
 
     const linkArg = args[ARG_LINK];
     let shouldLink: boolean;
@@ -372,11 +351,11 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
 
     if (shouldLink) {
       saveManifest<DatabaseManifest>(DATABASE_MANIFEST, {
-        id: data.db_id,
-        name: db?.name ?? name,
+        id: databaseId,
+        name: db.name,
       });
       if (isInteractive) {
-        logger.success(`Linked .bunny/database.json → ${data.db_id}.`);
+        logger.success(`Linked .bunny/database.json → ${databaseId}.`);
         logger.log();
       }
     }
@@ -401,14 +380,14 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       const tokenSpin = spinner("Generating token...");
       tokenSpin.start();
 
-      const tokenData = await generateToken(client, data.db_id, {
-        authorization: "full-access",
-        expiresAt: null,
-      });
+      let tokenData: Awaited<ReturnType<typeof dbTokensCreate.invoke>>;
+      try {
+        tokenData = await dbTokensCreate.invoke(ctx, { database: databaseId });
+      } finally {
+        tokenSpin.stop();
+      }
 
-      tokenSpin.stop();
-
-      token = tokenData?.token ?? null;
+      token = tokenData.token || null;
 
       if (token) {
         if (isInteractive) {
@@ -447,7 +426,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
           const envPath = existingToken?.envPath;
           writeEnvValue(ENV_DATABASE_AUTH_TOKEN, token, envPath);
 
-          if (db?.url && !readEnvValue(ENV_DATABASE_URL)) {
+          if (db.url && !readEnvValue(ENV_DATABASE_URL)) {
             writeEnvValue(ENV_DATABASE_URL, db.url, envPath);
             if (isInteractive) {
               logger.success(
@@ -461,17 +440,17 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         }
       }
     } else if (isInteractive) {
-      logger.dim(`  Get started:  bunny db quickstart ${data.db_id}`);
-      logger.dim(`  Open shell:   bunny db shell ${data.db_id}`);
+      logger.dim(`  Get started:  bunny db quickstart ${databaseId}`);
+      logger.dim(`  Open shell:   bunny db shell ${databaseId}`);
     }
 
     if (output === "json") {
       logger.log(
         JSON.stringify(
           {
-            db_id: data.db_id,
-            name: db?.name ?? name,
-            url: db?.url ?? null,
+            db_id: databaseId,
+            name: db.name,
+            url: db.url || null,
             linked: shouldLink,
             token,
             saved_to_env: savedToEnv,

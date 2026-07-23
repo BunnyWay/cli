@@ -1,23 +1,11 @@
 import { basename } from "node:path";
-import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
+import { storageFilesUpload } from "@bunny.net/actions";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
-import { connectStorageZone, uploadFile } from "../files-api.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 
-interface UploadArgs {
-  file: string;
-  zone?: string;
-  to?: string;
-  contentType?: string;
-  checksum?: boolean;
-}
-
-export const storageFileUploadCommand = defineCommand<UploadArgs>({
+export const storageFileUploadCommand = defineActionCommand({
+  action: storageFilesUpload,
   command: "upload <file>",
   describe: "Upload a local file to a storage zone.",
   examples: [
@@ -59,65 +47,35 @@ export const storageFileUploadCommand = defineCommand<UploadArgs>({
         describe: "Send a SHA256 checksum so the server verifies the upload",
       }),
 
-  handler: async ({
-    file,
-    zone: ref,
-    to,
-    contentType,
-    checksum,
-    profile,
-    output,
-    verbose,
-    apiKey,
-  }) => {
-    const source = Bun.file(file);
-    if (!(await source.exists())) {
-      throw new UserError(`File not found: ${file}`);
-    }
+  // Overwriting is the point of an upload; running the command is the intent.
+  skipConfirm: true,
 
-    // A bare path uses the file as-is; a trailing slash means "into this directory".
-    const remotePath =
-      !to || to.endsWith("/") ? `${to ?? ""}${basename(file)}` : to;
+  prepare: async (args, ctx) => {
+    // A bare --to uses the path as-is; a trailing slash means "into this directory".
+    const to = args.to;
+    const path =
+      !to || to.endsWith("/") ? `${to ?? ""}${basename(args.file)}` : to;
 
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+    const zone = await resolveStorageZoneInteractive(
+      ctx.clients.core,
+      args.zone,
+      { output: args.output, offerLink: true },
+    );
 
-    const zone = await resolveStorageZoneInteractive(client, ref, {
-      output,
-      offerLink: true,
-    });
-    const connection = connectStorageZone(zone);
+    return {
+      input: {
+        zone: String(zone.Id),
+        source: args.file,
+        path,
+        contentType: args["content-type"],
+        checksum: args.checksum,
+      },
+    };
+  },
 
-    const spin = spinner(`Uploading ${remotePath}...`);
-    spin.start();
-    try {
-      const sha256Checksum = checksum ? await sha256(source) : undefined;
-      await uploadFile(connection, remotePath, source.stream(), {
-        contentType,
-        sha256Checksum,
-      });
-    } finally {
-      spin.stop();
-    }
+  progress: "Uploading...",
 
-    if (output === "json") {
-      logger.log(
-        JSON.stringify(
-          { zone: zone.Name, path: remotePath, uploaded: true },
-          null,
-          2,
-        ),
-      );
-      return;
-    }
-
-    logger.success(`Uploaded ${remotePath} to ${zone.Name}.`);
+  render: (result) => {
+    logger.success(`Uploaded ${result.path} to ${result.zone}.`);
   },
 });
-
-// Hash in a streaming pass to avoid buffering the whole file in memory.
-async function sha256(source: ReturnType<typeof Bun.file>): Promise<string> {
-  const hasher = new Bun.CryptoHasher("sha256");
-  for await (const chunk of source.stream()) hasher.update(chunk);
-  return hasher.digest("hex").toUpperCase();
-}

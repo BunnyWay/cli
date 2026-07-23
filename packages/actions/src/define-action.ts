@@ -19,6 +19,11 @@ export interface ActionDefinition<
   schema: Schema;
   /** True when the action creates, mutates, or deletes remote state. Drives confirmations and tool annotations. */
   destructive: boolean;
+  /**
+   * True when the result contains credentials. Read-only, but a host may still
+   * want to withhold it from an agent or redact it from a transcript.
+   */
+  sensitive?: boolean;
   /** Extra detail for `--help` and tool descriptions. Each entry is `[input, description]`. */
   examples?: ReadonlyArray<readonly [z.input<Schema>, string]>;
   /** Does the work and returns plain serializable data. Never prints, never prompts. */

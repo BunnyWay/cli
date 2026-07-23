@@ -1,13 +1,10 @@
-import { createDbClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import { dbTokensCreate } from "@bunny.net/actions";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { formatKeyValue } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { confirm } from "../../../core/ui.ts";
 import { readEnvValue, writeEnvValue } from "../../../utils/env-file.ts";
-import { generateToken } from "../api.ts";
 import {
   ARG_DATABASE_ID,
   ENV_DATABASE_AUTH_TOKEN,
@@ -98,13 +95,8 @@ function parseExpiry(value: string): string {
  * bunny db tokens create --output json
  * ```
  */
-export const dbTokensCreateCommand = defineCommand<{
-  [ARG_DATABASE_ID]?: string;
-  [ARG_READ_ONLY]?: boolean;
-  [ARG_EXPIRY]?: string;
-  [ARG_SAVE]?: boolean;
-  [ARG_FORCE]?: boolean;
-}>({
+export const dbTokensCreateCommand = defineActionCommand({
+  action: dbTokensCreate,
   command: COMMAND,
   describe: DESCRIPTION,
   examples: [
@@ -146,122 +138,77 @@ export const dbTokensCreateCommand = defineCommand<{
         describe: "Skip confirmation prompts",
       }),
 
-  handler: async ({
-    [ARG_DATABASE_ID]: databaseIdArg,
-    "read-only": readOnly,
-    expiry,
-    save,
-    force,
-    profile,
-    output,
-    verbose,
-    apiKey,
-  }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createDbClient(clientOptions(config, verbose));
+  // Generating a token is the explicit intent of the command.
+  skipConfirm: true,
+  progress: "Generating token...",
 
-    const authorization = readOnly ? "read-only" : "full-access";
-    const expiresAt = expiry ? parseExpiry(expiry) : null;
+  prepare: async (args, ctx) => {
+    const { id, name, source } = await resolveDbId(
+      ctx.clients.db,
+      args[ARG_DATABASE_ID],
+    );
 
-    const {
-      id: databaseId,
-      name: databaseName,
-      source,
-    } = await resolveDbId(client, databaseIdArg);
-
-    const dbLabel = databaseName
-      ? `${databaseName} (${databaseId})`
-      : databaseId;
+    const label = name ? `${name} (${id})` : id;
     if (source === "env") {
-      logger.dim(`Database: ${dbLabel} (from .env)`);
+      logger.dim(`Database: ${label} (from .env)`);
     } else if (source === "manifest") {
-      logger.dim(`Database: ${dbLabel} (from .bunny/database.json)`);
+      logger.dim(`Database: ${label} (from .bunny/database.json)`);
     }
 
-    const spin = spinner("Generating token...");
-    spin.start();
+    return {
+      input: {
+        database: id,
+        readOnly: args["read-only"],
+        expiresAt: args.expiry ? parseExpiry(args.expiry) : null,
+      },
+    };
+  },
 
-    // Fetch token and database details in parallel
-    const [tokenResult, dbResult] = await Promise.all([
-      generateToken(client, databaseId, { authorization, expiresAt }),
-      client.GET("/v2/databases/{db_id}", {
-        params: { path: { db_id: databaseId } },
-      }),
-    ]);
+  // Offer to save the token to .env. Skipped for json output (must stay unprompted).
+  after: async (token, args) => {
+    if (args.output === "json" || !token.token || !args.save) return;
 
-    spin.stop();
+    const existingToken = readEnvValue(ENV_DATABASE_AUTH_TOKEN);
+    const shouldWrite = existingToken
+      ? await confirm(
+          `${ENV_DATABASE_AUTH_TOKEN} already exists in ${existingToken.envPath} — overwrite?`,
+          { force: args.force },
+        )
+      : await confirm(`Save ${ENV_DATABASE_AUTH_TOKEN} to .env?`, {
+          force: args.force,
+        });
+    if (!shouldWrite) return;
 
-    const token = tokenResult?.token;
-    const dbUrl = dbResult.data?.db?.url;
-
-    if (output === "json") {
-      logger.log(
-        JSON.stringify(
-          {
-            token,
-            expires_at: tokenResult?.expires_at ?? null,
-            db_id: databaseId,
-            authorization,
-          },
-          null,
-          2,
-        ),
+    const envPath = existingToken?.envPath;
+    writeEnvValue(ENV_DATABASE_AUTH_TOKEN, token.token, envPath);
+    if (token.databaseUrl && !readEnvValue(ENV_DATABASE_URL)) {
+      writeEnvValue(ENV_DATABASE_URL, token.databaseUrl, envPath);
+      logger.success(
+        `Saved ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} to .env`,
       );
-      return;
+    } else {
+      logger.success(`Saved ${ENV_DATABASE_AUTH_TOKEN} to .env`);
     }
+  },
 
+  json: (token) => ({
+    token: token.token,
+    expires_at: token.expiresAt,
+    db_id: token.database,
+    authorization: token.authorization,
+  }),
+
+  render: (token, { output }) => {
     const entries = [
-      { key: "Token", value: token ?? "" },
-      { key: "Access", value: authorization },
+      { key: "Token", value: token.token },
+      { key: "Access", value: token.authorization },
+      { key: "Expires", value: token.expiresAt ?? "never" },
     ];
-    if (source === "env") {
-      entries.push({ key: "DB", value: `${dbLabel} (from .env)` });
-    } else if (source === "manifest") {
-      entries.push({
-        key: "DB",
-        value: `${dbLabel} (from .bunny/database.json)`,
-      });
-    }
-    entries.push({
-      key: "Expires",
-      value: tokenResult?.expires_at ?? "never",
-    });
 
     logger.success("Token generated.");
     logger.dim("  Existing tokens for this database remain valid.");
     logger.log();
     logger.log(formatKeyValue(entries, output));
     logger.log();
-
-    // Offer to save to .env
-    if (!token || !save) return;
-
-    const existingToken = readEnvValue(ENV_DATABASE_AUTH_TOKEN);
-    let shouldWrite = false;
-
-    if (existingToken) {
-      shouldWrite = await confirm(
-        `${ENV_DATABASE_AUTH_TOKEN} already exists in ${existingToken.envPath} — overwrite?`,
-        { force },
-      );
-    } else {
-      shouldWrite = await confirm(`Save ${ENV_DATABASE_AUTH_TOKEN} to .env?`, {
-        force,
-      });
-    }
-
-    if (shouldWrite) {
-      const envPath = existingToken?.envPath;
-      writeEnvValue(ENV_DATABASE_AUTH_TOKEN, token, envPath);
-
-      if (dbUrl && !readEnvValue(ENV_DATABASE_URL)) {
-        writeEnvValue(ENV_DATABASE_URL, dbUrl, envPath);
-        logger.success(
-          `Saved ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} to .env`,
-        );
-      } else {
-        logger.success(`Saved ${ENV_DATABASE_AUTH_TOKEN} to .env`);
-      }
-    }
   },
 });

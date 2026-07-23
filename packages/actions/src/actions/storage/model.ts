@@ -1,3 +1,4 @@
+import { UserError } from "@bunny.net/openapi-client";
 import type { StorageZoneModel } from "./api.ts";
 
 /**
@@ -29,6 +30,31 @@ export function isS3Enabled(zone: StorageZoneModel): boolean {
 // Edge Storage S3 endpoint, e.g. https://de-s3.storage.bunnycdn.com
 export function s3Endpoint(zone: StorageZoneModel): string {
   return `https://${(zone.Region ?? "").toLowerCase()}-s3.storage.bunnycdn.com`;
+}
+
+export interface S3Credentials {
+  endpoint: string;
+  region: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+}
+
+export function s3Credentials(
+  zone: StorageZoneModel,
+  readOnly: boolean,
+): S3Credentials {
+  const secret = readOnly ? zone.ReadOnlyPassword : zone.Password;
+  if (!zone.Name || !secret) {
+    throw new UserError(
+      `No ${readOnly ? "read-only " : ""}password available for storage zone ${zone.Name ?? "?"}.`,
+    );
+  }
+  return {
+    endpoint: s3Endpoint(zone),
+    region: (zone.Region ?? "").toLowerCase(),
+    accessKeyId: zone.Name,
+    secretAccessKey: secret,
+  };
 }
 
 export function toStorageZone(zone: StorageZoneModel): StorageZone {

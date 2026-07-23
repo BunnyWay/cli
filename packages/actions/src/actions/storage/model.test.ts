@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { StorageZoneModel } from "./api.ts";
+import { type StorageFile, toStorageFileEntry } from "./files-api.ts";
 import { toStorageZone } from "./model.ts";
 
 const ZONE: StorageZoneModel = {
@@ -34,6 +35,47 @@ test("never carries zone passwords into the result", () => {
   const serialized = JSON.stringify(toStorageZone(ZONE));
   expect(serialized).not.toContain("rw-secret");
   expect(serialized).not.toContain("ro-secret");
+});
+
+const FILE = {
+  objectName: "photo.png",
+  path: "/my-assets/images/",
+  storageZoneName: "my-assets",
+  isDirectory: false,
+  length: 1024,
+  contentType: "image/png",
+  checksum: "ABC",
+  lastChanged: new Date("2026-01-01T00:00:00Z"),
+} as StorageFile;
+
+test("file paths are zone-relative and ready to reuse as input", () => {
+  expect(toStorageFileEntry(FILE)).toEqual({
+    name: "photo.png",
+    path: "images/photo.png",
+    isDirectory: false,
+    size: 1024,
+    contentType: "image/png",
+    checksum: "ABC",
+    lastChanged: "2026-01-01T00:00:00.000Z",
+  });
+
+  // Root-level files carry no directory prefix.
+  const root = toStorageFileEntry({
+    ...FILE,
+    path: "/my-assets/",
+  } as StorageFile);
+  expect(root.path).toBe("photo.png");
+});
+
+test("directories keep the trailing slash that makes deletes recursive", () => {
+  const dir = toStorageFileEntry({
+    ...FILE,
+    objectName: "images",
+    path: "/my-assets/",
+    isDirectory: true,
+  } as StorageFile);
+  expect(dir.path).toBe("images/");
+  expect(dir.name).toBe("images");
 });
 
 test("fills in defaults for a sparse zone", () => {

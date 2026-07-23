@@ -1,6 +1,6 @@
-import { createDbClient } from "@bunny.net/openapi-client";
+import { dbTokensCreate, dbTokensInvalidate } from "@bunny.net/actions";
 import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
+import { actionContext } from "../../../core/action-context.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { formatKeyValue } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
@@ -10,7 +10,6 @@ import {
   removeEnvValue,
   writeEnvValue,
 } from "../../../utils/env-file.ts";
-import { generateToken } from "../api.ts";
 import {
   ARG_DATABASE_ID,
   ENV_DATABASE_AUTH_TOKEN,
@@ -109,7 +108,9 @@ export const dbTokensInvalidateCommand = defineCommand<{
     apiKey,
   }) => {
     const config = resolveConfig(profile, apiKey, verbose);
-    const client = createDbClient(clientOptions(config, verbose));
+    // Revoke and (optionally) regenerate are two actions; this command orchestrates them.
+    const ctx = actionContext(config, { verbose });
+    const client = ctx.clients.db;
 
     // Resolve the target database — explicit ID, .env, or interactive prompt
     const {
@@ -138,15 +139,14 @@ export const dbTokensInvalidateCommand = defineCommand<{
       return;
     }
 
-    // Invalidate all tokens via the API
+    // Invalidate all tokens
     const spin2 = spinner("Invalidating tokens...");
     spin2.start();
-
-    await client.POST("/v2/databases/{db_id}/auth/revoke", {
-      params: { path: { db_id: databaseId } },
-    });
-
-    spin2.stop();
+    try {
+      await dbTokensInvalidate.invoke(ctx, { database: databaseId });
+    } finally {
+      spin2.stop();
+    }
 
     if (output === "json") {
       logger.log(
@@ -186,21 +186,15 @@ export const dbTokensInvalidateCommand = defineCommand<{
 
     const spin3 = spinner("Generating token...");
     spin3.start();
+    let tokenResult: Awaited<ReturnType<typeof dbTokensCreate.invoke>>;
+    try {
+      tokenResult = await dbTokensCreate.invoke(ctx, { database: databaseId });
+    } finally {
+      spin3.stop();
+    }
 
-    const [tokenResult, dbResult] = await Promise.all([
-      generateToken(client, databaseId, {
-        authorization: "full-access",
-        expiresAt: null,
-      }),
-      client.GET("/v2/databases/{db_id}", {
-        params: { path: { db_id: databaseId } },
-      }),
-    ]);
-
-    spin3.stop();
-
-    const newToken = tokenResult?.token;
-    const dbUrl = dbResult.data?.db?.url;
+    const newToken = tokenResult.token;
+    const dbUrl = tokenResult.databaseUrl;
 
     if (!newToken) {
       logger.error("Failed to generate token.");

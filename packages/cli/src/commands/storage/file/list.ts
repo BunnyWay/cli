@@ -1,23 +1,11 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import { storageFilesList } from "@bunny.net/actions";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { formatBytes, formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
-import {
-  connectStorageZone,
-  listFiles,
-  type StorageFile,
-} from "../files-api.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 
-interface ListArgs {
-  path?: string;
-  zone?: string;
-}
-
-export const storageFileListCommand = defineCommand<ListArgs>({
+export const storageFileListCommand = defineActionCommand({
+  action: storageFilesList,
   command: "list [path]",
   aliases: ["ls"],
   describe: "List files in a storage zone directory.",
@@ -39,58 +27,35 @@ export const storageFileListCommand = defineCommand<ListArgs>({
         describe: "Storage zone name or ID (defaults to the linked zone)",
       }),
 
-  handler: async ({ path, zone: ref, profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+  progress: "Listing files...",
 
-    const zone = await resolveStorageZoneInteractive(client, ref, {
-      output,
-      offerLink: true,
-    });
-    const connection = connectStorageZone(zone);
+  prepare: async (args, ctx) => {
+    const zone = await resolveStorageZoneInteractive(
+      ctx.clients.core,
+      args.zone,
+      { output: args.output, offerLink: true },
+    );
+    return { input: { zone: String(zone.Id), path: args.path ?? "" } };
+  },
 
-    const spin = spinner("Listing files...");
-    spin.start();
-    let files: StorageFile[];
-    try {
-      files = await listFiles(connection, path ?? "");
-    } finally {
-      spin.stop();
-    }
-
-    if (output === "json") {
-      // Drop the SDK-internal _tag and the lazy data() loader.
-      const plain = files.map((file) => ({
-        ...file,
-        _tag: undefined,
-        data: undefined,
-      }));
-      logger.log(JSON.stringify(plain, null, 2));
-      return;
-    }
-
+  render: (files, args) => {
     if (files.length === 0) {
-      const where = path ? `"${path}"` : "the zone root";
+      const where = args.path ? `"${args.path}"` : "the zone root";
       logger.info(
         `No files found at ${where}. The path may be empty or not exist.`,
       );
       return;
     }
 
-    const sorted = files.sort((a, b) => {
-      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-      return a.objectName.localeCompare(b.objectName);
-    });
-
     logger.log(
       formatTable(
         ["Name", "Type", "Size"],
-        sorted.map((file) => [
-          file.isDirectory ? `${file.objectName}/` : file.objectName,
+        files.map((file) => [
+          file.isDirectory ? `${file.name}/` : file.name,
           file.isDirectory ? "dir" : "file",
-          file.isDirectory ? "-" : formatBytes(file.length),
+          file.isDirectory ? "-" : formatBytes(file.size),
         ]),
-        output,
+        args.output,
       ),
     );
   },

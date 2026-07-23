@@ -1,17 +1,14 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
+import {
+  replicationChoices,
+  type StorageZoneModel,
+  storageZonesUpdate,
+} from "@bunny.net/actions";
 import prompts from "prompts";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { isInteractive, spinner } from "../../../core/ui.ts";
-import type { StorageZoneModel, StorageZoneSettingsModel } from "../api.ts";
-import {
-  confirmAddedReplicationRegions,
-  normalizeReplicationRegions,
-  replicationChoices,
-} from "../constants.ts";
+import { isInteractive } from "../../../core/ui.ts";
+import { confirmAddedReplicationRegions } from "../constants.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 
 interface ZoneUpdateArgs {
@@ -20,6 +17,13 @@ interface ZoneUpdateArgs {
   rewrite404To200?: boolean;
   replication?: string[];
   force?: boolean;
+}
+
+/** The settings half of the action input, gathered from flags or prompts. */
+interface ZoneSettings {
+  custom404FilePath?: string | null;
+  rewrite404To200?: boolean;
+  replicationRegions?: string[];
 }
 
 const FLAG_HINT =
@@ -33,27 +37,19 @@ function hasAnyFlag(args: ZoneUpdateArgs): boolean {
   );
 }
 
-function settingsFromFlags(
-  args: ZoneUpdateArgs,
-  primaryCode?: string,
-): StorageZoneSettingsModel {
-  const settings: StorageZoneSettingsModel = {};
+function settingsFromFlags(args: ZoneUpdateArgs): ZoneSettings {
+  const settings: ZoneSettings = {};
   // An empty value clears the custom 404, matching the prompt's blank-for-none behavior.
   if (args.custom404Path !== undefined)
-    settings.Custom404FilePath = args.custom404Path || null;
+    settings.custom404FilePath = args.custom404Path || null;
   if (args.rewrite404To200 !== undefined)
-    settings.Rewrite404To200 = args.rewrite404To200;
+    settings.rewrite404To200 = args.rewrite404To200;
   if (args.replication !== undefined)
-    settings.ReplicationZones = normalizeReplicationRegions(
-      args.replication,
-      primaryCode,
-    );
+    settings.replicationRegions = args.replication;
   return settings;
 }
 
-async function promptSettings(
-  zone: StorageZoneModel,
-): Promise<StorageZoneSettingsModel> {
+async function promptSettings(zone: StorageZoneModel): Promise<ZoneSettings> {
   const existing = (zone.ReplicationRegions ?? []).map((r) => r.toUpperCase());
   if (existing.length)
     logger.dim(`Already replicated (permanent): ${existing.join(", ")}`);
@@ -99,18 +95,19 @@ async function promptSettings(
   });
   if (cancelled) throw new UserError("Update cancelled.");
 
-  // Omit ReplicationZones when nothing new was picked so the PATCH body leaves replication untouched.
+  // Omit replicationRegions when nothing new was picked so replication is left untouched.
   const newReplicas: string[] = answers.replication ?? [];
   return {
-    Custom404FilePath: answers.custom404Path || null,
-    Rewrite404To200: answers.rewrite404To200,
-    ReplicationZones: newReplicas.length
+    custom404FilePath: answers.custom404Path || null,
+    rewrite404To200: answers.rewrite404To200,
+    replicationRegions: newReplicas.length
       ? [...existing, ...newReplicas]
       : undefined,
   };
 }
 
-export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
+export const storageZoneUpdateCommand = defineActionCommand({
+  action: storageZonesUpdate,
   command: "update [zone]",
   describe: "Update a storage zone's settings.",
   examples: [
@@ -147,70 +144,54 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
         describe: "Skip prompts and confirmations (use flag values only)",
       }),
 
-  handler: async (args) => {
-    const { zone: ref, profile, output, verbose, apiKey } = args;
+  progress: "Updating storage zone...",
+
+  prepare: async (args, ctx) => {
     const hasFlags = hasAnyFlag(args);
 
     // JSON output, non-TTY, and --force all stay non-interactive; settings must come from flags.
-    const interactive = isInteractive(output) && !args.force;
+    const interactive = isInteractive(args.output) && !args.force;
     if (!hasFlags && !interactive) {
       throw new UserError("No changes requested.", FLAG_HINT);
     }
 
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+    const zone = await resolveStorageZoneInteractive(
+      ctx.clients.core,
+      args.zone,
+      { output: args.output, force: args.force, offerLink: true },
+    );
 
-    const zone = await resolveStorageZoneInteractive(client, ref, {
-      output,
-      force: args.force,
-      offerLink: true,
-    });
     // Flags take full precedence over the editor: a partial set of flags is a partial update.
     const settings = hasFlags
-      ? settingsFromFlags(args, zone.Region ?? undefined)
+      ? settingsFromFlags(args)
       : await promptSettings(zone);
 
-    if (settings.ReplicationZones) {
-      const existing = (zone.ReplicationRegions ?? []).map((r) =>
-        r.toUpperCase(),
+    const existing = (zone.ReplicationRegions ?? []).map((r) =>
+      r.toUpperCase(),
+    );
+    const requested = settings.replicationRegions?.flatMap((region) =>
+      region.split(",").map((code) => code.trim().toUpperCase()),
+    );
+    const added = requested?.filter((code) => !existing.includes(code)) ?? [];
+    const omitted = requested
+      ? existing.filter((code) => !requested.includes(code))
+      : [];
+
+    if (omitted.length) {
+      logger.warn(
+        `Replication regions can't be removed; ${omitted.join(", ")} stays replicated.`,
       );
-      const requested = settings.ReplicationZones.map((r) => r.toUpperCase());
-      const added = requested.filter((r) => !existing.includes(r));
-      const omitted = existing.filter((r) => !requested.includes(r));
-
-      // Replicas can't be removed, so the final set is always the existing ones plus any new picks.
-      settings.ReplicationZones = [...new Set([...existing, ...requested])];
-
-      if (omitted.length)
-        logger.warn(
-          `Replication regions can't be removed; ${omitted.join(", ")} stays replicated.`,
-        );
-      if (
-        !(await confirmAddedReplicationRegions(added, { force: args.force }))
-      ) {
-        logger.log("Cancelled.");
-        return;
-      }
     }
 
-    const spin = spinner("Updating storage zone...");
-    spin.start();
-    try {
-      await client.POST("/storagezone/{id}", {
-        params: { path: { id: zone.Id as number } },
-        body: settings,
-      });
-    } finally {
-      spin.stop();
-    }
+    return {
+      input: { zone: String(zone.Id), ...settings },
+      // Only the replication additions are permanent, so only they need agreement.
+      confirm: () =>
+        confirmAddedReplicationRegions(added, { force: args.force }),
+    };
+  },
 
-    if (output === "json") {
-      logger.log(
-        JSON.stringify({ id: zone.Id, name: zone.Name, settings }, null, 2),
-      );
-      return;
-    }
-
-    logger.success(`Updated storage zone ${zone.Name}.`);
+  render: (result) => {
+    logger.success(`Updated storage zone ${result.zone.name}.`);
   },
 });

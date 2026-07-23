@@ -5,6 +5,10 @@ import type { DbClient } from "../../context.ts";
 export type Database2 = components["schemas"]["Database2"];
 export type RegionConfig = components["schemas"]["ListConfigAPIResponse"];
 export type DBLiveStatus = components["schemas"]["DBLiveStatus"];
+type GenerateTokenResponse =
+  components["schemas"]["GenerateTokenDatabaseV2Response"];
+export type TokenAuthorization =
+  components["schemas"]["GenerateTokenDatabaseV2Payload"]["authorization"];
 
 /** Page size used when paginating the database list endpoint. */
 export const DB_PAGE_SIZE = 100;
@@ -92,6 +96,19 @@ export async function fetchLiveStatus(
     signal: opts.signal,
   });
   return data?.live_metrics ?? {};
+}
+
+/** Generate an auth token for a database. */
+export async function generateToken(
+  client: DbClient,
+  id: string,
+  opts: { authorization: TokenAuthorization; expiresAt: string | null },
+): Promise<GenerateTokenResponse | undefined> {
+  const { data } = await client.PUT("/v2/databases/{db_id}/auth/generate", {
+    params: { path: { db_id: id } },
+    body: { authorization: opts.authorization, expires_at: opts.expiresAt },
+  });
+  return data;
 }
 
 /** "Active" when the database is live, otherwise "Idle". */

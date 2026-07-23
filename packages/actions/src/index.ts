@@ -2,6 +2,7 @@ export type {
   Database2,
   DBLiveStatus,
   RegionConfig,
+  TokenAuthorization,
 } from "./actions/db/api.ts";
 export {
   fetchAllDatabases,
@@ -9,13 +10,42 @@ export {
   fetchDatabaseWithRegions,
   fetchLiveStatus,
   fetchRegionConfig,
+  generateToken,
   liveMainRegion,
   liveStatusLabel,
   regionNameMap,
 } from "./actions/db/api.ts";
 export { dbActions, dbGet, dbList } from "./actions/db/index.ts";
+export type { DatabaseUsage, DeletedDatabase } from "./actions/db/lifecycle.ts";
+export {
+  DB_NAME_MAX_LENGTH,
+  dbCreate,
+  dbDelete,
+  dbLifecycleActions,
+  dbUsage,
+} from "./actions/db/lifecycle.ts";
 export type { Database, DatabaseRegion } from "./actions/db/model.ts";
 export { toDatabase } from "./actions/db/model.ts";
+export type {
+  AvailableRegion,
+  AvailableRegions,
+  DatabaseRegions,
+  SuggestedRegions,
+} from "./actions/db/regions.ts";
+export {
+  dbRegionActions,
+  dbRegionsAvailable,
+  dbRegionsList,
+  dbRegionsSet,
+  dbRegionsSuggest,
+  requirePrimaryRegion,
+} from "./actions/db/regions.ts";
+export type { DatabaseToken, InvalidatedTokens } from "./actions/db/tokens.ts";
+export {
+  dbTokenActions,
+  dbTokensCreate,
+  dbTokensInvalidate,
+} from "./actions/db/tokens.ts";
 export type {
   SafeStorageZone,
   StorageZoneModel,
@@ -27,18 +57,51 @@ export {
   resolveStorageZone,
   toSafeStorageZone,
 } from "./actions/storage/api.ts";
-export type { DeletedStorageZone } from "./actions/storage/index.ts";
+export type {
+  DeletedFile,
+  DownloadedFile,
+  UploadedFile,
+} from "./actions/storage/files.ts";
+export {
+  storageFileActions,
+  storageFilesDelete,
+  storageFilesDownload,
+  storageFilesList,
+  storageFilesUpload,
+} from "./actions/storage/files.ts";
+export type {
+  StorageFile,
+  StorageFileEntry,
+  StorageZoneConnection,
+  UploadOptions,
+} from "./actions/storage/files-api.ts";
+export {
+  connectStorageZone,
+  deleteFile,
+  downloadFile,
+  listFiles,
+  toStorageFileEntry,
+  uploadFile,
+} from "./actions/storage/files-api.ts";
+export type {
+  DeletedStorageZone,
+  StorageZoneCredentials,
+  StorageZoneUpdateResult,
+} from "./actions/storage/index.ts";
 export {
   storageActions,
   storageRegionsList,
   storageZonesCreate,
+  storageZonesCredentials,
   storageZonesDelete,
   storageZonesGet,
   storageZonesList,
+  storageZonesUpdate,
 } from "./actions/storage/index.ts";
-export type { StorageZone } from "./actions/storage/model.ts";
+export type { S3Credentials, StorageZone } from "./actions/storage/model.ts";
 export {
   isS3Enabled,
+  s3Credentials,
   s3Endpoint,
   toStorageZone,
 } from "./actions/storage/model.ts";

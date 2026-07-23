@@ -1,7 +1,5 @@
-import { createDbClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
+import { dbUsage } from "@bunny.net/actions";
+import { defineActionCommand } from "../../core/define-action-command.ts";
 import { UserError } from "../../core/errors.ts";
 import {
   formatBytes,
@@ -10,7 +8,6 @@ import {
   progressBar,
 } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
 import { ARG_DATABASE_ID } from "./constants.ts";
 import { resolveDbId } from "./resolve-db.ts";
 
@@ -45,21 +42,9 @@ function parsePeriod(period: string): Date {
   }
 }
 
-/** Sum all datapoints in a chart's data array. */
-function sumDatapoints(data: (string | number)[][]): number {
-  return data.reduce((sum, point) => sum + (Number(point[1]) || 0), 0);
-}
-
 /** Format a number with locale-appropriate thousand separators. */
 function formatNumber(n: number): string {
   return n.toLocaleString();
-}
-
-interface UsageArgs {
-  [ARG_DATABASE_ID]?: string;
-  [ARG_FROM]?: string;
-  [ARG_TO]?: string;
-  [ARG_PERIOD]?: string;
 }
 
 /**
@@ -87,7 +72,8 @@ interface UsageArgs {
  * bunny db usage --output json
  * ```
  */
-export const dbUsageCommand = defineCommand<UsageArgs>({
+export const dbUsageCommand = defineActionCommand({
+  action: dbUsage,
   command: COMMAND,
   describe: DESCRIPTION,
   examples: [
@@ -118,145 +104,67 @@ export const dbUsageCommand = defineCommand<UsageArgs>({
         describe: "Time range shorthand (default: this-month)",
       }),
 
-  handler: async ({
-    [ARG_DATABASE_ID]: databaseIdArg,
-    from: fromArg,
-    to: toArg,
-    period,
-    profile,
-    output,
-    verbose,
-    apiKey,
-  }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createDbClient(clientOptions(config, verbose));
+  progress: "Fetching usage data...",
 
-    // Resolve time range
+  prepare: async (args, ctx) => {
+    // --from/--to win; otherwise the period shorthand chooses the window.
     const now = new Date();
     let fromDate: Date;
     let toDate: Date;
-
-    if (fromArg) {
-      fromDate = new Date(fromArg);
+    if (args.from) {
+      fromDate = new Date(args.from);
       if (Number.isNaN(fromDate.getTime())) {
-        throw new UserError(`Invalid --from date: "${fromArg}"`);
+        throw new UserError(`Invalid --from date: "${args.from}"`);
       }
-      toDate = toArg ? new Date(toArg) : now;
+      toDate = args.to ? new Date(args.to) : now;
       if (Number.isNaN(toDate.getTime())) {
-        throw new UserError(`Invalid --to date: "${toArg}"`);
+        throw new UserError(`Invalid --to date: "${args.to}"`);
       }
     } else {
-      fromDate = parsePeriod(period ?? "this-month");
+      fromDate = parsePeriod(args.period ?? "this-month");
       toDate = now;
     }
 
-    const { id: databaseId, source } = await resolveDbId(client, databaseIdArg);
+    const { id } = await resolveDbId(ctx.clients.db, args[ARG_DATABASE_ID]);
 
-    // Fetch statistics and database details in parallel
-    const spin = spinner("Fetching usage data...");
-    spin.start();
+    return {
+      input: {
+        database: id,
+        from: fromDate.toISOString(),
+        to: toDate.toISOString(),
+      },
+    };
+  },
 
-    const [statsResult, dbResult] = await Promise.all([
-      client.GET("/v2/databases/{db_id}/statistics", {
-        params: {
-          path: { db_id: databaseId },
-          query: {
-            from: fromDate.toISOString(),
-            to: toDate.toISOString(),
-          },
-        },
-      }),
-      client.GET("/v2/databases/{db_id}", {
-        params: { path: { db_id: databaseId } },
-      }),
-    ]);
-
-    spin.stop();
-
-    const stats = statsResult.data;
-    const db = dbResult.data?.db;
-
-    if (!stats) {
-      throw new UserError("Could not fetch usage statistics.");
-    }
-
-    // Sum time-series datapoints into totals
-    const rowsRead = sumDatapoints(stats.row_read_count.data);
-    const rowsWritten = sumDatapoints(stats.row_write_count.data);
-    const queries = sumDatapoints(stats.query_count.data);
-
-    // Compute average latency across all regions
-    const latencyEntries = Object.values(stats.latency.data);
-    let avgLatency = 0;
-    if (latencyEntries.length > 0) {
-      const allLatencyPoints = latencyEntries.flatMap((r) => r.data);
-      const nonZero = allLatencyPoints.filter((point) => Number(point[1]) > 0);
-      if (nonZero.length > 0) {
-        avgLatency =
-          nonZero.reduce((sum, point) => sum + Number(point[1]), 0) /
-          nonZero.length;
-      }
-    }
-
-    const sizeBytes = db?.current_size_bytes ?? 0;
-    const maxBytes = db?.size_max_bytes ?? 0;
-    const sizeFraction = maxBytes > 0 ? sizeBytes / maxBytes : 0;
-    const sizePercent = Math.round(sizeFraction * 100);
-    const currentSize = formatBytes(sizeBytes);
-    const maxSize = formatBytes(maxBytes);
-
-    if (output === "json") {
-      logger.log(
-        JSON.stringify(
-          {
-            db_id: databaseId,
-            name: db?.name ?? null,
-            from: fromDate.toISOString(),
-            to: toDate.toISOString(),
-            rows_read: rowsRead,
-            rows_written: rowsWritten,
-            queries,
-            avg_latency_ms: Math.round(avgLatency * 100) / 100,
-            storage: {
-              current: sizeBytes,
-              max: maxBytes,
-              current_formatted: currentSize,
-              max_formatted: maxSize,
-              percent: sizePercent,
-            },
-          },
-          null,
-          2,
-        ),
-      );
-      return;
-    }
-
-    const label = db?.name ? `${db.name} (${databaseId})` : databaseId;
-    const range = `${formatDate(fromDate)} – ${formatDate(toDate)}`;
-    const storagePlain = `${currentSize} / ${maxSize} (${sizePercent}%)`;
+  render: (usage, { output }) => {
+    const sizeFraction =
+      usage.storage.maxBytes > 0
+        ? usage.storage.bytes / usage.storage.maxBytes
+        : 0;
+    const currentSize = formatBytes(usage.storage.bytes);
+    const maxSize = formatBytes(usage.storage.maxBytes);
 
     const entries = [
-      { key: "Rows read", value: formatNumber(rowsRead) },
-      { key: "Rows written", value: formatNumber(rowsWritten) },
-      { key: "Queries", value: formatNumber(queries) },
-      { key: "Avg latency", value: `${avgLatency.toFixed(1)}ms` },
+      { key: "Rows read", value: formatNumber(usage.rowsRead) },
+      { key: "Rows written", value: formatNumber(usage.rowsWritten) },
+      { key: "Queries", value: formatNumber(usage.queries) },
+      { key: "Avg latency", value: `${usage.avgLatencyMs.toFixed(1)}ms` },
       {
         key: "Storage",
         value:
           output === "text"
-            ? `${currentSize} / ${maxSize}  ${progressBar(sizeFraction)}  ${sizePercent}%`
-            : storagePlain,
+            ? `${currentSize} / ${maxSize}  ${progressBar(sizeFraction)}  ${usage.storage.percent}%`
+            : `${currentSize} / ${maxSize} (${usage.storage.percent}%)`,
       },
     ];
 
+    const label = usage.name
+      ? `${usage.name} (${usage.database})`
+      : usage.database;
     logger.info(`Usage for ${label}`);
-    logger.dim(`  ${range}`);
-    if (source === "env") {
-      logger.dim("  Resolved from .env");
-    } else if (source === "manifest") {
-      logger.dim("  Resolved from .bunny/database.json");
-    }
+    logger.dim(
+      `  ${formatDate(new Date(usage.from))} – ${formatDate(new Date(usage.to))}`,
+    );
     logger.log();
     logger.log(formatKeyValue(entries, output));
   },

@@ -8,7 +8,10 @@ import {
   fetchRegionConfig,
   regionNameMap,
 } from "./api.ts";
+import { dbLifecycleActions } from "./lifecycle.ts";
 import { type Database, toDatabase } from "./model.ts";
+import { dbRegionActions } from "./regions.ts";
+import { dbTokenActions } from "./tokens.ts";
 
 export const dbList = defineAction({
   name: "db.list",
@@ -68,4 +71,10 @@ export const dbGet = defineAction({
   },
 });
 
-export const dbActions: Action[] = [dbList, dbGet];
+export const dbActions: Action[] = [
+  dbList,
+  dbGet,
+  ...dbLifecycleActions,
+  ...dbRegionActions,
+  ...dbTokenActions,
+];

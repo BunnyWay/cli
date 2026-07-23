@@ -1,21 +1,13 @@
-import { createDbClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import { dbRegionsList } from "@bunny.net/actions";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
-import { fetchDatabaseWithRegions, regionNameMap } from "../api.ts";
 import { ARG_DATABASE_ID } from "../constants.ts";
 import { resolveDbId } from "../resolve-db.ts";
 
 const COMMAND = `list [${ARG_DATABASE_ID}]`;
 const ALIASES = ["ls"] as const;
 const DESCRIPTION = "List configured regions for a database.";
-
-interface ListArgs {
-  [ARG_DATABASE_ID]?: string;
-}
 
 /**
  * List the configured primary and replica regions for a database.
@@ -27,7 +19,8 @@ interface ListArgs {
  * bunny db regions list --output json
  * ```
  */
-export const dbRegionsListCommand = defineCommand<ListArgs>({
+export const dbRegionsListCommand = defineActionCommand({
+  action: dbRegionsList,
   command: COMMAND,
   aliases: ALIASES,
   describe: DESCRIPTION,
@@ -36,52 +29,24 @@ export const dbRegionsListCommand = defineCommand<ListArgs>({
     ["$0 db regions list --output json", "JSON output for scripting"],
   ],
 
-  handler: async ({
-    [ARG_DATABASE_ID]: databaseIdArg,
-    profile,
-    output,
-    verbose,
-    apiKey,
-  }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createDbClient(clientOptions(config, verbose));
+  builder: (yargs) =>
+    yargs.positional(ARG_DATABASE_ID, {
+      type: "string",
+      describe: "Database ID (defaults to the linked or .env database)",
+    }),
 
-    const { id: databaseId } = await resolveDbId(client, databaseIdArg);
+  progress: "Fetching regions...",
 
-    const spin = spinner("Fetching regions...");
-    spin.start();
+  prepare: async (args, ctx) => {
+    const { id } = await resolveDbId(ctx.clients.db, args[ARG_DATABASE_ID]);
+    return { input: { database: id } };
+  },
 
-    const { db, config: regionConfig } = await fetchDatabaseWithRegions(
-      client,
-      databaseId,
-    );
-
-    spin.stop();
-
-    const regionNames = regionNameMap(regionConfig);
-
-    if (output === "json") {
-      logger.log(
-        JSON.stringify(
-          {
-            db_id: databaseId,
-            primary_regions: db.primary_regions,
-            replicas_regions: db.replicas_regions,
-          },
-          null,
-          2,
-        ),
-      );
-      return;
-    }
-
-    const rows: string[][] = [];
-    for (const id of db.primary_regions) {
-      rows.push(["Primary", regionNames.get(id) ?? id, id]);
-    }
-    for (const id of db.replicas_regions) {
-      rows.push(["Replica", regionNames.get(id) ?? id, id]);
-    }
+  render: (regions, { output }) => {
+    const rows = [
+      ...regions.primary.map((r) => ["Primary", r.name, r.code]),
+      ...regions.replica.map((r) => ["Replica", r.name, r.code]),
+    ];
 
     if (rows.length === 0) {
       logger.info("No regions configured.");
