@@ -1,4 +1,4 @@
-# @bunny.net/app-config
+# @bunny.net/config
 
 ## 0.1.2
 

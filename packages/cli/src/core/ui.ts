@@ -37,6 +37,19 @@ export async function confirm(
   return confirmed ?? false;
 }
 
+export async function confirmTyped(
+  expected: string,
+  opts?: { force?: boolean },
+): Promise<boolean> {
+  if (opts?.force) return true;
+  const { value } = await prompts({
+    type: "text",
+    name: "value",
+    message: `Type "${expected}" to confirm:`,
+  });
+  return value === expected;
+}
+
 export function isInteractive(output?: string): boolean {
   return (
     output !== "json" &&
@@ -48,6 +61,20 @@ export function isInteractive(output?: string): boolean {
 /** Creates an ora spinner. Automatically silenced in non-TTY environments. */
 export function spinner(text: string) {
   return ora({ text, isSilent: !process.stdout.isTTY });
+}
+
+/** Run `fn` under a started spinner, stopping it whatever happens; `fn` may update `spin.text`. */
+export async function withSpinner<T>(
+  text: string,
+  fn: (spin: ReturnType<typeof spinner>) => Promise<T>,
+): Promise<T> {
+  const spin = spinner(text);
+  spin.start();
+  try {
+    return await fn(spin);
+  } finally {
+    spin.stop();
+  }
 }
 
 /** Open a URL in the user's default browser. */

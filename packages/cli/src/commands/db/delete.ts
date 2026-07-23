@@ -1,11 +1,10 @@
 import { createDbClient } from "@bunny.net/openapi-client";
-import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, removeManifest } from "../../core/manifest.ts";
-import { confirm, spinner } from "../../core/ui.ts";
+import { confirm, confirmTyped, spinner } from "../../core/ui.ts";
 import { readEnvValue, removeEnvValue } from "../../utils/env-file.ts";
 import { fetchDatabase } from "./api.ts";
 import {
@@ -105,29 +104,15 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
       );
     }
 
-    // First confirmation
-    const confirmed = await confirm(
-      `Delete database "${db.name}" (${databaseId})? This cannot be undone.`,
-      { force },
-    );
+    const confirmed =
+      (await confirm(
+        `Delete database "${db.name}" (${databaseId})? This cannot be undone.`,
+        { force },
+      )) && (await confirmTyped(db.name, { force }));
 
     if (!confirmed) {
       logger.log("Cancelled.");
       return;
-    }
-
-    // Second confirmation: type the database name
-    if (!force) {
-      const { value } = await prompts({
-        type: "text",
-        name: "value",
-        message: `Type "${db.name}" to confirm:`,
-      });
-
-      if (value !== db.name) {
-        logger.log("Cancelled.");
-        return;
-      }
     }
 
     const deleteSpin = spinner("Deleting database...");

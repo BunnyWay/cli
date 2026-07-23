@@ -1,5 +1,5 @@
 {
-  "$schema": "../../packages/app-config/generated/schema.json",
+  "$schema": "../../packages/config/generated/schema.json",
   "version": "2026-05-12",
   "app": {
     "name": "Next.js with PostgreSQL",

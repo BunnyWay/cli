@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/@bunny.net/config/generated/schema.json",
+  "version": "2026-05-11",
+  "sites": {
+    "name": "acme-landing",
+    // Requires `output: "export"` in next.config.js so the build emits static HTML.
+    "build": "npm run build",
+    "dir": "out"
+  }
+}

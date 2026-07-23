@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "bun-ny-cli",
@@ -15,22 +14,14 @@
         "typescript": "^5",
       },
     },
-    "packages/app-config": {
-      "name": "@bunny.net/app-config",
-      "version": "0.1.2",
-      "dependencies": {
-        "@bunny.net/openapi-client": "workspace:*",
-        "zod": "^4.3.6",
-      },
-    },
     "packages/cli": {
       "name": "@bunny.net/cli",
-      "version": "0.8.1",
+      "version": "0.9.1",
       "bin": {
         "bunny": "./bin/bunny.cjs",
       },
       "devDependencies": {
-        "@bunny.net/app-config": "workspace:*",
+        "@bunny.net/config": "workspace:*",
         "@bunny.net/database-shell": "workspace:*",
         "@bunny.net/database-studio": "workspace:*",
         "@bunny.net/openapi-client": "workspace:*",
@@ -49,32 +40,40 @@
         "zod": "^4.3.6",
       },
       "optionalDependencies": {
-        "@bunny.net/cli-darwin-arm64": "0.8.1",
-        "@bunny.net/cli-darwin-x64": "0.8.1",
-        "@bunny.net/cli-linux-arm64": "0.8.1",
-        "@bunny.net/cli-linux-x64": "0.8.1",
-        "@bunny.net/cli-windows-x64": "0.8.1",
+        "@bunny.net/cli-darwin-arm64": "0.9.1",
+        "@bunny.net/cli-darwin-x64": "0.9.1",
+        "@bunny.net/cli-linux-arm64": "0.9.1",
+        "@bunny.net/cli-linux-x64": "0.9.1",
+        "@bunny.net/cli-windows-x64": "0.9.1",
       },
     },
     "packages/cli-darwin-arm64": {
       "name": "@bunny.net/cli-darwin-arm64",
-      "version": "0.8.1",
+      "version": "0.9.1",
     },
     "packages/cli-darwin-x64": {
       "name": "@bunny.net/cli-darwin-x64",
-      "version": "0.8.1",
+      "version": "0.9.1",
     },
     "packages/cli-linux-arm64": {
       "name": "@bunny.net/cli-linux-arm64",
-      "version": "0.8.1",
+      "version": "0.9.1",
     },
     "packages/cli-linux-x64": {
       "name": "@bunny.net/cli-linux-x64",
-      "version": "0.8.1",
+      "version": "0.9.1",
     },
     "packages/cli-windows-x64": {
       "name": "@bunny.net/cli-windows-x64",
-      "version": "0.8.1",
+      "version": "0.9.1",
+    },
+    "packages/config": {
+      "name": "@bunny.net/config",
+      "version": "0.1.2",
+      "dependencies": {
+        "@bunny.net/openapi-client": "workspace:*",
+        "zod": "^4.3.6",
+      },
     },
     "packages/database-adapter-libsql": {
       "name": "@bunny.net/database-adapter-libsql",
@@ -186,7 +185,7 @@
     },
     "packages/sandbox": {
       "name": "@bunny.net/sandbox",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "dependencies": {
         "@bunny.net/openapi-client": "workspace:*",
         "@types/ssh2": "^1.15.0",
@@ -260,8 +259,6 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.1", "", { "os": "win32", "cpu": "x64" }, "sha512-6uxpR9hvaglANkZemeSiN/FhYgkGasrEGn267eXIWvjrjJ2LhDlk251IhjVJq6MXzkV2/bcXwLwSroLyPtqRZg=="],
 
-    "@bunny.net/app-config": ["@bunny.net/app-config@workspace:packages/app-config"],
-
     "@bunny.net/cli": ["@bunny.net/cli@workspace:packages/cli"],
 
     "@bunny.net/cli-darwin-arm64": ["@bunny.net/cli-darwin-arm64@workspace:packages/cli-darwin-arm64"],
@@ -273,6 +270,8 @@
     "@bunny.net/cli-linux-x64": ["@bunny.net/cli-linux-x64@workspace:packages/cli-linux-x64"],
 
     "@bunny.net/cli-windows-x64": ["@bunny.net/cli-windows-x64@workspace:packages/cli-windows-x64"],
+
+    "@bunny.net/config": ["@bunny.net/config@workspace:packages/config"],
 
     "@bunny.net/database-adapter-libsql": ["@bunny.net/database-adapter-libsql@workspace:packages/database-adapter-libsql"],
 

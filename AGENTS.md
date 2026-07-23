@@ -72,11 +72,11 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 This is a Bun workspace monorepo with six packages:
 
 - **`@bunny.net/openapi-client`** (`packages/openapi-client/`) — Standalone, type-safe OpenAPI client for bunny.net, generated from OpenAPI specs. Zero CLI dependencies. Publishable to npm.
-- **`@bunny.net/app-config`** (`packages/app-config/`) — Shared app configuration schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. Used by the CLI and potentially other tools.
+- **`@bunny.net/config`** (`packages/config/`) — Shared `bunny.jsonc` schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. The root `BunnyConfigSchema` has optional `app` (Magic Containers) and `sites` (static sites) blocks; `BunnyAppConfigSchema` narrows it to require `app`. Used by the CLI and potentially other tools.
 - **`@bunny.net/database-shell`** (`packages/database-shell/`) — Standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
 - **`@bunny.net/scriptable-dns-types`** (`packages/scriptable-dns-types/`): Ambient TypeScript declarations for the Scriptable DNS runtime globals (`ARecord`, `Monitoring`, `RoutingEngine`, etc.). Types-only, no runtime code: the DNS runtime can't `import`, so these power editor autocomplete and an optional typecheck step. Scaffolded into projects by `bunny dns scripts init`; intended to also feed the dashboard editor. Publishable to npm.
 - **`@bunny.net/sandbox`** (`packages/sandbox/`) — Standalone sandbox SDK. Code-first DX (`Sandbox.create`, `writeFiles`, `runCommand`, `exposePort`, `setEnv`/`getEnv`/`unsetEnv`, `listFiles`/`deleteFile`/`rename`/`exists`) over Magic Containers provisioning plus an `ssh2` SSH/SFTP transport. Blocking `runCommand` accepts `timeout` (rejects with `CommandTimeoutError` carrying partial output), `signal` for cancellation, and `onStdout`/`onStderr` callbacks for live output. Env vars can be baked in at `create` (persisted), passed per-command via `runCommand({ env })` (temporary), or persisted after creation via `setEnv`. The handle implements `Symbol.dispose`/`Symbol.asyncDispose` so `using`/`await using` release the SSH connection (without deleting the sandbox). Zero CLI dependencies.
-- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/app-config`, `@bunny.net/database-shell`, `@bunny.net/scriptable-dns-types`, and `@bunny.net/sandbox`.
+- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/config`, `@bunny.net/database-shell`, `@bunny.net/scriptable-dns-types`, and `@bunny.net/sandbox`.
 
 ```
 bunny-cli/
@@ -119,7 +119,7 @@ bunny-cli/
 │   │           ├── storage.d.ts
 │   │           └── stream.d.ts
 │   │
-│   ├── app-config/                        # @bunny.net/app-config package
+│   ├── config/                            # @bunny.net/config package
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   ├── scripts/
@@ -128,7 +128,7 @@ bunny-cli/
 │   │   │   └── schema.json                # JSON Schema for bunny.jsonc (committed)
 │   │   └── src/
 │   │       ├── index.ts                   # Barrel export: schemas, types, conversion functions
-│   │       ├── schema.ts                  # Zod schemas + inferred types (BunnyAppConfig, etc.)
+│   │       ├── schema.ts                  # Zod schemas + inferred types: BunnyConfigSchema (root; optional app + sites), AppConfigSchema, SiteConfigSchema, BunnyAppConfigSchema (app required)
 │   │       ├── convert.ts                 # API ↔ config conversion (apiToConfig, configToAddRequest, configToPatchRequest)
 │   │       └── parse-image-ref.ts         # Docker image reference parser (parseImageRef)
 │   │
@@ -178,12 +178,12 @@ bunny-cli/
 │           │   ├── define-namespace.ts   # Namespace/group factory for subcommand trees
 │           │   ├── dns-nameservers.ts    # BUNNY_NAMESERVERS + expectedNameservers(zone) + checkDelegation()/checkDelegations(): reads the parent zone's NS referral (raw UDP query of the registry, not the recursive answer a child host could spoof; falls back to dns.resolveNs when the referral is unreadable), matches the full expected set both ways, ground truth over bunny's NameserversDetected flag which defaults true on a fresh zone; checkDelegations is bounded-concurrency for the zone list
 │           │   ├── dns-record-types.ts   # Canonical DNS record-type name⇄integer map (RECORD_TYPES) + RECORD_TYPE_META (dashboard taxonomy: short label, friendly name, Standard/Bunny group) + recordTypeLabel() (bunny's canonical labels: PZ/RDR/SCR/Flatten for the bunny-specific types) + recordTypeFromLabel() (parses canonical labels and enum-key names); shared by commands/dns + core/hostnames
-│           │   ├── errors.ts             # Re-exports UserError/ApiError from @bunny.net/openapi-client + ConfigError
+│           │   ├── errors.ts             # Re-exports UserError/ApiError from @bunny.net/openapi-client + ConfigError + errorMessage()
 │           │   ├── format.ts             # Shared table/key-value rendering (text, table, csv, markdown)
 │           │   ├── format.test.ts        # Tests for format utilities
 │           │   ├── hostnames/            # Reusable pull-zone hostname feature (mounted by scripts; apps next)
 │           │   │   ├── index.ts          # Re-exports client helpers, DNS/flow helpers + createHostnamesCommands
-│           │   │   ├── client.ts         # hostnameUrl(), normalizeHostname(), addHostname(), fetchPullZoneHostnames(), enableSsl(), createPullZone() (storage-zone origin) + Hostname/ResolvedPullZone types
+│           │   │   ├── client.ts         # hostnameUrl(), normalizeHostname(), addHostname(), fetchPullZoneHostnames(), enableSsl(), createPullZone() (storage-zone origin), systemHostname() + Hostname/ResolvedPullZone types
 │           │   │   ├── client.test.ts    # Tests for hostnameUrl() scheme logic
 │           │   │   ├── dns.ts            # dnsPointsAt()/anyResolverPointsAt(): DNS checks (CNAME or flattened A records) via system + public (1.1.1.1/8.8.8.8) resolvers, injectable for tests
 │           │   │   ├── dns.test.ts       # Tests for DNS matching + multi-resolver checks with fake resolvers
@@ -191,6 +191,9 @@ bunny-cli/
 │           │   │   ├── bunny-dns.ts       # findBunnyDnsZone()/offerBunnyDnsRecord(): detect a hostname inside an account Bunny DNS zone, then add/repoint a PullZone record (always confirmed) so SSL can issue immediately
 │           │   │   ├── bunny-dns.test.ts  # Tests for longest-suffix zone matching + record-name derivation with a fake core client
 │           │   │   └── commands.ts       # createHostnamesCommands(): add/ssl/list/remove factory parameterized by a pull-zone resolver
+│           │   ├── bunny-config.ts       # Shared bunny.jsonc discovery + raw read (findConfigRoot, configPath, configExists, readBunnyConfig); used by apps/ and sites/ config.ts
+│           │   ├── jsonc.ts              # syncJsonc(): surgical JSONC editing that preserves comments, key order, and sibling blocks
+│           │   ├── jsonc.test.ts         # Tests for syncJsonc (comment/formatting preservation, key add/remove)
 │           │   ├── logger.ts             # Chalk-based structured logger
 │           │   ├── manifest.ts           # .bunny/ context file resolution (load, save, resolveManifestId)
 │           │   ├── registrar.ts          # detectRegistrar()/parseRegistrar(): best-effort registrar name via RDAP (used by dns zones add to name the registrar in next-steps)
@@ -198,7 +201,7 @@ bunny-cli/
 │           │   ├── stats.ts              # Shared stats rendering: sumChart(), renderBarChart(), formatBucketLabel() (UTC date labels), BAR_WIDTH (used by dns/zone/stats + scripts/stats)
 │           │   ├── stats.test.ts         # Tests for stats helpers
 │           │   ├── types.ts              # GlobalArgs, OutputFormat, and shared type definitions
-│           │   ├── ui.ts                 # readPassword(), confirm(), spinner() wrappers
+│           │   ├── ui.ts                 # readPassword(), confirm(), confirmTyped(), spinner() wrappers
 │           │   └── version.ts            # VERSION constant from package.json
 │           │
 │           ├── config/
@@ -211,7 +214,7 @@ bunny-cli/
 │           │   │   ├── APPS.md           # Apps documentation (while experimental)
 │           │   │   ├── index.ts          # defineNamespace("apps", false) — hidden, registers all app commands
 │           │   │   ├── constants.ts      # Status label maps + APP_MANIFEST filename + AppManifest interface (consumed via core/manifest.ts)
-│           │   │   ├── config.ts         # bunny.jsonc file I/O (saveConfig strips transient `image`/`registry`/`app.id` via stripTransientFields), re-exports from @bunny.net/app-config; provides resolveAppId, resolveContainerId, resolveContainerRegistry
+│           │   │   ├── config.ts         # bunny.jsonc app I/O over core/bunny-config.ts + core/jsonc.ts (loadConfig requires an `app` block; saveConfig strips transient `image`/`registry`/`app.id` via stripTransientFields and edits existing files surgically), re-exports from @bunny.net/config; provides resolveAppId, resolveContainerId, resolveContainerRegistry
 │           │   │   ├── docker.ts         # Docker + registry helpers (build, push, dockerLogin, ensureRegistryLogin, dockerHasCredentials, ghDockerLogin, generateTag, promptRegistry, resolveRegistryForImage, getConfigSuggestions, imageHostname, parseDockerfileExposedPorts/readDockerfileExposedPorts, findDockerfiles/isDockerfileName/defaultContainerNameFromDockerfile/assignContainerNamesToDockerfiles for monorepo Dockerfile discovery)
 │           │   │   ├── suggestions.ts    # Shared endpoint/env-var suggestion prompting (confirmEndpointSuggestions, endpointRequestToConfig, promptSuggestedEnv, filterNewEndpointSuggestions, filterNewEnvSuggestions) - used by walkthrough.ts and deploy.ts (post-push)
 │           │   │   ├── init.ts           # Scaffold bunny.jsonc (detects Dockerfile, prompts for registry)
@@ -374,6 +377,35 @@ bunny-cli/
 │           │   │       ├── upload.ts     # Upload a local file (<file> positional, --zone, --to, --checksum streams a SHA256, --content-type)
 │           │   │       ├── download.ts   # Download a file to disk (<path> positional, --zone, --out)
 │           │   │       └── remove.ts     # Delete a file or directory (alias: rm; <path> positional, --zone, trailing slash = recursive)
+│           │   ├── sites/                 # Experimental (hidden from help and landing page): static-site hosting (storage zone + pull zone + middleware router)
+│           │   │   ├── index.ts          # defineNamespace("sites", ...): create/list/show/deploy/deployments/domains/link/unlink/upgrade-router/delete
+│           │   │   ├── constants.ts      # SITES_MANIFEST (.bunny/site.json), REMOTE_STATE_PATH (_bunny/site.json), RemoteSiteState/DeployRecord types, parseRemoteState (shape-checked; null = not a site), previewHostname/previewWildcard/deployPrefix helpers, deploy-ID + site-name validators (3-47 chars), suffixedResourceName/siteResourcePattern (zone names are `sites-{name}-{random 6}`: the prefix marks them in the dashboard, the suffix dodges the global zone namespace; the pattern also matches bare pre-suffix names)
+│           │   │   ├── constants.test.ts # parseRemoteState round-trip/rejection + helper tests
+│           │   │   ├── api.ts            # siteFiles IO seam (connect/download/upload/remove; swap in tests instead of mock.module), remote state read/write (sha256 etag optimistic lock: concurrent deploy records merge on mismatch, ours win per id; current/previous follow promotedTo, so last promote wins and non-promoting writers adopt the concurrent pointers), siteContextFromZone, fetchSites (pull zone listing → middleware+storage candidates → per-zone state verification), createSite (idempotent provisioning: storage zone → router script code+publish+CURRENT_DEPLOY → pull zone + MiddlewareScriptId attach → state; both zones share a random name suffix so globally-taken names can't block the create, retrying fresh suffixes on collision; resume adopts a stateless name-pattern zone, and state.name keeps the clean site name), promoteDeploy (env var PUT + purgeCache POST), deleteSiteResources (pull zone → script → storage zone, best-effort), deleteDeployFiles
+│           │   │   ├── api.test.ts       # In-memory siteFiles store + path-branching fake clients: state round-trip, etag conflict, createSite fresh/resume/already-exists, promote, fetchSites filtering
+│           │   │   ├── interactive.ts    # selectSite: explicit ref (storage zone ID/name, falling back to a state.name match since zone names carry a suffix) → .bunny/site.json → bunny.jsonc sites.name → picker (offerLink like scripts); optional offerCreate (deploy only) adds a new-vs-existing prompt, and creates straight away when the account has no sites; siteOptionBuilder (--site) + sitePositionalBuilder ([site])
+│           │   │   ├── provision.ts       # promptSiteName (normalize/validate, directory-name suggestion) + createSiteWithProgress (createSite under a step-tracking spinner; shared with create.ts) + createLinkedSite (create + manifest link → SiteContext, skipping create's domain/CI prompts) for the deploy picker's new-site branch
+│           │   │   ├── config.ts         # loadSiteConfig: reads bunny.jsonc via core/bunny-config.ts and validates ONLY the `sites` block (SiteConfigSchema from @bunny.net/config), so sites-only configs work without an `app` block or `version`
+│           │   │   ├── router/source.ts  # routerSource: the middleware Edge Script (one script per site; no version tracking; upgrade-router just republishes the latest). apex → CURRENT_DEPLOY, dpl-{id}.preview.{domain} → that deploy, /deploys/{id}/ passthrough (path preview) flagged with x-bunny-preview header, /_bunny/* → 403 (client-sent x-bunny-preview headers are stripped; the flag is router-internal), trailing-slash → index.html. onOriginResponse: HTMLRewriter rewrites root-absolute href/src/srcset in flagged path-preview HTML → /deploys/{id}/… (so Jekyll/SSG assets render on one PZ; each deploy's assets get a unique cache key), and X-Robots-Tag: noindex on all previews. Production HTML is never rewritten (no header), so promote doesn't churn its cache
+│           │   │   ├── deploy-id.ts      # gitIdentity (short sha + dirty check via Bun.spawn), contentHashId (sorted path+sha256 merkle → 8 hex), resolveDeployIdentity (clean git → sha, else content hash)
+│           │   │   ├── deploy-id.test.ts # Hash determinism + real temp git repos (clean → sha, dirty → content hash)
+│           │   │   ├── uploader.ts       # collectFiles (recursive walk, skips dotfiles/node_modules, sorted), hashFiles (streaming sha256), uploadDeploy (8-way concurrency, per-file checksum, 3-attempt backoff retry) via siteFiles.upload
+│           │   │   ├── uploader.test.ts  # Walk/skip/hash tests + upload paths/checksums/retry via siteFiles swap
+│           │   │   ├── build.ts          # resolveAutoBuild (framework preset or package.json build script, via ci/frameworks detection) + runBuildCommand (Bun.spawn shell, caller env + overrides, throws on non-zero exit)
+│           │   │   ├── build.test.ts     # Env parsing + real build spawn success/failure
+│           │   │   ├── create.ts         # bunny sites create [name] (prompted, directory-name suggestion): createSite (storage + router + pull zone; forces HTTPS on the system host, best-effort) + manifest link + custom domain via setupSiteDomain (--domain flag, offered interactively when omitted; domain failure warns, never fails the create)
+│           │   │   ├── list.ts           # List sites (name, URL, deploy count, current)
+│           │   │   ├── show.ts           # Site details + hostname table (SSL cert + Force SSL columns) + router-outdated warning
+│           │   │   ├── open.ts           # bunny sites open [site]: open the live URL (recorded custom domain when live, else system host) in the browser; --print emits it, siteLiveUrl is the pure resolver
+│           │   │   ├── ssl.ts            # bunny sites ssl [site]: toggle Force HTTPS on the site's b-cdn.net system host via setForceSsl (no cert issued; --no-force-ssl allows HTTP); custom domains use `sites domains ssl`
+│           │   │   ├── deploy.ts         # bunny sites deploy [dir]: resolve site (picker offers to create a new site when none is linked) → build (--build resolves flag command → `sites.build` → detected build, failing before any site is created; no --build offers a detected/configured build interactively; without a dir arg, --build deploys the detected framework's output dir) → hash → no-op if unchanged → upload deploys/{id}/ → state update → immutable preview URL (custom-domain dpl-{id}.preview.* when a domain exists, else the sites-<name>-<suffix>.b-cdn.net/deploys/{id}/ path; rendered correctly by the router's HTMLRewriter), or publish live with --production/--prod
+│           │   │   ├── link.ts           # Link directory to a site (.bunny/site.json)
+│           │   │   ├── unlink.ts         # Remove .bunny/site.json
+│           │   │   ├── upgrade-router.ts # Republish the site's router script with the CLI's current source (pushes router improvements to an existing site)
+│           │   │   ├── delete.ts         # Delete a site (typed-name confirm; --keep-storage; drops .bunny/site.json if it pointed here)
+│           │   │   ├── ci/               # frameworks.ts (preset table of ~30 frameworks across js/ruby/hugo/python/zola/dotnet toolchains + detection: package.json deps/Gemfile/python+zola config files + lockfile pm), workflow.ts (renderSitesWorkflow -> .github/workflows/bunny-sites.yml using BunnyWay/actions/deploy-site), scaffold.ts (git helpers, scaffoldSitesWorkflow, printWorkflowInstructions, offerGitHubSecret via gh), init.ts (bunny sites ci init) + tests
+│           │   │   ├── deployments/      # list (● Live/○ Previous), publish [id]|--previous (alias promote; confirm + promote + current/previous swap), prune --keep N (pruneVictims never drops current/previous) + prune.test.ts
+│           │   │   └── domains/index.ts  # Mounts core/hostnames createHostnamesCommands as "sites domains" with onAdded/onRemoved hooks: apex add also attaches *.preview.<apex> (attachPreviewWildcard, best-effort SSL) + records state.domain; remove takes the wildcard down too. setupSiteDomain composes setupHostname + wildcard for create --domain
 │           │   ├── registries/
 │           │   │   ├── index.ts          # Manual CommandModule (not defineNamespace) — default handler runs list
 │           │   │   ├── list.ts           # List container registries
@@ -442,7 +474,7 @@ bunny-cli/
 
 ### Conventions
 
-- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/app-config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
+- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
 - **API clients use `ClientOptions`** — an options object with `apiKey`, `baseUrl`, `verbose`, `userAgent`, and `onDebug`. The CLI provides a `clientOptions(config, verbose)` helper to build this from `ResolvedConfig`.
 - **One command per file.** Each file in `commands/` exports a single command or namespace.
 - **Commands are grouped by domain** in subdirectories (`config/`, `db/`, `scripts/`).
@@ -893,12 +925,14 @@ Its `package.json` `exports`/`main`/`types` point at `dist/`, so npm consumers g
 
 ### Publishing `@bunny.net/sandbox`
 
-`@bunny.net/sandbox` follows the same compiled-library pattern as `@bunny.net/openapi-client`: `exports`/`main`/`types` point at `dist/`, in-repo tooling resolves it from source via the root `tsconfig.json` `paths` mapping, and `scripts/build.ts` (via `tsconfig.build.json`) emits JS + declarations with the same `.ts` → `.js` specifier rewriting.
+`@bunny.net/sandbox` follows the same compiled-library pattern as `@bunny.net/openapi-client`: `exports`/`main`/`types` point at `dist/`, in-repo tooling resolves it from source via the root `tsconfig.json` `paths` mapping, and `tsconfig.build.json` (plain `tsc` with `rewriteRelativeImportExtensions`, no `scripts/build.ts`) emits JS + declarations. Unlike openapi-client it has no declaration transformer, so emitted `.d.ts` keep their `.ts` import specifiers, which TypeScript resolves to the sibling `.d.ts` at the consumer.
 
 Two differences from openapi-client:
 
 - Sandbox depends on `@bunny.net/openapi-client` with `workspace:*`, so the `publish-sandbox` job in `release.yml` uses `bun publish` (not `npm publish`) — bun rewrites `workspace:*` to the local package version in the published tarball; npm would ship the unresolvable `workspace:*` spec verbatim. `bun publish` authenticates via the `NPM_CONFIG_TOKEN` env var.
 - Its `tsconfig.build.json` overrides `paths` to `{}` so openapi-client resolves via its package `exports` (`dist/`) instead of source — otherwise openapi-client's sources would enter the program and violate `rootDir`. The publish job therefore builds openapi-client before building sandbox.
+
+`@bunny.net/config` is a private workspace package (not published); the CLI consumes it from source via the workspace symlink.
 
 ### CI
 
@@ -1065,6 +1099,32 @@ bunny
 │   ├── show            [id]                Show Edge Script details (uses linked script if omitted)
 │   └── stats           [id] [--from] [--to] [--hourly] [--link]
 │                                           Show usage statistics (requests/CPU/cost totals + bar chart; defaults to last 30 days). No ID → linked script → interactive picker (offers to link; --no-link skips). JSON output skips the picker and errors.
+├── sites                                   (experimental; hidden from help and landing page)
+│   │                                       Static-site hosting: one storage zone (files) + one pull zone (CDN) + one middleware router script per site. Zone names are `sites-{name}-{random suffix}` (prefixed for dashboard grouping; suffixed because zone names are global across bunny.net); the site keeps its clean name in state. Deploys are immutable directories (`deploys/{id}/`); promote/rollback flips the router's CURRENT_DEPLOY env var + purges the cache; no files move. A deploy's immutable preview URL is `sites-<name>-<suffix>.b-cdn.net/deploys/{id}/`; the router's HTMLRewriter rewrites root-absolute asset URLs in that path-preview HTML to `/deploys/{id}/…` so Jekyll/most SSGs render on a single pull zone (each deploy's assets get a unique cache key). Custom domains add isolated per-deploy subdomains (`dpl-{id}.preview.{domain}`, root-served, no rewriting). Site state lives at `_bunny/site.json` in the storage zone (403-blocked by the router); `.bunny/site.json` is the local pointer. Site resolution everywhere: explicit ref → .bunny/site.json → `sites.name` in bunny.jsonc → interactive picker (offers to link).
+│   ├── create          [name] [--region] [--domain] [--link]
+│   │                                       Provision a site (idempotent; a failed create re-runs cleanly; each resource is looked up by name first). Interactive runs prompt for the name when omitted (directory-name suggestion). --domain also attaches *.preview.<domain> for per-deploy previews; when omitted, interactive runs offer to add one (Bunny DNS record with confirmation, nameserver guidance when undelegated, DNS wait + SSL). GitHub repos then get an offer to scaffold the deploy workflow (declining prints it instead).
+│   ├── list            (alias: ls)         List sites (middleware+storage pull zones with matching remote state)
+│   ├── show            [site]              Show resources, domains (with SSL + Force SSL state), current deploy; warns when a newer router is available
+│   ├── open            [site] [--print]    Open the live URL (recorded custom domain when live, else system host) in the browser; --print emits it
+│   ├── deploy          [dir] [--site] [--build [cmd]] [--env K=V] [--env-file] [--production/--prod] [--force]
+│   │                                       Deploy a directory to a preview URL: git short-sha ID when the tree is clean, content hash otherwise; identical IDs are no-ops (an already-uploaded ID with --production skips the upload and just publishes). The immutable preview URL is `sites-<name>-<suffix>.b-cdn.net/deploys/{id}/` (custom-domain `dpl-{id}.preview.*` when a domain exists), rendered correctly by the router's HTMLRewriter. The target site resolves via selectSite (--site → linked → bunny.jsonc → picker); when nothing is linked, the interactive picker offers to create a new site (or, with no sites yet, goes straight to create) and links it. A [dir] arg is cwd-relative; without it the target is `sites.dir` (or the detected output dir), resolved against the bunny.jsonc directory where the build runs, else that directory (dotfiles + node_modules excluded). --build runs the command (or `sites.build`, else the detected build; resolved before any site is created so a missing command can't leave an orphan site) in the caller's environment plus --env/--env-file overrides. Without --build, an interactive run offers to run the configured `sites.build`, else a detected build (the CI framework preset's command, else a package.json `build` script); confirming builds first and, when no dir was given, deploys the framework's output dir. --production/--prod publishes the deploy as the live site.
+│   ├── deployments
+│   │   ├── list        [site] (alias: ls)  List deploys (● Live / ○ Previous markers, created, source, files, size)
+│   │   ├── publish     [id] [--previous] [--site] [--force]  (alias: promote)
+│   │   │                                   Promote a past deploy; instant rollback (--previous = the previous deploy)
+│   │   └── prune       [--keep N] [--site] [--force]  Delete old deploys (never current/previous; default keeps 5)
+│   ├── domains                             (hidden alias: hostnames); mounts core/hostnames createHostnamesCommands with a sites resolver
+│   │   ├── add         <domain> [site] [--ssl] [--wait] [--no-force-ssl]  Add a domain; also attaches *.preview.<domain> + records the domain in site state (onAdded hook)
+│   │   ├── ssl         <domain> [site]     Issue a free SSL certificate
+│   │   ├── list        [site] (alias: ls)  List domains
+│   │   └── remove      <domain> [site] [--force]  Remove a domain (also removes its *.preview wildcard, onRemoved hook)
+│   ├── ssl             [site] [--no-force-ssl]  Toggle Force HTTPS on the site's b-cdn.net system host (no cert issued; custom domains use `sites domains ssl`)
+│   ├── ci
+│   │   └── init        [--site] [--framework] [--force]  Write .github/workflows/bunny-sites.yml: framework detection (package.json deps, Gemfile, hugo/python/zola config files; lockfile picks the package manager), previews on PRs + production on main via BunnyWay/actions/deploy-site, offers `gh secret set BUNNY_API_KEY`
+│   ├── link            [site]              Link this directory to a site → .bunny/site.json
+│   ├── unlink                              Remove .bunny/site.json
+│   ├── upgrade-router  [site]              Republish the site's router script with the CLI's current source
+│   └── delete          [site] [--force] [--keep-storage]  Delete pull zone → router → storage zone (typed-name confirmation; best-effort so re-runs finish a partial delete)
 ├── docs                                    Open bunny.net documentation in browser
 ├── open               [--print]            Open bunny.net dashboard in browser (or print URL)
 ├── --profile, -p       <string>            Profile to use (default: "default")
@@ -1263,6 +1323,7 @@ Commands that operate on a specific remote resource (e.g. a script, an app) can 
 ### How it works
 
 - **`.bunny/script.json`** (gitignored) — links the current directory to a remote Edge Script.
+- **`.bunny/site.json`** (gitignored): links the current directory to a site (the site's storage zone ID). Written by `bunny sites link`/`create`; the site's own state (resource triple, deploys, current/previous) lives remotely at `_bunny/site.json` inside the storage zone, so the local manifest is only a pointer.
 - The manifest is machine-managed: written by `bunny scripts link`, read by other script commands.
 - `resolveManifestId()` in `packages/cli/src/core/manifest.ts` handles the resolution: explicit ID flag → manifest file → error with hint.
 - `findRoot()` walks up the directory tree to find `.bunny/`, so it works from subdirectories.
@@ -1325,11 +1386,11 @@ The `.bunny/` manifest and `bunny.jsonc` serve different purposes:
 | Committed | No (gitignored)                              | Yes                                                |
 | Shared    | No (per-developer)                           | Yes (team-wide)                                    |
 
-`bunny.jsonc` supports a `$schema` property for editor autocompletion, pointing to the JSON Schema generated by `@bunny.net/app-config`:
+`bunny.jsonc` supports a `$schema` property for editor autocompletion, pointing to the JSON Schema generated by `@bunny.net/config`:
 
 ```jsonc
 {
-  "$schema": "./node_modules/@bunny.net/app-config/generated/schema.json",
+  "$schema": "./node_modules/@bunny.net/config/generated/schema.json",
   "version": "2026-05-11",
   "app": {
     "name": "my-app",
@@ -1341,9 +1402,9 @@ The `.bunny/` manifest and `bunny.jsonc` serve different purposes:
 }
 ```
 
-`version` is an ISO date string. The CLI requires it on load — if a config is missing `version`, `loadConfig` throws a `UserError` with a hint to regenerate via `bunny apps pull`. There is no migration runner yet; when the first breaking shape change ships, that PR introduces one alongside its transform.
+`version` is an ISO date string. The apps flow requires it on load — if a config is missing `version`, `loadConfig` throws a `UserError` with a hint to regenerate via `bunny apps pull`. (The sites flow is lenient: a sites-only file needs neither `version` nor an `app` block.) There is no migration runner yet; when the first breaking shape change ships, that PR introduces one alongside its transform.
 
-Schemas and types are defined in `@bunny.net/app-config` using Zod. The CLI's `config.ts` handles file I/O (parsing JSONC, validating with Zod, writing with `$schema` + `version` injection) and resolution helpers (`resolveAppId`, `resolveContainerId`).
+Schemas and types are defined in `@bunny.net/config` using Zod. `core/bunny-config.ts` owns `bunny.jsonc` discovery + raw read (shared by the apps and sites flows). The apps `config.ts` layers validation, resolution helpers (`resolveAppId`, `resolveContainerId`), and writes: a new file is serialized fresh with `$schema` + `version` first, while an existing file is edited surgically via `core/jsonc.ts` (`syncJsonc`) so comments, key order, and a sibling `sites` block survive.
 
 **Persistence model.** Three layers, with strict roles:
 
@@ -1355,7 +1416,7 @@ To keep these consistent and stop file churn on every deploy, `saveConfig` (`app
 
 `resolveAppId` and `resolveContainerRegistry` in `apps/config.ts` read from the manifest first, then fall back to legacy `app.id` / `container.registry` in `bunny.jsonc` with a one-time deprecation warning. Existing pre-manifest configs continue to work; the next save naturally migrates them by stripping the legacy fields once the manifest carries the same data.
 
-In-memory mutations during a deploy run (`targetContainer.image = imageRef`) are still required so `configToAddRequest` / `configToPatchRequest` can read the ref within the same run - they just don't make it to disk. Registry IDs for the API body are supplied via the new `RegistryMap` argument to `configToAddRequest` / `configToPatchRequest` (`@bunny.net/app-config`), sourced from the manifest at the call site.
+In-memory mutations during a deploy run (`targetContainer.image = imageRef`) are still required so `configToAddRequest` / `configToPatchRequest` can read the ref within the same run - they just don't make it to disk. Registry IDs for the API body are supplied via the new `RegistryMap` argument to `configToAddRequest` / `configToPatchRequest` (`@bunny.net/config`), sourced from the manifest at the call site.
 
 ---
 

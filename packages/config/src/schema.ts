@@ -67,19 +67,39 @@ export const RegionsConfigSchema = z.union([
   }),
 ]);
 
-export const BunnyAppConfigSchema = z.object({
-  $schema: z.string().optional(),
-  version: VersionSchema,
-  app: z.object({
-    id: z.string().optional(),
-    name: z.string(),
-    scaling: z.object({ min: z.number(), max: z.number() }).optional(),
-    regions: RegionsConfigSchema.optional(),
-    containers: z.record(z.string(), ContainerConfigSchema),
-  }),
+// Static-site config (`bunny sites`), all optional: `name` links the directory to a site, `dir` is the deploy root, `build` is the command `sites deploy --build` runs.
+export const SiteConfigSchema = z.object({
+  name: z.string().optional(),
+  dir: z.string().optional(),
+  build: z.string().optional(),
 });
 
+// The `app` block: Magic Containers deploy intent.
+export const AppConfigSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  scaling: z.object({ min: z.number(), max: z.number() }).optional(),
+  regions: RegionsConfigSchema.optional(),
+  containers: z.record(z.string(), ContainerConfigSchema),
+});
+
+// The whole `bunny.jsonc` file; every resource block is optional so app-only, sites-only, and combined files all validate.
+export const BunnyConfigSchema = z.object({
+  $schema: z.string().optional(),
+  version: VersionSchema,
+  app: AppConfigSchema.optional(),
+  sites: SiteConfigSchema.optional(),
+});
+
+// `BunnyConfigSchema` narrowed to require the `app` block; used by the apps commands and API conversion.
+export const BunnyAppConfigSchema = BunnyConfigSchema.extend({
+  app: AppConfigSchema,
+});
+
+export type BunnyConfig = z.infer<typeof BunnyConfigSchema>;
+export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type BunnyAppConfig = z.infer<typeof BunnyAppConfigSchema>;
+export type SiteConfig = z.infer<typeof SiteConfigSchema>;
 export type ContainerConfig = z.infer<typeof ContainerConfigSchema>;
 export type EndpointConfig = z.infer<typeof EndpointConfigSchema>;
 export type VolumeConfig = z.infer<typeof VolumeConfigSchema>;

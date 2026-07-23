@@ -1,5 +1,6 @@
 import dgram from "node:dgram";
 import { promises as dns } from "node:dns";
+import { mapWithConcurrency } from "./concurrency.ts";
 
 /** bunny.net delegates every zone to the same two anycast nameservers. */
 export const BUNNY_NAMESERVERS = ["kiki.bunny.net", "coco.bunny.net"] as const;
@@ -214,17 +215,7 @@ export async function checkDelegations(
   items: { domain: string; expected?: readonly string[] }[],
   concurrency = 10,
 ): Promise<DelegationCheck[]> {
-  const results = new Array<DelegationCheck>(items.length);
-  let next = 0;
-  async function worker() {
-    while (next < items.length) {
-      const index = next++;
-      const item = items[index];
-      if (!item) continue;
-      results[index] = await checkDelegation(item.domain, item.expected);
-    }
-  }
-  const lanes = Math.min(concurrency, items.length) || 1;
-  await Promise.all(Array.from({ length: lanes }, worker));
-  return results;
+  return mapWithConcurrency(items, concurrency, (item) =>
+    checkDelegation(item.domain, item.expected),
+  );
 }

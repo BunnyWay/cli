@@ -308,7 +308,14 @@ export async function offerBunnyDnsThenSsl(opts: {
       `${match.zoneDomain} isn't delegated to bunny.net's nameservers yet.`,
     );
     logger.dim(
-      "  The record is set, but won't resolve (or get a certificate) until you point your registrar at bunny.net.",
+      "  The record is set, but won't resolve (or get a certificate) until your registrar points at bunny.net.",
+    );
+    logger.log();
+    logger.log("Set these nameservers at your registrar:");
+    for (const ns of match.nameservers) logger.accent(`  ${ns}`);
+    logger.log();
+    logger.dim(
+      `Check delegation later with:\n  bunny dns zones ns ${match.zoneDomain}`,
     );
     printSslHint(opts.sslHint);
     return false;

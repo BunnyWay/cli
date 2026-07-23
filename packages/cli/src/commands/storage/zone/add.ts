@@ -9,6 +9,7 @@ import {
   createPullZone,
   normalizeHostname,
   setupHostname,
+  systemHostname,
 } from "../../../core/hostnames/index.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, isInteractive, spinner } from "../../../core/ui.ts";
@@ -212,7 +213,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       } finally {
         pzSpin.stop();
       }
-      const host = (pz?.Hostnames ?? []).find((h) => h.IsSystemHostname)?.Value;
+      const host = systemHostname(pz?.Hostnames);
       pullZoneResult = {
         id: pz?.Id,
         name: pz?.Name,

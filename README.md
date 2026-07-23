@@ -4,17 +4,17 @@ Monorepo for the [bunny.net](https://bunny.net) CLI and supporting packages.
 
 ## Packages
 
-| Package                                                                  | Name                                 | Description                                                  |
-| ------------------------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------ |
-| [`packages/cli/`](packages/cli/)                                         | `@bunny.net/cli`                     | Command-line interface for bunny.net                         |
-| [`packages/openapi-client/`](packages/openapi-client/)                   | `@bunny.net/openapi-client`          | Standalone, type-safe OpenAPI client for bunny.net           |
-| [`packages/sandbox/`](packages/sandbox/)                                 | `@bunny.net/sandbox`                 | Standalone sandbox SDK over Magic Containers and SSH         |
-| [`packages/app-config/`](packages/app-config/)                           | `@bunny.net/app-config`              | Shared Zod schemas, types, and JSON Schema for `bunny.jsonc` |
-| [`packages/database-shell/`](packages/database-shell/)                   | `@bunny.net/database-shell`          | Standalone interactive SQL shell for libSQL databases        |
-| [`packages/database-openapi/`](packages/database-openapi/)               | `@bunny.net/database-openapi`        | Generate OpenAPI 3.0 specs from a database schema            |
-| [`packages/database-rest/`](packages/database-rest/)                     | `@bunny.net/database-rest`           | PostgREST-like REST API handler (database-agnostic)          |
-| [`packages/database-adapter-libsql/`](packages/database-adapter-libsql/) | `@bunny.net/database-adapter-libsql` | Bunny Database adapter for database-rest                     |
-| [`packages/scriptable-dns-types/`](packages/scriptable-dns-types/)       | `@bunny.net/scriptable-dns-types`    | Ambient TypeScript types for the Scriptable DNS runtime      |
+| Package                                                                  | Name                                 | Description                                                                |
+| ------------------------------------------------------------------------ | ------------------------------------ | -------------------------------------------------------------------------- |
+| [`packages/cli/`](packages/cli/)                                         | `@bunny.net/cli`                     | Command-line interface for bunny.net                                       |
+| [`packages/openapi-client/`](packages/openapi-client/)                   | `@bunny.net/openapi-client`          | Standalone, type-safe OpenAPI client for bunny.net                         |
+| [`packages/sandbox/`](packages/sandbox/)                                 | `@bunny.net/sandbox`                 | Standalone sandbox SDK over Magic Containers and SSH                       |
+| [`packages/config/`](packages/config/)                                   | `@bunny.net/config`                  | Shared Zod schemas, types, and JSON Schema for `bunny.jsonc` (app + sites) |
+| [`packages/database-shell/`](packages/database-shell/)                   | `@bunny.net/database-shell`          | Standalone interactive SQL shell for libSQL databases                      |
+| [`packages/database-openapi/`](packages/database-openapi/)               | `@bunny.net/database-openapi`        | Generate OpenAPI 3.0 specs from a database schema                          |
+| [`packages/database-rest/`](packages/database-rest/)                     | `@bunny.net/database-rest`           | PostgREST-like REST API handler (database-agnostic)                        |
+| [`packages/database-adapter-libsql/`](packages/database-adapter-libsql/) | `@bunny.net/database-adapter-libsql` | Bunny Database adapter for database-rest                                   |
+| [`packages/scriptable-dns-types/`](packages/scriptable-dns-types/)       | `@bunny.net/scriptable-dns-types`    | Ambient TypeScript types for the Scriptable DNS runtime                    |
 
 See each package's README for usage and API documentation.
 
@@ -56,7 +56,21 @@ bun ny dns records scan example.com         # scan for the domain's existing rec
 bun ny dns records preset list              # list DNS record presets (email providers, verification, security)
 bun ny dns records preset google-workspace example.com   # apply a preset record set
 bun ny dns records preset bluesky example.com --param did=did:plc:abc123   # apply a preset non-interactively
+bun ny sites create my-site                 # provision a static site (storage zone + pull zone + edge router; zones are named sites-my-site-<suffix>, served at sites-my-site-<suffix>.b-cdn.net)
+bun ny sites deploy                         # no linked site? offers to create one or pick an existing; detects the framework, offers to build, then deploys
+bun ny sites deploy ./dist                  # deploy to an immutable preview URL (the site's b-cdn.net host + /deploys/<id>/); the router's HTMLRewriter keeps root-absolute assets working
+bun ny sites deploy ./dist --production     # deploy and publish as the live site (--prod works too)
+bun ny sites deploy --build                 # run `sites.build` from bunny.jsonc (else the detected framework's build), then deploy `sites.dir` (or the detected output dir)
+bun ny sites deployments list               # list deploys with the live one marked
+bun ny sites deployments publish --previous # instant rollback to the previous deploy
+bun ny sites deployments prune              # delete old deploys (keeps the newest 5, never current/previous)
+bun ny sites domains add example.com        # attach a custom domain (+ *.preview.example.com for previews)
+bun ny sites ssl --no-force-ssl             # stop forcing HTTPS on the site's b-cdn.net system host
+bun ny sites open                           # open the site's live URL in the browser
+bun ny sites ci init                        # add a GitHub Actions workflow (preview on PRs, production on main)
 ```
+
+Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) so a deploy needs no flags: `bun ny sites deploy --build --prod`. See [`examples/sites/`](examples/sites/) for ready-to-copy configs (Vite, Astro, Next.js static export, Hugo, plain HTML, and a combined app + site file).
 
 ### Available Scripts
 

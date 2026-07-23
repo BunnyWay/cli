@@ -17,10 +17,13 @@ export {
   normalizeHostname,
   type ResolvedPullZone,
   type SafeHostname,
+  setForceSsl,
+  systemHostname,
   toSafeHostname,
 } from "./client.ts";
 export {
   createHostnamesCommands,
+  type HostnameHookContext,
   type HostnameResolver,
   type HostnamesMountOptions,
 } from "./commands.ts";

@@ -133,6 +133,7 @@ describe("offerBunnyDnsRecord", () => {
           recordName: "shop",
           existing: { Type: 0, Name: "shop", Value: "192.0.2.4" },
           delegated: true,
+          nameservers: ["kiki.bunny.net", "coco.bunny.net"],
         },
       }),
     ).rejects.toThrow(/has no ID/);

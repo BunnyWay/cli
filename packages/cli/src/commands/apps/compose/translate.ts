@@ -6,8 +6,8 @@ import type {
   EndpointConfig,
   ProbeConfig,
   VolumeConfig,
-} from "@bunny.net/app-config";
-import { CURRENT_VERSION } from "@bunny.net/app-config";
+} from "@bunny.net/config";
+import { CURRENT_VERSION } from "@bunny.net/config";
 import { UserError } from "../../../core/errors.ts";
 import { parseDotenv } from "../env/parse.ts";
 import { parsePortMapping } from "./ports.ts";

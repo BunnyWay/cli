@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { BunnyAppConfigSchema } from "../src/schema.ts";
+import { BunnyConfigSchema } from "../src/schema.ts";
 
-const jsonSchema = z.toJSONSchema(BunnyAppConfigSchema, {
+const jsonSchema = z.toJSONSchema(BunnyConfigSchema, {
   target: "draft-2020-12",
 });
 
