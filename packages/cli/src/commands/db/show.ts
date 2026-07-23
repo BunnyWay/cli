@@ -1,26 +1,18 @@
-import { createDbClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
+import { type DatabaseRegion, dbGet } from "@bunny.net/actions";
+import { defineActionCommand } from "../../core/define-action-command.ts";
 import { formatBytes, formatKeyValue, progressBar } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
-import {
-  fetchDatabase,
-  fetchLiveStatus,
-  fetchRegionConfig,
-  liveMainRegion,
-  liveStatusLabel,
-  regionNameMap,
-} from "./api.ts";
 import { ARG_DATABASE_ID } from "./constants.ts";
 import { resolveDbId } from "./resolve-db.ts";
 
 const COMMAND = `show [${ARG_DATABASE_ID}]`;
 const DESCRIPTION = "Show database details.";
 
-interface ShowArgs {
-  [ARG_DATABASE_ID]?: string;
+/** Format a region as "Name (CODE)". */
+function formatRegion(region: DatabaseRegion): string {
+  return region.name === region.code
+    ? region.code
+    : `${region.name} (${region.code})`;
 }
 
 /**
@@ -40,7 +32,8 @@ interface ShowArgs {
  * bunny db show --output json
  * ```
  */
-export const dbShowCommand = defineCommand<ShowArgs>({
+export const dbShowCommand = defineActionCommand({
+  action: dbGet,
   command: COMMAND,
   describe: DESCRIPTION,
   examples: [
@@ -49,74 +42,50 @@ export const dbShowCommand = defineCommand<ShowArgs>({
     ["$0 db show --output json", "JSON output for scripting"],
   ],
 
-  handler: async ({
-    [ARG_DATABASE_ID]: databaseIdArg,
-    profile,
-    output,
-    verbose,
-    apiKey,
-  }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createDbClient(clientOptions(config, verbose));
+  builder: (yargs) =>
+    yargs.positional(ARG_DATABASE_ID, {
+      type: "string",
+      describe: "Database ID (defaults to the linked or .env database)",
+    }),
 
-    const { id: databaseId } = await resolveDbId(client, databaseIdArg);
+  progress: "Fetching database...",
 
-    const spin = spinner("Fetching database...");
-    spin.start();
+  prepare: async (args, ctx) => {
+    const { id } = await resolveDbId(ctx.clients.db, args[ARG_DATABASE_ID]);
+    return { input: { database: id } };
+  },
 
-    const [db, liveMetrics, regionConfig] = await Promise.all([
-      fetchDatabase(client, databaseId),
-      fetchLiveStatus(client, [databaseId]),
-      fetchRegionConfig(client),
-    ]);
-
-    spin.stop();
-
-    const live = liveMetrics[databaseId];
-    const regionNames = regionNameMap(regionConfig);
-
-    /** Format a region code as "Name (CODE)". */
-    const formatRegion = (code: string) => {
-      const name = regionNames.get(code);
-      return name ? `${name} (${code})` : code;
-    };
-
-    if (output === "json") {
-      logger.log(JSON.stringify({ ...db, live_status: live ?? null }, null, 2));
-      return;
-    }
-
-    const status = liveStatusLabel(live);
-    const mainCode = liveMainRegion(live);
-    const primaryRegion = mainCode ? formatRegion(mainCode) : "—";
-    const replicaRegions =
-      live?.state === "Live" && live.metadata.replicas.length > 0
-        ? live.metadata.replicas.map(formatRegion).join(", ")
-        : "None";
-
-    const sizeBytes = db.current_size_bytes;
-    const maxBytes = db.size_max_bytes;
-    const sizeFraction = maxBytes > 0 ? sizeBytes / maxBytes : 0;
+  render: (db, { output }) => {
+    const sizeFraction =
+      db.maxSizeBytes > 0 ? db.sizeBytes / db.maxSizeBytes : 0;
     const sizePercent = Math.round(sizeFraction * 100);
-    const currentSize = formatBytes(sizeBytes);
-    const maxSize = formatBytes(maxBytes);
-    const sizePlain = `${currentSize} / ${maxSize} (${sizePercent}%)`;
+    const currentSize = formatBytes(db.sizeBytes);
+    const maxSize = formatBytes(db.maxSizeBytes);
 
     const entries = [
       { key: "ID", value: db.id },
       { key: "Name", value: db.name },
       { key: "URL", value: db.url },
-      { key: "Status", value: status },
+      { key: "Status", value: db.status === "active" ? "Active" : "Idle" },
       {
         key: "Size",
         value:
           output === "text"
             ? `${currentSize} / ${maxSize}  ${progressBar(sizeFraction)}  ${sizePercent}%`
-            : sizePlain,
+            : `${currentSize} / ${maxSize} (${sizePercent}%)`,
       },
-      { key: "Storage Region", value: db.storage_region },
-      { key: "Primary Region", value: primaryRegion },
-      { key: "Replica Regions", value: replicaRegions },
+      { key: "Storage Region", value: db.storageRegion },
+      {
+        key: "Primary Region",
+        value: db.primaryRegion ? formatRegion(db.primaryRegion) : "—",
+      },
+      {
+        key: "Replica Regions",
+        value:
+          db.replicaRegions.length > 0
+            ? db.replicaRegions.map(formatRegion).join(", ")
+            : "None",
+      },
     ];
 
     logger.log(formatKeyValue(entries, output));

@@ -69,14 +69,15 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 
 ## Project Structure
 
-This is a Bun workspace monorepo with six packages:
+This is a Bun workspace monorepo with seven packages:
 
 - **`@bunny.net/openapi-client`** (`packages/openapi-client/`) — Standalone, type-safe OpenAPI client for bunny.net, generated from OpenAPI specs. Zero CLI dependencies. Publishable to npm.
+- **`@bunny.net/actions`** (`packages/actions/`): headless action layer. one definition per operation (`{ name, description, schema, destructive, run(ctx, input) }`) with Zod input schemas and normalized result shapes. No prompting, no printing. Wrapped by the CLI as yargs commands, convertible to MCP tools via `@bunny.net/actions/mcp`, and importable directly by agents as a curated registry. See "Action Layer" below.
 - **`@bunny.net/config`** (`packages/config/`) — Shared `bunny.jsonc` schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. The root `BunnyConfigSchema` has optional `app` (Magic Containers) and `sites` (static sites) blocks; `BunnyAppConfigSchema` narrows it to require `app`. Used by the CLI and potentially other tools.
 - **`@bunny.net/database-shell`** (`packages/database-shell/`) — Standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
 - **`@bunny.net/scriptable-dns-types`** (`packages/scriptable-dns-types/`): Ambient TypeScript declarations for the Scriptable DNS runtime globals (`ARecord`, `Monitoring`, `RoutingEngine`, etc.). Types-only, no runtime code: the DNS runtime can't `import`, so these power editor autocomplete and an optional typecheck step. Scaffolded into projects by `bunny dns scripts init`; intended to also feed the dashboard editor. Publishable to npm.
 - **`@bunny.net/sandbox`** (`packages/sandbox/`) — Standalone sandbox SDK. Code-first DX (`Sandbox.create`, `writeFiles`, `runCommand`, `exposePort`, `setEnv`/`getEnv`/`unsetEnv`, `listFiles`/`deleteFile`/`rename`/`exists`) over Magic Containers provisioning plus an `ssh2` SSH/SFTP transport. Blocking `runCommand` accepts `timeout` (rejects with `CommandTimeoutError` carrying partial output), `signal` for cancellation, and `onStdout`/`onStderr` callbacks for live output. Env vars can be baked in at `create` (persisted), passed per-command via `runCommand({ env })` (temporary), or persisted after creation via `setEnv`. The handle implements `Symbol.dispose`/`Symbol.asyncDispose` so `using`/`await using` release the SSH connection (without deleting the sandbox). Zero CLI dependencies.
-- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/config`, `@bunny.net/database-shell`, `@bunny.net/scriptable-dns-types`, and `@bunny.net/sandbox`.
+- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/actions`, `@bunny.net/config`, `@bunny.net/database-shell`, `@bunny.net/scriptable-dns-types`, and `@bunny.net/sandbox`.
 
 ```
 bunny-cli/
@@ -152,6 +153,25 @@ bunny-cli/
 │   │       ├── types.ts                  # ShellLogger, ShellOptions, PrintMode
 │   │       └── shell.test.ts            # Tests for shell utilities
 │   │
+│   ├── actions/                          # @bunny.net/actions package
+│   │   ├── package.json                  # exports "." (registry) and "./mcp" (tool descriptors)
+│   │   └── src/
+│   │       ├── index.ts                  # Barrel export: defineAction, registry, context, action + result types
+│   │       ├── define-action.ts          # defineAction(): name validation + invoke() that Zod-validates input first
+│   │       ├── context.ts                # createActionContext(): lazy memoized core/db clients, signal, progress/debug callbacks, injectable clients for tests
+│   │       ├── registry.ts               # actions[] (sorted, duplicate-checked) + getAction/requireAction/listActions/runAction
+│   │       ├── mcp.ts                    # toMcpTools()/toMcpTool()/actionForToolName(): Zod → JSON Schema + readOnly/destructive annotations
+│   │       └── actions/
+│   │           ├── storage/
+│   │           │   ├── index.ts          # storage.regions.list, storage.zones.list/get/create/delete
+│   │           │   ├── api.ts            # fetchStorageZones/fetchStorageZone/resolveStorageZone/toSafeStorageZone (moved out of the CLI)
+│   │           │   ├── model.ts          # StorageZone normalized shape + toStorageZone/isS3Enabled/s3Endpoint
+│   │           │   └── regions.ts        # STORAGE_REGIONS/STORAGE_REGION_CODES + replication normalization
+│   │           └── db/
+│   │               ├── index.ts          # db.list, db.get
+│   │               ├── api.ts            # fetchDatabase/fetchAllDatabases/fetchRegionConfig/fetchLiveStatus/regionNameMap (moved out of the CLI)
+│   │               └── model.ts          # Database normalized shape + toDatabase (region codes resolved to names)
+│   │
 │   ├── sandbox/                          # @bunny.net/sandbox package
 │   │   ├── package.json
 │   │   ├── tsconfig.json
@@ -173,7 +193,9 @@ bunny-cli/
 │           ├── cli.ts                    # Root yargs instance, global flags, command registration
 │           │
 │           ├── core/
+│           │   ├── action-context.ts     # actionContext(): builds an @bunny.net/actions ActionContext from ResolvedConfig (API key resolved lazily, so no-API actions run unauthenticated)
 │           │   ├── client-options.ts     # clientOptions() helper — builds ClientOptions from ResolvedConfig
+│           │   ├── define-action-command.ts # Action-backed command factory: prepare → confirm → spinner → after → render (see "Action Layer" below)
 │           │   ├── define-command.ts     # Command factory (see "Command Pattern" below)
 │           │   ├── define-namespace.ts   # Namespace/group factory for subcommand trees
 │           │   ├── dns-nameservers.ts    # BUNNY_NAMESERVERS + expectedNameservers(zone) + checkDelegation()/checkDelegations(): reads the parent zone's NS referral (raw UDP query of the registry, not the recursive answer a child host could spoof; falls back to dns.resolveNs when the referral is unreadable), matches the full expected set both ways, ground truth over bunny's NameserversDetected flag which defaults true on a fresh zone; checkDelegations is bounded-concurrency for the zone list
@@ -475,7 +497,7 @@ bunny-cli/
 
 ### Conventions
 
-- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
+- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/actions/` is the headless action layer shared by the CLI, MCP tools, and agents; `packages/config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
 - **API clients use `ClientOptions`** — an options object with `apiKey`, `baseUrl`, `verbose`, `userAgent`, and `onDebug`. The CLI provides a `clientOptions(config, verbose)` helper to build this from `ResolvedConfig`.
 - **One command per file.** Each file in `commands/` exports a single command or namespace.
 - **Commands are grouped by domain** in subdirectories (`config/`, `db/`, `scripts/`).
@@ -560,6 +582,75 @@ export const dbNamespace = defineNamespace("db", "Manage databases.", [
 ```
 
 Namespaces automatically enforce `demandCommand(1)` so that running `bunny db` without a subcommand shows help.
+
+---
+
+## Action Layer
+
+`@bunny.net/actions` holds the work; the CLI holds the experience. One action definition backs three surfaces: a yargs command, an MCP tool, and a direct import in an agent.
+
+### `defineAction(def)`
+
+```typescript
+export const storageZonesDelete = defineAction({
+  name: "storage.zones.delete", // dotted, lowercase, unique; `bunny_storage_zones_delete` as an MCP tool
+  title: "Delete a storage zone", // optional human label
+  description: "Permanently delete a storage zone and every file in it...",
+  schema: z.strictObject({ zone: zoneRef }), // object schemas only; `.describe()` every field
+  destructive: true, // drives CLI confirmation + MCP destructiveHint
+  examples: [[{ zone: "my-assets" }, "Delete a zone and all of its files"]],
+  run: async (ctx, input) => ({ id, name, deleted: true }), // plain serializable data
+});
+```
+
+Rules that keep the three surfaces honest:
+
+- **Actions never prompt and never print.** No `prompts`, no `logger`, no spinners. Progress is reported with `ctx.progress(message)` and the host decides how to show it.
+- **Actions return normalized data, not raw API models.** `toStorageZone`/`toDatabase` map PascalCase API payloads to a stable camelCase shape, strip credentials, and resolve region codes to names. This shape is the contract every surface sees.
+- **Input is validated before `run`.** `action.invoke(ctx, input)` Zod-parses first and rejects with a `UserError` naming the offending field.
+- **`destructive` is declared, not inferred.** Anything that creates, mutates, or deletes remote state sets it; `defineActionCommand` refuses to run such an action without a confirmation.
+
+`ActionContext` (from `createActionContext`) carries credentials, lazily created memoized API clients (`ctx.clients.core`, `ctx.clients.db`), an optional `AbortSignal`, and `progress`/`debug` callbacks. Pass `clients` to inject fakes in tests.
+
+### `defineActionCommand(def)`
+
+Wraps an action as a yargs command. The lifecycle is `prepare → confirm → run (spinner) → after → render`:
+
+```typescript
+export const storageZoneRemoveCommand = defineActionCommand({
+  action: storageZonesDelete,
+  command: "remove [zone]",
+  aliases: ["rm"],
+  builder: (yargs) =>
+    yargs.positional("zone", { type: "string" }).option("force", { type: "boolean" }),
+  progress: "Deleting storage zone...",
+
+  // Prompts, pickers, manifest lookups. Return CANCELLED to stop.
+  prepare: async ({ zone: ref, force, output }, ctx) => {
+    const zone = await resolveStorageZoneInteractive(ctx.clients.core, ref, { output, force });
+    return {
+      input: { zone: String(zone.Id) },
+      // Closes over what prepare() resolved, so the prompt can name the zone and its file count.
+      confirm: () => confirm(`Delete storage zone ${zone.Name}...`, { force }),
+    };
+  },
+
+  after: (result) => {}, // CLI-local follow-up (manifest cleanup); runs for every output format
+  render: (result) => logger.success(`Deleted storage zone ${result.name}.`),
+});
+```
+
+`--output json` prints the action result verbatim and skips `render`, so a CLI run and an MCP tool call return the same document. Commands that need orchestration beyond a single action (`storage zones add`, which also creates a pull zone and attaches a domain) stay on `defineCommand` and call `action.invoke(ctx, input)` directly.
+
+### MCP conversion
+
+`@bunny.net/actions/mcp` turns the registry into tool descriptors: `toMcpTools()` for `tools/list`, `actionForToolName(name)` to dispatch `tools/call`. Zod becomes JSON Schema via `z.toJSONSchema`, `title`/`description`/`examples` become the tool description, and `destructive` becomes `readOnlyHint`/`destructiveHint`. There is no MCP server in this repo yet; the conversion and its tests are what a server would consume.
+
+### Adding an action
+
+1. Define it under `packages/actions/src/actions/<namespace>/index.ts` and add it to that namespace's exported array (the registry picks it up and enforces unique names).
+2. Put shared API calls in the namespace's `api.ts` and the normalized shape in `model.ts`. If the CLI already has that helper, move it here and re-export from the CLI module so existing call sites keep working.
+3. Wrap it with `defineActionCommand` in `packages/cli/src/commands/...`.
 
 ---
 

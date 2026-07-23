@@ -1,7 +1,7 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
+import { type StorageZone, storageZonesCreate } from "@bunny.net/actions";
 import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
+import { actionContext } from "../../../core/action-context.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import {
@@ -13,7 +13,6 @@ import {
 } from "../../../core/hostnames/index.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, isInteractive, spinner } from "../../../core/ui.ts";
-import { type StorageZoneModel, toSafeStorageZone } from "../api.ts";
 import {
   confirmAddedReplicationRegions,
   normalizeReplicationRegions,
@@ -102,7 +101,10 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     }
 
     const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+    // The zone itself is created by an action; the pull zone and custom domain
+    // orchestration around it stays here, where it can prompt.
+    const ctx = actionContext(config, { verbose });
+    const client = ctx.clients.core;
 
     // JSON output, non-TTY, and --force all stay non-interactive; values must come from flags.
     const interactive = isInteractive(output) && !force;
@@ -176,21 +178,18 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
 
     const spin = spinner("Creating storage zone...");
     spin.start();
-    let created: StorageZoneModel | undefined;
+    let created: StorageZone;
     try {
-      const { data } = await client.POST("/storagezone", {
-        body: {
-          Name: zoneName,
-          Region: mainRegion,
-          ReplicationRegions: replicationCodes.length ? replicationCodes : null,
-        },
+      created = await storageZonesCreate.invoke(ctx, {
+        name: zoneName,
+        region: mainRegion,
+        replicationRegions: replicationCodes,
       });
-      created = data;
     } finally {
       spin.stop();
     }
 
-    const zoneId = created?.Id;
+    const zoneId = created.id || undefined;
 
     // A storage zone only holds files; a pull zone serves them on the web.
     // A custom domain attaches to that pull zone, so --domain implies one too.
@@ -254,9 +253,9 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       logger.log(
         JSON.stringify(
           {
-            ...(created ? toSafeStorageZone(created) : { Name: zoneName }),
-            PullZone: pullZoneResult ?? null,
-            CustomDomain: customDomainResult ?? null,
+            ...created,
+            pullZone: pullZoneResult ?? null,
+            customDomain: customDomainResult ?? null,
           },
           null,
           2,

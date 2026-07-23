@@ -1,43 +1,30 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import { storageZonesList } from "@bunny.net/actions";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { formatBytes, formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
-import {
-  fetchStorageZones,
-  type StorageZoneModel,
-  toSafeStorageZone,
-} from "../api.ts";
 
-export const storageZoneListCommand = defineCommand({
+export const storageZoneListCommand = defineActionCommand({
+  action: storageZonesList,
   command: "list",
   aliases: ["ls"],
   describe: "List all storage zones.",
   examples: [
     ["$0 storage zones list", "List all storage zones"],
+    ["$0 storage zones list --search assets", "Filter zones by name"],
     ["$0 storage zones list --output json", "JSON output"],
   ],
 
-  handler: async ({ profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+  builder: (yargs) =>
+    yargs.option("search", {
+      type: "string",
+      describe: "Only list zones whose name matches this term",
+    }),
 
-    const spin = spinner("Fetching storage zones...");
-    spin.start();
-    let zones: StorageZoneModel[];
-    try {
-      zones = await fetchStorageZones(client);
-    } finally {
-      spin.stop();
-    }
+  progress: "Fetching storage zones...",
 
-    if (output === "json") {
-      logger.log(JSON.stringify(zones.map(toSafeStorageZone), null, 2));
-      return;
-    }
+  prepare: async ({ search }) => ({ input: { search } }),
 
+  render: (zones, { output }) => {
     if (zones.length === 0) {
       logger.info("No storage zones found.");
       return;
@@ -46,12 +33,12 @@ export const storageZoneListCommand = defineCommand({
     logger.log(
       formatTable(
         ["ID", "Name", "Region", "Files", "Used"],
-        zones.map((z) => [
-          String(z.Id ?? ""),
-          z.Name ?? "",
-          z.Region ?? "",
-          String(z.FilesStored ?? 0),
-          formatBytes(z.StorageUsed ?? 0),
+        zones.map((zone) => [
+          String(zone.id),
+          zone.name,
+          zone.region,
+          String(zone.filesStored),
+          formatBytes(zone.storageUsed),
         ]),
         output,
       ),

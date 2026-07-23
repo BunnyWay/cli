@@ -1,5 +1,9 @@
+import { s3Endpoint } from "@bunny.net/actions";
 import { UserError } from "../../core/errors.ts";
 import type { StorageZoneModel } from "./api.ts";
+
+// S3 detection and endpoint derivation are part of the zone shape actions return.
+export { isS3Enabled, s3Endpoint } from "@bunny.net/actions";
 
 export interface S3Credentials {
   endpoint: string;
@@ -11,15 +15,6 @@ export interface S3Credentials {
 // Config formats for external S3 tools (default human/json output is handled by --output).
 export const S3_TOOL_FORMATS = ["rclone", "aws", "s3cmd", "env"] as const;
 export type S3ToolFormat = (typeof S3_TOOL_FORMATS)[number];
-
-export function isS3Enabled(zone: StorageZoneModel): boolean {
-  return zone.StorageZoneType === 1;
-}
-
-// Edge Storage S3 endpoint, e.g. https://de-s3.storage.bunnycdn.com
-export function s3Endpoint(zone: StorageZoneModel): string {
-  return `https://${(zone.Region ?? "").toLowerCase()}-s3.storage.bunnycdn.com`;
-}
 
 export function s3Credentials(
   zone: StorageZoneModel,

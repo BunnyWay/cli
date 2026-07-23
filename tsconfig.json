@@ -16,6 +16,8 @@
 
     // Resolve @bunny.net/openapi-client and @bunny.net/sandbox from source in-repo (no prebuild); npm consumers use their package exports. See AGENTS.md "Publishing".
     "paths": {
+      "@bunny.net/actions": ["./packages/actions/src/index.ts"],
+      "@bunny.net/actions/mcp": ["./packages/actions/src/mcp.ts"],
       "@bunny.net/openapi-client": ["./packages/openapi-client/src/index.ts"],
       "@bunny.net/openapi-client/generated/*": [
         "./packages/openapi-client/src/generated/*"
