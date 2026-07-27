@@ -7,4 +7,11 @@ if [ -z "${AGENT_TOKEN}" ]; then
 fi
 
 echo "root:${AGENT_TOKEN}" | chpasswd
+
+# The persistent volume mounts over /workplace after the image is built, so the
+# config directories have to be created here — anything created at build time is
+# hidden by the mount.
+mkdir -p /workplace/.claude \
+         /workplace/.config
+
 exec /usr/sbin/sshd -D

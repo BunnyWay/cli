@@ -5,6 +5,12 @@ on:
     branches: [main]
     paths:
       - sandbox/**
+  # Daily rebuild so Claude Code and the bunny CLI pick up new releases without
+  # a commit. The Dockerfile keys each install layer on the upstream version, so
+  # a day with no releases is a fully cached no-op.
+  # Off the hour on purpose — the top of the hour is the busiest Actions slot.
+  schedule:
+    - cron: "17 4 * * *"
   workflow_dispatch:
 
 jobs:
