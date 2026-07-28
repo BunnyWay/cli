@@ -125,7 +125,7 @@ bunny sites ci init --framework astro       # skip detection (astro, vite, react
 bunny sites ci init --site my-site --force  # overwrite an existing workflow
 ```
 
-Writes a workflow that deploys previews on pull requests and publishes to production on merges to `main`, using the `BunnyWay/actions/deploy-site` action with the site name baked in. Framework detection reads `package.json` dependencies, `Gemfile`, or Hugo config; the lockfile picks the package manager for the install steps. Fork PRs are skipped (no secrets there). After writing, the CLI offers to run `gh secret set BUNNY_API_KEY` (or prints the manual steps). `sites create` offers the same scaffold on GitHub repos; declining prints the workflow instead.
+Writes a workflow that deploys previews on pull requests and publishes to production on merges to `main`, using the `BunnyWay/actions/deploy-site` action with the site name baked in. `sites.dir` and `sites.build` from `bunny.jsonc` override the preset's deploy directory and build command, so CI builds and deploys exactly what a local `sites deploy` does. Framework detection reads `package.json` dependencies, `Gemfile`, or Hugo config; the lockfile picks the package manager for the install steps. Fork PRs are skipped (no secrets there). After writing, the CLI offers to run `gh secret set BUNNY_API_KEY` (or prints the manual steps). `sites create` offers the same scaffold on GitHub repos; declining prints the workflow instead.
 
 ---
 

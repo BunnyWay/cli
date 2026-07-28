@@ -4,6 +4,7 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
 import { isInteractive } from "../../../core/ui.ts";
+import { loadSiteConfig } from "../config.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -69,12 +70,16 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
       );
     }
 
+    // `sites.dir`/`sites.build` are what a local deploy uses, so the workflow follows them.
+    const siteConfig = loadSiteConfig()?.config;
     const result = await scaffoldSitesWorkflow({
       site: name,
       root,
       frameworkId: args.framework,
       interactive,
       force: args.force,
+      dir: siteConfig?.dir,
+      build: siteConfig?.build,
     });
 
     if (output === "json") {
@@ -85,6 +90,7 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
             path: result.path,
             framework: result.preset.id,
             packageManager: result.packageManager,
+            directory: result.dir,
           },
           null,
           2,
@@ -99,7 +105,7 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
     }
 
     logger.success(
-      `Wrote ${result.path} (${result.preset.label}, deploys ${result.preset.dir}).`,
+      `Wrote ${result.path} (${result.preset.label}, deploys ${result.dir}).`,
     );
     logger.log();
     await offerGitHubSecret({ apiKey: config.apiKey, root, interactive });

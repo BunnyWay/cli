@@ -94,6 +94,42 @@ test("zola installs the zola binary and blazor uses dotnet", () => {
   expect(blazor).toContain('directory: "bin/Release/net8.0/publish/wwwroot"');
 });
 
+test("sites.dir and sites.build from bunny.jsonc win over the preset", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("astro"),
+    packageManager: "npm",
+    dir: "build",
+    build: "make site",
+  });
+  expect(yml).toContain("run: npm ci");
+  expect(yml).toContain("run: make site");
+  expect(yml).not.toContain("run: npm run build");
+  expect(yml).toContain('directory: "build"');
+});
+
+test("a configured build runs even for a static preset", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("static"),
+    packageManager: "npm",
+    build: "./build.sh",
+  });
+  expect(yml).toContain("run: ./build.sh");
+  expect(yml).not.toContain("# No build step");
+});
+
+test("a configured build that would break a bare YAML scalar is quoted", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("static"),
+    packageManager: "npm",
+    build: "echo hi\n      run: rm -rf /",
+  });
+  expect(yml).toContain('run: "echo hi\\n      run: rm -rf /"');
+  expect(yml).not.toContain("\n      run: rm -rf /\n");
+});
+
 test("interpolated site name is a quoted, inert YAML scalar", () => {
   const yml = renderSitesWorkflow({
     site: "evil\n      run: rm -rf /",

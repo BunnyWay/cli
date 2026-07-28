@@ -41,25 +41,38 @@ const JS_SETUP: Record<PackageManager, string[]> = {
   ],
 };
 
-function jsSteps(preset: FrameworkPreset, pm: PackageManager): string[] {
-  const build = presetBuildCommand(preset, pm) ?? `${pm} run build`;
-  return [...JS_SETUP[pm], `      - run: ${build}`];
+// A `sites.build` from bunny.jsonc is user text, so quote it when a bare YAML scalar wouldn't survive it; preset commands are plain and stay unquoted.
+const YAML_UNSAFE_SCALAR = /^[-?:,[\]{}#&*!|>'"%@`]|\n|:\s|\s#/;
+
+function runStep(command: string | undefined): string {
+  const value = command ?? "";
+  return `      - run: ${YAML_UNSAFE_SCALAR.test(value) ? JSON.stringify(value) : value}`;
+}
+
+function jsSteps(
+  preset: FrameworkPreset,
+  pm: PackageManager,
+  build: string | undefined,
+): string[] {
+  const command = build ?? presetBuildCommand(preset, pm) ?? `${pm} run build`;
+  return [...JS_SETUP[pm], runStep(command)];
 }
 
 function buildSteps(
   preset: FrameworkPreset,
   packageManager: PackageManager,
+  build: string | undefined,
 ): string[] {
   switch (preset.toolchain) {
     case "js":
-      return jsSteps(preset, packageManager);
+      return jsSteps(preset, packageManager, build);
     case "ruby":
       return [
         "      - uses: ruby/setup-ruby@v1",
         "        with:",
         '          ruby-version: "3.3"',
         "          bundler-cache: true",
-        `      - run: ${preset.build}`,
+        runStep(build ?? preset.build),
         "        env:",
         "          JEKYLL_ENV: production",
       ];
@@ -69,7 +82,7 @@ function buildSteps(
         "        with:",
         '          hugo-version: "latest"',
         "          extended: true",
-        `      - run: ${preset.build}`,
+        runStep(build ?? preset.build),
       ];
     case "python":
       return [
@@ -77,32 +90,37 @@ function buildSteps(
         "        with:",
         '          python-version: "3.x"',
         "      - run: pip install -r requirements.txt",
-        `      - run: ${preset.build}`,
+        runStep(build ?? preset.build),
       ];
     case "zola":
       return [
         "      - uses: taiki-e/install-action@v2",
         "        with:",
         "          tool: zola",
-        `      - run: ${preset.build}`,
+        runStep(build ?? preset.build),
       ];
     case "dotnet":
       return [
         "      - uses: actions/setup-dotnet@v4",
         "        with:",
         '          dotnet-version: "8.0.x"',
-        `      - run: ${preset.build}`,
+        runStep(build ?? preset.build),
       ];
     case "none":
-      return ["      # No build step: static files deploy as-is."];
+      // A static site has no toolchain to set up, but a configured build still runs.
+      return build
+        ? [runStep(build)]
+        : ["      # No build step: static files deploy as-is."];
   }
 }
 
-// Render the GitHub Actions workflow: previews on PRs, production on pushes to main, via the BunnyWay/actions deploy-site action.
+// Render the GitHub Actions workflow: previews on PRs, production on pushes to main, via the BunnyWay/actions deploy-site action. `dir`/`build` carry `sites.dir`/`sites.build` from bunny.jsonc so CI deploys what `sites deploy` does.
 export function renderSitesWorkflow(opts: {
   site: string;
   preset: FrameworkPreset;
   packageManager: PackageManager;
+  dir?: string;
+  build?: string;
 }): string {
   const { site, preset, packageManager } = opts;
   const lines = [
@@ -128,13 +146,13 @@ export function renderSitesWorkflow(opts: {
     "    steps:",
     "      - uses: actions/checkout@v4",
     "",
-    ...buildSteps(preset, packageManager),
+    ...buildSteps(preset, packageManager, opts.build),
     "",
     `      - uses: ${DEPLOY_SITE_ACTION}`,
     "        with:",
     // Quote the interpolated values so they're always inert YAML scalars.
     `          site: ${JSON.stringify(site)}`,
-    `          directory: ${JSON.stringify(preset.dir)}`,
+    `          directory: ${JSON.stringify(opts.dir ?? preset.dir)}`,
     "          production: ${{ github.event_name == 'push' }}",
     "          api_key: ${{ secrets.BUNNY_API_KEY }}",
   ];

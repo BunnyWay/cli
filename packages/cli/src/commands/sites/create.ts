@@ -21,6 +21,7 @@ import {
   printWorkflowInstructions,
   scaffoldSitesWorkflow,
 } from "./ci/scaffold.ts";
+import { loadSiteConfig } from "./config.ts";
 import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 import { setupSiteDomain } from "./domains/index.ts";
 import { createSiteWithProgress, promptSiteName } from "./provision.ts";
@@ -213,15 +214,18 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
           "Set up GitHub deployments (preview on PRs, production on main)?",
           { initial: true },
         );
+        const siteConfig = loadSiteConfig()?.config;
         if (setup) {
           const scaffold = await scaffoldSitesWorkflow({
             site: name,
             root,
             interactive: true,
+            dir: siteConfig?.dir,
+            build: siteConfig?.build,
           });
           if (scaffold) {
             logger.success(
-              `Wrote ${scaffold.path} (${scaffold.preset.label}, deploys ${scaffold.preset.dir}).`,
+              `Wrote ${scaffold.path} (${scaffold.preset.label}, deploys ${scaffold.dir}).`,
             );
             await offerGitHubSecret({
               apiKey: config.apiKey,
@@ -230,7 +234,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
             });
           }
         } else {
-          await printWorkflowInstructions(name, root);
+          await printWorkflowInstructions(name, root, siteConfig);
         }
       }
     }

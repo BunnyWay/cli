@@ -30,6 +30,8 @@ export interface ScaffoldResult {
   path: string;
   preset: FrameworkPreset;
   packageManager: PackageManager;
+  /** Directory the workflow deploys: `sites.dir` when configured, else the preset's. */
+  dir: string;
 }
 
 /** Resolve the framework preset: explicit id, detection, prompt, static fallback. */
@@ -37,6 +39,7 @@ async function resolvePreset(
   root: string,
   frameworkId: string | undefined,
   interactive: boolean,
+  dir: string | undefined,
 ): Promise<FrameworkPreset> {
   if (frameworkId) {
     const preset = findPreset(frameworkId);
@@ -51,7 +54,7 @@ async function resolvePreset(
 
   const detected = await detectFramework(root);
   if (detected) {
-    logger.info(`Detected ${detected.label} (deploys ${detected.dir}).`);
+    logger.info(`Detected ${detected.label} (deploys ${dir ?? detected.dir}).`);
     return detected;
   }
 
@@ -72,24 +75,29 @@ async function resolvePreset(
   return fallback;
 }
 
-// Write `.github/workflows/bunny-sites.yml`; returns null when the user declines to overwrite an existing file, throws when non-interactive and it exists without `force`.
+// Write `.github/workflows/bunny-sites.yml`; returns null when the user declines to overwrite an existing file, throws when non-interactive and it exists without `force`. `sites.dir`/`sites.build` from bunny.jsonc win over the preset, so CI deploys what `sites deploy` does.
 export async function scaffoldSitesWorkflow(opts: {
   site: string;
   root: string;
   frameworkId?: string;
   interactive: boolean;
   force?: boolean;
+  dir?: string;
+  build?: string;
 }): Promise<ScaffoldResult | null> {
   const preset = await resolvePreset(
     opts.root,
     opts.frameworkId,
     opts.interactive,
+    opts.dir,
   );
   const packageManager = await detectPackageManager(opts.root);
   const content = renderSitesWorkflow({
     site: opts.site,
     preset,
     packageManager,
+    dir: opts.dir,
+    build: opts.build,
   });
 
   const target = join(opts.root, SITES_WORKFLOW_PATH);
@@ -109,13 +117,19 @@ export async function scaffoldSitesWorkflow(opts: {
 
   mkdirSync(dirname(target), { recursive: true });
   await Bun.write(target, content);
-  return { path: SITES_WORKFLOW_PATH, preset, packageManager };
+  return {
+    path: SITES_WORKFLOW_PATH,
+    preset,
+    packageManager,
+    dir: opts.dir ?? preset.dir,
+  };
 }
 
 /** Print the workflow and setup steps for users who declined the scaffold. */
 export async function printWorkflowInstructions(
   site: string,
   root: string,
+  config?: { dir?: string; build?: string },
 ): Promise<void> {
   const preset = (await detectFramework(root)) ?? findPreset("static");
   if (!preset) return;
@@ -123,7 +137,15 @@ export async function printWorkflowInstructions(
   logger.log();
   logger.log(`To deploy from GitHub later, add ${SITES_WORKFLOW_PATH}:`);
   logger.log();
-  logger.log(renderSitesWorkflow({ site, preset, packageManager }));
+  logger.log(
+    renderSitesWorkflow({
+      site,
+      preset,
+      packageManager,
+      dir: config?.dir,
+      build: config?.build,
+    }),
+  );
   printSecretHint();
 }
 
