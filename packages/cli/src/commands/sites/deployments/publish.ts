@@ -13,6 +13,7 @@ import { markCurrent } from "../constants.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
+  siteLinkOption,
   siteOptionBuilder,
 } from "../interactive.ts";
 
@@ -34,21 +35,23 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
   ],
 
   builder: (yargs) =>
-    siteOptionBuilder(
-      yargs.positional("id", {
-        type: "string",
-        describe: "Deploy ID to publish (see `sites deployments list`)",
-      }),
-    )
-      .option("previous", {
-        type: "boolean",
-        describe: "Publish the previous deploy (instant rollback)",
-      })
-      .option("force", {
-        alias: "f",
-        type: "boolean",
-        describe: "Skip the confirmation prompt",
-      }),
+    siteLinkOption(
+      siteOptionBuilder(
+        yargs.positional("id", {
+          type: "string",
+          describe: "Deploy ID to publish (see `sites deployments list`)",
+        }),
+      )
+        .option("previous", {
+          type: "boolean",
+          describe: "Publish the previous deploy (instant rollback)",
+        })
+        .option("force", {
+          alias: "f",
+          type: "boolean",
+          describe: "Skip the confirmation prompt",
+        }),
+    ),
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;

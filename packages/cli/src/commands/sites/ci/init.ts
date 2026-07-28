@@ -7,6 +7,7 @@ import { isInteractive } from "../../../core/ui.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
+  siteLinkOption,
   siteOptionBuilder,
 } from "../interactive.ts";
 import { FRAMEWORK_PRESETS } from "./frameworks.ts";
@@ -36,7 +37,7 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
   ],
 
   builder: (yargs) =>
-    siteOptionBuilder(yargs)
+    siteLinkOption(siteOptionBuilder(yargs))
       .option("framework", {
         type: "string",
         choices: FRAMEWORK_PRESETS.map((p) => p.id),

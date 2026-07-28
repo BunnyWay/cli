@@ -17,7 +17,7 @@ import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 const ARG_SITE_DESCRIPTION =
   "Site name or storage zone ID (uses the linked site if omitted)";
 const ARG_LINK_DESCRIPTION =
-  "Link the directory to the picked site (use --no-link to skip the prompt)";
+  "Link this directory to the site (prompted when picking one; --no-link never links)";
 
 /** Args contributed by {@link siteOptionBuilder} / {@link sitePositionalBuilder}. */
 export interface SiteSelectorArgs {
@@ -25,28 +25,32 @@ export interface SiteSelectorArgs {
   link?: boolean;
 }
 
-/** `--site` option + `--link`, for commands whose positionals are taken. */
+/** `--site` option, for commands whose positionals are taken. */
 export function siteOptionBuilder<T>(
   yargs: Argv<T>,
 ): Argv<T & SiteSelectorArgs> {
-  return yargs
-    .option("site", { type: "string", describe: ARG_SITE_DESCRIPTION })
-    .option("link", {
-      type: "boolean",
-      describe: ARG_LINK_DESCRIPTION,
-    }) as Argv<T & SiteSelectorArgs>;
+  return yargs.option("site", {
+    type: "string",
+    describe: ARG_SITE_DESCRIPTION,
+  }) as Argv<T & SiteSelectorArgs>;
 }
 
-/** Trailing `[site]` positional + `--link`. Pair with `command: "... [site]"`. */
+/** Trailing `[site]` positional. Pair with `command: "... [site]"`. */
 export function sitePositionalBuilder<T>(
   yargs: Argv<T>,
 ): Argv<T & SiteSelectorArgs> {
-  return yargs
-    .positional("site", { type: "string", describe: ARG_SITE_DESCRIPTION })
-    .option("link", {
-      type: "boolean",
-      describe: ARG_LINK_DESCRIPTION,
-    }) as Argv<T & SiteSelectorArgs>;
+  return yargs.positional("site", {
+    type: "string",
+    describe: ARG_SITE_DESCRIPTION,
+  }) as Argv<T & SiteSelectorArgs>;
+}
+
+/** `--link`. Only for commands that call {@link SelectedSite.offerLink}; elsewhere the flag would parse and do nothing. */
+export function siteLinkOption<T>(yargs: Argv<T>): Argv<T & SiteSelectorArgs> {
+  return yargs.option("link", {
+    type: "boolean",
+    describe: ARG_LINK_DESCRIPTION,
+  }) as Argv<T & SiteSelectorArgs>;
 }
 
 // Resolve a ref to a site: a storage zone ID/name directly, else by site name (zone names carry a random suffix, so the site name usually isn't one).
@@ -92,8 +96,16 @@ async function contextFromRef(
 
 export interface SelectedSite {
   site: SiteContext;
-  // Offer to link the directory to the site (only when chosen via the interactive picker); a no-op otherwise, so commands can always call it.
+  // Link the directory to the site: prompted when it came from the picker, silent when `--link` asked for it, a no-op otherwise, so commands can always call it.
   offerLink: () => Promise<void>;
+}
+
+function linkDirectory(site: SiteContext): void {
+  saveManifest<SiteManifest>(SITES_MANIFEST, {
+    id: site.state.storageZoneId,
+    name: site.state.name,
+  });
+  logger.success(`Linked to ${site.state.name} (${site.state.storageZoneId}).`);
 }
 
 // Resolve the site a command acts on, in precedence order: explicit ref, `.bunny/site.json`, `sites.name` in bunny.jsonc, interactive picker (non-interactive runs fail with a hint instead of hanging). `offerCreate` (deploy only) adds a "new site" branch returning a ready, already-linked context. Destructive commands pass their `--force` to opt out of the picker.
@@ -106,15 +118,17 @@ export async function selectSite(
   },
 ): Promise<SelectedSite> {
   const noLink = async () => {};
+  // A site resolved from a ref or from bunny.jsonc isn't prompted about, but an explicit `--link` still asks for it to be linked.
+  const linkIfRequested = (site: SiteContext) => async () => {
+    if (args.link === true) linkDirectory(site);
+  };
 
   if (args.site) {
     const ref = args.site;
-    return {
-      site: await withSpinner("Resolving site...", () =>
-        contextFromRef(client, ref),
-      ),
-      offerLink: noLink,
-    };
+    const site = await withSpinner("Resolving site...", () =>
+      contextFromRef(client, ref),
+    );
+    return { site, offerLink: linkIfRequested(site) };
   }
 
   const manifest = loadManifest<SiteManifest>(SITES_MANIFEST);
@@ -134,13 +148,11 @@ export async function selectSite(
 
   const configured = loadSiteConfig()?.config.name;
   if (configured) {
-    return {
-      site: await withSpinner(
-        `Resolving site "${configured}" from bunny.jsonc...`,
-        () => contextFromRef(client, configured),
-      ),
-      offerLink: noLink,
-    };
+    const site = await withSpinner(
+      `Resolving site "${configured}" from bunny.jsonc...`,
+      () => contextFromRef(client, configured),
+    );
+    return { site, offerLink: linkIfRequested(site) };
   }
 
   // `--force` skips the confirmation too, so picking a site from a list would act on it unprompted.
@@ -205,14 +217,7 @@ export async function selectSite(
         args.link !== undefined
           ? args.link
           : await confirm(`Link this directory to ${context.state.name}?`);
-      if (!shouldLink) return;
-      saveManifest<SiteManifest>(SITES_MANIFEST, {
-        id: context.state.storageZoneId,
-        name: context.state.name,
-      });
-      logger.success(
-        `Linked to ${context.state.name} (${context.state.storageZoneId}).`,
-      );
+      if (shouldLink) linkDirectory(context);
     },
   };
 }

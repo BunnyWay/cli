@@ -9,6 +9,8 @@ Most commands accept an optional site (a trailing `[site]` positional, or the `-
 3. `sites.name` in `bunny.jsonc`
 4. Interactive prompt (suppressed in `--output json` mode, and on destructive commands run with `--force`; pass a site or link the directory in CI)
 
+Commands that can link the directory (`deploy`, `show`, `deployments list/publish`, `upgrade-router`, `ci init`) take `--link`/`--no-link`: the picker prompts unless the flag decided it, and an explicit `--link` also links a site resolved from a ref or from `bunny.jsonc`. The other site commands never write the manifest and don't take the flag.
+
 ## Typical workflows
 
 ```bash
@@ -77,6 +79,7 @@ bunny sites deploy ./out --build "npm run build" --env VITE_FLAG=1
 | `--production` | Publish as the live site (alias `--prod`; default is preview only)   |
 | `--force`      | Deploy even when content is unchanged                                |
 | `--site`       | Target site (name or storage zone ID)                                |
+| `--link`       | Link this directory to the deployed site (`--no-link` never links)   |
 
 With `--build`, the build runs in your shell environment plus the `--env`/`--env-file` overrides; there is no remote env store; put build-time values in your local `.env` or CI secrets. Deploying already-uploaded content with `--production` skips the upload and just publishes it.
 

@@ -10,6 +10,7 @@ import { withSpinner } from "../../core/ui.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
+  siteLinkOption,
   sitePositionalBuilder,
 } from "./interactive.ts";
 import { routerSource } from "./router/source.ts";
@@ -25,7 +26,7 @@ export const sitesUpgradeRouterCommand = defineCommand<UpgradeArgs>({
     ["$0 sites upgrade-router my-site", "Republish a specific site's router"],
   ],
 
-  builder: (yargs) => sitePositionalBuilder(yargs),
+  builder: (yargs) => siteLinkOption(sitePositionalBuilder(yargs)),
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
