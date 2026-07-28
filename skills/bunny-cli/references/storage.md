@@ -22,15 +22,20 @@ Zone and domains commands take an optional `[zone]` positional; file commands ta
 
 When a zone is chosen via the picker on a non-destructive command, the command offers to link the directory to it.
 
+Prefer passing the zone explicitly (`--zone` / `[zone]`); it works from any directory and in non-interactive contexts. Linking is a convenience for a directory dedicated to one zone, letting you drop the zone from every command.
+
 ## Typical workflows
 
 ```bash
-# Create a zone, link the directory, work with files
+# Create a zone and work with files (zone passed explicitly)
 bunny storage zones add my-zone --region DE
+bunny storage files upload ./photo.png --to images/ --zone my-zone
+bunny storage files list images/ --zone my-zone
+bunny storage files download images/photo.png --out ./local.png --zone my-zone
+
+# Or link the directory once, then drop the zone from file commands
 bunny storage link my-zone
 bunny storage files upload ./photo.png --to images/
-bunny storage files list images/
-bunny storage files download images/photo.png --out ./local.png
 
 # Create a zone that is also served on the web (pull zone + custom domain)
 bunny storage zones add my-zone --region DE --pull-zone --domain cdn.example.com
@@ -152,21 +157,24 @@ bunny storage zones domains remove cdn.example.com my-zone
 
 File commands use the zone's storage password against a region-specific host (both resolved from the zone automatically) and are powered by `@bunny.net/storage-sdk`. Paths are relative to the zone root. **A trailing slash denotes a directory**: `--to images/` uploads into it, `remove images/` deletes it and its contents recursively.
 
+Every file command takes `--zone` (`-z`); it can be omitted only in a directory linked with `bunny storage link` (or interactively via the picker).
+
 ## `bunny storage files list`
 
 ```bash
-bunny storage files list                               # linked zone's root (alias: ls)
-bunny storage files list images/                       # a directory
-bunny storage files list --zone my-zone
+bunny storage files list --zone my-zone                # zone root (alias: ls)
+bunny storage files list images/ --zone my-zone        # a directory
+bunny storage files list images/                       # linked zone
 ```
 
 ## `bunny storage files upload`
 
 ```bash
-bunny storage files upload ./photo.png                 # to the zone root, same name
-bunny storage files upload ./photo.png --to images/    # into a directory
-bunny storage files upload ./photo.png --to images/renamed.png
-bunny storage files upload ./photo.png --checksum --content-type image/png
+bunny storage files upload ./photo.png --zone my-zone  # to the zone root, same name
+bunny storage files upload ./photo.png --to images/ --zone my-zone
+bunny storage files upload ./photo.png --to images/renamed.png --zone my-zone
+bunny storage files upload ./photo.png --checksum --content-type image/png --zone my-zone
+bunny storage files upload ./photo.png --to images/    # linked zone
 ```
 
 | Flag             | Description                                               |
@@ -179,9 +187,9 @@ bunny storage files upload ./photo.png --checksum --content-type image/png
 ## `bunny storage files download`
 
 ```bash
-bunny storage files download images/photo.png          # to ./photo.png
-bunny storage files download images/photo.png --out ./local.png
-bunny storage files download images/photo.png --zone my-zone
+bunny storage files download images/photo.png --zone my-zone   # to ./photo.png
+bunny storage files download images/photo.png --out ./local.png --zone my-zone
+bunny storage files download images/photo.png          # linked zone
 ```
 
 ## `bunny storage files remove`
@@ -189,8 +197,8 @@ bunny storage files download images/photo.png --zone my-zone
 Confirms unless `--force`. A trailing slash deletes the directory recursively.
 
 ```bash
-bunny storage files remove images/photo.png            # alias: rm
-bunny storage files remove images/ --force             # directory + contents, no prompt
+bunny storage files remove images/photo.png --zone my-zone     # alias: rm
+bunny storage files remove images/ --force --zone my-zone      # directory + contents, no prompt
 ```
 
 ---
