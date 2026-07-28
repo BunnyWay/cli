@@ -57,6 +57,7 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       site: args.site,
       link: false,
       output,
+      force: args.force,
     });
     const { state, connection, etag } = site;
 

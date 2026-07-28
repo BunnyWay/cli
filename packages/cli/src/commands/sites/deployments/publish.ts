@@ -61,6 +61,7 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       site: args.site,
       link: args.link,
       output,
+      force: args.force,
     });
     const { state, connection, etag } = site;
 

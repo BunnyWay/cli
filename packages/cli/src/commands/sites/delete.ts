@@ -64,6 +64,7 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
       site: args.site,
       link: false,
       output,
+      force,
     });
     const { state } = site;
 

@@ -96,11 +96,12 @@ export interface SelectedSite {
   offerLink: () => Promise<void>;
 }
 
-// Resolve the site a command acts on, in precedence order: explicit ref, `.bunny/site.json`, `sites.name` in bunny.jsonc, interactive picker (non-interactive runs fail with a hint instead of hanging). `offerCreate` (deploy only) adds a "new site" branch returning a ready, already-linked context.
+// Resolve the site a command acts on, in precedence order: explicit ref, `.bunny/site.json`, `sites.name` in bunny.jsonc, interactive picker (non-interactive runs fail with a hint instead of hanging). `offerCreate` (deploy only) adds a "new site" branch returning a ready, already-linked context. Destructive commands pass their `--force` to opt out of the picker.
 export async function selectSite(
   client: CoreClient,
   args: SiteSelectorArgs & {
     output: OutputFormat;
+    force?: boolean;
     offerCreate?: () => Promise<SiteContext>;
   },
 ): Promise<SelectedSite> {
@@ -142,7 +143,8 @@ export async function selectSite(
     };
   }
 
-  if (!isInteractive(args.output)) {
+  // `--force` skips the confirmation too, so picking a site from a list would act on it unprompted.
+  if (args.force || !isInteractive(args.output)) {
     throw new UserError(
       "No site specified and no linked site found.",
       "Pass a site name or run `bunny sites link`.",

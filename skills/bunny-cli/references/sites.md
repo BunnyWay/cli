@@ -7,7 +7,7 @@ Most commands accept an optional site (a trailing `[site]` positional, or the `-
 1. Explicit name or storage zone ID
 2. `.bunny/site.json` manifest (written by `bunny sites link` or `bunny sites create`)
 3. `sites.name` in `bunny.jsonc`
-4. Interactive prompt (suppressed in `--output json` mode; pass a site or link the directory in CI)
+4. Interactive prompt (suppressed in `--output json` mode, and on destructive commands run with `--force`; pass a site or link the directory in CI)
 
 ## Typical workflows
 
@@ -155,5 +155,5 @@ An optional `sites` block configures the deploy defaults (validated on its own, 
 ## CI / agents
 
 - Pass `--force` on anything with a confirmation (publish, prune, remove, delete); without a TTY they error with a hint rather than waiting on a prompt.
-- Pass the site explicitly (or commit `bunny.jsonc` with `sites.name`); the interactive picker is disabled under `--output json`.
+- Pass the site explicitly (or commit `bunny.jsonc` with `sites.name`); the interactive picker is disabled under `--output json` and by `--force`, so `sites delete --force` with nothing linked errors instead of prompting.
 - `--output json` on every command emits machine-readable results (deploy prints `{ id, production, preview, promoted }`).

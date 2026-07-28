@@ -157,6 +157,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const coreClient = createCoreClient(options);
     const computeClient = createComputeClient(options);
 
+    // No `force` here: deploy's --force only redeploys unchanged content, so the picker stays.
     const { site, offerLink } = await selectSite(coreClient, {
       site: args.site,
       link: args.link,
