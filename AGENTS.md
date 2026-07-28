@@ -1476,7 +1476,12 @@ interface ShellLogger {
 
 - An explicit database ID skips `.env` entirely. `.env` may describe a different database, and silently connecting there would target the wrong one.
 - A generated token is only sent to a URL whose host matches that database's canonical URL, so `--url` without `--token` is rejected on mismatch. The host check runs before the token is created, so nothing is minted for an endpoint we'd refuse.
-- A token bound for an explicit `--url` must travel encrypted unless the user passed it as `--token` on the same command line. `isEncrypted()` allows `libsql:`, `https:`, and `wss:`, and rejects `libsql://host:port?tls=0`, which the libSQL client downgrades to plaintext. The scheme check runs first of all, before any lookup or prompt. An explicit `--token` with a plaintext `--url` is left alone: that pairing is deliberate, and it covers a local `sqld` over http.
+- The `.env` token is only reused for an explicit `--url` on the same host as the `.env` URL (`envTokenAllowedFor()`). That pairing is the user's own and holds for nothing else, so an override addressing anywhere else falls through to the API path, where a fresh token is created and checked against the canonical URL. The comparison is against `.env` rather than the API so the offline case (both values in `.env`, `--url` naming the same host) still needs no network call.
+- A token bound for an explicit `--url` must travel encrypted. `isEncrypted()` allows `libsql:`, `https:`, and `wss:`, and rejects `libsql://host:port?tls=0`, which the libSQL client downgrades to plaintext. The scheme check runs first of all, before any lookup or prompt, so an unusable URL fails immediately instead of after a database prompt.
+- An explicit `--token` is exempt from all of the above: pairing it with `--url` is deliberate, and it covers a local `sqld` over plain http.
+
+The invariant behind all of it: a credential the user didn't pass on this command line is never sent to a target they did.
+
 - `shellLogger()` adapter that wraps the CLI `logger`
 - `createClient()` call and delegation to `startShell()`/`executeQuery()`/`executeFile()`
 - Passes resolved `databaseId` and optional `--views-dir` to `startShell()` for saved views

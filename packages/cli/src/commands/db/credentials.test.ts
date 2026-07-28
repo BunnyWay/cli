@@ -1,7 +1,50 @@
 import { describe, expect, test } from "bun:test";
-import { isEncrypted, sameHost } from "./credentials.ts";
+import { envTokenAllowedFor, isEncrypted, sameHost } from "./credentials.ts";
 
 const CANONICAL = "libsql://my-db-abc.lite.bunnydb.net/";
+
+describe("envTokenAllowedFor", () => {
+  test("allows the .env token when no --url overrides it", () => {
+    expect(envTokenAllowedFor(undefined, CANONICAL)).toBe(true);
+    expect(envTokenAllowedFor(undefined, undefined)).toBe(true);
+  });
+
+  test("allows a --url naming the same host as the .env URL", () => {
+    expect(
+      envTokenAllowedFor("libsql://my-db-abc.lite.bunnydb.net", CANONICAL),
+    ).toBe(true);
+    expect(
+      envTokenAllowedFor("https://my-db-abc.lite.bunnydb.net", CANONICAL),
+    ).toBe(true);
+  });
+
+  test("refuses an encrypted --url on a different host", () => {
+    expect(envTokenAllowedFor("https://evil.example.com", CANONICAL)).toBe(
+      false,
+    );
+    expect(
+      envTokenAllowedFor("libsql://other-db.lite.bunnydb.net", CANONICAL),
+    ).toBe(false);
+  });
+
+  test("refuses a plaintext --url even on the matching host", () => {
+    expect(
+      envTokenAllowedFor("http://my-db-abc.lite.bunnydb.net", CANONICAL),
+    ).toBe(false);
+    expect(
+      envTokenAllowedFor(
+        "libsql://my-db-abc.lite.bunnydb.net:8080?tls=0",
+        CANONICAL,
+      ),
+    ).toBe(false);
+  });
+
+  test("refuses when .env has a token but no URL to pair it with", () => {
+    expect(
+      envTokenAllowedFor("https://my-db-abc.lite.bunnydb.net", undefined),
+    ).toBe(false);
+  });
+});
 
 describe("isEncrypted", () => {
   test("accepts libsql, https, and wss", () => {

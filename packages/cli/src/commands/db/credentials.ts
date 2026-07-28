@@ -56,6 +56,26 @@ export function sameHost(a: string, b: string): boolean {
 }
 
 /**
+ * True when the token stored in `.env` may be sent to an explicit `--url`.
+ *
+ * The `.env` token belongs to the `.env` URL: that pairing is the user's own, so
+ * it holds for the same host and nothing else. An override addressing anywhere
+ * else falls through to the API path, where a fresh token is created and checked
+ * against the database's canonical URL instead of reusing the stored one.
+ *
+ * Checked against `.env` rather than the API so the offline case (both values in
+ * `.env`, `--url` naming the same host) still needs no network call.
+ */
+export function envTokenAllowedFor(
+  explicitUrl: string | undefined,
+  envUrl: string | undefined,
+): boolean {
+  if (!explicitUrl) return true;
+  if (!envUrl) return false;
+  return sameHost(explicitUrl, envUrl) && isEncrypted(explicitUrl);
+}
+
+/**
  * Resolve the database URL and auth token needed to connect over libSQL.
  *
  * Resolution order:
@@ -66,13 +86,12 @@ export function sameHost(a: string, b: string): boolean {
  * An explicit database ID skips step 2 entirely: `.env` may describe a different
  * database, and silently connecting there would target the wrong database.
  *
- * A generated token is only ever sent to an encrypted URL that belongs to the
- * database it was created for, so overriding `--url` without `--token` is
- * rejected rather than handing a full-access token to an unverified or
- * plaintext endpoint. A token read from `.env` is likewise refused for a
- * plaintext `--url`, since the user never paired the two. A token passed as
- * `--token` alongside `--url` is left alone: that pairing is explicit, and it
- * covers connecting to a local `sqld` over plain http.
+ * The rule for tokens is that a credential the user didn't pass on this command
+ * line is never sent to a target they did. So a generated token only goes to an
+ * encrypted URL belonging to the database it was created for, and the `.env`
+ * token only goes to an encrypted `--url` on the same host as the `.env` URL.
+ * A token passed as `--token` is left alone: pairing it with `--url` is explicit,
+ * and it covers connecting to a local `sqld` over plain http.
  *
  * Shared by `db shell`, `db studio`, and `db migrations apply`.
  */
@@ -80,23 +99,16 @@ export async function resolveCredentials(
   opts: ResolveCredentialsOptions,
 ): Promise<ResolvedCredentials> {
   const useEnv = !opts.databaseId;
+  const envUrl = useEnv ? readEnvValue(ENV_DATABASE_URL)?.value : undefined;
   const envToken = useEnv
     ? readEnvValue(ENV_DATABASE_AUTH_TOKEN)?.value
     : undefined;
 
-  let url =
-    opts.url ?? (useEnv ? readEnvValue(ENV_DATABASE_URL)?.value : undefined);
-  let token = opts.token ?? envToken;
+  let url = opts.url ?? envUrl;
+  let token =
+    opts.token ?? (envTokenAllowedFor(opts.url, envUrl) ? envToken : undefined);
 
   if (url && token) {
-    // A stored token wasn't paired with this URL by the user, so don't leak it in the clear.
-    if (opts.url && !opts.token && envToken && !isEncrypted(opts.url)) {
-      throw new UserError(
-        "--url must be encrypted to receive the token from .env.",
-        "Use libsql:// or https://, or pass --token to send a credential of your choosing.",
-      );
-    }
-
     return {
       url,
       token,
