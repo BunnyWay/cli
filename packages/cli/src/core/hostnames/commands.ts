@@ -5,7 +5,7 @@ import { UserError } from "../errors.ts";
 import { formatTable } from "../format.ts";
 import { logger } from "../logger.ts";
 import type { GlobalArgs } from "../types.ts";
-import { confirm, isInteractive, spinner } from "../ui.ts";
+import { confirm, isInteractive, requireConfirmable, spinner } from "../ui.ts";
 import {
   addHostname,
   type CoreClient,
@@ -508,6 +508,11 @@ export function createHostnamesCommands(
         );
       }
 
+      requireConfirmable(args.output, {
+        force: args.force,
+        message: `Removing ${hostname} needs a confirmation prompt.`,
+        hint: "Re-run with --force to remove it non-interactively.",
+      });
       const confirmed = await confirm(`Remove ${hostname}?`, {
         force: args.force,
       });

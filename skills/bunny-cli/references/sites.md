@@ -154,6 +154,6 @@ An optional `sites` block configures the deploy defaults (validated on its own, 
 
 ## CI / agents
 
-- Pass `--force` on anything with a confirmation (publish, prune, remove, delete).
+- Pass `--force` on anything with a confirmation (publish, prune, remove, delete); without a TTY they error with a hint rather than waiting on a prompt.
 - Pass the site explicitly (or commit `bunny.jsonc` with `sites.name`); the interactive picker is disabled under `--output json`.
 - `--output json` on every command emits machine-readable results (deploy prints `{ id, production, preview, promoted }`).

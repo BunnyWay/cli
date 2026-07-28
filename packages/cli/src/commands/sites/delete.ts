@@ -7,7 +7,12 @@ import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, removeManifest } from "../../core/manifest.ts";
-import { confirm, confirmTyped, withSpinner } from "../../core/ui.ts";
+import {
+  confirm,
+  confirmTyped,
+  requireConfirmable,
+  withSpinner,
+} from "../../core/ui.ts";
 import { deleteSiteResources } from "./api.ts";
 import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 import {
@@ -65,6 +70,11 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     const what = args["keep-storage"]
       ? "its pull zone and router"
       : "its pull zone, router, and ALL deploy files";
+    requireConfirmable(output, {
+      force,
+      message: `Deleting "${state.name}" needs a confirmation prompt.`,
+      hint: "Re-run with --force to delete non-interactively.",
+    });
     const confirmed =
       (await confirm(
         `Delete site "${state.name}" (${what})? This cannot be undone.`,

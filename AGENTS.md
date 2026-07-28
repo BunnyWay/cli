@@ -190,7 +190,7 @@ bunny-cli/
 │           │   │   ├── flow.ts           # offerDnsWaitAndSsl(): poll DNS + opportunistically attempt SSL issuance (~30s) since bunny's resolvers decide validation; printSslHint(). dnsAlreadyLive skips the poll (Bunny DNS record already live). offerBunnyDnsThenSsl() takes an optional onBunnyDnsZone(zone) callback fired when the hostname is on Bunny DNS (lets the command layer link the directory). setupHostname(): resource-agnostic add-hostname -> DNS -> SSL orchestration (caller supplies sslHint/retryHint); used by scripts setupCustomDomain and storage zone add
 │           │   │   ├── bunny-dns.ts       # findBunnyDnsZone()/offerBunnyDnsRecord(): detect a hostname inside an account Bunny DNS zone, then add/repoint a PullZone record (always confirmed) so SSL can issue immediately
 │           │   │   ├── bunny-dns.test.ts  # Tests for longest-suffix zone matching + record-name derivation with a fake core client
-│           │   │   └── commands.ts       # createHostnamesCommands(): add/ssl/list/remove factory parameterized by a pull-zone resolver
+│           │   │   └── commands.ts       # createHostnamesCommands(): add/ssl/list/remove factory parameterized by a pull-zone resolver; remove guards its confirmation with requireConfirmable (unattended runs need --force)
 │           │   ├── bunny-config.ts       # Shared bunny.jsonc discovery + raw read (findConfigRoot, configPath, configExists, readBunnyConfig); used by apps/ and sites/ config.ts
 │           │   ├── jsonc.ts              # syncJsonc(): surgical JSONC editing that preserves comments, key order, and sibling blocks
 │           │   ├── jsonc.test.ts         # Tests for syncJsonc (comment/formatting preservation, key add/remove)
@@ -201,7 +201,8 @@ bunny-cli/
 │           │   ├── stats.ts              # Shared stats rendering: sumChart(), renderBarChart(), formatBucketLabel() (UTC date labels), BAR_WIDTH (used by dns/zone/stats + scripts/stats)
 │           │   ├── stats.test.ts         # Tests for stats helpers
 │           │   ├── types.ts              # GlobalArgs, OutputFormat, and shared type definitions
-│           │   ├── ui.ts                 # readPassword(), confirm(), confirmTyped(), spinner() wrappers
+│           │   ├── ui.ts                 # readPassword(), confirm(), confirmTyped(), requireConfirmable() (unattended runs must pass --force instead of hanging on a prompt), spinner() wrappers
+│           │   ├── ui.test.ts            # Tests for requireConfirmable (no-TTY guard, --force bypass)
 │           │   └── version.ts            # VERSION constant from package.json
 │           │
 │           ├── config/
@@ -717,6 +718,10 @@ Masked password input using `prompts` with `type: "password"`. Used for API key 
 
 Confirmation prompt using `prompts` with `type: "confirm"`. If `opts.force` is `true`, returns `true` immediately without prompting. This maps to the `--force` flag pattern used in `auth login` and `auth logout`.
 
+### `requireConfirmable(output, { force, message, hint })`
+
+Guard called immediately before a `confirm()`/`confirmTyped()` that gates a destructive action. Returns silently with `force`, or when `isInteractive(output)`; otherwise throws a `UserError` with `hint`. Without it an unattended run (CI, `--output json`, no TTY) blocks forever on a prompt nobody can answer, and the prompt lands on stdout ahead of the JSON payload. Used by `sites delete`, `sites deployments publish/prune`, and the shared `domains remove`.
+
 ### `spinner(text: string): ora.Ora`
 
 Creates an `ora` spinner. Automatically silenced in non-TTY environments (`isSilent: !process.stdout.isTTY`).
@@ -1111,8 +1116,8 @@ bunny
 │   ├── deployments
 │   │   ├── list        [site] (alias: ls)  List deploys (● Live / ○ Previous markers, created, source, files, size)
 │   │   ├── publish     [id] [--previous] [--site] [--force]  (alias: promote)
-│   │   │                                   Promote a past deploy; instant rollback (--previous = the previous deploy)
-│   │   └── prune       [--keep N] [--site] [--force]  Delete old deploys (never current/previous; default keeps 5)
+│   │   │                                   Promote a past deploy; instant rollback (--previous = the previous deploy). Unattended runs need --force (the confirmation is guarded by requireConfirmable)
+│   │   └── prune       [--keep N] [--site] [--force]  Delete old deploys (never current/previous; default keeps 5). Unattended runs need --force; "nothing to prune" still succeeds without it
 │   ├── domains                             (hidden alias: hostnames); mounts core/hostnames createHostnamesCommands with a sites resolver
 │   │   ├── add         <domain> [site] [--ssl] [--wait] [--no-force-ssl]  Add a domain; also attaches *.preview.<domain> + records the domain in site state (onAdded hook)
 │   │   ├── ssl         <domain> [site]     Issue a free SSL certificate
@@ -1124,7 +1129,7 @@ bunny
 │   ├── link            [site]              Link this directory to a site → .bunny/site.json
 │   ├── unlink                              Remove .bunny/site.json
 │   ├── upgrade-router  [site]              Republish the site's router script with the CLI's current source
-│   └── delete          [site] [--force] [--keep-storage]  Delete pull zone → router → storage zone (typed-name confirmation; best-effort so re-runs finish a partial delete)
+│   └── delete          [site] [--force] [--keep-storage]  Delete pull zone → router → storage zone (typed-name confirmation, so unattended runs need --force; best-effort so re-runs finish a partial delete)
 ├── docs                                    Open bunny.net documentation in browser
 ├── open               [--print]            Open bunny.net dashboard in browser (or print URL)
 ├── --profile, -p       <string>            Profile to use (default: "default")

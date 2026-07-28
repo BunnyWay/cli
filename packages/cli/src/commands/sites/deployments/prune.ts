@@ -4,7 +4,7 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { errorMessage } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, withSpinner } from "../../../core/ui.ts";
+import { confirm, requireConfirmable, withSpinner } from "../../../core/ui.ts";
 import { deleteDeployFiles, writeRemoteState } from "../api.ts";
 import {
   DEFAULT_KEEP_DEPLOYS,
@@ -76,6 +76,11 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       return;
     }
 
+    requireConfirmable(output, {
+      force: args.force,
+      message: `Pruning ${victims.length} deploy(s) needs a confirmation prompt.`,
+      hint: "Re-run with --force to prune non-interactively.",
+    });
     const proceed = await confirm(
       `Delete ${victims.length} old deploy(s) from ${state.name} (${victims
         .map((v) => v.id)
