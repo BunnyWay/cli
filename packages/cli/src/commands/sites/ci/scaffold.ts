@@ -12,6 +12,7 @@ import {
   type FrameworkPreset,
   findPreset,
   type PackageManager,
+  readPackageJson,
 } from "./frameworks.ts";
 import {
   renderSitesWorkflow,
@@ -107,6 +108,15 @@ async function workflowSettings(opts: {
   };
 }
 
+// A configured build on the static preset (an unrecognized bundler, say) gets the JS setup/install steps when the project has a package.json; the toolchain presets already install for themselves.
+async function needsJsInstall(
+  preset: FrameworkPreset,
+  settings: WorkflowSettings,
+): Promise<boolean> {
+  if (preset.toolchain !== "none" || settings.build === undefined) return false;
+  return (await readPackageJson(settings.projectRoot)) !== null;
+}
+
 /** Resolve the framework preset: explicit id, detection, prompt, static fallback. */
 async function resolvePreset(
   root: string,
@@ -175,6 +185,7 @@ export async function scaffoldSitesWorkflow(opts: {
     build: settings.build,
     workingDirectory: settings.prefix || undefined,
     cacheDependencyPath: settings.cacheDependencyPath,
+    installDeps: await needsJsInstall(preset, settings),
   });
 
   const target = join(opts.root, SITES_WORKFLOW_PATH);
@@ -230,6 +241,7 @@ export async function printWorkflowInstructions(
       build: settings.build,
       workingDirectory: settings.prefix || undefined,
       cacheDependencyPath: settings.cacheDependencyPath,
+      installDeps: await needsJsInstall(preset, settings),
     }),
   );
   printSecretHint();

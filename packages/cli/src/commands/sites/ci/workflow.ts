@@ -81,6 +81,7 @@ function buildSteps(
   packageManager: PackageManager,
   build: string | undefined,
   cacheDependencyPath: string | undefined,
+  installDeps: boolean | undefined,
 ): string[] {
   switch (preset.toolchain) {
     case "js":
@@ -126,10 +127,11 @@ function buildSteps(
         runStep(build, preset.build),
       ];
     case "none":
-      // A static site has no toolchain to set up, but a configured build still runs.
-      return build
-        ? [runStep(build)]
-        : ["      # No build step: static files deploy as-is."];
+      if (!build) return ["      # No build step: static files deploy as-is."];
+      // An unrecognized bundler lands on the static preset; a configured build in a JS project still needs its dependencies on the runner.
+      return installDeps
+        ? [...jsSetup(packageManager, cacheDependencyPath), runStep(build)]
+        : [runStep(build)];
   }
 }
 
@@ -139,7 +141,7 @@ export function workflowPath(prefix: string | undefined, path: string): string {
   return path === "." ? prefix : `${prefix.replace(/\/$/, "")}/${path}`;
 }
 
-// Render the GitHub Actions workflow: previews on PRs, production on pushes to main, via the BunnyWay/actions deploy-site action. `dir`/`build` carry `sites.dir`/`sites.build` from bunny.jsonc, and `workingDirectory` is where that config lives relative to the workflow root, so CI builds and deploys exactly what `sites deploy` does.
+// Render the GitHub Actions workflow: previews on PRs, production on pushes to main, via the BunnyWay/actions deploy-site action. `dir`/`build` carry `sites.dir`/`sites.build` from bunny.jsonc, `workingDirectory` is where that config lives relative to the workflow root, and `installDeps` adds the JS setup/install steps to a configured build the preset wouldn't have installed for, so CI builds and deploys exactly what `sites deploy` does.
 export function renderSitesWorkflow(opts: {
   site: string;
   preset: FrameworkPreset;
@@ -148,6 +150,7 @@ export function renderSitesWorkflow(opts: {
   build?: string;
   workingDirectory?: string;
   cacheDependencyPath?: string;
+  installDeps?: boolean;
 }): string {
   const { site, preset, packageManager, workingDirectory } = opts;
   // Every `run` step builds from the project directory; `uses` inputs stay workflow-root-relative, so the deploy directory carries the prefix instead.
@@ -182,7 +185,13 @@ export function renderSitesWorkflow(opts: {
     "    steps:",
     "      - uses: actions/checkout@v4",
     "",
-    ...buildSteps(preset, packageManager, opts.build, opts.cacheDependencyPath),
+    ...buildSteps(
+      preset,
+      packageManager,
+      opts.build,
+      opts.cacheDependencyPath,
+      opts.installDeps,
+    ),
     "",
     `      - uses: ${DEPLOY_SITE_ACTION}`,
     "        with:",

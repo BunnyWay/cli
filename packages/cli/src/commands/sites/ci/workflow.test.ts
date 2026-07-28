@@ -157,6 +157,35 @@ test("a configured build runs even for a static preset", () => {
   });
   expect(yml).toContain('run: "./build.sh"');
   expect(yml).not.toContain("# No build step");
+  // No package.json, so nothing to install.
+  expect(yml).not.toContain("setup-node");
+});
+
+// An unrecognized bundler lands on the static preset, but a configured `npm run build` still needs dependencies on the runner.
+test("a configured build gets the JS install steps when installDeps is set", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("static"),
+    packageManager: "pnpm",
+    build: "pnpm run build",
+    dir: "out",
+    installDeps: true,
+  });
+  expect(yml).toContain("uses: pnpm/action-setup@v4");
+  expect(yml).toContain("run: pnpm install --frozen-lockfile");
+  expect(yml).toContain('run: "pnpm run build"');
+  expect(yml).toContain('directory: "out"');
+});
+
+test("a static site with no configured build never installs", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("static"),
+    packageManager: "npm",
+    installDeps: true,
+  });
+  expect(yml).toContain("# No build step: static files deploy as-is.");
+  expect(yml).not.toContain("setup-node");
 });
 
 // A configured build is always a quoted scalar: bare `true`/`null`/`1.5` would parse as a boolean/null/number, which Actions rejects, and a newline would open a new YAML line.
