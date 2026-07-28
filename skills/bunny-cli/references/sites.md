@@ -97,6 +97,7 @@ bunny sites deployments list
 bunny sites deployments publish a1b2c3d4    # confirm prompt; --force to skip
 bunny sites deployments publish --previous  # instant rollback
 bunny sites deployments prune --keep 10     # never prunes current/previous
+bunny sites deployments prune my-site       # or --site my-site
 ```
 
 `publish` (alias `promote`) flips production to a past deploy; the files are already on the CDN, so this is instant plus a cache purge.

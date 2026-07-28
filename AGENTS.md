@@ -1117,7 +1117,7 @@ bunny
 │   │   ├── list        [site] [--link] (alias: ls)  List deploys (● Live / ○ Previous markers, created, source, files, size)
 │   │   ├── publish     [id] [--previous] [--site] [--link] [--force]  (alias: promote)
 │   │   │                                   Promote a past deploy; instant rollback (--previous = the previous deploy). Unattended runs need --force (the confirmation is guarded by requireConfirmable)
-│   │   └── prune       [--keep N] [--site] [--force]  Delete old deploys (never current/previous; default keeps 5). --keep is validated as a whole number >= 0 before anything runs (resolveKeepCount: yargs turns `--keep abc` into NaN, which would otherwise slip through pruneVictims and prune everything). Unattended runs need --force; "nothing to prune" still succeeds without it
+│   │   └── prune       [site] [--keep N] [--force]  Delete old deploys (never current/previous; default keeps 5). --keep is validated as a whole number >= 0 before anything runs (resolveKeepCount: yargs turns `--keep abc` into NaN, which would otherwise slip through pruneVictims and prune everything). Unattended runs need --force; "nothing to prune" still succeeds without it
 │   ├── domains                             (hidden alias: hostnames); mounts core/hostnames createHostnamesCommands with a sites resolver
 │   │   ├── add         <domain> [site] [--ssl] [--wait] [--no-force-ssl]  Add a domain; also attaches *.preview.<domain> + records the domain in site state (onAdded hook)
 │   │   ├── ssl         <domain> [site]     Issue a free SSL certificate

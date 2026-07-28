@@ -14,7 +14,7 @@ import {
 import {
   type SiteSelectorArgs,
   selectSite,
-  siteOptionBuilder,
+  sitePositionalBuilder,
 } from "../interactive.ts";
 
 interface PruneArgs extends SiteSelectorArgs {
@@ -35,7 +35,7 @@ export function resolveKeepCount(keep: number | undefined): number {
 }
 
 export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
-  command: "prune",
+  command: "prune [site]",
   describe: "Delete old deploys, keeping the most recent ones.",
   examples: [
     [
@@ -43,11 +43,12 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       `Keep the ${DEFAULT_KEEP_DEPLOYS} newest deploys`,
     ],
     ["$0 sites deployments prune --keep 10", "Keep the 10 newest deploys"],
+    ["$0 sites deployments prune my-site", "Prune a specific site"],
     ["$0 sites deployments prune --force", "Skip confirmation"],
   ],
 
   builder: (yargs) =>
-    siteOptionBuilder(yargs)
+    sitePositionalBuilder(yargs)
       .option("keep", {
         type: "number",
         default: DEFAULT_KEEP_DEPLOYS,
