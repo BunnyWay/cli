@@ -405,7 +405,7 @@ bunny-cli/
 │           │   │   ├── upgrade-router.ts # Republish the site's router script with the CLI's current source (pushes router improvements to an existing site)
 │           │   │   ├── delete.ts         # Delete a site (typed-name confirm; --keep-storage; drops .bunny/site.json if it pointed here)
 │           │   │   ├── ci/               # frameworks.ts (preset table of ~30 frameworks across js/ruby/hugo/python/zola/dotnet toolchains + detection: package.json deps/Gemfile/python+zola config files + lockfile pm), workflow.ts (renderSitesWorkflow -> .github/workflows/bunny-sites.yml using BunnyWay/actions/deploy-site), scaffold.ts (git helpers, scaffoldSitesWorkflow, printWorkflowInstructions, offerGitHubSecret via gh), init.ts (bunny sites ci init) + tests
-│           │   │   ├── deployments/      # list (● Live/○ Previous), publish [id]|--previous (alias promote; confirm + promote + current/previous swap), prune --keep N (pruneVictims never drops current/previous) + prune.test.ts
+│           │   │   ├── deployments/      # list (● Live/○ Previous), publish [id]|--previous (alias promote; confirm + promote + current/previous swap), prune --keep N (resolveKeepCount validates the count first; pruneVictims never drops current/previous) + prune.test.ts
 │           │   │   └── domains/index.ts  # Mounts core/hostnames createHostnamesCommands as "sites domains" with onAdded/onRemoved hooks: apex add also attaches *.preview.<apex> (attachPreviewWildcard, best-effort SSL) + records state.domain; remove takes the wildcard down too. setupSiteDomain composes setupHostname + wildcard for create --domain
 │           │   ├── registries/
 │           │   │   ├── index.ts          # Manual CommandModule (not defineNamespace) — default handler runs list
@@ -1117,7 +1117,7 @@ bunny
 │   │   ├── list        [site] (alias: ls)  List deploys (● Live / ○ Previous markers, created, source, files, size)
 │   │   ├── publish     [id] [--previous] [--site] [--force]  (alias: promote)
 │   │   │                                   Promote a past deploy; instant rollback (--previous = the previous deploy). Unattended runs need --force (the confirmation is guarded by requireConfirmable)
-│   │   └── prune       [--keep N] [--site] [--force]  Delete old deploys (never current/previous; default keeps 5). Unattended runs need --force; "nothing to prune" still succeeds without it
+│   │   └── prune       [--keep N] [--site] [--force]  Delete old deploys (never current/previous; default keeps 5). --keep is validated as a whole number >= 0 before anything runs (resolveKeepCount: yargs turns `--keep abc` into NaN, which would otherwise slip through pruneVictims and prune everything). Unattended runs need --force; "nothing to prune" still succeeds without it
 │   ├── domains                             (hidden alias: hostnames); mounts core/hostnames createHostnamesCommands with a sites resolver
 │   │   ├── add         <domain> [site] [--ssl] [--wait] [--no-force-ssl]  Add a domain; also attaches *.preview.<domain> + records the domain in site state (onAdded hook)
 │   │   ├── ssl         <domain> [site]     Issue a free SSL certificate

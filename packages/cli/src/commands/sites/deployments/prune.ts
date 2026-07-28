@@ -2,7 +2,7 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
-import { errorMessage } from "../../../core/errors.ts";
+import { errorMessage, UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, requireConfirmable, withSpinner } from "../../../core/ui.ts";
 import { deleteDeployFiles, writeRemoteState } from "../api.ts";
@@ -20,6 +20,18 @@ import {
 interface PruneArgs extends SiteSelectorArgs {
   keep?: number;
   force?: boolean;
+}
+
+// yargs hands us NaN for `--keep abc`, which passes pruneVictims' `Math.max(0, keep)` untouched and marks every deploy but current/previous for deletion; the same goes for a negative count.
+export function resolveKeepCount(keep: number | undefined): number {
+  const value = keep ?? DEFAULT_KEEP_DEPLOYS;
+  if (!Number.isInteger(value) || value < 0) {
+    throw new UserError(
+      "--keep must be a whole number of deploys to keep, 0 or more.",
+      `Omit it to keep the newest ${DEFAULT_KEEP_DEPLOYS}.`,
+    );
+  }
+  return value;
 }
 
 export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
@@ -50,6 +62,8 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
+    const keep = resolveKeepCount(args.keep);
+
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
@@ -63,7 +77,7 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
 
     const victims = pruneVictims(
       state.deploys,
-      args.keep ?? DEFAULT_KEEP_DEPLOYS,
+      keep,
       state.current,
       state.previous,
     );
