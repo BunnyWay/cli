@@ -571,6 +571,32 @@ describe("splitStatements", () => {
     const sql = "-- this; is a comment\nSELECT 1;";
     expect(splitStatements(sql)).toEqual(["SELECT 1"]);
   });
+
+  test("keeps a CREATE TRIGGER body intact", () => {
+    const sql =
+      "CREATE TRIGGER touch AFTER UPDATE ON users BEGIN\n  UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;\nEND;";
+    expect(splitStatements(sql)).toEqual([
+      "CREATE TRIGGER touch AFTER UPDATE ON users BEGIN\n  UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;\nEND",
+    ]);
+  });
+
+  test("keeps a multi-statement trigger body intact and splits what follows", () => {
+    const sql =
+      "CREATE TEMPORARY TRIGGER log AFTER INSERT ON t BEGIN\n  INSERT INTO audit VALUES (1);\n  INSERT INTO audit VALUES (2);\nEND;\nSELECT 1;";
+    expect(splitStatements(sql)).toEqual([
+      "CREATE TEMPORARY TRIGGER log AFTER INSERT ON t BEGIN\n  INSERT INTO audit VALUES (1);\n  INSERT INTO audit VALUES (2);\nEND",
+      "SELECT 1",
+    ]);
+  });
+
+  test("splits drizzle statement-breakpoint files", () => {
+    const sql =
+      "CREATE TABLE `users` (\n\t`id` integer PRIMARY KEY NOT NULL\n);\n--> statement-breakpoint\nCREATE UNIQUE INDEX `users_id` ON `users` (`id`);";
+    expect(splitStatements(sql)).toEqual([
+      "CREATE TABLE `users` (\n\t`id` integer PRIMARY KEY NOT NULL\n)",
+      "CREATE UNIQUE INDEX `users_id` ON `users` (`id`)",
+    ]);
+  });
 });
 
 describe("views", () => {

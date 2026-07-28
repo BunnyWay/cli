@@ -1,6 +1,19 @@
+/** Statements whose body is a `BEGIN ... END` block, so inner semicolons don't terminate them. */
+const BLOCK_BODY_START = /^CREATE\s+(?:TEMP\s+|TEMPORARY\s+)?TRIGGER\b/i;
+
+/** True when `current` opens a `BEGIN ... END` block that hasn't been closed yet. */
+function inBlockBody(current: string): boolean {
+  const trimmed = current.trim();
+  if (!BLOCK_BODY_START.test(trimmed)) return false;
+  return !/\bEND$/i.test(trimmed);
+}
+
 /**
  * Split a SQL string into individual statements, handling single-quoted strings
  * and `--` line comments. Trims whitespace and filters empty results.
+ *
+ * `CREATE TRIGGER` bodies are kept intact: semicolons inside `BEGIN ... END`
+ * don't split the statement.
  */
 export function splitStatements(sql: string): string[] {
   const statements: string[] = [];
@@ -37,6 +50,10 @@ export function splitStatements(sql: string): string[] {
     }
 
     if (ch === ";" && !inString) {
+      if (inBlockBody(current)) {
+        current += ch;
+        continue;
+      }
       const trimmed = current.trim();
       if (trimmed.length > 0) statements.push(trimmed);
       current = "";

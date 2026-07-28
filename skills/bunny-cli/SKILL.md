@@ -34,6 +34,7 @@ bunny api GET /user
 bunny db create
 bunny db list
 bunny db shell
+bunny db migrations apply                             # run pending migrations/*.sql files
 
 # manage Edge Scripts
 bunny scripts init
@@ -63,7 +64,7 @@ bunny sites deployments publish --previous --force    # instant rollback
 Use this to route to the correct reference file:
 
 - **Authenticate or switch profiles** -> `references/auth.md`
-- **Database management (create, list, show, link, delete, shell, studio, regions, tokens)** -> `references/database.md`
+- **Database management (create, list, show, link, delete, shell, studio, migrations, regions, tokens)** -> `references/database.md`
 - **DNS (zones, delegation checks, records, presets, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
 - **Static sites (create, deploy, rollback, previews, custom domains)** -> `references/sites.md`
