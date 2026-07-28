@@ -44,7 +44,7 @@ bunny sites domains add example.com --wait # also attaches *.preview.example.com
 ## `bunny sites create`; Provision a site
 
 ```bash
-bunny sites create                         # prompts for a name (directory-name suggestion), then a custom domain
+bunny sites create                         # uses `sites.name` from bunny.jsonc, else prompts (directory-name suggestion), then a custom domain
 bunny sites create my-site
 bunny sites create my-site --region NY
 bunny sites create my-site --domain example.com
