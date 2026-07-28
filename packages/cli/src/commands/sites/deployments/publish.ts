@@ -7,12 +7,13 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, withSpinner } from "../../../core/ui.ts";
+import { confirm, requireConfirmable, withSpinner } from "../../../core/ui.ts";
 import { promoteDeploy, writeRemoteState } from "../api.ts";
 import { markCurrent } from "../constants.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
+  siteLinkOption,
   siteOptionBuilder,
 } from "../interactive.ts";
 
@@ -34,21 +35,23 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
   ],
 
   builder: (yargs) =>
-    siteOptionBuilder(
-      yargs.positional("id", {
-        type: "string",
-        describe: "Deploy ID to publish (see `sites deployments list`)",
-      }),
-    )
-      .option("previous", {
-        type: "boolean",
-        describe: "Publish the previous deploy (instant rollback)",
-      })
-      .option("force", {
-        alias: "f",
-        type: "boolean",
-        describe: "Skip the confirmation prompt",
-      }),
+    siteLinkOption(
+      siteOptionBuilder(
+        yargs.positional("id", {
+          type: "string",
+          describe: "Deploy ID to publish (see `sites deployments list`)",
+        }),
+      )
+        .option("previous", {
+          type: "boolean",
+          describe: "Publish the previous deploy (instant rollback)",
+        })
+        .option("force", {
+          alias: "f",
+          type: "boolean",
+          describe: "Skip the confirmation prompt",
+        }),
+    ),
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
@@ -61,6 +64,7 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       site: args.site,
       link: args.link,
       output,
+      force: args.force,
     });
     const { state, connection, etag } = site;
 
@@ -112,6 +116,11 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       return;
     }
 
+    requireConfirmable(output, {
+      force: args.force,
+      message: `Publishing ${targetId} needs a confirmation prompt.`,
+      hint: "Re-run with --force to publish non-interactively.",
+    });
     const proceed = await confirm(
       `Publish deploy ${targetId} as production for ${state.name}?`,
       { force: args.force },

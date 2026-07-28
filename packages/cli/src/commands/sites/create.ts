@@ -21,6 +21,7 @@ import {
   printWorkflowInstructions,
   scaffoldSitesWorkflow,
 } from "./ci/scaffold.ts";
+import { loadSiteConfig } from "./config.ts";
 import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 import { setupSiteDomain } from "./domains/index.ts";
 import { createSiteWithProgress, promptSiteName } from "./provision.ts";
@@ -63,7 +64,10 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
   command: "create [name]",
   describe: "Create a new static site.",
   examples: [
-    ["$0 sites create", "Prompt for a name (defaults to the directory name)"],
+    [
+      "$0 sites create",
+      "Use `sites.name` from bunny.jsonc, else prompt (directory-name suggestion)",
+    ],
     [
       "$0 sites create my-site",
       "Create a site served at sites-my-site-<suffix>.b-cdn.net",
@@ -80,7 +84,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       .positional("name", {
         type: "string",
         describe:
-          "Site name; the storage zone, pull zone, and b-cdn.net subdomain become sites-<name>-xxxxxx (prompted when omitted)",
+          "Site name; the storage zone, pull zone, and b-cdn.net subdomain become sites-<name>-xxxxxx (defaults to `sites.name` in bunny.jsonc, else prompted)",
       })
       .option("region", {
         type: "string",
@@ -102,7 +106,17 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
     const { profile, output, verbose, apiKey } = args;
     const interactive = isInteractive(output);
 
-    const name = await promptSiteName(args.name, interactive);
+    // `sites.name` is how every other sites command resolves the site, so create takes it as the name too.
+    const loadedConfig = loadSiteConfig();
+    const siteConfig = loadedConfig?.config;
+    const configRoot = loadedConfig?.root;
+    const name = await promptSiteName(
+      args.name ?? siteConfig?.name,
+      interactive,
+    );
+    if (!args.name && siteConfig?.name && output !== "json") {
+      logger.info(`Using site name "${name}" from bunny.jsonc.`);
+    }
 
     const domain = args.domain ? normalizeHostname(args.domain) : undefined;
 
@@ -217,11 +231,14 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
           const scaffold = await scaffoldSitesWorkflow({
             site: name,
             root,
+            projectRoot: configRoot,
             interactive: true,
+            dir: siteConfig?.dir,
+            build: siteConfig?.build,
           });
           if (scaffold) {
             logger.success(
-              `Wrote ${scaffold.path} (${scaffold.preset.label}, deploys ${scaffold.preset.dir}).`,
+              `Wrote ${scaffold.path} (${scaffold.preset.label}, deploys ${scaffold.dir}).`,
             );
             await offerGitHubSecret({
               apiKey: config.apiKey,
@@ -230,7 +247,10 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
             });
           }
         } else {
-          await printWorkflowInstructions(name, root);
+          await printWorkflowInstructions(name, root, {
+            root: configRoot,
+            ...siteConfig,
+          });
         }
       }
     }

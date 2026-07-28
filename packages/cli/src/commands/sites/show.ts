@@ -17,6 +17,7 @@ import { withSpinner } from "../../core/ui.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
+  siteLinkOption,
   sitePositionalBuilder,
 } from "./interactive.ts";
 
@@ -31,7 +32,7 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
     ["$0 sites show --output json", "JSON output"],
   ],
 
-  builder: (yargs) => sitePositionalBuilder(yargs),
+  builder: (yargs) => siteLinkOption(sitePositionalBuilder(yargs)),
 
   handler: async ({ site: ref, link, profile, output, verbose, apiKey }) => {
     const config = resolveConfig(profile, apiKey, verbose);

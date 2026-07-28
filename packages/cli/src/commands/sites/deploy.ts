@@ -35,6 +35,7 @@ import { resolveDeployIdentity } from "./deploy-id.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
+  siteLinkOption,
   siteOptionBuilder,
 } from "./interactive.ts";
 import { createLinkedSite, promptSiteName } from "./provision.ts";
@@ -97,38 +98,41 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
   ],
 
   builder: (yargs) =>
-    siteOptionBuilder(
-      yargs.positional("dir", {
-        type: "string",
-        describe:
-          "Directory to deploy (defaults to `sites.dir` in bunny.jsonc, then the detected framework's output dir when building, then the current directory)",
-      }),
-    )
-      .option("build", {
-        type: "string",
-        describe:
-          "Run a build first. Pass a command, or use the bare flag to run `sites.build` from bunny.jsonc (else the detected framework's build)",
-      })
-      .option("env", {
-        type: "string",
-        array: true,
-        describe: "Build-time env override (KEY=VALUE, repeatable)",
-      })
-      .option("env-file", {
-        type: "string",
-        describe: "Read build-time env overrides from a dotenv-style file",
-      })
-      .option("production", {
-        alias: "prod",
-        type: "boolean",
-        default: false,
-        describe: "Publish the deploy as the live site (default: preview only)",
-      })
-      .option("force", {
-        type: "boolean",
-        default: false,
-        describe: "Deploy even when the content is unchanged",
-      }),
+    siteLinkOption(
+      siteOptionBuilder(
+        yargs.positional("dir", {
+          type: "string",
+          describe:
+            "Directory to deploy (defaults to `sites.dir` in bunny.jsonc, then the detected framework's output dir when building, then the current directory)",
+        }),
+      )
+        .option("build", {
+          type: "string",
+          describe:
+            "Run a build first. Pass a command, or use the bare flag to run `sites.build` from bunny.jsonc (else the detected framework's build)",
+        })
+        .option("env", {
+          type: "string",
+          array: true,
+          describe: "Build-time env override (KEY=VALUE, repeatable)",
+        })
+        .option("env-file", {
+          type: "string",
+          describe: "Read build-time env overrides from a dotenv-style file",
+        })
+        .option("production", {
+          alias: "prod",
+          type: "boolean",
+          default: false,
+          describe:
+            "Publish the deploy as the live site (default: preview only)",
+        })
+        .option("force", {
+          type: "boolean",
+          default: false,
+          describe: "Deploy even when the content is unchanged",
+        }),
+    ),
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
@@ -157,6 +161,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const coreClient = createCoreClient(options);
     const computeClient = createComputeClient(options);
 
+    // No `force` here: deploy's --force only redeploys unchanged content, so the picker stays.
     const { site, offerLink } = await selectSite(coreClient, {
       site: args.site,
       link: args.link,

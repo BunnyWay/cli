@@ -94,6 +94,122 @@ test("zola installs the zola binary and blazor uses dotnet", () => {
   expect(blazor).toContain('directory: "bin/Release/net8.0/publish/wwwroot"');
 });
 
+test("sites.dir and sites.build from bunny.jsonc win over the preset", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("astro"),
+    packageManager: "npm",
+    dir: "build",
+    build: "make site",
+  });
+  expect(yml).toContain("run: npm ci");
+  expect(yml).toContain('run: "make site"');
+  expect(yml).not.toContain("run: npm run build");
+  expect(yml).toContain('directory: "build"');
+});
+
+// bunny.jsonc can live below the repo root; the workflow runs from the checkout root, so run steps get a working directory and the action's directory carries the prefix.
+test("a nested project builds from its own directory and deploys the prefixed path", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("astro"),
+    packageManager: "npm",
+    dir: "dist",
+    build: "npm run build:site",
+    workingDirectory: "packages/site",
+    cacheDependencyPath: "packages/site/package-lock.json",
+  });
+  expect(yml).toContain('        working-directory: "packages/site"');
+  expect(yml).toContain('run: "npm run build:site"');
+  expect(yml).toContain(
+    '          cache-dependency-path: "packages/site/package-lock.json"',
+  );
+  expect(yml).toContain('directory: "packages/site/dist"');
+});
+
+test("a static site at the project root deploys the project directory itself", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("static"),
+    packageManager: "npm",
+    workingDirectory: "sites/marketing",
+  });
+  expect(yml).toContain('directory: "sites/marketing"');
+});
+
+test("a root-level project gets no working directory or cache path", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("astro"),
+    packageManager: "npm",
+  });
+  expect(yml).not.toContain("working-directory");
+  expect(yml).not.toContain("cache-dependency-path");
+  expect(yml).toContain('directory: "dist"');
+});
+
+test("a configured build runs even for a static preset", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("static"),
+    packageManager: "npm",
+    build: "./build.sh",
+  });
+  expect(yml).toContain('run: "./build.sh"');
+  expect(yml).not.toContain("# No build step");
+  // No package.json, so nothing to install.
+  expect(yml).not.toContain("setup-node");
+});
+
+// An unrecognized bundler lands on the static preset, but a configured `npm run build` still needs dependencies on the runner.
+test("a configured build gets the JS install steps when installDeps is set", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("static"),
+    packageManager: "pnpm",
+    build: "pnpm run build",
+    dir: "out",
+    installDeps: true,
+  });
+  expect(yml).toContain("uses: pnpm/action-setup@v4");
+  expect(yml).toContain("run: pnpm install --frozen-lockfile");
+  expect(yml).toContain('run: "pnpm run build"');
+  expect(yml).toContain('directory: "out"');
+});
+
+test("a static site with no configured build never installs", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("static"),
+    packageManager: "npm",
+    installDeps: true,
+  });
+  expect(yml).toContain("# No build step: static files deploy as-is.");
+  expect(yml).not.toContain("setup-node");
+});
+
+// A configured build is always a quoted scalar: bare `true`/`null`/`1.5` would parse as a boolean/null/number, which Actions rejects, and a newline would open a new YAML line.
+test("a configured build is always emitted as a quoted scalar", () => {
+  const injected = renderSitesWorkflow({
+    site: "s",
+    preset: preset("static"),
+    packageManager: "npm",
+    build: "echo hi\n      run: rm -rf /",
+  });
+  expect(injected).toContain('run: "echo hi\\n      run: rm -rf /"');
+  expect(injected).not.toContain("\n      run: rm -rf /\n");
+
+  for (const build of ["true", "false", "null", "1.5"]) {
+    const yml = renderSitesWorkflow({
+      site: "s",
+      preset: preset("static"),
+      packageManager: "npm",
+      build,
+    });
+    expect(yml).toContain(`run: "${build}"`);
+  }
+});
+
 test("interpolated site name is a quoted, inert YAML scalar", () => {
   const yml = renderSitesWorkflow({
     site: "evil\n      run: rm -rf /",

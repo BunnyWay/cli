@@ -41,13 +41,13 @@ export const sitesSslCommand = defineCommand<SslArgs>({
     }),
 
   handler: async (args) => {
-    const { site: ref, link, profile, output, verbose, apiKey } = args;
+    const { site: ref, profile, output, verbose, apiKey } = args;
     const force = args["force-ssl"] !== false;
 
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const { site } = await selectSite(client, { site: ref, link, output });
+    const { site } = await selectSite(client, { site: ref, output });
     const { state } = site;
 
     const systemHost = await withSpinner("Updating Force SSL...", async () => {

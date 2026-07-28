@@ -25,10 +25,12 @@ async function resolveSitePullZone(
   const config = resolveConfig(args.profile, args.apiKey, args.verbose);
   const coreClient = createCoreClient(clientOptions(config, args.verbose));
 
+  // Only `remove` defines --force, so add/ssl/list keep the picker.
   const { site } = await selectSite(coreClient, {
     site: args.site as string | undefined,
     link: false,
     output: args.output,
+    force: args.force === true,
   });
   resolvedSite = site;
 

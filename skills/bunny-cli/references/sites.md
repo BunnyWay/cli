@@ -7,7 +7,9 @@ Most commands accept an optional site (a trailing `[site]` positional, or the `-
 1. Explicit name or storage zone ID
 2. `.bunny/site.json` manifest (written by `bunny sites link` or `bunny sites create`)
 3. `sites.name` in `bunny.jsonc`
-4. Interactive prompt (suppressed in `--output json` mode; pass a site or link the directory in CI)
+4. Interactive prompt (suppressed in `--output json` mode, and on destructive commands run with `--force`; pass a site or link the directory in CI)
+
+Commands that can link the directory (`deploy`, `show`, `deployments list/publish`, `upgrade-router`, `ci init`) take `--link`/`--no-link`: the picker prompts unless the flag decided it, and an explicit `--link` also links a site resolved from a ref or from `bunny.jsonc`, including under `--output json`. The other site commands never write the manifest and don't take the flag.
 
 ## Typical workflows
 
@@ -42,7 +44,7 @@ bunny sites domains add example.com --wait # also attaches *.preview.example.com
 ## `bunny sites create`; Provision a site
 
 ```bash
-bunny sites create                         # prompts for a name (directory-name suggestion), then a custom domain
+bunny sites create                         # uses `sites.name` from bunny.jsonc, else prompts (directory-name suggestion), then a custom domain
 bunny sites create my-site
 bunny sites create my-site --region NY
 bunny sites create my-site --domain example.com
@@ -77,6 +79,7 @@ bunny sites deploy ./out --build "npm run build" --env VITE_FLAG=1
 | `--production` | Publish as the live site (alias `--prod`; default is preview only)   |
 | `--force`      | Deploy even when content is unchanged                                |
 | `--site`       | Target site (name or storage zone ID)                                |
+| `--link`       | Link this directory to the deployed site (`--no-link` never links)   |
 
 With `--build`, the build runs in your shell environment plus the `--env`/`--env-file` overrides; there is no remote env store; put build-time values in your local `.env` or CI secrets. Deploying already-uploaded content with `--production` skips the upload and just publishes it.
 
@@ -94,6 +97,7 @@ bunny sites deployments list
 bunny sites deployments publish a1b2c3d4    # confirm prompt; --force to skip
 bunny sites deployments publish --previous  # instant rollback
 bunny sites deployments prune --keep 10     # never prunes current/previous
+bunny sites deployments prune my-site       # or --site my-site
 ```
 
 `publish` (alias `promote`) flips production to a past deploy; the files are already on the CDN, so this is instant plus a cache purge.
@@ -121,7 +125,7 @@ bunny sites ci init --framework astro       # skip detection (astro, vite, react
 bunny sites ci init --site my-site --force  # overwrite an existing workflow
 ```
 
-Writes a workflow that deploys previews on pull requests and publishes to production on merges to `main`, using the `BunnyWay/actions/deploy-site` action with the site name baked in. Framework detection reads `package.json` dependencies, `Gemfile`, or Hugo config; the lockfile picks the package manager for the install steps. Fork PRs are skipped (no secrets there). After writing, the CLI offers to run `gh secret set BUNNY_API_KEY` (or prints the manual steps). `sites create` offers the same scaffold on GitHub repos; declining prints the workflow instead.
+Writes a workflow that deploys previews on pull requests and publishes to production on merges to `main`, using the `BunnyWay/actions/deploy-site` action with the site name baked in. `sites.dir` and `sites.build` from `bunny.jsonc` override the preset's deploy directory and build command, so CI builds and deploys exactly what a local `sites deploy` does. The workflow is written at the git root; when `bunny.jsonc` lives below it (a monorepo package), the job gets `defaults.run.working-directory` and the deploy directory is prefixed, so those paths still mean what they do locally. Framework detection reads `package.json` dependencies, `Gemfile`, or Hugo config; the lockfile picks the package manager for the install steps. Fork PRs are skipped (no secrets there). After writing, the CLI offers to run `gh secret set BUNNY_API_KEY` (or prints the manual steps). `sites create` offers the same scaffold on GitHub repos; declining prints the workflow instead.
 
 ---
 
@@ -154,6 +158,6 @@ An optional `sites` block configures the deploy defaults (validated on its own, 
 
 ## CI / agents
 
-- Pass `--force` on anything with a confirmation (publish, prune, remove, delete).
-- Pass the site explicitly (or commit `bunny.jsonc` with `sites.name`); the interactive picker is disabled under `--output json`.
+- Pass `--force` on anything with a confirmation (publish, prune, remove, delete); without a TTY they error with a hint rather than waiting on a prompt.
+- Pass the site explicitly (or commit `bunny.jsonc` with `sites.name`); the interactive picker is disabled under `--output json` and by `--force`, so `sites delete --force` with nothing linked errors instead of prompting.
 - `--output json` on every command emits machine-readable results (deploy prints `{ id, production, preview, promoted }`).
