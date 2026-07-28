@@ -140,7 +140,7 @@ eval "$(bunny storage zones credentials my-zone --format env)"   # AWS_* env var
 
 ## `bunny storage zones domains`: Custom domains
 
-Hidden alias: `hostnames`. Domains attach to the storage zone's **pull zone**; if the zone has none, create one with `zones add --pull-zone`. When the zone has multiple pull zones, pass `--pull-zone <id>` to choose.
+Hidden alias: `hostnames`. Domains attach to the storage zone's **pull zone**. The CLI only creates that pull zone during zone creation (`zones add --pull-zone`); for an existing zone without one, create a pull zone with the storage zone as its origin in the dashboard (or `bunny api POST /pullzone --body '{"Name":"...","StorageZoneId":<id>,"OriginType":2}'`). When the zone has multiple pull zones, pass `--pull-zone <id>` to choose.
 
 ```bash
 bunny storage zones domains list my-zone
