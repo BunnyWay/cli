@@ -103,7 +103,7 @@ test("sites.dir and sites.build from bunny.jsonc win over the preset", () => {
     build: "make site",
   });
   expect(yml).toContain("run: npm ci");
-  expect(yml).toContain("run: make site");
+  expect(yml).toContain('run: "make site"');
   expect(yml).not.toContain("run: npm run build");
   expect(yml).toContain('directory: "build"');
 });
@@ -120,6 +120,7 @@ test("a nested project builds from its own directory and deploys the prefixed pa
     cacheDependencyPath: "packages/site/package-lock.json",
   });
   expect(yml).toContain('        working-directory: "packages/site"');
+  expect(yml).toContain('run: "npm run build:site"');
   expect(yml).toContain(
     '          cache-dependency-path: "packages/site/package-lock.json"',
   );
@@ -154,19 +155,30 @@ test("a configured build runs even for a static preset", () => {
     packageManager: "npm",
     build: "./build.sh",
   });
-  expect(yml).toContain("run: ./build.sh");
+  expect(yml).toContain('run: "./build.sh"');
   expect(yml).not.toContain("# No build step");
 });
 
-test("a configured build that would break a bare YAML scalar is quoted", () => {
-  const yml = renderSitesWorkflow({
+// A configured build is always a quoted scalar: bare `true`/`null`/`1.5` would parse as a boolean/null/number, which Actions rejects, and a newline would open a new YAML line.
+test("a configured build is always emitted as a quoted scalar", () => {
+  const injected = renderSitesWorkflow({
     site: "s",
     preset: preset("static"),
     packageManager: "npm",
     build: "echo hi\n      run: rm -rf /",
   });
-  expect(yml).toContain('run: "echo hi\\n      run: rm -rf /"');
-  expect(yml).not.toContain("\n      run: rm -rf /\n");
+  expect(injected).toContain('run: "echo hi\\n      run: rm -rf /"');
+  expect(injected).not.toContain("\n      run: rm -rf /\n");
+
+  for (const build of ["true", "false", "null", "1.5"]) {
+    const yml = renderSitesWorkflow({
+      site: "s",
+      preset: preset("static"),
+      packageManager: "npm",
+      build,
+    });
+    expect(yml).toContain(`run: "${build}"`);
+  }
 });
 
 test("interpolated site name is a quoted, inert YAML scalar", () => {

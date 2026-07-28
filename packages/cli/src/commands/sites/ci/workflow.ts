@@ -58,12 +58,10 @@ function jsSetup(
   }
 }
 
-// A `sites.build` from bunny.jsonc is user text, so quote it when a bare YAML scalar wouldn't survive it; preset commands are plain and stay unquoted.
-const YAML_UNSAFE_SCALAR = /^[-?:,[\]{}#&*!|>'"%@`]|\n|:\s|\s#/;
-
-function runStep(command: string | undefined): string {
-  const value = command ?? "";
-  return `      - run: ${YAML_UNSAFE_SCALAR.test(value) ? JSON.stringify(value) : value}`;
+// A `sites.build` from bunny.jsonc is user text, so it's always a quoted scalar: bare `true`/`null`/`1.5` would parse as a boolean/null/number and Actions rejects a `run` that isn't a string. Preset commands come from our own table and stay readable.
+function runStep(configured: string | undefined, preset?: string): string {
+  const value = configured !== undefined ? JSON.stringify(configured) : preset;
+  return `      - run: ${value ?? ""}`;
 }
 
 function jsSteps(
@@ -72,8 +70,10 @@ function jsSteps(
   build: string | undefined,
   cacheDependencyPath: string | undefined,
 ): string[] {
-  const command = build ?? presetBuildCommand(preset, pm) ?? `${pm} run build`;
-  return [...jsSetup(pm, cacheDependencyPath), runStep(command)];
+  return [
+    ...jsSetup(pm, cacheDependencyPath),
+    runStep(build, presetBuildCommand(preset, pm) ?? `${pm} run build`),
+  ];
 }
 
 function buildSteps(
@@ -91,7 +91,7 @@ function buildSteps(
         "        with:",
         '          ruby-version: "3.3"',
         "          bundler-cache: true",
-        runStep(build ?? preset.build),
+        runStep(build, preset.build),
         "        env:",
         "          JEKYLL_ENV: production",
       ];
@@ -101,7 +101,7 @@ function buildSteps(
         "        with:",
         '          hugo-version: "latest"',
         "          extended: true",
-        runStep(build ?? preset.build),
+        runStep(build, preset.build),
       ];
     case "python":
       return [
@@ -109,21 +109,21 @@ function buildSteps(
         "        with:",
         '          python-version: "3.x"',
         "      - run: pip install -r requirements.txt",
-        runStep(build ?? preset.build),
+        runStep(build, preset.build),
       ];
     case "zola":
       return [
         "      - uses: taiki-e/install-action@v2",
         "        with:",
         "          tool: zola",
-        runStep(build ?? preset.build),
+        runStep(build, preset.build),
       ];
     case "dotnet":
       return [
         "      - uses: actions/setup-dotnet@v4",
         "        with:",
         '          dotnet-version: "8.0.x"',
-        runStep(build ?? preset.build),
+        runStep(build, preset.build),
       ];
     case "none":
       // A static site has no toolchain to set up, but a configured build still runs.
