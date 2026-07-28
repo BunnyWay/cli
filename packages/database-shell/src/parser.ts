@@ -25,7 +25,8 @@ function inBlockBody(current: string): boolean {
 
 /**
  * Split a SQL string into individual statements, handling single-quoted strings
- * and `--` line comments. Trims whitespace and filters empty results.
+ * and both `--` line and block comments. Trims whitespace and filters empty
+ * results. Comments are dropped, so a `;` or a quote inside one is inert.
  *
  * `CREATE TRIGGER` bodies are kept intact: semicolons inside `BEGIN ... END`
  * don't split the statement.
@@ -45,6 +46,15 @@ export function splitStatements(sql: string): string[] {
       if (nl === -1) break;
       i = nl;
       current += "\n";
+      continue;
+    }
+
+    // Handle /* */ block comments (only outside strings)
+    if (!inString && ch === "/" && sql[i + 1] === "*") {
+      const close = sql.indexOf("*/", i + 2);
+      if (close === -1) break;
+      i = close + 1;
+      current += " ";
       continue;
     }
 

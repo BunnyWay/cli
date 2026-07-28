@@ -1,7 +1,33 @@
 import { describe, expect, test } from "bun:test";
-import { sameHost } from "./credentials.ts";
+import { isEncrypted, sameHost } from "./credentials.ts";
 
 const CANONICAL = "libsql://my-db-abc.lite.bunnydb.net/";
+
+describe("isEncrypted", () => {
+  test("accepts libsql, https, and wss", () => {
+    expect(isEncrypted("libsql://h.lite.bunnydb.net")).toBe(true);
+    expect(isEncrypted("https://h.lite.bunnydb.net")).toBe(true);
+    expect(isEncrypted("wss://h.lite.bunnydb.net")).toBe(true);
+  });
+
+  test("rejects plaintext schemes", () => {
+    expect(isEncrypted("http://h.lite.bunnydb.net")).toBe(false);
+    expect(isEncrypted("ws://h.lite.bunnydb.net")).toBe(false);
+  });
+
+  test("rejects libsql that opts out of TLS, which downgrades to http", () => {
+    expect(isEncrypted("libsql://h.lite.bunnydb.net:8080?tls=0")).toBe(false);
+  });
+
+  test("still accepts libsql with tls left on", () => {
+    expect(isEncrypted("libsql://h.lite.bunnydb.net:8080?tls=1")).toBe(true);
+  });
+
+  test("rejects unparseable input", () => {
+    expect(isEncrypted("h.lite.bunnydb.net")).toBe(false);
+    expect(isEncrypted("")).toBe(false);
+  });
+});
 
 describe("sameHost", () => {
   test("accepts the canonical URL with or without a trailing slash", () => {

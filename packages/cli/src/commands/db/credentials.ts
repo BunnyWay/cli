@@ -25,6 +25,25 @@ export interface ResolveCredentialsOptions {
   verbose?: boolean;
 }
 
+/** Schemes that encrypt in transit. `libsql:` resolves to `https:`/`wss:` unless it opts out with `?tls=0`. */
+const ENCRYPTED_SCHEMES = new Set(["libsql:", "https:", "wss:"]);
+
+/**
+ * True when traffic to this URL is encrypted, so a token we create can be sent to it.
+ *
+ * The scheme alone isn't enough: `libsql://host:port?tls=0` downgrades to
+ * plaintext `http:`/`ws:` inside the libSQL client.
+ */
+export function isEncrypted(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (!ENCRYPTED_SCHEMES.has(parsed.protocol)) return false;
+    return parsed.searchParams.get("tls") !== "0";
+  } catch {
+    return false;
+  }
+}
+
 /** Same host, ignoring scheme, port, and path, since `libsql://` and `https://` address the same endpoint. */
 export function sameHost(a: string, b: string): boolean {
   try {
@@ -47,9 +66,13 @@ export function sameHost(a: string, b: string): boolean {
  * An explicit database ID skips step 2 entirely: `.env` may describe a different
  * database, and silently connecting there would target the wrong database.
  *
- * A generated token is only ever sent to a URL that belongs to the database it
- * was created for, so overriding `--url` without `--token` is rejected rather
- * than handing a full-access token to an unverified host.
+ * A generated token is only ever sent to an encrypted URL that belongs to the
+ * database it was created for, so overriding `--url` without `--token` is
+ * rejected rather than handing a full-access token to an unverified or
+ * plaintext endpoint. A token read from `.env` is likewise refused for a
+ * plaintext `--url`, since the user never paired the two. A token passed as
+ * `--token` alongside `--url` is left alone: that pairing is explicit, and it
+ * covers connecting to a local `sqld` over plain http.
  *
  * Shared by `db shell`, `db studio`, and `db migrations apply`.
  */
@@ -57,19 +80,37 @@ export async function resolveCredentials(
   opts: ResolveCredentialsOptions,
 ): Promise<ResolvedCredentials> {
   const useEnv = !opts.databaseId;
+  const envToken = useEnv
+    ? readEnvValue(ENV_DATABASE_AUTH_TOKEN)?.value
+    : undefined;
+
   let url =
     opts.url ?? (useEnv ? readEnvValue(ENV_DATABASE_URL)?.value : undefined);
-  let token =
-    opts.token ??
-    (useEnv ? readEnvValue(ENV_DATABASE_AUTH_TOKEN)?.value : undefined);
+  let token = opts.token ?? envToken;
 
   if (url && token) {
+    // A stored token wasn't paired with this URL by the user, so don't leak it in the clear.
+    if (opts.url && !opts.token && envToken && !isEncrypted(opts.url)) {
+      throw new UserError(
+        "--url must be encrypted to receive the token from .env.",
+        "Use libsql:// or https://, or pass --token to send a credential of your choosing.",
+      );
+    }
+
     return {
       url,
       token,
       databaseId: opts.databaseId,
       tokenGenerated: false,
     };
+  }
+
+  // Refuse a plaintext target up front, before any lookup, prompt, or token creation.
+  if (opts.url && !token && !isEncrypted(opts.url)) {
+    throw new UserError(
+      "--url must be encrypted to receive a generated token.",
+      "Use libsql:// or https://, or pass --token to send your own credential.",
+    );
   }
 
   const config = resolveConfig(opts.profile, opts.apiKey, opts.verbose);

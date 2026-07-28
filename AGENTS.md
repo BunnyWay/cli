@@ -1472,7 +1472,11 @@ interface ShellLogger {
 
 **CLI wrapper** (`packages/cli/src/commands/db/shell.ts`) provides:
 
-- Credential resolution via `resolveCredentials()` in `packages/cli/src/commands/db/credentials.ts` (--url/--token flags → .env → API lookup), shared with `db studio` and `db migrations apply`. Two safety rules live there: an explicit database ID skips `.env` entirely (it may describe a different database, and silently connecting there would target the wrong one), and a generated token is only sent to a URL whose host matches that database's canonical URL, so `--url` without `--token` is rejected on mismatch rather than handing a full-access token to an unverified host.
+- Credential resolution via `resolveCredentials()` in `packages/cli/src/commands/db/credentials.ts` (--url/--token flags → .env → API lookup), shared with `db studio` and `db migrations apply`. Its job is to never pair a credential with a target the user didn't pair it with:
+
+- An explicit database ID skips `.env` entirely. `.env` may describe a different database, and silently connecting there would target the wrong one.
+- A generated token is only sent to a URL whose host matches that database's canonical URL, so `--url` without `--token` is rejected on mismatch. The host check runs before the token is created, so nothing is minted for an endpoint we'd refuse.
+- A token bound for an explicit `--url` must travel encrypted unless the user passed it as `--token` on the same command line. `isEncrypted()` allows `libsql:`, `https:`, and `wss:`, and rejects `libsql://host:port?tls=0`, which the libSQL client downgrades to plaintext. The scheme check runs first of all, before any lookup or prompt. An explicit `--token` with a plaintext `--url` is left alone: that pairing is deliberate, and it covers a local `sqld` over http.
 - `shellLogger()` adapter that wraps the CLI `logger`
 - `createClient()` call and delegation to `startShell()`/`executeQuery()`/`executeFile()`
 - Passes resolved `databaseId` and optional `--views-dir` to `startShell()` for saved views

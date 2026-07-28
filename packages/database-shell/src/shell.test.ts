@@ -589,6 +589,33 @@ describe("splitStatements", () => {
     ]);
   });
 
+  test("drops block comments and the semicolons inside them", () => {
+    expect(splitStatements("SELECT 1 /* a ; b */;")).toEqual(["SELECT 1"]);
+    expect(splitStatements("SELECT 1; /* between */ SELECT 2;")).toEqual([
+      "SELECT 1",
+      "SELECT 2",
+    ]);
+  });
+
+  test("ignores quotes inside block comments", () => {
+    expect(splitStatements("SELECT 1 /* it's fine */; SELECT 2;")).toEqual([
+      "SELECT 1",
+      "SELECT 2",
+    ]);
+  });
+
+  test("does not treat a block comment as a trigger block closer", () => {
+    const sql =
+      "CREATE TRIGGER t AFTER INSERT ON x BEGIN\n  /* END of story */\n  UPDATE x SET a = 1;\nEND;";
+    expect(splitStatements(sql)).toHaveLength(1);
+    expect(splitStatements(sql)[0]).toContain("UPDATE x SET a = 1;");
+    expect(splitStatements(sql)[0]?.endsWith("END")).toBe(true);
+  });
+
+  test("stops at an unterminated block comment without losing the statement", () => {
+    expect(splitStatements("SELECT 1; /* never closed")).toEqual(["SELECT 1"]);
+  });
+
   test("keeps a trigger body whose statement ends in CASE ... END intact", () => {
     const sql =
       "CREATE TRIGGER grade AFTER UPDATE ON scores BEGIN\n  UPDATE scores SET band = CASE WHEN NEW.v > 90 THEN 'a' ELSE 'b' END;\n  UPDATE scores SET seen = 1;\nEND;";

@@ -181,6 +181,7 @@ Shared by `db shell`, `db studio`, and `db migrations apply`. Two rules apply:
 
 - **Passing a database ID skips `.env`.** `bunny db shell db_01ABC` targets that database even when `.env` describes another one, so an explicit target is never silently redirected.
 - **`--url` without `--token` must match the resolved database.** A generated token is only sent to that database's own host; a mismatch errors and asks for `--token`.
+- **`--url` must be encrypted to receive a token you didn't pass yourself.** `libsql://`, `https://`, and `wss://` are accepted; `http://`, `ws://`, and `libsql://host:port?tls=0` are refused, whether the token would be generated or read from `.env`. Passing `--token` alongside a plaintext `--url` is allowed, for cases like a local `sqld`.
 
 ### REPL dot-commands
 
