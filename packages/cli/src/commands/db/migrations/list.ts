@@ -7,11 +7,9 @@ import { resolveCredentials } from "../credentials.ts";
 import { ARG_DIR, MIGRATIONS_TABLE } from "./constants.ts";
 import { warnOnDrift } from "./drift.ts";
 import {
-  type AppliedMigration,
   discoverMigrations,
-  fetchApplied,
   migrationStatuses,
-  migrationsTableExists,
+  readApplied,
   resolveMigrationsDir,
 } from "./engine.ts";
 
@@ -105,9 +103,7 @@ export const dbMigrationsListCommand = defineCommand<ListArgs>({
     const client = createClient({ url, authToken: token });
 
     // Don't create the tracking table from a read-only command.
-    const applied: AppliedMigration[] = (await migrationsTableExists(client))
-      ? await fetchApplied(client)
-      : [];
+    const applied = await readApplied(client);
 
     const statuses = migrationStatuses(files, applied);
 

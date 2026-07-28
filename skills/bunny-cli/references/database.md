@@ -177,6 +177,11 @@ bunny db shell --url libsql://... --token ey...      # explicit credentials
 2. `BUNNY_DATABASE_URL` / `BUNNY_DATABASE_AUTH_TOKEN` from `.env`
 3. API lookup (fetches URL and generates a temporary token)
 
+Shared by `db shell`, `db studio`, and `db migrations apply`. Two rules apply:
+
+- **Passing a database ID skips `.env`.** `bunny db shell db_01ABC` targets that database even when `.env` describes another one, so an explicit target is never silently redirected.
+- **`--url` without `--token` must match the resolved database.** A generated token is only sent to that database's own host; a mismatch errors and asks for `--token`.
+
 ### REPL dot-commands
 
 In interactive mode, the shell supports dot-commands like `.tables`, `.schema`, `.fk`, etc.

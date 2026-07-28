@@ -589,6 +589,27 @@ describe("splitStatements", () => {
     ]);
   });
 
+  test("keeps a trigger body whose statement ends in CASE ... END intact", () => {
+    const sql =
+      "CREATE TRIGGER grade AFTER UPDATE ON scores BEGIN\n  UPDATE scores SET band = CASE WHEN NEW.v > 90 THEN 'a' ELSE 'b' END;\n  UPDATE scores SET seen = 1;\nEND;";
+    expect(splitStatements(sql)).toEqual([sql.slice(0, -1)]);
+  });
+
+  test("handles nested CASE expressions in a trigger body", () => {
+    const sql =
+      "CREATE TRIGGER t AFTER INSERT ON x BEGIN\n  UPDATE x SET a = CASE WHEN b THEN CASE WHEN c THEN 1 ELSE 2 END ELSE 3 END;\nEND;\nSELECT 1;";
+    expect(splitStatements(sql)).toEqual([
+      "CREATE TRIGGER t AFTER INSERT ON x BEGIN\n  UPDATE x SET a = CASE WHEN b THEN CASE WHEN c THEN 1 ELSE 2 END ELSE 3 END;\nEND",
+      "SELECT 1",
+    ]);
+  });
+
+  test("ignores block keywords inside strings and quoted identifiers", () => {
+    const sql =
+      "CREATE TRIGGER t AFTER INSERT ON x BEGIN\n  INSERT INTO log (\"end\") VALUES ('CASE END');\nEND;";
+    expect(splitStatements(sql)).toEqual([sql.slice(0, -1)]);
+  });
+
   test("splits drizzle statement-breakpoint files", () => {
     const sql =
       "CREATE TABLE `users` (\n\t`id` integer PRIMARY KEY NOT NULL\n);\n--> statement-breakpoint\nCREATE UNIQUE INDEX `users_id` ON `users` (`id`);";

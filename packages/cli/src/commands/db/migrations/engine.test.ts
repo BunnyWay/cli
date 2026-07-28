@@ -20,6 +20,7 @@ import {
   migrationsTableExists,
   nextSequence,
   pendingMigrations,
+  readApplied,
   resolveMigrationsDir,
   slugify,
 } from "./engine.ts";
@@ -353,6 +354,27 @@ describe("migrationsTableExists", () => {
     expect(await migrationsTableExists(client)).toBe(false);
     await ensureMigrationsTable(client);
     expect(await migrationsTableExists(client)).toBe(true);
+  });
+});
+
+describe("readApplied", () => {
+  test("returns empty without creating the table", async () => {
+    const client = memoryClient();
+    expect(await readApplied(client)).toEqual([]);
+    expect(await migrationsTableExists(client)).toBe(false);
+  });
+
+  test("turns a connection failure into a hinted UserError", async () => {
+    const broken = {
+      execute: async () => {
+        throw new Error("SERVER_ERROR: Server returned HTTP status 404");
+      },
+      migrate: async () => [],
+    } as unknown as MigrationClient;
+
+    await expect(readApplied(broken)).rejects.toThrow(
+      /Could not read migration state: SERVER_ERROR/,
+    );
   });
 });
 

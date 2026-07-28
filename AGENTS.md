@@ -1472,7 +1472,7 @@ interface ShellLogger {
 
 **CLI wrapper** (`packages/cli/src/commands/db/shell.ts`) provides:
 
-- Credential resolution via `resolveCredentials()` in `packages/cli/src/commands/db/credentials.ts` (--url/--token flags → .env → API lookup), shared with `db studio` and `db migrations apply`
+- Credential resolution via `resolveCredentials()` in `packages/cli/src/commands/db/credentials.ts` (--url/--token flags → .env → API lookup), shared with `db studio` and `db migrations apply`. Two safety rules live there: an explicit database ID skips `.env` entirely (it may describe a different database, and silently connecting there would target the wrong one), and a generated token is only sent to a URL whose host matches that database's canonical URL, so `--url` without `--token` is rejected on mismatch rather than handing a full-access token to an unverified host.
 - `shellLogger()` adapter that wraps the CLI `logger`
 - `createClient()` call and delegation to `startShell()`/`executeQuery()`/`executeFile()`
 - Passes resolved `databaseId` and optional `--views-dir` to `startShell()` for saved views
@@ -1519,6 +1519,7 @@ All file and state logic is here so the commands stay thin and the logic is test
 - `checksum(sql)` — sha256 of the body with CRLF normalized and edges trimmed, so reformatting line endings isn't reported as a change.
 - `migrationStatuses(files, applied)` / `pendingMigrations(files, applied)` — join disk against the table. A recorded migration whose file changed is `modified`; one whose file is gone is `missing`. Both are warnings (`drift.ts`), never fatal: pending migrations still apply cleanly, and the remedy is the developer's call.
 - `applyMigration(client, file)` — splits the file with `splitStatements()` and runs the statements plus the tracking-row insert through `client.migrate()`, so a migration either lands and is recorded or neither happens.
+- `readApplied(client)` — the read path for `list` and for `apply` before confirmation. Checks `sqlite_master` rather than creating the tracking table, so a preview never writes, and converts connection or query failures into a hinted `UserError` instead of an unexpected-error exit.
 
 `client.migrate()` is used rather than `client.batch()` because it defers foreign key enforcement for the batch, which table rebuilds and `ALTER TABLE` need. `db shell <file>.sql` still uses `batch()` and is not migration-aware.
 
@@ -1536,7 +1537,9 @@ bunny db migrations apply --dir drizzle    # or be explicit
 
 ### Applying
 
-`apply` runs pending migrations sequentially and stops at the first failure, reporting how many applied and how many are still pending. It confirms before writing when a TTY is attached, and skips the prompt under `--force` or any non-interactive run (`--output json`, no TTY) so CI and agents aren't blocked. `--dry-run` lists what would run without writing.
+`apply` runs pending migrations sequentially and stops at the first failure, reporting how many applied and how many are still pending (the failed file counts as pending, since its tracking row rolled back with it). It confirms before writing when a TTY is attached, and skips the prompt under `--force` or any non-interactive run (`--output json`, no TTY) so CI and agents aren't blocked. `--dry-run` lists what would run without writing.
+
+Nothing is written before confirmation, including the tracking table: `ensureMigrationsTable()` runs only after the confirm and after the `--dry-run` exit, so a preview against read-only credentials lists pending files instead of failing on a schema write.
 
 ```bash
 bunny db migrations create add_users_table   # migrations/0001_add_users_table.sql

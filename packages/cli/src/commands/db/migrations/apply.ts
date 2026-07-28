@@ -11,9 +11,9 @@ import {
   applyMigration,
   discoverMigrations,
   ensureMigrationsTable,
-  fetchApplied,
   migrationStatuses,
   pendingMigrations,
+  readApplied,
   resolveMigrationsDir,
 } from "./engine.ts";
 
@@ -134,8 +134,8 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
     const { createClient } = await import("@libsql/client/web");
     const client = createClient({ url, authToken: token });
 
-    await ensureMigrationsTable(client);
-    const applied = await fetchApplied(client);
+    // Read without creating the table, so --dry-run and a declined confirm leave the database untouched.
+    const applied = await readApplied(client);
     const statuses = migrationStatuses(files, applied);
     const pending = pendingMigrations(files, applied);
 
@@ -193,6 +193,8 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
       return;
     }
 
+    await ensureMigrationsTable(client);
+
     const done: string[] = [];
 
     for (const file of pending) {
@@ -210,12 +212,11 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
         }
       } catch (err: unknown) {
         spin.stop();
-        const remaining = pending.length - done.length - 1;
+        // The failed file rolled back, so it is still pending along with everything unattempted.
+        const remaining = pending.length - done.length;
         throw new UserError(
           `${file.name} failed: ${errorMessage(err)}`,
-          done.length > 0 || remaining > 0
-            ? `${done.length} applied, ${remaining} still pending. Fix ${file.name} and re-run.`
-            : undefined,
+          `${done.length} applied, ${remaining} still pending. Fix ${file.name} and re-run.`,
         );
       }
     }

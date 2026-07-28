@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { splitStatements } from "@bunny.net/database-shell";
 import type { Client } from "@libsql/client";
-import { UserError } from "../../../core/errors.ts";
+import { errorMessage, UserError } from "../../../core/errors.ts";
 import {
   DEFAULT_MIGRATIONS_DIR,
   FALLBACK_MIGRATIONS_DIRS,
@@ -179,6 +179,29 @@ export async function fetchApplied(
     checksum: String(row.checksum),
     applied_at: String(row.applied_at),
   }));
+}
+
+/**
+ * Read the applied migrations without creating the tracking table.
+ *
+ * Used by the read paths (`list`, and `apply` before it has confirmation) so a
+ * preview never writes. Connection and query failures become `UserError`, since
+ * a bad URL or token is a user problem, not a crash.
+ */
+export async function readApplied(
+  client: MigrationClient,
+  table = MIGRATIONS_TABLE,
+): Promise<AppliedMigration[]> {
+  try {
+    return (await migrationsTableExists(client, table))
+      ? await fetchApplied(client, table)
+      : [];
+  } catch (err: unknown) {
+    throw new UserError(
+      `Could not read migration state: ${errorMessage(err)}`,
+      "Check that the database URL and token are correct.",
+    );
+  }
 }
 
 /**
