@@ -108,6 +108,45 @@ test("sites.dir and sites.build from bunny.jsonc win over the preset", () => {
   expect(yml).toContain('directory: "build"');
 });
 
+// bunny.jsonc can live below the repo root; the workflow runs from the checkout root, so run steps get a working directory and the action's directory carries the prefix.
+test("a nested project builds from its own directory and deploys the prefixed path", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("astro"),
+    packageManager: "npm",
+    dir: "dist",
+    build: "npm run build:site",
+    workingDirectory: "packages/site",
+    cacheDependencyPath: "packages/site/package-lock.json",
+  });
+  expect(yml).toContain('        working-directory: "packages/site"');
+  expect(yml).toContain(
+    '          cache-dependency-path: "packages/site/package-lock.json"',
+  );
+  expect(yml).toContain('directory: "packages/site/dist"');
+});
+
+test("a static site at the project root deploys the project directory itself", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("static"),
+    packageManager: "npm",
+    workingDirectory: "sites/marketing",
+  });
+  expect(yml).toContain('directory: "sites/marketing"');
+});
+
+test("a root-level project gets no working directory or cache path", () => {
+  const yml = renderSitesWorkflow({
+    site: "s",
+    preset: preset("astro"),
+    packageManager: "npm",
+  });
+  expect(yml).not.toContain("working-directory");
+  expect(yml).not.toContain("cache-dependency-path");
+  expect(yml).toContain('directory: "dist"');
+});
+
 test("a configured build runs even for a static preset", () => {
   const yml = renderSitesWorkflow({
     site: "s",

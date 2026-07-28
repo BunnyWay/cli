@@ -107,7 +107,9 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
     const interactive = isInteractive(output);
 
     // `sites.name` is how every other sites command resolves the site, so create takes it as the name too.
-    const siteConfig = loadSiteConfig()?.config;
+    const loadedConfig = loadSiteConfig();
+    const siteConfig = loadedConfig?.config;
+    const configRoot = loadedConfig?.root;
     const name = await promptSiteName(
       args.name ?? siteConfig?.name,
       interactive,
@@ -229,6 +231,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
           const scaffold = await scaffoldSitesWorkflow({
             site: name,
             root,
+            projectRoot: configRoot,
             interactive: true,
             dir: siteConfig?.dir,
             build: siteConfig?.build,
@@ -244,7 +247,10 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
             });
           }
         } else {
-          await printWorkflowInstructions(name, root, siteConfig);
+          await printWorkflowInstructions(name, root, {
+            root: configRoot,
+            ...siteConfig,
+          });
         }
       }
     }

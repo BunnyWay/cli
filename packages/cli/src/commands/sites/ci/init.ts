@@ -70,16 +70,17 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
       );
     }
 
-    // `sites.dir`/`sites.build` are what a local deploy uses, so the workflow follows them.
-    const siteConfig = loadSiteConfig()?.config;
+    // `sites.dir`/`sites.build` are what a local deploy uses, so the workflow follows them, relative to the bunny.jsonc directory they resolve against.
+    const siteConfig = loadSiteConfig();
     const result = await scaffoldSitesWorkflow({
       site: name,
       root,
+      projectRoot: siteConfig?.root,
       frameworkId: args.framework,
       interactive,
       force: args.force,
-      dir: siteConfig?.dir,
-      build: siteConfig?.build,
+      dir: siteConfig?.config.dir,
+      build: siteConfig?.config.build,
     });
 
     if (output === "json") {
