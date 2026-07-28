@@ -96,16 +96,21 @@ async function contextFromRef(
 
 export interface SelectedSite {
   site: SiteContext;
-  // Link the directory to the site: prompted when it came from the picker, silent when `--link` asked for it, a no-op otherwise, so commands can always call it.
+  // Offer to link the directory to the site: prompts for a picked site, a no-op otherwise (an explicit `--link` is already applied by then), so commands can always call it.
   offerLink: () => Promise<void>;
 }
 
-function linkDirectory(site: SiteContext): void {
+function linkDirectory(site: SiteContext, output: OutputFormat): void {
   saveManifest<SiteManifest>(SITES_MANIFEST, {
     id: site.state.storageZoneId,
     name: site.state.name,
   });
-  logger.success(`Linked to ${site.state.name} (${site.state.storageZoneId}).`);
+  // A JSON consumer reads the result from the payload, not from a log line.
+  if (output !== "json") {
+    logger.success(
+      `Linked to ${site.state.name} (${site.state.storageZoneId}).`,
+    );
+  }
 }
 
 // Resolve the site a command acts on, in precedence order: explicit ref, `.bunny/site.json`, `sites.name` in bunny.jsonc, interactive picker (non-interactive runs fail with a hint instead of hanging). `offerCreate` (deploy only) adds a "new site" branch returning a ready, already-linked context. Destructive commands pass their `--force` to opt out of the picker.
@@ -118,9 +123,10 @@ export async function selectSite(
   },
 ): Promise<SelectedSite> {
   const noLink = async () => {};
-  // A site resolved from a ref or from bunny.jsonc isn't prompted about, but an explicit `--link` still asks for it to be linked.
-  const linkIfRequested = (site: SiteContext) => async () => {
-    if (args.link === true) linkDirectory(site);
+  // An explicit `--link` is applied during resolution rather than deferred: commands return from their `--output json` branch before offerLink would run. `--no-link` never links.
+  const linked = (site: SiteContext): SelectedSite => {
+    if (args.link === true) linkDirectory(site, args.output);
+    return { site, offerLink: noLink };
   };
 
   if (args.site) {
@@ -128,7 +134,7 @@ export async function selectSite(
     const site = await withSpinner("Resolving site...", () =>
       contextFromRef(client, ref),
     );
-    return { site, offerLink: linkIfRequested(site) };
+    return linked(site);
   }
 
   const manifest = loadManifest<SiteManifest>(SITES_MANIFEST);
@@ -152,7 +158,7 @@ export async function selectSite(
       `Resolving site "${configured}" from bunny.jsonc...`,
       () => contextFromRef(client, configured),
     );
-    return { site, offerLink: linkIfRequested(site) };
+    return linked(site);
   }
 
   // `--force` skips the confirmation too, so picking a site from a list would act on it unprompted.
@@ -210,14 +216,15 @@ export async function selectSite(
     throw new UserError(`Site "${summary.state.name}" could not be loaded.`);
   }
 
+  // A picked site is prompted about at the end of the command, unless --link/--no-link already settled it.
+  if (args.link !== undefined) return linked(context);
+
   return {
     site: context,
     offerLink: async () => {
-      const shouldLink =
-        args.link !== undefined
-          ? args.link
-          : await confirm(`Link this directory to ${context.state.name}?`);
-      if (shouldLink) linkDirectory(context);
+      if (await confirm(`Link this directory to ${context.state.name}?`)) {
+        linkDirectory(context, args.output);
+      }
     },
   };
 }

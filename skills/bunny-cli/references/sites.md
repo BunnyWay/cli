@@ -9,7 +9,7 @@ Most commands accept an optional site (a trailing `[site]` positional, or the `-
 3. `sites.name` in `bunny.jsonc`
 4. Interactive prompt (suppressed in `--output json` mode, and on destructive commands run with `--force`; pass a site or link the directory in CI)
 
-Commands that can link the directory (`deploy`, `show`, `deployments list/publish`, `upgrade-router`, `ci init`) take `--link`/`--no-link`: the picker prompts unless the flag decided it, and an explicit `--link` also links a site resolved from a ref or from `bunny.jsonc`. The other site commands never write the manifest and don't take the flag.
+Commands that can link the directory (`deploy`, `show`, `deployments list/publish`, `upgrade-router`, `ci init`) take `--link`/`--no-link`: the picker prompts unless the flag decided it, and an explicit `--link` also links a site resolved from a ref or from `bunny.jsonc`, including under `--output json`. The other site commands never write the manifest and don't take the flag.
 
 ## Typical workflows
 
