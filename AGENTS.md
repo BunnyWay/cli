@@ -1062,8 +1062,8 @@ bunny
 │   ├── migrations                          Create and apply SQL migrations (files are the source of truth)
 │   │   ├── apply       [database-id] [--dir] [--url] [--token] [--dry-run] [--force]
 │   │   │                                   Apply pending migrations in filename order (each file + its tracking row is one atomic batch)
-│   │   ├── create      <name> (alias: new) [--dir]
-│   │   │                                   Write an empty migrations/NNNN_<slug>.sql
+│   │   ├── create      [name] (alias: new) [--dir]
+│   │   │                                   Write an empty migrations/NNNN_<slug>.sql (prompts for name when omitted)
 │   │   └── list        [database-id] (aliases: ls, status) [--dir] [--url] [--token]
 │   │                                       Show applied / pending / modified / missing migrations
 │   ├── quickstart      [database-id] [--lang] [--url] [--token]

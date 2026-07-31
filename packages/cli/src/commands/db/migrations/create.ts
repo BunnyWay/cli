@@ -1,8 +1,10 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import prompts from "prompts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
+import { isInteractive } from "../../../core/ui.ts";
 import { ARG_DIR } from "./constants.ts";
 import {
   discoverMigrations,
@@ -11,12 +13,12 @@ import {
   slugify,
 } from "./engine.ts";
 
-const COMMAND = "create <name>";
+const COMMAND = "create [name]";
 const ALIASES = ["new"] as const;
 const DESCRIPTION = "Create an empty migration file.";
 
 interface CreateArgs {
-  name: string;
+  name?: string;
   [ARG_DIR]?: string;
 }
 
@@ -41,6 +43,7 @@ export const dbMigrationsCreateCommand = defineCommand<CreateArgs>({
       "$0 db migrations create add_users_table",
       "Create migrations/0001_add_users_table.sql",
     ],
+    ["$0 db migrations create", "Prompt for a name"],
     [
       "$0 db migrations create add_index --dir db/migrations",
       "Use a custom directory",
@@ -52,14 +55,26 @@ export const dbMigrationsCreateCommand = defineCommand<CreateArgs>({
       .positional("name", {
         type: "string",
         describe: "Migration name, used as the filename suffix",
-        demandOption: true,
       })
       .option(ARG_DIR, {
         type: "string",
         describe: "Migrations directory (default: migrations)",
       }),
 
-  handler: async ({ name, [ARG_DIR]: dirArg, output }) => {
+  handler: async ({ name: nameArg, [ARG_DIR]: dirArg, output }) => {
+    let name = nameArg;
+    if (!name && isInteractive(output)) {
+      const { value } = await prompts({
+        type: "text",
+        name: "value",
+        message: "Migration name:",
+        validate: (v: string) =>
+          /[a-z0-9]/i.test(v) || "Must contain at least one letter or number",
+      });
+      name = value;
+    }
+    if (!name) throw new UserError("Migration name is required.");
+
     const { dir } = resolveMigrationsDir(dirArg);
 
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
