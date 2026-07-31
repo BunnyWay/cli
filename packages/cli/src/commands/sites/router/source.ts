@@ -106,11 +106,13 @@ BunnySDK.net.http
   .onOriginResponse(async (ctx) => {
     let response = ctx.response;
 
-    // A flagged 404 retries once as its directory index so extensionless routes (/blog) resolve: the re-entrant fetch runs this router again with production/preview semantics intact, and its trailing slash means it can never retry further.
+    // A flagged 404 probes its directory index and redirects to the slash URL when it exists (/blog -> /blog/), so relative references resolve against the right base; the probe re-enters this router and, slash-terminated, can never retry further.
     const retry = ctx.request.headers.get(RETRY_HEADER);
     if (retry && response.status === 404) {
-      const fallback = await fetch(retry, { method: ctx.request.method });
-      if (fallback.ok) return fallback;
+      const probe = await fetch(retry, { method: "HEAD" });
+      if (probe.ok) {
+        return new Response(null, { status: 301, headers: { Location: retry } });
+      }
     }
 
     const previewId = ctx.request.headers.get(PREVIEW_HEADER);

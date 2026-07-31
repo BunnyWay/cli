@@ -32,9 +32,10 @@ test("routerSource wires up the preview machinery", () => {
   );
   // Flags previews so the response phase rewrites their HTML (and never production's).
   expect(src).toContain('const PREVIEW_HEADER = "x-bunny-preview";');
-  // Slashless 404s retry once as a directory index, after the exact lookup misses.
+  // Slashless 404s probe the directory index and redirect to the slash URL, after the exact lookup misses.
   expect(src).toContain('const RETRY_HEADER = "x-bunny-index-retry";');
   expect(src).toContain("if (retry && response.status === 404)");
+  expect(src).toContain("{ status: 301, headers: { Location: retry } }");
   // Client-sent flags must be stripped, or they'd poison cached HTML.
   expect(src).toContain("headers.delete(PREVIEW_HEADER);");
   expect(src).toContain("headers.delete(RETRY_HEADER);");
