@@ -60,9 +60,10 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
+    // Destructive: --force must not silently delete from a picked zone, and no link offer.
     const zone = await resolveStorageZoneInteractive(client, ref, {
       output,
-      offerLink: true,
+      force,
     });
     const connection = connectStorageZone(zone);
 
