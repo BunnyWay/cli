@@ -29,6 +29,7 @@ const commands: CommandModule[] = [
   dnsNamespace,
   scriptsNamespace,
   sandboxNamespace,
+  sitesNamespace,
   configNamespace,
   docsCommand,
   openCommand,
@@ -39,7 +40,6 @@ const commands: CommandModule[] = [
 const experimentalCommands: CommandModule[] = [
   appsNamespace,
   registriesNamespace,
-  sitesNamespace,
   storageNamespace,
 ];
 
