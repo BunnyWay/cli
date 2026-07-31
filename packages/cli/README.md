@@ -1,6 +1,6 @@
 # @bunny.net/cli
 
-Command-line interface for [bunny.net](https://bunny.net) — manage databases, apps (Magic Containers), Edge Scripts, and more from your terminal.
+Command-line interface for [bunny.net](https://bunny.net) — manage databases, static sites, apps (Magic Containers), Edge Scripts, and more from your terminal.
 
 ## Installation
 
@@ -855,6 +855,79 @@ Open the Edge Scripts documentation in your browser.
 ```bash
 bunny scripts docs
 ```
+
+### `bunny sites`
+
+Host static sites on bunny.net. Each site is three resources provisioned and wired together for you: a **storage zone** holding the files, a **pull zone** serving them over the CDN, and a **middleware router** (an Edge Script) that maps incoming requests to the deploy that should answer them. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
+
+Deploys are immutable: every `sites deploy` uploads to its own `deploys/<id>/` directory and gets a permanent preview URL. Publishing flips the router's `CURRENT_DEPLOY` variable and purges the cache, so going live and rolling back are instant and move no files. Deploy IDs are the git short SHA when the working tree is clean and a content hash otherwise, which makes redeploying identical content a no-op.
+
+Commands take the site as an optional positional (`[site]`), except `deploy`, `ci init`, and `deployments publish`, which use `--site`. Either accepts the site name or its storage zone ID. When omitted, the site resolves from the directory's linked site (`.bunny/site.json`, written by `sites link` or by `create`/`deploy`), then `sites.name` in `bunny.jsonc`, then an interactive picker that offers to link. Non-interactive runs (`--output json`, no TTY, or `--force` on a destructive command) error instead of prompting.
+
+```bash
+# Provision a site
+bunny sites create                                    # interactive: prompts for a name (directory-name suggestion)
+bunny sites create my-site                            # served at sites-my-site-<suffix>.b-cdn.net
+bunny sites create my-site --region NY                # store the files in New York (default: DE)
+bunny sites create my-site --domain example.com       # also attach *.preview.example.com for per-deploy previews
+
+# Deploy
+bunny sites deploy                                    # detects the framework, offers to build, then deploys
+bunny sites deploy ./dist                             # deploy a directory to an immutable preview URL
+bunny sites deploy ./dist --production                # deploy and publish as the live site (--prod works too)
+bunny sites deploy --build                            # run `sites.build` from bunny.jsonc (else the detected build), then deploy
+bunny sites deploy --build "npm run build" --env API_URL=https://api.example.com
+bunny sites deploy ./dist --site my-site --force      # target a site explicitly; redeploy unchanged content
+
+# Deploys: list, publish (roll back), prune
+bunny sites deployments list                          # ● Live / ○ Previous markers, created, source, files, size
+bunny sites deployments publish a1b2c3d4              # promote a past deploy (alias: promote)
+bunny sites deployments publish --previous            # instant rollback
+bunny sites deployments prune --keep 10               # delete old deploys (default keeps 5; never live/previous)
+
+# Custom domains (a *.preview.<domain> wildcard is attached alongside)
+bunny sites domains list
+bunny sites domains add shop.example.com              # prints the DNS record to create
+bunny sites domains add shop.example.com --wait       # add, wait for DNS, then issue SSL and force HTTPS
+bunny sites domains add shop.example.com --ssl --no-force-ssl   # issue SSL now, keep HTTP available
+bunny sites domains ssl shop.example.com
+bunny sites domains remove shop.example.com --force
+
+# Inspect, open, and force HTTPS on the b-cdn.net system host
+bunny sites list                                      # alias: ls
+bunny sites show                                      # resources, domains, SSL state, current deploy
+bunny sites open --print
+bunny sites ssl --no-force-ssl
+
+# CI, linking, maintenance
+bunny sites ci init                                   # GitHub Actions: previews on PRs, production on main
+bunny sites ci init --framework astro
+bunny sites link my-site
+bunny sites unlink
+bunny sites upgrade-router                            # republish the router with this CLI's version
+bunny sites delete my-site --keep-storage             # typed-name confirmation; keeps the deploy files
+```
+
+Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) and a deploy needs no arguments: `bunny sites deploy --build --prod`. `sites ci init` reads the same block, so the generated workflow builds and deploys exactly what the local command does; without it, the framework is detected from `package.json` deps, `Gemfile`, or a `hugo`/`python`/`zola` config file, with the lockfile picking the package manager. `sites create` offers to scaffold the workflow on GitHub repos.
+
+A deploy's preview URL is `sites-<name>-<suffix>.b-cdn.net/deploys/<id>/`. Because the preview is served from a path, the router rewrites root-absolute asset URLs in that HTML so most SSGs render correctly without a per-deploy pull zone. Once a custom domain is attached, deploys also get a cleaner root-served preview at `dpl-<id>.preview.<domain>`. Site state lives at `_bunny/site.json` inside the storage zone (the router blocks it with a 403); `.bunny/site.json` is only a local pointer, so a fresh clone can `sites link` and pick up where the last machine left off.
+
+| Flag                                   | Commands                                                   | Description                                                                                        |
+| -------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `--region`, `--domain`                 | `create`                                                   | Main storage region code (default `DE`); custom domain to attach, with `*.preview.<domain>`        |
+| `--site`                               | `deploy`, `ci init`, `deployments publish`                 | Site name or storage zone ID (defaults to the linked site)                                         |
+| `--build [cmd]`, `--env`, `--env-file` | `deploy`                                                   | Build before deploying (bare flag uses the configured or detected build); build-time env overrides |
+| `--production`, `--prod`               | `deploy`                                                   | Publish the deploy as the live site instead of a preview only                                      |
+| `--force`                              | `deploy`                                                   | Deploy even when the content is unchanged                                                          |
+| `--previous`                           | `deployments publish`                                      | Publish the previous deploy (instant rollback)                                                     |
+| `--keep`                               | `deployments prune`                                        | Number of recent deploys to keep (default 5; live and previous are always kept)                    |
+| `--ssl`, `--wait`, `--force-ssl`       | `domains add`                                              | Issue SSL now; wait up to 10 minutes for DNS then issue it; `--no-force-ssl` keeps HTTP working    |
+| `--force-ssl`                          | `ssl`                                                      | Force HTTP→HTTPS on the system host; `--no-force-ssl` allows plain HTTP                            |
+| `--framework`                          | `ci init`                                                  | Framework preset for the workflow's build steps (default: detected)                                |
+| `--print`                              | `open`                                                     | Print the URL instead of opening a browser                                                         |
+| `--link`                               | `create`, `deploy`, `show`, `ci init`, `deployments`       | Link the directory to the site; `--no-link` never links                                            |
+| `--keep-storage`                       | `delete`                                                   | Delete the pull zone and router but keep the storage zone and its deploy files                     |
+| `--force`, `-f`                        | `deployments publish`, `prune`, `domains remove`, `delete` | Skip the confirmation prompts                                                                      |
 
 ### `bunny sandbox`
 
