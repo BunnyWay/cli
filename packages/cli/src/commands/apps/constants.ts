@@ -40,6 +40,12 @@ export interface AppManifest {
    * - `registry`: the user's MC registry record this container pushes
    *   to / pulls from. Registries are account-scoped so this can't live
    *   in shared config.
+   * - `envIgnore`: `.env` keys the user declined at deploy time, so the
+   *   `.env` reconcile prompt doesn't re-offer them every run. A local
+   *   preference about a local file, hence not in `bunny.jsonc`.
    */
-  containers: Record<string, { id?: string; registry?: string }>;
+  containers: Record<
+    string,
+    { id?: string; registry?: string; envIgnore?: string[] }
+  >;
 }

@@ -245,7 +245,9 @@ bunny-cli/
 │           │   │   │   ├── pull.ts       # Pull env vars to .env file
 │           │   │   │   ├── push.ts       # Bulk import .env file to remote (merge or --replace, --dry-run)
 │           │   │   │   ├── parse.ts      # Minimal dotenv parser (no shell expansion)
-│           │   │   │   └── parse.test.ts # parser unit tests
+│           │   │   │   ├── resolve.ts    # resolveContainerEnv(): swap `bunny.jsonc` env pointers for .env values at deploy time
+│           │   │   │   ├── reconcile.ts  # reconcileDotenv(): offer .env keys the target container doesn't declare (redeploy multi-select); declines persist to app.json envIgnore
+│           │   │   │   └── *.test.ts     # parse, resolve, reconcile unit tests
 │           │   │   ├── endpoints/
 │           │   │   │   ├── index.ts      # defineNamespace("endpoints", ...)
 │           │   │   │   ├── list.ts       # List endpoints per container
@@ -1414,7 +1416,7 @@ Schemas and types are defined in `@bunny.net/config` using Zod. `core/bunny-conf
 **Persistence model.** Three layers, with strict roles:
 
 - **`bunny.jsonc`** - committable deploy _intent_. App name, container shapes (dockerfile/image-pin/env/endpoints/volumes/command), scaling, regions. No account-scoped identities, no per-deploy artifacts.
-- **`.bunny/app.json`** - per-user _identity_ state (gitignored). `id` (app ID), container-template IDs, account-scoped registry IDs, the CLI profile this link was made under. Stored via the shared `core/manifest.ts` helpers (`loadManifest`, `saveManifest`, `removeManifest`) - the same generic pattern used by `db/` (`database.json`) and `scripts/` (`script.json`). The filename `app.json` and the `AppManifest` interface live in `apps/constants.ts`. Created by `bun-ny apps link <app-id>`, mutated during `apps deploy` and `apps pull`, dropped by `apps unlink` or `apps delete`.
+- **`.bunny/app.json`** - per-user _identity_ state (gitignored). `id` (app ID), container-template IDs, account-scoped registry IDs, `envIgnore` (`.env` keys declined at the deploy-time reconcile prompt, so it asks once per key), the CLI profile this link was made under. Stored via the shared `core/manifest.ts` helpers (`loadManifest`, `saveManifest`, `removeManifest`) - the same generic pattern used by `db/` (`database.json`) and `scripts/` (`script.json`). The filename `app.json` and the `AppManifest` interface live in `apps/constants.ts`. Created by `bun-ny apps link <app-id>`, mutated during `apps deploy` and `apps pull`, dropped by `apps unlink` or `apps delete`.
 - **MC API** - source of truth for _deployed state_. The currently-running image digest and the live config.
 
 To keep these consistent and stop file churn on every deploy, `saveConfig` (`apps/config.ts`) calls `stripTransientFields` before writing - it removes `app.id`, per-container `registry`, and any `image` field on a container that has `dockerfile` set. Pre-built `image:` refs (e.g. `nginx:1.27`) are preserved because they're universally resolvable upstream identifiers, not account-scoped or build-time artifacts.

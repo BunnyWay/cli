@@ -46,6 +46,7 @@ bun ny db list
 bun ny apps deploy ghcr.io/me/api:v1.2     # deploy a pre-built image
 bun ny apps deploy --dockerfile             # build ./Dockerfile and deploy
 bun ny apps deploy                          # first run? Imports docker-compose.yml if present; otherwise auto-detects Dockerfile(s) (including monorepo subdirs) so you can pick one or many, or falls back to a pre-built image.
+bun ny apps deploy                          # already have a bunny.jsonc? Any key in .env the container doesn't set yet is offered as a multi-select; accepted keys are written as name-only pointers, declined ones are remembered.
 bun ny apps link                            # interactive: pick from existing apps on the account
 bun ny apps link <app-id>                   # link a specific app to this directory (writes .bunny/app.json)
 bun ny apps unlink                          # remove .bunny/app.json

@@ -151,6 +151,29 @@ bunny apps delete --force --id $(jq -r .app.id /tmp/agent-task.jsonc)
 rm /tmp/agent-task.jsonc
 ```
 
+### `.env` during deploy
+
+`bunny.jsonc` is committable, so it never holds secret values. Instead a container's `env` map can point at a key in the `.env` file sitting next to `bunny.jsonc`:
+
+```jsonc
+"env": {
+  "PORT": "3000",                        // literal
+  "BETTER_AUTH_SECRET": "BETTER_AUTH_SECRET", // resolved from .env
+  "DATABASE_URL": "PROD_DATABASE_URL"    // resolved + renamed
+}
+```
+
+At deploy time each value that matches a `.env` key is swapped for the real value before the API call; everything else is sent literally. The `.env` is only ever read, never written.
+
+Two places offer to wire those pointers up for you, both as a multi-select with everything pre-selected:
+
+- **First run** (walkthrough, build path) — keys are discovered from `.env` / `.env.example` next to the Dockerfile, falling back to cwd for monorepos.
+- **Every deploy after that** — a key added to `.env` later would otherwise stay invisible, since resolution only covers keys the config already declares. Deploy diffs `.env` against the target container and offers whatever's unaccounted for. Keys already used on either side of the map (as a name or as a pointer target) aren't re-offered.
+
+Declining a key records it in `.bunny/app.json` under `containers.<name>.envIgnore`, so it's asked about once and never again. Delete the entry to be asked again. Cancelling the prompt records nothing.
+
+The prompt is skipped when there's no TTY or with `--output json`, so CI deploys never block. It's also skipped under `--dry-run`. When `bunny.jsonc` has several containers and no `--container` was passed there's no safe guess, so deploy prints the keys no container accounts for and leaves them alone.
+
 ### Registries during deploy
 
 Every container on Magic Containers is tied to a registry record on bunny.net, even for public images. When you pass `<image>` for the first time, the CLI parses the hostname and tries to match it to an existing registry on your account:

@@ -11,7 +11,7 @@ import { formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
 import type { OutputFormat } from "../../core/types.ts";
-import { spinner } from "../../core/ui.ts";
+import { isInteractive, spinner } from "../../core/ui.ts";
 import {
   type BunnyAppConfig,
   type ContainerConfig,
@@ -141,6 +141,7 @@ import {
   collectDeployedEndpoints,
   type DeployedEndpointLine,
 } from "./endpoints/format.ts";
+import { reconcileDotenv } from "./env/reconcile.ts";
 import { resolveContainerEnv } from "./env/resolve.ts";
 import {
   confirmEndpointSuggestions,
@@ -286,7 +287,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     let toml: BunnyAppConfig;
     /** Registries the walkthrough resolved, to seed the manifest draft below. */
     let walkthroughRegistries: Record<string, string> = {};
-    if (!configExists(configPath)) {
+    // The walkthrough runs its own `.env` picker on the config it writes, so
+    // the reconcile below is for configs that already existed.
+    const hadConfig = configExists(configPath);
+    if (!hadConfig) {
       const result = await runWalkthrough(client, {
         positionalImage,
         dockerfileFlag,
@@ -353,6 +357,14 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       draft.containers[name] = { ...draft.containers[name], id: templateId };
       persistDraft();
     };
+    const addContainerEnvDeclines = (name: string, keys: string[]) => {
+      const existing = draft.containers[name]?.envIgnore ?? [];
+      draft.containers[name] = {
+        ...draft.containers[name],
+        envIgnore: [...new Set([...existing, ...keys])].sort(),
+      };
+      persistDraft();
+    };
 
     if (dryRun) {
       logger.log();
@@ -363,6 +375,33 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         "Dry run complete. No files were written and no API calls were made to deploy.",
       );
       return;
+    }
+
+    // A `.env` key added after `bunny.jsonc` was written is invisible to
+    // `resolveContainerEnv` until the config declares it. Offer the gap
+    // here, once per new key - declines are remembered in the manifest.
+    // Skipped when nobody's there to answer.
+    if (hadConfig && isInteractive(output)) {
+      const changed = await reconcileDotenv(toml, dotenvPath, {
+        explicitContainer: args.container,
+        declinedFor: (name) => draft.containers[name]?.envIgnore ?? [],
+        onDeclined: addContainerEnvDeclines,
+      });
+      if (changed) {
+        // This is the earliest `saveConfig` of the run and it strips legacy
+        // `app.id` / `container.registry`, so mirror both into the manifest
+        // before writing rather than losing them if the deploy then fails.
+        for (const [name, container] of Object.entries(toml.app.containers)) {
+          if (container.registry && !draft.containers[name]?.registry) {
+            draft.containers[name] = {
+              ...draft.containers[name],
+              registry: container.registry,
+            };
+          }
+        }
+        persistDraft();
+        saveConfig(toml, configPath);
+      }
     }
 
     // First-time deploy of a multi-container app (e.g. compose import).
