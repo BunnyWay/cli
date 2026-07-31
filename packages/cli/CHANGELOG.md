@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.11.1
+
+### Patch Changes
+
+- [#140](https://github.com/BunnyWay/cli/pull/140) [`f4b1486`](https://github.com/BunnyWay/cli/commit/f4b1486607d52d45fed345927dab72ffd00d861f) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sites): redirect extensionless directory paths to their slash URL in the router
+
 ## 0.11.0
 
 ### Minor Changes
