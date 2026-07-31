@@ -1,6 +1,25 @@
 import { expect, test } from "bun:test";
 import { routerSource } from "./source.ts";
 
+// Extracts a top-level function from the generated script and evaluates it, so tests run the shipped code rather than a mirror of it.
+function extractFn(name: string): (...args: unknown[]) => unknown {
+  const match = routerSource.match(
+    new RegExp(`function ${name}\\([^]*?\\n\\}`),
+  );
+  if (!match) throw new Error(`function ${name} not found in routerSource`);
+  return new Function(`return (${match[0]});`)() as (
+    ...args: unknown[]
+  ) => unknown;
+}
+
+const withDeploy = extractFn("withDeploy") as (
+  id: string,
+  value: string,
+) => string;
+const indexRetryUrl = extractFn("indexRetryUrl") as (
+  rawUrl: string,
+) => string | null;
+
 test("routerSource wires up the preview machinery", () => {
   const src = routerSource;
   expect(src).toContain("bunny sites router");
@@ -13,18 +32,36 @@ test("routerSource wires up the preview machinery", () => {
   );
   // Flags previews so the response phase rewrites their HTML (and never production's).
   expect(src).toContain('const PREVIEW_HEADER = "x-bunny-preview";');
-  // Client-sent preview flags must be stripped, or they'd poison cached production HTML.
+  // Slashless 404s probe the directory index and redirect to the slash URL, after the exact lookup misses.
+  expect(src).toContain('const RETRY_HEADER = "x-bunny-index-retry";');
+  expect(src).toContain("if (retry && response.status === 404)");
+  expect(src).toContain("{ status: 301, headers: { Location: retry } }");
+  // Client-sent flags must be stripped, or they'd poison cached HTML.
   expect(src).toContain("headers.delete(PREVIEW_HEADER);");
+  expect(src).toContain("headers.delete(RETRY_HEADER);");
   expect(src).toContain("new HTMLRewriter()");
   expect(src).toContain("X-Robots-Tag");
 });
 
-// Mirrors the router's withDeploy() so a regression in the rewrite rule is caught here.
-function withDeploy(id: string, value: string): string {
-  if (!value.startsWith("/") || value.startsWith("//")) return value;
-  if (value.startsWith("/deploys/")) return value;
-  return `/deploys/${id}${value}`;
-}
+test("indexRetryUrl targets the directory index for slashless paths only", () => {
+  expect(indexRetryUrl("https://x.b-cdn.net/blog")).toBe(
+    "https://x.b-cdn.net/blog/",
+  );
+  // No dot heuristic: dotted segments retry too, so dotted directories stay reachable.
+  expect(indexRetryUrl("https://x.b-cdn.net/v2.1/docs")).toBe(
+    "https://x.b-cdn.net/v2.1/docs/",
+  );
+  expect(indexRetryUrl("https://x.b-cdn.net/deploys/abcd/blog")).toBe(
+    "https://x.b-cdn.net/deploys/abcd/blog/",
+  );
+  // Query strings survive the retry.
+  expect(indexRetryUrl("https://x.b-cdn.net/blog?page=2")).toBe(
+    "https://x.b-cdn.net/blog/?page=2",
+  );
+  // Directory and root URLs already expand to an index; no retry.
+  expect(indexRetryUrl("https://x.b-cdn.net/blog/")).toBeNull();
+  expect(indexRetryUrl("https://x.b-cdn.net/")).toBeNull();
+});
 
 test("withDeploy prefixes only root-absolute, un-prefixed paths", () => {
   expect(withDeploy("abcd", "/assets/main.css")).toBe(

@@ -5,6 +5,7 @@ import * as BunnySDK from "@bunny.net/edgescript-sdk";
 
 const PREVIEW_HOST = /^dpl-([a-z0-9]{4,40})\\.preview\\./i;
 const PREVIEW_HEADER = "x-bunny-preview";
+const RETRY_HEADER = "x-bunny-index-retry";
 const DEPLOY_PATH = /^\\/deploys\\/([a-z0-9]{4,40})\\//i;
 
 const NO_DEPLOYS_PAGE = \`<!doctype html>
@@ -13,6 +14,14 @@ const NO_DEPLOYS_PAGE = \`<!doctype html>
 <h1>Nothing here yet 🐇</h1>
 <p>This site has no published deploys. Run <code>bunny sites deploy</code> to publish one.</p>
 </body></html>\`;
+
+// A slashless URL's directory-index retry target (/blog -> /blog/); null when the path already ends with a slash.
+function indexRetryUrl(rawUrl) {
+  const u = new URL(rawUrl);
+  if (u.pathname.endsWith("/")) return null;
+  u.pathname += "/";
+  return u.toString();
+}
 
 // Prefix root-absolute, un-prefixed paths with the deploy dir; leave everything else alone.
 function withDeploy(id, value) {
@@ -61,9 +70,16 @@ BunnySDK.net.http
       return new Response("Forbidden", { status: 403 });
     }
 
-    // The preview flag is router-internal: a client-sent one is stripped, or it would poison cached production HTML with preview rewrites.
+    // Both flags are router-internal: client-sent copies are stripped, or they'd poison cached HTML.
     const headers = new Headers(ctx.request.headers);
     headers.delete(PREVIEW_HEADER);
+    headers.delete(RETRY_HEADER);
+
+    // Exact objects win: a slashless GET/HEAD miss retries as its directory index in the response phase.
+    if (ctx.request.method === "GET" || ctx.request.method === "HEAD") {
+      const retry = indexRetryUrl(ctx.request.url);
+      if (retry) headers.set(RETRY_HEADER, retry);
+    }
 
     // Path preview: serve the deploy dir directly, flagging the request so the response phase rewrites its HTML.
     if (path === "/deploys" || path.startsWith("/deploys/")) {
@@ -88,11 +104,20 @@ BunnySDK.net.http
     return new Request(new Request(url.toString(), ctx.request), { headers });
   })
   .onOriginResponse(async (ctx) => {
+    let response = ctx.response;
+
+    // A flagged 404 probes its directory index and redirects to the slash URL when it exists (/blog -> /blog/), so relative references resolve against the right base; the probe re-enters this router and, slash-terminated, can never retry further.
+    const retry = ctx.request.headers.get(RETRY_HEADER);
+    if (retry && response.status === 404) {
+      const probe = await fetch(retry, { method: "HEAD" });
+      if (probe.ok) {
+        return new Response(null, { status: 301, headers: { Location: retry } });
+      }
+    }
+
     const previewId = ctx.request.headers.get(PREVIEW_HEADER);
     const isCustomPreview = PREVIEW_HOST.test(new URL(ctx.request.url).hostname);
     if (!previewId && !isCustomPreview) return;
-
-    let response = ctx.response;
 
     // Path previews serve under a subpath: rewrite root-absolute asset refs into the deploy.
     const contentType = response.headers.get("content-type") || "";
