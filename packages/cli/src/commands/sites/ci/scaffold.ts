@@ -168,6 +168,7 @@ export async function scaffoldSitesWorkflow(opts: {
   force?: boolean;
   dir?: string;
   build?: string;
+  previews?: boolean;
 }): Promise<ScaffoldResult | null> {
   const settings = await workflowSettings(opts);
   const preset = await resolvePreset(
@@ -186,6 +187,7 @@ export async function scaffoldSitesWorkflow(opts: {
     workingDirectory: settings.prefix || undefined,
     cacheDependencyPath: settings.cacheDependencyPath,
     installDeps: await needsJsInstall(preset, settings),
+    previews: opts.previews,
   });
 
   const target = join(opts.root, SITES_WORKFLOW_PATH);
@@ -217,7 +219,7 @@ export async function scaffoldSitesWorkflow(opts: {
 export async function printWorkflowInstructions(
   site: string,
   root: string,
-  config?: { root?: string; dir?: string; build?: string },
+  config?: { root?: string; dir?: string; build?: string; previews?: boolean },
 ): Promise<void> {
   const settings = await workflowSettings({
     root,
@@ -242,6 +244,7 @@ export async function printWorkflowInstructions(
       workingDirectory: settings.prefix || undefined,
       cacheDependencyPath: settings.cacheDependencyPath,
       installDeps: await needsJsInstall(preset, settings),
+      previews: config?.previews,
     }),
   );
   printSecretHint();

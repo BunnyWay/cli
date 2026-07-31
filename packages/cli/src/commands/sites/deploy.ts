@@ -4,12 +4,14 @@ import {
   createComputeClient,
   createCoreClient,
 } from "@bunny.net/openapi-client";
+import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { collectEnv } from "../../core/env.ts";
-import { UserError } from "../../core/errors.ts";
+import { errorMessage, UserError } from "../../core/errors.ts";
 import { formatBytes } from "../../core/format.ts";
+import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { confirm, isInteractive, withSpinner } from "../../core/ui.ts";
 import {
@@ -27,11 +29,11 @@ import {
 import { loadSiteConfig } from "./config.ts";
 import {
   type DeployRecord,
-  deployPrefix,
   markCurrent,
   previewHostname,
 } from "./constants.ts";
 import { resolveDeployIdentity } from "./deploy-id.ts";
+import { setupSiteDomain } from "./domains/index.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -50,7 +52,7 @@ interface DeployArgs extends SiteSelectorArgs {
   force?: boolean;
 }
 
-// Production and preview URLs for a deploy: with a custom domain the preview is `dpl-{id}.preview.{domain}`, else the `/deploys/{id}/` path the router's HTMLRewriter renders correctly.
+// Production and preview URLs for a deploy: previews are `dpl-{id}.preview.{domain}` hosts, so they only exist once a custom domain is attached.
 function deployUrls(
   site: SiteContext,
   deployId: string,
@@ -62,9 +64,7 @@ function deployUrls(
     production: productionHost ? `https://${productionHost}` : undefined,
     preview: domain
       ? `https://${previewHostname(deployId, domain)}`
-      : productionHost
-        ? `https://${productionHost}/${deployPrefix(deployId)}/`
-        : undefined,
+      : undefined,
   };
 }
 
@@ -79,12 +79,15 @@ export function resolveDeployDir(
   return resolve(root, configDir ?? autoDir ?? ".");
 }
 
-// Deploy a directory: hash, skip if unchanged, upload to `deploys/{id}/`, record state, serve a preview URL; `--production` also publishes it live, `--build` runs the build first with `--env`/`--env-file` overrides.
+// Deploy a directory: hash, skip if unchanged, upload to `deploys/{id}/`, record state, publish. Without a custom domain every deploy goes live; with one the default is a preview and `--production` publishes. `--build` runs the build first with `--env`/`--env-file` overrides.
 export const sitesDeployCommand = defineCommand<DeployArgs>({
   command: "deploy [dir]",
   describe: "Deploy a directory to a site.",
   examples: [
-    ["$0 sites deploy ./dist", "Deploy to a preview URL"],
+    [
+      "$0 sites deploy ./dist",
+      "Deploy the site (a preview when a custom domain is attached, else live)",
+    ],
     [
       "$0 sites deploy ./dist --production",
       "Deploy and publish as the live site",
@@ -125,7 +128,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           type: "boolean",
           default: false,
           describe:
-            "Publish the deploy as the live site (default: preview only)",
+            "Publish the deploy as the live site (always on when the site has no custom domain; with one, the default is a preview)",
         })
         .option("force", {
           type: "boolean",
@@ -172,6 +175,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       },
     });
     const { state, connection } = site;
+
+    // No custom domain means no preview hosts, so every deploy publishes; with a domain, previews are the default and --production is the publish switch.
+    const publish = args.production === true || !state.domain;
+    // The site's first-ever deploy is the one moment we offer a custom domain; declining self-limits, since the list is never empty again.
+    const firstDeploy = state.deploys.length === 0;
 
     let etag = site.etag;
 
@@ -236,8 +244,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const deployId = alreadyUploaded?.id ?? identity.id;
     const alreadyLive = state.current === deployId;
 
-    // Nothing to do: the deploy is already uploaded (and live, if --production).
-    if (skipUpload && (alreadyLive || !args.production)) {
+    // Nothing to do: the deploy is already uploaded (and live, if publishing).
+    if (skipUpload && (alreadyLive || !publish)) {
       const urls = deployUrls(
         site,
         deployId,
@@ -300,7 +308,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       etag = await writeRemoteState(connection, state, etag);
     }
 
-    if (args.production) {
+    if (publish) {
       await withSpinner("Publishing to production...", async () => {
         await promoteDeploy({
           computeClient,
@@ -330,7 +338,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
             source: identity.source,
             files: files.length,
             bytes: totalBytes,
-            promoted: args.production === true,
+            promoted: publish,
             production: urls.production ?? null,
             preview: urls.preview ?? null,
           },
@@ -348,7 +356,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         `Deployed ${deployId} (${files.length} files, ${formatBytes(totalBytes)}).`,
       );
     }
-    if (args.production) {
+    if (publish) {
       if (urls.production) logger.info(`Production: ${urls.production}`);
       if (urls.preview) logger.log(`  Preview:    ${urls.preview}`);
     } else {
@@ -356,6 +364,50 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       logger.info(
         `Publish it with \`bunny sites deploy --production\` or \`bunny sites deployments publish ${deployId}\`.`,
       );
+    }
+
+    // Domainless sites: the first deploy offers a custom domain (which unlocks preview deploys), later ones just hint.
+    if (!state.domain) {
+      logger.log();
+      let handled = false;
+      if (firstDeploy && isInteractive(output)) {
+        const { value } = await prompts({
+          type: "text",
+          name: "value",
+          message:
+            "Custom domain for this site (unlocks preview deploys; leave blank to skip):",
+        });
+        const domain = normalizeHostname(value ?? "") || undefined;
+        if (domain) {
+          handled = true;
+          // The domain flow writes state, so it needs the etag from this deploy's writes, not the stale read.
+          site.etag = etag;
+          try {
+            await setupSiteDomain({
+              coreClient,
+              site,
+              domain,
+              interactive: true,
+              verbose,
+            });
+            logger.dim(
+              "  From now on `bunny sites deploy` creates a preview; publish with --production.",
+            );
+          } catch (err) {
+            logger.warn(
+              `Couldn't finish setting up ${domain}: ${errorMessage(err)}`,
+            );
+            logger.dim(
+              `  Retry later: bunny sites domains add ${domain} ${state.name}`,
+            );
+          }
+        }
+      }
+      if (!handled) {
+        logger.dim(
+          "  Add a custom domain to unlock preview deploys: bunny sites domains add <domain>",
+        );
+      }
     }
 
     await offerLink();

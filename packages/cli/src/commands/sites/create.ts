@@ -198,6 +198,8 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       });
       chosenDomain = normalizeHostname(value ?? "") || undefined;
     }
+    // Previews (and the PR flow in CI) exist only once a custom domain is attached.
+    let previews = false;
     if (chosenDomain) {
       // A domain failure mustn't fail the create; the site already exists and the domain can be retried via `sites domains add`.
       logger.log();
@@ -208,6 +210,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
         interactive,
         verbose,
       });
+      previews = !domainError;
       if (domainError) {
         logger.warn(
           `Couldn't finish setting up ${chosenDomain}: ${domainError}`,
@@ -224,7 +227,9 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       if (root && (await hasGitHubOrigin(root))) {
         logger.log();
         const setup = await confirm(
-          "Set up GitHub deployments (preview on PRs, production on main)?",
+          previews
+            ? "Set up GitHub deployments (preview on PRs, production on main)?"
+            : "Set up GitHub deployments (production on pushes to main)?",
           { initial: true },
         );
         if (setup) {
@@ -235,6 +240,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
             interactive: true,
             dir: siteConfig?.dir,
             build: siteConfig?.build,
+            previews,
           });
           if (scaffold) {
             logger.success(
@@ -250,6 +256,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
           await printWorkflowInstructions(name, root, {
             root: configRoot,
             ...siteConfig,
+            previews,
           });
         }
       }
