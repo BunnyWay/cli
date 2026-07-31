@@ -390,9 +390,12 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
               interactive: true,
               verbose,
             });
-            logger.dim(
-              "  From now on `bunny sites deploy` creates a preview; publish with --production.",
-            );
+            // state.domain stays unset when the preview wildcard didn't attach; deploys keep publishing (the wildcard failure already printed the retry hint).
+            if (site.state.domain) {
+              logger.dim(
+                "  From now on `bunny sites deploy` creates a preview; publish with --production.",
+              );
+            }
           } catch (err) {
             logger.warn(
               `Couldn't finish setting up ${domain}: ${errorMessage(err)}`,

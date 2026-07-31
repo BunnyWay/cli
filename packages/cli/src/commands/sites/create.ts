@@ -33,7 +33,7 @@ interface CreateArgs {
   link?: boolean;
 }
 
-// Attach a custom domain to a just-created site; returns an error message on failure (never throws).
+// Attach a custom domain to a just-created site; never throws. `previewsReady` mirrors state.domain, which setupSiteDomain only records once the preview wildcard attached.
 async function attachDomainToCreatedSite(opts: {
   coreClient: CoreClient;
   storageZone: StorageZoneModel;
@@ -41,9 +41,9 @@ async function attachDomainToCreatedSite(opts: {
   interactive: boolean;
   verbose: boolean;
   json?: boolean;
-}): Promise<string | undefined> {
+}): Promise<{ error?: string; previewsReady: boolean }> {
   const site = await siteContextFromZone(opts.storageZone);
-  if (!site) return undefined;
+  if (!site) return { previewsReady: false };
   try {
     await setupSiteDomain({
       coreClient: opts.coreClient,
@@ -53,9 +53,9 @@ async function attachDomainToCreatedSite(opts: {
       verbose: opts.verbose,
       json: opts.json,
     });
-    return undefined;
+    return { previewsReady: Boolean(site.state.domain) };
   } catch (err) {
-    return errorMessage(err);
+    return { error: errorMessage(err), previewsReady: false };
   }
 }
 
@@ -141,7 +141,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
 
     if (output === "json") {
       // --domain is attached non-interactively; a failure is reported but doesn't fail the create.
-      const domainError = domain
+      const attach = domain
         ? await attachDomainToCreatedSite({
             coreClient,
             storageZone: result.storageZone,
@@ -151,6 +151,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
             json: true,
           })
         : undefined;
+      const domainError = attach?.error;
       logger.log(
         JSON.stringify(
           {
@@ -198,19 +199,20 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       });
       chosenDomain = normalizeHostname(value ?? "") || undefined;
     }
-    // Previews (and the PR flow in CI) exist only once a custom domain is attached.
+    // Previews (and the PR flow in CI) exist only once the domain and its preview wildcard are attached.
     let previews = false;
     if (chosenDomain) {
       // A domain failure mustn't fail the create; the site already exists and the domain can be retried via `sites domains add`.
       logger.log();
-      const domainError = await attachDomainToCreatedSite({
-        coreClient,
-        storageZone: result.storageZone,
-        domain: chosenDomain,
-        interactive,
-        verbose,
-      });
-      previews = !domainError;
+      const { error: domainError, previewsReady } =
+        await attachDomainToCreatedSite({
+          coreClient,
+          storageZone: result.storageZone,
+          domain: chosenDomain,
+          interactive,
+          verbose,
+        });
+      previews = previewsReady;
       if (domainError) {
         logger.warn(
           `Couldn't finish setting up ${chosenDomain}: ${domainError}`,

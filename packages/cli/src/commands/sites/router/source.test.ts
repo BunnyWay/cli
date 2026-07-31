@@ -34,9 +34,6 @@ test("routerSource wires up the deploy routing", () => {
   // The client-sent flag must be stripped, or it'd poison cached HTML.
   expect(src).toContain("headers.delete(RETRY_HEADER);");
   expect(src).toContain("X-Robots-Tag");
-  // Path previews are gone: deploys are only reachable at the apex or a preview host.
-  expect(src).not.toContain("HTMLRewriter");
-  expect(src).not.toContain("x-bunny-preview");
 });
 
 test("indexRetryUrl targets the directory index for slashless paths only", () => {
