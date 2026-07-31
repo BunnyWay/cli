@@ -52,8 +52,12 @@ BunnySDK.net.http
   .servePullZone()
   .onOriginRequest(async (ctx) => {
     const url = new URL(ctx.request.url);
-    // Storage serves no directory indexes: expand \`/dir/\` to \`/dir/index.html\` on every route, path previews included.
-    if (url.pathname.endsWith("/")) url.pathname += "index.html";
+    // Storage serves no directory indexes: expand \`/dir/\` and extensionless \`/dir\` to \`/dir/index.html\` on every route, path previews included.
+    if (url.pathname.endsWith("/")) {
+      url.pathname += "index.html";
+    } else if (!url.pathname.slice(url.pathname.lastIndexOf("/") + 1).includes(".")) {
+      url.pathname += "/index.html";
+    }
     const path = url.pathname;
 
     // Internal site metadata (state, env) is never served.

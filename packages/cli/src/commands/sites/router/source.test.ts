@@ -8,9 +8,9 @@ test("routerSource wires up the preview machinery", () => {
   expect(src).toContain("process.env.CURRENT_DEPLOY");
   expect(src).toContain('url.pathname = "/deploys/" + deploy + path;');
   // Directory URLs expand to index.html before any branching, so path previews get it too.
-  expect(src).toContain(
-    'if (url.pathname.endsWith("/")) url.pathname += "index.html";',
-  );
+  expect(src).toContain('url.pathname += "index.html";');
+  // Extensionless URLs (/blog) expand too; SSG directory output has no /blog object, only /blog/index.html.
+  expect(src).toContain('url.pathname += "/index.html";');
   // Flags previews so the response phase rewrites their HTML (and never production's).
   expect(src).toContain('const PREVIEW_HEADER = "x-bunny-preview";');
   // Client-sent preview flags must be stripped, or they'd poison cached production HTML.
@@ -25,6 +25,28 @@ function withDeploy(id: string, value: string): string {
   if (value.startsWith("/deploys/")) return value;
   return `/deploys/${id}${value}`;
 }
+
+// Mirrors the router's index expansion so a regression in the rule is caught here.
+function expandIndex(pathname: string): string {
+  if (pathname.endsWith("/")) return pathname + "index.html";
+  const last = pathname.slice(pathname.lastIndexOf("/") + 1);
+  return last.includes(".") ? pathname : pathname + "/index.html";
+}
+
+test("expandIndex resolves directory and extensionless paths to index.html", () => {
+  expect(expandIndex("/")).toBe("/index.html");
+  expect(expandIndex("/blog/")).toBe("/blog/index.html");
+  expect(expandIndex("/blog")).toBe("/blog/index.html");
+  // Only the last segment decides: a dotted parent dir still expands.
+  expect(expandIndex("/v2.1/docs")).toBe("/v2.1/docs/index.html");
+  // Files with extensions pass through untouched.
+  expect(expandIndex("/assets/main.css")).toBe("/assets/main.css");
+  expect(expandIndex("/blog/post.html")).toBe("/blog/post.html");
+  // Rewritten preview links expand into the deploy dir.
+  expect(expandIndex("/deploys/abcd/blog")).toBe(
+    "/deploys/abcd/blog/index.html",
+  );
+});
 
 test("withDeploy prefixes only root-absolute, un-prefixed paths", () => {
   expect(withDeploy("abcd", "/assets/main.css")).toBe(
