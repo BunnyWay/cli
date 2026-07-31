@@ -1,5 +1,11 @@
 # @bunny.net/config
 
+## 0.1.3
+
+### Patch Changes
+
+- [#125](https://github.com/BunnyWay/cli/pull/125) [`9696434`](https://github.com/BunnyWay/cli/commit/96964348d630df5b8344087deac50bb6da4a5734) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - rename `@bunny.net/app-config` to `@bunny.net/config` and add a top-level `sites` block (`name`, `dir`, `build`) to the bunny.jsonc schema; the root `BunnyConfigSchema` makes `app` and `sites` optional so app-only, sites-only, and combined files all validate against the generated JSON Schema
+
 ## 0.1.2
 
 ### Patch Changes
