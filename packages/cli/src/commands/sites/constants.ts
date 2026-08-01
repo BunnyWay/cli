@@ -87,6 +87,16 @@ export function previewWildcard(domain: string): string {
   return `*.${PREVIEW_LABEL}.${domain}`;
 }
 
+/** The domain a `*.preview.<domain>` wildcard hostname serves; undefined for any other hostname. */
+export function previewDomainFromWildcard(
+  hostname: string,
+): string | undefined {
+  const match = new RegExp(`^\\*\\.${PREVIEW_LABEL}\\.(.+)$`, "i").exec(
+    hostname,
+  );
+  return match?.[1]?.toLowerCase();
+}
+
 /** Router script name for a site; namespaced so `sites create` can find it on re-run. */
 export function routerScriptName(siteName: string): string {
   return `${siteName}-router`;

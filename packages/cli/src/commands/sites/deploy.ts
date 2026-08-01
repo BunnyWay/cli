@@ -15,7 +15,7 @@ import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { confirm, isInteractive, withSpinner } from "../../core/ui.ts";
 import {
-  fetchSystemHostname,
+  fetchSiteHostnames,
   promoteDeploy,
   type SiteContext,
   writeRemoteState,
@@ -51,6 +51,9 @@ interface DeployArgs extends SiteSelectorArgs {
   production?: boolean;
   force?: boolean;
 }
+
+const DOMAIN_HINT =
+  "  Add a custom domain to unlock preview deploys: bunny sites domains add <domain>";
 
 // Production and preview URLs for a deploy: previews are `dpl-{id}.preview.{domain}` hosts, so they only exist once a custom domain is attached.
 function deployUrls(
@@ -176,6 +179,24 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     });
     const { state, connection } = site;
 
+    // The pull zone's preview wildcard, not the best-effort recorded state, decides preview mode: a stale-missing domain must not publish a CI preview to production, and a stale-present one must not advertise preview URLs that can't serve. State heals to match (persisted by the next state write).
+    const zone = await fetchSiteHostnames(coreClient, state.pullZoneId);
+    if (zone.fetched) {
+      if (!state.domain && zone.previewDomain) {
+        state.domain = zone.previewDomain;
+      } else if (state.domain && !zone.previewDomain) {
+        if (output !== "json") {
+          logger.warn(
+            `The preview wildcard for ${state.domain} is missing from the pull zone; deploys publish directly until it's restored.`,
+          );
+          logger.dim(
+            `  Restore it with: bunny sites domains add ${state.domain} ${state.name}`,
+          );
+        }
+        state.domain = undefined;
+      }
+    }
+
     // No custom domain means no preview hosts, so every deploy publishes; with a domain, previews are the default and --production is the publish switch.
     const publish = args.production === true || !state.domain;
     // The site's first-ever deploy is the one moment we offer a custom domain; declining self-limits, since the list is never empty again.
@@ -246,11 +267,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
     // Nothing to do: the deploy is already uploaded (and live, if publishing).
     if (skipUpload && (alreadyLive || !publish)) {
-      const urls = deployUrls(
-        site,
-        deployId,
-        await fetchSystemHostname(coreClient, state.pullZoneId),
-      );
+      const urls = deployUrls(site, deployId, zone.systemHost);
       if (output === "json") {
         logger.log(
           JSON.stringify(
@@ -278,6 +295,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         );
       }
       if (urls.preview) logger.log(`  Preview: ${urls.preview}`);
+      // The common repeat path after declining the first-deploy domain offer still gets the hint.
+      if (!state.domain) logger.dim(DOMAIN_HINT);
       return;
     }
 
@@ -323,11 +342,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       });
     }
 
-    const urls = deployUrls(
-      site,
-      deployId,
-      await fetchSystemHostname(coreClient, state.pullZoneId),
-    );
+    const urls = deployUrls(site, deployId, zone.systemHost);
 
     if (output === "json") {
       logger.log(
@@ -406,11 +421,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           }
         }
       }
-      if (!handled) {
-        logger.dim(
-          "  Add a custom domain to unlock preview deploys: bunny sites domains add <domain>",
-        );
-      }
+      if (!handled) logger.dim(DOMAIN_HINT);
     }
 
     await offerLink();

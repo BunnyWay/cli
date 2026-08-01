@@ -4,6 +4,7 @@ import {
   isValidDeployId,
   isValidSiteName,
   parseRemoteState,
+  previewDomainFromWildcard,
   previewHostname,
   previewWildcard,
   type RemoteSiteState,
@@ -85,4 +86,20 @@ test("suffixed resource names round-trip through the site pattern", () => {
   expect(pattern.test("sites-my-site-abcdef1")).toBe(false); // suffix too long
   expect(pattern.test("sites-my-site2-abcdef")).toBe(false); // different site
   expect(siteResourcePattern("other").test(zoneName)).toBe(false);
+});
+
+// Deploy trusts the pull zone's wildcard over recorded state, so parsing must round-trip previewWildcard and reject everything else.
+test("previewDomainFromWildcard extracts the domain from preview wildcards only", () => {
+  expect(previewDomainFromWildcard(previewWildcard("example.com"))).toBe(
+    "example.com",
+  );
+  expect(previewDomainFromWildcard("*.PREVIEW.Example.COM")).toBe(
+    "example.com",
+  );
+  expect(previewDomainFromWildcard("example.com")).toBeUndefined();
+  expect(previewDomainFromWildcard("*.example.com")).toBeUndefined();
+  expect(
+    previewDomainFromWildcard("dpl-abc.preview.example.com"),
+  ).toBeUndefined();
+  expect(previewDomainFromWildcard("")).toBeUndefined();
 });

@@ -26,6 +26,7 @@ import {
   CURRENT_DEPLOY_VAR,
   deployPrefix,
   parseRemoteState,
+  previewDomainFromWildcard,
   REMOTE_STATE_PATH,
   type RemoteSiteState,
   routerScriptName,
@@ -462,6 +463,30 @@ export async function fetchSystemHostname(
     return systemHostname(data?.Hostnames);
   } catch {
     return undefined;
+  }
+}
+
+// One pull-zone read for deploy: the system host plus the domain served by an attached `*.preview.*` wildcard. The wildcard is the source of truth for preview mode; `fetched: false` (zone unreadable) tells callers to fall back to the recorded state.
+export async function fetchSiteHostnames(
+  coreClient: CoreClient,
+  pullZoneId: number,
+): Promise<{ fetched: boolean; systemHost?: string; previewDomain?: string }> {
+  try {
+    const { data } = await coreClient.GET("/pullzone/{id}", {
+      params: { path: { id: pullZoneId } },
+    });
+    if (!data) return { fetched: false };
+    const hostnames = data.Hostnames ?? [];
+    const previewDomain = hostnames
+      .map((h) => previewDomainFromWildcard(h.Value ?? ""))
+      .find((domain) => domain !== undefined);
+    return {
+      fetched: true,
+      systemHost: systemHostname(hostnames),
+      previewDomain,
+    };
+  } catch {
+    return { fetched: false };
   }
 }
 
