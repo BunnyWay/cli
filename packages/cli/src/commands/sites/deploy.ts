@@ -17,6 +17,7 @@ import { confirm, isInteractive, withSpinner } from "../../core/ui.ts";
 import {
   fetchSiteHostnames,
   promoteDeploy,
+  reconcilePreviewDomain,
   type SiteContext,
   writeRemoteState,
 } from "./api.ts";
@@ -31,6 +32,7 @@ import {
   type DeployRecord,
   markCurrent,
   previewHostname,
+  previewWildcard,
 } from "./constants.ts";
 import { resolveDeployIdentity } from "./deploy-id.ts";
 import { setupSiteDomain } from "./domains/index.ts";
@@ -179,22 +181,17 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     });
     const { state, connection } = site;
 
-    // The pull zone's preview wildcard, not the best-effort recorded state, decides preview mode: a stale-missing domain must not publish a CI preview to production, and a stale-present one must not advertise preview URLs that can't serve. State heals to match (persisted by the next state write).
+    // The pull zone's preview wildcard, not the best-effort recorded state, decides preview mode: a stale-missing domain must not publish a CI preview to production, and a stale-present one must not advertise preview URLs that can't serve.
     const zone = await fetchSiteHostnames(coreClient, state.pullZoneId);
-    if (zone.fetched) {
-      if (!state.domain && zone.previewDomain) {
-        state.domain = zone.previewDomain;
-      } else if (state.domain && !zone.previewDomain) {
-        if (output !== "json") {
-          logger.warn(
-            `The preview wildcard for ${state.domain} is missing from the pull zone; deploys publish directly until it's restored.`,
-          );
-          logger.dim(
-            `  Restore it with: bunny sites domains add ${state.domain} ${state.name}`,
-          );
-        }
-        state.domain = undefined;
-      }
+    const staleDomain = state.domain;
+    const drift = reconcilePreviewDomain(state, zone);
+    if (drift === "detached" && staleDomain && output !== "json") {
+      logger.warn(
+        `${previewWildcard(staleDomain)} isn't on the pull zone, so previews can't serve; this deploy publishes directly.`,
+      );
+      logger.dim(
+        `  Restore it with: bunny sites domains add ${staleDomain} ${state.name}`,
+      );
     }
 
     // No custom domain means no preview hosts, so every deploy publishes; with a domain, previews are the default and --production is the publish switch.

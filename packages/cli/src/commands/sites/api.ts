@@ -490,13 +490,30 @@ export async function fetchSiteHostnames(
   }
 }
 
-// Promote timing: `CURRENT_DEPLOY` is accepted instantly but reaches edge nodes async, so we confirm the edge serves it before the follow-up purge, then settle briefly.
+export type PreviewDomainDrift = "attached" | "detached" | undefined;
+
+export function reconcilePreviewDomain(
+  state: RemoteSiteState,
+  zone: { fetched: boolean; previewDomain?: string },
+): PreviewDomainDrift {
+  if (!zone.fetched) return undefined;
+  if (zone.previewDomain) {
+    if (state.domain === zone.previewDomain) return undefined;
+    state.domain = zone.previewDomain;
+    return "attached";
+  }
+  if (state.domain) {
+    state.domain = undefined;
+    return "detached";
+  }
+  return undefined;
+}
+
 const PROBE_TIMEOUT_MS = 4000;
 const PROPAGATION_DEADLINE_MS = 20_000;
 const PROPAGATION_INTERVAL_MS = 1500;
 const SETTLE_FLOOR_MS = 2500;
 
-// CDN-probe seam; tests swap these so promote runs without real network or timers.
 export const promoteVerification = {
   /** Probe the live site through the CDN; resolves to the HTTP status code. */
   probe: async (url: string): Promise<number> => {

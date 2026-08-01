@@ -7,6 +7,8 @@ import {
   type CoreClient,
   createHostnamesCommands,
   enableSsl,
+  fetchPullZoneHostnames,
+  type Hostname,
   type ResolvedPullZone,
   setupHostname,
 } from "../../../core/hostnames/index.ts";
@@ -69,44 +71,57 @@ export async function attachPreviewWildcard(opts: {
   json?: boolean;
 }): Promise<boolean> {
   const wildcard = previewWildcard(opts.domain);
+  let hostnames: Hostname[];
   try {
-    const { hostnames } = await addHostname(
-      opts.coreClient,
-      opts.pullZoneId,
-      wildcard,
-    );
+    hostnames = (await addHostname(opts.coreClient, opts.pullZoneId, wildcard))
+      .hostnames;
     if (!opts.json) {
       logger.success(`Added ${wildcard} for deploy previews.`);
       if (opts.cnameTarget) {
         logger.accent(`  CNAME  ${wildcard}  →  ${opts.cnameTarget}`);
       }
     }
-    try {
-      await enableSsl(
-        opts.coreClient,
-        opts.pullZoneId,
-        wildcard,
-        true,
-        hostnames,
-      );
-    } catch {
-      // Wildcard certs need DNS in place (DNS-01); issue later, don't block.
+  } catch (err) {
+    // Retrying after a partial setup re-adds an existing wildcard, so the zone decides whether previews can serve, not the error.
+    const existing = await fetchPullZoneHostnames(
+      opts.coreClient,
+      opts.pullZoneId,
+    ).catch(() => [] as Hostname[]);
+    const attached = existing.some(
+      (h) => (h.Value ?? "").toLowerCase() === wildcard.toLowerCase(),
+    );
+    if (!attached) {
       if (!opts.json) {
+        logger.warn(`Couldn't add ${wildcard}: ${errorMessage(err)}`);
         logger.dim(
-          `  Preview HTTPS pending; once DNS is live: bunny sites domains ssl "${wildcard}"`,
+          `  Previews stay off and deploys keep publishing directly; retry with \`bunny sites domains add ${opts.domain}\`.`,
         );
       }
+      return false;
     }
-    return true;
-  } catch (err) {
+    hostnames = existing;
     if (!opts.json) {
-      logger.warn(`Couldn't add ${wildcard}: ${errorMessage(err)}`);
+      logger.info(`${wildcard} is already attached for deploy previews.`);
+    }
+  }
+
+  try {
+    await enableSsl(
+      opts.coreClient,
+      opts.pullZoneId,
+      wildcard,
+      true,
+      hostnames,
+    );
+  } catch {
+    // Wildcard certs need DNS in place (DNS-01); issue later, don't block.
+    if (!opts.json) {
       logger.dim(
-        `  Previews stay off and deploys keep publishing directly; retry with \`bunny sites domains add ${opts.domain}\`.`,
+        `  Preview HTTPS pending; once DNS is live: bunny sites domains ssl "${wildcard}"`,
       );
     }
-    return false;
   }
+  return true;
 }
 
 // Full custom-domain setup for a site (used by `sites create --domain`): interactive runs get the DNS-wait/SSL flow, JSON runs just attach and report; the preview wildcard and state update happen in both.

@@ -9,6 +9,7 @@ import {
   promoteDeploy,
   promoteVerification,
   readRemoteState,
+  reconcilePreviewDomain,
   siteContextFromZone,
   siteFiles,
   writeRemoteState,
@@ -830,4 +831,49 @@ test("fetchSites pages through the /pullzone envelope", async () => {
   const sites = await fetchSites(coreClient);
   expect(sites).toHaveLength(1);
   expect(sites[0]?.state.name).toBe("my-site");
+});
+
+// `state.domain` decides whether deploys preview or publish, but its write is best-effort, so the zone's wildcard reconciles it before anything reads it.
+test("reconcilePreviewDomain heals drifted domain state from the zone", () => {
+  const state = (domain?: string) => ({ domain }) as RemoteSiteState;
+
+  // Wildcard attached but the state write failed: previews work, so a CI preview build must not publish to production.
+  const stranded = state(undefined);
+  expect(
+    reconcilePreviewDomain(stranded, {
+      fetched: true,
+      previewDomain: "example.com",
+    }),
+  ).toBe("attached");
+  expect(stranded.domain).toBe("example.com");
+
+  // Wildcard removed behind the CLI's back: previews can't serve, so don't advertise them.
+  const dangling = state("example.com");
+  expect(reconcilePreviewDomain(dangling, { fetched: true })).toBe("detached");
+  expect(dangling.domain).toBeUndefined();
+
+  // The domain moved: adopt whatever the zone actually serves.
+  const moved = state("old.example");
+  expect(
+    reconcilePreviewDomain(moved, {
+      fetched: true,
+      previewDomain: "new.example",
+    }),
+  ).toBe("attached");
+  expect(moved.domain).toBe("new.example");
+
+  // Agreement is not drift.
+  const agreed = state("example.com");
+  expect(
+    reconcilePreviewDomain(agreed, {
+      fetched: true,
+      previewDomain: "example.com",
+    }),
+  ).toBeUndefined();
+  expect(agreed.domain).toBe("example.com");
+
+  // An unreadable zone proves nothing; keep the recorded value.
+  const unknown = state("example.com");
+  expect(reconcilePreviewDomain(unknown, { fetched: false })).toBeUndefined();
+  expect(unknown.domain).toBe("example.com");
 });
