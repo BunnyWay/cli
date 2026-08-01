@@ -4,6 +4,7 @@ import { mapWithConcurrency } from "../../core/concurrency.ts";
 import { ApiError, errorMessage, UserError } from "../../core/errors.ts";
 import {
   createPullZone,
+  type Hostname,
   setForceSsl,
   systemHostname,
 } from "../../core/hostnames/index.ts";
@@ -217,6 +218,8 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
         const zone = await fetchStorageZone(client, pz.StorageZoneId as number);
         const context = await siteContextFromZone(zone);
         if (!context || context.state.pullZoneId !== pz.Id) return null;
+        // The listing already carries the hostnames, so a drifted domain costs nothing to correct here.
+        reconcilePreviewDomain(context.state, previewZone(pz.Hostnames));
         return {
           state: context.state,
           storageZone: zone,
@@ -466,6 +469,20 @@ export async function fetchSystemHostname(
   }
 }
 
+/** The preview-mode view of an already-fetched hostname list, so callers that read hostnames anyway reconcile without a second request; null means the read failed (never "no wildcard"). */
+export function previewZone(hostnames: Hostname[] | null | undefined): {
+  fetched: boolean;
+  previewDomain?: string;
+} {
+  if (!hostnames) return { fetched: false };
+  return {
+    fetched: true,
+    previewDomain: hostnames
+      .map((h) => previewDomainFromWildcard(h.Value ?? ""))
+      .find((domain) => domain !== undefined),
+  };
+}
+
 // One pull-zone read for deploy: the system host plus the domain served by an attached `*.preview.*` wildcard. The wildcard is the source of truth for preview mode; `fetched: false` (zone unreadable) tells callers to fall back to the recorded state.
 export async function fetchSiteHostnames(
   coreClient: CoreClient,
@@ -477,13 +494,9 @@ export async function fetchSiteHostnames(
     });
     if (!data) return { fetched: false };
     const hostnames = data.Hostnames ?? [];
-    const previewDomain = hostnames
-      .map((h) => previewDomainFromWildcard(h.Value ?? ""))
-      .find((domain) => domain !== undefined);
     return {
-      fetched: true,
+      ...previewZone(hostnames),
       systemHost: systemHostname(hostnames),
-      previewDomain,
     };
   } catch {
     return { fetched: false };
@@ -507,6 +520,19 @@ export function reconcilePreviewDomain(
     return "detached";
   }
   return undefined;
+}
+
+// Persist a drift correction so the commands that only read state (show/list/open) stop lagging; best-effort, since the in-memory value already drives this run and the next one reconciles from the zone regardless.
+export async function persistReconciledDomain(
+  site: SiteContext,
+): Promise<void> {
+  try {
+    site.etag = await writeRemoteState(site.connection, site.state, site.etag);
+  } catch (err) {
+    logger.warn(
+      `Couldn't record the site's domain state: ${errorMessage(err)}`,
+    );
+  }
 }
 
 const PROBE_TIMEOUT_MS = 4000;

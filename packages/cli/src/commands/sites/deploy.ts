@@ -16,6 +16,7 @@ import { logger } from "../../core/logger.ts";
 import { confirm, isInteractive, withSpinner } from "../../core/ui.ts";
 import {
   fetchSiteHostnames,
+  persistReconciledDomain,
   promoteDeploy,
   reconcilePreviewDomain,
   type SiteContext,
@@ -193,6 +194,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         `  Restore it with: bunny sites domains add ${staleDomain} ${state.name}`,
       );
     }
+    // Persist before the deploy's own writes so an unchanged/no-op run still heals the state the read-only commands show.
+    if (drift) await persistReconciledDomain(site);
 
     // No custom domain means no preview hosts, so every deploy publishes; with a domain, previews are the default and --production is the publish switch.
     const publish = args.production === true || !state.domain;

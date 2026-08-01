@@ -1,11 +1,13 @@
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import { ApiError } from "../../core/errors.ts";
+import type { Hostname } from "../../core/hostnames/index.ts";
 import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
 import {
   type ComputeClient,
   createSite,
   deleteSiteResources,
   fetchSites,
+  previewZone,
   promoteDeploy,
   promoteVerification,
   readRemoteState,
@@ -736,6 +738,42 @@ test("fetchSites keeps only middleware+storage pull zones with matching state", 
   expect(sites).toHaveLength(1);
   expect(sites[0]?.state.name).toBe("my-site");
   expect(sites[0]?.systemHostname).toBe("my-site.b-cdn.net");
+});
+
+// `list` reads the same listing, so a domain the zone doesn't back must not be shown as live.
+test("fetchSites reconciles each site's domain against its pull zone hostnames", async () => {
+  store.set(
+    REMOTE_STATE_PATH,
+    JSON.stringify(fakeState({ domain: "stale.example" })),
+  );
+  const coreClient = fakeCoreClient({
+    calls: [],
+    storageZones: [ZONE],
+    pullZones: [
+      {
+        Id: 30,
+        Name: "my-site",
+        MiddlewareScriptId: 20,
+        StorageZoneId: 10,
+        Hostnames: [
+          { IsSystemHostname: true, Value: "my-site.b-cdn.net" },
+          { Value: "*.preview.live.example" },
+        ],
+      },
+    ],
+  });
+
+  const sites = await fetchSites(coreClient);
+  expect(sites[0]?.state.domain).toBe("live.example");
+});
+
+test("previewZone tells a failed hostname read apart from a zone with no wildcard", () => {
+  // Null is "unknown", so a fetch failure can never be mistaken for "previews are off".
+  expect(previewZone(null)).toEqual({ fetched: false });
+  expect(previewZone([])).toEqual({ fetched: true, previewDomain: undefined });
+  expect(
+    previewZone([{ Value: "*.preview.example.com" }] as Hostname[]),
+  ).toEqual({ fetched: true, previewDomain: "example.com" });
 });
 
 test("siteContextFromZone is null for a zone without site state", async () => {

@@ -4,7 +4,11 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
 import { isInteractive } from "../../../core/ui.ts";
-import { fetchSiteHostnames, reconcilePreviewDomain } from "../api.ts";
+import {
+  fetchSiteHostnames,
+  persistReconciledDomain,
+  reconcilePreviewDomain,
+} from "../api.ts";
 import { loadSiteConfig } from "../config.ts";
 import {
   type SiteSelectorArgs,
@@ -73,7 +77,9 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
 
     // PR previews must key off the same signal deploy uses: the zone's wildcard, since a failed state write can leave `state.domain` unset while previews work fine.
     const zone = await fetchSiteHostnames(coreClient, site.state.pullZoneId);
-    reconcilePreviewDomain(site.state, zone);
+    if (reconcilePreviewDomain(site.state, zone)) {
+      await persistReconciledDomain(site);
+    }
     const previews = Boolean(site.state.domain);
 
     // `sites.dir`/`sites.build` are what a local deploy uses, so the workflow follows them, relative to the bunny.jsonc directory they resolve against.

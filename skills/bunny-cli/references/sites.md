@@ -42,7 +42,7 @@ This is the rule that shapes every other command here:
 
 Previews are served on their own root host (via the `*.preview.<domain>` wildcard), not under a path prefix, so client-side routers (TanStack Router, React Router, Vue Router in history mode) and root-absolute assets behave exactly as they do in production. Preview responses carry `X-Robots-Tag: noindex`. Deploys are not otherwise addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served.
 
-The switch is the preview wildcard on the pull zone, not merely the domain being recorded. `deploy` and `ci init` check the pull zone directly and reconcile the site's stored domain against it, so a half-finished domain setup can't leave you deploying at previews that don't resolve, nor publishing a CI preview build to production. If the wildcard is missing, `deploy` says so, publishes directly, and prints the command to restore it; re-running `sites domains add <domain>` reconciles a partial setup rather than failing on the already-attached wildcard.
+The switch is the preview wildcard on the pull zone, not merely the domain being recorded. Every command that reads the site's domain (`deploy`, `ci init`, `show`, `list`, `open`) checks it against the zone's hostnames first and corrects a drifted record, so a half-finished domain setup can't leave you deploying at previews that don't resolve, nor publishing a CI preview build to production. If the wildcard is missing, `deploy` says so, publishes directly, and prints the command to restore it; re-running `sites domains add <domain>` reconciles a partial setup rather than failing on the already-attached wildcard.
 
 ## Deploy IDs
 
