@@ -42,7 +42,7 @@ This is the rule that shapes every other command here:
 
 Previews are served on their own root host (via the `*.preview.<domain>` wildcard), not under a path prefix, so client-side routers (TanStack Router, React Router, Vue Router in history mode) and root-absolute assets behave exactly as they do in production. Preview responses carry `X-Robots-Tag: noindex`. Deploys are not otherwise addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served.
 
-The switch is the preview wildcard on the pull zone, not merely the domain being recorded. Every command that reads the site's domain (`deploy`, `ci init`, `show`, `list`, `open`) checks it against the zone's hostnames first and corrects a drifted record, so a half-finished domain setup can't leave you deploying at previews that don't resolve, nor publishing a CI preview build to production. If the wildcard is missing, `deploy` says so, publishes directly, and prints the command to restore it; re-running `sites domains add <domain>` reconciles a partial setup rather than failing on the already-attached wildcard.
+The switch is the preview wildcard on the pull zone, not merely the domain being recorded. Every command that reads the site's domain (`deploy`, `ci init`, `show`, `list`, `open`) checks it against the zone's hostnames first and corrects a drifted record, so a half-finished domain setup can't leave you deploying at previews that don't resolve, nor publishing a CI preview build to production. If the wildcard is missing, `deploy` says so, publishes directly, and prints the command to restore it; re-running `sites domains add <domain>` reconciles a partial setup rather than failing on the already-attached apex or wildcard.
 
 ## Deploy IDs
 
@@ -124,9 +124,9 @@ bunny sites domains list
 bunny sites domains remove example.com
 ```
 
-Adding a domain also attaches `*.preview.<domain>`, which is what unlocks per-deploy preview URLs (removing the domain takes the wildcard down too, returning the site to publish-on-deploy). If the domain is on a Bunny DNS zone in the account, the CLI offers to create the apex record; otherwise it prints the CNAME target. **The wildcard's DNS record is always yours to create** (`CNAME *.preview.<domain> → <target>`), and because wildcard certificates validate over DNS-01, the certificate usually can't issue until that record resolves; run `bunny sites domains ssl "*.preview.<domain>"` once it does.
+Adding a domain also attaches `*.preview.<domain>`, which is what unlocks per-deploy preview URLs (removing the domain takes the wildcard down too, returning the site to publish-on-deploy). If the domain is on a Bunny DNS zone in the account, the CLI offers to create the apex record; otherwise it prints the CNAME target. **The wildcard's DNS record is always yours to create** (`CNAME *.preview.<domain> → <target>`), and because wildcard certificates validate over DNS-01, the certificate usually can't issue until that record resolves; run `bunny sites domains ssl "*.preview.<domain>"` once it does. Until it does, previews serve over plain HTTP: `deploy` prints `http://` preview URLs plus a pending-HTTPS hint, and switches to `https://` on its own once the certificate is on the zone.
 
-Previews only turn on if the wildcard hostname actually attached; if it didn't, the site stays in publish-on-deploy mode and the CLI prints the retry command. Re-running `bunny sites domains add <domain>` after a partial setup reconciles it (an already-attached wildcard counts as attached, not as an error).
+Previews only turn on if the wildcard hostname actually attached; if it didn't, the site stays in publish-on-deploy mode and the CLI prints the retry command. Re-running `bunny sites domains add <domain>` after a partial setup reconciles whatever is left (an already-attached apex or wildcard counts as attached, not as an error, so the retry always reaches the wildcard, certificate, and state-record steps).
 
 So the full path from a plain deploy to working previews is:
 

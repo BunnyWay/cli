@@ -773,7 +773,28 @@ test("previewZone tells a failed hostname read apart from a zone with no wildcar
   expect(previewZone([])).toEqual({ fetched: true, previewDomain: undefined });
   expect(
     previewZone([{ Value: "*.preview.example.com" }] as Hostname[]),
-  ).toEqual({ fetched: true, previewDomain: "example.com" });
+  ).toEqual({
+    fetched: true,
+    previewDomain: "example.com",
+    previewSecure: false,
+  });
+});
+
+// Preview URLs print with the scheme the wildcard can actually serve, so a pending certificate reads as http, never a TLS-failing https.
+test("previewZone reports whether the wildcard's certificate has issued", () => {
+  expect(
+    previewZone([
+      { Value: "*.preview.example.com", HasCertificate: true },
+    ] as Hostname[]).previewSecure,
+  ).toBe(true);
+  expect(
+    previewZone([
+      { Value: "*.preview.example.com", HasCertificate: false },
+    ] as Hostname[]).previewSecure,
+  ).toBe(false);
+  expect(
+    previewZone([{ Value: "example.com" }] as Hostname[]).previewSecure,
+  ).toBeUndefined();
 });
 
 test("siteContextFromZone is null for a zone without site state", async () => {

@@ -59,17 +59,19 @@ const DOMAIN_HINT =
   "  Add a custom domain to unlock preview deploys: bunny sites domains add <domain>";
 
 // Production and preview URLs for a deploy: previews are `dpl-{id}.preview.{domain}` hosts, so they only exist once a custom domain is attached.
-function deployUrls(
+export function deployUrls(
   site: SiteContext,
   deployId: string,
-  systemHost: string | undefined,
+  zone: { systemHost?: string; previewSecure?: boolean },
 ): { production?: string; preview?: string } {
   const domain = site.state.domain;
-  const productionHost = domain ?? systemHost;
+  const productionHost = domain ?? zone.systemHost;
+  // Until the wildcard's certificate issues, an https preview URL fails TLS outright, while http serves fine (ForceSSL is only set alongside the cert).
+  const previewScheme = zone.previewSecure === false ? "http" : "https";
   return {
     production: productionHost ? `https://${productionHost}` : undefined,
     preview: domain
-      ? `https://${previewHostname(deployId, domain)}`
+      ? `${previewScheme}://${previewHostname(deployId, domain)}`
       : undefined,
   };
 }
@@ -265,9 +267,18 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const deployId = alreadyUploaded?.id ?? identity.id;
     const alreadyLive = state.current === deployId;
 
+    // The preview host serves http-only until the wildcard's certificate issues; say so wherever a preview URL prints.
+    const previewTlsHint = () => {
+      if (zone.previewSecure === false && state.domain) {
+        logger.dim(
+          `  Preview HTTPS pending; once DNS is live: bunny sites domains ssl "${previewWildcard(state.domain)}" ${state.name}`,
+        );
+      }
+    };
+
     // Nothing to do: the deploy is already uploaded (and live, if publishing).
     if (skipUpload && (alreadyLive || !publish)) {
-      const urls = deployUrls(site, deployId, zone.systemHost);
+      const urls = deployUrls(site, deployId, zone);
       if (output === "json") {
         logger.log(
           JSON.stringify(
@@ -294,7 +305,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           `No changes: deploy ${deployId} is already uploaded. Publish it with \`bunny sites deploy --production\`.`,
         );
       }
-      if (urls.preview) logger.log(`  Preview: ${urls.preview}`);
+      if (urls.preview) {
+        logger.log(`  Preview: ${urls.preview}`);
+        previewTlsHint();
+      }
       // The common repeat path after declining the first-deploy domain offer still gets the hint.
       if (!state.domain) logger.dim(DOMAIN_HINT);
       return;
@@ -342,7 +356,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       });
     }
 
-    const urls = deployUrls(site, deployId, zone.systemHost);
+    const urls = deployUrls(site, deployId, zone);
 
     if (output === "json") {
       logger.log(
@@ -374,8 +388,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     if (publish) {
       if (urls.production) logger.info(`Production: ${urls.production}`);
       if (urls.preview) logger.log(`  Preview:    ${urls.preview}`);
+      previewTlsHint();
     } else {
       if (urls.preview) logger.info(`Preview: ${urls.preview}`);
+      previewTlsHint();
       logger.info(
         `Publish it with \`bunny sites deploy --production\` or \`bunny sites deployments publish ${deployId}\`.`,
       );

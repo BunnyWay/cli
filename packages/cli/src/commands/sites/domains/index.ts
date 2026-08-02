@@ -7,7 +7,6 @@ import {
   type CoreClient,
   createHostnamesCommands,
   enableSsl,
-  fetchPullZoneHostnames,
   type Hostname,
   type ResolvedPullZone,
   setupHostname,
@@ -72,53 +71,56 @@ export async function attachPreviewWildcard(opts: {
 }): Promise<boolean> {
   const wildcard = previewWildcard(opts.domain);
   let hostnames: Hostname[];
+  let alreadyAttached: boolean;
   try {
-    hostnames = (await addHostname(opts.coreClient, opts.pullZoneId, wildcard))
-      .hostnames;
+    // A retry after a partial setup re-adds an existing wildcard; addHostname reconciles that against the zone instead of failing.
+    ({ hostnames, alreadyAttached } = await addHostname(
+      opts.coreClient,
+      opts.pullZoneId,
+      wildcard,
+    ));
+  } catch (err) {
     if (!opts.json) {
+      logger.warn(`Couldn't add ${wildcard}: ${errorMessage(err)}`);
+      logger.dim(
+        `  Previews stay off and deploys keep publishing directly; retry with \`bunny sites domains add ${opts.domain}\`.`,
+      );
+    }
+    return false;
+  }
+  if (!opts.json) {
+    if (alreadyAttached) {
+      logger.info(`${wildcard} is already attached for deploy previews.`);
+    } else {
       logger.success(`Added ${wildcard} for deploy previews.`);
       if (opts.cnameTarget) {
         logger.accent(`  CNAME  ${wildcard}  →  ${opts.cnameTarget}`);
       }
     }
-  } catch (err) {
-    // Retrying after a partial setup re-adds an existing wildcard, so the zone decides whether previews can serve, not the error.
-    const existing = await fetchPullZoneHostnames(
-      opts.coreClient,
-      opts.pullZoneId,
-    ).catch(() => [] as Hostname[]);
-    const attached = existing.some(
-      (h) => (h.Value ?? "").toLowerCase() === wildcard.toLowerCase(),
-    );
-    if (!attached) {
-      if (!opts.json) {
-        logger.warn(`Couldn't add ${wildcard}: ${errorMessage(err)}`);
-        logger.dim(
-          `  Previews stay off and deploys keep publishing directly; retry with \`bunny sites domains add ${opts.domain}\`.`,
-        );
-      }
-      return false;
-    }
-    hostnames = existing;
-    if (!opts.json) {
-      logger.info(`${wildcard} is already attached for deploy previews.`);
-    }
   }
 
-  try {
-    await enableSsl(
-      opts.coreClient,
-      opts.pullZoneId,
-      wildcard,
-      true,
-      hostnames,
-    );
-  } catch {
-    // Wildcard certs need DNS in place (DNS-01); issue later, don't block.
-    if (!opts.json) {
-      logger.dim(
-        `  Preview HTTPS pending; once DNS is live: bunny sites domains ssl "${wildcard}"`,
+  // A retry on an already-certified wildcard skips issuance; re-running it would print a bogus pending hint.
+  const certified = hostnames.some(
+    (h) =>
+      (h.Value ?? "").toLowerCase() === wildcard.toLowerCase() &&
+      h.HasCertificate,
+  );
+  if (!certified) {
+    try {
+      await enableSsl(
+        opts.coreClient,
+        opts.pullZoneId,
+        wildcard,
+        true,
+        hostnames,
       );
+    } catch {
+      // Wildcard certs need DNS in place (DNS-01); issue later, don't block. Deploys print http:// preview URLs until it lands.
+      if (!opts.json) {
+        logger.dim(
+          `  Preview HTTPS pending; once DNS is live: bunny sites domains ssl "${wildcard}"`,
+        );
+      }
     }
   }
   return true;

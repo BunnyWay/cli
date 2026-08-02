@@ -469,17 +469,22 @@ export async function fetchSystemHostname(
   }
 }
 
-/** The preview-mode view of an already-fetched hostname list, so callers that read hostnames anyway reconcile without a second request; null means the read failed (never "no wildcard"). */
+/** The preview-mode view of an already-fetched hostname list, so callers that read hostnames anyway reconcile without a second request; null means the read failed (never "no wildcard"). `previewSecure: false` means the wildcard serves but its certificate hasn't issued, so preview URLs are http-only for now. */
 export function previewZone(hostnames: Hostname[] | null | undefined): {
   fetched: boolean;
   previewDomain?: string;
+  previewSecure?: boolean;
 } {
   if (!hostnames) return { fetched: false };
+  const wildcard = hostnames.find(
+    (h) => previewDomainFromWildcard(h.Value ?? "") !== undefined,
+  );
   return {
     fetched: true,
-    previewDomain: hostnames
-      .map((h) => previewDomainFromWildcard(h.Value ?? ""))
-      .find((domain) => domain !== undefined),
+    previewDomain: wildcard
+      ? previewDomainFromWildcard(wildcard.Value ?? "")
+      : undefined,
+    previewSecure: wildcard ? wildcard.HasCertificate === true : undefined,
   };
 }
 
@@ -487,7 +492,12 @@ export function previewZone(hostnames: Hostname[] | null | undefined): {
 export async function fetchSiteHostnames(
   coreClient: CoreClient,
   pullZoneId: number,
-): Promise<{ fetched: boolean; systemHost?: string; previewDomain?: string }> {
+): Promise<{
+  fetched: boolean;
+  systemHost?: string;
+  previewDomain?: string;
+  previewSecure?: boolean;
+}> {
   try {
     const { data } = await coreClient.GET("/pullzone/{id}", {
       params: { path: { id: pullZoneId } },

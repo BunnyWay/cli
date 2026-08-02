@@ -142,19 +142,38 @@ export async function createPullZone(
   return data;
 }
 
-/** Add a hostname to a pull zone, returning the zone's hostnames and the CNAME target to point DNS at. */
+/** Add a hostname to a pull zone, returning the zone's hostnames and the CNAME target to point DNS at. A hostname the zone already serves reports `alreadyAttached` instead of failing, so retries after a partial setup reach their follow-up steps. */
 export async function addHostname(
   client: CoreClient,
   pullZoneId: number,
   hostname: string,
-): Promise<{ hostnames: Hostname[]; cnameTarget?: string }> {
-  await client.POST("/pullzone/{id}/addHostname", {
-    params: { path: { id: pullZoneId } },
-    body: { Hostname: hostname },
-  });
-  const hostnames = await fetchPullZoneHostnames(client, pullZoneId);
+): Promise<{
+  hostnames: Hostname[];
+  cnameTarget?: string;
+  alreadyAttached: boolean;
+}> {
+  let hostnames: Hostname[] | undefined;
+  let alreadyAttached = false;
+  try {
+    await client.POST("/pullzone/{id}/addHostname", {
+      params: { path: { id: pullZoneId } },
+      body: { Hostname: hostname },
+    });
+  } catch (err) {
+    // The zone decides whether a rejected duplicate counts as attached, not the error.
+    const existing = await fetchPullZoneHostnames(client, pullZoneId).catch(
+      () => null,
+    );
+    const attached = existing?.some(
+      (h) => (h.Value ?? "").toLowerCase() === hostname.toLowerCase(),
+    );
+    if (!attached) throw err;
+    alreadyAttached = true;
+    hostnames = existing ?? undefined;
+  }
+  hostnames ??= await fetchPullZoneHostnames(client, pullZoneId);
   const cnameTarget = systemHostname(hostnames)?.replace(/^https?:\/\//i, "");
-  return { hostnames, cnameTarget };
+  return { hostnames, cnameTarget, alreadyAttached };
 }
 
 /** Set a hostname's Force SSL (HTTP→HTTPS redirect) state; assumes the cert is already in place. */
