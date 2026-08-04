@@ -107,8 +107,8 @@ RUN npm install -g @bunny.net/cli@latest \
 
 # Workplace — SSH sessions land here, and Claude Code, the bunny CLI and gh all
 # keep their config and credentials on the persistent volume (the latter two via
-# XDG_CONFIG_HOME, which they both honour). /workplace/bin leads the PATH, so
-# user scripts placed there run by name and survive a redeploy.
+# XDG_CONFIG_HOME, which they both honour). /workplace/bin is on the PATH after
+# system directories.
 #
 # These have to go in /etc/environment, not just ENV: sshd builds a fresh
 # environment per session, so Docker ENV never reaches an SSH login. pam_env
@@ -118,10 +118,10 @@ RUN npm install -g @bunny.net/cli@latest \
 # see the same values.
 ENV CLAUDE_CONFIG_DIR=/workplace/.claude \
     XDG_CONFIG_HOME=/workplace/.config
-ENV PATH="/workplace/bin:$PATH"
+ENV PATH="$PATH:/workplace/bin"
 RUN mkdir -p /workplace \
     && printf '%s\n' \
-        'PATH=/workplace/bin:/root/.local/bin:/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' \
+        'PATH=/root/.local/bin:/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/workplace/bin' \
         'LANG=C.UTF-8' \
         'CLAUDE_CONFIG_DIR=/workplace/.claude' \
         'XDG_CONFIG_HOME=/workplace/.config' \
