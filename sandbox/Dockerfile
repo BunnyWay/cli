@@ -69,6 +69,21 @@ RUN set -eux; \
     rm -rf /tmp/bun.zip /tmp/bun
 ENV PATH="/root/.bun/bin:$PATH"
 
+# uv — Python package and project manager
+ARG UV_VERSION=0.12.1
+RUN set -eux; \
+    case "${TARGETARCH:-amd64}" in \
+        amd64) UV_ARCH=x86_64;    UV_SHA256=90b2f223fb69d19db49e117da601f64978593417988530aa733d456141b4bcbb ;; \
+        arm64) UV_ARCH=aarch64;   UV_SHA256=769d373e146692c639b5fbaae33b331c297a32e03d30448772051902df52bbf4 ;; \
+        *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${UV_ARCH}-unknown-linux-gnu.tar.gz" -o /tmp/uv.tar.gz; \
+    echo "${UV_SHA256}  /tmp/uv.tar.gz" | sha256sum -c -; \
+    tar -xzf /tmp/uv.tar.gz -C /tmp; \
+    install -Dm755 "/tmp/uv-${UV_ARCH}-unknown-linux-gnu/uv" /usr/local/bin/uv; \
+    install -Dm755 "/tmp/uv-${UV_ARCH}-unknown-linux-gnu/uvx" /usr/local/bin/uvx; \
+    rm -rf /tmp/uv.tar.gz "/tmp/uv-${UV_ARCH}-unknown-linux-gnu"
+
 # Claude Code — official installer, always the newest release.
 # Installs the launcher into /root/.local/bin; the installer itself
 # checksum-verifies the binary it downloads.
@@ -92,7 +107,9 @@ RUN npm install -g @bunny.net/cli@latest \
 
 # Workplace — SSH sessions land here, and Claude Code, the bunny CLI and gh all
 # keep their config and credentials on the persistent volume (the latter two via
-# XDG_CONFIG_HOME, which they both honour).
+# XDG_CONFIG_HOME, which they both honour). /workplace/bin leads the PATH, so
+# anything dropped there — a uv tool redirected with UV_TOOL_BIN_DIR, a script
+# of your own — runs by name and survives a redeploy.
 #
 # These have to go in /etc/environment, not just ENV: sshd builds a fresh
 # environment per session, so Docker ENV never reaches an SSH login. pam_env
@@ -102,9 +119,10 @@ RUN npm install -g @bunny.net/cli@latest \
 # see the same values.
 ENV CLAUDE_CONFIG_DIR=/workplace/.claude \
     XDG_CONFIG_HOME=/workplace/.config
+ENV PATH="/workplace/bin:$PATH"
 RUN mkdir -p /workplace \
     && printf '%s\n' \
-        'PATH=/root/.local/bin:/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' \
+        'PATH=/workplace/bin:/root/.local/bin:/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' \
         'LANG=C.UTF-8' \
         'CLAUDE_CONFIG_DIR=/workplace/.claude' \
         'XDG_CONFIG_HOME=/workplace/.config' \

@@ -931,7 +931,9 @@ A deploy's preview URL is `sites-<name>-<suffix>.b-cdn.net/deploys/<id>/`. Becau
 
 ### `bunny sandbox`
 
-Manage on-demand cloud sandbox environments backed by Bunny Magic Containers. Each sandbox is a fully isolated Ubuntu container with Node.js, Bun, Python, the bunny CLI, and Claude Code pre-installed, alongside the tooling agents reach for: `git`, `gh`, `ripgrep`, `fd`, `jq`, `tmux`, `sqlite3`, `tree`, and `fzf`. A 10 GB persistent volume is mounted at `/workplace`, your default working directory.
+Manage on-demand cloud sandbox environments backed by Bunny Magic Containers. Each sandbox is a fully isolated Ubuntu container with Node.js, Bun, Python (plus `uv`), the bunny CLI, and Claude Code pre-installed, alongside the tooling agents reach for: `git`, `gh`, `ripgrep`, `fd`, `jq`, `tmux`, `sqlite3`, `tree`, and `fzf`. A 10 GB persistent volume is mounted at `/workplace`, your default working directory.
+
+`/workplace/bin` is included in the PATH, so anything you put there runs by name after a redeploy without an absolute path.
 
 Claude Code is pre-installed but needs your own Anthropic credentials before it can do anything: pass an API key at create time (prefer `--env-file .env` so the key stays out of your shell history), or run `claude` inside the sandbox and complete the login prompt it prints. Both survive restarts and redeploys: baked env vars live on the container, and config and credentials are pinned to the persistent volume — `/workplace/.claude` for Claude Code, and `/workplace/.config` for the bunny CLI and `gh`.
 
