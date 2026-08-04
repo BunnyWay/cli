@@ -108,8 +108,7 @@ RUN npm install -g @bunny.net/cli@latest \
 # Workplace — SSH sessions land here, and Claude Code, the bunny CLI and gh all
 # keep their config and credentials on the persistent volume (the latter two via
 # XDG_CONFIG_HOME, which they both honour). /workplace/bin leads the PATH, so
-# anything dropped there — a uv tool redirected with UV_TOOL_BIN_DIR, a script
-# of your own — runs by name and survives a redeploy.
+# user scripts placed there run by name and survive a redeploy.
 #
 # These have to go in /etc/environment, not just ENV: sshd builds a fresh
 # environment per session, so Docker ENV never reaches an SSH login. pam_env
