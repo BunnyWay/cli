@@ -9,7 +9,11 @@ import {
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
-import { REGISTRY_USERNAME, resolveRegistryEndpoint } from "./client.ts";
+import {
+  fetchRegistryNamespace,
+  REGISTRY_USERNAME,
+  resolveRegistryEndpoint,
+} from "./client.ts";
 import { buildTargetRef } from "./ref.ts";
 
 const COMMAND = "push <image>";
@@ -27,7 +31,7 @@ export const registryPushCommand = defineCommand<PushArgs>({
   examples: [
     ["$0 registry push myapp:latest", "Push as myapp:latest"],
     [
-      "$0 registry push myapp:dev --repository team/myapp --tag v1",
+      "$0 registry push myapp:dev --repository myapp --tag v1",
       "Push under an explicit repository and tag",
     ],
   ],
@@ -66,7 +70,14 @@ export const registryPushCommand = defineCommand<PushArgs>({
     }
 
     const endpoint = resolveRegistryEndpoint();
-    const target = buildTargetRef(endpoint.host, image, repository, tag);
+    const namespace = await fetchRegistryNamespace(config, verbose);
+    const target = buildTargetRef(
+      endpoint.host,
+      namespace,
+      image,
+      repository,
+      tag,
+    );
 
     await ensureDockerAvailable();
 
@@ -85,13 +96,15 @@ export const registryPushCommand = defineCommand<PushArgs>({
       logger.log(
         JSON.stringify({
           reference: target.reference,
-          repository: target.repository,
+          repository: target.displayRepository,
           tag: target.tag,
         }),
       );
       return;
     }
 
-    logger.success(`Pushed ${target.reference}`);
+    logger.success(
+      `Pushed ${target.displayRepository}:${target.tag} to ${endpoint.host}`,
+    );
   },
 });

@@ -406,18 +406,16 @@ bunny registries remove <registry-id>
 
 > **Experimental** internal use only
 
-Push and inspect images on the bunny.net OCI registry. The endpoint is read from the `BUNNYNET_REGISTRY_URL` environment variable.
+Push and inspect images on the bunny.net OCI registry. The endpoint defaults to `registry.bunny.net`; set the `BUNNYNET_REGISTRY_URL` environment variable to override it.
 
 ```bash
-export BUNNYNET_REGISTRY_URL=https://<registry-host>
-
 bunny registry push myapp:latest                      # push, deriving repository/tag from the image
-bunny registry push myapp:dev --repository team/myapp --tag v1
+bunny registry push myapp:dev --repository myapp --tag v1
 bunny registry list                                   # list repositories (alias: ls)
-bunny registry tags team/myapp                        # list tags for a repository
+bunny registry tags myapp                             # list tags for a repository
 ```
 
-`push` currently uses Docker to read the local image; `list` and `tags` talk to the registry directly.
+`push` currently uses Docker to read the local image; `list` and `tags` talk to the registry directly. On the registry itself repositories are namespaced by your account id (`<account-id>/myapp`); the CLI adds and hides that prefix automatically, so you always work with the bare repository name.
 
 ### `bunny dns`
 

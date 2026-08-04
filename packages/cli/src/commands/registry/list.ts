@@ -4,7 +4,12 @@ import { UserError } from "../../core/errors.ts";
 import { formatTable } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
-import { registryRequest, resolveRegistryEndpoint } from "./client.ts";
+import {
+  fetchRegistryNamespace,
+  registryRequest,
+  resolveRegistryEndpoint,
+  stripNamespace,
+} from "./client.ts";
 
 const COMMAND = "list";
 const DESCRIPTION = "List repositories in the bunny.net registry.";
@@ -32,17 +37,19 @@ export const registryListCommand = defineCommand({
     const spin = spinner("Fetching repositories...");
     spin.start();
     let catalog: Catalog;
+    let namespace: string;
     try {
-      catalog = await registryRequest<Catalog>(
-        endpoint,
-        config.apiKey,
-        "/v2/_catalog",
-      );
+      [catalog, namespace] = await Promise.all([
+        registryRequest<Catalog>(endpoint, config.apiKey, "/v2/_catalog"),
+        fetchRegistryNamespace(config, verbose),
+      ]);
     } finally {
       spin.stop();
     }
 
-    const repositories = catalog.repositories ?? [];
+    const repositories = (catalog.repositories ?? []).map((r) =>
+      stripNamespace(r, namespace),
+    );
 
     if (output === "json") {
       logger.log(JSON.stringify({ repositories }, null, 2));

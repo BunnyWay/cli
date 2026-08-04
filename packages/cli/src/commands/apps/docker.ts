@@ -4,7 +4,7 @@ import { basename, isAbsolute, join, resolve } from "node:path";
 import type { createMcClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import prompts from "prompts";
-import { tryResolveRegistryEndpoint } from "../../core/bunny-registry.ts";
+import { resolveRegistryEndpoint } from "../../core/bunny-registry.ts";
 import { dockerLogin, imageHostname } from "../../core/docker.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
@@ -676,18 +676,16 @@ export async function createRegistry(
 export async function promptRegistry(
   client: McClient,
 ): Promise<ResolvedRegistry | null> {
-  const bunnyEndpoint = tryResolveRegistryEndpoint();
-  if (bunnyEndpoint) {
-    const { value: useBunny } = await prompts({
-      type: "confirm",
-      name: "value",
-      message: "Push to the bunny.net registry?",
-      initial: true,
-    });
-    if (useBunny === undefined) return null;
-    if (useBunny) {
-      return { id: BUNNY_REGISTRY_ID, hostName: bunnyEndpoint.host };
-    }
+  const bunnyEndpoint = resolveRegistryEndpoint();
+  const { value: useBunny } = await prompts({
+    type: "confirm",
+    name: "value",
+    message: "Push to the bunny.net registry?",
+    initial: true,
+  });
+  if (useBunny === undefined) return null;
+  if (useBunny) {
+    return { id: BUNNY_REGISTRY_ID, hostName: bunnyEndpoint.host };
   }
 
   const regSpin = spinner("Fetching registries...");

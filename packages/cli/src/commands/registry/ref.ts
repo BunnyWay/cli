@@ -1,3 +1,7 @@
+import {
+  qualifyRepository,
+  stripNamespace,
+} from "../../core/bunny-registry.ts";
 import { imageHostname } from "../../core/docker.ts";
 
 export interface ParsedImageRef {
@@ -30,28 +34,36 @@ export function parseImageRef(ref: string): ParsedImageRef {
 }
 
 export interface TargetRef {
+  /** Full pushable reference, including the account namespace. */
   reference: string;
+  /** Namespaced repository path as stored on the registry. */
   repository: string;
+  /** Repository name without the account namespace, for display. */
+  displayRepository: string;
   tag: string;
 }
 
 /**
  * Build the fully-qualified target reference for pushing `source` to the
  * registry `host`. Repository and tag default to the source image's, and
- * either can be overridden explicitly.
+ * either can be overridden explicitly. The account `namespace` is added
+ * to the repository path (the registry requires it) but kept out of
+ * `displayRepository` so user-facing output stays clean.
  */
 export function buildTargetRef(
   host: string,
+  namespace: string,
   source: string,
   repository?: string,
   tag?: string,
 ): TargetRef {
   const parsed = parseImageRef(source);
-  const repo = (repository ?? parsed.name).toLowerCase();
+  const repo = qualifyRepository(repository ?? parsed.name, namespace);
   const finalTag = tag ?? parsed.tag;
   return {
     reference: `${host}/${repo}:${finalTag}`,
     repository: repo,
+    displayRepository: stripNamespace(repo, namespace),
     tag: finalTag,
   };
 }

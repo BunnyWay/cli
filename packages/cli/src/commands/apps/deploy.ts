@@ -4,9 +4,9 @@ import type { RegistryMap } from "@bunny.net/app-config";
 import { createMcClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
 import {
-  REGISTRY_URL_ENV,
+  fetchRegistryNamespace,
   REGISTRY_USERNAME,
-  tryResolveRegistryEndpoint,
+  resolveRegistryEndpoint,
 } from "../../core/bunny-registry.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { bunny } from "../../core/colors.ts";
@@ -466,7 +466,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     if (mode.kind === "build") {
       assertDockerfileExists(mode.dockerfile, targetName);
 
-      const bunnyEndpoint = tryResolveRegistryEndpoint();
+      const bunnyEndpoint = resolveRegistryEndpoint();
       // Ensure a registry is selected before we build (we need its hostname).
       if (!registryId) {
         const resolved = await promptRegistry(client);
@@ -485,12 +485,6 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
       // TODO: bunny.net registry (env stub): build + push with the API token, then skip deploy — MC can't pull from it until `/registries` exposes a `bunny` record we can deploy by id.
       if (registryId === BUNNY_REGISTRY_ID) {
-        if (!bunnyEndpoint) {
-          throw new UserError(
-            "The bunny.net registry endpoint is not configured.",
-            `Set ${REGISTRY_URL_ENV} to the registry URL and try again.`,
-          );
-        }
         if (!cfg.apiKey) {
           throw new UserError(
             "Not logged in.",
@@ -499,9 +493,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         }
 
         const tag = args.tag ?? (await generateTag());
+        const namespace = await fetchRegistryNamespace(cfg, verbose);
         const imageRef = buildImageRef(
           bunnyEndpoint.host,
-          undefined,
+          namespace,
           toml.app.name,
           tag,
         );

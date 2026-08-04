@@ -92,7 +92,7 @@ For compose files that have just one service, the import overlaps with the Docke
 | `--dockerfile` | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`.                                  |
 | `--context`    | Docker build context directory. Defaults to the directory of the Dockerfile.                                                |
 | `--tag`        | Override the auto-generated `<sha>-<timestamp>` image tag.                                                                  |
-| `--registry`   | Registry ID to push to, or `bunny` for the bunny.net registry (requires `BUNNYNET_REGISTRY_URL`). Overrides `bunny.jsonc`.  |
+| `--registry`   | Registry ID to push to, or `bunny` for the bunny.net registry (`registry.bunny.net`, override with `BUNNYNET_REGISTRY_URL`). Overrides `bunny.jsonc`. |
 | `--container`  | Name of the container to update. Required when `bunny.jsonc` has multiple containers and you pass `<image>`/`--dockerfile`. |
 | `--port`       | Override the container port. Retargets any endpoints written to `bunny.jsonc`.                                              |
 | `--command`    | Override the container `CMD`. Passed as a single string, split on whitespace.                                               |

@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { parseRegistryUrl } from "./client.ts";
+import {
+  parseRegistryUrl,
+  qualifyRepository,
+  stripNamespace,
+} from "./client.ts";
 import { buildTargetRef, parseImageRef } from "./ref.ts";
+
+const NS = "1b26800c-91f5-4a75-8a8e-3de52942d9ce";
 
 describe("parseImageRef", () => {
   test.each([
@@ -17,21 +23,62 @@ describe("parseImageRef", () => {
 
 describe("buildTargetRef", () => {
   test("defaults repository and tag from the source", () => {
-    expect(buildTargetRef("host.example", "alpine:3.20")).toEqual({
-      reference: "host.example/alpine:3.20",
-      repository: "alpine",
+    expect(buildTargetRef("host.example", NS, "alpine:3.20")).toEqual({
+      reference: `host.example/${NS}/alpine:3.20`,
+      repository: `${NS}/alpine`,
+      displayRepository: "alpine",
       tag: "3.20",
     });
   });
 
   test("overrides repository and tag", () => {
     expect(
-      buildTargetRef("host.example", "alpine:3.20", "Team/Alpine", "v1"),
+      buildTargetRef("host.example", NS, "alpine:3.20", "Team/Alpine", "v1"),
     ).toEqual({
-      reference: "host.example/team/alpine:v1",
-      repository: "team/alpine",
+      reference: `host.example/${NS}/team/alpine:v1`,
+      repository: `${NS}/team/alpine`,
+      displayRepository: "team/alpine",
       tag: "v1",
     });
+  });
+
+  test("keeps an already-namespaced repository as-is", () => {
+    expect(
+      buildTargetRef("host.example", NS, "alpine:3.20", `${NS}/alpine`, "v1"),
+    ).toEqual({
+      reference: `host.example/${NS}/alpine:v1`,
+      repository: `${NS}/alpine`,
+      displayRepository: "alpine",
+      tag: "v1",
+    });
+  });
+});
+
+describe("qualifyRepository", () => {
+  test("prefixes the namespace", () => {
+    expect(qualifyRepository("myapp", NS)).toBe(`${NS}/myapp`);
+  });
+
+  test("lowercases and trims slashes", () => {
+    expect(qualifyRepository("/Team/MyApp/", NS)).toBe(`${NS}/team/myapp`);
+  });
+
+  test("does not double-prefix", () => {
+    expect(qualifyRepository(`${NS}/myapp`, NS)).toBe(`${NS}/myapp`);
+  });
+
+  test("throws on an empty name", () => {
+    expect(() => qualifyRepository("//", NS)).toThrow();
+  });
+});
+
+describe("stripNamespace", () => {
+  test("removes the namespace prefix", () => {
+    expect(stripNamespace(`${NS}/myapp`, NS)).toBe("myapp");
+  });
+
+  test("leaves other namespaces untouched", () => {
+    expect(stripNamespace("other/myapp", NS)).toBe("other/myapp");
   });
 });
 

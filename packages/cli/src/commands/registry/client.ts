@@ -5,10 +5,13 @@ import {
 import { UserError } from "../../core/errors.ts";
 
 export {
+  fetchRegistryNamespace,
   parseRegistryUrl,
+  qualifyRepository,
   REGISTRY_USERNAME,
   type RegistryEndpoint,
   resolveRegistryEndpoint,
+  stripNamespace,
 } from "../../core/bunny-registry.ts";
 
 /**
