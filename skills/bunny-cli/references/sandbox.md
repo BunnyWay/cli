@@ -97,7 +97,7 @@ Copy a single file between the local machine and a sandbox over SFTP. Exactly on
 ```bash
 bunny sandbox cp ./app.js my-sandbox:/workplace/app.js
 bunny sandbox cp ./app.js my-sandbox:app.js            # relative to /workplace
-bunny sandbox cp ./app.js my-sandbox:/workplace/src/   # trailing slash keeps the filename
+bunny sandbox cp ./app.js my-sandbox:/workplace/src    # existing dir (or trailing slash) keeps the filename
 bunny sandbox cp my-sandbox:/workplace/out.log ./logs/   # ./logs must already exist
 ```
 
