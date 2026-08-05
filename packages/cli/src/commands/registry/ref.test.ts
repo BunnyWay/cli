@@ -16,6 +16,14 @@ describe("parseImageRef", () => {
     ["ghcr.io/org/app:1.0", { name: "org/app", tag: "1.0" }],
     ["registry:5000/app:dev", { name: "app", tag: "dev" }],
     ["MyApp:Latest", { name: "myapp", tag: "Latest" }],
+    [
+      "myapp@sha256:8c841d92a3b0edeb691f8c1b6b6928f2a4c1e2c4b16a0b6ef2c0e9b76a1ea2fb",
+      { name: "myapp", tag: "latest" },
+    ],
+    [
+      "ghcr.io/org/app:1.0@sha256:8c841d92a3b0edeb691f8c1b6b6928f2a4c1e2c4b16a0b6ef2c0e9b76a1ea2fb",
+      { name: "org/app", tag: "1.0" },
+    ],
   ])("parseImageRef(%j)", (input, expected) => {
     expect(parseImageRef(input)).toEqual(expected);
   });
