@@ -56,11 +56,12 @@ bunny logout --force
 
 ### `bunny whoami`
 
-Show the currently authenticated account, including your name and email.
+Show the currently authenticated account, including your name, email, and account ID.
 
 ```bash
 bunny whoami
 # Logged in as Jamie Barton (jamie@bunny.net) 🐇
+# Account ID: 0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d
 # Profile: default
 
 bunny whoami --output json
@@ -401,6 +402,21 @@ bunny registries list
 bunny registries add --name "GitHub" --username myorg
 bunny registries remove <registry-id>
 ```
+
+### `bunny registry`
+
+> **Experimental** internal use only
+
+Push and inspect images on the bunny.net OCI registry. The endpoint defaults to `registry.bunny.net`; set the `BUNNYNET_REGISTRY_URL` environment variable to override it.
+
+```bash
+bunny registry push myapp:latest                      # push, deriving repository/tag from the image
+bunny registry push myapp:dev --repository myapp --tag v1
+bunny registry list                                   # list repositories (alias: ls)
+bunny registry tags myapp                             # list tags for a repository
+```
+
+`push` currently uses Docker to read the local image; `list` and `tags` talk to the registry directly. On the registry itself repositories are namespaced by your account id (`<account-id>/myapp`); the CLI adds and hides that prefix automatically, so you always work with the bare repository name.
 
 ### `bunny dns`
 

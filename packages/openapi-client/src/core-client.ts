@@ -13,6 +13,8 @@ type CustomPaths = {
         200: {
           content: {
             "application/json": {
+              Id: string;
+              AccountId: string;
               Email: string;
               FirstName: string;
               LastName: string;

@@ -85,20 +85,20 @@ For compose files that have just one service, the import overlaps with the Docke
 
 ### Deploy flags
 
-| Flag           | Description                                                                                                                 |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `<image>`      | Container image reference to deploy (e.g. `ghcr.io/me/api:v1.2`). Skips build.                                              |
-| `--name`       | App name. Used during the first-run walkthrough; skips the interactive prompt.                                              |
-| `--dockerfile` | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`.                                  |
-| `--context`    | Docker build context directory. Defaults to the directory of the Dockerfile.                                                |
-| `--tag`        | Override the auto-generated `<sha>-<timestamp>` image tag.                                                                  |
-| `--registry`   | bunny.net registry ID to push to. Overrides the value stored in `bunny.jsonc`.                                              |
-| `--container`  | Name of the container to update. Required when `bunny.jsonc` has multiple containers and you pass `<image>`/`--dockerfile`. |
-| `--port`       | Override the container port. Retargets any endpoints written to `bunny.jsonc`.                                              |
-| `--command`    | Override the container `CMD`. Passed as a single string, split on whitespace.                                               |
-| `--config`     | Use this file as the app config instead of cwd's `bunny.jsonc`. Useful in CI / agent flows.                                 |
-| `--dry-run`    | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                    |
-| `--no-push`    | Build only. Skip pushing the image and skip the deploy.                                                                     |
+| Flag           | Description                                                                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<image>`      | Container image reference to deploy (e.g. `ghcr.io/me/api:v1.2`). Skips build.                                                                        |
+| `--name`       | App name. Used during the first-run walkthrough; skips the interactive prompt.                                                                        |
+| `--dockerfile` | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`.                                                            |
+| `--context`    | Docker build context directory. Defaults to the directory of the Dockerfile.                                                                          |
+| `--tag`        | Override the auto-generated `<sha>-<timestamp>` image tag.                                                                                            |
+| `--registry`   | Registry ID to push to, or `bunny` for the bunny.net registry (`registry.bunny.net`, override with `BUNNYNET_REGISTRY_URL`). Overrides `bunny.jsonc`. |
+| `--container`  | Name of the container to update. Required when `bunny.jsonc` has multiple containers and you pass `<image>`/`--dockerfile`.                           |
+| `--port`       | Override the container port. Retargets any endpoints written to `bunny.jsonc`.                                                                        |
+| `--command`    | Override the container `CMD`. Passed as a single string, split on whitespace.                                                                         |
+| `--config`     | Use this file as the app config instead of cwd's `bunny.jsonc`. Useful in CI / agent flows.                                                           |
+| `--dry-run`    | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                                              |
+| `--no-push`    | Build only. Skip pushing the image and skip the deploy.                                                                                               |
 
 ```bash
 # Deploy a pre-built image
