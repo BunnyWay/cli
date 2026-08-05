@@ -90,7 +90,7 @@ export const registryPushCommand = defineCommand<PushArgs>({
     }
 
     await tagImage(image, target.reference);
-    await pushImage(target.reference);
+    await pushImage(target.reference, { quiet: output === "json" });
 
     if (output === "json") {
       logger.log(

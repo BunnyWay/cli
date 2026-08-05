@@ -77,10 +77,16 @@ export async function tagImage(source: string, target: string): Promise<void> {
 
 /**
  * Push a Docker image to a registry.
+ *
+ * With `quiet`, docker's push progress is routed to stderr (fd 2) so
+ * stdout stays reserved for machine-readable output (`--output json`).
  */
-export async function pushImage(tag: string): Promise<void> {
+export async function pushImage(
+  tag: string,
+  options?: { quiet?: boolean },
+): Promise<void> {
   const proc = Bun.spawn(["docker", "push", tag], {
-    stdout: "inherit",
+    stdout: options?.quiet ? 2 : "inherit",
     stderr: "inherit",
   });
 
