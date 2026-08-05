@@ -76,7 +76,11 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
     }
 
     // PR previews must key off the same signal deploy uses: the zone's wildcard, since a failed state write can leave `state.domain` unset while previews work fine.
-    const zone = await fetchSiteHostnames(coreClient, site.state.pullZoneId);
+    const zone = await fetchSiteHostnames(
+      coreClient,
+      site.state.pullZoneId,
+      site.state.domain,
+    );
     if (reconcilePreviewDomain(site.state, zone)) {
       await persistReconciledDomain(site);
     }

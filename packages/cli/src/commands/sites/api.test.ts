@@ -797,6 +797,22 @@ test("previewZone reports whether the wildcard's certificate has issued", () => 
   ).toBeUndefined();
 });
 
+// With several domains attached, the recorded primary must keep winning; only its own detachment may switch domains.
+test("previewZone prefers the recorded domain over other wildcards", () => {
+  const two = [
+    { Value: "*.preview.first.com", HasCertificate: true },
+    { Value: "*.preview.second.com", HasCertificate: false },
+  ] as Hostname[];
+  expect(previewZone(two, "second.com")).toEqual({
+    fetched: true,
+    previewDomain: "second.com",
+    previewSecure: false,
+  });
+  // An unmatched preference falls back to the first wildcard rather than reporting previews off.
+  expect(previewZone(two, "gone.com").previewDomain).toBe("first.com");
+  expect(previewZone(two).previewDomain).toBe("first.com");
+});
+
 test("siteContextFromZone is null for a zone without site state", async () => {
   expect(await siteContextFromZone(ZONE)).toBeNull();
 });

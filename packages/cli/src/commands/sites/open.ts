@@ -67,7 +67,7 @@ export const sitesOpenCommand = defineCommand<OpenArgs>({
 
     const hostnames = await fetchPullZoneHostnames(client, state.pullZoneId);
     // A domain the zone no longer serves must not win over the system host.
-    reconcilePreviewDomain(state, previewZone(hostnames));
+    reconcilePreviewDomain(state, previewZone(hostnames, state.domain));
     const url = siteLiveUrl(state, hostnames);
     if (!url) {
       throw new UserError(

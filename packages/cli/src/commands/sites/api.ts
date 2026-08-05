@@ -219,7 +219,10 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
         const context = await siteContextFromZone(zone);
         if (!context || context.state.pullZoneId !== pz.Id) return null;
         // The listing already carries the hostnames, so a drifted domain costs nothing to correct here.
-        reconcilePreviewDomain(context.state, previewZone(pz.Hostnames));
+        reconcilePreviewDomain(
+          context.state,
+          previewZone(pz.Hostnames, context.state.domain),
+        );
         return {
           state: context.state,
           storageZone: zone,
@@ -469,16 +472,23 @@ export async function fetchSystemHostname(
   }
 }
 
-/** The preview-mode view of an already-fetched hostname list, so callers that read hostnames anyway reconcile without a second request; null means the read failed (never "no wildcard"). `previewSecure: false` means the wildcard serves but its certificate hasn't issued, so preview URLs are http-only for now. */
-export function previewZone(hostnames: Hostname[] | null | undefined): {
+/** The preview-mode view of an already-fetched hostname list, so callers that read hostnames anyway reconcile without a second request; null means the read failed (never "no wildcard"). `preferred` (the recorded domain) wins over other domains' wildcards when several are attached, so reconciliation never swaps a still-valid primary. `previewSecure: false` means the wildcard serves but its certificate hasn't issued, so preview URLs are http-only for now. */
+export function previewZone(
+  hostnames: Hostname[] | null | undefined,
+  preferred?: string,
+): {
   fetched: boolean;
   previewDomain?: string;
   previewSecure?: boolean;
 } {
   if (!hostnames) return { fetched: false };
-  const wildcard = hostnames.find(
+  const wildcards = hostnames.filter(
     (h) => previewDomainFromWildcard(h.Value ?? "") !== undefined,
   );
+  const wildcard =
+    wildcards.find(
+      (h) => previewDomainFromWildcard(h.Value ?? "") === preferred,
+    ) ?? wildcards[0];
   return {
     fetched: true,
     previewDomain: wildcard
@@ -492,6 +502,7 @@ export function previewZone(hostnames: Hostname[] | null | undefined): {
 export async function fetchSiteHostnames(
   coreClient: CoreClient,
   pullZoneId: number,
+  preferred?: string,
 ): Promise<{
   fetched: boolean;
   systemHost?: string;
@@ -505,7 +516,7 @@ export async function fetchSiteHostnames(
     if (!data) return { fetched: false };
     const hostnames = data.Hostnames ?? [];
     return {
-      ...previewZone(hostnames),
+      ...previewZone(hostnames, preferred),
       systemHost: systemHostname(hostnames),
     };
   } catch {

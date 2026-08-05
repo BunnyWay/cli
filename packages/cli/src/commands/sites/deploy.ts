@@ -185,7 +185,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const { state, connection } = site;
 
     // The pull zone's preview wildcard, not the best-effort recorded state, decides preview mode: a stale-missing domain must not publish a CI preview to production, and a stale-present one must not advertise preview URLs that can't serve.
-    const zone = await fetchSiteHostnames(coreClient, state.pullZoneId);
+    const zone = await fetchSiteHostnames(
+      coreClient,
+      state.pullZoneId,
+      state.domain,
+    );
     const staleDomain = state.domain;
     const drift = reconcilePreviewDomain(state, zone);
     if (drift === "detached" && staleDomain && output !== "json") {

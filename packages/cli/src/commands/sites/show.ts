@@ -52,7 +52,7 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
     );
     const hostnames = fetched ?? [];
     // The zone's wildcard, not the best-effort record, says whether previews are on.
-    reconcilePreviewDomain(state, previewZone(fetched));
+    reconcilePreviewDomain(state, previewZone(fetched, state.domain));
 
     if (output === "json") {
       logger.log(
