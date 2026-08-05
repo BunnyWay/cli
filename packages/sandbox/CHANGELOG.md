@@ -1,5 +1,12 @@
 # @bunny.net/sandbox
 
+## 0.3.3
+
+### Patch Changes
+
+- Updated dependencies [[`8b8adb4`](https://github.com/BunnyWay/cli/commit/8b8adb486046513c5921daa06ee6befe9c221334)]:
+  - @bunny.net/openapi-client@0.2.0
+
 ## 0.3.2
 
 ### Patch Changes
