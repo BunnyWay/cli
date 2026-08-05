@@ -472,7 +472,7 @@ export async function fetchSystemHostname(
   }
 }
 
-/** The preview-mode view of an already-fetched hostname list, so callers that read hostnames anyway reconcile without a second request; null means the read failed (never "no wildcard"). `preferred` (the recorded domain) wins over other domains' wildcards when several are attached, so reconciliation never swaps a still-valid primary; when the preferred wildcard is gone the first remaining one is adopted, and `reconcilePreviewDomain` reports that as a "switched" drift for callers to surface. `previewSecure: false` means the wildcard serves but its certificate hasn't issued, so preview URLs are http-only for now. */
+/** The preview-mode view of an already-fetched hostname list, so callers that read hostnames anyway reconcile without a second request; null means the read failed (never "no wildcard"). A `preferred` (recorded) domain is only ever matched, never replaced: when its wildcard is gone, another domain's wildcard is reported as `alternateDomain` for the user to switch to explicitly instead of being adopted. `previewSecure: false` means the wildcard serves but its certificate hasn't issued, so preview URLs are http-only for now. */
 export function previewZone(
   hostnames: Hostname[] | null | undefined,
   preferred?: string,
@@ -480,21 +480,28 @@ export function previewZone(
   fetched: boolean;
   previewDomain?: string;
   previewSecure?: boolean;
+  alternateDomain?: string;
 } {
   if (!hostnames) return { fetched: false };
   const wildcards = hostnames.filter(
     (h) => previewDomainFromWildcard(h.Value ?? "") !== undefined,
   );
   const wildcard =
-    wildcards.find(
-      (h) => previewDomainFromWildcard(h.Value ?? "") === preferred,
-    ) ?? wildcards[0];
+    preferred === undefined
+      ? wildcards[0]
+      : wildcards.find(
+          (h) => previewDomainFromWildcard(h.Value ?? "") === preferred,
+        );
+  const alternate = wildcard === undefined ? wildcards[0] : undefined;
   return {
     fetched: true,
     previewDomain: wildcard
       ? previewDomainFromWildcard(wildcard.Value ?? "")
       : undefined,
     previewSecure: wildcard ? wildcard.HasCertificate === true : undefined,
+    alternateDomain: alternate
+      ? previewDomainFromWildcard(alternate.Value ?? "")
+      : undefined,
   };
 }
 
@@ -508,6 +515,7 @@ export async function fetchSiteHostnames(
   systemHost?: string;
   previewDomain?: string;
   previewSecure?: boolean;
+  alternateDomain?: string;
 }> {
   try {
     const { data } = await coreClient.GET("/pullzone/{id}", {
@@ -524,23 +532,20 @@ export async function fetchSiteHostnames(
   }
 }
 
-// "switched" means the recorded domain's wildcard is gone but another domain's still serves; callers must surface it, since the primary domain changing under the user is never routine.
-export type PreviewDomainDrift =
-  | "attached"
-  | "detached"
-  | "switched"
-  | undefined;
+export type PreviewDomainDrift = "attached" | "detached" | undefined;
 
+// Reconciliation only fills an empty record or clears a dead one; it never replaces a recorded domain with another (previewZone's preferred matching keeps a differing value from arising).
 export function reconcilePreviewDomain(
   state: RemoteSiteState,
   zone: { fetched: boolean; previewDomain?: string },
 ): PreviewDomainDrift {
   if (!zone.fetched) return undefined;
   if (zone.previewDomain) {
-    if (state.domain === zone.previewDomain) return undefined;
-    const switched = state.domain !== undefined;
-    state.domain = zone.previewDomain;
-    return switched ? "switched" : "attached";
+    if (state.domain === undefined) {
+      state.domain = zone.previewDomain;
+      return "attached";
+    }
+    return undefined;
   }
   if (state.domain) {
     state.domain = undefined;

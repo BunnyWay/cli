@@ -81,14 +81,7 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
       site.state.pullZoneId,
       site.state.domain,
     );
-    const staleDomain = site.state.domain;
-    const drift = reconcilePreviewDomain(site.state, zone);
-    if (drift) {
-      if (drift === "switched" && output !== "json") {
-        logger.warn(
-          `${staleDomain}'s preview wildcard isn't on the pull zone; this site's domain is now ${site.state.domain}.`,
-        );
-      }
+    if (reconcilePreviewDomain(site.state, zone)) {
       await persistReconciledDomain(site);
     }
     const previews = Boolean(site.state.domain);

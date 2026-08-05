@@ -740,7 +740,7 @@ test("fetchSites keeps only middleware+storage pull zones with matching state", 
   expect(sites[0]?.systemHostname).toBe("my-site.b-cdn.net");
 });
 
-// `list` reads the same listing, so a domain the zone doesn't back must not be shown as live.
+// `list` reads the same listing, so a domain the zone doesn't back must not be shown as live; another domain's wildcard never takes its place.
 test("fetchSites reconciles each site's domain against its pull zone hostnames", async () => {
   store.set(
     REMOTE_STATE_PATH,
@@ -764,7 +764,7 @@ test("fetchSites reconciles each site's domain against its pull zone hostnames",
   });
 
   const sites = await fetchSites(coreClient);
-  expect(sites[0]?.state.domain).toBe("live.example");
+  expect(sites[0]?.state.domain).toBeUndefined();
 });
 
 test("previewZone tells a failed hostname read apart from a zone with no wildcard", () => {
@@ -797,8 +797,8 @@ test("previewZone reports whether the wildcard's certificate has issued", () => 
   ).toBeUndefined();
 });
 
-// With several domains attached, the recorded primary must keep winning; only its own detachment may switch domains.
-test("previewZone prefers the recorded domain over other wildcards", () => {
+// A recorded primary is only ever matched, never replaced: another domain's wildcard surfaces as an alternate to switch to, not as a silent takeover.
+test("previewZone never swaps the recorded domain for another wildcard", () => {
   const two = [
     { Value: "*.preview.first.com", HasCertificate: true },
     { Value: "*.preview.second.com", HasCertificate: false },
@@ -807,9 +807,16 @@ test("previewZone prefers the recorded domain over other wildcards", () => {
     fetched: true,
     previewDomain: "second.com",
     previewSecure: false,
+    alternateDomain: undefined,
   });
-  // An unmatched preference falls back to the first wildcard rather than reporting previews off.
-  expect(previewZone(two, "gone.com").previewDomain).toBe("first.com");
+  // The recorded wildcard is gone: report previews off plus the attached alternate; adopting it is the user's call.
+  expect(previewZone(two, "gone.com")).toEqual({
+    fetched: true,
+    previewDomain: undefined,
+    previewSecure: undefined,
+    alternateDomain: "first.com",
+  });
+  // No recorded domain: the first wildcard heals a lost state write.
   expect(previewZone(two).previewDomain).toBe("first.com");
 });
 
@@ -927,15 +934,15 @@ test("reconcilePreviewDomain heals drifted domain state from the zone", () => {
   expect(reconcilePreviewDomain(dangling, { fetched: true })).toBe("detached");
   expect(dangling.domain).toBeUndefined();
 
-  // The domain moved: adopt whatever the zone actually serves, but report the switch so callers warn instead of repointing silently.
-  const moved = state("old.example");
+  // A recorded domain is authoritative: reconciliation never replaces it with another.
+  const recorded = state("old.example");
   expect(
-    reconcilePreviewDomain(moved, {
+    reconcilePreviewDomain(recorded, {
       fetched: true,
       previewDomain: "new.example",
     }),
-  ).toBe("switched");
-  expect(moved.domain).toBe("new.example");
+  ).toBeUndefined();
+  expect(recorded.domain).toBe("old.example");
 
   // Agreement is not drift.
   const agreed = state("example.com");
