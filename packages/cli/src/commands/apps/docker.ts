@@ -6,7 +6,7 @@ import type { components } from "@bunny.net/openapi-client/generated/magic-conta
 import prompts from "prompts";
 import { resolveRegistryEndpoint } from "../../core/bunny-registry.ts";
 import { dockerLogin, imageHostname } from "../../core/docker.ts";
-import { UserError } from "../../core/errors.ts";
+import { ApiError, UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
 
@@ -560,8 +560,18 @@ export function buildImageRef(
 
 const ADD_NEW_REGISTRY = "__add_new__";
 
-/** Stand-in id for the bunny.net registry; swap for the real id once `/registries` returns it as a `bunny` record. */
-export const BUNNY_REGISTRY_ID = "bunny";
+/** Id of the bunny.net registry's `/registries` record. It's a public record (no userName) shared by every account, so pushes use the API token and the account-id namespace instead of stored credentials. */
+export const BUNNY_REGISTRY_ID = "9808";
+
+/**
+ * Normalize a `--registry` flag value: "bunny" is accepted as an alias
+ * for the bunny.net registry id.
+ */
+export function normalizeRegistryFlag(
+  flag: string | undefined,
+): string | undefined {
+  return flag?.toLowerCase() === "bunny" ? BUNNY_REGISTRY_ID : flag;
+}
 
 /**
  * Result of resolving a registry — the ID plus, if the user just entered
@@ -582,6 +592,30 @@ export async function listRegistries(
 ): Promise<ContainerRegistry[]> {
   const { data } = await client.GET("/registries");
   return data?.items ?? [];
+}
+
+/**
+ * Fetch a single registry record by id.
+ *
+ * `GET /registries/{registryId}` only resolves account-owned records —
+ * global/platform ones (Docker Hub Public, the bunny.net registry) 404
+ * even though `GET /registries` lists them — so on 404 fall back to
+ * scanning the full list.
+ */
+export async function getRegistry(
+  client: McClient,
+  registryId: string,
+): Promise<ContainerRegistry | undefined> {
+  try {
+    const { data } = await client.GET("/registries/{registryId}", {
+      params: { path: { registryId: Number(registryId) } },
+    });
+    if (data) return data;
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status !== 404) throw err;
+  }
+  const registries = await listRegistries(client);
+  return registries.find((r) => String(r.id) === registryId);
 }
 
 /**
