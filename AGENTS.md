@@ -272,7 +272,7 @@ bunny-cli/
 │           │   │       ├── index.ts      # defineNamespace("profile", ...) — registers create + delete
 │           │   │       ├── create.ts     # Add profile with masked API key input
 │           │   │       └── delete.ts     # Remove a profile
-│           │   ├── whoami.ts             # Show authenticated account: name, email, profile (top-level: bunny whoami)
+│           │   ├── whoami.ts             # Show authenticated account: name, email, account id, profile (top-level: bunny whoami)
 │           │   ├── db/
 │           │   │   ├── index.ts               # defineNamespace("db", ...) — registers all database commands
 │           │   │   ├── constants.ts           # Database status labels, region maps
@@ -951,7 +951,7 @@ Tests and type-checking run on every pull request via `.github/workflows/ci.yml`
 bunny
 ├── login              [--force]            Authenticate via browser
 ├── logout             [--force]            Remove stored authentication profile
-├── whoami                                  Show authenticated account (name, email, profile)
+├── whoami                                  Show authenticated account (name, email, account id, profile)
 ├── config
 │   ├── init            [--api-key]         Initialize config (create default profile)
 │   ├── show                                Display resolved configuration
