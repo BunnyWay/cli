@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/cli-linux-x64",
-  "version": "0.7.0",
+  "version": "0.11.1",
   "description": "bunny.net CLI binary for Linux x64",
   "os": [
     "linux"
@@ -9,7 +9,8 @@
     "x64"
   ],
   "files": [
-    "bunny"
+    "bunny",
+    "bunny-baseline"
   ],
   "publishConfig": {
     "access": "public"

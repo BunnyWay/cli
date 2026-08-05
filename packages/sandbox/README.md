@@ -1,0 +1,177 @@
+# @bunny.net/sandbox
+
+Programmatically create bunny.net sandboxes, buffer files into them, run commands, and expose ports. Backed by Magic Containers, with a code-first developer experience.
+
+## Install
+
+```bash
+bun add @bunny.net/sandbox
+```
+
+## Quick start
+
+```ts
+import { Sandbox } from "@bunny.net/sandbox";
+
+// Provision a sandbox and wait until it accepts connections.
+const sandbox = await Sandbox.create({
+  apiKey: process.env.BUNNYNET_API_KEY,
+  name: "my-sandbox",
+  region: "AMS",
+});
+
+// Buffer a file into the sandbox.
+await sandbox.writeFiles([{ path: "server.js", content: Buffer.from("console.log('hi')") }]);
+
+// Run a command and read the result.
+const result = await sandbox.runCommand("node", ["--version"]);
+console.log(result.exitCode, await result.stdout());
+
+// Expose a port as a public CDN URL.
+const url = await sandbox.exposePort(3000);
+console.log(url);
+
+await sandbox.delete();
+```
+
+Authentication comes from the `apiKey` option or the `BUNNYNET_API_KEY` environment variable.
+
+## Streaming output
+
+For a blocking command, pass `onStdout` / `onStderr` to observe output as it arrives while still awaiting the buffered result. This composes with `timeout` and `signal`:
+
+```ts
+const result = await sandbox.runCommand({
+  cmd: "npm",
+  args: ["install"],
+  onStdout: (chunk) => process.stdout.write(chunk),
+  onStderr: (chunk) => process.stderr.write(chunk),
+});
+console.log(result.exitCode);
+```
+
+These options apply to blocking commands only — the types enforce it. Detached commands stream via `command.logs()` instead.
+
+## Long-running commands
+
+Pass `detached: true` to start a process and stream its output:
+
+```ts
+const server = await sandbox.runCommand({
+  cmd: "node",
+  args: ["server.js"],
+  detached: true,
+});
+
+for await (const { stream, data } of server.logs()) {
+  process[stream].write(data);
+}
+
+const finished = await server.wait();
+console.log(finished.exitCode);
+```
+
+## Timeouts and cancellation
+
+Blocking commands accept a `timeout` in milliseconds and an `AbortSignal`. On timeout the remote process is killed and the call rejects with `CommandTimeoutError`, which carries the output collected so far:
+
+```ts
+import { CommandTimeoutError } from "@bunny.net/sandbox";
+
+try {
+  await sandbox.runCommand({ cmd: "bun", args: ["run", "build"], timeout: 30_000 });
+} catch (err) {
+  if (err instanceof CommandTimeoutError) console.log(err.stdout, err.stderr);
+}
+
+// Or cancel from an AbortSignal; the call rejects with the abort reason.
+const controller = new AbortController();
+const pending = sandbox.runCommand({ cmd: "sleep", args: ["600"], signal: controller.signal });
+controller.abort();
+```
+
+A signal that is already aborted rejects before the SSH channel opens, so the remote command never starts.
+
+Detached commands manage their own lifetime instead: use `command.kill()`.
+
+## Environment variables
+
+Variables can be baked in at creation (persisted for the sandbox's lifetime), passed per command (temporary), or persisted after creation:
+
+```ts
+// Baked in at creation.
+const sandbox = await Sandbox.create({ apiKey, env: { NODE_ENV: "production" } });
+
+// For a single command only.
+await sandbox.runCommand({ cmd: "node", args: ["app.js"], env: { DEBUG: "1" } });
+
+// Persisted after creation (merges with the existing set).
+await sandbox.setEnv({ PORT: "8080" });
+console.log(await sandbox.getEnv()); // { NODE_ENV: "production", PORT: "8080" }
+await sandbox.unsetEnv(["PORT"]); // ["PORT"]
+```
+
+`setEnv` and `unsetEnv` redeploy the sandbox with the new environment, restarting running processes. The volume at `/workplace` persists across the restart.
+
+## Reconnecting
+
+`Sandbox.create` returns a handle you can persist and rebuild later, with no API round trip:
+
+```ts
+const handle = sandbox.toHandle();
+// ...store handle somewhere...
+
+const same = Sandbox.fromHandle(handle, { apiKey });
+```
+
+Or look a sandbox up by its app ID, recovering its connection details from the API:
+
+```ts
+const sandbox = await Sandbox.get({ apiKey, appId });
+```
+
+## Automatic cleanup
+
+A sandbox implements `Symbol.dispose` / `Symbol.asyncDispose`, so `using` and `await using` release the SSH connection when the handle leaves scope:
+
+```ts
+{
+  await using sandbox = await Sandbox.create({ apiKey });
+  await sandbox.runCommand("echo", ["hi"]);
+} // connection closed here
+```
+
+Disposal calls `disconnect()` — it releases the connection but does **not** delete the sandbox. Call `delete()` explicitly to tear down an ephemeral sandbox.
+
+## API
+
+| Method                                        | Description                                               |
+| --------------------------------------------- | --------------------------------------------------------- |
+| `Sandbox.create(options)`                     | Provision a sandbox and wait until SSH is reachable.      |
+| `Sandbox.get({ appId })`                      | Retrieve an existing sandbox by app ID.                   |
+| `Sandbox.fromHandle(handle)`                  | Rebuild a sandbox from a serialized handle.               |
+| `sandbox.runCommand(cmd, args)`               | Run a command, blocking for the result.                   |
+| `sandbox.runCommand({ ..., detached: true })` | Start a command and stream `logs()`.                      |
+| `sandbox.writeFiles(files)`                   | Upload files, creating parent directories.                |
+| `sandbox.readFile(path)`                      | Read a file into a Buffer, or `null` if missing.          |
+| `sandbox.listFiles(path?)`                    | List directory entries; `[]` if the directory is missing. |
+| `sandbox.deleteFile(path)`                    | Delete a file; `false` if it did not exist.               |
+| `sandbox.rename(from, to)`                    | Rename or move; fails if the destination exists.          |
+| `sandbox.exists(path)`                        | Whether a file or directory exists.                       |
+| `sandbox.mkDir(path)`                         | Create a directory.                                       |
+| `sandbox.exposePort(port, label?)`            | Expose a port as a public CDN URL.                        |
+| `sandbox.domain(port)`                        | Return the URL of an already exposed port.                |
+| `sandbox.getEnv()`                            | Read the persisted environment variables.                 |
+| `sandbox.setEnv(vars)`                        | Persist environment variables (redeploys).                |
+| `sandbox.unsetEnv(keys)`                      | Remove persisted variables; returns the removed keys.     |
+| `sandbox.disconnect()`                        | Close the SSH connection without deleting the sandbox.    |
+| `sandbox.delete()`                            | Delete the sandbox and its backing app.                   |
+| `sandbox.toHandle()`                          | Serialize the sandbox for reconnection.                   |
+
+## Not yet supported
+
+Magic Containers has no equivalent for these features, so they are intentionally omitted: `stop()`/resume, automatic timeouts, and snapshot/fork. Volumes persist across the sandbox lifetime, but there is no snapshot or branch API.
+
+## Transport
+
+Commands and file transfers run over SSH/SFTP (pure-JS [`ssh2`](https://github.com/mscdex/ssh2), no `sshpass` binary). The agent token generated at creation is used as the root password, and the connection targets the anycast SSH endpoint provisioned on the app.

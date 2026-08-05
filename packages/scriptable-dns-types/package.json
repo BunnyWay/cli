@@ -1,0 +1,24 @@
+{
+  "name": "@bunny.net/scriptable-dns-types",
+  "version": "0.1.1",
+  "description": "Ambient TypeScript types for the bunny.net Scriptable DNS runtime.",
+  "license": "MIT",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts"
+    }
+  },
+  "files": [
+    "index.d.ts"
+  ],
+  "keywords": [
+    "bunny",
+    "dns",
+    "scriptable-dns",
+    "types"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

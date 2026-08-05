@@ -6,7 +6,12 @@ import {
   findBunnyDnsZone,
   offerBunnyDnsRecord,
 } from "./bunny-dns.ts";
-import { type CoreClient, enableSsl, hostnameUrl } from "./client.ts";
+import {
+  addHostname,
+  type CoreClient,
+  enableSsl,
+  hostnameUrl,
+} from "./client.ts";
 import { anyResolverPointsAt, defaultResolvers } from "./dns.ts";
 
 const DNS_TIMEOUT_MS = 10 * 60 * 1000;
@@ -178,6 +183,86 @@ export async function offerDnsWaitAndSsl(
  * resolve publicly (only bunny's nameservers serve it), so we point the user at
  * their registrar instead of starting a poll that would time out after 10 min.
  */
+/**
+ * Add a hostname to a pull zone, then wire up DNS and a free SSL certificate.
+ * Tries the Bunny DNS auto-record path first (when the domain is on Bunny DNS),
+ * otherwise prints the CNAME to set and offers to wait for propagation.
+ *
+ * Returns `true` when a certificate was issued. Resource-agnostic: the caller
+ * supplies the copy-paste `sslHint`/`retryHint` for its own command surface.
+ */
+export async function setupHostname(opts: {
+  coreClient: CoreClient;
+  pullZoneId: number;
+  domain: string;
+  /** Copy-paste command to issue SSL later (shown when declining or on manual DNS). */
+  sslHint: string;
+  /** Copy-paste command to retry adding the hostname (shown if the add fails). */
+  retryHint?: string;
+  forceSsl: boolean;
+  interactive: boolean;
+  verbose: boolean;
+  onBunnyDnsZone?: (zone: {
+    id: number;
+    domain: string;
+  }) => void | Promise<void>;
+}): Promise<boolean> {
+  const spin = spinner(`Adding ${opts.domain}...`);
+  spin.start();
+
+  let cnameTarget: string | undefined;
+  try {
+    ({ cnameTarget } = await addHostname(
+      opts.coreClient,
+      opts.pullZoneId,
+      opts.domain,
+    ));
+  } catch (err) {
+    spin.stop();
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn(`Couldn't add ${opts.domain}: ${message}`);
+    if (opts.retryHint) logger.dim(`  Retry: ${opts.retryHint}`);
+    return false;
+  }
+
+  spin.stop();
+  logger.success(`Added ${opts.domain} to pull zone ${opts.pullZoneId}.`);
+  if (!cnameTarget) return false;
+
+  if (opts.interactive) {
+    const issued = await offerBunnyDnsThenSsl({
+      coreClient: opts.coreClient,
+      hostname: opts.domain,
+      pullZoneId: opts.pullZoneId,
+      cnameTarget,
+      forceSsl: opts.forceSsl,
+      sslHint: opts.sslHint,
+      verbose: opts.verbose,
+      onBunnyDnsZone: opts.onBunnyDnsZone,
+    });
+    if (issued !== null) return issued;
+  }
+
+  logger.log();
+  logger.log("Point your DNS at bunny.net to activate it:");
+  logger.accent(`  CNAME  ${opts.domain}  ->  ${cnameTarget}`);
+  logger.log();
+
+  if (!opts.interactive) {
+    printSslHint(opts.sslHint);
+    return false;
+  }
+
+  return offerDnsWaitAndSsl({
+    coreClient: opts.coreClient,
+    pullZoneId: opts.pullZoneId,
+    hostname: opts.domain,
+    cnameTarget,
+    forceSsl: opts.forceSsl,
+    sslHint: opts.sslHint,
+  });
+}
+
 export async function offerBunnyDnsThenSsl(opts: {
   coreClient: CoreClient;
   hostname: string;
@@ -223,7 +308,14 @@ export async function offerBunnyDnsThenSsl(opts: {
       `${match.zoneDomain} isn't delegated to bunny.net's nameservers yet.`,
     );
     logger.dim(
-      "  The record is set, but won't resolve (or get a certificate) until you point your registrar at bunny.net.",
+      "  The record is set, but won't resolve (or get a certificate) until your registrar points at bunny.net.",
+    );
+    logger.log();
+    logger.log("Set these nameservers at your registrar:");
+    for (const ns of match.nameservers) logger.accent(`  ${ns}`);
+    logger.log();
+    logger.dim(
+      `Check delegation later with:\n  bunny dns zones ns ${match.zoneDomain}`,
     );
     printSslHint(opts.sslHint);
     return false;

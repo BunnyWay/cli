@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/@bunny.net/config/generated/schema.json",
+  "version": "2026-05-11",
+  "sites": {
+    "name": "acme-status",
+    // No build step: plain HTML lives in this directory, so `dir` is the project root.
+    "dir": "."
+  }
+}

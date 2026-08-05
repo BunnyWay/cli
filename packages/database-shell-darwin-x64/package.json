@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/database-shell-darwin-x64",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Bunny Database shell binary for macOS x64",
   "os": [
     "darwin"
@@ -9,7 +9,8 @@
     "x64"
   ],
   "files": [
-    "bsql"
+    "bsql",
+    "bsql-baseline"
   ],
   "publishConfig": {
     "access": "public"

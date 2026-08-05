@@ -31,7 +31,7 @@ describe("dnsPointsAt", () => {
     const r = resolver({
       resolveCname: async () => ["other.example.net"],
       resolve4: async (host) =>
-        host === "my-script-e9g0r.b-cdn.net" ? ["1.1.1.1"] : ["9.9.9.9"],
+        host === "my-script-e9g0r.b-cdn.net" ? ["192.0.2.1"] : ["203.0.113.9"],
     });
     expect(
       await dnsPointsAt("shop.example.com", "my-script-e9g0r.b-cdn.net", r),
@@ -41,7 +41,9 @@ describe("dnsPointsAt", () => {
   test("falls back to shared A records when no CNAME exists (flattened DNS)", async () => {
     const r = resolver({
       resolve4: async (host) =>
-        host === "shop.example.com" ? ["1.1.1.1", "2.2.2.2"] : ["2.2.2.2"],
+        host === "shop.example.com"
+          ? ["192.0.2.1", "192.0.2.2"]
+          : ["192.0.2.2"],
     });
     expect(
       await dnsPointsAt("shop.example.com", "my-script-e9g0r.b-cdn.net", r),
@@ -61,7 +63,7 @@ describe("dnsPointsAt", () => {
   test("returns false when A records differ", async () => {
     const r = resolver({
       resolve4: async (host) =>
-        host === "shop.example.com" ? ["3.3.3.3"] : ["4.4.4.4"],
+        host === "shop.example.com" ? ["192.0.2.3"] : ["203.0.113.4"],
     });
     expect(
       await dnsPointsAt("shop.example.com", "my-script-e9g0r.b-cdn.net", r),

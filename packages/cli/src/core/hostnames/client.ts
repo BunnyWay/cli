@@ -91,7 +91,15 @@ export async function fetchHostnamesForZones(
   return results.flat();
 }
 
-/** Pick the system-preferred live URL plus any custom-domain URLs from a hostname list. */
+export function systemHostname(
+  hostnames:
+    | Array<Pick<Hostname, "IsSystemHostname" | "Value">>
+    | null
+    | undefined,
+): string | undefined {
+  return hostnames?.find((h) => h.IsSystemHostname)?.Value ?? undefined;
+}
+
 export function liveHostnames(hostnames: Hostname[]): {
   primary?: string;
   customs: string[];
@@ -109,6 +117,31 @@ export function liveHostnames(hostnames: Hostname[]): {
   };
 }
 
+// PullZoneOriginType: 2 = StorageZone.
+const ORIGIN_TYPE_STORAGE_ZONE = 2;
+
+/** Create a pull zone served from a storage zone, with delivery enabled in every geo region. */
+export async function createPullZone(
+  client: CoreClient,
+  name: string,
+  storageZoneId: number,
+): Promise<components["schemas"]["PullZoneModel"]> {
+  const { data } = await client.POST("/pullzone", {
+    body: {
+      Name: name,
+      StorageZoneId: storageZoneId,
+      OriginType: ORIGIN_TYPE_STORAGE_ZONE,
+      EnableGeoZoneUS: true,
+      EnableGeoZoneEU: true,
+      EnableGeoZoneASIA: true,
+      EnableGeoZoneSA: true,
+      EnableGeoZoneAF: true,
+    },
+  });
+  if (!data) throw new UserError(`Failed to create pull zone ${name}.`);
+  return data;
+}
+
 /** Add a hostname to a pull zone, returning the zone's hostnames and the CNAME target to point DNS at. */
 export async function addHostname(
   client: CoreClient,
@@ -120,10 +153,21 @@ export async function addHostname(
     body: { Hostname: hostname },
   });
   const hostnames = await fetchPullZoneHostnames(client, pullZoneId);
-  const cnameTarget = hostnames
-    .find((h) => h.IsSystemHostname)
-    ?.Value?.replace(/^https?:\/\//i, "");
+  const cnameTarget = systemHostname(hostnames)?.replace(/^https?:\/\//i, "");
   return { hostnames, cnameTarget };
+}
+
+/** Set a hostname's Force SSL (HTTP→HTTPS redirect) state; assumes the cert is already in place. */
+export async function setForceSsl(
+  client: CoreClient,
+  pullZoneId: number,
+  hostname: string,
+  forceSSL: boolean,
+): Promise<void> {
+  await client.POST("/pullzone/{id}/setForceSSL", {
+    params: { path: { id: pullZoneId } },
+    body: { Hostname: hostname, ForceSSL: forceSSL },
+  });
 }
 
 /** Issue a free SSL certificate for a hostname on a pull zone, then set its Force SSL state. */
@@ -152,8 +196,5 @@ export async function enableSsl(
     params: { query: { hostname } },
   });
   // Always set Force SSL to the requested value so --no-force-ssl can also turn it off.
-  await client.POST("/pullzone/{id}/setForceSSL", {
-    params: { path: { id: pullZoneId } },
-    body: { Hostname: hostname, ForceSSL: forceSSL },
-  });
+  await setForceSsl(client, pullZoneId, hostname, forceSSL);
 }

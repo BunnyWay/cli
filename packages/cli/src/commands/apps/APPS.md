@@ -293,7 +293,7 @@ A single-container app:
 
 ```jsonc
 {
-  "$schema": "./node_modules/@bunny.net/app-config/generated/schema.json",
+  "$schema": "./node_modules/@bunny.net/config/generated/schema.json",
   "version": "2026-05-11",
   "app": {
     "id": "app_xxx", // written by the CLI on first deploy

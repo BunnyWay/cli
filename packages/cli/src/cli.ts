@@ -13,7 +13,10 @@ import { docsCommand } from "./commands/docs.ts";
 import { openCommand } from "./commands/open.ts";
 import { registriesNamespace } from "./commands/registries/index.ts";
 import { registryNamespace } from "./commands/registry/index.ts";
+import { sandboxNamespace } from "./commands/sandbox/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
+import { sitesNamespace } from "./commands/sites/index.ts";
+import { storageNamespace } from "./commands/storage/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { bunny } from "./core/colors.ts";
 import { logger } from "./core/logger.ts";
@@ -24,7 +27,10 @@ const commands: CommandModule[] = [
   authLogoutCommand,
   whoamiCommand,
   dbNamespace,
+  dnsNamespace,
   scriptsNamespace,
+  sandboxNamespace,
+  sitesNamespace,
   configNamespace,
   docsCommand,
   openCommand,
@@ -36,7 +42,7 @@ const experimentalCommands: CommandModule[] = [
   appsNamespace,
   registriesNamespace,
   registryNamespace,
-  dnsNamespace,
+  storageNamespace,
 ];
 
 let instance = yargs(hideBin(process.argv))
@@ -83,21 +89,21 @@ export const cli = instance
     () => {},
     () => {
       const art = `
-                  @@@@                                                                                                              
-                 @@@@                                                                                                               
-                 @@@@                                                                                                               
-               @@@@@@  @@@@@@@     @@@@      @@@@@  @@@@ @@@@@@@@    @@@@ @@@@@@@@  @@@@@      @@@@                                 
-            @@@@@@@@@@@@@@@@@@@@   @@@@      @@@@   @@@@@@@@@@@@@@   @@@@@@@@@@@@@@ @@@@@     @@@@@                                 
-                           @@@@@  @@@@@      @@@@   @@@@@    @@@@@   @@@@@    @@@@@  @@@@    @@@@@                                  
-    @@@@ @@@@@@@@@@@        @@@@@ @@@@       @@@@  @@@@@      @@@@  @@@@@      @@@@  @@@@@  @@@@@                        ${bunny("@@")}         
-               @@@@@        @@@@  @@@@      @@@@@  @@@@      @@@@@  @@@@       @@@@   @@@@ @@@@@      ${bunny("@@ @@@     @@@@  @@@@@@")}       
-               @@@@@       @@@@@  @@@@      @@@@   @@@@      @@@@@  @@@@      @@@@@   @@@@@@@@@      ${bunny("@@@@  @@  @@   @@  @@")}          
-               @@@@@      @@@@@  @@@@@     @@@@@   @@@@      @@@@   @@@@      @@@@    @@@@@@@@       ${bunny("@@    @@ @@@@@@@   @@")}          
-               @@@@@@@@@@@@@@@    @@@@@@@@@@@@@@  @@@@@      @@@@  @@@@@      @@@@     @@@@@@        ${bunny("@@    @@ @@        @@")}          
-              @@@@ @@@@@@@@@       @@@@@@@@  @@@  @@@@      @@@@@  @@@@      @@@@@     @@@@@     @@  ${bunny("@@    @@  @@@@@    +@@@")}        
-                                                                                      @@@@@                                         
-                                                                                     @@@@@                                          
-                                                                                    @@@@@                                           
+                  @@@@
+                 @@@@
+                 @@@@
+               @@@@@@  @@@@@@@     @@@@      @@@@@  @@@@ @@@@@@@@    @@@@ @@@@@@@@  @@@@@      @@@@
+            @@@@@@@@@@@@@@@@@@@@   @@@@      @@@@   @@@@@@@@@@@@@@   @@@@@@@@@@@@@@ @@@@@     @@@@@
+                           @@@@@  @@@@@      @@@@   @@@@@    @@@@@   @@@@@    @@@@@  @@@@    @@@@@
+    @@@@ @@@@@@@@@@@        @@@@@ @@@@       @@@@  @@@@@      @@@@  @@@@@      @@@@  @@@@@  @@@@@                        ${bunny("@@")}
+               @@@@@        @@@@  @@@@      @@@@@  @@@@      @@@@@  @@@@       @@@@   @@@@ @@@@@      ${bunny("@@ @@@     @@@@  @@@@@@")}
+               @@@@@       @@@@@  @@@@      @@@@   @@@@      @@@@@  @@@@      @@@@@   @@@@@@@@@      ${bunny("@@@@  @@  @@   @@  @@")}
+               @@@@@      @@@@@  @@@@@     @@@@@   @@@@      @@@@   @@@@      @@@@    @@@@@@@@       ${bunny("@@    @@ @@@@@@@   @@")}
+               @@@@@@@@@@@@@@@    @@@@@@@@@@@@@@  @@@@@      @@@@  @@@@@      @@@@     @@@@@@        ${bunny("@@    @@ @@        @@")}
+              @@@@ @@@@@@@@@       @@@@@@@@  @@@  @@@@      @@@@@  @@@@      @@@@@     @@@@@     @@  ${bunny("@@    @@  @@@@@    +@@@")}
+                                                                                      @@@@@
+                                                                                     @@@@@
+                                                                                    @@@@@
       `;
       if ((process.stdout.columns ?? 0) >= 135) {
         console.log(art);
@@ -133,6 +139,9 @@ export const cli = instance
       const examples = [
         ["Create a database", "bunny db create"],
         ["Create an edge script", "bunny scripts init"],
+        ["Add a domain to manage DNS", "bunny dns zones add example.com"],
+        ["Create a dev sandbox", "bunny sandbox create my-sandbox"],
+        ["Deploy a static site", "bunny sites deploy"],
         // ["Deploy an app", "bunny apps deploy"],
       ];
 

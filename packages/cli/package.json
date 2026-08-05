@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/cli",
-  "version": "0.7.0",
+  "version": "0.11.1",
   "type": "module",
   "module": "src/index.ts",
   "bin": {
@@ -11,8 +11,10 @@
   ],
   "devDependencies": {
     "@bunny.net/openapi-client": "workspace:*",
-    "@bunny.net/app-config": "workspace:*",
+    "@bunny.net/config": "workspace:*",
+    "@bunny.net/storage-sdk": "^0.3.1",
     "@bunny.net/database-shell": "workspace:*",
+    "@bunny.net/sandbox": "workspace:*",
     "@bunny.net/database-studio": "workspace:*",
     "@libsql/client": "^0.17.0",
     "@types/prompts": "^2.4.9",
@@ -27,11 +29,11 @@
     "zod": "^4.3.6"
   },
   "optionalDependencies": {
-    "@bunny.net/cli-linux-x64": "0.7.0",
-    "@bunny.net/cli-linux-arm64": "0.7.0",
-    "@bunny.net/cli-darwin-x64": "0.7.0",
-    "@bunny.net/cli-darwin-arm64": "0.7.0",
-    "@bunny.net/cli-windows-x64": "0.7.0"
+    "@bunny.net/cli-linux-x64": "0.11.1",
+    "@bunny.net/cli-linux-arm64": "0.11.1",
+    "@bunny.net/cli-darwin-x64": "0.11.1",
+    "@bunny.net/cli-darwin-arm64": "0.11.1",
+    "@bunny.net/cli-windows-x64": "0.11.1"
   },
   "publishConfig": {
     "access": "public"

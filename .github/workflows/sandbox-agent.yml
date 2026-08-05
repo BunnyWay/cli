@@ -1,0 +1,43 @@
+name: Sandbox Agent
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - sandbox/**
+  # Daily rebuild so Claude Code and the bunny CLI pick up new releases without
+  # a commit. The Dockerfile keys each install layer on the upstream version, so
+  # a day with no releases is a fully cached no-op.
+  # Off the hour on purpose — the top of the hour is the busiest Actions slot.
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./sandbox
+          push: true
+          tags: ghcr.io/bunnyway/sandbox-agent:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -6,6 +6,10 @@ import { UserError } from "../../core/errors.ts";
 import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifestAt } from "../../core/manifest.ts";
+import {
+  detectFromLockfile,
+  pickPackageManager,
+} from "../../core/package-manager.ts";
 import { confirm, spinner } from "../../core/ui.ts";
 import { promptOpenInBrowser } from "./api.ts";
 import {
@@ -18,7 +22,6 @@ import {
   type Template,
 } from "./constants.ts";
 import { createScript, setupCustomDomain } from "./create.ts";
-import { detectFromLockfile, pickPackageManager } from "./package-manager.ts";
 
 const COMMAND = "init";
 const DESCRIPTION = "Create a new Edge Script project.";
@@ -308,7 +311,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
         const pm = await pickPackageManager(dirPath);
         if (!pm) {
           logger.warn(
-            "No package manager found on PATH. Install bun, npm, pnpm, or yarn, then run `<pm> install` in the new project.",
+            "No package manager found on PATH. Install bun, npm, pnpm, or yarn, then install dependencies in the new project.",
           );
         } else {
           const lockfilePm = detectFromLockfile(dirPath);

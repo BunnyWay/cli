@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { csvEscape, formatKeyValue, formatTable } from "./format.ts";
-
-// --- csvEscape ---
+import {
+  csvEscape,
+  formatKeyValue,
+  formatTable,
+  maskSecret,
+} from "./format.ts";
 
 describe("csvEscape", () => {
   test("plain string unchanged", () => {
@@ -24,8 +27,6 @@ describe("csvEscape", () => {
     expect(csvEscape("")).toBe("");
   });
 });
-
-// --- formatTable ---
 
 describe("formatTable", () => {
   const headers = ["ID", "Name"];
@@ -92,8 +93,6 @@ describe("formatTable", () => {
   });
 });
 
-// --- formatKeyValue ---
-
 describe("formatKeyValue", () => {
   const entries = [
     { key: "Name", value: "Alice" },
@@ -133,5 +132,21 @@ describe("formatKeyValue", () => {
   test("empty entries", () => {
     const result = formatKeyValue([], "csv");
     expect(result).toBe("Key,Value");
+  });
+});
+
+describe("maskSecret", () => {
+  test("keeps the last 4 chars for a long secret", () => {
+    expect(maskSecret("abcdef1234567890wxyz")).toBe("••••••••••••••••wxyz");
+  });
+
+  test("keeps the last 4 chars once the secret is longer than 8", () => {
+    expect(maskSecret("abcdef123")).toBe("•••••f123");
+  });
+
+  test("fully masks short secrets so the tail can't expose half or more", () => {
+    expect(maskSecret("short")).toBe("••••••••");
+    expect(maskSecret("12345678")).toBe("••••••••");
+    expect(maskSecret("ab")).toBe("••••••••");
   });
 });

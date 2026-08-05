@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import Table from "cli-table3";
+import { bunny } from "./colors.ts";
 import type { OutputFormat } from "./types.ts";
 
 /** Resolve a date-like value to a `Date`, or `null` if invalid/missing. */
@@ -86,16 +87,20 @@ export function formatTable(
   const noColorStyle = chalk.level === 0 ? { head: [], border: [] } : {};
 
   if (format === "table") {
-    const table = new Table({ head: headers, style: noColorStyle });
+    // Color heads bunny orange ourselves; cli-table3's own head color is red.
+    const table = new Table({
+      head: headers.map((h) => bunny.bold(h)),
+      style: { head: [], ...noColorStyle },
+    });
     for (const row of rows) {
       table.push(row);
     }
     return table.toString();
   }
 
-  // text: borderless aligned columns with bold headers
+  // text: borderless aligned columns with bold bunny-colored headers
   const table = new Table({
-    head: headers.map((h) => chalk.bold(h)),
+    head: headers.map((h) => bunny.bold(h)),
     chars: {
       top: "",
       "top-mid": "",
@@ -160,4 +165,11 @@ export function formatBytes(bytes: number): string {
   );
   const value = bytes / 1024 ** i;
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`;
+}
+
+export function maskSecret(secret: string): string {
+  // Revealing the last 4 chars of an 8-or-fewer-char secret exposes half or more, so fully mask it.
+  if (secret.length <= 8) return "•".repeat(8);
+  const tail = secret.slice(-4);
+  return `${"•".repeat(Math.max(secret.length - 4, 4))}${tail}`;
 }

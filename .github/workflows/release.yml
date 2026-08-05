@@ -39,6 +39,8 @@ jobs:
       cli-version: ${{ steps.check-cli.outputs.version }}
       database-shell-version: ${{ steps.check-database-shell.outputs.version }}
       openapi-client-version: ${{ steps.check-openapi-client.outputs.version }}
+      sandbox-version: ${{ steps.check-sandbox.outputs.version }}
+      scriptable-dns-types-version: ${{ steps.check-scriptable-dns-types.outputs.version }}
     steps:
       - uses: actions/checkout@v5
       - name: Check openapi-client version
@@ -46,6 +48,28 @@ jobs:
         run: |
           VERSION=$(node -p "require('./packages/openapi-client/package.json').version")
           PUBLISHED=$(npm view @bunny.net/openapi-client version 2>/dev/null || echo "0.0.0")
+          if [ "$VERSION" != "$PUBLISHED" ]; then
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "New version detected: $VERSION (published: $PUBLISHED)"
+          else
+            echo "No version change: $VERSION"
+          fi
+      - name: Check sandbox version
+        id: check-sandbox
+        run: |
+          VERSION=$(node -p "require('./packages/sandbox/package.json').version")
+          PUBLISHED=$(npm view @bunny.net/sandbox version 2>/dev/null || echo "0.0.0")
+          if [ "$VERSION" != "$PUBLISHED" ]; then
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "New version detected: $VERSION (published: $PUBLISHED)"
+          else
+            echo "No version change: $VERSION"
+          fi
+      - name: Check scriptable-dns-types version
+        id: check-scriptable-dns-types
+        run: |
+          VERSION=$(node -p "require('./packages/scriptable-dns-types/package.json').version")
+          PUBLISHED=$(npm view @bunny.net/scriptable-dns-types version 2>/dev/null || echo "0.0.0")
           if [ "$VERSION" != "$PUBLISHED" ]; then
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "New version detected: $VERSION (published: $PUBLISHED)"
@@ -128,6 +152,43 @@ jobs:
           path: packages/${{ matrix.npm-pkg }}/
           if-no-files-found: error
 
+  build-cli-baseline:
+    name: Build ${{ matrix.binary }}
+    needs: version
+    if: needs.version.outputs.cli-version
+    strategy:
+      matrix:
+        include:
+          - target: bun-linux-x64-baseline
+            os: ubuntu-latest
+            binary: bunny-linux-x64-baseline
+          - target: bun-darwin-x64-baseline
+            os: macos-latest
+            binary: bunny-darwin-x64-baseline
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+      - run: bun install
+
+      - name: Build database studio
+        run: bun run --filter @bunny.net/database-studio build:client
+
+      # Baseline targets avoid AVX2, so the binary runs on pre-Haswell x64 CPUs that crash the default build with SIGILL.
+      - name: Build binary
+        run: bun build packages/cli/src/index.ts --compile --minify --sourcemap --target=${{ matrix.target }} --outfile ${{ matrix.binary }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary }}
+          path: ${{ matrix.binary }}
+          if-no-files-found: error
+
   build-database-shell-binaries:
     name: Build ${{ matrix.npm-pkg }}
     needs: version
@@ -178,12 +239,47 @@ jobs:
           path: packages/${{ matrix.npm-pkg }}/
           if-no-files-found: error
 
+  build-database-shell-baseline:
+    name: Build ${{ matrix.binary }}
+    needs: version
+    if: needs.version.outputs.database-shell-version
+    strategy:
+      matrix:
+        include:
+          - target: bun-linux-x64-baseline
+            os: ubuntu-latest
+            binary: bsql-linux-x64-baseline
+          - target: bun-darwin-x64-baseline
+            os: macos-latest
+            binary: bsql-darwin-x64-baseline
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+      - run: bun install
+
+      # Baseline targets avoid AVX2, so the binary runs on pre-Haswell x64 CPUs that crash the default build with SIGILL.
+      - name: Build binary
+        run: bun build packages/database-shell/src/cli.ts --compile --minify --sourcemap --target=${{ matrix.target }} --outfile ${{ matrix.binary }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary }}
+          path: ${{ matrix.binary }}
+          if-no-files-found: error
+
   publish-cli:
     name: Publish CLI
     runs-on: ubuntu-latest
     needs:
       - version
       - build-cli-binaries
+      - build-cli-baseline
     steps:
       - uses: actions/checkout@v5
 
@@ -203,12 +299,20 @@ jobs:
             cp -r npm-artifacts/$pkg/* packages/$pkg/
           done
 
+      # x64 packages also ship a baseline binary the wrapper falls back to on AVX2-less CPUs.
+      - name: Copy baseline binaries into x64 npm packages
+        run: |
+          cp npm-artifacts/bunny-linux-x64-baseline/bunny-linux-x64-baseline packages/cli-linux-x64/bunny-baseline
+          cp npm-artifacts/bunny-darwin-x64-baseline/bunny-darwin-x64-baseline packages/cli-darwin-x64/bunny-baseline
+
       - name: Set execute permissions
         run: |
           chmod +x packages/cli-linux-x64/bunny
           chmod +x packages/cli-linux-arm64/bunny
           chmod +x packages/cli-darwin-x64/bunny
           chmod +x packages/cli-darwin-arm64/bunny
+          chmod +x packages/cli-linux-x64/bunny-baseline
+          chmod +x packages/cli-darwin-x64/bunny-baseline
 
       - name: Publish platform packages
         run: |
@@ -247,6 +351,8 @@ jobs:
             npm-artifacts/cli-darwin-x64/bunny-darwin-x64
             npm-artifacts/cli-darwin-arm64/bunny-darwin-arm64
             npm-artifacts/cli-windows-x64/bunny-windows-x64.exe
+            npm-artifacts/bunny-linux-x64-baseline/bunny-linux-x64-baseline
+            npm-artifacts/bunny-darwin-x64-baseline/bunny-darwin-x64-baseline
           fail_on_unmatched_files: true
 
   publish-database-shell:
@@ -255,6 +361,7 @@ jobs:
     needs:
       - version
       - build-database-shell-binaries
+      - build-database-shell-baseline
     steps:
       - uses: actions/checkout@v5
 
@@ -274,12 +381,20 @@ jobs:
             cp -r npm-artifacts/$pkg/* packages/$pkg/
           done
 
+      # x64 packages also ship a baseline binary the wrapper falls back to on AVX2-less CPUs.
+      - name: Copy baseline binaries into x64 npm packages
+        run: |
+          cp npm-artifacts/bsql-linux-x64-baseline/bsql-linux-x64-baseline packages/database-shell-linux-x64/bsql-baseline
+          cp npm-artifacts/bsql-darwin-x64-baseline/bsql-darwin-x64-baseline packages/database-shell-darwin-x64/bsql-baseline
+
       - name: Set execute permissions
         run: |
           chmod +x packages/database-shell-linux-x64/bsql
           chmod +x packages/database-shell-linux-arm64/bsql
           chmod +x packages/database-shell-darwin-x64/bsql
           chmod +x packages/database-shell-darwin-arm64/bsql
+          chmod +x packages/database-shell-linux-x64/bsql-baseline
+          chmod +x packages/database-shell-darwin-x64/bsql-baseline
 
       - name: Publish platform packages
         run: |
@@ -321,6 +436,53 @@ jobs:
       - name: Publish @bunny.net/openapi-client
         run: |
           cd packages/openapi-client
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-sandbox:
+    name: Publish sandbox
+    runs-on: ubuntu-latest
+    needs: version
+    if: needs.version.outputs.sandbox-version
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+      - run: bun install
+
+      # Sandbox's build type-checks against openapi-client's package exports (dist/), so build it first.
+      - name: Build openapi-client
+        run: bun run --filter @bunny.net/openapi-client build
+
+      - name: Build package
+        run: bun run --filter @bunny.net/sandbox build
+
+      # bun publish (not npm) rewrites the workspace:* dependency on @bunny.net/openapi-client to a real version.
+      - name: Publish @bunny.net/sandbox
+        run: |
+          cd packages/sandbox
+          bun publish --access public
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-scriptable-dns-types:
+    name: Publish scriptable-dns-types
+    runs-on: ubuntu-latest
+    needs: version
+    if: needs.version.outputs.scriptable-dns-types-version
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish @bunny.net/scriptable-dns-types
+        run: |
+          cd packages/scriptable-dns-types
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

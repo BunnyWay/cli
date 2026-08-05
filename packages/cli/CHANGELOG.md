@@ -1,5 +1,118 @@
 # @bunny.net/cli
 
+## 0.11.1
+
+### Patch Changes
+
+- [#140](https://github.com/BunnyWay/cli/pull/140) [`f4b1486`](https://github.com/BunnyWay/cli/commit/f4b1486607d52d45fed345927dab72ffd00d861f) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sites): redirect extensionless directory paths to their slash URL in the router
+
+## 0.11.0
+
+### Minor Changes
+
+- [#125](https://github.com/BunnyWay/cli/pull/125) [`9696434`](https://github.com/BunnyWay/cli/commit/96964348d630df5b8344087deac50bb6da4a5734) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sites): new `bunny sites` namespace for static-site hosting. `sites create` provisions a storage zone + pull zone + middleware router per site (zones are named `sites-<name>-<random id>` so globally-taken names can't block the create; commands take the clean site name), prompting for the name (directory-name suggestion) and a custom domain when run interactively (Bunny DNS record, nameserver guidance, DNS wait + SSL); `sites deploy` uploads immutable deploys (git-sha or content-hash IDs, no-op when unchanged) to preview URLs, and `--production`/`--prod` publishes the live site by flipping the router's `CURRENT_DEPLOY` env var + purging the cache; `sites deployments list/publish/prune` cover rollback and cleanup; `sites domains` attaches custom domains plus a `*.preview.<domain>` wildcard for per-deploy preview URLs; `sites ci init` (also offered by `sites create` on GitHub repos) scaffolds a GitHub Actions workflow with framework detection: previews on PRs, production on merges to main; `sites link/unlink/show/upgrade/delete` round out the lifecycle. Concurrent deploys merge remote state records instead of overwriting. Site state lives at `_bunny/site.json` inside the storage zone (403-blocked by the router). The shared hostnames factory gains optional `onAdded`/`onRemoved` hooks.
+
+### Patch Changes
+
+- [#135](https://github.com/BunnyWay/cli/pull/135) [`009d9e8`](https://github.com/BunnyWay/cli/commit/009d9e812fe7f1f9088f1feb24743002cdf317ef) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sites): `ci init` now writes `sites.dir` and `sites.build` from `bunny.jsonc` into the generated workflow, so CI stops deploying the framework preset's directory while a local `sites deploy` uses the configured one; a `bunny.jsonc` below the repo root also gets a job working directory, a prefixed deploy directory, and its own lockfile as the cache path
+
+- [#135](https://github.com/BunnyWay/cli/pull/135) [`009d9e8`](https://github.com/BunnyWay/cli/commit/009d9e812fe7f1f9088f1feb24743002cdf317ef) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sites): `delete`, `deployments publish/prune` and `domains remove` now error with a `--force` hint when there's no TTY to answer their confirmation, instead of hanging on a prompt (and writing it to stdout ahead of `--output json`)
+
+- [#135](https://github.com/BunnyWay/cli/pull/135) [`009d9e8`](https://github.com/BunnyWay/cli/commit/009d9e812fe7f1f9088f1feb24743002cdf317ef) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sites): `create` falls back to `sites.name` from `bunny.jsonc` like every other sites command, instead of failing with "Site name is required." in a configured project when it can't prompt
+
+- [#135](https://github.com/BunnyWay/cli/pull/135) [`009d9e8`](https://github.com/BunnyWay/cli/commit/009d9e812fe7f1f9088f1feb24743002cdf317ef) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sites): `--force` on `delete`, `deployments publish/prune` and `domains remove` now errors without an explicit or linked site instead of opening the picker, so a highlighted site can't be acted on with the confirmation already skipped
+
+- [#135](https://github.com/BunnyWay/cli/pull/135) [`009d9e8`](https://github.com/BunnyWay/cli/commit/009d9e812fe7f1f9088f1feb24743002cdf317ef) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sites): `--link` is now only accepted by the commands that can act on it (`deploy`, `show`, `deployments list/publish`, `upgrade-router`, `ci init`), where an explicit `--link` also links a site resolved from `--site` or `bunny.jsonc`, including under `--output json`; `open`, `ssl`, `delete` and `deployments prune` no longer advertise a flag they ignored
+
+- [#135](https://github.com/BunnyWay/cli/pull/135) [`009d9e8`](https://github.com/BunnyWay/cli/commit/009d9e812fe7f1f9088f1feb24743002cdf317ef) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sites): `deployments prune --keep` now rejects non-integer and negative counts up front; `--keep abc` reached the pruner as NaN and deleted every deploy except the live and previous ones
+
+- [#135](https://github.com/BunnyWay/cli/pull/135) [`009d9e8`](https://github.com/BunnyWay/cli/commit/009d9e812fe7f1f9088f1feb24743002cdf317ef) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sites): `deployments prune` takes the site as a positional (`prune my-site`) like its sibling subcommands, instead of rejecting it as an unknown argument; `--site` keeps working
+
+- [#120](https://github.com/BunnyWay/cli/pull/120) [`3c3373a`](https://github.com/BunnyWay/cli/commit/3c3373a0dff5a0e730f7a6c3b5a23fb17727a14e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(storage): shared TTY detection, non-interactive guard and cancel handling for zones update, aligned --force semantics, and linked-zone fallback for domains commands
+
+- [#120](https://github.com/BunnyWay/cli/pull/120) [`3c3373a`](https://github.com/BunnyWay/cli/commit/3c3373a0dff5a0e730f7a6c3b5a23fb17727a14e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(storage): type-to-confirm zone deletion, new storage unlink command, offer-to-link from the zone picker, and the replication confirmation now defaults to no
+
+- [#134](https://github.com/BunnyWay/cli/pull/134) [`ac867d5`](https://github.com/BunnyWay/cli/commit/ac867d58f329575f89c52fa1d789c10501c4ef5b) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - storage: `--force` on `zones remove` and `files remove` now errors without an explicit or linked zone instead of opening the picker
+
+- [#120](https://github.com/BunnyWay/cli/pull/120) [`3c3373a`](https://github.com/BunnyWay/cli/commit/3c3373a0dff5a0e730f7a6c3b5a23fb17727a14e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(storage): canonical plural command paths in hints, consistent decline handling in zones add, and --custom-404-path "" now clears the custom 404
+
+## 0.10.1
+
+### Patch Changes
+
+- [#128](https://github.com/BunnyWay/cli/pull/128) [`f6b64a3`](https://github.com/BunnyWay/cli/commit/f6b64a3a414aefe059fbcf1ec6b0003b0dd1d04d) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - Sandbox is now visible on the CLI root help and landing page, with create examples in the README and root help. The backing Magic Containers app is now named `sandbox-<name>` so sandboxes are recognizable in the MC dashboard; default generated sandbox names dropped their `sandbox-` prefix accordingly.
+
+## 0.10.0
+
+### Minor Changes
+
+- [#122](https://github.com/BunnyWay/cli/pull/122) [`27a1929`](https://github.com/BunnyWay/cli/commit/27a1929c0e3b8973c2c11cf4e19dba9f3360c43a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sandbox): add `bunny sandbox files list` (alias: `ls`) to list files in a sandbox directory over SFTP (bare name lists `/workplace`, or `<sandbox>:<path>`), and `--timeout` on `bunny sandbox exec` to close the SSH connection and exit 124 after N seconds.
+
+### Patch Changes
+
+- [#122](https://github.com/BunnyWay/cli/pull/122) [`27a1929`](https://github.com/BunnyWay/cli/commit/27a1929c0e3b8973c2c11cf4e19dba9f3360c43a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sandbox): add `bunny sandbox cp` to copy files between your machine and a sandbox over SFTP (`<sandbox>:<path>` on either side). Uploads preserve the local file mode; a trailing slash or existing directory keeps the source filename.
+
+- [#122](https://github.com/BunnyWay/cli/pull/122) [`27a1929`](https://github.com/BunnyWay/cli/commit/27a1929c0e3b8973c2c11cf4e19dba9f3360c43a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sandbox): `sandbox exec` now honors the documented `-- <command>` separator, and a repeatable `--env` flag no longer greedily swallows the command that follows it
+
+- [#124](https://github.com/BunnyWay/cli/pull/124) [`9e31add`](https://github.com/BunnyWay/cli/commit/9e31add7c64acdf9b31b60ac149598e80715e670) Thanks [@jedisct1](https://github.com/jedisct1)! - fix(sandbox): verify a sandbox's SSH host key before sending a token, pinning it in a known-hosts store to prevent credential disclosure to an impersonating server
+
+- [#126](https://github.com/BunnyWay/cli/pull/126) [`fc8181a`](https://github.com/BunnyWay/cli/commit/fc8181aeffa89f8ea3b3fddddd0456c673c9993c) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(db): validate database name length before create
+
+- [#119](https://github.com/BunnyWay/cli/pull/119) [`dfbe849`](https://github.com/BunnyWay/cli/commit/dfbe849881a4446d2092aa9148fe0b552b1b6663) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(storage): shared TTY detection, non-interactive guard and cancel handling for zones update, aligned --force semantics, and linked-zone fallback for domains commands
+
+## 0.9.1
+
+### Patch Changes
+
+- [#116](https://github.com/BunnyWay/cli/pull/116) [`aaba878`](https://github.com/BunnyWay/cli/commit/aaba8782b15bdcadf1ffd9a891317c7061a48d33) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(dns): never prompt non-interactively, add an interactive field editor to records update, prompt for missing record values, and reject extra positional values
+
+- [#118](https://github.com/BunnyWay/cli/pull/118) [`93ffdbc`](https://github.com/BunnyWay/cli/commit/93ffdbc2de1833d144d4b0e4ce1f31184d28cf1a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(dns): offer Pull zone/Script ID instead of Value for link records in the records update editor, and pre-select the current CAA tag
+
+## 0.9.0
+
+### Minor Changes
+
+- [#114](https://github.com/BunnyWay/cli/pull/114) [`11fbadd`](https://github.com/BunnyWay/cli/commit/11fbadd27c1355f0072f504e208564be73141fc7) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): promote dns out of experimental and onto the main command menu
+
+- [#114](https://github.com/BunnyWay/cli/pull/114) [`11fbadd`](https://github.com/BunnyWay/cli/commit/11fbadd27c1355f0072f504e208564be73141fc7) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): zones add prompts for the domain when omitted
+
+- [#114](https://github.com/BunnyWay/cli/pull/114) [`11fbadd`](https://github.com/BunnyWay/cli/commit/11fbadd27c1355f0072f504e208564be73141fc7) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): zones add asks how to add records (scan existing / upload a BIND zone file / add manually) instead of auto-scanning
+
+- [#111](https://github.com/BunnyWay/cli/pull/111) [`87e2c3d`](https://github.com/BunnyWay/cli/commit/87e2c3d7f8021bece3a27fe371fa5d710a7cdb8e) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - feat(sandbox): add environment variable support
+  - SDK: `Sandbox` gains `getEnv`/`setEnv`/`unsetEnv` to read and persist container env vars after creation (merges with the existing set, preserves reserved keys).
+  - CLI: `sandbox create`, `sandbox exec`, and `sandbox ssh` accept `-e/--env KEY=VALUE` (repeatable) and `--env-file`. Vars on `create` are persisted; on `exec`/`ssh` they are temporary for that invocation.
+  - CLI: new `sandbox env` namespace (`set`/`list`/`delete`) to manage persisted env vars.
+
+- [#98](https://github.com/BunnyWay/cli/pull/98) [`4aa8fbe`](https://github.com/BunnyWay/cli/commit/4aa8fbeecc5c69921abe43116a5f77ff69a178c4) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(storage): add storage zone and file commands with S3-compatible credentials
+
+## 0.8.1
+
+### Patch Changes
+
+- [#108](https://github.com/BunnyWay/cli/pull/108) [`8c6ae43`](https://github.com/BunnyWay/cli/commit/8c6ae4340b99305acad7e355f533fbc4ba300420) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(dns): `dns scripts init` detects and uses any installed package manager (bun, pnpm, yarn, npm) instead of assuming bun, and warns clearly when none is on PATH
+
+## 0.8.0
+
+### Minor Changes
+
+- [#99](https://github.com/BunnyWay/cli/pull/99) [`6c05e7f`](https://github.com/BunnyWay/cli/commit/6c05e7f046c869dc71484a20231e7855b19d33f6) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - Add @bunny.net/sandbox SDK for programmatic sandbox create, file buffering, command execution, and port exposure; wire sandbox CLI commands onto it
+
+### Patch Changes
+
+- [#97](https://github.com/BunnyWay/cli/pull/97) [`b122269`](https://github.com/BunnyWay/cli/commit/b122269a5f5523302bccccba383460703818ac75) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(install): ship a baseline (non-AVX2) build for older x64 CPUs that crashed with "Illegal instruction" — the installer auto-selects it, and the npm wrapper falls back to it on SIGILL
+
+- [#107](https://github.com/BunnyWay/cli/pull/107) [`18645ed`](https://github.com/BunnyWay/cli/commit/18645edc7736eb5d88f1a8ec038993cc7d2deb12) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): import a domain's existing records when moving to bunny: new `dns records scan [domain]` (server-side record scan, multiselect, bulk-write) and `dns zones add --import` offer the same migration right after creating the zone; a bad record is reported rather than stranding the batch, and CAA flags/tag survive via corrected `DnsDiscoveredRecord` types in `@bunny.net/openapi-client`
+
+- [#107](https://github.com/BunnyWay/cli/pull/107) [`18645ed`](https://github.com/BunnyWay/cli/commit/18645edc7736eb5d88f1a8ec038993cc7d2deb12) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(dns): label the bunny-specific record types with bunny's canonical codes (Pull Zone as PZ, Redirect as RDR, Script as SCR) across listings and pickers, group them under "Bunny" in the interactive type picker, and accept those codes (plus the spelled-out names) when parsing a record type
+
+- [#107](https://github.com/BunnyWay/cli/pull/107) [`18645ed`](https://github.com/BunnyWay/cli/commit/18645edc7736eb5d88f1a8ec038993cc7d2deb12) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): `dns zones add` now scans for existing records automatically, then offers a next-steps menu (upload a zone file, add records manually, or continue to nameserver setup) so you can fully populate the zone before delegating; `--import` imports scanned records without prompting and `--no-import` skips the scan and menu
+
+- [#104](https://github.com/BunnyWay/cli/pull/104) [`1aa67e0`](https://github.com/BunnyWay/cli/commit/1aa67e069adb3d1ec2bc6395414053c2da67e332) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): manage Scriptable DNS scripts (`bunny dns scripts` init/create/deploy/attach/link/list) with ambient runtime types in `@bunny.net/scriptable-dns-types`; `dns records add` offers a static or script-computed answer for A/AAAA/CNAME/TXT
+
+- [#106](https://github.com/BunnyWay/cli/pull/106) [`ff794c3`](https://github.com/BunnyWay/cli/commit/ff794c30ec0cfabc18e5222fda2273b5fe6aacbd) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(dns): verify registrar delegation with a live nameserver lookup (instead of the API's NameserversDetected flag, which defaults to true on a fresh zone) across `dns zones ns`, `dns zones list`, and pull-zone setup; `dns zones add` and `ns` now give registrar-aware setup steps (registrar named via RDAP) and skip them when the domain is already delegated; add `dns records preset` with email, verification, and security presets (Google Workspace, Microsoft 365, Zoho, Mailgun, Resend, Proton, Bluesky, DMARC, CAA, no-email) plus a preset option in the `records add` wizard; color table heads bunny orange
+
+- [#102](https://github.com/BunnyWay/cli/pull/102) [`b4c1bd9`](https://github.com/BunnyWay/cli/commit/b4c1bd9029a8ee296e14a65447c04a6144ec330e) Thanks [@nocanoa](https://github.com/nocanoa)! - Added bunny color to the table head and also the help overview.
+
 ## 0.7.0
 
 ### Minor Changes

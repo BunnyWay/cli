@@ -1,22 +1,26 @@
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import {
   type DnsRecordTypes,
+  RECORD_TYPE_LABELS,
+  RECORD_TYPE_META,
   RECORD_TYPES,
+  recordTypeFromLabel,
   recordTypeLabel,
 } from "../../core/dns-record-types.ts";
 import { UserError } from "../../core/errors.ts";
 
-export { type DnsRecordTypes, RECORD_TYPES, recordTypeLabel };
+export { type DnsRecordTypes, RECORD_TYPE_META, RECORD_TYPES, recordTypeLabel };
 export type DnsRecordModel = components["schemas"]["DnsRecordModel"];
 
-/** Parse a record type name (e.g. "A", "cname") to its enum value, or throw. */
+export const CAA_TAGS: readonly string[] = ["issue", "issuewild", "iodef"];
+
+/** Parse a record type label (e.g. "A", "cname", "PZ") to its enum value, or throw. */
 export function parseRecordType(value: string): DnsRecordTypes {
-  const key = value.trim().toUpperCase() as keyof typeof RECORD_TYPES;
-  const parsed = RECORD_TYPES[key];
+  const parsed = recordTypeFromLabel(value);
   if (parsed === undefined) {
     throw new UserError(
       `Unknown record type "${value}".`,
-      `Valid types: ${Object.keys(RECORD_TYPES).join(", ")}`,
+      `Valid types: ${RECORD_TYPE_LABELS.join(", ")}`,
     );
   }
   return parsed;

@@ -1,6 +1,6 @@
 ---
 name: bunny-cli
-description: Manage bunny.net resources from the command line (databases, Edge Scripts, authentication, and raw API requests). Use when working with bunny.net (pullzones, databases, storage, Edge Scripts, Magic Containers), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
+description: Manage bunny.net resources from the command line (databases, DNS, Edge Scripts, static sites, sandboxes, authentication, and raw API requests). Use when working with bunny.net (pullzones, DNS zones/records, databases, storage, Edge Scripts, Magic Containers, static-site hosting/deploys, cloud sandboxes), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
 ---
 
 # bunny.net CLI Skill
@@ -18,7 +18,7 @@ Config is stored in (first match wins):
 - `~/.bunnynet.json`
 - `/etc/bunnynet.json`
 
-**When something goes wrong, check auth first** — run a quick `bunny api GET /user` to verify your key works. If using profiles, confirm the right one is active with `--profile`.
+**When something goes wrong, check auth first**: run a quick `bunny api GET /user` to verify your key works. If using profiles, confirm the right one is active with `--profile`.
 
 ## Quick Start
 
@@ -39,6 +39,27 @@ bunny db shell
 bunny scripts init
 bunny scripts deploy dist/index.js
 bunny scripts list
+
+# manage cloud sandboxes (isolated containers with Claude Code inside)
+bunny sandbox create my-sandbox -e ANTHROPIC_API_KEY=sk-ant-...
+bunny sandbox exec my-sandbox -- bun install
+bunny sandbox url add my-sandbox 3000
+
+# manage Edge Storage
+bunny storage zones add my-zone --region DE
+bunny storage files upload ./photo.png --to images/ --zone my-zone
+
+# manage DNS
+bunny dns zones add example.com
+bunny dns zones nameservers example.com               # is the registrar delegated to bunny yet?
+bunny dns records add example.com api A 198.51.100.1
+bunny dns records preset google-workspace example.com # apply a preset record set
+bunny dns records list example.com
+
+# host a static site
+bunny sites create my-site                            # provision (served at my-site.b-cdn.net)
+bunny sites deploy ./dist --production               # deploy + publish as the live site
+bunny sites deployments publish --previous --force    # instant rollback
 ```
 
 ## Decision Tree
@@ -47,7 +68,11 @@ Use this to route to the correct reference file:
 
 - **Authenticate or switch profiles** -> `references/auth.md`
 - **Database management (create, list, show, link, delete, shell, studio, regions, tokens)** -> `references/database.md`
+- **DNS (zones, delegation checks, records, presets, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
+- **Edge Storage (zones, replication, S3 credentials, file upload/download, custom domains)** -> `references/storage.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
+- **Static sites (create, deploy, rollback, previews, custom domains)** -> `references/sites.md`
+- **Sandboxes (create, exec, ssh, cp, files, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)
 
