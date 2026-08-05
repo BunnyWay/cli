@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.12.0
+
+### Minor Changes
+
+- [#142](https://github.com/BunnyWay/cli/pull/142) [`30686ef`](https://github.com/BunnyWay/cli/commit/30686ef9482c6191ea9b8ae839334ab8e4d9f436) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sites): custom domains unlock `dpl-{id}.preview.{domain}` preview deploys; domainless sites deploy straight to production
+
 ## 0.11.1
 
 ### Patch Changes
