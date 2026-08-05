@@ -10,9 +10,8 @@ mock.module("../dns-nameservers.ts", () => ({
   checkDelegation: async () => ({ status: delegationStatus, resolved: [] }),
 }));
 
-const { findBunnyDnsZone, offerBunnyDnsRecord } = await import(
-  "./bunny-dns.ts"
-);
+const { findBunnyDnsZone, offerBunnyDnsRecord, offerCnameRecord } =
+  await import("./bunny-dns.ts");
 const { offerBunnyDnsThenSsl } = await import("./flow.ts");
 type CoreClient = import("./client.ts").CoreClient;
 
@@ -137,6 +136,79 @@ describe("offerBunnyDnsRecord", () => {
         },
       }),
     ).rejects.toThrow(/has no ID/);
+  });
+});
+
+describe("offerCnameRecord", () => {
+  type Match = import("./bunny-dns.ts").BunnyDnsMatch;
+  const match = (existing: Match["existing"]): Match => ({
+    zoneId: 7,
+    zoneDomain: "example.com",
+    recordName: "*.preview",
+    existing,
+    delegated: true,
+    nameservers: ["kiki.bunny.net", "coco.bunny.net"],
+  });
+
+  test("creates the CNAME after confirmation", async () => {
+    prompts.inject([true]);
+    const writes: unknown[] = [];
+    const client = {
+      PUT: async (_route: string, args: { body: unknown }) => {
+        writes.push(args.body);
+        return {};
+      },
+    } as unknown as CoreClient;
+
+    const result = await offerCnameRecord({
+      client,
+      hostname: "*.preview.example.com",
+      cnameTarget: "site.b-cdn.net",
+      match: match(null),
+    });
+    expect(result).toBe("created");
+    expect(writes).toEqual([
+      { Type: 2, Name: "*.preview", Value: "site.b-cdn.net" },
+    ]);
+  });
+
+  test("returns declined without writing when the prompt is refused", async () => {
+    prompts.inject([false]);
+    const client = {
+      PUT: async () => {
+        throw new Error("must not write after a declined prompt");
+      },
+    } as unknown as CoreClient;
+
+    const result = await offerCnameRecord({
+      client,
+      hostname: "*.preview.example.com",
+      cnameTarget: "site.b-cdn.net",
+      match: match(null),
+    });
+    expect(result).toBe("declined");
+  });
+
+  // Ignores case and the trailing dot DNS answers often carry; a matching record must not prompt or rewrite.
+  test("skips the prompt when the record already points at the target", async () => {
+    const client = {
+      PUT: async () => {
+        throw new Error("must not rewrite a record that already matches");
+      },
+    } as unknown as CoreClient;
+
+    const result = await offerCnameRecord({
+      client,
+      hostname: "*.preview.example.com",
+      cnameTarget: "site.b-cdn.net",
+      match: match({
+        Id: 9,
+        Type: 2,
+        Name: "*.preview",
+        Value: "Site.B-CDN.net.",
+      }),
+    });
+    expect(result).toBe("exists");
   });
 });
 

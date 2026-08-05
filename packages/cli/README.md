@@ -901,7 +901,7 @@ bunny sites deployments publish a1b2c3d4              # promote a past deploy (a
 bunny sites deployments publish --previous            # instant rollback
 bunny sites deployments prune --keep 10               # delete old deploys (default keeps 5; never live/previous)
 
-# Custom domains (a *.preview.<domain> wildcard is attached alongside)
+# Custom domains (a *.preview.<domain> wildcard is attached alongside; on Bunny DNS both records are offered automatically, elsewhere the CNAMEs to create are printed)
 bunny sites domains list
 bunny sites domains add shop.example.com              # prints the DNS record to create
 bunny sites domains add shop.example.com --wait       # add, wait for DNS, then issue SSL and force HTTPS

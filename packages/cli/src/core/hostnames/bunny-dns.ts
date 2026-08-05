@@ -141,6 +141,97 @@ async function repointPullZoneRecord(
 
 export type BunnyDnsResult = "created" | "updated" | "exists" | "declined";
 
+async function writeCnameRecord(
+  client: CoreClient,
+  zoneId: number,
+  name: string,
+  value: string,
+  recordId?: number,
+): Promise<void> {
+  const spin = spinner(
+    recordId == null ? "Adding DNS record..." : "Updating DNS record...",
+  );
+  spin.start();
+  try {
+    const body = { Type: RECORD_TYPES.CNAME, Name: name, Value: value };
+    if (recordId == null) {
+      await client.PUT("/dnszone/{zoneId}/records", {
+        params: { path: { zoneId } },
+        body,
+      });
+    } else {
+      await client.POST("/dnszone/{zoneId}/records/{id}", {
+        params: { path: { zoneId, id: recordId } },
+        body,
+      });
+    }
+  } finally {
+    spin.stop();
+  }
+}
+
+/** True when the record is already a CNAME to `target` (ignoring case and a trailing dot). */
+function cnamePointsAt(record: DnsRecordModel, target: string): boolean {
+  return (
+    record.Type === RECORD_TYPES.CNAME &&
+    normalize(record.Value ?? "") === normalize(target)
+  );
+}
+
+/**
+ * Offer to create (or repoint) a CNAME record for a hostname in a Bunny DNS
+ * zone. The API validates wildcard hostnames against live DNS when they're
+ * added to a pull zone, and that validation wants a CNAME to the zone's
+ * system hostname, so this runs before the wildcard attach. Every write is
+ * confirmed first; a record that already points at the target skips the prompt.
+ */
+export async function offerCnameRecord(opts: {
+  client: CoreClient;
+  hostname: string;
+  cnameTarget: string;
+  match: BunnyDnsMatch;
+  /** Prompt shown before creating a missing record. */
+  addMessage?: string;
+}): Promise<BunnyDnsResult> {
+  const { client, hostname, cnameTarget, match } = opts;
+  const { zoneId, zoneDomain, recordName, existing } = match;
+
+  if (existing && cnamePointsAt(existing, cnameTarget)) {
+    logger.success(`${hostname} already points here via Bunny DNS.`);
+    return "exists";
+  }
+
+  if (!existing) {
+    if (
+      !(await confirm(
+        opts.addMessage ?? `Point ${hostname} at ${cnameTarget} now?`,
+        { initial: true },
+      ))
+    ) {
+      return "declined";
+    }
+    await writeCnameRecord(client, zoneId, recordName, cnameTarget);
+    logger.success(`Pointed ${hostname} at ${cnameTarget} via Bunny DNS.`);
+    return "created";
+  }
+
+  logger.warn(
+    `${hostname} already has a ${recordTypeLabel(existing.Type)} record in your Bunny DNS (${zoneDomain}).`,
+  );
+  if (!(await confirm(`Repoint it at ${cnameTarget}?`, { initial: false }))) {
+    return "declined";
+  }
+  if (existing.Id == null) {
+    throw new UserError(
+      `DNS record for "${hostname}" has no ID: cannot repoint it.`,
+      "Update the record manually in the Bunny DNS dashboard.",
+    );
+  }
+  await writeCnameRecord(client, zoneId, recordName, cnameTarget, existing.Id);
+  logger.success(`Repointed ${hostname} at ${cnameTarget} via Bunny DNS.`);
+  return "updated";
+}
+
 /**
  * Offer to point a Bunny DNS record at the pull zone. Every write is confirmed
  * first; the one exception is a record that already routes here. The result

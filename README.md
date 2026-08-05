@@ -64,7 +64,7 @@ bun ny sites deploy --build                 # run `sites.build` from bunny.jsonc
 bun ny sites deployments list               # list deploys with the live one marked
 bun ny sites deployments publish --previous # instant rollback to the previous deploy
 bun ny sites deployments prune              # delete old deploys (keeps the newest 5, never current/previous)
-bun ny sites domains add example.com        # attach a custom domain (+ *.preview.example.com, which unlocks per-deploy preview URLs)
+bun ny sites domains add example.com        # attach a custom domain (+ *.preview.example.com, which unlocks per-deploy preview URLs; on Bunny DNS both records are offered automatically, elsewhere it prints the CNAMEs to create)
 bun ny sites ssl --no-force-ssl             # stop forcing HTTPS on the site's b-cdn.net system host
 bun ny sites open                           # open the site's live URL in the browser
 bun ny sites ci init                        # add a GitHub Actions workflow (with a custom domain: previews on PRs + production on main; without: production on main)

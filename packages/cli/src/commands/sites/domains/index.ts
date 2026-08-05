@@ -7,12 +7,17 @@ import {
   type CoreClient,
   createHostnamesCommands,
   enableSsl,
+  fetchPullZoneHostnames,
+  findBunnyDnsZone,
   type Hostname,
+  offerCnameRecord,
   type ResolvedPullZone,
   setupHostname,
+  systemHostname,
 } from "../../../core/hostnames/index.ts";
 import { logger } from "../../../core/logger.ts";
 import type { GlobalArgs } from "../../../core/types.ts";
+import { isInteractive } from "../../../core/ui.ts";
 import { type SiteContext, writeRemoteState } from "../api.ts";
 import { PREVIEW_LABEL, previewWildcard } from "../constants.ts";
 import { selectSite } from "../interactive.ts";
@@ -61,6 +66,60 @@ async function recordSiteDomain(
   }
 }
 
+// How the wildcard's DNS looks before the attach: "ready" (record known live on Bunny DNS), "unknown" (external DNS; attempt the attach and let validation decide), "skip" (declined/undelegated; attaching would only fail).
+type PreviewDnsState = "ready" | "unknown" | "skip";
+
+// The API validates `*.preview.<domain>` against live DNS when it's attached, so the record has to exist first; on a Bunny-managed zone we can create it (confirmed) right here.
+async function ensurePreviewWildcardDns(opts: {
+  coreClient: CoreClient;
+  wildcard: string;
+  cnameTarget: string;
+  retryHint: string;
+}): Promise<PreviewDnsState> {
+  let match: Awaited<ReturnType<typeof findBunnyDnsZone>>;
+  try {
+    match = await findBunnyDnsZone(opts.coreClient, opts.wildcard);
+  } catch {
+    return "unknown";
+  }
+  if (!match) return "unknown";
+
+  if (!match.delegated) {
+    logger.dim(
+      `  ${match.zoneDomain} isn't delegated to bunny.net's nameservers yet, so ${opts.wildcard} can't validate; once it is, re-run \`${opts.retryHint}\`.`,
+    );
+    return "skip";
+  }
+
+  let result: Awaited<ReturnType<typeof offerCnameRecord>>;
+  try {
+    result = await offerCnameRecord({
+      client: opts.coreClient,
+      hostname: opts.wildcard,
+      cnameTarget: opts.cnameTarget,
+      match,
+      addMessage: `Point ${opts.wildcard} here for deploy previews?`,
+    });
+  } catch (err) {
+    // A companion failure must not fail the apex add; the attach's own failure path prints the manual CNAME instructions.
+    logger.warn(
+      `Couldn't write the ${opts.wildcard} DNS record: ${errorMessage(err)}`,
+    );
+    return "unknown";
+  }
+  if (result === "declined") {
+    logger.dim(
+      `  Previews stay off; re-run \`${opts.retryHint}\` to enable them.`,
+    );
+    return "skip";
+  }
+  return "ready";
+}
+
+// A freshly created record can race the API's wildcard validation; retry a couple of times before giving up.
+const WILDCARD_ATTACH_ATTEMPTS = 3;
+const WILDCARD_ATTACH_RETRY_DELAY_MS = 4_000;
+
 // Attach the `*.preview.<domain>` wildcard that serves per-deploy previews; returns whether the hostname attached (SSL may still be pending), since `state.domain` must only be recorded when previews can actually serve.
 export async function attachPreviewWildcard(opts: {
   coreClient: CoreClient;
@@ -68,34 +127,63 @@ export async function attachPreviewWildcard(opts: {
   domain: string;
   cnameTarget?: string;
   json?: boolean;
+  /** Allows the confirmed Bunny DNS record write for the wildcard; JSON/non-TTY runs skip it. */
+  interactive?: boolean;
 }): Promise<boolean> {
   const wildcard = previewWildcard(opts.domain);
-  let hostnames: Hostname[];
-  let alreadyAttached: boolean;
-  try {
-    // A retry after a partial setup re-adds an existing wildcard; addHostname reconciles that against the zone instead of failing.
-    ({ hostnames, alreadyAttached } = await addHostname(
-      opts.coreClient,
-      opts.pullZoneId,
+  const retryHint = `bunny sites domains add ${opts.domain}`;
+
+  let dns: PreviewDnsState = "unknown";
+  if (opts.interactive && !opts.json && opts.cnameTarget) {
+    dns = await ensurePreviewWildcardDns({
+      coreClient: opts.coreClient,
       wildcard,
-    ));
-  } catch (err) {
+      cnameTarget: opts.cnameTarget,
+      retryHint,
+    });
+    if (dns === "skip") return false;
+  }
+
+  let hostnames: Hostname[] | undefined;
+  let alreadyAttached = false;
+  let addError: unknown;
+  // A retry after a partial setup re-adds an existing wildcard; addHostname reconciles that against the zone instead of failing.
+  const attempts = dns === "ready" ? WILDCARD_ATTACH_ATTEMPTS : 1;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      ({ hostnames, alreadyAttached } = await addHostname(
+        opts.coreClient,
+        opts.pullZoneId,
+        wildcard,
+      ));
+      addError = undefined;
+      break;
+    } catch (err) {
+      addError = err;
+      if (attempt < attempts) await Bun.sleep(WILDCARD_ATTACH_RETRY_DELAY_MS);
+    }
+  }
+  if (!hostnames) {
     if (!opts.json) {
-      logger.warn(`Couldn't add ${wildcard}: ${errorMessage(err)}`);
+      logger.warn(
+        `Couldn't add ${wildcard} for deploy previews: ${errorMessage(addError)}`,
+      );
+      if (opts.cnameTarget) {
+        logger.log("  Point it at this site, then re-run the add:");
+        logger.accent(`  CNAME  ${wildcard}  →  ${opts.cnameTarget}`);
+      }
       logger.dim(
-        `  Previews stay off and deploys keep publishing directly; retry with \`bunny sites domains add ${opts.domain}\`.`,
+        `  Previews stay off and deploys keep publishing directly; retry with \`${retryHint}\`.`,
       );
     }
     return false;
   }
+  // The API only accepts a wildcard whose DNS already resolves here, so success needs no CNAME instructions.
   if (!opts.json) {
     if (alreadyAttached) {
       logger.info(`${wildcard} is already attached for deploy previews.`);
     } else {
       logger.success(`Added ${wildcard} for deploy previews.`);
-      if (opts.cnameTarget) {
-        logger.accent(`  CNAME  ${wildcard}  →  ${opts.cnameTarget}`);
-      }
     }
   }
 
@@ -118,7 +206,7 @@ export async function attachPreviewWildcard(opts: {
       // Wildcard certs need DNS in place (DNS-01); issue later, don't block. Deploys report preview URLs as pending until it lands.
       if (!opts.json) {
         logger.dim(
-          `  Preview HTTPS pending; once DNS is live: bunny sites domains ssl "${wildcard}"`,
+          `  Preview HTTPS pending; once its DNS has settled, issue it with: bunny sites domains ssl "${wildcard}"`,
         );
       }
     }
@@ -154,6 +242,10 @@ export async function setupSiteDomain(opts: {
       interactive: opts.interactive,
       verbose: opts.verbose,
     });
+    // The wildcard's DNS record needs the CNAME target; setupHostname doesn't return it, so read it off the zone.
+    cnameTarget = systemHostname(
+      await fetchPullZoneHostnames(coreClient, pullZoneId).catch(() => null),
+    );
   }
 
   // `state.domain` switches deploy and CI into preview mode, so it's only recorded once the wildcard can serve previews.
@@ -163,6 +255,7 @@ export async function setupSiteDomain(opts: {
     domain,
     cnameTarget,
     json: opts.json,
+    interactive: opts.interactive && !opts.json,
   });
   if (wildcardAttached) await recordSiteDomain(site, domain);
 }
@@ -188,6 +281,7 @@ export const sitesDomainsCommands = createHostnamesCommands({
       domain: hostname,
       cnameTarget,
       json: args.output === "json",
+      interactive: isInteractive(args.output),
     });
     if (wildcardAttached && resolvedSite && !resolvedSite.state.domain) {
       await recordSiteDomain(resolvedSite, hostname);

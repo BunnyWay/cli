@@ -20,6 +20,7 @@ import {
   offerBunnyDnsThenSsl,
   offerDnsWaitAndSsl,
   printSslHint,
+  reportIssuedCertificate,
 } from "./flow.ts";
 
 /** Resolves the pull zone (and a core client) for the resource being targeted. */
@@ -184,7 +185,9 @@ export function createHostnamesCommands(
 
       spin.stop();
 
-      if (opts.onAdded) {
+      // Companion hostnames (e.g. the sites preview wildcard) need the primary domain's DNS in place first, so the hook runs after the DNS/SSL flow, not here.
+      const runOnAdded = async () => {
+        if (!opts.onAdded) return;
         await opts.onAdded({
           coreClient,
           pullZoneId,
@@ -192,7 +195,7 @@ export function createHostnamesCommands(
           cnameTarget: systemHostname,
           args: args as unknown as GlobalArgs & Record<string, unknown>,
         });
-      }
+      };
 
       let sslIssued = false;
       let sslError: string | undefined;
@@ -236,6 +239,8 @@ export function createHostnamesCommands(
           }
         }
 
+        await runOnAdded();
+
         logger.log(
           JSON.stringify(
             {
@@ -267,14 +272,8 @@ export function createHostnamesCommands(
 
       if (sslIssued) {
         logger.log();
-        logger.success(
-          force
-            ? "SSL certificate issued and HTTPS forced."
-            : "SSL certificate issued.",
-        );
-        logger.log(
-          `  Live at: ${hostnameUrl(hostname, { hasCertificate: true })}`,
-        );
+        await reportIssuedCertificate(hostname, force);
+        await runOnAdded();
         return;
       }
 
@@ -298,7 +297,10 @@ export function createHostnamesCommands(
           sslHint,
           verbose: args.verbose,
         });
-        if (issued !== null) return;
+        if (issued !== null) {
+          await runOnAdded();
+          return;
+        }
       }
 
       if (systemHostname) {
@@ -319,6 +321,7 @@ export function createHostnamesCommands(
           sslHint,
           assumeYes: args.wait === true,
         });
+        await runOnAdded();
         return;
       }
 
@@ -330,6 +333,7 @@ export function createHostnamesCommands(
       }
 
       printSslHint(sslHint);
+      await runOnAdded();
     },
   });
 
@@ -400,14 +404,7 @@ export function createHostnamesCommands(
         return;
       }
 
-      logger.success(
-        force
-          ? `SSL certificate issued for ${hostname} and HTTPS forced.`
-          : `SSL certificate issued for ${hostname}.`,
-      );
-      logger.log(
-        `  Live at: ${hostnameUrl(hostname, { hasCertificate: true })}`,
-      );
+      await reportIssuedCertificate(hostname, force);
     },
   });
 
