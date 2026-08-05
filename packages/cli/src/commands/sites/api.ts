@@ -472,7 +472,7 @@ export async function fetchSystemHostname(
   }
 }
 
-/** The preview-mode view of an already-fetched hostname list, so callers that read hostnames anyway reconcile without a second request; null means the read failed (never "no wildcard"). `preferred` (the recorded domain) wins over other domains' wildcards when several are attached, so reconciliation never swaps a still-valid primary. `previewSecure: false` means the wildcard serves but its certificate hasn't issued, so preview URLs are http-only for now. */
+/** The preview-mode view of an already-fetched hostname list, so callers that read hostnames anyway reconcile without a second request; null means the read failed (never "no wildcard"). `preferred` (the recorded domain) wins over other domains' wildcards when several are attached, so reconciliation never swaps a still-valid primary; when the preferred wildcard is gone the first remaining one is adopted, and `reconcilePreviewDomain` reports that as a "switched" drift for callers to surface. `previewSecure: false` means the wildcard serves but its certificate hasn't issued, so preview URLs are http-only for now. */
 export function previewZone(
   hostnames: Hostname[] | null | undefined,
   preferred?: string,
@@ -524,7 +524,12 @@ export async function fetchSiteHostnames(
   }
 }
 
-export type PreviewDomainDrift = "attached" | "detached" | undefined;
+// "switched" means the recorded domain's wildcard is gone but another domain's still serves; callers must surface it, since the primary domain changing under the user is never routine.
+export type PreviewDomainDrift =
+  | "attached"
+  | "detached"
+  | "switched"
+  | undefined;
 
 export function reconcilePreviewDomain(
   state: RemoteSiteState,
@@ -533,8 +538,9 @@ export function reconcilePreviewDomain(
   if (!zone.fetched) return undefined;
   if (zone.previewDomain) {
     if (state.domain === zone.previewDomain) return undefined;
+    const switched = state.domain !== undefined;
     state.domain = zone.previewDomain;
-    return "attached";
+    return switched ? "switched" : "attached";
   }
   if (state.domain) {
     state.domain = undefined;

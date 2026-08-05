@@ -200,6 +200,14 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         `  Restore it with: bunny sites domains add ${staleDomain} ${state.name}`,
       );
     }
+    if (drift === "switched" && staleDomain && output !== "json") {
+      logger.warn(
+        `${previewWildcard(staleDomain)} isn't on the pull zone; this site's domain is now ${state.domain}.`,
+      );
+      logger.dim(
+        `  To switch back: bunny sites domains add ${staleDomain} ${state.name}`,
+      );
+    }
     // Persist before the deploy's own writes so an unchanged/no-op run still heals the state the read-only commands show.
     if (drift) await persistReconciledDomain(site);
 

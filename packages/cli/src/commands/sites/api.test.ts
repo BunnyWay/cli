@@ -927,14 +927,14 @@ test("reconcilePreviewDomain heals drifted domain state from the zone", () => {
   expect(reconcilePreviewDomain(dangling, { fetched: true })).toBe("detached");
   expect(dangling.domain).toBeUndefined();
 
-  // The domain moved: adopt whatever the zone actually serves.
+  // The domain moved: adopt whatever the zone actually serves, but report the switch so callers warn instead of repointing silently.
   const moved = state("old.example");
   expect(
     reconcilePreviewDomain(moved, {
       fetched: true,
       previewDomain: "new.example",
     }),
-  ).toBe("attached");
+  ).toBe("switched");
   expect(moved.domain).toBe("new.example");
 
   // Agreement is not drift.
