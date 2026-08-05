@@ -58,7 +58,9 @@ bunny dns records list example.com
 
 # host a static site
 bunny sites create my-site                            # provision (served at my-site.b-cdn.net)
-bunny sites deploy ./dist --production               # deploy + publish as the live site
+bunny sites deploy ./dist                             # no custom domain → publishes live
+bunny sites domains add example.com --wait            # attaches *.preview.example.com: turns previews on
+bunny sites deploy ./dist                             # now a preview; add --production to publish
 bunny sites deployments publish --previous --force    # instant rollback
 ```
 
@@ -71,7 +73,7 @@ Use this to route to the correct reference file:
 - **DNS (zones, delegation checks, records, presets, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
 - **Edge Storage (zones, replication, S3 credentials, file upload/download, custom domains)** -> `references/storage.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
-- **Static sites (create, deploy, rollback, previews, custom domains)** -> `references/sites.md`
+- **Static sites (create, deploy, rollback, custom domains, domain-gated previews, GitHub Actions)** -> `references/sites.md`
 - **Sandboxes (create, exec, ssh, cp, files, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)

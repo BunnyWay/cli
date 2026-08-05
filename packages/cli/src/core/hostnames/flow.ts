@@ -211,8 +211,9 @@ export async function setupHostname(opts: {
   spin.start();
 
   let cnameTarget: string | undefined;
+  let alreadyAttached = false;
   try {
-    ({ cnameTarget } = await addHostname(
+    ({ cnameTarget, alreadyAttached } = await addHostname(
       opts.coreClient,
       opts.pullZoneId,
       opts.domain,
@@ -226,7 +227,13 @@ export async function setupHostname(opts: {
   }
 
   spin.stop();
-  logger.success(`Added ${opts.domain} to pull zone ${opts.pullZoneId}.`);
+  if (alreadyAttached) {
+    logger.info(
+      `${opts.domain} is already on pull zone ${opts.pullZoneId}; finishing setup.`,
+    );
+  } else {
+    logger.success(`Added ${opts.domain} to pull zone ${opts.pullZoneId}.`);
+  }
   if (!cnameTarget) return false;
 
   if (opts.interactive) {

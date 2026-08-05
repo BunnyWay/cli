@@ -14,6 +14,7 @@ import {
 } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { withSpinner } from "../../core/ui.ts";
+import { previewZone, reconcilePreviewDomain } from "./api.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -45,10 +46,13 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
     });
     const { state } = site;
 
-    // Hostnames are informational; a fetch failure shouldn't hide the site.
-    const hostnames = await withSpinner("Fetching hostnames...", () =>
-      fetchPullZoneHostnames(client, state.pullZoneId).catch(() => []),
+    // Hostnames are informational; a fetch failure shouldn't hide the site (null, not [], so a failed read never reads as "no preview wildcard").
+    const fetched = await withSpinner("Fetching hostnames...", () =>
+      fetchPullZoneHostnames(client, state.pullZoneId).catch(() => null),
     );
+    const hostnames = fetched ?? [];
+    // The zone's wildcard, not the best-effort record, says whether previews are on.
+    reconcilePreviewDomain(state, previewZone(fetched, state.domain));
 
     if (output === "json") {
       logger.log(

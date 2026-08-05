@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { resolve } from "node:path";
-import { resolveDeployDir } from "./deploy.ts";
+import type { SiteContext } from "./api.ts";
+import { deployUrls, resolveDeployDir } from "./deploy.ts";
 
 const ROOT = "/project/root";
 
@@ -22,4 +23,30 @@ test("the detected framework output dir resolves against the root where the buil
 
 test("nothing specified falls back to the root, not cwd", () => {
   expect(resolveDeployDir(undefined, undefined, undefined, ROOT)).toBe(ROOT);
+});
+
+const siteWithDomain = (domain?: string) =>
+  ({ state: { domain } }) as SiteContext;
+
+test("deployUrls has no preview URL without a custom domain", () => {
+  expect(
+    deployUrls(siteWithDomain(undefined), "abc123", {
+      systemHost: "site.b-cdn.net",
+    }),
+  ).toEqual({ production: "https://site.b-cdn.net", preview: undefined });
+});
+
+// Until the wildcard's certificate issues, an https preview URL fails TLS outright; the printed URL must match what the host can serve.
+test("deployUrls previews are https only once the wildcard certificate issued", () => {
+  const site = siteWithDomain("example.com");
+  expect(deployUrls(site, "abc123", { previewSecure: true }).preview).toBe(
+    "https://dpl-abc123.preview.example.com",
+  );
+  expect(deployUrls(site, "abc123", { previewSecure: false }).preview).toBe(
+    "http://dpl-abc123.preview.example.com",
+  );
+  // Zone unreadable: fall back to https rather than downgrading a working preview.
+  expect(deployUrls(site, "abc123", {}).preview).toBe(
+    "https://dpl-abc123.preview.example.com",
+  );
 });

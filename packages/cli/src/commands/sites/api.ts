@@ -4,6 +4,7 @@ import { mapWithConcurrency } from "../../core/concurrency.ts";
 import { ApiError, errorMessage, UserError } from "../../core/errors.ts";
 import {
   createPullZone,
+  type Hostname,
   setForceSsl,
   systemHostname,
 } from "../../core/hostnames/index.ts";
@@ -26,6 +27,7 @@ import {
   CURRENT_DEPLOY_VAR,
   deployPrefix,
   parseRemoteState,
+  previewDomainFromWildcard,
   REMOTE_STATE_PATH,
   type RemoteSiteState,
   routerScriptName,
@@ -216,6 +218,11 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
         const zone = await fetchStorageZone(client, pz.StorageZoneId as number);
         const context = await siteContextFromZone(zone);
         if (!context || context.state.pullZoneId !== pz.Id) return null;
+        // The listing already carries the hostnames, so a drifted domain costs nothing to correct here.
+        reconcilePreviewDomain(
+          context.state,
+          previewZone(pz.Hostnames, context.state.domain),
+        );
         return {
           state: context.state,
           storageZone: zone,
@@ -465,13 +472,106 @@ export async function fetchSystemHostname(
   }
 }
 
-// Promote timing: `CURRENT_DEPLOY` is accepted instantly but reaches edge nodes async, so we confirm the edge serves it before the follow-up purge, then settle briefly.
+/** The preview-mode view of an already-fetched hostname list, so callers that read hostnames anyway reconcile without a second request; null means the read failed (never "no wildcard"). A `preferred` (recorded) domain is only ever matched, never replaced: when its wildcard is gone, another domain's wildcard is reported as `alternateDomain` for the user to switch to explicitly instead of being adopted. `previewSecure: false` means the wildcard serves but its certificate hasn't issued, so preview URLs are http-only for now. */
+export function previewZone(
+  hostnames: Hostname[] | null | undefined,
+  preferred?: string,
+): {
+  fetched: boolean;
+  previewDomain?: string;
+  previewSecure?: boolean;
+  alternateDomain?: string;
+} {
+  if (!hostnames) return { fetched: false };
+  const wildcards = hostnames.filter(
+    (h) => previewDomainFromWildcard(h.Value ?? "") !== undefined,
+  );
+  const wildcard =
+    preferred === undefined
+      ? wildcards[0]
+      : wildcards.find(
+          (h) => previewDomainFromWildcard(h.Value ?? "") === preferred,
+        );
+  const alternate = wildcard === undefined ? wildcards[0] : undefined;
+  return {
+    fetched: true,
+    previewDomain: wildcard
+      ? previewDomainFromWildcard(wildcard.Value ?? "")
+      : undefined,
+    previewSecure: wildcard ? wildcard.HasCertificate === true : undefined,
+    alternateDomain: alternate
+      ? previewDomainFromWildcard(alternate.Value ?? "")
+      : undefined,
+  };
+}
+
+// One pull-zone read for deploy: the system host plus the domain served by an attached `*.preview.*` wildcard. The wildcard is the source of truth for preview mode; `fetched: false` (zone unreadable) tells callers to fall back to the recorded state.
+export async function fetchSiteHostnames(
+  coreClient: CoreClient,
+  pullZoneId: number,
+  preferred?: string,
+): Promise<{
+  fetched: boolean;
+  systemHost?: string;
+  previewDomain?: string;
+  previewSecure?: boolean;
+  alternateDomain?: string;
+}> {
+  try {
+    const { data } = await coreClient.GET("/pullzone/{id}", {
+      params: { path: { id: pullZoneId } },
+    });
+    if (!data) return { fetched: false };
+    const hostnames = data.Hostnames ?? [];
+    return {
+      ...previewZone(hostnames, preferred),
+      systemHost: systemHostname(hostnames),
+    };
+  } catch {
+    return { fetched: false };
+  }
+}
+
+export type PreviewDomainDrift = "attached" | "detached" | undefined;
+
+// Reconciliation only fills an empty record or clears a dead one; it never replaces a recorded domain with another (previewZone's preferred matching keeps a differing value from arising).
+export function reconcilePreviewDomain(
+  state: RemoteSiteState,
+  zone: { fetched: boolean; previewDomain?: string },
+): PreviewDomainDrift {
+  if (!zone.fetched) return undefined;
+  if (zone.previewDomain) {
+    if (state.domain === undefined) {
+      state.domain = zone.previewDomain;
+      return "attached";
+    }
+    return undefined;
+  }
+  if (state.domain) {
+    state.domain = undefined;
+    return "detached";
+  }
+  return undefined;
+}
+
+// Persist a drift correction so the commands that only read state (show/list/open) stop lagging; best-effort, since the in-memory value already drives this run and the next one reconciles from the zone regardless.
+export async function persistReconciledDomain(
+  site: SiteContext,
+): Promise<void> {
+  try {
+    site.etag = await writeRemoteState(site.connection, site.state, site.etag);
+  } catch (err) {
+    logger.warn(
+      `Couldn't record the site's domain state: ${errorMessage(err)}`,
+    );
+  }
+}
+
 const PROBE_TIMEOUT_MS = 4000;
 const PROPAGATION_DEADLINE_MS = 20_000;
 const PROPAGATION_INTERVAL_MS = 1500;
 const SETTLE_FLOOR_MS = 2500;
 
-// CDN-probe seam; tests swap these so promote runs without real network or timers.
 export const promoteVerification = {
   /** Probe the live site through the CDN; resolves to the HTTP status code. */
   probe: async (url: string): Promise<number> => {

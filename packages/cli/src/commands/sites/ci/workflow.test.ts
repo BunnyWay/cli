@@ -28,6 +28,20 @@ test("astro + bun workflow builds with bun and deploys dist", () => {
   );
 });
 
+// Without a custom domain there are no previews, and a preview-less deploy publishes, so the workflow must not run on PRs.
+test("a previews-less workflow only deploys pushes to main, always as production", () => {
+  const yml = renderSitesWorkflow({
+    site: "my-site",
+    preset: preset("astro"),
+    packageManager: "bun",
+    previews: false,
+  });
+  expect(yml).not.toContain("pull_request");
+  expect(yml).not.toContain("pull-requests: write");
+  expect(yml).toContain("production: true");
+  expect(yml).not.toContain("production: ${{");
+});
+
 test("jekyll workflow uses ruby and deploys _site", () => {
   const yml = renderSitesWorkflow({
     site: "blog",

@@ -176,11 +176,11 @@ export function createHostnamesCommands(
       const spin = spinner(`Adding ${hostname}...`);
       spin.start();
 
-      const { hostnames, cnameTarget: systemHostname } = await addHostname(
-        coreClient,
-        pullZoneId,
-        hostname,
-      );
+      const {
+        hostnames,
+        cnameTarget: systemHostname,
+        alreadyAttached,
+      } = await addHostname(coreClient, pullZoneId, hostname);
 
       spin.stop();
 
@@ -257,7 +257,13 @@ export function createHostnamesCommands(
         return;
       }
 
-      logger.success(`Added ${hostname} to pull zone ${pullZoneId}.`);
+      if (alreadyAttached) {
+        logger.info(
+          `${hostname} is already on pull zone ${pullZoneId}; finishing setup.`,
+        );
+      } else {
+        logger.success(`Added ${hostname} to pull zone ${pullZoneId}.`);
+      }
 
       if (sslIssued) {
         logger.log();

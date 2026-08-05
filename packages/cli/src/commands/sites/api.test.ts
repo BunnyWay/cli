@@ -1,14 +1,17 @@
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import { ApiError } from "../../core/errors.ts";
+import type { Hostname } from "../../core/hostnames/index.ts";
 import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
 import {
   type ComputeClient,
   createSite,
   deleteSiteResources,
   fetchSites,
+  previewZone,
   promoteDeploy,
   promoteVerification,
   readRemoteState,
+  reconcilePreviewDomain,
   siteContextFromZone,
   siteFiles,
   writeRemoteState,
@@ -737,6 +740,86 @@ test("fetchSites keeps only middleware+storage pull zones with matching state", 
   expect(sites[0]?.systemHostname).toBe("my-site.b-cdn.net");
 });
 
+// `list` reads the same listing, so a domain the zone doesn't back must not be shown as live; another domain's wildcard never takes its place.
+test("fetchSites reconciles each site's domain against its pull zone hostnames", async () => {
+  store.set(
+    REMOTE_STATE_PATH,
+    JSON.stringify(fakeState({ domain: "stale.example" })),
+  );
+  const coreClient = fakeCoreClient({
+    calls: [],
+    storageZones: [ZONE],
+    pullZones: [
+      {
+        Id: 30,
+        Name: "my-site",
+        MiddlewareScriptId: 20,
+        StorageZoneId: 10,
+        Hostnames: [
+          { IsSystemHostname: true, Value: "my-site.b-cdn.net" },
+          { Value: "*.preview.live.example" },
+        ],
+      },
+    ],
+  });
+
+  const sites = await fetchSites(coreClient);
+  expect(sites[0]?.state.domain).toBeUndefined();
+});
+
+test("previewZone tells a failed hostname read apart from a zone with no wildcard", () => {
+  // Null is "unknown", so a fetch failure can never be mistaken for "previews are off".
+  expect(previewZone(null)).toEqual({ fetched: false });
+  expect(previewZone([])).toEqual({ fetched: true, previewDomain: undefined });
+  expect(
+    previewZone([{ Value: "*.preview.example.com" }] as Hostname[]),
+  ).toEqual({
+    fetched: true,
+    previewDomain: "example.com",
+    previewSecure: false,
+  });
+});
+
+// Preview URLs print with the scheme the wildcard can actually serve, so a pending certificate reads as http, never a TLS-failing https.
+test("previewZone reports whether the wildcard's certificate has issued", () => {
+  expect(
+    previewZone([
+      { Value: "*.preview.example.com", HasCertificate: true },
+    ] as Hostname[]).previewSecure,
+  ).toBe(true);
+  expect(
+    previewZone([
+      { Value: "*.preview.example.com", HasCertificate: false },
+    ] as Hostname[]).previewSecure,
+  ).toBe(false);
+  expect(
+    previewZone([{ Value: "example.com" }] as Hostname[]).previewSecure,
+  ).toBeUndefined();
+});
+
+// A recorded primary is only ever matched, never replaced: another domain's wildcard surfaces as an alternate to switch to, not as a silent takeover.
+test("previewZone never swaps the recorded domain for another wildcard", () => {
+  const two = [
+    { Value: "*.preview.first.com", HasCertificate: true },
+    { Value: "*.preview.second.com", HasCertificate: false },
+  ] as Hostname[];
+  expect(previewZone(two, "second.com")).toEqual({
+    fetched: true,
+    previewDomain: "second.com",
+    previewSecure: false,
+    alternateDomain: undefined,
+  });
+  // The recorded wildcard is gone: report previews off plus the attached alternate; adopting it is the user's call.
+  expect(previewZone(two, "gone.com")).toEqual({
+    fetched: true,
+    previewDomain: undefined,
+    previewSecure: undefined,
+    alternateDomain: "first.com",
+  });
+  // No recorded domain: the first wildcard heals a lost state write.
+  expect(previewZone(two).previewDomain).toBe("first.com");
+});
+
 test("siteContextFromZone is null for a zone without site state", async () => {
   expect(await siteContextFromZone(ZONE)).toBeNull();
 });
@@ -830,4 +913,49 @@ test("fetchSites pages through the /pullzone envelope", async () => {
   const sites = await fetchSites(coreClient);
   expect(sites).toHaveLength(1);
   expect(sites[0]?.state.name).toBe("my-site");
+});
+
+// `state.domain` decides whether deploys preview or publish, but its write is best-effort, so the zone's wildcard reconciles it before anything reads it.
+test("reconcilePreviewDomain heals drifted domain state from the zone", () => {
+  const state = (domain?: string) => ({ domain }) as RemoteSiteState;
+
+  // Wildcard attached but the state write failed: previews work, so a CI preview build must not publish to production.
+  const stranded = state(undefined);
+  expect(
+    reconcilePreviewDomain(stranded, {
+      fetched: true,
+      previewDomain: "example.com",
+    }),
+  ).toBe("attached");
+  expect(stranded.domain).toBe("example.com");
+
+  // Wildcard removed behind the CLI's back: previews can't serve, so don't advertise them.
+  const dangling = state("example.com");
+  expect(reconcilePreviewDomain(dangling, { fetched: true })).toBe("detached");
+  expect(dangling.domain).toBeUndefined();
+
+  // A recorded domain is authoritative: reconciliation never replaces it with another.
+  const recorded = state("old.example");
+  expect(
+    reconcilePreviewDomain(recorded, {
+      fetched: true,
+      previewDomain: "new.example",
+    }),
+  ).toBeUndefined();
+  expect(recorded.domain).toBe("old.example");
+
+  // Agreement is not drift.
+  const agreed = state("example.com");
+  expect(
+    reconcilePreviewDomain(agreed, {
+      fetched: true,
+      previewDomain: "example.com",
+    }),
+  ).toBeUndefined();
+  expect(agreed.domain).toBe("example.com");
+
+  // An unreadable zone proves nothing; keep the recorded value.
+  const unknown = state("example.com");
+  expect(reconcilePreviewDomain(unknown, { fetched: false })).toBeUndefined();
+  expect(unknown.domain).toBe("example.com");
 });

@@ -4,6 +4,11 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
 import { isInteractive } from "../../../core/ui.ts";
+import {
+  fetchSiteHostnames,
+  persistReconciledDomain,
+  reconcilePreviewDomain,
+} from "../api.ts";
 import { loadSiteConfig } from "../config.ts";
 import {
   type SiteSelectorArgs,
@@ -24,7 +29,7 @@ interface CiInitArgs extends SiteSelectorArgs {
   force?: boolean;
 }
 
-// Scaffold `.github/workflows/bunny-sites.yml`: previews on PRs, production on merges to main, via the BunnyWay/actions deploy-site action.
+// Scaffold `.github/workflows/bunny-sites.yml` via the BunnyWay/actions deploy-site action: with a custom domain, previews on PRs + production on merges to main; without one, production on merges to main only.
 export const sitesCiInitCommand = defineCommand<CiInitArgs>({
   command: "init",
   describe: "Add a GitHub Actions workflow that deploys this site.",
@@ -70,6 +75,17 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
       );
     }
 
+    // PR previews must key off the same signal deploy uses: the zone's wildcard, since a failed state write can leave `state.domain` unset while previews work fine.
+    const zone = await fetchSiteHostnames(
+      coreClient,
+      site.state.pullZoneId,
+      site.state.domain,
+    );
+    if (reconcilePreviewDomain(site.state, zone)) {
+      await persistReconciledDomain(site);
+    }
+    const previews = Boolean(site.state.domain);
+
     // `sites.dir`/`sites.build` are what a local deploy uses, so the workflow follows them, relative to the bunny.jsonc directory they resolve against.
     const siteConfig = loadSiteConfig();
     const result = await scaffoldSitesWorkflow({
@@ -81,6 +97,7 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
       force: args.force,
       dir: siteConfig?.config.dir,
       build: siteConfig?.config.build,
+      previews,
     });
 
     if (output === "json") {
@@ -111,9 +128,16 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
     logger.log();
     await offerGitHubSecret({ apiKey: config.apiKey, root, interactive });
     logger.log();
-    logger.dim(
-      "  Push to GitHub: PRs get preview URLs, merges to main go live.",
-    );
+    if (previews) {
+      logger.dim(
+        "  Push to GitHub: PRs get preview URLs, merges to main go live.",
+      );
+    } else {
+      logger.dim("  Push to GitHub: merges to main deploy the live site.");
+      logger.dim(
+        "  Add a custom domain (`bunny sites domains add`), then re-run `bunny sites ci init --force` for PR previews.",
+      );
+    }
 
     await offerLink();
   },
