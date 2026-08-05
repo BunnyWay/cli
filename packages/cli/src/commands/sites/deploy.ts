@@ -58,21 +58,22 @@ interface DeployArgs extends SiteSelectorArgs {
 const DOMAIN_HINT =
   "  Add a custom domain to unlock preview deploys: bunny sites domains add <domain>";
 
-// Production and preview URLs for a deploy: previews are `dpl-{id}.preview.{domain}` hosts, so they only exist once a custom domain is attached.
+// Production and preview URLs for a deploy: previews are `dpl-{id}.preview.{domain}` hosts, so they only exist once a custom domain is attached. Until the wildcard's certificate issues the URL moves to `previewPending`: an https link would fail TLS, and a plaintext http link would expose preview traffic.
 export function deployUrls(
   site: SiteContext,
   deployId: string,
   zone: { systemHost?: string; previewSecure?: boolean },
-): { production?: string; preview?: string } {
+): { production?: string; preview?: string; previewPending?: string } {
   const domain = site.state.domain;
   const productionHost = domain ?? zone.systemHost;
-  // Until the wildcard's certificate issues, an https preview URL fails TLS outright, while http serves fine (ForceSSL is only set alongside the cert).
-  const previewScheme = zone.previewSecure === false ? "http" : "https";
+  const previewUrl = domain
+    ? `https://${previewHostname(deployId, domain)}`
+    : undefined;
+  const pending = zone.previewSecure === false;
   return {
     production: productionHost ? `https://${productionHost}` : undefined,
-    preview: domain
-      ? `${previewScheme}://${previewHostname(deployId, domain)}`
-      : undefined,
+    preview: pending ? undefined : previewUrl,
+    previewPending: pending ? previewUrl : undefined,
   };
 }
 
@@ -276,11 +277,12 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const deployId = alreadyUploaded?.id ?? identity.id;
     const alreadyLive = state.current === deployId;
 
-    // The preview host serves http-only until the wildcard's certificate issues; say so wherever a preview URL prints.
-    const previewTlsHint = () => {
-      if (zone.previewSecure === false && state.domain) {
+    // A pending-certificate preview URL prints labeled, never as a working link; this hint says how to finish setup.
+    const printPendingPreview = (url: string) => {
+      logger.log(`  Preview (HTTPS pending): ${url}`);
+      if (state.domain) {
         logger.dim(
-          `  Preview HTTPS pending; once DNS is live: bunny sites domains ssl "${previewWildcard(state.domain)}" ${state.name}`,
+          `  It serves once the certificate issues; when DNS is live, run: bunny sites domains ssl "${previewWildcard(state.domain)}" ${state.name}`,
         );
       }
     };
@@ -298,6 +300,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
               live: alreadyLive,
               production: urls.production ?? null,
               preview: urls.preview ?? null,
+              previewPending: urls.previewPending ?? null,
             },
             null,
             2,
@@ -314,10 +317,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           `No changes: deploy ${deployId} is already uploaded. Publish it with \`bunny sites deploy --production\`.`,
         );
       }
-      if (urls.preview) {
-        logger.log(`  Preview: ${urls.preview}`);
-        previewTlsHint();
-      }
+      if (urls.preview) logger.log(`  Preview: ${urls.preview}`);
+      if (urls.previewPending) printPendingPreview(urls.previewPending);
       // The common repeat path after declining the first-deploy domain offer still gets the hint.
       if (!state.domain) logger.dim(DOMAIN_HINT);
       return;
@@ -379,6 +380,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
             promoted: publish,
             production: urls.production ?? null,
             preview: urls.preview ?? null,
+            previewPending: urls.previewPending ?? null,
           },
           null,
           2,
@@ -397,10 +399,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     if (publish) {
       if (urls.production) logger.info(`Production: ${urls.production}`);
       if (urls.preview) logger.log(`  Preview:    ${urls.preview}`);
-      previewTlsHint();
+      if (urls.previewPending) printPendingPreview(urls.previewPending);
     } else {
       if (urls.preview) logger.info(`Preview: ${urls.preview}`);
-      previewTlsHint();
+      if (urls.previewPending) printPendingPreview(urls.previewPending);
       logger.info(
         `Publish it with \`bunny sites deploy --production\` or \`bunny sites deployments publish ${deployId}\`.`,
       );

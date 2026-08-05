@@ -115,7 +115,7 @@ export async function attachPreviewWildcard(opts: {
         hostnames,
       );
     } catch {
-      // Wildcard certs need DNS in place (DNS-01); issue later, don't block. Deploys print http:// preview URLs until it lands.
+      // Wildcard certs need DNS in place (DNS-01); issue later, don't block. Deploys report preview URLs as pending until it lands.
       if (!opts.json) {
         logger.dim(
           `  Preview HTTPS pending; once DNS is live: bunny sites domains ssl "${wildcard}"`,

@@ -36,14 +36,16 @@ test("deployUrls has no preview URL without a custom domain", () => {
   ).toEqual({ production: "https://site.b-cdn.net", preview: undefined });
 });
 
-// Until the wildcard's certificate issues, an https preview URL fails TLS outright; the printed URL must match what the host can serve.
-test("deployUrls previews are https only once the wildcard certificate issued", () => {
+// Until the wildcard's certificate issues, an https preview URL fails TLS and a plaintext http one would expose traffic; the URL is reported as pending instead of reachable.
+test("deployUrls holds the preview URL as pending until the wildcard certificate issued", () => {
   const site = siteWithDomain("example.com");
   expect(deployUrls(site, "abc123", { previewSecure: true }).preview).toBe(
     "https://dpl-abc123.preview.example.com",
   );
-  expect(deployUrls(site, "abc123", { previewSecure: false }).preview).toBe(
-    "http://dpl-abc123.preview.example.com",
+  const pending = deployUrls(site, "abc123", { previewSecure: false });
+  expect(pending.preview).toBeUndefined();
+  expect(pending.previewPending).toBe(
+    "https://dpl-abc123.preview.example.com",
   );
   // Zone unreadable: fall back to https rather than downgrading a working preview.
   expect(deployUrls(site, "abc123", {}).preview).toBe(
