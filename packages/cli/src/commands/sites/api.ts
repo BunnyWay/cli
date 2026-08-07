@@ -475,7 +475,8 @@ export async function ensureRouterCurrent(opts: {
   state: RemoteSiteState;
 }): Promise<boolean> {
   const { computeClient, state } = opts;
-  if (state.routerVersion === ROUTER_VERSION) return false;
+  // Only upgrade: a site touched by a newer CLI must not be downgraded to this binary's older source (e.g. a pinned CI action racing a newer local CLI).
+  if ((state.routerVersion ?? 0) >= ROUTER_VERSION) return false;
   await computeClient.POST("/compute/script/{id}/code", {
     params: { path: { id: state.scriptId } },
     body: { Code: routerSource },
@@ -707,8 +708,8 @@ export async function deleteSiteResources(opts: {
     }),
   );
   if (opts.keepStorage) {
-    // The zone survives, so remove its site marker, else list/link/show rediscover a "site" whose pull zone and router are gone.
-    if (opts.connection) {
+    // The zone survives, so remove its site marker, else list/link/show rediscover a "site" whose pull zone and router are gone. But only once everything else deleted: the marker is what makes a re-run able to find and retry the failures.
+    if (opts.connection && results.every((r) => r.deleted)) {
       try {
         await siteFiles.remove(opts.connection, REMOTE_STATE_PATH);
       } catch (err) {

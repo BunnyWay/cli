@@ -16,7 +16,7 @@ Commands that can link the directory (`deploy`, `show`, `deployments list/publis
 ```bash
 # New site: provision, deploy, iterate
 bunny sites create my-site                 # served at https://sites-my-site-<suffix>.b-cdn.net
-bunny sites deploy ./dist                  # no custom domain yet → publishes live
+bunny sites deploy ./dist                  # immutable preview URL; the interactive first deploy offers to publish
 
 # Build-and-deploy in one step (build command from bunny.jsonc or the flag)
 bunny sites deploy --build                 # runs `sites.build`, deploys `sites.dir`
@@ -27,22 +27,20 @@ bunny sites deployments list               # find the deploy ID (● Live marks 
 bunny sites deployments publish --previous --force   # instant rollback
 bunny sites deployments publish a1b2c3d4 --force     # promote a specific deploy
 
-# Add a custom domain: this is what turns previews on
-bunny sites domains add example.com --wait # also attaches *.preview.example.com
-bunny sites deploy ./dist                  # now a preview: https://dpl-<id>.preview.example.com
+# Custom production domain (optional; previews never need one)
+bunny sites domains add example.com --wait # production vanity hostname + SSL
 bunny sites deploy ./dist --production     # publish live: https://example.com
 ```
 
-## Previews are a custom-domain feature
+## Every deploy gets its own preview URL
 
 This is the rule that shapes every other command here:
 
-- **No custom domain** → there are no preview hosts, so **every deploy publishes live**. `--production` is implied; passing it changes nothing.
-- **Custom domain attached** → `deploy` defaults to a preview at `https://dpl-<id>.preview.<domain>`, and `--production`/`--prod` publishes to the domain.
+- Every `deploy` serves at an immutable preview URL, `https://sites-dpl-<id>-<suffix>.b-cdn.net`: the deploy's own pull zone, HTTPS out of the box, no custom domain or DNS setup.
+- Publishing is always explicit: `--production`/`--prod` (a fresh site's interactive first deploy offers it, since nothing is live yet).
+- Custom domains are production-only vanity hostnames; they change nothing about previews.
 
-Previews are served on their own root host (via the `*.preview.<domain>` wildcard), not under a path prefix, so client-side routers (TanStack Router, React Router, Vue Router in history mode) and root-absolute assets behave exactly as they do in production. Preview responses carry `X-Robots-Tag: noindex`. Deploys are not otherwise addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served.
-
-The switch is the preview wildcard on the pull zone, not merely the domain being recorded. Every command that reads the site's domain (`deploy`, `ci init`, `show`, `list`, `open`) checks it against the zone's hostnames first and corrects a drifted record, so a half-finished domain setup can't leave you deploying at previews that don't resolve, nor publishing a CI preview build to production. If the wildcard is missing, `deploy` says so, publishes directly, and prints the command to restore it; re-running `sites domains add <domain>` reconciles a partial setup rather than failing on the already-attached apex or wildcard.
+Previews are root-served on their own host, not under a path prefix, so client-side routers (TanStack Router, React Router, Vue Router in history mode) and root-absolute assets behave exactly as they do in production. Preview responses carry `X-Robots-Tag: noindex`. Deploys are not otherwise addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served. Preview URLs live as long as their deploy: `deployments prune` deletes old deploys together with their preview zones.
 
 ## Deploy IDs
 
@@ -64,7 +62,7 @@ bunny sites create my-site --no-link       # don't write .bunny/site.json
 | Flag       | Description                                                                                                                               |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `--region` | Main storage region code (default `DE`)                                                                                                   |
-| `--domain` | Attach a custom domain (+ `*.preview.<domain>`, which turns previews on) after provisioning; interactive runs prompt for one when omitted |
+| `--domain` | Attach a custom production domain after provisioning; interactive runs prompt for one when omitted |
 | `--link`   | Link this directory (default true; `--no-link` to skip)                                                                                   |
 
 Site names are 3-47 lowercase letters, digits, and dashes. The storage zone, pull zone, and b-cdn.net subdomain become `sites-<name>-xxxxxx` (a `sites-` prefix marking them in the dashboard, plus a shared random suffix since zone names are global across bunny.net); commands still take the clean site name. Creation is idempotent; a failed create re-runs cleanly, reusing whatever was already provisioned.
@@ -74,7 +72,7 @@ Site names are 3-47 lowercase letters, digits, and dashes. The storage zone, pul
 ## `bunny sites deploy`; Deploy a directory
 
 ```bash
-bunny sites deploy ./dist                  # domainless: publishes live. With a domain: a preview
+bunny sites deploy ./dist                  # deploy to an immutable preview URL
 bunny sites deploy ./dist --production     # publish as the live site (--prod works too)
 bunny sites deploy --build                 # run `sites.build` from bunny.jsonc first
 bunny sites deploy ./out --build "npm run build" --env VITE_FLAG=1
@@ -86,7 +84,7 @@ bunny sites deploy ./out --build "npm run build" --env VITE_FLAG=1
 | `--build`      | Run a build first (bare flag: `sites.build`, else a detected build)              |
 | `--env`        | Build-time env override `KEY=VALUE` (repeatable; requires `--build`)             |
 | `--env-file`   | Dotenv file of build-time overrides (requires `--build`)                         |
-| `--production` | Publish as the live site (alias `--prod`); always on when the site has no domain |
+| `--production` | Publish as the live site (alias `--prod`); the default is a preview, and an interactive first deploy offers to publish |
 | `--force`      | Deploy even when content is unchanged                                            |
 | `--site`       | Target site (name or storage zone ID)                                            |
 | `--link`       | Link this directory to the deployed site (`--no-link` never links)               |
@@ -97,7 +95,7 @@ Interactive `deploy` adds three conveniences (all skipped under `--output json`)
 
 - **No linked site** → it offers to create a new site or pick an existing one, then links it (goes straight to create when the account has no sites).
 - **No `--build`** → it offers to run a build first: the configured `sites.build`, else a detected framework build (same detection as `ci init`), else a `package.json` `build` script. Confirming builds first, and when no `[dir]` was given it deploys the framework's output directory.
-- **A domainless site's first deploy** → it offers to attach a custom domain (blank skips) and runs the same DNS/SSL flow as `sites domains add`, which switches later deploys into the preview/`--production` model. It asks only once per site; every later domainless deploy just prints a one-line `sites domains add` hint.
+- **A site with no production deploy yet** → it offers to publish this deploy to production (a preview URL is created either way). A domainless site's first deploy also offers to attach a custom production domain (blank skips) and runs the same DNS/SSL flow as `sites domains add`; it asks only once per site, and every later domainless deploy just prints a one-line `sites domains add` hint.
 
 ---
 
@@ -124,18 +122,7 @@ bunny sites domains list
 bunny sites domains remove example.com
 ```
 
-Adding a domain also attaches `*.preview.<domain>`, which is what unlocks per-deploy preview URLs (removing the domain takes the wildcard down too, returning the site to publish-on-deploy). If the domain is on a Bunny DNS zone in the account, the CLI offers to create the apex record; otherwise it prints the CNAME target. **The wildcard's DNS record is always yours to create** (`CNAME *.preview.<domain> → <target>`), and because wildcard certificates validate over DNS-01, the certificate usually can't issue until that record resolves; run `bunny sites domains ssl "*.preview.<domain>"` once it does. Until it does, previews serve over plain HTTP: `deploy` prints `http://` preview URLs plus a pending-HTTPS hint, and switches to `https://` on its own once the certificate is on the zone.
-
-Previews only turn on if the wildcard hostname actually attached; if it didn't, the site stays in publish-on-deploy mode and the CLI prints the retry command. Re-running `bunny sites domains add <domain>` after a partial setup reconciles whatever is left (an already-attached apex or wildcard counts as attached, not as an error, so the retry always reaches the wildcard, certificate, and state-record steps).
-
-So the full path from a plain deploy to working previews is:
-
-```bash
-bunny sites domains add example.com --wait          # apex + *.preview.example.com
-# create CNAME *.preview.example.com → <printed target> at your DNS provider
-bunny sites domains ssl "*.preview.example.com"     # once that record resolves
-bunny sites ci init --force                         # regenerate CI so PRs deploy previews
-```
+A custom domain is the site's production URL and nothing more; previews run on their own b-cdn.net zones and don't depend on it. The first added domain is recorded as the production URL. If the domain is on a Bunny DNS zone in the account, the CLI offers to create the record; otherwise it prints the CNAME target. The CLI verifies a certificate actually landed on the exact hostname before forcing HTTPS or reporting success, and probes the domain over TLS afterwards, so a mismatched certificate (e.g. shadowed by another zone's wildcard) warns instead of printing a broken URL. Re-running `bunny sites domains add <domain>` after a partial setup reconciles the remaining steps instead of failing on the already-attached hostname.
 
 ---
 
@@ -147,12 +134,7 @@ bunny sites ci init --framework astro       # skip detection (astro, vite, react
 bunny sites ci init --site my-site --force  # overwrite an existing workflow
 ```
 
-Writes a workflow using the `BunnyWay/actions/deploy-site` action with the site name baked in. What it generates depends on whether the site has a working custom domain (checked against the pull zone's preview wildcard, the same signal `deploy` uses):
-
-- **With a domain** → previews on pull requests, production on merges to `main`.
-- **Without one** → production on merges to `main` only. There is deliberately no `pull_request` trigger: a domainless deploy publishes, so a PR build would push unreviewed changes live.
-
-Add a domain later and re-run `bunny sites ci init --force` to regenerate the workflow with PR previews. `sites.dir` and `sites.build` from `bunny.jsonc` override the preset's deploy directory and build command, so CI builds and deploys exactly what a local `sites deploy` does. The workflow is written at the git root; when `bunny.jsonc` lives below it (a monorepo package), the job gets `defaults.run.working-directory` and the deploy directory is prefixed, so those paths still mean what they do locally. Framework detection reads `package.json` dependencies, `Gemfile`, or Hugo config; the lockfile picks the package manager for the install steps. Fork PRs are skipped (no secrets there). After writing, the CLI offers to run `gh secret set BUNNY_API_KEY` (or prints the manual steps). `sites create` offers the same scaffold on GitHub repos; declining prints the workflow instead.
+Writes a workflow using the `BunnyWay/actions/deploy-site` action with the site name baked in: previews on pull requests, production on merges to `main` (previews need no custom domain, so there is a single workflow shape). `sites.dir` and `sites.build` from `bunny.jsonc` override the preset's deploy directory and build command, so CI builds and deploys exactly what a local `sites deploy` does. The workflow is written at the git root; when `bunny.jsonc` lives below it (a monorepo package), the job gets `defaults.run.working-directory` and the deploy directory is prefixed, so those paths still mean what they do locally. Framework detection reads `package.json` dependencies, `Gemfile`, or Hugo config; the lockfile picks the package manager for the install steps. Fork PRs are skipped (no secrets there). After writing, the CLI offers to run `gh secret set BUNNY_API_KEY` (or prints the manual steps). `sites create` offers the same scaffold on GitHub repos; declining prints the workflow instead.
 
 ---
 

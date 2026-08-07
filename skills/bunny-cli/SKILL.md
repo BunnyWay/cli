@@ -57,10 +57,10 @@ bunny dns records preset google-workspace example.com # apply a preset record se
 bunny dns records list example.com
 
 # host a static site
-bunny sites create my-site                            # provision (served at my-site.b-cdn.net)
-bunny sites deploy ./dist                             # no custom domain → publishes live
-bunny sites domains add example.com --wait            # attaches *.preview.example.com: turns previews on
-bunny sites deploy ./dist                             # now a preview; add --production to publish
+bunny sites create my-site                            # provision (served at sites-my-site-<suffix>.b-cdn.net)
+bunny sites deploy ./dist                             # immutable preview URL (sites-dpl-<id>-<suffix>.b-cdn.net); first deploy offers to publish
+bunny sites deploy ./dist --production                # publish as the live site
+bunny sites domains add example.com --wait            # custom production domain (previews never need one)
 bunny sites deployments publish --previous --force    # instant rollback
 ```
 

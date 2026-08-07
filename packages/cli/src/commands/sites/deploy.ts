@@ -199,7 +199,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         "  This deploy gets no preview URL; retry with `bunny sites upgrade-router`.",
       );
     }
-    // Preview zones may have cached responses the OLD router produced (e.g. production content on a preview host); a router upgrade purges them, best-effort.
+    // Preview zones may have cached responses the OLD router produced (e.g. production content on a preview host); a router upgrade purges them.
     if (routerUpgraded) {
       for (const d of state.deploys) {
         if (!d.previewZoneId) continue;
@@ -208,7 +208,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
             params: { path: { id: d.previewZoneId } },
             body: {},
           })
-          .catch(() => {});
+          .catch((err) => {
+            logger.warn(
+              `Couldn't purge preview ${d.id}'s cache; it may serve stale content: ${errorMessage(err)}`,
+            );
+          });
       }
     }
 
@@ -365,14 +369,18 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         record,
         ...state.deploys.filter((d) => d.id !== deployId),
       ];
-      // Re-uploaded content under an existing id: purge its preview zone so the preview serves the new bytes; best-effort.
+      // Re-uploaded content under an existing id: purge its preview zone so the preview serves the new bytes; a failed purge means the preview may show stale assets, so say so.
       if (prior?.previewZoneId) {
         await coreClient
           .POST("/pullzone/{id}/purgeCache", {
             params: { path: { id: prior.previewZoneId } },
             body: {},
           })
-          .catch(() => {});
+          .catch((err) => {
+            logger.warn(
+              `Couldn't purge the preview cache; it may serve stale files: ${errorMessage(err)}`,
+            );
+          });
       }
     }
     const previewChanged = record ? await ensurePreview(record) : false;
