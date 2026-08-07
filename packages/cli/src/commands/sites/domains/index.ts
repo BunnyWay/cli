@@ -13,7 +13,6 @@ import {
 import { logger } from "../../../core/logger.ts";
 import type { GlobalArgs } from "../../../core/types.ts";
 import { type SiteContext, writeRemoteState } from "../api.ts";
-import { PREVIEW_LABEL, previewWildcard } from "../constants.ts";
 import { selectSite } from "../interactive.ts";
 
 // The hooks run in the same invocation as `resolve`, so the resolved site is cached here (a CLI process handles exactly one command).
@@ -35,15 +34,6 @@ async function resolveSitePullZone(
   resolvedSite = site;
 
   return { pullZoneId: site.state.pullZoneId, coreClient };
-}
-
-// Wildcards and `preview.`-namespaced names are legacy preview infrastructure, never a site's production domain.
-function isPreviewHost(hostname: string): boolean {
-  return (
-    hostname.startsWith("*.") ||
-    hostname.includes(`.${PREVIEW_LABEL}.`) ||
-    hostname.startsWith(`${PREVIEW_LABEL}.`)
-  );
 }
 
 /** Persist the site's production domain in the remote state (best-effort; rolls back the in-memory value on failure so the recorded value always reflects a successful write). */
@@ -115,24 +105,21 @@ export const sitesDomainsCommands = createHostnamesCommands({
     type: "string",
   },
   resolve: resolveSitePullZone,
-  onAdded: async ({ hostname }) => {
-    if (isPreviewHost(hostname)) return;
+  onAdded: async ({ hostname, args }) => {
+    // A wildcard is never a site's production URL.
+    if (hostname.startsWith("*.")) return;
     // The first custom domain becomes the site's production URL.
     if (resolvedSite && !resolvedSite.state.domain) {
       await recordSiteDomain(resolvedSite, hostname);
     }
-  },
-  onRemoved: async ({ coreClient, pullZoneId, hostname }) => {
-    if (isPreviewHost(hostname)) return;
-    // Older CLIs served previews from a `*.preview.<domain>` wildcard; take a leftover one down with its domain.
-    try {
-      await coreClient.DELETE("/pullzone/{id}/removeHostname", {
-        params: { path: { id: pullZoneId } },
-        body: { Hostname: previewWildcard(hostname) },
-      });
-    } catch {
-      // Already gone (or never added); nothing to clean up.
+    // A domain on a site with nothing published serves the router's 404; say so instead of letting the first visit read as breakage.
+    if (args.output !== "json" && resolvedSite?.state.current === undefined) {
+      logger.dim(
+        "  Nothing is published yet, so this domain serves a 404: publish with `bunny sites deploy --production`.",
+      );
     }
+  },
+  onRemoved: async ({ hostname }) => {
     if (resolvedSite?.state.domain === hostname) {
       await recordSiteDomain(resolvedSite, undefined);
     }

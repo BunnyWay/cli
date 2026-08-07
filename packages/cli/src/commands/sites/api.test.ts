@@ -304,6 +304,7 @@ test("writeRemoteState merges concurrent deploy records on an etag mismatch", as
     id: "zzz",
     createdAt: "2026-01-02T00:00:00.000Z",
     source: "git" as const,
+    contentHash: "hashzzz",
     files: 1,
     bytes: 10,
   };
@@ -316,6 +317,7 @@ test("writeRemoteState merges concurrent deploy records on an etag mismatch", as
     id: "aaa",
     createdAt: "2026-01-03T00:00:00.000Z",
     source: "git" as const,
+    contentHash: "hashaaa",
     files: 1,
     bytes: 10,
   };
@@ -341,6 +343,7 @@ test("a non-promoting write adopts the concurrent writer's current/previous", as
     id: "zzz",
     createdAt: "2026-01-02T00:00:00.000Z",
     source: "git" as const,
+    contentHash: "hashzzz",
     files: 1,
     bytes: 10,
   };
@@ -355,6 +358,7 @@ test("a non-promoting write adopts the concurrent writer's current/previous", as
     id: "aaa",
     createdAt: "2026-01-03T00:00:00.000Z",
     source: "git" as const,
+    contentHash: "hashaaa",
     files: 1,
     bytes: 10,
   };
@@ -372,6 +376,7 @@ test("writeRemoteState does not resurrect intentionally removed deploys on a pru
     id: "keep",
     createdAt: "2026-01-03T00:00:00.000Z",
     source: "content" as const,
+    contentHash: "hashkeep",
     files: 1,
     bytes: 10,
   };
@@ -485,12 +490,19 @@ test("createSite re-run reuses existing resources and converges", async () => {
   // Everything already exists; but no remote state (a half-finished create).
   const coreClient = fakeCoreClient({
     calls: coreCalls,
-    storageZones: [ZONE],
-    pullZones: [{ Id: 30, Name: "my-site", Hostnames: [] }],
+    storageZones: [{ ...ZONE, Name: "sites-my-site-abc123" }],
+    pullZones: [
+      {
+        Id: 30,
+        Name: "sites-my-site-abc123",
+        StorageZoneId: 10,
+        Hostnames: [],
+      },
+    ],
   });
   const computeClient = fakeComputeClient({
     calls: computeCalls,
-    scripts: [{ Id: 20, Name: "my-site-router" }],
+    scripts: [{ Id: 20, Name: "sites-my-site-abc123-router" }],
   });
 
   const result = await createSite({
@@ -559,16 +571,6 @@ test("createSite resumes a half-created suffixed site", async () => {
   });
   // The site keeps its clean display name; only the zones carry the suffix.
   expect(result.state.name).toBe("my-site");
-});
-
-test("createSite refuses to re-provision an existing site", async () => {
-  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
-  const coreClient = fakeCoreClient({ calls: [], storageZones: [ZONE] });
-  const computeClient = fakeComputeClient({ calls: [] });
-
-  await expect(
-    createSite({ coreClient, computeClient, name: "my-site", region: "DE" }),
-  ).rejects.toThrow('Site "my-site" already exists.');
 });
 
 test("createSite refuses to re-provision an existing suffixed site", async () => {
@@ -1009,6 +1011,7 @@ test("deleteSiteResources deletes preview zones before the site's own resources"
         id: "a1b2c3d4",
         createdAt: "2026-01-01T00:00:00Z",
         source: "git",
+        contentHash: "hash1",
         files: 1,
         bytes: 1,
         previewZoneId: 77,

@@ -7,9 +7,6 @@ export const REMOTE_STATE_PATH = "_bunny/site.json";
 // Deploys live at `deploys/{id}/...` inside the storage zone.
 export const DEPLOYS_DIR = "deploys";
 
-// Legacy preview hosts are `dpl-{id}.preview.{domain}`; kept only so removing a domain cleans up its old wildcard.
-export const PREVIEW_LABEL = "preview";
-
 // Router env var selecting the production deploy; updating it is the promote/rollback lever (no republish).
 export const CURRENT_DEPLOY_VAR = "CURRENT_DEPLOY";
 
@@ -29,11 +26,11 @@ export interface DeployRecord {
   source: "git" | "content";
   gitSha?: string;
   dirty?: boolean;
-  /** Hash of the deployed bytes; the no-op check keys on this. Absent on pre-v1 records. */
-  contentHash?: string;
+  /** Hash of the deployed bytes; the no-op check keys on this. */
+  contentHash: string;
   files: number;
   bytes: number;
-  /** The deploy's preview pull zone; absent when its creation failed (retried on the next deploy of this id) or on records from older CLIs. */
+  /** The deploy's preview pull zone; absent when its creation failed (retried on the next deploy of this id). */
   previewZoneId?: number;
   /** The preview zone's `*.b-cdn.net` system hostname; always HTTPS-ready. */
   previewHost?: string;
@@ -81,11 +78,6 @@ export function pruneVictims(
   return sorted
     .slice(Math.max(0, keep))
     .filter((d) => d.id !== current && d.id !== previous);
-}
-
-/** The legacy wildcard hostname that served deploy previews on a domain; only removal paths reference it now. */
-export function previewWildcard(domain: string): string {
-  return `*.${PREVIEW_LABEL}.${domain}`;
 }
 
 /** Router script name for a site; namespaced so `sites create` can find it on re-run. */
@@ -151,10 +143,10 @@ export function isPreviewZoneName(name: string | null | undefined): boolean {
   return deployIdFromPreviewZoneName(name) !== undefined;
 }
 
-/** Matches a site's zone names: `sites-{name}-{suffix}`, or bare `{name}` from pre-suffix CLIs. */
+/** Matches a site's zone names: `sites-{name}-{suffix}`. */
 export function siteResourcePattern(siteName: string): RegExp {
   return new RegExp(
-    `^(${RESOURCE_PREFIX}${siteName}-[a-z0-9]{${RESOURCE_SUFFIX_LENGTH}}|${siteName})$`,
+    `^${RESOURCE_PREFIX}${siteName}-[a-z0-9]{${RESOURCE_SUFFIX_LENGTH}}$`,
     "i",
   );
 }

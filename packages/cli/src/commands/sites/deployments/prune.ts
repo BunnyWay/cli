@@ -115,7 +115,7 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
 
     const failures: Array<{ id: string; error: string }> = [];
     await withSpinner("Pruning deploys...", async (spin) => {
-      // Records from older CLIs lack preview-zone ids; one listing backfills them so their zones don't leak.
+      // A record can lack its preview-zone id when the zone create raced a failed state write; one listing backfills them so orphans don't leak.
       let discovered: Map<string, number> | undefined;
       if (victims.some((v) => v.previewZoneId === undefined)) {
         try {

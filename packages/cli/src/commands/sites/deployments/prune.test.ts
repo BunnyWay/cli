@@ -7,7 +7,14 @@ import {
 import { resolveKeepCount } from "./prune.ts";
 
 function deploy(id: string, createdAt: string): DeployRecord {
-  return { id, createdAt, source: "content", files: 1, bytes: 1 };
+  return {
+    id,
+    createdAt,
+    source: "content",
+    contentHash: `hash-${id}`,
+    files: 1,
+    bytes: 1,
+  };
 }
 
 const DEPLOYS = [

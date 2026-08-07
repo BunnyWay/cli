@@ -239,7 +239,7 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
     .sort((a, b) => a.state.name.localeCompare(b.state.name));
 }
 
-// Account storage zones whose name is `{name}-{suffix}` (or bare `{name}` from pre-suffix CLIs), re-fetched by ID because search results may omit the zone password.
+// Account storage zones whose name is `sites-{name}-{suffix}`, re-fetched by ID because search results may omit the zone password.
 async function findSiteStorageZones(
   client: CoreClient,
   name: string,
@@ -256,19 +256,15 @@ async function findSiteStorageZones(
   );
 }
 
-// The site's pull zone on a resumed create: prefer the one already pointing at the storage zone, else a bare legacy `{name}` zone.
+// The site's pull zone on a resumed create: the name-pattern match already pointing at the storage zone.
 async function findSitePullZone(
   client: CoreClient,
   name: string,
   storageZoneId: number,
 ): Promise<PullZone | undefined> {
   const pattern = siteResourcePattern(name);
-  const candidates = (await fetchPullZones(client, name)).filter((pz) =>
-    pattern.test(pz.Name ?? ""),
-  );
-  return (
-    candidates.find((pz) => pz.StorageZoneId === storageZoneId) ??
-    candidates.find((pz) => (pz.Name ?? "").toLowerCase() === name)
+  return (await fetchPullZones(client, name)).find(
+    (pz) => pattern.test(pz.Name ?? "") && pz.StorageZoneId === storageZoneId,
   );
 }
 

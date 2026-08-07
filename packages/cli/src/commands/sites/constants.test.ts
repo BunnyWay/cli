@@ -6,7 +6,6 @@ import {
   isValidDeployId,
   isValidSiteName,
   parseRemoteState,
-  previewWildcard,
   previewZoneName,
   type RemoteSiteState,
   siteResourcePattern,
@@ -48,9 +47,8 @@ test("parseRemoteState rejects garbage", () => {
   ).toBeNull();
 });
 
-test("deploy path and legacy wildcard helpers", () => {
+test("deploy path helper", () => {
   expect(deployPrefix("a1b2c3d4")).toBe("deploys/a1b2c3d4");
-  expect(previewWildcard("example.com")).toBe("*.preview.example.com");
 });
 
 test("isValidDeployId accepts git shas and content hashes", () => {
@@ -78,7 +76,7 @@ test("suffixed resource names round-trip through the site pattern", () => {
   expect(zoneName).toMatch(/^sites-my-site-[a-z0-9]{6}$/);
   const pattern = siteResourcePattern("my-site");
   expect(pattern.test(zoneName)).toBe(true);
-  expect(pattern.test("my-site")).toBe(true); // bare pre-suffix zone
+  expect(pattern.test("my-site")).toBe(false); // bare name is not a site zone
   expect(pattern.test("my-site-abcdef")).toBe(false); // suffix without the prefix
   expect(pattern.test("sites-my-site")).toBe(false); // prefix without a suffix
   expect(pattern.test("sites-my-site-abcdef1")).toBe(false); // suffix too long
