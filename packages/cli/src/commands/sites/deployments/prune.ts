@@ -5,7 +5,12 @@ import { defineCommand } from "../../../core/define-command.ts";
 import { errorMessage, UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, requireConfirmable, withSpinner } from "../../../core/ui.ts";
-import { deleteDeployFiles, writeRemoteState } from "../api.ts";
+import {
+  deleteDeployFiles,
+  deletePreviewZone,
+  findPreviewZones,
+  writeRemoteState,
+} from "../api.ts";
 import {
   DEFAULT_KEEP_DEPLOYS,
   isValidDeployId,
@@ -110,6 +115,21 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
 
     const failures: Array<{ id: string; error: string }> = [];
     await withSpinner("Pruning deploys...", async (spin) => {
+      // Records from older CLIs lack preview-zone ids; one listing backfills them so their zones don't leak.
+      let discovered: Map<string, number> | undefined;
+      if (victims.some((v) => v.previewZoneId === undefined)) {
+        try {
+          discovered = new Map(
+            (await findPreviewZones(client, state.storageZoneId)).map((z) => [
+              z.deployId,
+              z.id,
+            ]),
+          );
+        } catch (err) {
+          logger.warn(`Couldn't list preview zones: ${errorMessage(err)}`);
+        }
+      }
+
       const pruned = new Set<string>();
       for (const [index, victim] of victims.entries()) {
         spin.text = `Pruning ${victim.id} (${index + 1}/${victims.length})...`;
@@ -120,6 +140,9 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
             continue;
           }
           await deleteDeployFiles(connection, victim.id);
+          // Best-effort: a zone that survives is warned about and swept up by `sites delete`.
+          const zoneId = victim.previewZoneId ?? discovered?.get(victim.id);
+          if (zoneId !== undefined) await deletePreviewZone(client, zoneId);
           pruned.add(victim.id);
         } catch (err) {
           failures.push({ id: victim.id, error: errorMessage(err) });

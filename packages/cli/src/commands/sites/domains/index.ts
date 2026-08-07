@@ -6,8 +6,7 @@ import {
   addHostname,
   type CoreClient,
   createHostnamesCommands,
-  enableSsl,
-  type Hostname,
+  fetchPullZoneHostnames,
   type ResolvedPullZone,
   setupHostname,
 } from "../../../core/hostnames/index.ts";
@@ -38,6 +37,7 @@ async function resolveSitePullZone(
   return { pullZoneId: site.state.pullZoneId, coreClient };
 }
 
+// Wildcards and `preview.`-namespaced names are legacy preview infrastructure, never a site's production domain.
 function isPreviewHost(hostname: string): boolean {
   return (
     hostname.startsWith("*.") ||
@@ -46,8 +46,8 @@ function isPreviewHost(hostname: string): boolean {
   );
 }
 
-/** Persist the site's primary domain in the remote state (best-effort; rolls back the in-memory value on failure so it never claims previews the next run won't see). */
-async function recordSiteDomain(
+/** Persist the site's production domain in the remote state (best-effort; rolls back the in-memory value on failure so the recorded value always reflects a successful write). */
+export async function recordSiteDomain(
   site: SiteContext,
   domain: string | undefined,
 ): Promise<void> {
@@ -61,72 +61,7 @@ async function recordSiteDomain(
   }
 }
 
-// Attach the `*.preview.<domain>` wildcard that serves per-deploy previews; returns whether the hostname attached (SSL may still be pending), since `state.domain` must only be recorded when previews can actually serve.
-export async function attachPreviewWildcard(opts: {
-  coreClient: CoreClient;
-  pullZoneId: number;
-  domain: string;
-  cnameTarget?: string;
-  json?: boolean;
-}): Promise<boolean> {
-  const wildcard = previewWildcard(opts.domain);
-  let hostnames: Hostname[];
-  let alreadyAttached: boolean;
-  try {
-    // A retry after a partial setup re-adds an existing wildcard; addHostname reconciles that against the zone instead of failing.
-    ({ hostnames, alreadyAttached } = await addHostname(
-      opts.coreClient,
-      opts.pullZoneId,
-      wildcard,
-    ));
-  } catch (err) {
-    if (!opts.json) {
-      logger.warn(`Couldn't add ${wildcard}: ${errorMessage(err)}`);
-      logger.dim(
-        `  Previews stay off and deploys keep publishing directly; retry with \`bunny sites domains add ${opts.domain}\`.`,
-      );
-    }
-    return false;
-  }
-  if (!opts.json) {
-    if (alreadyAttached) {
-      logger.info(`${wildcard} is already attached for deploy previews.`);
-    } else {
-      logger.success(`Added ${wildcard} for deploy previews.`);
-      if (opts.cnameTarget) {
-        logger.accent(`  CNAME  ${wildcard}  →  ${opts.cnameTarget}`);
-      }
-    }
-  }
-
-  // A retry on an already-certified wildcard skips issuance; re-running it would print a bogus pending hint.
-  const certified = hostnames.some(
-    (h) =>
-      (h.Value ?? "").toLowerCase() === wildcard.toLowerCase() &&
-      h.HasCertificate,
-  );
-  if (!certified) {
-    try {
-      await enableSsl(
-        opts.coreClient,
-        opts.pullZoneId,
-        wildcard,
-        true,
-        hostnames,
-      );
-    } catch {
-      // Wildcard certs need DNS in place (DNS-01); issue later, don't block. Deploys report preview URLs as pending until it lands.
-      if (!opts.json) {
-        logger.dim(
-          `  Preview HTTPS pending; once DNS is live: bunny sites domains ssl "${wildcard}"`,
-        );
-      }
-    }
-  }
-  return true;
-}
-
-// Full custom-domain setup for a site (used by `sites create --domain`): interactive runs get the DNS-wait/SSL flow, JSON runs just attach and report; the preview wildcard and state update happen in both.
+// Full custom-domain setup for a site (used by `sites create --domain` and deploy's first-run offer): interactive runs get the DNS-wait/SSL flow, JSON runs just attach and report. The domain is display-only (previews run on their own b-cdn.net zones), so it's recorded as soon as the hostname is on the zone.
 export async function setupSiteDomain(opts: {
   coreClient: CoreClient;
   site: SiteContext;
@@ -139,10 +74,10 @@ export async function setupSiteDomain(opts: {
   const pullZoneId = site.state.pullZoneId;
   const name = site.state.name;
 
-  let cnameTarget: string | undefined;
+  let attached: boolean;
   if (opts.json) {
-    const added = await addHostname(coreClient, pullZoneId, domain);
-    cnameTarget = added.cnameTarget;
+    await addHostname(coreClient, pullZoneId, domain);
+    attached = true;
   } else {
     await setupHostname({
       coreClient,
@@ -154,17 +89,18 @@ export async function setupSiteDomain(opts: {
       interactive: opts.interactive,
       verbose: opts.verbose,
     });
+    // setupHostname's return means "certificate issued", not "attached", so read the zone: a domain that never attached must not be recorded as the production URL.
+    const hostnames = await fetchPullZoneHostnames(
+      coreClient,
+      pullZoneId,
+    ).catch(() => null);
+    attached =
+      hostnames?.some(
+        (h) => (h.Value ?? "").toLowerCase() === domain.toLowerCase(),
+      ) ?? false;
   }
 
-  // `state.domain` switches deploy and CI into preview mode, so it's only recorded once the wildcard can serve previews.
-  const wildcardAttached = await attachPreviewWildcard({
-    coreClient,
-    pullZoneId,
-    domain,
-    cnameTarget,
-    json: opts.json,
-  });
-  if (wildcardAttached) await recordSiteDomain(site, domain);
+  if (attached) await recordSiteDomain(site, domain);
 }
 
 /** The `domains` namespace + hidden `hostnames` alias, ready to spread into `sites`. */
@@ -179,23 +115,16 @@ export const sitesDomainsCommands = createHostnamesCommands({
     type: "string",
   },
   resolve: resolveSitePullZone,
-  onAdded: async ({ coreClient, pullZoneId, hostname, cnameTarget, args }) => {
-    // Adding preview infrastructure by hand shouldn't recurse into itself.
+  onAdded: async ({ hostname }) => {
     if (isPreviewHost(hostname)) return;
-    const wildcardAttached = await attachPreviewWildcard({
-      coreClient,
-      pullZoneId,
-      domain: hostname,
-      cnameTarget,
-      json: args.output === "json",
-    });
-    if (wildcardAttached && resolvedSite && !resolvedSite.state.domain) {
+    // The first custom domain becomes the site's production URL.
+    if (resolvedSite && !resolvedSite.state.domain) {
       await recordSiteDomain(resolvedSite, hostname);
     }
   },
   onRemoved: async ({ coreClient, pullZoneId, hostname }) => {
     if (isPreviewHost(hostname)) return;
-    // Take the companion wildcard down with the apex.
+    // Older CLIs served previews from a `*.preview.<domain>` wildcard; take a leftover one down with its domain.
     try {
       await coreClient.DELETE("/pullzone/{id}/removeHostname", {
         params: { path: { id: pullZoneId } },
