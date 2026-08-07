@@ -199,6 +199,18 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         "  This deploy gets no preview URL; retry with `bunny sites upgrade-router`.",
       );
     }
+    // Preview zones may have cached responses the OLD router produced (e.g. production content on a preview host); a router upgrade purges them, best-effort.
+    if (routerUpgraded) {
+      for (const d of state.deploys) {
+        if (!d.previewZoneId) continue;
+        await coreClient
+          .POST("/pullzone/{id}/purgeCache", {
+            params: { path: { id: d.previewZoneId } },
+            body: {},
+          })
+          .catch(() => {});
+      }
+    }
 
     let autoDir: string | undefined;
     if (requestedBuild) {

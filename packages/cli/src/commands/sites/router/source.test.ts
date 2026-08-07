@@ -14,7 +14,18 @@ function extractFn(name: string): (...args: unknown[]) => unknown {
 
 const indexRetryUrl = extractFn("indexRetryUrl") as (
   rawUrl: string,
+  host: string,
 ) => string | null;
+
+const clientHostname = extractFn("clientHostname") as (request: {
+  url: string;
+  headers: Map<string, string>;
+}) => string;
+
+// A minimal Headers-alike; the router only calls headers.get().
+function req(url: string, headers: Record<string, string>) {
+  return { url, headers: new Map(Object.entries(headers)) };
+}
 
 // previewDeployId closes over the hostname regex, so both are extracted and evaluated together.
 function extractPreviewDeployId(): (hostname: string) => string | null {
@@ -50,21 +61,42 @@ test("routerSource wires up the deploy routing", () => {
   expect(src).toContain("X-Robots-Tag");
 });
 
-test("indexRetryUrl targets the directory index for slashless paths only", () => {
-  expect(indexRetryUrl("https://x.b-cdn.net/blog")).toBe(
+// The raw URL at the edge is an internal origin address; the retry target must be rebuilt on the client host so the probe re-enters the CDN and this router.
+test("indexRetryUrl targets the directory index on the client host for slashless paths only", () => {
+  expect(indexRetryUrl("http://203.0.113.10:9000/blog", "x.b-cdn.net")).toBe(
     "https://x.b-cdn.net/blog/",
   );
   // No dot heuristic: dotted segments retry too, so dotted directories stay reachable.
-  expect(indexRetryUrl("https://x.b-cdn.net/v2.1/docs")).toBe(
-    "https://x.b-cdn.net/v2.1/docs/",
-  );
+  expect(
+    indexRetryUrl("http://203.0.113.10:9000/v2.1/docs", "x.b-cdn.net"),
+  ).toBe("https://x.b-cdn.net/v2.1/docs/");
   // Query strings survive the retry.
-  expect(indexRetryUrl("https://x.b-cdn.net/blog?page=2")).toBe(
-    "https://x.b-cdn.net/blog/?page=2",
-  );
+  expect(
+    indexRetryUrl("http://203.0.113.10:9000/blog?page=2", "x.b-cdn.net"),
+  ).toBe("https://x.b-cdn.net/blog/?page=2");
   // Directory and root URLs already expand to an index; no retry.
-  expect(indexRetryUrl("https://x.b-cdn.net/blog/")).toBeNull();
-  expect(indexRetryUrl("https://x.b-cdn.net/")).toBeNull();
+  expect(
+    indexRetryUrl("http://203.0.113.10:9000/blog/", "x.b-cdn.net"),
+  ).toBeNull();
+  expect(indexRetryUrl("http://203.0.113.10:9000/", "x.b-cdn.net")).toBeNull();
+});
+
+// ctx.request.url at the edge is the origin-facing address (`http://<edge-ip>:9000/...`), so the client host must come from the platform's CDN-Host header; matching on url.hostname would route every preview like production.
+test("clientHostname prefers CDN-Host, then Host, then the URL", () => {
+  expect(
+    clientHostname(
+      req("http://203.0.113.10:9000/", {
+        "cdn-host": "SITES-DPL-A1B2C3D4-X1Y2Z3.b-cdn.net",
+        host: "other.example",
+      }),
+    ),
+  ).toBe("sites-dpl-a1b2c3d4-x1y2z3.b-cdn.net");
+  expect(
+    clientHostname(req("http://203.0.113.10:9000/", { host: "x.b-cdn.net" })),
+  ).toBe("x.b-cdn.net");
+  expect(clientHostname(req("https://fallback.example/", {}))).toBe(
+    "fallback.example",
+  );
 });
 
 // The hostname is the entire preview routing contract: preview-zone hosts serve their deploy, everything else serves production.
