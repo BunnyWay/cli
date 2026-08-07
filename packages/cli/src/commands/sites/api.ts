@@ -501,7 +501,7 @@ export async function ensurePreviewZone(opts: {
 
   try {
     // Adopt an orphan before creating: same deploy, same storage zone, preview-shaped name.
-    const existing = (
+    let zone: PullZone | undefined = (
       await fetchPullZones(coreClient, `${PREVIEW_ZONE_PREFIX}${deployId}-`)
     ).find(
       (pz) =>
@@ -509,9 +509,7 @@ export async function ensurePreviewZone(opts: {
         pz.StorageZoneId === state.storageZoneId &&
         pz.Id != null,
     );
-    if (existing) return { id: existing.Id as number, host: host(existing) };
 
-    let zone: PullZone | undefined;
     for (let attempt = 0; !zone && attempt < 3; attempt++) {
       try {
         zone = await createPullZone(
@@ -526,11 +524,12 @@ export async function ensurePreviewZone(opts: {
     }
     if (!zone?.Id) return null;
 
+    // The router attach is part of the ready contract for created AND adopted zones: an orphan whose attach failed on the previous run would otherwise serve the raw storage root (every deploy plus _bunny/) at the advertised URL. Idempotent, so re-running on a configured zone is safe.
     await coreClient.POST("/pullzone/{id}", {
       params: { path: { id: zone.Id } },
       body: { MiddlewareScriptId: state.scriptId },
     });
-    // Redirect HTTP to HTTPS on the b-cdn.net host (already certified); best-effort.
+    // Redirect HTTP to HTTPS on the b-cdn.net host (already certified); best-effort, and retried here whenever a zone is adopted.
     const systemHost = systemHostname(zone.Hostnames);
     if (systemHost) {
       await setForceSsl(coreClient, zone.Id, systemHost, true).catch(() => {});
@@ -538,7 +537,7 @@ export async function ensurePreviewZone(opts: {
     return { id: zone.Id, host: host(zone) };
   } catch (err) {
     logger.warn(
-      `Couldn't create a preview zone for ${deployId}: ${errorMessage(err)}`,
+      `Couldn't set up a preview zone for ${deployId}: ${errorMessage(err)}`,
     );
     return null;
   }
@@ -559,7 +558,7 @@ export async function findPreviewZones(
   });
 }
 
-/** Delete a preview pull zone; returns false (with a warning) instead of throwing, so cleanup sweeps keep going. */
+/** Delete a preview pull zone; returns false (with a warning) instead of throwing, so cleanup sweeps keep going. A zone that's already gone counts as deleted, so retries converge. */
 export async function deletePreviewZone(
   coreClient: CoreClient,
   id: number,
@@ -568,6 +567,7 @@ export async function deletePreviewZone(
     await coreClient.DELETE("/pullzone/{id}", { params: { path: { id } } });
     return true;
   } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return true;
     logger.warn(`Couldn't delete preview zone ${id}: ${errorMessage(err)}`);
     return false;
   }
@@ -677,7 +677,7 @@ export async function deleteSiteResources(opts: {
     }
   };
 
-  // Preview zones: the recorded ids plus a name-shape sweep, so zones a failed state write orphaned still go.
+  // Preview zones: the recorded ids plus a name-shape sweep, so zones a failed state write orphaned still go. The sweep needs the storage zone (it's the association key), so a failed listing aborts before anything is torn down; the whole delete is retryable.
   const previewZoneIds = new Set(
     state.deploys.flatMap((d) => (d.previewZoneId ? [d.previewZoneId] : [])),
   );
@@ -685,7 +685,10 @@ export async function deleteSiteResources(opts: {
     for (const zone of await findPreviewZones(coreClient, state.storageZoneId))
       previewZoneIds.add(zone.id);
   } catch (err) {
-    logger.warn(`Couldn't list preview zones: ${errorMessage(err)}`);
+    throw new UserError(
+      `Couldn't list the site's preview zones: ${errorMessage(err)}`,
+      "Nothing was deleted; re-run the command.",
+    );
   }
   for (const id of previewZoneIds) {
     await attempt("preview zone", id, () =>

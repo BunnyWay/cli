@@ -139,10 +139,19 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
             failures.push({ id: victim.id, error: "Invalid deploy ID." });
             continue;
           }
-          await deleteDeployFiles(connection, victim.id);
-          // Best-effort: a zone that survives is warned about and swept up by `sites delete`.
+          // Zone first: a failed zone deletion keeps the record (and files), so the next prune retries instead of orphaning the zone until site delete.
           const zoneId = victim.previewZoneId ?? discovered?.get(victim.id);
-          if (zoneId !== undefined) await deletePreviewZone(client, zoneId);
+          if (
+            zoneId !== undefined &&
+            !(await deletePreviewZone(client, zoneId))
+          ) {
+            failures.push({
+              id: victim.id,
+              error: `preview zone ${zoneId} couldn't be deleted; retry with another prune`,
+            });
+            continue;
+          }
+          await deleteDeployFiles(connection, victim.id);
           pruned.add(victim.id);
         } catch (err) {
           failures.push({ id: victim.id, error: errorMessage(err) });

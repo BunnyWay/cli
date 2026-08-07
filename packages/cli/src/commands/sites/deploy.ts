@@ -184,13 +184,13 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
     let etag = site.etag;
 
-    // Preview zones route by hostname in the router, so an outdated router would serve production content on preview URLs; republish it first (state.routerVersion persists with this deploy's writes).
+    // Preview zones route by hostname in the router, so an outdated router would serve production content on preview URLs; republish it first (state.routerVersion persists with this deploy's writes, including no-op runs, so it doesn't republish every time).
     let routerReady = true;
+    let routerUpgraded = false;
     try {
-      if (await ensureRouterCurrent({ computeClient, state })) {
-        if (output !== "json") {
-          logger.info("Republished the site's router (new preview routing).");
-        }
+      routerUpgraded = await ensureRouterCurrent({ computeClient, state });
+      if (routerUpgraded && output !== "json") {
+        logger.info("Republished the site's router (new preview routing).");
       }
     } catch (err) {
       routerReady = false;
@@ -286,9 +286,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       ? undefined
       : await fetchSystemHostname(coreClient, state.pullZoneId);
 
-    // Nothing to upload or promote: the deploy is already up (and live, if publishing); still backfill its preview zone so re-runs converge.
+    // Nothing to upload or promote: the deploy is already up (and live, if publishing); still backfill its preview zone (and persist a router upgrade) so re-runs converge.
     if (skipUpload && (alreadyLive || !publish)) {
-      if (await ensurePreview(alreadyUploaded)) {
+      const previewChanged = await ensurePreview(alreadyUploaded);
+      if (previewChanged || routerUpgraded) {
         etag = await writeRemoteState(connection, state, etag);
       }
       const urls = deployUrls(state, alreadyUploaded, systemHost);

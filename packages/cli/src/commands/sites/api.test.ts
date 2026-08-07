@@ -4,6 +4,7 @@ import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
 import {
   type ComputeClient,
   createSite,
+  deletePreviewZone,
   deleteSiteResources,
   ensurePreviewZone,
   ensureRouterCurrent,
@@ -834,7 +835,16 @@ test("ensurePreviewZone adopts an existing zone for the deploy", async () => {
   });
 
   expect(zone).toEqual({ id: 77, host: "sites-dpl-a1b2c3d4-abc123.b-cdn.net" });
-  expect(calls.some((c) => c.method === "POST")).toBe(false);
+  // Never a create...
+  expect(calls.some((c) => c.method === "POST" && c.path === "/pullzone")).toBe(
+    false,
+  );
+  // ...but the router attach re-runs: the orphan may exist precisely because the attach failed last time, and an unrouted zone would serve the raw storage root.
+  const attach = calls.find(
+    (c) => c.method === "POST" && c.path === "/pullzone/{id}",
+  );
+  expect(attach?.params).toEqual({ path: { id: 77 } });
+  expect(attach?.body).toEqual({ MiddlewareScriptId: 20 });
 });
 
 // A preview failure must not fail the deploy; the caller warns and the next run retries.
@@ -1032,4 +1042,46 @@ test("deleteSiteResources deletes preview zones before the site's own resources"
   expect(
     results.filter((r) => r.resource === "preview zone" && r.deleted),
   ).toHaveLength(2);
+});
+
+// Retries must converge: a zone something else already removed counts as deleted, so prune doesn't keep a record alive forever over a 404.
+test("deletePreviewZone treats an already-gone zone as deleted", async () => {
+  const notFound = {
+    DELETE: async () => {
+      throw new ApiError("gone", 404, "Not Found");
+    },
+  } as unknown as CoreClient;
+  expect(await deletePreviewZone(notFound, 77)).toBe(true);
+
+  const broken = {
+    DELETE: async () => {
+      throw new ApiError("boom", 500, "boom");
+    },
+  } as unknown as CoreClient;
+  expect(await deletePreviewZone(broken, 77)).toBe(false);
+});
+
+// The storage zone is the association key for the orphan sweep; deleting it after a failed sweep would strand unfindable preview zones, so teardown aborts untouched instead.
+test("deleteSiteResources aborts before deleting anything when the preview sweep fails", async () => {
+  const calls: Call[] = [];
+  const client = fakeCoreClient({ calls });
+  const failingList = {
+    ...client,
+    GET: async (path: string, options?: unknown) => {
+      if (path === "/pullzone") throw new Error("listing down");
+      return (client.GET as (p: string, o?: unknown) => Promise<unknown>)(
+        path,
+        options,
+      );
+    },
+  } as unknown as CoreClient;
+
+  await expect(
+    deleteSiteResources({
+      coreClient: failingList,
+      computeClient: fakeComputeClient({ calls: [] }),
+      state: fakeState(),
+    }),
+  ).rejects.toThrow(/preview zones/);
+  expect(calls.some((c) => c.method === "DELETE")).toBe(false);
 });
