@@ -797,6 +797,50 @@ test("ensurePreviewZone creates the zone, attaches the router, and returns its h
   expect(zone?.ready).toBe(true);
 });
 
+// A pull zone is public the moment it exists, and an unrouted one serves the storage origin (every deploy plus _bunny/), so the router must be attached by the create itself, not only afterwards.
+test("ensurePreviewZone attaches the router in the create call", async () => {
+  const calls: Call[] = [];
+  await ensurePreviewZone({
+    coreClient: fakeCoreClient({ calls }),
+    state: fakeState(),
+    deployId: "a1b2c3d4",
+  });
+
+  const create = calls.find(
+    (c) => c.method === "POST" && c.path === "/pullzone",
+  );
+  expect(
+    (create?.body as { MiddlewareScriptId: number }).MiddlewareScriptId,
+  ).toBe(20);
+});
+
+// If the confirming attach fails, the zone can't be proven routed; one this run created is taken back down rather than left exposed at a public URL.
+test("ensurePreviewZone deletes a zone it created when the router attach fails", async () => {
+  const calls: Call[] = [];
+  const client = fakeCoreClient({ calls });
+  const attachDown = {
+    ...client,
+    POST: async (path: string, options?: unknown) => {
+      if (path === "/pullzone/{id}") throw new Error("attach failed");
+      return (client.POST as (p: string, o?: unknown) => Promise<unknown>)(
+        path,
+        options,
+      );
+    },
+  } as unknown as CoreClient;
+
+  expect(
+    await ensurePreviewZone({
+      coreClient: attachDown,
+      state: fakeState(),
+      deployId: "a1b2c3d4",
+    }),
+  ).toBeNull();
+  expect(
+    calls.some((c) => c.method === "DELETE" && c.path === "/pullzone/{id}"),
+  ).toBe(true);
+});
+
 // A Force SSL failure only costs the HTTP-to-HTTPS redirect (the b-cdn.net host serves HTTPS regardless), so the preview is still usable; reporting it as not-ready keeps it out of the deploy record, which is what makes the next deploy re-adopt and retry it.
 test("ensurePreviewZone reports a zone whose Force SSL failed as not ready", async () => {
   const client = fakeCoreClient({ calls: [] });

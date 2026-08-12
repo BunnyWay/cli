@@ -395,10 +395,12 @@ export async function createSite(
     let pullZoneName = resourceName;
     for (let attempt = 0; !pullZone && attempt < 3; attempt++) {
       try {
+        // Router attached at creation time: an unrouted zone is already public and would serve the raw storage origin.
         pullZone = await createPullZone(
           coreClient,
           pullZoneName,
           storageZoneId,
+          { middlewareScriptId: scriptId },
         );
       } catch (err) {
         if (!isNameTaken(err)) throw err;
@@ -511,13 +513,17 @@ export async function ensurePreviewZone(opts: {
         pz.Id != null,
     );
 
+    let created = false;
     for (let attempt = 0; !zone && attempt < 3; attempt++) {
       try {
+        // The router goes on at creation time: a pull zone is publicly reachable the moment it exists, and an unrouted one serves the raw storage origin (every deploy plus _bunny/).
         zone = await createPullZone(
           coreClient,
           previewZoneName(deployId),
           state.storageZoneId,
+          { middlewareScriptId: state.scriptId },
         );
+        created = true;
       } catch (err) {
         // Another account owns the random name; a fresh suffix next round.
         if (!isNameTaken(err)) throw err;
@@ -525,11 +531,17 @@ export async function ensurePreviewZone(opts: {
     }
     if (!zone?.Id) return null;
 
-    // The router attach is part of the ready contract for created AND adopted zones: an orphan whose attach failed on the previous run would otherwise serve the raw storage root (every deploy plus _bunny/) at the advertised URL. Idempotent, so re-running on a configured zone is safe.
-    await coreClient.POST("/pullzone/{id}", {
-      params: { path: { id: zone.Id } },
-      body: { MiddlewareScriptId: state.scriptId },
-    });
+    // Confirm the attach: it's what repairs an adopted orphan whose attach failed on a previous run, and it re-asserts the router on a fresh zone in case the create ignored the field. Idempotent either way.
+    try {
+      await coreClient.POST("/pullzone/{id}", {
+        params: { path: { id: zone.Id } },
+        body: { MiddlewareScriptId: state.scriptId },
+      });
+    } catch (err) {
+      // The zone can't be proven routed now, so a zone this run created is taken back down rather than left publicly serving the storage origin. An adopted one predates this run: leave it (it may well be routed) for the next deploy or a cleanup sweep.
+      if (created) await deletePreviewZone(coreClient, zone.Id);
+      throw err;
+    }
     // The zone's own b-cdn.net host, derived from its name when the response omits hostnames; the request below is the only thing that can prove the name right, so there's no skip path that would record an unenforced zone as configured.
     const previewHost = host(zone);
     // Redirect HTTP to HTTPS on that host (already certified). The preview serves over HTTPS regardless, so a failure here doesn't sink the deploy; it reports the zone as not-ready instead, which keeps it out of the deploy record so the next deploy re-adopts and retries.
