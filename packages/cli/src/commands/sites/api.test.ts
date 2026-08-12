@@ -822,6 +822,34 @@ test("ensurePreviewZone reports a zone whose Force SSL failed as not ready", asy
   expect(zone?.ready).toBe(false);
 });
 
+// A create/list response without hostnames must not silently skip Force SSL and still report the zone configured: that would record it as done with no repair path. The host is derived from the zone name instead, and only the API call decides ready.
+test("ensurePreviewZone still forces SSL when the response carries no hostnames", async () => {
+  const calls: Call[] = [];
+  const client = fakeCoreClient({ calls });
+  const noHostnames = {
+    ...client,
+    POST: async (path: string, options?: { body?: unknown }) => {
+      const result = (await (
+        client.POST as (p: string, o?: unknown) => Promise<{ data?: unknown }>
+      )(path, options)) as { data?: Record<string, unknown> };
+      if (path === "/pullzone" && result.data) {
+        return { data: { ...result.data, Hostnames: undefined } };
+      }
+      return result;
+    },
+  } as unknown as CoreClient;
+
+  const zone = await ensurePreviewZone({
+    coreClient: noHostnames,
+    state: fakeState(),
+    deployId: "a1b2c3d4",
+  });
+
+  expect(zone?.ready).toBe(true);
+  const forceSsl = calls.find((c) => c.path === "/pullzone/{id}/setForceSSL");
+  expect(forceSsl?.body).toEqual({ Hostname: zone?.host, ForceSSL: true });
+});
+
 // A zone created before a failed state write must be adopted on retry, not duplicated.
 test("ensurePreviewZone adopts an existing zone for the deploy", async () => {
   const calls: Call[] = [];

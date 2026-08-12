@@ -530,20 +530,19 @@ export async function ensurePreviewZone(opts: {
       params: { path: { id: zone.Id } },
       body: { MiddlewareScriptId: state.scriptId },
     });
-    // Redirect HTTP to HTTPS on the b-cdn.net host (already certified). The preview serves over HTTPS regardless, so a failure here doesn't sink the deploy; it reports the zone as not-ready instead, which keeps it out of the deploy record so the next deploy re-adopts and retries.
+    // The zone's own b-cdn.net host, derived from its name when the response omits hostnames; the request below is the only thing that can prove the name right, so there's no skip path that would record an unenforced zone as configured.
+    const previewHost = host(zone);
+    // Redirect HTTP to HTTPS on that host (already certified). The preview serves over HTTPS regardless, so a failure here doesn't sink the deploy; it reports the zone as not-ready instead, which keeps it out of the deploy record so the next deploy re-adopts and retries.
     let ready = true;
-    const systemHost = systemHostname(zone.Hostnames);
-    if (systemHost) {
-      try {
-        await setForceSsl(coreClient, zone.Id, systemHost, true);
-      } catch (err) {
-        ready = false;
-        logger.warn(
-          `Preview ${deployId} won't redirect HTTP to HTTPS yet: ${errorMessage(err)}`,
-        );
-      }
+    try {
+      await setForceSsl(coreClient, zone.Id, previewHost, true);
+    } catch (err) {
+      ready = false;
+      logger.warn(
+        `Preview ${deployId} won't redirect HTTP to HTTPS yet: ${errorMessage(err)}`,
+      );
     }
-    return { id: zone.Id, host: host(zone), ready };
+    return { id: zone.Id, host: previewHost, ready };
   } catch (err) {
     logger.warn(
       `Couldn't set up a preview zone for ${deployId}: ${errorMessage(err)}`,
