@@ -539,7 +539,12 @@ export async function ensurePreviewZone(opts: {
       });
     } catch (err) {
       // The zone can't be proven routed now, so a zone this run created is taken back down rather than left publicly serving the storage origin. An adopted one predates this run: leave it (it may well be routed) for the next deploy or a cleanup sweep.
-      if (created) await deletePreviewZone(coreClient, zone.Id);
+      if (created && !(await deletePreviewZone(coreClient, zone.Id))) {
+        // Nothing left to try automatically: name the zone so it can be removed by hand.
+        logger.warn(
+          `Pull zone ${zone.Name ?? zone.Id} is left over and may serve this site's files; delete it from the dashboard.`,
+        );
+      }
       throw err;
     }
     // The zone's own b-cdn.net host, derived from its name when the response omits hostnames; the request below is the only thing that can prove the name right, so there's no skip path that would record an unenforced zone as configured.
