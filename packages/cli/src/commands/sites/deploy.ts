@@ -292,8 +292,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         ensurePreviewZone({ coreClient, state, deployId: record.id }),
       );
       if (!zone) return false;
-      record.previewZoneId = zone.id;
       record.previewHost = zone.host;
+      // Only a fully configured zone is recorded: leaving a partial one unrecorded is what makes the next deploy of this id re-adopt and repair it (cleanup finds it by name shape either way).
+      if (zone.ready) record.previewZoneId = zone.id;
       return true;
     };
 
@@ -342,6 +343,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
 
     let record = alreadyUploaded;
+    let reusedDeployId = false;
     if (!skipUpload) {
       await withSpinner(`Uploading ${files.length} files...`, (spin) =>
         uploadDeploy(connection, deployId, files, {
@@ -369,21 +371,22 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         record,
         ...state.deploys.filter((d) => d.id !== deployId),
       ];
-      // Re-uploaded content under an existing id: purge its preview zone so the preview serves the new bytes; a failed purge means the preview may show stale assets, so say so.
-      if (prior?.previewZoneId) {
-        await coreClient
-          .POST("/pullzone/{id}/purgeCache", {
-            params: { path: { id: prior.previewZoneId } },
-            body: {},
-          })
-          .catch((err) => {
-            logger.warn(
-              `Couldn't purge the preview cache; it may serve stale files: ${errorMessage(err)}`,
-            );
-          });
-      }
+      reusedDeployId = prior !== undefined;
     }
     const previewChanged = record ? await ensurePreview(record) : false;
+    // Re-uploaded content under an existing id: purge its preview zone so the preview serves the new bytes rather than the old ones; a failed purge means stale assets, so say so.
+    if (reusedDeployId && record?.previewZoneId) {
+      await coreClient
+        .POST("/pullzone/{id}/purgeCache", {
+          params: { path: { id: record.previewZoneId } },
+          body: {},
+        })
+        .catch((err) => {
+          logger.warn(
+            `Couldn't purge the preview cache; it may serve stale files: ${errorMessage(err)}`,
+          );
+        });
+    }
     // Persist the new record (and any preview/router updates); a pure promote of an unchanged deploy leaves persistence to the promote write below.
     if (!skipUpload || previewChanged) {
       etag = await writeRemoteState(connection, state, etag);

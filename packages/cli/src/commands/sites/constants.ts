@@ -30,7 +30,7 @@ export interface DeployRecord {
   contentHash: string;
   files: number;
   bytes: number;
-  /** The deploy's preview pull zone; absent when its creation failed (retried on the next deploy of this id). */
+  /** The deploy's preview pull zone, recorded only once fully configured; absent when creation or setup failed, which is what makes the next deploy of this id re-adopt and repair it. */
   previewZoneId?: number;
   /** The preview zone's `*.b-cdn.net` system hostname; always HTTPS-ready. */
   previewHost?: string;

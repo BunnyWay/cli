@@ -494,7 +494,7 @@ export async function ensurePreviewZone(opts: {
   coreClient: CoreClient;
   state: RemoteSiteState;
   deployId: string;
-}): Promise<{ id: number; host: string } | null> {
+}): Promise<{ id: number; host: string; ready: boolean } | null> {
   const { coreClient, state, deployId } = opts;
 
   const host = (pz: PullZone) =>
@@ -530,12 +530,20 @@ export async function ensurePreviewZone(opts: {
       params: { path: { id: zone.Id } },
       body: { MiddlewareScriptId: state.scriptId },
     });
-    // Redirect HTTP to HTTPS on the b-cdn.net host (already certified); best-effort, and retried here whenever a zone is adopted.
+    // Redirect HTTP to HTTPS on the b-cdn.net host (already certified). The preview serves over HTTPS regardless, so a failure here doesn't sink the deploy; it reports the zone as not-ready instead, which keeps it out of the deploy record so the next deploy re-adopts and retries.
+    let ready = true;
     const systemHost = systemHostname(zone.Hostnames);
     if (systemHost) {
-      await setForceSsl(coreClient, zone.Id, systemHost, true).catch(() => {});
+      try {
+        await setForceSsl(coreClient, zone.Id, systemHost, true);
+      } catch (err) {
+        ready = false;
+        logger.warn(
+          `Preview ${deployId} won't redirect HTTP to HTTPS yet: ${errorMessage(err)}`,
+        );
+      }
     }
-    return { id: zone.Id, host: host(zone) };
+    return { id: zone.Id, host: host(zone), ready };
   } catch (err) {
     logger.warn(
       `Couldn't set up a preview zone for ${deployId}: ${errorMessage(err)}`,

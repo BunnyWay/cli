@@ -794,6 +794,32 @@ test("ensurePreviewZone creates the zone, attaches the router, and returns its h
     (c) => c.method === "POST" && c.path === "/pullzone/{id}",
   );
   expect(attach?.body).toEqual({ MiddlewareScriptId: 20 });
+  expect(zone?.ready).toBe(true);
+});
+
+// A Force SSL failure only costs the HTTP-to-HTTPS redirect (the b-cdn.net host serves HTTPS regardless), so the preview is still usable; reporting it as not-ready keeps it out of the deploy record, which is what makes the next deploy re-adopt and retry it.
+test("ensurePreviewZone reports a zone whose Force SSL failed as not ready", async () => {
+  const client = fakeCoreClient({ calls: [] });
+  const forceSslDown = {
+    ...client,
+    POST: async (path: string, options?: unknown) => {
+      if (path === "/pullzone/{id}/setForceSSL") throw new Error("nope");
+      return (client.POST as (p: string, o?: unknown) => Promise<unknown>)(
+        path,
+        options,
+      );
+    },
+  } as unknown as CoreClient;
+
+  const zone = await ensurePreviewZone({
+    coreClient: forceSslDown,
+    state: fakeState(),
+    deployId: "a1b2c3d4",
+  });
+
+  // Still a usable preview: the host is returned, just not recorded as configured.
+  expect(zone?.host).toMatch(/^sites-dpl-a1b2c3d4-[a-z0-9]{6}\.b-cdn\.net$/);
+  expect(zone?.ready).toBe(false);
 });
 
 // A zone created before a failed state write must be adopted on retry, not duplicated.
@@ -834,7 +860,11 @@ test("ensurePreviewZone adopts an existing zone for the deploy", async () => {
     deployId: "a1b2c3d4",
   });
 
-  expect(zone).toEqual({ id: 77, host: "sites-dpl-a1b2c3d4-abc123.b-cdn.net" });
+  expect(zone).toEqual({
+    id: 77,
+    host: "sites-dpl-a1b2c3d4-abc123.b-cdn.net",
+    ready: true,
+  });
   // Never a create...
   expect(calls.some((c) => c.method === "POST" && c.path === "/pullzone")).toBe(
     false,

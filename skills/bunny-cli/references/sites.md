@@ -59,11 +59,11 @@ bunny sites create my-site --domain example.com
 bunny sites create my-site --no-link       # don't write .bunny/site.json
 ```
 
-| Flag       | Description                                                                                                                               |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `--region` | Main storage region code (default `DE`)                                                                                                   |
+| Flag       | Description                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------------- |
+| `--region` | Main storage region code (default `DE`)                                                            |
 | `--domain` | Attach a custom production domain after provisioning; interactive runs prompt for one when omitted |
-| `--link`   | Link this directory (default true; `--no-link` to skip)                                                                                   |
+| `--link`   | Link this directory (default true; `--no-link` to skip)                                            |
 
 Site names are 3-47 lowercase letters, digits, and dashes. The storage zone, pull zone, and b-cdn.net subdomain become `sites-<name>-xxxxxx` (a `sites-` prefix marking them in the dashboard, plus a shared random suffix since zone names are global across bunny.net); commands still take the clean site name. Creation is idempotent; a failed create re-runs cleanly, reusing whatever was already provisioned.
 
@@ -78,16 +78,16 @@ bunny sites deploy --build                 # run `sites.build` from bunny.jsonc 
 bunny sites deploy ./out --build "npm run build" --env VITE_FLAG=1
 ```
 
-| Flag           | Description                                                                      |
-| -------------- | -------------------------------------------------------------------------------- |
-| `[dir]`        | Directory to deploy (default: `sites.dir` in bunny.jsonc, then cwd)              |
-| `--build`      | Run a build first (bare flag: `sites.build`, else a detected build)              |
-| `--env`        | Build-time env override `KEY=VALUE` (repeatable; requires `--build`)             |
-| `--env-file`   | Dotenv file of build-time overrides (requires `--build`)                         |
+| Flag           | Description                                                                                                            |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `[dir]`        | Directory to deploy (default: `sites.dir` in bunny.jsonc, then cwd)                                                    |
+| `--build`      | Run a build first (bare flag: `sites.build`, else a detected build)                                                    |
+| `--env`        | Build-time env override `KEY=VALUE` (repeatable; requires `--build`)                                                   |
+| `--env-file`   | Dotenv file of build-time overrides (requires `--build`)                                                               |
 | `--production` | Publish as the live site (alias `--prod`); the default is a preview, and an interactive first deploy offers to publish |
-| `--force`      | Deploy even when content is unchanged                                            |
-| `--site`       | Target site (name or storage zone ID)                                            |
-| `--link`       | Link this directory to the deployed site (`--no-link` never links)               |
+| `--force`      | Deploy even when content is unchanged                                                                                  |
+| `--site`       | Target site (name or storage zone ID)                                                                                  |
+| `--link`       | Link this directory to the deployed site (`--no-link` never links)                                                     |
 
 With `--build`, the build runs in your shell environment plus the `--env`/`--env-file` overrides; there is no remote env store; put build-time values in your local `.env` or CI secrets. Deploying already-uploaded content with `--production` skips the upload and just publishes it.
 
