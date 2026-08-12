@@ -513,6 +513,10 @@ export async function ensurePreviewZone(opts: {
         pz.Id != null,
     );
 
+    // An adopted zone that already carries this site's router needs no repair, so a failed confirmation below is harmless; one that doesn't is the only adoption case that can be serving the storage origin unrouted.
+    const adoptedUnrouted =
+      zone !== undefined && zone.MiddlewareScriptId !== state.scriptId;
+
     let created = false;
     for (let attempt = 0; !zone && attempt < 3; attempt++) {
       try {
@@ -539,10 +543,13 @@ export async function ensurePreviewZone(opts: {
       });
     } catch (err) {
       // The zone can't be proven routed now, so a zone this run created is taken back down rather than left publicly serving the storage origin. An adopted one predates this run: leave it (it may well be routed) for the next deploy or a cleanup sweep.
-      if (created && !(await deletePreviewZone(coreClient, zone.Id))) {
-        // Nothing left to try automatically: name the zone so it can be removed by hand.
+      // Deleting an adopted zone isn't an option: it predates this run and may be serving a preview URL someone is already using, so a transient failure here must not destroy it. Naming it is all that's left when it can't be routed either.
+      const stranded = created
+        ? !(await deletePreviewZone(coreClient, zone.Id))
+        : adoptedUnrouted;
+      if (stranded) {
         logger.warn(
-          `Pull zone ${zone.Name ?? zone.Id} is left over and may serve this site's files; delete it from the dashboard.`,
+          `Pull zone ${zone.Name ?? zone.Id} has no router attached and may serve this site's files; delete it from the dashboard.`,
         );
       }
       throw err;
