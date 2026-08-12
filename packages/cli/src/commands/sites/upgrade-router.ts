@@ -5,15 +5,17 @@ import {
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
+import { errorMessage } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { withSpinner } from "../../core/ui.ts";
+import { writeRemoteState } from "./api.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
   siteLinkOption,
   sitePositionalBuilder,
 } from "./interactive.ts";
-import { routerSource } from "./router/source.ts";
+import { ROUTER_VERSION, routerSource } from "./router/source.ts";
 
 type UpgradeArgs = SiteSelectorArgs;
 
@@ -52,6 +54,16 @@ export const sitesUpgradeRouterCommand = defineCommand<UpgradeArgs>({
         body: {},
       });
     });
+
+    // Record the published generation so deploy stops re-upgrading; best-effort (a missed write just republishes next deploy).
+    if (state.routerVersion !== ROUTER_VERSION) {
+      state.routerVersion = ROUTER_VERSION;
+      try {
+        site.etag = await writeRemoteState(site.connection, state, site.etag);
+      } catch (err) {
+        logger.warn(`Couldn't record the router version: ${errorMessage(err)}`);
+      }
+    }
 
     if (output === "json") {
       logger.log(

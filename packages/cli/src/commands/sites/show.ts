@@ -14,7 +14,6 @@ import {
 } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { withSpinner } from "../../core/ui.ts";
-import { previewZone, reconcilePreviewDomain } from "./api.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -51,8 +50,6 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
       fetchPullZoneHostnames(client, state.pullZoneId).catch(() => null),
     );
     const hostnames = fetched ?? [];
-    // The zone's wildcard, not the best-effort record, says whether previews are on.
-    reconcilePreviewDomain(state, previewZone(fetched, state.domain));
 
     if (output === "json") {
       logger.log(

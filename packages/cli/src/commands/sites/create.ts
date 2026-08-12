@@ -33,7 +33,7 @@ interface CreateArgs {
   link?: boolean;
 }
 
-// Attach a custom domain to a just-created site; never throws. `previewsReady` mirrors state.domain, which setupSiteDomain only records once the preview wildcard attached.
+// Attach a custom production domain to a just-created site; never throws (the site already exists and the domain can be retried via `sites domains add`).
 async function attachDomainToCreatedSite(opts: {
   coreClient: CoreClient;
   storageZone: StorageZoneModel;
@@ -41,9 +41,9 @@ async function attachDomainToCreatedSite(opts: {
   interactive: boolean;
   verbose: boolean;
   json?: boolean;
-}): Promise<{ error?: string; previewsReady: boolean }> {
+}): Promise<{ error?: string }> {
   const site = await siteContextFromZone(opts.storageZone);
-  if (!site) return { previewsReady: false };
+  if (!site) return {};
   try {
     await setupSiteDomain({
       coreClient: opts.coreClient,
@@ -53,9 +53,9 @@ async function attachDomainToCreatedSite(opts: {
       verbose: opts.verbose,
       json: opts.json,
     });
-    return { previewsReady: Boolean(site.state.domain) };
+    return {};
   } catch (err) {
-    return { error: errorMessage(err), previewsReady: false };
+    return { error: errorMessage(err) };
   }
 }
 
@@ -94,7 +94,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       .option("domain", {
         type: "string",
         describe:
-          "Custom domain to attach, with *.preview.<domain> previews (offered interactively when omitted)",
+          "Custom production domain to attach (offered interactively when omitted)",
       })
       .option("link", {
         type: "boolean",
@@ -199,20 +199,15 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       });
       chosenDomain = normalizeHostname(value ?? "") || undefined;
     }
-    // Previews (and the PR flow in CI) exist only once the domain and its preview wildcard are attached.
-    let previews = false;
     if (chosenDomain) {
-      // A domain failure mustn't fail the create; the site already exists and the domain can be retried via `sites domains add`.
       logger.log();
-      const { error: domainError, previewsReady } =
-        await attachDomainToCreatedSite({
-          coreClient,
-          storageZone: result.storageZone,
-          domain: chosenDomain,
-          interactive,
-          verbose,
-        });
-      previews = previewsReady;
+      const { error: domainError } = await attachDomainToCreatedSite({
+        coreClient,
+        storageZone: result.storageZone,
+        domain: chosenDomain,
+        interactive,
+        verbose,
+      });
       if (domainError) {
         logger.warn(
           `Couldn't finish setting up ${chosenDomain}: ${domainError}`,
@@ -229,9 +224,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       if (root && (await hasGitHubOrigin(root))) {
         logger.log();
         const setup = await confirm(
-          previews
-            ? "Set up GitHub deployments (preview on PRs, production on main)?"
-            : "Set up GitHub deployments (production on pushes to main)?",
+          "Set up GitHub deployments (preview on PRs, production on main)?",
           { initial: true },
         );
         if (setup) {
@@ -242,7 +235,6 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
             interactive: true,
             dir: siteConfig?.dir,
             build: siteConfig?.build,
-            previews,
           });
           if (scaffold) {
             logger.success(
@@ -258,7 +250,6 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
           await printWorkflowInstructions(name, root, {
             root: configRoot,
             ...siteConfig,
-            previews,
           });
         }
       }

@@ -141,7 +141,7 @@ export function workflowPath(prefix: string | undefined, path: string): string {
   return path === "." ? prefix : `${prefix.replace(/\/$/, "")}/${path}`;
 }
 
-// Render the GitHub Actions workflow via the BunnyWay/actions deploy-site action: with `previews` (a custom domain exists) PRs deploy previews and pushes to main go live, without it the workflow only runs on pushes to main (a preview-less deploy publishes, so PR builds must not deploy). `dir`/`build` carry `sites.dir`/`sites.build` from bunny.jsonc, `workingDirectory` is where that config lives relative to the workflow root, and `installDeps` adds the JS setup/install steps to a configured build the preset wouldn't have installed for, so CI builds and deploys exactly what `sites deploy` does.
+// Render the GitHub Actions workflow via the BunnyWay/actions deploy-site action: PRs deploy previews (every deploy gets its own preview zone) and pushes to main go live. `dir`/`build` carry `sites.dir`/`sites.build` from bunny.jsonc, `workingDirectory` is where that config lives relative to the workflow root, and `installDeps` adds the JS setup/install steps to a configured build the preset wouldn't have installed for, so CI builds and deploys exactly what `sites deploy` does.
 export function renderSitesWorkflow(opts: {
   site: string;
   preset: FrameworkPreset;
@@ -151,10 +151,8 @@ export function renderSitesWorkflow(opts: {
   workingDirectory?: string;
   cacheDependencyPath?: string;
   installDeps?: boolean;
-  previews?: boolean;
 }): string {
   const { site, preset, packageManager, workingDirectory } = opts;
-  const previews = opts.previews !== false;
   // Every `run` step builds from the project directory; `uses` inputs stay workflow-root-relative, so the deploy directory carries the prefix instead.
   const defaults = workingDirectory
     ? [
@@ -168,7 +166,7 @@ export function renderSitesWorkflow(opts: {
     "on:",
     "  push:",
     "    branches: [main]",
-    ...(previews ? ["  pull_request:"] : []),
+    "  pull_request:",
     "",
     "# One deploy at a time per ref; a newer commit cancels the older build.",
     "concurrency:",
@@ -179,15 +177,11 @@ export function renderSitesWorkflow(opts: {
     "  deploy:",
     "    runs-on: ubuntu-latest",
     ...defaults,
-    ...(previews
-      ? [
-          "    # Fork PRs have no access to secrets; skip instead of failing.",
-          "    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository",
-        ]
-      : []),
+    "    # Fork PRs have no access to secrets; skip instead of failing.",
+    "    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository",
     "    permissions:",
     "      contents: read",
-    ...(previews ? ["      pull-requests: write # preview comment"] : []),
+    "      pull-requests: write # preview comment",
     "    steps:",
     "      - uses: actions/checkout@v4",
     "",
@@ -204,7 +198,7 @@ export function renderSitesWorkflow(opts: {
     // Quote the interpolated values so they're always inert YAML scalars.
     `          site: ${JSON.stringify(site)}`,
     `          directory: ${JSON.stringify(workflowPath(workingDirectory, opts.dir ?? preset.dir))}`,
-    `          production: ${previews ? "${{ github.event_name == 'push' }}" : "true"}`,
+    "          production: ${{ github.event_name == 'push' }}",
     "          api_key: ${{ secrets.BUNNY_API_KEY }}",
   ];
   return `${lines.join("\n")}\n`;

@@ -11,7 +11,6 @@ import {
 } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { openBrowser } from "../../core/ui.ts";
-import { previewZone, reconcilePreviewDomain } from "./api.ts";
 import type { RemoteSiteState } from "./constants.ts";
 import {
   type SiteSelectorArgs,
@@ -65,9 +64,8 @@ export const sitesOpenCommand = defineCommand<OpenArgs>({
     const { site } = await selectSite(client, { site: ref, output });
     const { state } = site;
 
+    // siteLiveUrl only honors a recorded domain the zone still serves, so a stale record can't win over the system host.
     const hostnames = await fetchPullZoneHostnames(client, state.pullZoneId);
-    // A domain the zone no longer serves must not win over the system host.
-    reconcilePreviewDomain(state, previewZone(hostnames, state.domain));
     const url = siteLiveUrl(state, hostnames);
     if (!url) {
       throw new UserError(

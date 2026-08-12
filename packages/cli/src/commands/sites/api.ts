@@ -4,7 +4,6 @@ import { mapWithConcurrency } from "../../core/concurrency.ts";
 import { ApiError, errorMessage, UserError } from "../../core/errors.ts";
 import {
   createPullZone,
-  type Hostname,
   setForceSsl,
   systemHostname,
 } from "../../core/hostnames/index.ts";
@@ -25,9 +24,12 @@ import {
 } from "../storage/files-api.ts";
 import {
   CURRENT_DEPLOY_VAR,
+  deployIdFromPreviewZoneName,
   deployPrefix,
+  isPreviewZoneName,
+  PREVIEW_ZONE_PREFIX,
   parseRemoteState,
-  previewDomainFromWildcard,
+  previewZoneName,
   REMOTE_STATE_PATH,
   type RemoteSiteState,
   routerScriptName,
@@ -35,7 +37,7 @@ import {
   siteResourcePattern,
   suffixedResourceName,
 } from "./constants.ts";
-import { routerSource } from "./router/source.ts";
+import { ROUTER_VERSION, routerSource } from "./router/source.ts";
 
 export type ComputeClient = ReturnType<typeof createComputeClient>;
 type PullZone = components["schemas"]["PullZoneModel"];
@@ -204,10 +206,13 @@ async function fetchPullZones(
   }
 }
 
-// Discover sites: a pull zone listing narrows to storage+middleware candidates, only those get the per-zone `_bunny/site.json` read.
+// Discover sites: a pull zone listing narrows to storage+middleware candidates (preview zones share that shape, so their name pattern skips them), only those get the per-zone `_bunny/site.json` read.
 export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
   const candidates = (await fetchPullZones(client)).filter(
-    (pz: PullZone) => pz.MiddlewareScriptId != null && pz.StorageZoneId != null,
+    (pz: PullZone) =>
+      pz.MiddlewareScriptId != null &&
+      pz.StorageZoneId != null &&
+      !isPreviewZoneName(pz.Name),
   );
 
   const summaries = await mapWithConcurrency(
@@ -218,11 +223,6 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
         const zone = await fetchStorageZone(client, pz.StorageZoneId as number);
         const context = await siteContextFromZone(zone);
         if (!context || context.state.pullZoneId !== pz.Id) return null;
-        // The listing already carries the hostnames, so a drifted domain costs nothing to correct here.
-        reconcilePreviewDomain(
-          context.state,
-          previewZone(pz.Hostnames, context.state.domain),
-        );
         return {
           state: context.state,
           storageZone: zone,
@@ -239,7 +239,7 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
     .sort((a, b) => a.state.name.localeCompare(b.state.name));
 }
 
-// Account storage zones whose name is `{name}-{suffix}` (or bare `{name}` from pre-suffix CLIs), re-fetched by ID because search results may omit the zone password.
+// Account storage zones whose name is `sites-{name}-{suffix}`, re-fetched by ID because search results may omit the zone password.
 async function findSiteStorageZones(
   client: CoreClient,
   name: string,
@@ -256,19 +256,15 @@ async function findSiteStorageZones(
   );
 }
 
-// The site's pull zone on a resumed create: prefer the one already pointing at the storage zone, else a bare legacy `{name}` zone.
+// The site's pull zone on a resumed create: the name-pattern match already pointing at the storage zone.
 async function findSitePullZone(
   client: CoreClient,
   name: string,
   storageZoneId: number,
 ): Promise<PullZone | undefined> {
   const pattern = siteResourcePattern(name);
-  const candidates = (await fetchPullZones(client, name)).filter((pz) =>
-    pattern.test(pz.Name ?? ""),
-  );
-  return (
-    candidates.find((pz) => pz.StorageZoneId === storageZoneId) ??
-    candidates.find((pz) => (pz.Name ?? "").toLowerCase() === name)
+  return (await fetchPullZones(client, name)).find(
+    (pz) => pattern.test(pz.Name ?? "") && pz.StorageZoneId === storageZoneId,
   );
 }
 
@@ -399,10 +395,12 @@ export async function createSite(
     let pullZoneName = resourceName;
     for (let attempt = 0; !pullZone && attempt < 3; attempt++) {
       try {
+        // Router attached at creation time: an unrouted zone is already public and would serve the raw storage origin.
         pullZone = await createPullZone(
           coreClient,
           pullZoneName,
           storageZoneId,
+          { middlewareScriptId: scriptId },
         );
       } catch (err) {
         if (!isNameTaken(err)) throw err;
@@ -444,6 +442,7 @@ export async function createSite(
     storageZoneId,
     pullZoneId: pullZone.Id,
     scriptId,
+    routerVersion: ROUTER_VERSION,
     deploys: [],
   };
   const connection = siteFiles.connect(storageZone);
@@ -472,98 +471,137 @@ export async function fetchSystemHostname(
   }
 }
 
-/** The preview-mode view of an already-fetched hostname list, so callers that read hostnames anyway reconcile without a second request; null means the read failed (never "no wildcard"). A `preferred` (recorded) domain is only ever matched, never replaced: when its wildcard is gone, another domain's wildcard is reported as `alternateDomain` for the user to switch to explicitly instead of being adopted. `previewSecure: false` means the wildcard serves but its certificate hasn't issued, so preview URLs are http-only for now. */
-export function previewZone(
-  hostnames: Hostname[] | null | undefined,
-  preferred?: string,
-): {
-  fetched: boolean;
-  previewDomain?: string;
-  previewSecure?: boolean;
-  alternateDomain?: string;
-} {
-  if (!hostnames) return { fetched: false };
-  const wildcards = hostnames.filter(
-    (h) => previewDomainFromWildcard(h.Value ?? "") !== undefined,
-  );
-  const wildcard =
-    preferred === undefined
-      ? wildcards[0]
-      : wildcards.find(
-          (h) => previewDomainFromWildcard(h.Value ?? "") === preferred,
+// Republish the site's router when its recorded source generation lags the CLI's (pre-preview-zone routers would silently serve production on preview hostnames). Mutates state.routerVersion; the caller's next state write persists it, and a missed write just re-runs this next time.
+export async function ensureRouterCurrent(opts: {
+  computeClient: ComputeClient;
+  state: RemoteSiteState;
+}): Promise<boolean> {
+  const { computeClient, state } = opts;
+  // Only upgrade: a site touched by a newer CLI must not be downgraded to this binary's older source (e.g. a pinned CI action racing a newer local CLI).
+  if ((state.routerVersion ?? 0) >= ROUTER_VERSION) return false;
+  await computeClient.POST("/compute/script/{id}/code", {
+    params: { path: { id: state.scriptId } },
+    body: { Code: routerSource },
+  });
+  await computeClient.POST("/compute/script/{id}/publish", {
+    params: { path: { id: state.scriptId, uuid: null } },
+    body: {},
+  });
+  state.routerVersion = ROUTER_VERSION;
+  return true;
+}
+
+// Every deploy gets its own preview pull zone: the site's storage origin + router, served at `sites-dpl-{id}-{suffix}.b-cdn.net` (instant HTTPS, no DNS or certificate setup). A zone left over from a failed state write is adopted by name + storage-zone match, so retries converge instead of piling up zones.
+export async function ensurePreviewZone(opts: {
+  coreClient: CoreClient;
+  state: RemoteSiteState;
+  deployId: string;
+}): Promise<{ id: number; host: string; ready: boolean } | null> {
+  const { coreClient, state, deployId } = opts;
+
+  const host = (pz: PullZone) =>
+    systemHostname(pz.Hostnames) ?? `${pz.Name}.b-cdn.net`;
+
+  try {
+    // Adopt an orphan before creating: same deploy, same storage zone, preview-shaped name.
+    let zone: PullZone | undefined = (
+      await fetchPullZones(coreClient, `${PREVIEW_ZONE_PREFIX}${deployId}-`)
+    ).find(
+      (pz) =>
+        deployIdFromPreviewZoneName(pz.Name) === deployId &&
+        pz.StorageZoneId === state.storageZoneId &&
+        pz.Id != null,
+    );
+
+    // An adopted zone that already carries this site's router needs no repair, so a failed confirmation below is harmless; one that doesn't is the only adoption case that can be serving the storage origin unrouted.
+    const adoptedUnrouted =
+      zone !== undefined && zone.MiddlewareScriptId !== state.scriptId;
+
+    let created = false;
+    for (let attempt = 0; !zone && attempt < 3; attempt++) {
+      try {
+        // The router goes on at creation time: a pull zone is publicly reachable the moment it exists, and an unrouted one serves the raw storage origin (every deploy plus _bunny/).
+        zone = await createPullZone(
+          coreClient,
+          previewZoneName(deployId),
+          state.storageZoneId,
+          { middlewareScriptId: state.scriptId },
         );
-  const alternate = wildcard === undefined ? wildcards[0] : undefined;
-  return {
-    fetched: true,
-    previewDomain: wildcard
-      ? previewDomainFromWildcard(wildcard.Value ?? "")
-      : undefined,
-    previewSecure: wildcard ? wildcard.HasCertificate === true : undefined,
-    alternateDomain: alternate
-      ? previewDomainFromWildcard(alternate.Value ?? "")
-      : undefined,
-  };
-}
-
-// One pull-zone read for deploy: the system host plus the domain served by an attached `*.preview.*` wildcard. The wildcard is the source of truth for preview mode; `fetched: false` (zone unreadable) tells callers to fall back to the recorded state.
-export async function fetchSiteHostnames(
-  coreClient: CoreClient,
-  pullZoneId: number,
-  preferred?: string,
-): Promise<{
-  fetched: boolean;
-  systemHost?: string;
-  previewDomain?: string;
-  previewSecure?: boolean;
-  alternateDomain?: string;
-}> {
-  try {
-    const { data } = await coreClient.GET("/pullzone/{id}", {
-      params: { path: { id: pullZoneId } },
-    });
-    if (!data) return { fetched: false };
-    const hostnames = data.Hostnames ?? [];
-    return {
-      ...previewZone(hostnames, preferred),
-      systemHost: systemHostname(hostnames),
-    };
-  } catch {
-    return { fetched: false };
-  }
-}
-
-export type PreviewDomainDrift = "attached" | "detached" | undefined;
-
-// Reconciliation only fills an empty record or clears a dead one; it never replaces a recorded domain with another (previewZone's preferred matching keeps a differing value from arising).
-export function reconcilePreviewDomain(
-  state: RemoteSiteState,
-  zone: { fetched: boolean; previewDomain?: string },
-): PreviewDomainDrift {
-  if (!zone.fetched) return undefined;
-  if (zone.previewDomain) {
-    if (state.domain === undefined) {
-      state.domain = zone.previewDomain;
-      return "attached";
+        created = true;
+      } catch (err) {
+        // Another account owns the random name; a fresh suffix next round.
+        if (!isNameTaken(err)) throw err;
+      }
     }
-    return undefined;
-  }
-  if (state.domain) {
-    state.domain = undefined;
-    return "detached";
-  }
-  return undefined;
-}
+    if (!zone?.Id) return null;
 
-// Persist a drift correction so the commands that only read state (show/list/open) stop lagging; best-effort, since the in-memory value already drives this run and the next one reconciles from the zone regardless.
-export async function persistReconciledDomain(
-  site: SiteContext,
-): Promise<void> {
-  try {
-    site.etag = await writeRemoteState(site.connection, site.state, site.etag);
+    // Confirm the attach: it's what repairs an adopted orphan whose attach failed on a previous run, and it re-asserts the router on a fresh zone in case the create ignored the field. Idempotent either way.
+    try {
+      await coreClient.POST("/pullzone/{id}", {
+        params: { path: { id: zone.Id } },
+        body: { MiddlewareScriptId: state.scriptId },
+      });
+    } catch (err) {
+      // The zone can't be proven routed now, so a zone this run created is taken back down rather than left publicly serving the storage origin. An adopted one predates this run: leave it (it may well be routed) for the next deploy or a cleanup sweep.
+      // Deleting an adopted zone isn't an option: it predates this run and may be serving a preview URL someone is already using, so a transient failure here must not destroy it. Naming it is all that's left when it can't be routed either.
+      const stranded = created
+        ? !(await deletePreviewZone(coreClient, zone.Id))
+        : adoptedUnrouted;
+      if (stranded) {
+        logger.warn(
+          `Pull zone ${zone.Name ?? zone.Id} has no router attached and may serve this site's files; delete it from the dashboard.`,
+        );
+      }
+      throw err;
+    }
+    // The zone's own b-cdn.net host, derived from its name when the response omits hostnames; the request below is the only thing that can prove the name right, so there's no skip path that would record an unenforced zone as configured.
+    const previewHost = host(zone);
+    // Redirect HTTP to HTTPS on that host (already certified). The preview serves over HTTPS regardless, so a failure here doesn't sink the deploy; it reports the zone as not-ready instead, which keeps it out of the deploy record so the next deploy re-adopts and retries.
+    let ready = true;
+    try {
+      await setForceSsl(coreClient, zone.Id, previewHost, true);
+    } catch (err) {
+      ready = false;
+      logger.warn(
+        `Preview ${deployId} won't redirect HTTP to HTTPS yet: ${errorMessage(err)}`,
+      );
+    }
+    return { id: zone.Id, host: previewHost, ready };
   } catch (err) {
     logger.warn(
-      `Couldn't record the site's domain state: ${errorMessage(err)}`,
+      `Couldn't set up a preview zone for ${deployId}: ${errorMessage(err)}`,
     );
+    return null;
+  }
+}
+
+/** Every preview zone backed by this site's storage zone, discovered by name shape (covers zones missing from state after a failed write). */
+export async function findPreviewZones(
+  coreClient: CoreClient,
+  storageZoneId: number,
+): Promise<Array<{ id: number; deployId: string }>> {
+  const zones = await fetchPullZones(coreClient, PREVIEW_ZONE_PREFIX);
+  return zones.flatMap((pz) => {
+    const deployId = deployIdFromPreviewZoneName(pz.Name);
+    if (!deployId || pz.StorageZoneId !== storageZoneId || pz.Id == null) {
+      return [];
+    }
+    return [{ id: pz.Id as number, deployId }];
+  });
+}
+
+/** Delete a preview pull zone; returns false (with a warning) instead of throwing, so cleanup sweeps keep going. A zone that's already gone counts as deleted, so retries converge. */
+export async function deletePreviewZone(
+  coreClient: CoreClient,
+  id: number,
+): Promise<boolean> {
+  try {
+    await coreClient.DELETE("/pullzone/{id}", { params: { path: { id } } });
+    return true;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return true;
+    logger.warn(`Couldn't delete preview zone ${id}: ${errorMessage(err)}`);
+    return false;
   }
 }
 
@@ -640,13 +678,13 @@ export async function promoteDeploy(opts: {
 }
 
 export interface TeardownResult {
-  resource: "pull zone" | "router script" | "storage zone";
+  resource: "preview zone" | "pull zone" | "router script" | "storage zone";
   id: number;
   deleted: boolean;
   error?: string;
 }
 
-// Tear down a site's resources; the pull zone references the script and storage zone so it goes first, and each step is best-effort so a partial delete can be re-run.
+// Tear down a site's resources; the pull zones reference the script and storage zone so they go first (previews before the main zone), and each step is best-effort so a partial delete can be re-run.
 export async function deleteSiteResources(opts: {
   coreClient: CoreClient;
   computeClient: ComputeClient;
@@ -671,6 +709,25 @@ export async function deleteSiteResources(opts: {
     }
   };
 
+  // Preview zones: the recorded ids plus a name-shape sweep, so zones a failed state write orphaned still go. The sweep needs the storage zone (it's the association key), so a failed listing aborts before anything is torn down; the whole delete is retryable.
+  const previewZoneIds = new Set(
+    state.deploys.flatMap((d) => (d.previewZoneId ? [d.previewZoneId] : [])),
+  );
+  try {
+    for (const zone of await findPreviewZones(coreClient, state.storageZoneId))
+      previewZoneIds.add(zone.id);
+  } catch (err) {
+    throw new UserError(
+      `Couldn't list the site's preview zones: ${errorMessage(err)}`,
+      "Nothing was deleted; re-run the command.",
+    );
+  }
+  for (const id of previewZoneIds) {
+    await attempt("preview zone", id, () =>
+      coreClient.DELETE("/pullzone/{id}", { params: { path: { id } } }),
+    );
+  }
+
   await attempt("pull zone", state.pullZoneId, () =>
     coreClient.DELETE("/pullzone/{id}", {
       params: { path: { id: state.pullZoneId } },
@@ -682,8 +739,8 @@ export async function deleteSiteResources(opts: {
     }),
   );
   if (opts.keepStorage) {
-    // The zone survives, so remove its site marker, else list/link/show rediscover a "site" whose pull zone and router are gone.
-    if (opts.connection) {
+    // The zone survives, so remove its site marker, else list/link/show rediscover a "site" whose pull zone and router are gone. But only once everything else deleted: the marker is what makes a re-run able to find and retry the failures.
+    if (opts.connection && results.every((r) => r.deleted)) {
       try {
         await siteFiles.remove(opts.connection, REMOTE_STATE_PATH);
       } catch (err) {
