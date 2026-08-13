@@ -600,6 +600,12 @@ describe("splitStatements", () => {
     ]);
   });
 
+  test("keeps CREATE TRIGGER IF NOT EXISTS intact", () => {
+    const sql =
+      "CREATE TRIGGER IF NOT EXISTS touch AFTER UPDATE ON users BEGIN\n  UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;\nEND;";
+    expect(splitStatements(sql)).toEqual([sql.slice(0, -1)]);
+  });
+
   test("keeps a multi-statement trigger body intact and splits what follows", () => {
     const sql =
       "CREATE TEMPORARY TRIGGER log AFTER INSERT ON t BEGIN\n  INSERT INTO audit VALUES (1);\n  INSERT INTO audit VALUES (2);\nEND;\nSELECT 1;";
