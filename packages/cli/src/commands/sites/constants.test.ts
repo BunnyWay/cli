@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 import {
+  deployIdFromPreviewZoneName,
   deployPrefix,
+  isPreviewZoneName,
   isValidDeployId,
   isValidSiteName,
   parseRemoteState,
-  previewHostname,
-  previewWildcard,
+  previewZoneName,
   type RemoteSiteState,
   siteResourcePattern,
   suffixedResourceName,
@@ -46,12 +47,8 @@ test("parseRemoteState rejects garbage", () => {
   ).toBeNull();
 });
 
-test("deploy path and preview host helpers", () => {
+test("deploy path helper", () => {
   expect(deployPrefix("a1b2c3d4")).toBe("deploys/a1b2c3d4");
-  expect(previewHostname("a1b2c3d4", "example.com")).toBe(
-    "dpl-a1b2c3d4.preview.example.com",
-  );
-  expect(previewWildcard("example.com")).toBe("*.preview.example.com");
 });
 
 test("isValidDeployId accepts git shas and content hashes", () => {
@@ -79,10 +76,34 @@ test("suffixed resource names round-trip through the site pattern", () => {
   expect(zoneName).toMatch(/^sites-my-site-[a-z0-9]{6}$/);
   const pattern = siteResourcePattern("my-site");
   expect(pattern.test(zoneName)).toBe(true);
-  expect(pattern.test("my-site")).toBe(true); // bare pre-suffix zone
+  expect(pattern.test("my-site")).toBe(false); // bare name is not a site zone
   expect(pattern.test("my-site-abcdef")).toBe(false); // suffix without the prefix
   expect(pattern.test("sites-my-site")).toBe(false); // prefix without a suffix
   expect(pattern.test("sites-my-site-abcdef1")).toBe(false); // suffix too long
   expect(pattern.test("sites-my-site2-abcdef")).toBe(false); // different site
   expect(siteResourcePattern("other").test(zoneName)).toBe(false);
+});
+
+// Cleanup and site discovery key on the name shape, and the router parses the same shape from the hostname, so the round-trip must be exact and everything else rejected.
+test("preview zone names round-trip the deploy id and reject other shapes", () => {
+  const name = previewZoneName("a1b2c3d4");
+  expect(name).toMatch(/^sites-dpl-a1b2c3d4-[a-z0-9]{6}$/);
+  // Worst case (40-char content-hash id) stays inside the 63-char DNS label limit.
+  expect(previewZoneName("a".repeat(40)).length).toBeLessThanOrEqual(63);
+
+  expect(deployIdFromPreviewZoneName(name)).toBe("a1b2c3d4");
+  expect(deployIdFromPreviewZoneName(name.toUpperCase())).toBe("a1b2c3d4");
+  expect(isPreviewZoneName(name)).toBe(true);
+
+  expect(deployIdFromPreviewZoneName("sites-my-site-abc123")).toBeUndefined();
+  expect(deployIdFromPreviewZoneName("sites-dpl-abc123")).toBeUndefined();
+  expect(deployIdFromPreviewZoneName("dpl-abc123-x1y2z3")).toBeUndefined();
+  expect(deployIdFromPreviewZoneName(undefined)).toBeUndefined();
+  expect(deployIdFromPreviewZoneName("")).toBeUndefined();
+});
+
+// A site named like a deploy would make its zones indistinguishable from preview zones, so the name space is reserved.
+test("site names starting with dpl- are rejected", () => {
+  expect(isValidSiteName("dpl-abc123")).toBe(false);
+  expect(isValidSiteName("dplx-abc123")).toBe(true);
 });

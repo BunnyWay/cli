@@ -61,20 +61,20 @@ bun ny dns records preset list              # list DNS record presets (email pro
 bun ny dns records preset google-workspace example.com   # apply a preset record set
 bun ny dns records preset bluesky example.com --param did=did:plc:abc123   # apply a preset non-interactively
 bun ny sites create my-site                 # provision a static site (storage zone + pull zone + edge router; zones are named sites-my-site-<suffix>, served at sites-my-site-<suffix>.b-cdn.net)
-bun ny sites deploy                         # no linked site? offers to create one or pick an existing; detects the framework, offers to build, then deploys
-bun ny sites deploy ./dist                  # deploy to an immutable preview URL (the site's b-cdn.net host + /deploys/<id>/); the router's HTMLRewriter keeps root-absolute assets working
-bun ny sites deploy ./dist --production     # deploy and publish as the live site (--prod works too)
+bun ny sites deploy                         # no linked site? offers to create one or pick an existing; detects the framework, offers to build, then deploys (a site's first deploy also offers to publish + attach a custom domain)
+bun ny sites deploy ./dist                  # deploy to an immutable HTTPS preview URL (sites-dpl-<id>-xxxxxx.b-cdn.net); no custom domain needed
+bun ny sites deploy ./dist --production     # publish as the live site (--prod works too)
 bun ny sites deploy --build                 # run `sites.build` from bunny.jsonc (else the detected framework's build), then deploy `sites.dir` (or the detected output dir)
 bun ny sites deployments list               # list deploys with the live one marked
 bun ny sites deployments publish --previous # instant rollback to the previous deploy
-bun ny sites deployments prune              # delete old deploys (keeps the newest 5, never current/previous)
-bun ny sites domains add example.com        # attach a custom domain (+ *.preview.example.com for previews)
+bun ny sites deployments prune              # delete old deploys and their preview URLs (keeps the newest 5, never current/previous)
+bun ny sites domains add example.com        # attach a custom production domain
 bun ny sites ssl --no-force-ssl             # stop forcing HTTPS on the site's b-cdn.net system host
 bun ny sites open                           # open the site's live URL in the browser
-bun ny sites ci init                        # add a GitHub Actions workflow (preview on PRs, production on main)
+bun ny sites ci init                        # add a GitHub Actions workflow (previews on PRs, production on main)
 ```
 
-Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) so a deploy needs no flags: `bun ny sites deploy --build --prod`. See [`examples/sites/`](examples/sites/) for ready-to-copy configs (Vite, Astro, Next.js static export, Hugo, plain HTML, and a combined app + site file).
+Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) so a deploy needs no flags: `bun ny sites deploy --build --prod`. `bun ny sites ci init` writes the same `build` and `dir` into the generated workflow. See [`examples/sites/`](examples/sites/) for ready-to-copy configs (Vite, Astro, Next.js static export, Hugo, plain HTML, and a combined app + site file).
 
 ### Available scripts
 

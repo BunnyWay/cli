@@ -1,6 +1,6 @@
 # @bunny.net/cli
 
-Command-line interface for [bunny.net](https://bunny.net) — manage databases, apps (Magic Containers), Edge Scripts, and more from your terminal.
+Command-line interface for [bunny.net](https://bunny.net) — manage databases, static sites, apps (Magic Containers), Edge Scripts, and more from your terminal.
 
 ## Installation
 
@@ -56,11 +56,12 @@ bunny logout --force
 
 ### `bunny whoami`
 
-Show the currently authenticated account, including your name and email.
+Show the currently authenticated account, including your name, email, and account ID.
 
 ```bash
 bunny whoami
 # Logged in as Jamie Barton (jamie@bunny.net) 🐇
+# Account ID: 0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d
 # Profile: default
 
 bunny whoami --output json
@@ -402,6 +403,21 @@ bunny registries add --name "GitHub" --username myorg
 bunny registries remove <registry-id>
 ```
 
+### `bunny registry`
+
+> **Experimental** internal use only
+
+Push and inspect images on the bunny.net OCI registry. The endpoint defaults to `registry.bunny.net`; set the `BUNNYNET_REGISTRY_URL` environment variable to override it.
+
+```bash
+bunny registry push myapp:latest                      # push, deriving repository/tag from the image
+bunny registry push myapp:dev --repository myapp --tag v1
+bunny registry list                                   # list repositories (alias: ls)
+bunny registry tags myapp                             # list tags for a repository
+```
+
+`push` currently uses Docker to read the local image; `list` and `tags` talk to the registry directly. On the registry itself repositories are namespaced by your account id (`<account-id>/myapp`); the CLI adds and hides that prefix automatically, so you always work with the bare repository name.
+
 ### `bunny dns`
 
 Manage DNS through two resource groups: **`bunny dns record`** (the entries within a zone) and **`bunny dns zone`** (the zone itself — settings, DNSSEC, logging, stats, nameservers). The `[domain]` argument accepts either the zone's domain name or its numeric zone ID, and is optional everywhere — omit it and you'll be prompted to pick a zone. `record update`/`record remove` likewise prompt you to pick a record when the ID is omitted. `record` aliases to `records`/`rec`; `zone` aliases to `zones` (and `domain`/`domains`).
@@ -477,66 +493,71 @@ Positional value ordering for `record add` follows the record type: `A`/`AAAA`/`
 
 > **Experimental**: hidden from `--help` and the landing page while it stabilizes.
 
-Manage Edge Storage through two resource groups: **`bunny storage zone`** (the zone itself: create, list, inspect, update, delete) and **`bunny storage file`** (the files within a zone). Zone management uses the account API key; file operations use the zone's own password and a region-specific host, both resolved automatically from the zone. The `[zone]` argument accepts either the zone name or its numeric ID. `zone` aliases to `zones` (and `bucket`/`buckets`); `file` aliases to `files`.
+Manage Edge Storage through two resource groups: **`bunny storage zones`** (the zone itself: create, list, inspect, update, delete; alias `zone`, plus hidden `bucket`/`buckets`) and **`bunny storage files`** (the files within a zone; alias `file`). Zone management uses the account API key; file operations use the zone's own password and a region-specific host, both resolved automatically from the zone. `zones` commands take the zone as an optional `[zone]` positional; `files` commands take it as the `--zone`/`-z` flag (their positional is the file path). Either accepts the zone name or its numeric ID. When the zone is omitted it resolves from the directory's linked zone (`bunny storage link`, stored in `.bunny/storage.json`), then an interactive picker, which offers to link the directory to the picked zone (except on destructive commands). Non-interactive runs (`--output json`, no TTY, or `--force`) error instead of prompting; pass a zone or link the directory.
 
-A storage zone only holds files; a **pull zone** is what serves them on the web. `zone add` offers to create one (origin set to the new storage zone) and then to add a custom domain, or pass `--pull-zone`/`--domain` to do it non-interactively. Custom domains live on the pull zone and are managed with `bunny storage zone domains`.
+A storage zone only holds files; a **pull zone** is what serves them on the web. `zones add` offers to create one (origin set to the new storage zone) and then to add a custom domain, or pass `--pull-zone`/`--domain` to do it non-interactively. Custom domains live on the pull zone and are managed with `bunny storage zones domains`.
 
 ```bash
 # Zones (lifecycle)
-bunny storage zone list
-bunny storage zone add                                # interactive: prompts for name and region
-bunny storage zone add my-zone --region DE
-bunny storage zone add my-zone --region NY --replication LA,SG
-bunny storage zone add my-zone --region DE --pull-zone   # also create a pull zone to serve it on the web
-bunny storage zone add my-zone --region DE --domain cdn.example.com   # pull zone + custom domain
-bunny storage zone show my-zone
-bunny storage zone update my-zone                     # interactive: edit settings, pre-filled with current values
-bunny storage zone update my-zone --custom-404-path /404.html
-bunny storage zone remove my-zone
+bunny storage zones list
+bunny storage zones add                                # interactive: prompts for name and region
+bunny storage zones add my-zone --region DE
+bunny storage zones add my-zone --region NY --replication LA,SG
+bunny storage zones add my-zone --region DE --pull-zone   # also create a pull zone to serve it on the web
+bunny storage zones add my-zone --region DE --domain cdn.example.com   # pull zone + custom domain
+bunny storage zones show my-zone
+bunny storage zones update my-zone                     # interactive: edit settings, pre-filled with current values
+bunny storage zones update my-zone --custom-404-path /404.html
+bunny storage zones remove my-zone                     # confirms twice (yes/no, then type the zone name)
+
+# Link the working directory to a zone so commands can omit it
+bunny storage link my-zone
+bunny storage unlink
 
 # List the available storage regions
 bunny storage regions
 
 # S3-compatible credentials (for zones with S3 preview access)
-bunny storage zone credentials my-zone                # show endpoint + access key (secret masked)
-bunny storage zone credentials my-zone --show-secret  # reveal the secret access key
-bunny storage zone credentials my-zone --read-only    # use the read-only password as the secret
-bunny storage zone credentials my-zone --format rclone >> ~/.config/rclone/rclone.conf
-eval "$(bunny storage zone credentials my-zone --format env)"   # AWS-compatible env vars
+bunny storage zones credentials my-zone                # show endpoint + access key (secret masked)
+bunny storage zones credentials my-zone --show-secret  # reveal the secret access key
+bunny storage zones credentials my-zone --read-only    # use the read-only password as the secret
+bunny storage zones credentials my-zone --format rclone >> ~/.config/rclone/rclone.conf
+eval "$(bunny storage zones credentials my-zone --format env)"   # AWS-compatible env vars
 
 # Files: list, upload, download, delete (paths are relative to the zone root)
-bunny storage file list my-zone
-bunny storage file list my-zone images/
-bunny storage file upload my-zone ./photo.png --to images/
-bunny storage file upload my-zone ./photo.png --checksum --content-type image/png
-bunny storage file download my-zone images/photo.png --out ./local.png
-bunny storage file remove my-zone images/photo.png
-bunny storage file remove my-zone images/ --force   # trailing slash removes a directory
+bunny storage files list --zone my-zone
+bunny storage files list images/                       # linked zone
+bunny storage files upload ./photo.png --to images/
+bunny storage files upload ./photo.png --checksum --content-type image/png
+bunny storage files download images/photo.png --out ./local.png
+bunny storage files remove images/photo.png
+bunny storage files remove images/ --force             # trailing slash removes a directory
 
 # Custom domains on the zone's pull zone
-bunny storage zone domains list my-zone
-bunny storage zone domains add cdn.example.com my-zone
-bunny storage zone domains ssl cdn.example.com my-zone
-bunny storage zone domains remove cdn.example.com my-zone
+bunny storage zones domains list my-zone
+bunny storage zones domains add cdn.example.com my-zone
+bunny storage zones domains ssl cdn.example.com my-zone
+bunny storage zones domains remove cdn.example.com my-zone
 
 # Open the storage documentation
 bunny storage docs
 ```
 
-A trailing slash on a `file` path denotes a directory: `file list my-zone images/` lists that directory, and `file remove my-zone images/` deletes it and its contents recursively. Edge Storage file operations are powered by the [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage).
+A trailing slash on a `files` path denotes a directory: `files list images/` lists that directory, and `files remove images/` deletes it and its contents recursively. Edge Storage file operations are powered by the [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage).
 
-bunny.net's S3-compatible API is in closed preview and is opt-in per zone (it cannot be enabled on an existing zone). When a zone has access, `bunny storage zone show` surfaces its S3 endpoint, and `bunny storage zone credentials` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table masks the secret by default; pass `--show-secret` to reveal it (`--output json` and `--format` always emit it in full, since they're meant to be consumed by tools). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
+bunny.net's S3-compatible API is in closed preview and is opt-in per zone (it cannot be enabled on an existing zone). When a zone has access, `bunny storage zones show` surfaces its S3 endpoint, and `bunny storage zones credentials` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table and JSON output mask the secret by default; pass `--show-secret` to reveal it (`--format` always emits it in full, since it's meant to be consumed by tools). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
 
-| Flag                                                                               | Commands                     | Description                                                                                                                        |
-| ---------------------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `--region`, `--replication`                                                        | `zone add`                   | Primary region code, plus optional replication regions (any storage region except the primary; run `storage regions` to list them) |
-| `--pull-zone`, `--pull-zone-name`, `--domain`                                      | `zone add`                   | Also create a pull zone (what serves the stored files on the web) and optionally a custom domain; interactively, `add` offers both |
-| `--custom-404-path`, `--rewrite-404-to-200`, `--replication`                       | `zone update`                | Edit zone settings (see `bunny storage zone update --help`)                                                                        |
-| `--format` (`rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only`, `--show-secret` | `zone credentials`           | Emit S3 config for a tool; use the read-only password as the secret; reveal the masked secret in the table                         |
-| `--to`                                                                             | `file upload`                | Remote path; a trailing slash uploads into that directory                                                                          |
-| `--checksum`, `--content-type`                                                     | `file upload`                | Send a SHA256 checksum for server-side verification; set the stored content type                                                   |
-| `--out`                                                                            | `file download`              | Local destination path (defaults to the file name)                                                                                 |
-| `--force`                                                                          | `zone remove`, `file remove` | Skip the confirmation prompt                                                                                                       |
+| Flag                                                                               | Commands                                 | Description                                                                                                                        |
+| ---------------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `--region`, `--replication`                                                        | `zones add`                              | Primary region code, plus optional replication regions (any storage region except the primary; run `storage regions` to list them) |
+| `--pull-zone`, `--pull-zone-name`, `--domain`                                      | `zones add`                              | Also create a pull zone (what serves the stored files on the web) and optionally a custom domain; interactively, `add` offers both |
+| `--custom-404-path`, `--rewrite-404-to-200`, `--replication`                       | `zones update`                           | Edit zone settings; replication is additive since replicas can't be removed (see `bunny storage zones update --help`)              |
+| `--format` (`rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only`, `--show-secret` | `zones credentials`                      | Emit S3 config for a tool; use the read-only password as the secret; reveal the secret masked in the table and JSON                |
+| `--zone`, `-z`                                                                     | all `files` commands                     | Storage zone name or ID (defaults to the linked zone)                                                                              |
+| `--to`                                                                             | `files upload`                           | Remote path; a trailing slash uploads into that directory                                                                          |
+| `--checksum`, `--content-type`                                                     | `files upload`                           | Send a SHA256 checksum for server-side verification; set the stored content type                                                   |
+| `--out`                                                                            | `files download`                         | Local destination path (defaults to the file name)                                                                                 |
+| `--force`                                                                          | `zones remove`, `files remove`, `unlink` | Skip the confirmation prompts                                                                                                      |
 
 ### `bunny scripts`
 
@@ -850,6 +871,79 @@ Open the Edge Scripts documentation in your browser.
 ```bash
 bunny scripts docs
 ```
+
+### `bunny sites`
+
+Host static sites on bunny.net. Each site is three resources provisioned and wired together for you: a **storage zone** holding the files, a **pull zone** serving them over the CDN, and a **middleware router** (an Edge Script) that maps incoming requests to the deploy that should answer them. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
+
+Deploys are immutable: every `sites deploy` uploads to its own `deploys/<id>/` directory and gets its own preview pull zone, a permanent root-served HTTPS URL (`sites-dpl-<id>-<suffix>.b-cdn.net`) that needs no DNS or certificate setup. Publishing flips the router's `CURRENT_DEPLOY` variable and purges the cache, so going live and rolling back are instant and move no files. Deploy IDs are the git short SHA when the working tree is clean and a content hash otherwise, which makes redeploying identical content a no-op.
+
+Commands take the site as an optional positional (`[site]`), except `deploy`, `ci init`, and `deployments publish`, which use `--site`. Either accepts the site name or its storage zone ID. When omitted, the site resolves from the directory's linked site (`.bunny/site.json`, written by `sites link` or by `create`/`deploy`), then `sites.name` in `bunny.jsonc`, then an interactive picker that offers to link. Non-interactive runs (`--output json`, no TTY, or `--force` on a destructive command) error instead of prompting.
+
+```bash
+# Provision a site
+bunny sites create                                    # interactive: prompts for a name (directory-name suggestion)
+bunny sites create my-site                            # served at sites-my-site-<suffix>.b-cdn.net
+bunny sites create my-site --region NY                # store the files in New York (default: DE)
+bunny sites create my-site --domain example.com       # also attach a custom production domain
+
+# Deploy
+bunny sites deploy                                    # detects the framework, offers to build, then deploys
+bunny sites deploy ./dist                             # deploy a directory to an immutable HTTPS preview URL
+bunny sites deploy ./dist --production                # deploy and publish as the live site (--prod works too; the interactive first deploy offers this)
+bunny sites deploy --build                            # run `sites.build` from bunny.jsonc (else the detected build), then deploy
+bunny sites deploy --build "npm run build" --env API_URL=https://api.example.com
+bunny sites deploy ./dist --site my-site --force      # target a site explicitly; redeploy unchanged content
+
+# Deploys: list, publish (roll back), prune
+bunny sites deployments list                          # ● Live / ○ Previous markers, created, source, files, size
+bunny sites deployments publish a1b2c3d4              # promote a past deploy (alias: promote)
+bunny sites deployments publish --previous            # instant rollback
+bunny sites deployments prune --keep 10               # delete old deploys and their preview zones (default keeps 5; never live/previous)
+
+# Custom production domains (previews don't need one)
+bunny sites domains list
+bunny sites domains add shop.example.com              # prints the DNS record to create
+bunny sites domains add shop.example.com --wait       # add, wait for DNS, then issue SSL and force HTTPS
+bunny sites domains add shop.example.com --ssl --no-force-ssl   # issue SSL now, keep HTTP available
+bunny sites domains ssl shop.example.com
+bunny sites domains remove shop.example.com --force
+
+# Inspect, open, and force HTTPS on the b-cdn.net system host
+bunny sites list                                      # alias: ls
+bunny sites show                                      # resources, domains, SSL state, current deploy
+bunny sites open --print
+bunny sites ssl --no-force-ssl
+
+# CI, linking, maintenance
+bunny sites ci init                                   # GitHub Actions: previews on PRs, production on main
+bunny sites ci init --framework astro
+bunny sites link my-site
+bunny sites unlink
+bunny sites upgrade-router                            # republish the router with this CLI's version (deploy also does this automatically)
+bunny sites delete my-site --keep-storage             # typed-name confirmation; keeps the deploy files
+```
+
+Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) and a deploy needs no arguments: `bunny sites deploy --build --prod`. `sites ci init` reads the same block, so the generated workflow builds and deploys exactly what the local command does; without it, the framework is detected from `package.json` deps, `Gemfile`, or a `hugo`/`python`/`zola` config file, with the lockfile picking the package manager. `sites create` offers to scaffold the workflow on GitHub repos.
+
+A deploy's preview URL is `https://sites-dpl-<id>-<suffix>.b-cdn.net`: its own pull zone pointed at the same storage zone with the same router attached, so previews are root-served (client-side routing and absolute asset paths behave exactly like production) and HTTPS works immediately under bunny's own certificate. Previews never publish anything; only `--production` (or `deployments publish`) changes the live site. Site state lives at `_bunny/site.json` inside the storage zone (the router blocks it with a 403); `.bunny/site.json` is only a local pointer, so a fresh clone can `sites link` and pick up where the last machine left off.
+
+| Flag                                   | Commands                                                   | Description                                                                                        |
+| -------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `--region`, `--domain`                 | `create`                                                   | Main storage region code (default `DE`); custom production domain to attach                        |
+| `--site`                               | `deploy`, `ci init`, `deployments publish`                 | Site name or storage zone ID (defaults to the linked site)                                         |
+| `--build [cmd]`, `--env`, `--env-file` | `deploy`                                                   | Build before deploying (bare flag uses the configured or detected build); build-time env overrides |
+| `--production`, `--prod`               | `deploy`                                                   | Publish the deploy as the live site instead of a preview only                                      |
+| `--force`                              | `deploy`                                                   | Deploy even when the content is unchanged                                                          |
+| `--previous`                           | `deployments publish`                                      | Publish the previous deploy (instant rollback)                                                     |
+| `--keep`                               | `deployments prune`                                        | Number of recent deploys to keep (default 5; live and previous are always kept)                    |
+| `--ssl`, `--wait`, `--force-ssl`       | `domains add`                                              | Issue SSL now; wait up to 10 minutes for DNS then issue it; `--no-force-ssl` keeps HTTP working    |
+| `--force-ssl`                          | `ssl`                                                      | Force HTTP→HTTPS on the system host; `--no-force-ssl` allows plain HTTP                            |
+| `--framework`                          | `ci init`                                                  | Framework preset for the workflow's build steps (default: detected)                                |
+| `--print`                              | `open`                                                     | Print the URL instead of opening a browser                                                         |
+| `--link`                               | `create`, `deploy`, `show`, `ci init`, `deployments`       | Link the directory to the site; `--no-link` never links                                            |
+| `--keep-storage`                       | `delete`                                                   | Delete the pull zone and router but keep the storage zone and its deploy files                     |
+| `--force`, `-f`                        | `deployments publish`, `prune`, `domains remove`, `delete` | Skip the confirmation prompts                                                                      |
 
 ### `bunny sandbox`
 

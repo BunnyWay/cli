@@ -1,5 +1,6 @@
 import ora from "ora";
 import prompts from "prompts";
+import { UserError } from "./errors.ts";
 
 /**
  * Masked password input. Returns an empty string if the user cancels.
@@ -56,6 +57,15 @@ export function isInteractive(output?: string): boolean {
     Boolean(process.stdin.isTTY) &&
     Boolean(process.stdout.isTTY)
   );
+}
+
+// Guard a confirmation there's nobody to answer: an unguarded prompt blocks forever in CI and lands on stdout ahead of `--output json`, so unattended runs must pass --force.
+export function requireConfirmable(
+  output: string | undefined,
+  opts: { force?: boolean; message: string; hint: string },
+): void {
+  if (opts.force || isInteractive(output)) return;
+  throw new UserError(opts.message, opts.hint);
 }
 
 /** Creates an ora spinner. Automatically silenced in non-TTY environments. */

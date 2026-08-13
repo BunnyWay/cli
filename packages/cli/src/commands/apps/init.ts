@@ -6,6 +6,7 @@ import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { configExists } from "./config.ts";
+import { normalizeRegistryFlag } from "./docker.ts";
 import { runWalkthrough } from "./walkthrough.ts";
 
 const COMMAND = "init";
@@ -65,7 +66,8 @@ export const appsInitCommand = defineCommand<InitArgs>({
       })
       .option("registry", {
         type: "string",
-        describe: "bunny.net registry ID to push to",
+        describe:
+          'Registry ID to push to, or "bunny" for the bunny.net registry',
       })
       .option("port", {
         type: "number",
@@ -114,7 +116,7 @@ export const appsInitCommand = defineCommand<InitArgs>({
     const { config: toml } = await runWalkthrough(client, {
       positionalImage: image,
       dockerfileFlag: normalizeDockerfileFlag(dockerfile),
-      registryFlag: registry,
+      registryFlag: normalizeRegistryFlag(registry),
       portOverride: port,
       commandOverride: command,
       nameOverride: name,

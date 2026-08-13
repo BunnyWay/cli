@@ -6,14 +6,13 @@ import {
   addHostname,
   type CoreClient,
   createHostnamesCommands,
-  enableSsl,
+  fetchPullZoneHostnames,
   type ResolvedPullZone,
   setupHostname,
 } from "../../../core/hostnames/index.ts";
 import { logger } from "../../../core/logger.ts";
 import type { GlobalArgs } from "../../../core/types.ts";
 import { type SiteContext, writeRemoteState } from "../api.ts";
-import { PREVIEW_LABEL, previewWildcard } from "../constants.ts";
 import { selectSite } from "../interactive.ts";
 
 // The hooks run in the same invocation as `resolve`, so the resolved site is cached here (a CLI process handles exactly one command).
@@ -25,83 +24,34 @@ async function resolveSitePullZone(
   const config = resolveConfig(args.profile, args.apiKey, args.verbose);
   const coreClient = createCoreClient(clientOptions(config, args.verbose));
 
+  // Only `remove` defines --force, so add/ssl/list keep the picker.
   const { site } = await selectSite(coreClient, {
     site: args.site as string | undefined,
     link: false,
     output: args.output,
+    force: args.force === true,
   });
   resolvedSite = site;
 
   return { pullZoneId: site.state.pullZoneId, coreClient };
 }
 
-function isPreviewHost(hostname: string): boolean {
-  return (
-    hostname.startsWith("*.") ||
-    hostname.includes(`.${PREVIEW_LABEL}.`) ||
-    hostname.startsWith(`${PREVIEW_LABEL}.`)
-  );
-}
-
-/** Persist the site's primary domain in the remote state (best-effort). */
-async function recordSiteDomain(
+/** Persist the site's production domain in the remote state (best-effort; rolls back the in-memory value on failure so the recorded value always reflects a successful write). */
+export async function recordSiteDomain(
   site: SiteContext,
   domain: string | undefined,
 ): Promise<void> {
+  const previous = site.state.domain;
   try {
     site.state.domain = domain;
     site.etag = await writeRemoteState(site.connection, site.state, site.etag);
   } catch (err) {
+    site.state.domain = previous;
     logger.warn(`Couldn't update the site state: ${errorMessage(err)}`);
   }
 }
 
-// Attach the `*.preview.<domain>` wildcard that serves per-deploy previews; best-effort, since the apex is already added and this can be retried via `sites domains add`.
-export async function attachPreviewWildcard(opts: {
-  coreClient: CoreClient;
-  pullZoneId: number;
-  domain: string;
-  cnameTarget?: string;
-  json?: boolean;
-}): Promise<void> {
-  const wildcard = previewWildcard(opts.domain);
-  try {
-    const { hostnames } = await addHostname(
-      opts.coreClient,
-      opts.pullZoneId,
-      wildcard,
-    );
-    if (!opts.json) {
-      logger.success(`Added ${wildcard} for deploy previews.`);
-      if (opts.cnameTarget) {
-        logger.accent(`  CNAME  ${wildcard}  →  ${opts.cnameTarget}`);
-      }
-    }
-    try {
-      await enableSsl(
-        opts.coreClient,
-        opts.pullZoneId,
-        wildcard,
-        true,
-        hostnames,
-      );
-    } catch {
-      // Wildcard certs need DNS in place (DNS-01); issue later, don't block.
-      if (!opts.json) {
-        logger.dim(
-          `  Preview HTTPS pending; once DNS is live: bunny sites domains ssl "${wildcard}"`,
-        );
-      }
-    }
-  } catch (err) {
-    if (!opts.json) {
-      logger.warn(`Couldn't add ${wildcard}: ${errorMessage(err)}`);
-      logger.dim("  Previews will use /deploys/<id>/ paths until it's added.");
-    }
-  }
-}
-
-// Full custom-domain setup for a site (used by `sites create --domain`): interactive runs get the DNS-wait/SSL flow, JSON runs just attach and report; the preview wildcard and state update happen in both.
+// Full custom-domain setup for a site (used by `sites create --domain` and deploy's first-run offer): interactive runs get the DNS-wait/SSL flow, JSON runs just attach and report. The domain is display-only (previews run on their own b-cdn.net zones), so it's recorded as soon as the hostname is on the zone.
 export async function setupSiteDomain(opts: {
   coreClient: CoreClient;
   site: SiteContext;
@@ -114,10 +64,10 @@ export async function setupSiteDomain(opts: {
   const pullZoneId = site.state.pullZoneId;
   const name = site.state.name;
 
-  let cnameTarget: string | undefined;
+  let attached: boolean;
   if (opts.json) {
-    const added = await addHostname(coreClient, pullZoneId, domain);
-    cnameTarget = added.cnameTarget;
+    await addHostname(coreClient, pullZoneId, domain);
+    attached = true;
   } else {
     await setupHostname({
       coreClient,
@@ -129,16 +79,18 @@ export async function setupSiteDomain(opts: {
       interactive: opts.interactive,
       verbose: opts.verbose,
     });
+    // setupHostname's return means "certificate issued", not "attached", so read the zone: a domain that never attached must not be recorded as the production URL.
+    const hostnames = await fetchPullZoneHostnames(
+      coreClient,
+      pullZoneId,
+    ).catch(() => null);
+    attached =
+      hostnames?.some(
+        (h) => (h.Value ?? "").toLowerCase() === domain.toLowerCase(),
+      ) ?? false;
   }
 
-  await attachPreviewWildcard({
-    coreClient,
-    pullZoneId,
-    domain,
-    cnameTarget,
-    json: opts.json,
-  });
-  await recordSiteDomain(site, domain);
+  if (attached) await recordSiteDomain(site, domain);
 }
 
 /** The `domains` namespace + hidden `hostnames` alias, ready to spread into `sites`. */
@@ -153,31 +105,21 @@ export const sitesDomainsCommands = createHostnamesCommands({
     type: "string",
   },
   resolve: resolveSitePullZone,
-  onAdded: async ({ coreClient, pullZoneId, hostname, cnameTarget, args }) => {
-    // Adding preview infrastructure by hand shouldn't recurse into itself.
-    if (isPreviewHost(hostname)) return;
-    await attachPreviewWildcard({
-      coreClient,
-      pullZoneId,
-      domain: hostname,
-      cnameTarget,
-      json: args.output === "json",
-    });
+  onAdded: async ({ hostname, args }) => {
+    // A wildcard is never a site's production URL.
+    if (hostname.startsWith("*.")) return;
+    // The first custom domain becomes the site's production URL.
     if (resolvedSite && !resolvedSite.state.domain) {
       await recordSiteDomain(resolvedSite, hostname);
     }
-  },
-  onRemoved: async ({ coreClient, pullZoneId, hostname }) => {
-    if (isPreviewHost(hostname)) return;
-    // Take the companion wildcard down with the apex.
-    try {
-      await coreClient.DELETE("/pullzone/{id}/removeHostname", {
-        params: { path: { id: pullZoneId } },
-        body: { Hostname: previewWildcard(hostname) },
-      });
-    } catch {
-      // Already gone (or never added); nothing to clean up.
+    // A domain on a site with nothing published serves the router's 404; say so instead of letting the first visit read as breakage.
+    if (args.output !== "json" && resolvedSite?.state.current === undefined) {
+      logger.dim(
+        "  Nothing is published yet, so this domain serves a 404: publish with `bunny sites deploy --production`.",
+      );
     }
+  },
+  onRemoved: async ({ hostname }) => {
     if (resolvedSite?.state.domain === hostname) {
       await recordSiteDomain(resolvedSite, undefined);
     }

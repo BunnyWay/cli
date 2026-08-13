@@ -21,6 +21,7 @@ import {
   printWorkflowInstructions,
   scaffoldSitesWorkflow,
 } from "./ci/scaffold.ts";
+import { loadSiteConfig } from "./config.ts";
 import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 import { setupSiteDomain } from "./domains/index.ts";
 import { createSiteWithProgress, promptSiteName } from "./provision.ts";
@@ -32,7 +33,7 @@ interface CreateArgs {
   link?: boolean;
 }
 
-// Attach a custom domain to a just-created site; returns an error message on failure (never throws).
+// Attach a custom production domain to a just-created site; never throws (the site already exists and the domain can be retried via `sites domains add`).
 async function attachDomainToCreatedSite(opts: {
   coreClient: CoreClient;
   storageZone: StorageZoneModel;
@@ -40,9 +41,9 @@ async function attachDomainToCreatedSite(opts: {
   interactive: boolean;
   verbose: boolean;
   json?: boolean;
-}): Promise<string | undefined> {
+}): Promise<{ error?: string }> {
   const site = await siteContextFromZone(opts.storageZone);
-  if (!site) return undefined;
+  if (!site) return {};
   try {
     await setupSiteDomain({
       coreClient: opts.coreClient,
@@ -52,9 +53,9 @@ async function attachDomainToCreatedSite(opts: {
       verbose: opts.verbose,
       json: opts.json,
     });
-    return undefined;
+    return {};
   } catch (err) {
-    return errorMessage(err);
+    return { error: errorMessage(err) };
   }
 }
 
@@ -63,7 +64,10 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
   command: "create [name]",
   describe: "Create a new static site.",
   examples: [
-    ["$0 sites create", "Prompt for a name (defaults to the directory name)"],
+    [
+      "$0 sites create",
+      "Use `sites.name` from bunny.jsonc, else prompt (directory-name suggestion)",
+    ],
     [
       "$0 sites create my-site",
       "Create a site served at sites-my-site-<suffix>.b-cdn.net",
@@ -80,7 +84,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       .positional("name", {
         type: "string",
         describe:
-          "Site name; the storage zone, pull zone, and b-cdn.net subdomain become sites-<name>-xxxxxx (prompted when omitted)",
+          "Site name; the storage zone, pull zone, and b-cdn.net subdomain become sites-<name>-xxxxxx (defaults to `sites.name` in bunny.jsonc, else prompted)",
       })
       .option("region", {
         type: "string",
@@ -90,7 +94,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       .option("domain", {
         type: "string",
         describe:
-          "Custom domain to attach, with *.preview.<domain> previews (offered interactively when omitted)",
+          "Custom production domain to attach (offered interactively when omitted)",
       })
       .option("link", {
         type: "boolean",
@@ -102,7 +106,17 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
     const { profile, output, verbose, apiKey } = args;
     const interactive = isInteractive(output);
 
-    const name = await promptSiteName(args.name, interactive);
+    // `sites.name` is how every other sites command resolves the site, so create takes it as the name too.
+    const loadedConfig = loadSiteConfig();
+    const siteConfig = loadedConfig?.config;
+    const configRoot = loadedConfig?.root;
+    const name = await promptSiteName(
+      args.name ?? siteConfig?.name,
+      interactive,
+    );
+    if (!args.name && siteConfig?.name && output !== "json") {
+      logger.info(`Using site name "${name}" from bunny.jsonc.`);
+    }
 
     const domain = args.domain ? normalizeHostname(args.domain) : undefined;
 
@@ -127,7 +141,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
 
     if (output === "json") {
       // --domain is attached non-interactively; a failure is reported but doesn't fail the create.
-      const domainError = domain
+      const attach = domain
         ? await attachDomainToCreatedSite({
             coreClient,
             storageZone: result.storageZone,
@@ -137,6 +151,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
             json: true,
           })
         : undefined;
+      const domainError = attach?.error;
       logger.log(
         JSON.stringify(
           {
@@ -185,9 +200,8 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       chosenDomain = normalizeHostname(value ?? "") || undefined;
     }
     if (chosenDomain) {
-      // A domain failure mustn't fail the create; the site already exists and the domain can be retried via `sites domains add`.
       logger.log();
-      const domainError = await attachDomainToCreatedSite({
+      const { error: domainError } = await attachDomainToCreatedSite({
         coreClient,
         storageZone: result.storageZone,
         domain: chosenDomain,
@@ -217,11 +231,14 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
           const scaffold = await scaffoldSitesWorkflow({
             site: name,
             root,
+            projectRoot: configRoot,
             interactive: true,
+            dir: siteConfig?.dir,
+            build: siteConfig?.build,
           });
           if (scaffold) {
             logger.success(
-              `Wrote ${scaffold.path} (${scaffold.preset.label}, deploys ${scaffold.preset.dir}).`,
+              `Wrote ${scaffold.path} (${scaffold.preset.label}, deploys ${scaffold.dir}).`,
             );
             await offerGitHubSecret({
               apiKey: config.apiKey,
@@ -230,7 +247,10 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
             });
           }
         } else {
-          await printWorkflowInstructions(name, root);
+          await printWorkflowInstructions(name, root, {
+            root: configRoot,
+            ...siteConfig,
+          });
         }
       }
     }

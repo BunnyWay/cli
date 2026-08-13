@@ -27,7 +27,7 @@ function resolvePullZoneId(zone: StorageZoneModel, flag?: number): number {
   if (zones.length === 0) {
     throw new UserError(
       `Storage zone ${zone.Name} has no pull zone.`,
-      'Create one with "bunny storage zones add --pull-zone".',
+      "The CLI only creates one during `zones add --pull-zone`; for an existing zone, create a pull zone with it as the origin in the dashboard (https://dash.bunny.net/cdn/add).",
     );
   }
 

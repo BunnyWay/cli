@@ -2,10 +2,15 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
-import { errorMessage } from "../../../core/errors.ts";
+import { errorMessage, UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, withSpinner } from "../../../core/ui.ts";
-import { deleteDeployFiles, writeRemoteState } from "../api.ts";
+import { confirm, requireConfirmable, withSpinner } from "../../../core/ui.ts";
+import {
+  deleteDeployFiles,
+  deletePreviewZone,
+  findPreviewZones,
+  writeRemoteState,
+} from "../api.ts";
 import {
   DEFAULT_KEEP_DEPLOYS,
   isValidDeployId,
@@ -14,7 +19,7 @@ import {
 import {
   type SiteSelectorArgs,
   selectSite,
-  siteOptionBuilder,
+  sitePositionalBuilder,
 } from "../interactive.ts";
 
 interface PruneArgs extends SiteSelectorArgs {
@@ -22,8 +27,20 @@ interface PruneArgs extends SiteSelectorArgs {
   force?: boolean;
 }
 
+// yargs hands us NaN for `--keep abc`, which passes pruneVictims' `Math.max(0, keep)` untouched and marks every deploy but current/previous for deletion; the same goes for a negative count.
+export function resolveKeepCount(keep: number | undefined): number {
+  const value = keep ?? DEFAULT_KEEP_DEPLOYS;
+  if (!Number.isInteger(value) || value < 0) {
+    throw new UserError(
+      "--keep must be a whole number of deploys to keep, 0 or more.",
+      `Omit it to keep the newest ${DEFAULT_KEEP_DEPLOYS}.`,
+    );
+  }
+  return value;
+}
+
 export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
-  command: "prune",
+  command: "prune [site]",
   describe: "Delete old deploys, keeping the most recent ones.",
   examples: [
     [
@@ -31,11 +48,12 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       `Keep the ${DEFAULT_KEEP_DEPLOYS} newest deploys`,
     ],
     ["$0 sites deployments prune --keep 10", "Keep the 10 newest deploys"],
+    ["$0 sites deployments prune my-site", "Prune a specific site"],
     ["$0 sites deployments prune --force", "Skip confirmation"],
   ],
 
   builder: (yargs) =>
-    siteOptionBuilder(yargs)
+    sitePositionalBuilder(yargs)
       .option("keep", {
         type: "number",
         default: DEFAULT_KEEP_DEPLOYS,
@@ -50,6 +68,8 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
+    const keep = resolveKeepCount(args.keep);
+
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
@@ -57,12 +77,13 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       site: args.site,
       link: false,
       output,
+      force: args.force,
     });
     const { state, connection, etag } = site;
 
     const victims = pruneVictims(
       state.deploys,
-      args.keep ?? DEFAULT_KEEP_DEPLOYS,
+      keep,
       state.current,
       state.previous,
     );
@@ -76,6 +97,11 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       return;
     }
 
+    requireConfirmable(output, {
+      force: args.force,
+      message: `Pruning ${victims.length} deploy(s) needs a confirmation prompt.`,
+      hint: "Re-run with --force to prune non-interactively.",
+    });
     const proceed = await confirm(
       `Delete ${victims.length} old deploy(s) from ${state.name} (${victims
         .map((v) => v.id)
@@ -89,6 +115,21 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
 
     const failures: Array<{ id: string; error: string }> = [];
     await withSpinner("Pruning deploys...", async (spin) => {
+      // One listing per prune: it backfills records that lack their zone id (zone create raced a failed state write) and catches duplicate zones a concurrent same-id deploy left behind.
+      let discovered: Map<string, number[]> | undefined;
+      try {
+        discovered = new Map();
+        for (const z of await findPreviewZones(client, state.storageZoneId)) {
+          discovered.set(z.deployId, [
+            ...(discovered.get(z.deployId) ?? []),
+            z.id,
+          ]);
+        }
+      } catch (err) {
+        discovered = undefined;
+        logger.warn(`Couldn't list preview zones: ${errorMessage(err)}`);
+      }
+
       const pruned = new Set<string>();
       for (const [index, victim] of victims.entries()) {
         spin.text = `Pruning ${victim.id} (${index + 1}/${victims.length})...`;
@@ -96,6 +137,34 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
           // Never interpolate an unvalidated ID into a storage path.
           if (!isValidDeployId(victim.id)) {
             failures.push({ id: victim.id, error: "Invalid deploy ID." });
+            continue;
+          }
+          // With the listing down, a record without a zone id can't prove its zone doesn't exist; keep it so the next prune retries instead of stranding an orphan.
+          if (discovered === undefined && victim.previewZoneId === undefined) {
+            failures.push({
+              id: victim.id,
+              error:
+                "couldn't check for a preview zone; retry with another prune",
+            });
+            continue;
+          }
+          // Zones first: a failed zone deletion keeps the record (and files), so the next prune retries instead of orphaning the zone until site delete.
+          const zoneIds = new Set([
+            ...(victim.previewZoneId !== undefined
+              ? [victim.previewZoneId]
+              : []),
+            ...(discovered?.get(victim.id) ?? []),
+          ]);
+          let zonesGone = true;
+          for (const zoneId of zoneIds) {
+            zonesGone = (await deletePreviewZone(client, zoneId)) && zonesGone;
+          }
+          if (!zonesGone) {
+            failures.push({
+              id: victim.id,
+              error:
+                "preview zone couldn't be deleted; retry with another prune",
+            });
             continue;
           }
           await deleteDeployFiles(connection, victim.id);

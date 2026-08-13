@@ -17,6 +17,7 @@ import { withSpinner } from "../../core/ui.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
+  siteLinkOption,
   sitePositionalBuilder,
 } from "./interactive.ts";
 
@@ -31,7 +32,7 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
     ["$0 sites show --output json", "JSON output"],
   ],
 
-  builder: (yargs) => sitePositionalBuilder(yargs),
+  builder: (yargs) => siteLinkOption(sitePositionalBuilder(yargs)),
 
   handler: async ({ site: ref, link, profile, output, verbose, apiKey }) => {
     const config = resolveConfig(profile, apiKey, verbose);
@@ -44,10 +45,11 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
     });
     const { state } = site;
 
-    // Hostnames are informational; a fetch failure shouldn't hide the site.
-    const hostnames = await withSpinner("Fetching hostnames...", () =>
-      fetchPullZoneHostnames(client, state.pullZoneId).catch(() => []),
+    // Hostnames are informational; a fetch failure shouldn't hide the site (null, not [], so a failed read never reads as "no preview wildcard").
+    const fetched = await withSpinner("Fetching hostnames...", () =>
+      fetchPullZoneHostnames(client, state.pullZoneId).catch(() => null),
     );
+    const hostnames = fetched ?? [];
 
     if (output === "json") {
       logger.log(

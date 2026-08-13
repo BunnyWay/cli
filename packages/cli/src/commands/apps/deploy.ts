@@ -2,7 +2,11 @@ import { existsSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import type { RegistryMap } from "@bunny.net/config";
 import { createMcClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
+import { type ResolvedConfig, resolveConfig } from "../../config/index.ts";
+import {
+  fetchRegistryNamespace,
+  REGISTRY_USERNAME,
+} from "../../core/bunny-registry.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { bunny } from "../../core/colors.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -124,6 +128,7 @@ async function applyPostPushSuggestions(
 }
 
 import {
+  BUNNY_REGISTRY_ID,
   buildImage,
   buildImageRef,
   dockerLogin,
@@ -131,6 +136,8 @@ import {
   ensureRegistryLogin,
   generateTag,
   getConfigSuggestions,
+  getRegistry,
+  normalizeRegistryFlag,
   promptRegistry,
   pushImage,
   type ResolvedRegistry,
@@ -207,7 +214,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       })
       .option("registry", {
         type: "string",
-        describe: "bunny.net registry ID to push to (overrides bunny.jsonc)",
+        describe:
+          'Registry ID to push to, or "bunny" for the bunny.net registry (overrides bunny.jsonc)',
       })
       .option("container", {
         type: "string",
@@ -248,6 +256,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     const { profile, output, verbose, apiKey } = args;
     const positionalImage = args.image;
     const dockerfileFlag = normalizeDockerfileFlag(args.dockerfile);
+    const registryFlag = normalizeRegistryFlag(args.registry);
     const noPush = args["no-push"] === true;
     const dryRun = args["dry-run"] === true;
 
@@ -291,7 +300,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         positionalImage,
         dockerfileFlag,
         contextFlag: args.context,
-        registryFlag: args.registry,
+        registryFlag,
         portOverride: args.port,
         commandOverride: args.command,
         nameOverride: args.name,
@@ -383,6 +392,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         contextOverride: args.context,
         draftContainers: draft.containers,
         onRegistryResolved: setContainerRegistry,
+        cfg,
+        verbose,
       });
 
       const createSpin = spinner("Creating app...");
@@ -450,7 +461,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
     let deployImage: string | undefined;
     let registryId: string | undefined = resolveDeployRegistry(
-      args.registry,
+      registryFlag,
       draft.containers[targetName]?.registry,
       () => resolveContainerRegistry(targetName, targetContainer),
     );
@@ -474,9 +485,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
       const regSpin = spinner("Fetching registry...");
       regSpin.start();
-      const { data: reg } = await client.GET("/registries/{registryId}", {
-        params: { path: { registryId: Number(registryId) } },
-      });
+      const reg = await getRegistry(client, registryId);
       regSpin.stop();
 
       if (!reg?.hostName) {
@@ -486,10 +495,18 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         );
       }
 
+      // The bunny.net registry record is public (no userName):
+      // repositories are namespaced by account id and pushes
+      // authenticate with the API token.
+      const isBunnyRegistry = registryId === BUNNY_REGISTRY_ID;
+      const namespace = isBunnyRegistry
+        ? await fetchRegistryNamespace(cfg, verbose)
+        : reg.userName;
+
       const tag = args.tag ?? (await generateTag());
       const imageRef = buildImageRef(
         reg.hostName,
-        reg.userName,
+        namespace,
         toml.app.name,
         tag,
       );
@@ -509,7 +526,21 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         return;
       }
 
-      if (freshCreds && reg.hostName) {
+      if (isBunnyRegistry) {
+        if (!cfg.apiKey) {
+          throw new UserError(
+            "Not logged in.",
+            'Run "bunny login" to authenticate.',
+          );
+        }
+        const loginSpin = spinner(`Logging in to ${reg.hostName}...`);
+        loginSpin.start();
+        try {
+          await dockerLogin(reg.hostName, REGISTRY_USERNAME, cfg.apiKey);
+        } finally {
+          loginSpin.stop();
+        }
+      } else if (freshCreds) {
         const loginSpin = spinner(`Logging in to ${reg.hostName}...`);
         loginSpin.start();
         try {
@@ -518,12 +549,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
             freshCreds.userName,
             freshCreds.password,
           );
+        } finally {
           loginSpin.stop();
-        } catch (err) {
-          loginSpin.stop();
-          throw err;
         }
-      } else if (reg.hostName) {
+      } else {
         // No just-entered credentials, so make sure docker is logged in
         // before we attempt the push, prompting if not.
         await ensureRegistryLogin(reg.hostName);
@@ -955,6 +984,9 @@ async function prepareContainersForCreate(
      */
     draftContainers: AppManifest["containers"];
     onRegistryResolved: (name: string, registryId: string) => void;
+    /** Resolved CLI config — needed to push to the bunny.net registry (API-token auth). */
+    cfg: ResolvedConfig;
+    verbose?: boolean;
   },
 ): Promise<void> {
   const entries = Object.entries(toml.app.containers);
@@ -970,6 +1002,8 @@ async function prepareContainersForCreate(
         contextOverride: opts.contextOverride,
         draftContainers: opts.draftContainers,
         onRegistryResolved: opts.onRegistryResolved,
+        cfg: opts.cfg,
+        verbose: opts.verbose,
       });
     } else if (container.image) {
       await resolveRegistryForPrebuiltImage(client, name, container, {
@@ -995,6 +1029,8 @@ async function buildAndPushContainer(
     contextOverride?: string;
     draftContainers: AppManifest["containers"];
     onRegistryResolved: (name: string, registryId: string) => void;
+    cfg: ResolvedConfig;
+    verbose?: boolean;
   },
 ): Promise<void> {
   if (!container.dockerfile) return;
@@ -1021,9 +1057,7 @@ async function buildAndPushContainer(
 
   const regSpin = spinner(`Fetching registry for ${name}...`);
   regSpin.start();
-  const { data: reg } = await client.GET("/registries/{registryId}", {
-    params: { path: { registryId: Number(registryId) } },
-  });
+  const reg = await getRegistry(client, registryId);
   regSpin.stop();
 
   if (!reg?.hostName) {
@@ -1033,9 +1067,16 @@ async function buildAndPushContainer(
     );
   }
 
+  // The bunny.net registry record is public (no userName): repositories
+  // are namespaced by account id and pushes authenticate with the API token.
+  const isBunnyRegistry = registryId === BUNNY_REGISTRY_ID;
+  const namespace = isBunnyRegistry
+    ? await fetchRegistryNamespace(opts.cfg, opts.verbose)
+    : reg.userName;
+
   const imageRef = buildImageRef(
     reg.hostName,
-    reg.userName,
+    namespace,
     `${toml.app.name}-${name}`,
     opts.tag,
   );
@@ -1047,7 +1088,21 @@ async function buildAndPushContainer(
   logger.info(`Building ${imageRef}...`);
   await buildImage(container.dockerfile, imageRef, buildCwd);
 
-  if (freshCreds && reg.hostName) {
+  if (isBunnyRegistry) {
+    if (!opts.cfg.apiKey) {
+      throw new UserError(
+        "Not logged in.",
+        'Run "bunny login" to authenticate.',
+      );
+    }
+    const loginSpin = spinner(`Logging in to ${reg.hostName}...`);
+    loginSpin.start();
+    try {
+      await dockerLogin(reg.hostName, REGISTRY_USERNAME, opts.cfg.apiKey);
+    } finally {
+      loginSpin.stop();
+    }
+  } else if (freshCreds) {
     const loginSpin = spinner(`Logging in to ${reg.hostName}...`);
     loginSpin.start();
     try {
@@ -1057,7 +1112,7 @@ async function buildAndPushContainer(
       loginSpin.stop();
       throw err;
     }
-  } else if (reg.hostName) {
+  } else {
     await ensureRegistryLogin(reg.hostName);
   }
 

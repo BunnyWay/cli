@@ -4,9 +4,11 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
 import { isInteractive } from "../../../core/ui.ts";
+import { loadSiteConfig } from "../config.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
+  siteLinkOption,
   siteOptionBuilder,
 } from "../interactive.ts";
 import { FRAMEWORK_PRESETS } from "./frameworks.ts";
@@ -22,7 +24,7 @@ interface CiInitArgs extends SiteSelectorArgs {
   force?: boolean;
 }
 
-// Scaffold `.github/workflows/bunny-sites.yml`: previews on PRs, production on merges to main, via the BunnyWay/actions deploy-site action.
+// Scaffold `.github/workflows/bunny-sites.yml` via the BunnyWay/actions deploy-site action: previews on PRs + production on merges to main (every deploy has its own preview zone, so no custom domain is needed).
 export const sitesCiInitCommand = defineCommand<CiInitArgs>({
   command: "init",
   describe: "Add a GitHub Actions workflow that deploys this site.",
@@ -36,7 +38,7 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
   ],
 
   builder: (yargs) =>
-    siteOptionBuilder(yargs)
+    siteLinkOption(siteOptionBuilder(yargs))
       .option("framework", {
         type: "string",
         choices: FRAMEWORK_PRESETS.map((p) => p.id),
@@ -68,12 +70,17 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
       );
     }
 
+    // `sites.dir`/`sites.build` are what a local deploy uses, so the workflow follows them, relative to the bunny.jsonc directory they resolve against.
+    const siteConfig = loadSiteConfig();
     const result = await scaffoldSitesWorkflow({
       site: name,
       root,
+      projectRoot: siteConfig?.root,
       frameworkId: args.framework,
       interactive,
       force: args.force,
+      dir: siteConfig?.config.dir,
+      build: siteConfig?.config.build,
     });
 
     if (output === "json") {
@@ -84,6 +91,7 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
             path: result.path,
             framework: result.preset.id,
             packageManager: result.packageManager,
+            directory: result.dir,
           },
           null,
           2,
@@ -98,7 +106,7 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
     }
 
     logger.success(
-      `Wrote ${result.path} (${result.preset.label}, deploys ${result.preset.dir}).`,
+      `Wrote ${result.path} (${result.preset.label}, deploys ${result.dir}).`,
     );
     logger.log();
     await offerGitHubSecret({ apiKey: config.apiKey, root, interactive });

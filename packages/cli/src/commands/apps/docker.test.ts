@@ -4,15 +4,28 @@ import { join } from "node:path";
 import { useTempDir } from "../../test-utils/temp-dir.ts";
 import {
   assignContainerNamesToDockerfiles,
+  BUNNY_REGISTRY_ID,
   buildImageRef,
   defaultContainerNameFromDockerfile,
   dockerHasCredentials,
   findDockerfiles,
   imageHostname,
   isDockerfileName,
+  normalizeRegistryFlag,
   parseDockerfileExposedPorts,
   parseOauthScopes,
 } from "./docker.ts";
+
+describe("normalizeRegistryFlag", () => {
+  test.each([
+    ["bunny", BUNNY_REGISTRY_ID],
+    ["Bunny", BUNNY_REGISTRY_ID],
+    ["1234", "1234"],
+    [undefined, undefined],
+  ])("normalizeRegistryFlag(%j) → %j", (input, expected) => {
+    expect(normalizeRegistryFlag(input)).toBe(expected);
+  });
+});
 
 describe("imageHostname", () => {
   test.each([

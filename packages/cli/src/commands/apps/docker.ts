@@ -4,50 +4,23 @@ import { basename, isAbsolute, join, resolve } from "node:path";
 import type { createMcClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import prompts from "prompts";
-import { UserError } from "../../core/errors.ts";
+import { resolveRegistryEndpoint } from "../../core/bunny-registry.ts";
+import { dockerLogin, imageHostname } from "../../core/docker.ts";
+import { ApiError, UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { spinner } from "../../core/ui.ts";
+
+export {
+  dockerLogin,
+  ensureDockerAvailable,
+  imageHostname,
+  pushImage,
+} from "../../core/docker.ts";
 
 export type McClient = ReturnType<typeof createMcClient>;
 export type ContainerRegistry = components["schemas"]["ContainerRegistry"];
 export type ConfigSuggestions =
   components["schemas"]["ContainerConfigSuggestions"];
-
-/**
- * Ensure the Docker CLI is available on the system.
- *
- * Two failure modes need to map to the same friendly error:
- *   - `docker` not on PATH → `Bun.spawn` throws ENOENT synchronously
- *     (unlike Node's child_process, which emits an 'error' event).
- *   - `docker` on PATH but daemon not running / version probe fails →
- *     non-zero exit code.
- *
- * Without the try/catch the first case escapes as a raw spawn error
- * and lands on the generic "An unexpected error occurred." branch in
- * `defineCommand`, which hides the install link.
- */
-export async function ensureDockerAvailable(): Promise<void> {
-  let exitCode: number;
-  try {
-    const proc = Bun.spawn(
-      ["docker", "version", "--format", "{{.Client.Version}}"],
-      {
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    );
-    exitCode = await proc.exited;
-  } catch {
-    exitCode = 1;
-  }
-
-  if (exitCode !== 0) {
-    throw new UserError(
-      "Docker is not installed or not running.",
-      "Install Docker from https://docs.docker.com/get-docker/",
-    );
-  }
-}
 
 /**
  * Get a short git SHA for tagging images.
@@ -335,56 +308,6 @@ export async function buildImage(
 }
 
 /**
- * Push a Docker image to a registry.
- */
-export async function pushImage(tag: string): Promise<void> {
-  const proc = Bun.spawn(["docker", "push", tag], {
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-
-  const exitCode = await proc.exited;
-
-  if (exitCode !== 0) {
-    const hostname = imageHostname(tag);
-    const hint =
-      hostname === "ghcr.io"
-        ? "If you saw `permission_denied: write_package`, your token is missing the `write:packages` scope. Run `gh auth refresh -h github.com -s write:packages` then `gh auth token | docker login ghcr.io -u $(gh api user --jq .login) --password-stdin` and try again."
-        : `Run \`docker login ${hostname ?? "<hostname>"}\` and try again. Check that your token has push permission.`;
-    throw new UserError(`Docker push failed (exit code ${exitCode}).`, hint);
-  }
-}
-
-/**
- * Log in to a Docker registry. Pipes the password through stdin so it
- * never appears in the process list.
- */
-export async function dockerLogin(
-  hostname: string,
-  username: string,
-  password: string,
-): Promise<void> {
-  const proc = Bun.spawn(
-    ["docker", "login", hostname, "-u", username, "--password-stdin"],
-    {
-      stdin: new Response(password),
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
-
-  const exitCode = await proc.exited;
-
-  if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
-    throw new UserError(
-      "Docker login failed.",
-      stderr.trim() || "Check your registry credentials.",
-    );
-  }
-}
-
-/**
  * Check `~/.docker/config.json` for an existing credential record for
  * `hostname`. Looks at both the `auths` map (where Docker Desktop leaves
  * a `{}` marker even when the real cred lives in a credsStore) and the
@@ -635,31 +558,20 @@ export function buildImageRef(
   return ns ? `${hostName}/${ns}/${name}:${tag}` : `${hostName}/${name}:${tag}`;
 }
 
-/**
- * Extract the registry hostname from a Docker image reference.
- *
- * Returns null if the reference has no explicit hostname (i.e. it's a
- * Docker Hub library or user image like `nginx:latest` or `library/redis`).
- *
- * A hostname only exists when the ref has a `/`. Otherwise the first
- * segment is just `name[:tag]`, not `host[:port]`. Without that check,
- * `nginx:1.27` would be mis-read as the hostname `nginx:1.27`.
- */
-export function imageHostname(ref: string): string | null {
-  if (!ref.includes("/")) return null;
-  const firstSegment = ref.split("/")[0];
-  if (!firstSegment) return null;
-  if (
-    firstSegment.includes(".") ||
-    firstSegment.includes(":") ||
-    firstSegment === "localhost"
-  ) {
-    return firstSegment;
-  }
-  return null;
-}
-
 const ADD_NEW_REGISTRY = "__add_new__";
+
+/** Id of the bunny.net registry's `/registries` record. It's a public record (no userName) shared by every account, so pushes use the API token and the account-id namespace instead of stored credentials. */
+export const BUNNY_REGISTRY_ID = "9808";
+
+/**
+ * Normalize a `--registry` flag value: "bunny" is accepted as an alias
+ * for the bunny.net registry id.
+ */
+export function normalizeRegistryFlag(
+  flag: string | undefined,
+): string | undefined {
+  return flag?.toLowerCase() === "bunny" ? BUNNY_REGISTRY_ID : flag;
+}
 
 /**
  * Result of resolving a registry — the ID plus, if the user just entered
@@ -680,6 +592,30 @@ export async function listRegistries(
 ): Promise<ContainerRegistry[]> {
   const { data } = await client.GET("/registries");
   return data?.items ?? [];
+}
+
+/**
+ * Fetch a single registry record by id.
+ *
+ * `GET /registries/{registryId}` only resolves account-owned records —
+ * global/platform ones (Docker Hub Public, the bunny.net registry) 404
+ * even though `GET /registries` lists them — so on 404 fall back to
+ * scanning the full list.
+ */
+export async function getRegistry(
+  client: McClient,
+  registryId: string,
+): Promise<ContainerRegistry | undefined> {
+  try {
+    const { data } = await client.GET("/registries/{registryId}", {
+      params: { path: { registryId: Number(registryId) } },
+    });
+    if (data) return data;
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status !== 404) throw err;
+  }
+  const registries = await listRegistries(client);
+  return registries.find((r) => String(r.id) === registryId);
 }
 
 /**
@@ -774,6 +710,18 @@ export async function createRegistry(
 export async function promptRegistry(
   client: McClient,
 ): Promise<ResolvedRegistry | null> {
+  const bunnyEndpoint = resolveRegistryEndpoint();
+  const { value: useBunny } = await prompts({
+    type: "confirm",
+    name: "value",
+    message: "Push to the bunny.net registry?",
+    initial: true,
+  });
+  if (useBunny === undefined) return null;
+  if (useBunny) {
+    return { id: BUNNY_REGISTRY_ID, hostName: bunnyEndpoint.host };
+  }
+
   const regSpin = spinner("Fetching registries...");
   regSpin.start();
 

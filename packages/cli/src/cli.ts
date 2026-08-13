@@ -12,6 +12,7 @@ import { dnsNamespace } from "./commands/dns/index.ts";
 import { docsCommand } from "./commands/docs.ts";
 import { openCommand } from "./commands/open.ts";
 import { registriesNamespace } from "./commands/registries/index.ts";
+import { registryNamespace } from "./commands/registry/index.ts";
 import { sandboxNamespace } from "./commands/sandbox/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
 import { sitesNamespace } from "./commands/sites/index.ts";
@@ -29,6 +30,7 @@ const commands: CommandModule[] = [
   dnsNamespace,
   scriptsNamespace,
   sandboxNamespace,
+  sitesNamespace,
   configNamespace,
   docsCommand,
   openCommand,
@@ -39,7 +41,7 @@ const commands: CommandModule[] = [
 const experimentalCommands: CommandModule[] = [
   appsNamespace,
   registriesNamespace,
-  sitesNamespace,
+  registryNamespace,
   storageNamespace,
 ];
 
@@ -87,21 +89,21 @@ export const cli = instance
     () => {},
     () => {
       const art = `
-                  @@@@                                                                                                              
-                 @@@@                                                                                                               
-                 @@@@                                                                                                               
-               @@@@@@  @@@@@@@     @@@@      @@@@@  @@@@ @@@@@@@@    @@@@ @@@@@@@@  @@@@@      @@@@                                 
-            @@@@@@@@@@@@@@@@@@@@   @@@@      @@@@   @@@@@@@@@@@@@@   @@@@@@@@@@@@@@ @@@@@     @@@@@                                 
-                           @@@@@  @@@@@      @@@@   @@@@@    @@@@@   @@@@@    @@@@@  @@@@    @@@@@                                  
-    @@@@ @@@@@@@@@@@        @@@@@ @@@@       @@@@  @@@@@      @@@@  @@@@@      @@@@  @@@@@  @@@@@                        ${bunny("@@")}         
-               @@@@@        @@@@  @@@@      @@@@@  @@@@      @@@@@  @@@@       @@@@   @@@@ @@@@@      ${bunny("@@ @@@     @@@@  @@@@@@")}       
-               @@@@@       @@@@@  @@@@      @@@@   @@@@      @@@@@  @@@@      @@@@@   @@@@@@@@@      ${bunny("@@@@  @@  @@   @@  @@")}          
-               @@@@@      @@@@@  @@@@@     @@@@@   @@@@      @@@@   @@@@      @@@@    @@@@@@@@       ${bunny("@@    @@ @@@@@@@   @@")}          
-               @@@@@@@@@@@@@@@    @@@@@@@@@@@@@@  @@@@@      @@@@  @@@@@      @@@@     @@@@@@        ${bunny("@@    @@ @@        @@")}          
-              @@@@ @@@@@@@@@       @@@@@@@@  @@@  @@@@      @@@@@  @@@@      @@@@@     @@@@@     @@  ${bunny("@@    @@  @@@@@    +@@@")}        
-                                                                                      @@@@@                                         
-                                                                                     @@@@@                                          
-                                                                                    @@@@@                                           
+                  @@@@
+                 @@@@
+                 @@@@
+               @@@@@@  @@@@@@@     @@@@      @@@@@  @@@@ @@@@@@@@    @@@@ @@@@@@@@  @@@@@      @@@@
+            @@@@@@@@@@@@@@@@@@@@   @@@@      @@@@   @@@@@@@@@@@@@@   @@@@@@@@@@@@@@ @@@@@     @@@@@
+                           @@@@@  @@@@@      @@@@   @@@@@    @@@@@   @@@@@    @@@@@  @@@@    @@@@@
+    @@@@ @@@@@@@@@@@        @@@@@ @@@@       @@@@  @@@@@      @@@@  @@@@@      @@@@  @@@@@  @@@@@                        ${bunny("@@")}
+               @@@@@        @@@@  @@@@      @@@@@  @@@@      @@@@@  @@@@       @@@@   @@@@ @@@@@      ${bunny("@@ @@@     @@@@  @@@@@@")}
+               @@@@@       @@@@@  @@@@      @@@@   @@@@      @@@@@  @@@@      @@@@@   @@@@@@@@@      ${bunny("@@@@  @@  @@   @@  @@")}
+               @@@@@      @@@@@  @@@@@     @@@@@   @@@@      @@@@   @@@@      @@@@    @@@@@@@@       ${bunny("@@    @@ @@@@@@@   @@")}
+               @@@@@@@@@@@@@@@    @@@@@@@@@@@@@@  @@@@@      @@@@  @@@@@      @@@@     @@@@@@        ${bunny("@@    @@ @@        @@")}
+              @@@@ @@@@@@@@@       @@@@@@@@  @@@  @@@@      @@@@@  @@@@      @@@@@     @@@@@     @@  ${bunny("@@    @@  @@@@@    +@@@")}
+                                                                                      @@@@@
+                                                                                     @@@@@
+                                                                                    @@@@@
       `;
       if ((process.stdout.columns ?? 0) >= 135) {
         console.log(art);
@@ -139,6 +141,7 @@ export const cli = instance
         ["Create an edge script", "bunny scripts init"],
         ["Add a domain to manage DNS", "bunny dns zones add example.com"],
         ["Create a dev sandbox", "bunny sandbox create my-sandbox"],
+        ["Deploy a static site", "bunny sites deploy"],
         // ["Deploy an app", "bunny apps deploy"],
       ];
 

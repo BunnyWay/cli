@@ -47,6 +47,10 @@ bunny sandbox create my-sandbox -e ANTHROPIC_API_KEY=sk-ant-...
 bunny sandbox exec my-sandbox -- bun install
 bunny sandbox url add my-sandbox 3000
 
+# manage Edge Storage
+bunny storage zones add my-zone --region DE
+bunny storage files upload ./photo.png --to images/ --zone my-zone
+
 # manage DNS
 bunny dns zones add example.com
 bunny dns zones nameservers example.com               # is the registrar delegated to bunny yet?
@@ -55,8 +59,10 @@ bunny dns records preset google-workspace example.com # apply a preset record se
 bunny dns records list example.com
 
 # host a static site
-bunny sites create my-site                            # provision (served at my-site.b-cdn.net)
-bunny sites deploy ./dist --production               # deploy + publish as the live site
+bunny sites create my-site                            # provision (served at sites-my-site-<suffix>.b-cdn.net)
+bunny sites deploy ./dist                             # immutable preview URL (sites-dpl-<id>-<suffix>.b-cdn.net); first deploy offers to publish
+bunny sites deploy ./dist --production                # publish as the live site
+bunny sites domains add example.com --wait            # custom production domain (previews never need one)
 bunny sites deployments publish --previous --force    # instant rollback
 ```
 
@@ -67,8 +73,9 @@ Use this to route to the correct reference file:
 - **Authenticate or switch profiles** -> `references/auth.md`
 - **Database management (create, list, show, link, delete, shell, studio, migrations, regions, tokens)** -> `references/database.md`
 - **DNS (zones, delegation checks, records, presets, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
+- **Edge Storage (zones, replication, S3 credentials, file upload/download, custom domains)** -> `references/storage.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
-- **Static sites (create, deploy, rollback, previews, custom domains)** -> `references/sites.md`
+- **Static sites (create, deploy, rollback, custom domains, domain-gated previews, GitHub Actions)** -> `references/sites.md`
 - **Sandboxes (create, exec, ssh, cp, files, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)

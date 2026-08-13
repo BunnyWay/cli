@@ -1,5 +1,11 @@
 # @bunny.net/openapi-client
 
+## 0.2.0
+
+### Minor Changes
+
+- [#100](https://github.com/BunnyWay/cli/pull/100) [`8b8adb4`](https://github.com/BunnyWay/cli/commit/8b8adb486046513c5921daa06ee6befe9c221334) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - add bunny.net container registry support
+
 ## 0.1.2
 
 ### Patch Changes

@@ -57,21 +57,14 @@ export const sitesOpenCommand = defineCommand<OpenArgs>({
       describe: "Print the URL instead of opening it in the browser",
     }),
 
-  handler: async ({
-    site: ref,
-    link,
-    print,
-    profile,
-    output,
-    verbose,
-    apiKey,
-  }) => {
+  handler: async ({ site: ref, print, profile, output, verbose, apiKey }) => {
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const { site } = await selectSite(client, { site: ref, link, output });
+    const { site } = await selectSite(client, { site: ref, output });
     const { state } = site;
 
+    // siteLiveUrl only honors a recorded domain the zone still serves, so a stale record can't win over the system host.
     const hostnames = await fetchPullZoneHostnames(client, state.pullZoneId);
     const url = siteLiveUrl(state, hostnames);
     if (!url) {
