@@ -76,7 +76,7 @@ bun ny sites ci init                        # add a GitHub Actions workflow (pre
 
 Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) so a deploy needs no flags: `bun ny sites deploy --build --prod`. See [`examples/sites/`](examples/sites/) for ready-to-copy configs (Vite, Astro, Next.js static export, Hugo, plain HTML, and a combined app + site file).
 
-### Available Scripts
+### Available scripts
 
 ```bash
 # Type check the entire monorepo

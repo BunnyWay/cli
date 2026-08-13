@@ -1,6 +1,6 @@
 # AGENTS.md: bunny.net CLI
 
-This document describes the architecture, conventions, and implementation details for the bunny.net CLI. It serves as the canonical reference for AI agents and contributors working on this codebase.
+This document describes the architecture, conventions, and implementation details for the bunny.net CLI. It is the canonical reference for AI agents and contributors working on this codebase.
 
 ---
 
@@ -58,12 +58,12 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 
 ### Packages we explicitly do NOT use
 
-- **No `dotenv`** — Bun loads `.env` automatically.
-- **No `execa`** — Use `Bun.spawn()` or `Bun.$` shell.
-- **No `express` or `http`** — Use `Bun.serve()` for HTTP servers.
-- **No `ink` or `react`** — We use the lighter stack of `ora` + `prompts` + `chalk`.
-- **No `commander` or `clipanion`** — We use `yargs`.
-- **No `cosmiconfig`** — Config file resolution is hand-rolled to match the existing Go CLI behavior.
+- **No `dotenv`**: Bun loads `.env` automatically.
+- **No `execa`**: use `Bun.spawn()` or `Bun.$` shell.
+- **No `express` or `http`**: use `Bun.serve()` for HTTP servers.
+- **No `ink` or `react`**: we use the lighter stack of `ora` + `prompts` + `chalk`.
+- **No `commander` or `clipanion`**: we use `yargs`.
+- **No `cosmiconfig`**: config file resolution is hand-rolled to match the existing Go CLI behavior.
 
 ---
 
@@ -71,12 +71,12 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 
 This is a Bun workspace monorepo with six packages:
 
-- **`@bunny.net/openapi-client`** (`packages/openapi-client/`) — Standalone, type-safe OpenAPI client for bunny.net, generated from OpenAPI specs. Zero CLI dependencies. Publishable to npm.
-- **`@bunny.net/config`** (`packages/config/`) — Shared `bunny.jsonc` schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. The root `BunnyConfigSchema` has optional `app` (Magic Containers) and `sites` (static sites) blocks; `BunnyAppConfigSchema` narrows it to require `app`. Used by the CLI and potentially other tools.
-- **`@bunny.net/database-shell`** (`packages/database-shell/`) — Standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
+- **`@bunny.net/openapi-client`** (`packages/openapi-client/`): standalone, type-safe OpenAPI client for bunny.net, generated from OpenAPI specs. Zero CLI dependencies. Publishable to npm.
+- **`@bunny.net/config`** (`packages/config/`): shared `bunny.jsonc` schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. The root `BunnyConfigSchema` has optional `app` (Magic Containers) and `sites` (static sites) blocks; `BunnyAppConfigSchema` narrows it to require `app`. Used by the CLI and potentially other tools.
+- **`@bunny.net/database-shell`** (`packages/database-shell/`): standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
 - **`@bunny.net/scriptable-dns-types`** (`packages/scriptable-dns-types/`): Ambient TypeScript declarations for the Scriptable DNS runtime globals (`ARecord`, `Monitoring`, `RoutingEngine`, etc.). Types-only, no runtime code: the DNS runtime can't `import`, so these power editor autocomplete and an optional typecheck step. Scaffolded into projects by `bunny dns scripts init`; intended to also feed the dashboard editor. Publishable to npm.
-- **`@bunny.net/sandbox`** (`packages/sandbox/`) — Standalone sandbox SDK. Code-first DX (`Sandbox.create`, `writeFiles`, `runCommand`, `exposePort`, `setEnv`/`getEnv`/`unsetEnv`, `listFiles`/`deleteFile`/`rename`/`exists`) over Magic Containers provisioning plus an `ssh2` SSH/SFTP transport. Blocking `runCommand` accepts `timeout` (rejects with `CommandTimeoutError` carrying partial output), `signal` for cancellation, and `onStdout`/`onStderr` callbacks for live output. Env vars can be baked in at `create` (persisted), passed per-command via `runCommand({ env })` (temporary), or persisted after creation via `setEnv`. The handle implements `Symbol.dispose`/`Symbol.asyncDispose` so `using`/`await using` release the SSH connection (without deleting the sandbox). Zero CLI dependencies.
-- **`@bunny.net/cli`** (`packages/cli/`) — The CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/config`, `@bunny.net/database-shell`, `@bunny.net/scriptable-dns-types`, and `@bunny.net/sandbox`.
+- **`@bunny.net/sandbox`** (`packages/sandbox/`): standalone sandbox SDK. Code-first DX (`Sandbox.create`, `writeFiles`, `runCommand`, `exposePort`, `setEnv`/`getEnv`/`unsetEnv`, `listFiles`/`deleteFile`/`rename`/`exists`) over Magic Containers provisioning plus an `ssh2` SSH/SFTP transport. Blocking `runCommand` accepts `timeout` (rejects with `CommandTimeoutError` carrying partial output), `signal` for cancellation, and `onStdout`/`onStderr` callbacks for live output. Env vars can be baked in at `create` (persisted), passed per-command via `runCommand({ env })` (temporary), or persisted after creation via `setEnv`. The handle implements `Symbol.dispose`/`Symbol.asyncDispose` so `using`/`await using` release the SSH connection (without deleting the sandbox). Zero CLI dependencies.
+- **`@bunny.net/cli`** (`packages/cli/`): the CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/config`, `@bunny.net/database-shell`, `@bunny.net/scriptable-dns-types`, and `@bunny.net/sandbox`.
 
 ```
 bunny-cli/
@@ -86,29 +86,29 @@ bunny-cli/
 │   │   ├── tsconfig.json
 │   │   ├── redocly.yaml                  # Multi-spec config for openapi-typescript
 │   │   ├── specs/                        # OpenAPI specs (committed, JSON)
-│   │   │   ├── core.json                 # Core API — https://api.bunny.net
-│   │   │   ├── compute.json              # Edge Scripting API — https://api.bunny.net/compute
-│   │   │   ├── database.json             # Database API — https://api.bunny.net/database
-│   │   │   ├── magic-containers.json     # Magic Containers API — https://api.bunny.net/mc
-│   │   │   ├── origin-errors.json        # Origin Errors API — https://cdn-origin-logging.bunny.net
-│   │   │   ├── shield.json               # Shield API — https://api.bunny.net (paths under /shield/...)
-│   │   │   ├── storage.json              # Edge Storage API — https://storage.bunnycdn.com (region-specific)
-│   │   │   └── stream.json               # Stream API — https://video.bunnycdn.com
+│   │   │   ├── core.json                 # Core API at https://api.bunny.net
+│   │   │   ├── compute.json              # Edge Scripting API at https://api.bunny.net/compute
+│   │   │   ├── database.json             # Database API at https://api.bunny.net/database
+│   │   │   ├── magic-containers.json     # Magic Containers API at https://api.bunny.net/mc
+│   │   │   ├── origin-errors.json        # Origin Errors API at https://cdn-origin-logging.bunny.net
+│   │   │   ├── shield.json               # Shield API at https://api.bunny.net (paths under /shield/...)
+│   │   │   ├── storage.json              # Edge Storage API at https://storage.bunnycdn.com (region-specific)
+│   │   │   └── stream.json               # Stream API at https://video.bunnycdn.com
 │   │   ├── scripts/
 │   │   │   └── update-specs.ts           # Downloads latest specs from bunny.net endpoints
 │   │   └── src/
 │   │       ├── index.ts                  # Barrel export: clients, errors, ClientOptions type, DNS scan type corrections
-│   │       ├── middleware.ts             # authMiddleware(options) — dependency-inverted (no CLI imports)
+│   │       ├── middleware.ts             # authMiddleware(options), dependency-inverted (no CLI imports)
 │   │       ├── errors.ts                 # UserError, ApiError classes
 │   │       ├── dns.ts                    # Hand-authored corrections for lossy generated DNS types: DnsDiscoveredRecord (adds Flags/Tag the scan returns but generation drops), DnsRecordScanJob/Trigger, DnsRecordScanStatus enum. Pattern for enriching generated types.
-│   │       ├── core-client.ts            # createCoreClient(options) — Core API
-│   │       ├── compute-client.ts         # createComputeClient(options) — Edge Scripting
-│   │       ├── db-client.ts              # createDbClient(options) — Database
-│   │       ├── mc-client.ts              # createMcClient(options) — Magic Containers
-│   │       ├── origin-errors-client.ts   # createOriginErrorsClient(options) — Origin Errors
-│   │       ├── shield-client.ts          # createShieldClient(options) — Shield (WAF/DDoS/bots)
-│   │       ├── storage-client.ts         # createStorageClient(options) — Edge Storage (region-specific)
-│   │       ├── stream-client.ts          # createStreamClient(options) — Stream (video libraries)
+│   │       ├── core-client.ts            # createCoreClient(options), Core API
+│   │       ├── compute-client.ts         # createComputeClient(options), Edge Scripting
+│   │       ├── db-client.ts              # createDbClient(options), Database
+│   │       ├── mc-client.ts              # createMcClient(options), Magic Containers
+│   │       ├── origin-errors-client.ts   # createOriginErrorsClient(options), Origin Errors
+│   │       ├── shield-client.ts          # createShieldClient(options), Shield (WAF/DDoS/bots)
+│   │       ├── storage-client.ts         # createStorageClient(options), Edge Storage (region-specific)
+│   │       ├── stream-client.ts          # createStreamClient(options), Stream (video libraries)
 │   │       └── generated/                # Generated .d.ts files (gitignored)
 │   │           ├── core.d.ts
 │   │           ├── compute.d.ts
@@ -173,7 +173,7 @@ bunny-cli/
 │           ├── cli.ts                    # Root yargs instance, global flags, command registration
 │           │
 │           ├── core/
-│           │   ├── client-options.ts     # clientOptions() helper — builds ClientOptions from ResolvedConfig
+│           │   ├── client-options.ts     # clientOptions() helper that builds ClientOptions from ResolvedConfig
 │           │   ├── define-command.ts     # Command factory (see "Command Pattern" below)
 │           │   ├── define-namespace.ts   # Namespace/group factory for subcommand trees
 │           │   ├── dns-nameservers.ts    # BUNNY_NAMESERVERS + expectedNameservers(zone) + checkDelegation()/checkDelegations(): reads the parent zone's NS referral (raw UDP query of the registry, not the recursive answer a child host could spoof; falls back to dns.resolveNs when the referral is unreadable), matches the full expected set both ways, ground truth over bunny's NameserversDetected flag which defaults true on a fresh zone; checkDelegations is bounded-concurrency for the zone list
@@ -210,9 +210,9 @@ bunny-cli/
 │           │   └── paths.ts              # XDG-compliant config file path resolution
 │           │
 │           ├── commands/
-│           │   ├── apps/                 # Experimental — hidden from help and landing page
+│           │   ├── apps/                 # Experimental: hidden from help and landing page
 │           │   │   ├── APPS.md           # Apps documentation (while experimental)
-│           │   │   ├── index.ts          # defineNamespace("apps", false) — hidden, registers all app commands
+│           │   │   ├── index.ts          # defineNamespace("apps", false): hidden, registers all app commands
 │           │   │   ├── constants.ts      # Status label maps + APP_MANIFEST filename + AppManifest interface (consumed via core/manifest.ts)
 │           │   │   ├── config.ts         # bunny.jsonc app I/O over core/bunny-config.ts + core/jsonc.ts (loadConfig requires an `app` block; saveConfig strips transient `image`/`registry`/`app.id` via stripTransientFields and edits existing files surgically), re-exports from @bunny.net/config; provides resolveAppId, resolveContainerId, resolveContainerRegistry
 │           │   │   ├── docker.ts         # Docker + registry helpers (build, push, dockerLogin, ensureRegistryLogin, dockerHasCredentials, ghDockerLogin, generateTag, promptRegistry, resolveRegistryForImage, getConfigSuggestions, imageHostname, parseDockerfileExposedPorts/readDockerfileExposedPorts, findDockerfiles/isDockerfileName/defaultContainerNameFromDockerfile/assignContainerNamesToDockerfiles for monorepo Dockerfile discovery)
@@ -264,16 +264,16 @@ bunny-cli/
 │           │   │   ├── login.ts          # Browser-based login via Bun.serve() callback (top-level: bunny login)
 │           │   │   └── logout.ts         # Profile removal with --force confirmation bypass (top-level: bunny logout)
 │           │   ├── config/
-│           │   │   ├── index.ts          # defineNamespace("config", ...) — registers init, show, profile
+│           │   │   ├── index.ts          # defineNamespace("config", ...) registers init, show, profile
 │           │   │   ├── init.ts           # First-time setup (delegates to profile create)
 │           │   │   ├── show.ts           # Display resolved config as table or JSON
 │           │   │   └── profile/
-│           │   │       ├── index.ts      # defineNamespace("profile", ...) — registers create + delete
+│           │   │       ├── index.ts      # defineNamespace("profile", ...) registers create + delete
 │           │   │       ├── create.ts     # Add profile with masked API key input
 │           │   │       └── delete.ts     # Remove a profile
 │           │   ├── whoami.ts             # Show authenticated account: name, email, profile (top-level: bunny whoami)
 │           │   ├── db/
-│           │   │   ├── index.ts               # defineNamespace("db", ...) — registers all database commands
+│           │   │   ├── index.ts               # defineNamespace("db", ...) registers all database commands
 │           │   │   ├── constants.ts           # Database status labels, region maps
 │           │   │   ├── api.ts                 # Shared: typed v2 database/token API calls (fetchDatabase, fetchAllDatabases, generateToken, fetchLiveStatus, …)
 │           │   │   ├── create.ts              # Create a new database (interactive region selection or flags)
@@ -291,7 +291,7 @@ bunny-cli/
 │           │   │   ├── studio.ts              # Open a visual database explorer in the browser (local web UI)
 │           │   │   ├── usage.ts               # Show database usage statistics
 │           │   │   ├── migrations/
-│           │   │   │   ├── index.ts     # defineNamespace("migrations", ...) — registers migration commands
+│           │   │   │   ├── index.ts     # defineNamespace("migrations", ...) registers migration commands
 │           │   │   │   ├── constants.ts # Default dir/pattern, drizzle fallback dir, tracking table name
 │           │   │   │   ├── engine.ts    # Shared: glob discovery, checksums, applied/pending state, preflight parsing, apply one migration
 │           │   │   │   ├── drift.ts     # Shared: report and block modified/missing/out-of-order histories unless explicitly allowed
@@ -299,22 +299,22 @@ bunny-cli/
 │           │   │   │   ├── create.ts    # Write an empty numbered top-level migration file (never auto-detects ORM dirs)
 │           │   │   │   └── list.ts      # Show applied/pending/modified/missing/out-of-order state
 │           │   │   ├── regions/
-│           │   │   │   ├── index.ts     # defineNamespace("regions", ...) — registers region commands
+│           │   │   │   ├── index.ts     # defineNamespace("regions", ...) registers region commands
 │           │   │   │   ├── add.ts       # Add primary/replica regions (interactive multiselect or flags)
 │           │   │   │   ├── list.ts      # List configured primary and replica regions
 │           │   │   │   ├── remove.ts    # Remove primary/replica regions
 │           │   │   │   └── update.ts    # Interactive multiselect to toggle all regions on/off
 │           │   │   └── tokens/
-│           │   │       ├── index.ts      # defineNamespace("tokens", ...) — registers token commands
+│           │   │       ├── index.ts      # defineNamespace("tokens", ...) registers token commands
 │           │   │       ├── create.ts     # Generate an auth token (read-only/full-access, optional expiry)
 │           │   │       └── invalidate.ts # Invalidate all tokens for a database (with confirmation)
 │           │   ├── dns/
 │           │   │   ├── index.ts          # defineNamespace("dns", ...): registers the records + zones + scripts groups (+ hidden domain aliases)
 │           │   │   ├── api.ts            # CoreClient type, fetchZones/fetchZone, resolveZone (domain-or-ID → zone), scanZoneRecords (trigger + poll bunny's server-side record scan via /dnszone/records/scan; matches the triggered JobId, falling back to "differs from the prior job" when the trigger omits one; returns corrected DnsDiscoveredRecord[] with Flags/Tag; uses DnsRecordScanStatus enum)
 │           │   │   ├── constants.ts      # DNS_MANIFEST (".bunny/dns.json") + DnsManifest type, written by `dns zones link`
-│           │   │   ├── interactive.ts    # resolveZoneInteractive (arg → .bunny/dns.json manifest → zone picker; errors instead of prompting when non-interactive (json output or no TTY, see core/ui.ts isInteractive); ignoreManifest forces the picker for `zones link`; offerLink prompts to link a picked zone) + resolveRecordInteractive; autoLinkDnsZone (link a zone found in another flow — silent write, confirm before relinking a different zone) reused by scripts custom-domain setup
+│           │   │   ├── interactive.ts    # resolveZoneInteractive (arg → .bunny/dns.json manifest → zone picker; errors instead of prompting when non-interactive (json output or no TTY, see core/ui.ts isInteractive); ignoreManifest forces the picker for `zones link`; offerLink prompts to link a picked zone) + resolveRecordInteractive; autoLinkDnsZone (link a zone found in another flow: silent write, confirm before relinking a different zone) reused by scripts custom-domain setup
 │           │   │   ├── record-types.ts   # Re-exports RECORD_TYPES/RECORD_TYPE_META/recordTypeLabel from core/dns-record-types.ts; adds parseRecordType (accepts canonical labels + enum-key names), recordName, formatRecordValue
-│           │   │   ├── record/            # `dns records` — entries within a zone (canonical: records; aliases: record, rec)
+│           │   │   ├── record/            # `dns records`: entries within a zone (canonical: records; aliases: record, rec)
 │           │   │   │   ├── index.ts      # defineNamespace("records", ...)
 │           │   │   │   ├── list.ts       # List records in a zone (alias: ls)
 │           │   │   │   ├── add.ts        # Add a record (positional grammar per type, or interactive wizard; --pull-zone/--script). Interactive wizard first offers "single record" vs a preset (pickAndApplyPreset); A/AAAA/CNAME/TXT offer static vs script-computed (Scriptable DNS) via pickOrCreateDnsScript: pick or create+seed a DNS script and write a SCRIPT record. Exports addRecordInteractive (the single-record wizard) reused by zone/add.ts's next-steps menu
@@ -329,7 +329,7 @@ bunny-cli/
 │           │   │   │   ├── scan.ts       # `records scan [domain]` (--yes): discover the domain's existing records (server-side scan) and reviewAndApply them; reused at zone creation
 │           │   │   │   ├── import.ts     # Import records from a BIND zone file (prompts for zone/file when omitted). Exports importZoneFile reused by zone/add.ts's next-steps menu
 │           │   │   │   └── export.ts     # Export records as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
-│           │   │   └── zone/              # `dns zones` — the zone itself (canonical: zones; aliases: zone; hidden: domain, domains)
+│           │   │   └── zone/              # `dns zones`: the zone itself (canonical: zones; aliases: zone; hidden: domain, domains)
 │           │   │       ├── index.ts      # defineNamespace("zones", ...) + dnsZoneHiddenAliases (domain/domains)
 │           │   │       ├── list.ts       # List all DNS zones (alias: ls); Nameservers column from a live per-zone NS lookup, not bunny's NameserversDetected flag
 │           │   │       ├── add.ts        # Create a DNS zone (prompts for the domain when omitted; required non-interactively), then offerNextSteps menu (scan for existing records via scanAndImport: discoverImportableRecords + reviewAndApply / upload a zone file via importZoneFile / add records manually via addRecordInteractive / continue); --import scans and imports all without prompting and surfaces failures as a JSON ImportError + nonzero exit, --no-import skips the menu; then print the bunny nameservers (naming the registrar via core/registrar.ts when RDAP resolves it). Menu is TTY-gated so `zones add <domain>` stays scriptable
@@ -416,7 +416,7 @@ bunny-cli/
 │           │   │   ├── deployments/      # list (● Live/○ Previous), publish [id]|--previous (alias promote; confirm + promote + current/previous swap), prune --keep N (pruneVictims never drops current/previous) + prune.test.ts
 │           │   │   └── domains/index.ts  # Mounts core/hostnames createHostnamesCommands as "sites domains" with onAdded/onRemoved hooks: apex add also attaches *.preview.<apex> (attachPreviewWildcard, best-effort SSL) + records state.domain; remove takes the wildcard down too. setupSiteDomain composes setupHostname + wildcard for create --domain
 │           │   ├── registries/
-│           │   │   ├── index.ts          # Manual CommandModule (not defineNamespace) — default handler runs list
+│           │   │   ├── index.ts          # Manual CommandModule (not defineNamespace); default handler runs list
 │           │   │   ├── list.ts           # List container registries
 │           │   │   ├── add.ts            # Add registry with credentials
 │           │   │   ├── update.ts         # Update registry display name and/or rotate credentials
@@ -424,7 +424,7 @@ bunny-cli/
 │           │   ├── docs.ts               # Open bunny.net documentation in browser (top-level: bunny docs)
 │           │   ├── open.ts               # Open bunny.net dashboard in browser (top-level: bunny open)
 │           │   └── scripts/
-│           │       ├── index.ts          # defineNamespace("scripts", ...) — registers all script commands
+│           │       ├── index.ts          # defineNamespace("scripts", ...) registers all script commands
 │           │       ├── constants.ts      # SCRIPT_MANIFEST, SCRIPT_TYPE_LABELS
 │           │       ├── api.ts            # Shared: fetchScript(s), fetchEnvEntries, fetchScriptHostnames, logLiveHostnames, promptOpenInBrowser
 │           │       ├── create.ts         # Create a remote Edge Script (exports shared `createScript` + `setupCustomDomain`; for a linked script, setupCustomDomain auto-links the dir to the domain's Bunny DNS zone via autoLinkDnsZone)
@@ -451,7 +451,7 @@ bunny-cli/
 │           │           └── pull.ts       # Pull environment variables to .env file
 │           │
 │           ├── sandbox/                  # `sandbox`: ephemeral dev sandboxes over @bunny.net/sandbox
-│           │   ├── index.ts              # defineNamespace("sandbox", ...) — registers all sandbox commands
+│           │   ├── index.ts              # defineNamespace("sandbox", ...) registers all sandbox commands
 │           │   ├── create.ts             # Create a sandbox (--region, -e/--env + --env-file bake persisted env vars in)
 │           │   ├── list.ts               # List sandboxes
 │           │   ├── delete.ts             # Delete a sandbox and its MC app (--force)
@@ -484,20 +484,20 @@ bunny-cli/
 ### Conventions
 
 - **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
-- **API clients use `ClientOptions`** — an options object with `apiKey`, `baseUrl`, `verbose`, `userAgent`, and `onDebug`. The CLI provides a `clientOptions(config, verbose)` helper to build this from `ResolvedConfig`.
+- **API clients use `ClientOptions`**: an options object with `apiKey`, `baseUrl`, `verbose`, `userAgent`, and `onDebug`. The CLI provides a `clientOptions(config, verbose)` helper to build this from `ResolvedConfig`.
 - **One command per file.** Each file in `commands/` exports a single command or namespace.
 - **Commands are grouped by domain** in subdirectories (`config/`, `db/`, `scripts/`).
 - **Namespaces are directories** with an `index.ts` that calls `defineNamespace()`.
 - **Leaf commands** are individual `.ts` files that call `defineCommand()`.
 - **Top-level commands** (`login`, `logout`, `whoami`) are registered directly in `cli.ts` without a namespace.
-- **Shared internal code lives in `packages/cli/src/core/`** — command factories, errors, logger, format utilities, UI helpers, and shared types. Keep this mostly flat; a cohesive, reusable feature spanning several files may use a subdirectory (e.g. `core/hostnames/` — the pull-zone hostname helpers + the `createHostnamesCommands` factory mounted by both `scripts` and, in future, `apps`).
-- **Config logic lives in `packages/cli/src/config/`** — schema, file resolution, and profile management.
+- **Shared internal code lives in `packages/cli/src/core/`**: command factories, errors, logger, format utilities, UI helpers, and shared types. Keep this mostly flat; a cohesive, reusable feature spanning several files may use a subdirectory (e.g. `core/hostnames/`, the pull-zone hostname helpers + the `createHostnamesCommands` factory mounted by both `scripts` and, in future, `apps`).
+- **Config logic lives in `packages/cli/src/config/`**: schema, file resolution, and profile management.
 - **Error classes are split.** `UserError` and `ApiError` live in `@bunny.net/openapi-client` (the SDK needs them). `ConfigError` lives in the CLI and extends `UserError`. The CLI's `errors.ts` re-exports `UserError` and `ApiError` from `@bunny.net/openapi-client`.
 - **Import API clients from `@bunny.net/openapi-client`**, not relative paths. Import generated types from `@bunny.net/openapi-client/generated/<spec>.d.ts`.
 - **Mask secrets in human output; reveal only behind an explicit flag.** Any sensitive value (API keys, passwords, S3 secret keys, auth tokens) must be masked in the default table/text output and shown in full only when the user opts in with a flag (e.g. `--show-secret`). Use `maskSecret()` from `core/format.ts` for the masked form (it keeps the last 4 characters for identification). Machine-readable output is the exception because it exists to be consumed by tools: `--output json` and tool-config `--format` emit full values. Never print a secret the user did not explicitly ask to see. Reference: `storage zones credentials` masks the S3 secret access key by default and reveals it with `--show-secret`, while never leaking it from inspect/list commands (see `toSafeStorageZone`).
 - **Pull-zone settings are exposed via "Hybrid D" across surfaces.** Scripts and apps are backed by a pull zone, which has a large settings surface (hostnames, caching, edge rules, origin, security, purge, CORS, optimizer, logging, …). To keep each owner's help legible:
-  - **Flatten only first-class groups** directly into the owner — picked by user mental model, kept to one or two. `scripts domains` is the flattened group (a custom domain is "my site's address," not a CDN setting).
-  - **Group the long tail** under a `pullzone` sub-namespace within the owner (e.g. `scripts pullzone <setting>`), so the owner's top-level help gains one line, not ten. Curate per owner — don't expose settings that don't apply (a script _is_ its pull zone's origin, so no origin-URL command under `scripts`).
+  - **Flatten only first-class groups** directly into the owner, picked by user mental model and kept to one or two. `scripts domains` is the flattened group (a custom domain is "my site's address," not a CDN setting).
+  - **Group the long tail** under a `pullzone` sub-namespace within the owner (e.g. `scripts pullzone <setting>`), so the owner's top-level help gains one line, not ten. Curate per owner and don't expose settings that don't apply (a script _is_ its pull zone's origin, so no origin-URL command under `scripts`).
   - **A standalone `bunny pullzone` command** (planned) is the canonical full surface for pull zones not backing a script/app, targeted by `--id`.
   - Each setting-area is a **mountable factory** like `createHostnamesCommands` (`core/hostnames/`): one `{ commandPath, target, targetPositional, resolve(args) => { pullZoneId, coreClient }, hiddenAliases }` mounted into the root `pullzone` (resolve from `--id`), `scripts` (resolve from the linked manifest), and `apps` (resolve from the CDN endpoint). The resolver is the only per-surface difference. `targetPositional` appends an optional trailing positional (e.g. `[id]`) to every subcommand so mounts can match their namespace's positional-ID convention; the flag form of the same key keeps working.
   - Canonical term is `pullzone` (matches the bunny.net dashboard/API); `pz` is a hidden alias (`defineNamespace(alias, false, …)`), the same pattern as `domains`'s hidden `hostnames` alias.
@@ -586,11 +586,11 @@ Registered on the root yargs instance in `cli.ts` with `global: true` (equivalen
 
 These are configured on the root yargs instance:
 
-- **`$0` default command** — Running `bunny` with no subcommand shows a branded landing page (ASCII art, commands list, examples, global options).
-- **`recommendCommands()`** — "Did you mean ...?" suggestions on typos (like Cobra).
-- **`strict()`** — Errors on unrecognized flags.
-- **`.version()`** — Reads from `package.json`.
-- **`.help()`** — Auto-generated help for all commands.
+- **`$0` default command**: running `bunny` with no subcommand shows a branded landing page (ASCII art, commands list, examples, global options).
+- **`recommendCommands()`**: "Did you mean ...?" suggestions on typos (like Cobra).
+- **`strict()`**: errors on unrecognized flags.
+- **`.version()`**: reads from `package.json`.
+- **`.help()`**: auto-generated help for all commands.
 
 ---
 
@@ -647,12 +647,12 @@ Config files are written with permissions `0o660`.
 
 ### Config resolution precedence
 
-When resolving the active configuration (in `resolveConfig(profile, apiKeyOverride?, verbose?)`), the following priority applies — highest wins:
+When resolving the active configuration (in `resolveConfig(profile, apiKeyOverride?, verbose?)`), the following priority applies (highest wins):
 
-1. **`--api-key` flag** — Passed as `apiKeyOverride` to `resolveConfig()`
-2. **Environment variables** — `BUNNYNET_API_KEY` and `BUNNYNET_API_URL`
-3. **Config file profile** — Matched by the `--profile` flag value
-4. **Built-in defaults** — `apiUrl: "https://api.bunny.net"`, empty `apiKey`
+1. **`--api-key` flag**: passed as `apiKeyOverride` to `resolveConfig()`
+2. **Environment variables**: `BUNNYNET_API_KEY` and `BUNNYNET_API_URL`
+3. **Config file profile**: matched by the `--profile` flag value
+4. **Built-in defaults**: `apiUrl: "https://api.bunny.net"`, empty `apiKey`
 
 If `--api-key` or `BUNNYNET_API_KEY` is set, the config file is ignored entirely and the profile field is set to `""`.
 
@@ -707,10 +707,10 @@ An HTML page is embedded as a template literal string in `login.ts` (equivalent 
 
 ### Profile management
 
-- **`bunny config profile create <name>`** (alias: `add`) — Prompts for API key with masked input, saves to config file.
-- **`bunny config profile delete <name>`** — Removes profile from config file.
-- **`bunny config init`** — Convenience command that delegates to profile create for the active profile.
-- **`bunny config show`** — Displays resolved config as a table (or JSON with `--output json`). API key is truncated in table view.
+- **`bunny config profile create <name>`** (alias: `add`): prompts for API key with masked input, saves to config file.
+- **`bunny config profile delete <name>`**: removes profile from config file.
+- **`bunny config init`**: convenience command that delegates to profile create for the active profile.
+- **`bunny config show`**: displays resolved config as a table (or JSON with `--output json`). API key is truncated in table view.
 
 ---
 
@@ -736,9 +736,9 @@ Creates an `ora` spinner. Automatically silenced in non-TTY environments (`isSil
 
 ### Error classes
 
-- **`UserError`** — Expected errors caused by user input or missing configuration. Displayed as a clean message with an optional hint. Exit code 1.
-- **`ConfigError`** — Extends `UserError`. Automatically includes a hint to run `bunny config show`.
-- **`ApiError`** — Extends `UserError`. Thrown by the API middleware for HTTP error responses. Carries `status`, optional `field`, and optional `validationErrors[]`.
+- **`UserError`**: expected errors caused by user input or missing configuration. Displayed as a clean message with an optional hint. Exit code 1.
+- **`ConfigError`**: extends `UserError`. Automatically includes a hint to run `bunny config show`.
+- **`ApiError`**: extends `UserError`. Thrown by the API middleware for HTTP error responses. Carries `status`, optional `field`, and optional `validationErrors[]`.
 
 ### API error normalization
 
@@ -806,16 +806,16 @@ Defined in `packages/cli/src/core/logger.ts`. Uses `chalk` for styling.
 | `logger.success(msg)`        | `✓` (green)      | Successful operations               |
 | `logger.warn(msg)`           | `⚠` (yellow)     | Warnings                            |
 | `logger.error(msg)`          | `✖` (red)        | Errors                              |
-| `logger.dim(msg)`            | — (gray)         | Hints, secondary info               |
+| `logger.dim(msg)`            | - (gray)         | Hints, secondary info               |
 | `logger.debug(msg, verbose)` | `[debug]` (gray) | Only shown when `verbose` is `true` |
 
 ### NO_COLOR support
 
 The CLI respects the [NO_COLOR](https://no-color.org) standard. When `NO_COLOR` is set (any non-empty value), all ANSI color codes are suppressed:
 
-- **chalk** — Natively respects `NO_COLOR` by setting `chalk.level` to `0`.
-- **cli-table3** — Has its own built-in ANSI coloring for headers and borders. Disabled by passing `style: { head: [], border: [] }` when `chalk.level === 0`. This is handled in `format.ts` and `shell.ts`.
-- **ora** — Uses chalk internally, so spinners are also affected.
+- **chalk**: natively respects `NO_COLOR` by setting `chalk.level` to `0`.
+- **cli-table3**: has its own built-in ANSI coloring for headers and borders. Disabled by passing `style: { head: [], border: [] }` when `chalk.level === 0`. This is handled in `format.ts` and `shell.ts`.
+- **ora**: uses chalk internally, so spinners are also affected.
 
 ---
 
@@ -918,19 +918,19 @@ Each release includes prebuilt binaries as release assets, created automatically
 ### Release workflow
 
 1. Create changesets on feature branches (`bun run changeset`)
-2. Merge to `main` — the `changesets/action` opens or updates a "Release" PR
-3. Merge the Release PR — changesets bumps versions for `@bunny.net/cli` and all platform packages (kept in sync via `fixed`)
+2. Merge to `main`; the `changesets/action` opens or updates a "Release" PR
+3. Merge the Release PR; changesets bumps versions for `@bunny.net/cli` and all platform packages (kept in sync via `fixed`)
 4. The release workflow detects the version change, builds binaries for all platforms, publishes platform packages then `@bunny.net/cli` to npm, and creates a GitHub release with binaries attached
 
 ### Publishing `@bunny.net/openapi-client`
 
-Unlike the CLI and `database-shell` (which ship as compiled binaries), `@bunny.net/openapi-client` is published as a plain TypeScript library — compiled JS plus `.d.ts` declarations.
+Unlike the CLI and `database-shell` (which ship as compiled binaries), `@bunny.net/openapi-client` is published as a plain TypeScript library: compiled JS plus `.d.ts` declarations.
 
-Its `package.json` `exports`/`main`/`types` point at `dist/`, so npm consumers get the compiled output. **In-repo tooling resolves it from source instead** — the root `tsconfig.json` has a `paths` mapping for `@bunny.net/openapi-client` → `src/`, and `bun run`, `bun build --compile`, `bun test`, and `tsc` all honor `paths` over the package's `exports`. So the CLI build and dev loop consume live source with no prebuild step, while only the publish step needs `dist/` built. (Published consumers never see the repo `tsconfig.json`, so they fall back to `exports`.)
+Its `package.json` `exports`/`main`/`types` point at `dist/`, so npm consumers get the compiled output. **In-repo tooling resolves it from source instead**: the root `tsconfig.json` has a `paths` mapping for `@bunny.net/openapi-client` → `src/`, and `bun run`, `bun build --compile`, `bun test`, and `tsc` all honor `paths` over the package's `exports`. So the CLI build and dev loop consume live source with no prebuild step, while only the publish step needs `dist/` built. (Published consumers never see the repo `tsconfig.json`, so they fall back to `exports`.)
 
 - `bun run --filter @bunny.net/openapi-client build` runs `generate` (the `src/generated/` types are gitignored, so they are regenerated from the committed specs), then `scripts/build.ts`.
 - `scripts/build.ts` drives the TypeScript compiler API (using `tsconfig.build.json`) to emit JS + declarations, then copies the generated `.d.ts` files into `dist/generated/` (tsc never emits its inputs, and those files back the `./generated/*` subpath export). `rewriteRelativeImportExtensions` rewrites `./x.ts` → `./x.js` in the emitted **JS**; TypeScript has no equivalent for declaration emit, so an `afterDeclarations` transformer rewrites the `.ts`/`.d.ts` specifiers in the emitted **`.d.ts`** files on the AST.
-- The `publish-openapi-client` job in `release.yml` (gated on a version bump detected via `npm view`) builds, then runs `cd packages/openapi-client && npm publish` (`files` ships `dist` + `README.md`). The package versions independently of the CLI — it is not part of any `fixed` group in `.changeset/config.json`.
+- The `publish-openapi-client` job in `release.yml` (gated on a version bump detected via `npm view`) builds, then runs `cd packages/openapi-client && npm publish` (`files` ships `dist` + `README.md`). The package versions independently of the CLI; it is not part of any `fixed` group in `.changeset/config.json`.
 
 ### Publishing `@bunny.net/sandbox`
 
@@ -938,8 +938,8 @@ Its `package.json` `exports`/`main`/`types` point at `dist/`, so npm consumers g
 
 Two differences from openapi-client:
 
-- Sandbox depends on `@bunny.net/openapi-client` with `workspace:*`, so the `publish-sandbox` job in `release.yml` uses `bun publish` (not `npm publish`) — bun rewrites `workspace:*` to the local package version in the published tarball; npm would ship the unresolvable `workspace:*` spec verbatim. `bun publish` authenticates via the `NPM_CONFIG_TOKEN` env var.
-- Its `tsconfig.build.json` overrides `paths` to `{}` so openapi-client resolves via its package `exports` (`dist/`) instead of source — otherwise openapi-client's sources would enter the program and violate `rootDir`. The publish job therefore builds openapi-client before building sandbox.
+- Sandbox depends on `@bunny.net/openapi-client` with `workspace:*`, so the `publish-sandbox` job in `release.yml` uses `bun publish` (not `npm publish`) because bun rewrites `workspace:*` to the local package version in the published tarball; npm would ship the unresolvable `workspace:*` spec verbatim. `bun publish` authenticates via the `NPM_CONFIG_TOKEN` env var.
+- Its `tsconfig.build.json` overrides `paths` to `{}` so openapi-client resolves via its package `exports` (`dist/`) instead of source. Otherwise openapi-client's sources would enter the program and violate `rootDir`. The publish job therefore builds openapi-client before building sandbox.
 
 `@bunny.net/config` is a private workspace package (not published); the CLI consumes it from source via the workspace symlink.
 
@@ -962,7 +962,7 @@ bunny
 │   └── profile
 │       ├── create <name>  (alias: add)     Create a named profile with API key
 │       └── delete <name>                   Delete a named profile
-├── apps                                    (experimental — hidden from help and landing page)
+├── apps                                    (experimental: hidden from help and landing page)
 │   ├── init            [image] [--name] [--dockerfile] [--registry] [--port] [--command] [--config]
 │   │                                       Scaffold bunny.jsonc via shared walkthrough (no deploy); --config writes to a specific path
 │   ├── list            (alias: ls)         List all apps
@@ -1003,7 +1003,7 @@ bunny
 │   └── remove          <id>                Remove registry
 ├── dns                                     Manage DNS zones and records
 │   │                                       Two resource groups: `records` (entries in a zone) and `zones` (the zone itself).
-│   │                                       Every [domain] is optional — omit it to use the linked zone (`dns zones link` → .bunny/dns.json), else pick interactively (resolveZoneInteractive; errors instead of prompting under --output json or without a TTY). Picking a zone interactively offers to link the directory (`zones remove` never offers).
+│   │                                       Every [domain] is optional; omit it to use the linked zone (`dns zones link` → .bunny/dns.json), else pick interactively (resolveZoneInteractive; errors instead of prompting under --output json or without a TTY). Picking a zone interactively offers to link the directory (`zones remove` never offers).
 │   ├── records                             (canonical; aliases: record, rec)
 │   │   ├── list        [domain] (alias: ls)  List the records within a zone
 │   │   ├── add         [domain] [name] [type] [values..] [--ttl] [--comment] [--pull-zone] [--script]
@@ -1157,7 +1157,7 @@ bunny
 
 ### Overview
 
-API calls use `openapi-fetch` with types generated from OpenAPI specs by `openapi-typescript`. This gives full type safety — paths, params, request bodies, and responses are all inferred from the specs.
+API calls use `openapi-fetch` with types generated from OpenAPI specs by `openapi-typescript`. This gives full type safety: paths, params, request bodies, and responses are all inferred from the specs.
 
 ### API domains
 
@@ -1207,10 +1207,10 @@ Only type the fields you actually use. When the endpoint is added to the spec, r
 Prefer generated schema types over inline primitives. When you need a subset of fields from a generated type, use `Pick<>`:
 
 ```typescript
-// Good — derived from generated schema
+// Good: derived from generated schema
 type Database = Pick<components["schemas"]["Database2"], "id" | "name" | "url">;
 
-// Bad — inline primitives that duplicate the schema
+// Bad: inline primitives that duplicate the schema
 type Database = {
   id: string;
   name: string;
@@ -1269,7 +1269,7 @@ handler: async ({ profile, apiKey, verbose }) => {
 
 ## Agent & Scripting Compatibility
 
-The CLI is designed to be fully usable by AI agents, scripts, and pipelines — not just humans.
+The CLI is designed to be fully usable by AI agents, scripts, and pipelines, not just humans.
 
 ### Non-interactive by default
 
@@ -1278,7 +1278,7 @@ Every command must be runnable without interactive prompts when the right flags 
 - **Every prompt has a flag equivalent.** If a command prompts for input (API key, confirmation, name), there must be a flag that provides the value and skips the prompt entirely.
   - Confirmation prompts → `--force` flag
   - Text/password input → named flag (e.g. `--api-key`)
-- **Never block on stdin.** If a required value is missing and no prompt flag was given, error immediately — don't hang waiting for input that will never come.
+- **Never block on stdin.** If a required value is missing and no prompt flag was given, error immediately instead of hanging on input that will never come.
 
 Examples of non-interactive usage:
 
@@ -1320,10 +1320,10 @@ handler: async ({ output, profile, apiKey }) => {
     return;
   }
 
-  // Tabular data — formatTable handles text, table, csv, markdown
+  // Tabular data: formatTable handles text, table, csv, markdown
   logger.log(formatTable(["Name", "Status"], rows, output));
 
-  // Key-value data — formatKeyValue renders as a 2-column table
+  // Key-value data: formatKeyValue renders as a 2-column table
   logger.log(formatKeyValue([{ key: "Name", value: "Alice" }], output));
 };
 ```
@@ -1338,7 +1338,7 @@ Commands that operate on a specific remote resource (e.g. a script, an app) can 
 
 ### How it works
 
-- **`.bunny/script.json`** (gitignored) — links the current directory to a remote Edge Script.
+- **`.bunny/script.json`** (gitignored): links the current directory to a remote Edge Script.
 - **`.bunny/site.json`** (gitignored): links the current directory to a site (the site's storage zone ID). Written by `bunny sites link`/`create`; the site's own state (resource triple, deploys, current/previous) lives remotely at `_bunny/site.json` inside the storage zone, so the local manifest is only a pointer.
 - The manifest is machine-managed: written by `bunny scripts link`, read by other script commands.
 - `resolveManifestId()` in `packages/cli/src/core/manifest.ts` handles the resolution: explicit ID flag → manifest file → error with hint.
@@ -1358,9 +1358,9 @@ Commands that operate on a specific remote resource (e.g. a script, an app) can 
 
 Commands that need a resource ID follow this pattern:
 
-1. **Explicit positional or flag** — `bunny scripts show 12345` or `--script-id 12345`
-2. **Manifest file** — `.bunny/script.json` in the current or ancestor directory
-3. **Error** — `UserError` with a hint to run `bunny scripts link`
+1. **Explicit positional or flag**: `bunny scripts show 12345` or `--script-id 12345`
+2. **Manifest file**: `.bunny/script.json` in the current or ancestor directory
+3. **Error**: `UserError` with a hint to run `bunny scripts link`
 
 ### Adding new resource types
 
@@ -1376,20 +1376,20 @@ The manifest system is generic. To add a new resource type (e.g. containers):
 
 **Resolution order:**
 
-1. Explicit positional argument — `bunny db tokens create db_01KCHBG8...`
-2. `.bunny/database.json` manifest — written by `bunny db link`, read via `loadManifest<DatabaseManifest>(DATABASE_MANIFEST)`
-3. `BUNNY_DATABASE_URL` in `.env` — walks up the directory tree, parses the URL, matches it against the database list via API
-4. Interactive prompt — fetches all databases and presents a select menu
-5. If no databases exist — `UserError` with hint to run `bunny db create`
+1. Explicit positional argument: `bunny db tokens create db_01KCHBG8...`
+2. `.bunny/database.json` manifest, written by `bunny db link`, read via `loadManifest<DatabaseManifest>(DATABASE_MANIFEST)`
+3. `BUNNY_DATABASE_URL` in `.env`: walks up the directory tree, parses the URL, matches it against the database list via API
+4. Interactive prompt: fetches all databases and presents a select menu
+5. If no databases exist, a `UserError` with a hint to run `bunny db create`
 
 The URL (e.g. `libsql://...bunnydb.net/`) does not directly contain the `db_id`. The resolver fetches the database list and matches by URL to find the corresponding `db_id`. The manifest stores the `db_id` directly so no list lookup is needed for that path.
 
-The manifest path mirrors `bunny scripts link` — both write to `.bunny/<resource>.json` via the same generic `saveManifest<T>()` helper in `packages/cli/src/core/manifest.ts`.
+The manifest path mirrors `bunny scripts link`: both write to `.bunny/<resource>.json` via the same generic `saveManifest<T>()` helper in `packages/cli/src/core/manifest.ts`.
 
 **Lifecycle integration:**
 
-- `bunny db create` — the name is validated client-side against `DB_NAME_MAX_LENGTH` (16) before any API call, since longer names make the backend 500 instead of returning a validation error. After creating the database, prompts "Link this directory to <name>?" and (on yes) writes the manifest. If a link already exists it shows what will be replaced. The follow-up flow (link → token → save-env) exposes three flags for non-interactive control: `--link`/`--no-link`, `--token`/`--no-token`, `--save-env`/`--no-save-env`. When a flag is provided the prompt is skipped; in `--output json` mode prompts are suppressed entirely so flags become the only way to opt in. The JSON output then includes `linked`, `token`, and `saved_to_env` fields reflecting what happened.
-- `bunny db delete` — after deleting the database, if `.bunny/database.json` points at the deleted ID it is removed silently via `removeManifest()` (no prompt — a manifest pointing at a deleted DB is unambiguously stale).
+- `bunny db create`: the name is validated client-side against `DB_NAME_MAX_LENGTH` (16) before any API call, since longer names make the backend 500 instead of returning a validation error. After creating the database, prompts "Link this directory to <name>?" and (on yes) writes the manifest. If a link already exists it shows what will be replaced. The follow-up flow (link → token → save-env) exposes three flags for non-interactive control: `--link`/`--no-link`, `--token`/`--no-token`, `--save-env`/`--no-save-env`. When a flag is provided the prompt is skipped; in `--output json` mode prompts are suppressed entirely so flags become the only way to opt in. The JSON output then includes `linked`, `token`, and `saved_to_env` fields reflecting what happened.
+- `bunny db delete`: after deleting the database, if `.bunny/database.json` points at the deleted ID it is removed silently via `removeManifest()` (no prompt, since a manifest pointing at a deleted DB is unambiguously stale).
 
 ### `bunny.jsonc` (app config)
 
@@ -1418,7 +1418,7 @@ The `.bunny/` manifest and `bunny.jsonc` serve different purposes:
 }
 ```
 
-`version` is an ISO date string. The apps flow requires it on load — if a config is missing `version`, `loadConfig` throws a `UserError` with a hint to regenerate via `bunny apps pull`. (The sites flow is lenient: a sites-only file needs neither `version` nor an `app` block.) There is no migration runner yet; when the first breaking shape change ships, that PR introduces one alongside its transform.
+`version` is an ISO date string. The apps flow requires it on load: if a config is missing `version`, `loadConfig` throws a `UserError` with a hint to regenerate via `bunny apps pull`. (The sites flow is lenient: a sites-only file needs neither `version` nor an `app` block.) There is no migration runner yet; when the first breaking shape change ships, that PR introduces one alongside its transform.
 
 Schemas and types are defined in `@bunny.net/config` using Zod. `core/bunny-config.ts` owns `bunny.jsonc` discovery + raw read (shared by the apps and sites flows). The apps `config.ts` layers validation, resolution helpers (`resolveAppId`, `resolveContainerId`), and writes: a new file is serialized fresh with `$schema` + `version` first, while an existing file is edited surgically via `core/jsonc.ts` (`syncJsonc`) so comments, key order, and a sibling `sites` block survive.
 
@@ -1446,19 +1446,19 @@ The database shell is an interactive SQL REPL that connects to a Bunny Database 
 
 The shell is split across two packages:
 
-- **`@bunny.net/database-shell`** (`packages/database-shell/`) — Framework-agnostic shell engine. Contains the REPL, dot-commands, result formatting, masking, history, and SQL parsing. Accepts a `@libsql/client` `Client` instance and an optional `ShellLogger` interface for output.
-- **`@bunny.net/cli`** (`packages/cli/src/commands/db/shell.ts`) — Thin CLI wrapper. Handles credential resolution (API client, `.env` lookup, interactive prompts), yargs command definition, and delegates to the shell package.
+- **`@bunny.net/database-shell`** (`packages/database-shell/`): framework-agnostic shell engine. Contains the REPL, dot-commands, result formatting, masking, history, and SQL parsing. Accepts a `@libsql/client` `Client` instance and an optional `ShellLogger` interface for output.
+- **`@bunny.net/cli`** (`packages/cli/src/commands/db/shell.ts`): thin CLI wrapper. Handles credential resolution (API client, `.env` lookup, interactive prompts), yargs command definition, and delegates to the shell package.
 
 **Shell engine components** (in `packages/database-shell/src/`):
 
-- **REPL** (`shell.ts`) — `startShell()`, `executeQuery()`, `executeFile()`. Uses `node:readline` with multi-line SQL support.
-- **Dot-commands** (`dot-commands.ts`) — `.tables`, `.schema`, `.describe`, `.indexes`, `.fk`, `.er`, `.count`, `.size`, `.truncate`, `.dump`, `.read`, `.mode`, `.timing`, `.mask`, `.unmask`, `.save`, `.view`, `.views`, `.unsave`, `.clear-history`, `.help`, `.quit`.
-- **Formatting** (`format.ts`) — `printResultSet()` with 5 output modes: `default`, `table`, `json`, `csv`, `markdown`. Sensitive column masking (full mask for passwords/secrets, email mask for email columns).
-- **Views** (`views.ts`) — Saved queries scoped per database. Stored at `~/.config/bunny/views/<databaseId>/` (respects `XDG_CONFIG_HOME`). Callers can override via `ShellOptions.viewsDir`.
-- **History** (`history.ts`) — Stored at `~/.config/bunny/shell_history` (respects `XDG_CONFIG_HOME`). Max 1000 entries.
-- **SQL parsing** (`parser.ts`) — `splitStatements()` for `.sql` file execution. Splits on `;` outside single-quoted strings and SQLite's double-quote/backtick/bracket identifier forms, strips line and block comments (so drizzle's `--> statement-breakpoint` markers are ignored), keeps `CREATE TRIGGER ... BEGIN ... END;` bodies intact, and rejects unterminated quotes/comments rather than returning truncated SQL.
+- **REPL** (`shell.ts`): `startShell()`, `executeQuery()`, `executeFile()`. Uses `node:readline` with multi-line SQL support.
+- **Dot-commands** (`dot-commands.ts`): `.tables`, `.schema`, `.describe`, `.indexes`, `.fk`, `.er`, `.count`, `.size`, `.truncate`, `.dump`, `.read`, `.mode`, `.timing`, `.mask`, `.unmask`, `.save`, `.view`, `.views`, `.unsave`, `.clear-history`, `.help`, `.quit`.
+- **Formatting** (`format.ts`): `printResultSet()` with 5 output modes: `default`, `table`, `json`, `csv`, `markdown`. Sensitive column masking (full mask for passwords/secrets, email mask for email columns).
+- **Views** (`views.ts`): saved queries scoped per database. Stored at `~/.config/bunny/views/<databaseId>/` (respects `XDG_CONFIG_HOME`). Callers can override via `ShellOptions.viewsDir`.
+- **History** (`history.ts`): stored at `~/.config/bunny/shell_history` (respects `XDG_CONFIG_HOME`). Max 1000 entries.
+- **SQL parsing** (`parser.ts`): `splitStatements()` for `.sql` file execution. Splits on `;` outside single-quoted strings and SQLite's double-quote/backtick/bracket identifier forms, strips line and block comments (so drizzle's `--> statement-breakpoint` markers are ignored), keeps `CREATE TRIGGER ... BEGIN ... END;` bodies intact, and rejects unterminated quotes/comments rather than returning truncated SQL.
 
-**Dependency injection** — The shell engine accepts a `ShellLogger` interface instead of importing the CLI logger directly:
+**Dependency injection**: the shell engine accepts a `ShellLogger` interface instead of importing the CLI logger directly:
 
 ```typescript
 interface ShellLogger {
@@ -1494,7 +1494,7 @@ Dot-commands that perform full table scans (`.count`, `.size`, `.dump`) warn the
 
 SQL can be passed as a positional argument or via `--execute`/`-e`. Smart detection: if the first positional doesn't start with `db_`, it's treated as the query rather than a database ID.
 
-If the value ends with `.sql` and the file exists, statements are read from the file instead — split on `;` and executed sequentially. Execution stops on the first error.
+If the value ends with `.sql` and the file exists, statements are read from the file instead, split on `;` and executed sequentially. Execution stops on the first error.
 
 ```bash
 bunny db shell "SELECT * FROM users"
@@ -1523,13 +1523,13 @@ Schema changes live in plain `.sql` files that the developer writes (or generate
 
 All file and state logic is here so the commands stay thin and the logic is testable against an in-memory libSQL database (`engine.test.ts`, no network):
 
-- `resolveMigrationsDir(dirArg?)` — `--dir` wins; otherwise `migrations/`, falling back to `drizzle/` when `migrations/` doesn't exist (`detected: true` so the caller can say which directory it used). `resolveCreateMigrationsDir()` deliberately skips fallback detection so `create` never writes an unjournaled file into an ORM directory.
-- `discoverMigrations(dir, pattern)` — every `.sql` file matched by a positive `Bun.Glob` relative to `dir`, sorted by portable slash-separated relative path. The default `*.sql` stays top-level; `*/migration.sql` and `**/*.sql` opt into nested layouts. Absolute/traversing/negated patterns are rejected.
-- `checksum(sql)` — sha256 of the body with CRLF normalized and edges trimmed, so reformatting line endings isn't reported as a change.
-- `migrationStatuses(files, applied)` / `pendingMigrations(files, applied)` — join disk against the table. A recorded migration whose file changed is `modified`; one whose file is gone is `missing`; an unseen file that sorts before the newest applied path is `out_of_order`.
-- `migrationStatements(file)` — parses one file and converts lexical failures into a hinted `UserError`. `apply` calls it for every pending migration before the first database write, so a malformed later file cannot cause a predictably partial run.
-- `applyMigration(client, file, options)` — runs the prepared statements plus the tracking-row insert through `client.migrate()`, so a migration either lands and is recorded or neither happens.
-- `readApplied(client)` — the read path for `list` and for `apply` before confirmation. Checks `sqlite_master` rather than creating the tracking table, so a preview never writes, and converts connection or query failures into a hinted `UserError` instead of an unexpected-error exit.
+- `resolveMigrationsDir(dirArg?)`: `--dir` wins; otherwise `migrations/`, falling back to `drizzle/` when `migrations/` doesn't exist (`detected: true` so the caller can say which directory it used). `resolveCreateMigrationsDir()` deliberately skips fallback detection so `create` never writes an unjournaled file into an ORM directory.
+- `discoverMigrations(dir, pattern)`: every `.sql` file matched by a positive `Bun.Glob` relative to `dir`, sorted by portable slash-separated relative path. The default `*.sql` stays top-level; `*/migration.sql` and `**/*.sql` opt into nested layouts. Absolute/traversing/negated patterns are rejected.
+- `checksum(sql)`: sha256 of the body with CRLF normalized and edges trimmed, so reformatting line endings isn't reported as a change.
+- `migrationStatuses(files, applied)` / `pendingMigrations(files, applied)`: join disk against the table. A recorded migration whose file changed is `modified`; one whose file is gone is `missing`; an unseen file that sorts before the newest applied path is `out_of_order`.
+- `migrationStatements(file)`: parses one file and converts lexical failures into a hinted `UserError`. `apply` calls it for every pending migration before the first database write, so a malformed later file cannot cause a predictably partial run.
+- `applyMigration(client, file, options)`: runs the prepared statements plus the tracking-row insert through `client.migrate()`, so a migration either lands and is recorded or neither happens.
+- `readApplied(client)`: the read path for `list` and for `apply` before confirmation. Checks `sqlite_master` rather than creating the tracking table, so a preview never writes, and converts connection or query failures into a hinted `UserError` instead of an unexpected-error exit.
 
 `client.migrate()` is used rather than `client.batch()` because it defers foreign key enforcement for the batch, which table rebuilds and `ALTER TABLE` need. `db shell <file>.sql` still uses `batch()` and is not migration-aware.
 
@@ -1621,7 +1621,7 @@ Before plugins can ship, the CLI core utilities need to be extracted into a shar
 
 ### Design principles
 
-- **Keep `defineCommand` and `defineNamespace` interfaces clean and stable** — they will become the public plugin API.
-- **Built-in over plugin for core bunny.net primitives** — analytics, streaming, storage sync, DNS, and logs should be first-class commands, not plugins.
+- **Keep `defineCommand` and `defineNamespace` interfaces clean and stable**: they will become the public plugin API.
+- **Built-in over plugin for core bunny.net primitives**: analytics, streaming, storage sync, DNS, and logs should be first-class commands, not plugins.
 - **Plugins are best for**: framework-specific adapters (Next.js, Laravel, WordPress), third-party integrations (Datadog, Slack, PagerDuty), and organization-specific workflows.
-- **Unix composability first** — built-in commands should output to stdout in structured formats (`--output json`) so users can pipe to any tool. Plugins add value with pre-built integrations on top.
+- **Unix composability first**: built-in commands should output to stdout in structured formats (`--output json`) so users can pipe to any tool. Plugins add value with pre-built integrations on top.
