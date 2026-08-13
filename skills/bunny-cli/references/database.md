@@ -177,13 +177,13 @@ bunny db shell --url libsql://... --token ey...      # explicit credentials
 2. `BUNNY_DATABASE_URL` / `BUNNY_DATABASE_AUTH_TOKEN` from `.env`
 3. API lookup (fetches URL and generates a temporary token)
 
-Shared by `db shell`, `db studio`, and `db migrations apply`. Two rules apply:
+Shared by `db shell`, `db studio`, and `db migrations apply`. These rules apply:
 
 - **Passing a database ID skips `.env`.** `bunny db shell db_01ABC` targets that database even when `.env` describes another one, so an explicit target is never silently redirected.
-- **`--url` without `--token` must match the resolved database.** A generated token is only sent to that database's own host; a mismatch errors and asks for `--token`. The token from `.env` is likewise only reused for a `--url` on the same host as `BUNNY_DATABASE_URL`.
-- **`--url` must be encrypted to receive a token you didn't pass yourself.** `libsql://`, `https://`, and `wss://` are accepted; `http://`, `ws://`, and `libsql://host:port?tls=0` are refused.
+- **`--url` without `--token` must match the resolved database.** A generated token is only sent to that database's own endpoint (hostname and normalized TLS port); a mismatch directs the user back to the Bunny-provided URL. The token from `.env` is likewise only reused for a `--url` matching the endpoint in `BUNNY_DATABASE_URL`.
+- **Every database URL must be encrypted.** `libsql:`, `https:`, and `wss:` are accepted, while plaintext schemes and `libsql:` URLs with `tls=0` are rejected regardless of where the token came from.
 
-In short, a credential you didn't type on the command line never goes to a URL you did. Passing `--token` alongside a plaintext or foreign `--url` is always allowed, for cases like a local `sqld`.
+The CLI targets hosted Bunny Database connections and does not provide a plaintext local-database exception.
 
 ### REPL dot-commands
 

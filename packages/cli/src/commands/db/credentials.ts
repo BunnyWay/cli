@@ -33,6 +33,7 @@ export interface ResolveCredentialsOptions {
 
 /** Schemes that encrypt in transit. `libsql:` resolves to `https:`/`wss:` unless it opts out with `?tls=0`. */
 const ENCRYPTED_SCHEMES = new Set(["libsql:", "https:", "wss:"]);
+const DEFAULT_TLS_PORT = "443";
 
 /** A credential-free database identity suitable for prompts and structured output. */
 export function databaseTarget(
@@ -69,35 +70,54 @@ export function isEncrypted(url: string): boolean {
   }
 }
 
-/** Same host, ignoring scheme, port, and path, since `libsql://` and `https://` address the same endpoint. */
-export function sameHost(a: string, b: string): boolean {
+/**
+ * Same encrypted service endpoint, allowing equivalent libSQL/HTTP/WebSocket
+ * schemes but not a different authority port.
+ */
+export function sameEndpoint(a: string, b: string): boolean {
   try {
+    const first = new URL(a);
+    const second = new URL(b);
+    const firstPort = first.port || DEFAULT_TLS_PORT;
+    const secondPort = second.port || DEFAULT_TLS_PORT;
+
     return (
-      new URL(a).hostname.toLowerCase() === new URL(b).hostname.toLowerCase()
+      first.hostname.toLowerCase() === second.hostname.toLowerCase() &&
+      firstPort === secondPort
     );
   } catch {
     return false;
   }
 }
 
+function requireEncrypted(url: string): void {
+  if (isEncrypted(url)) return;
+
+  throw new UserError(
+    "Database URL must use an encrypted connection.",
+    "Use the libsql://, https://, or wss:// URL provided by Bunny Database.",
+  );
+}
+
 /**
  * True when the token stored in `.env` may be sent to an explicit `--url`.
  *
  * The `.env` token belongs to the `.env` URL: that pairing is the user's own, so
- * it holds for the same host and nothing else. An override addressing anywhere
+ * it holds for the same endpoint and nothing else. An override addressing anywhere
  * else falls through to the API path, where a fresh token is created and checked
  * against the database's canonical URL instead of reusing the stored one.
  *
  * Checked against `.env` rather than the API so the offline case (both values in
- * `.env`, `--url` naming the same host) still needs no network call.
+ * `.env`, `--url` naming the same endpoint) still needs no network call.
  */
 export function envTokenAllowedFor(
   explicitUrl: string | undefined,
   envUrl: string | undefined,
 ): boolean {
-  if (!explicitUrl) return true;
   if (!envUrl) return false;
-  return sameHost(explicitUrl, envUrl) && isEncrypted(explicitUrl);
+  if (!isEncrypted(envUrl)) return false;
+  if (!explicitUrl) return true;
+  return sameEndpoint(explicitUrl, envUrl) && isEncrypted(explicitUrl);
 }
 
 /**
@@ -114,9 +134,8 @@ export function envTokenAllowedFor(
  * The rule for tokens is that a credential the user didn't pass on this command
  * line is never sent to a target they did. So a generated token only goes to an
  * encrypted URL belonging to the database it was created for, and the `.env`
- * token only goes to an encrypted `--url` on the same host as the `.env` URL.
- * A token passed as `--token` is left alone: pairing it with `--url` is explicit,
- * and it covers connecting to a local `sqld` over plain http.
+ * token only goes to an encrypted `--url` on the same endpoint as the `.env`
+ * URL. Every URL must be encrypted, including URLs paired with an explicit token.
  *
  * Shared by `db shell`, `db studio`, and `db migrations apply`.
  */
@@ -133,6 +152,8 @@ export async function resolveCredentials(
   let token =
     opts.token ?? (envTokenAllowedFor(opts.url, envUrl) ? envToken : undefined);
 
+  if (url) requireEncrypted(url);
+
   if (url && token) {
     return {
       url,
@@ -140,14 +161,6 @@ export async function resolveCredentials(
       databaseId: opts.databaseId,
       tokenGenerated: false,
     };
-  }
-
-  // Refuse a plaintext target up front, before any lookup, prompt, or token creation.
-  if (opts.url && !token && !isEncrypted(opts.url)) {
-    throw new UserError(
-      "--url must be encrypted to receive a generated token.",
-      "Use libsql:// or https://, or pass --token to send your own credential.",
-    );
   }
 
   const config = resolveConfig(opts.profile, opts.apiKey, opts.verbose);
@@ -175,7 +188,7 @@ export async function resolveCredentials(
 
   try {
     if (url && willGenerateToken) {
-      // Verify the override before creating a token, so a token is never created for a host we'd refuse.
+      // Verify the override before creating a token, so a token is never created for an endpoint we'd refuse.
       const { data } = await fetchDatabase();
       const canonical = data?.db?.url;
 
@@ -183,10 +196,10 @@ export async function resolveCredentials(
         throw new UserError(`Could not fetch database ${databaseId}.`);
       }
 
-      if (!sameHost(url, canonical)) {
+      if (!sameEndpoint(url, canonical)) {
         throw new UserError(
           `--url does not point at ${databaseId}.`,
-          `Pass --token for that URL, or drop --url to connect to ${canonical}.`,
+          `Use the URL provided by Bunny Database, or drop --url to connect to ${canonical}.`,
         );
       }
 
@@ -207,6 +220,8 @@ export async function resolveCredentials(
   if (!url || !token) {
     throw new UserError("Could not resolve database URL or generate token.");
   }
+
+  requireEncrypted(url);
 
   return { url, token, databaseId, tokenGenerated: willGenerateToken };
 }

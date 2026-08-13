@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   databaseTarget,
   envTokenAllowedFor,
   isEncrypted,
-  sameHost,
+  resolveCredentials,
+  sameEndpoint,
 } from "./credentials.ts";
 
 const CANONICAL = "libsql://my-db-abc.lite.bunnydb.net/";
@@ -34,10 +38,10 @@ describe("databaseTarget", () => {
 describe("envTokenAllowedFor", () => {
   test("allows the .env token when no --url overrides it", () => {
     expect(envTokenAllowedFor(undefined, CANONICAL)).toBe(true);
-    expect(envTokenAllowedFor(undefined, undefined)).toBe(true);
+    expect(envTokenAllowedFor(undefined, undefined)).toBe(false);
   });
 
-  test("allows a --url naming the same host as the .env URL", () => {
+  test("allows a --url naming the same endpoint as the .env URL", () => {
     expect(
       envTokenAllowedFor("libsql://my-db-abc.lite.bunnydb.net", CANONICAL),
     ).toBe(true);
@@ -52,6 +56,12 @@ describe("envTokenAllowedFor", () => {
     );
     expect(
       envTokenAllowedFor("libsql://other-db.lite.bunnydb.net", CANONICAL),
+    ).toBe(false);
+  });
+
+  test("refuses an encrypted --url on a different port", () => {
+    expect(
+      envTokenAllowedFor("libsql://my-db-abc.lite.bunnydb.net:8443", CANONICAL),
     ).toBe(false);
   });
 
@@ -100,44 +110,107 @@ describe("isEncrypted", () => {
   });
 });
 
-describe("sameHost", () => {
+describe("sameEndpoint", () => {
   test("accepts the canonical URL with or without a trailing slash", () => {
-    expect(sameHost("libsql://my-db-abc.lite.bunnydb.net", CANONICAL)).toBe(
+    expect(sameEndpoint("libsql://my-db-abc.lite.bunnydb.net", CANONICAL)).toBe(
       true,
     );
-    expect(sameHost(CANONICAL, CANONICAL)).toBe(true);
+    expect(sameEndpoint(CANONICAL, CANONICAL)).toBe(true);
   });
 
-  test("accepts https for the same host, since libsql maps onto it", () => {
-    expect(sameHost("https://my-db-abc.lite.bunnydb.net", CANONICAL)).toBe(
+  test("accepts https for the same endpoint, since libsql maps onto it", () => {
+    expect(sameEndpoint("https://my-db-abc.lite.bunnydb.net", CANONICAL)).toBe(
       true,
     );
+  });
+
+  test("normalizes an explicit default TLS port", () => {
+    expect(
+      sameEndpoint("libsql://my-db-abc.lite.bunnydb.net:443", CANONICAL),
+    ).toBe(true);
+  });
+
+  test("rejects an alternate service port", () => {
+    expect(
+      sameEndpoint("libsql://my-db-abc.lite.bunnydb.net:8443", CANONICAL),
+    ).toBe(false);
   });
 
   test("ignores host casing and path", () => {
     expect(
-      sameHost("libsql://MY-DB-ABC.lite.bunnydb.net/anything", CANONICAL),
+      sameEndpoint("libsql://MY-DB-ABC.lite.bunnydb.net/anything", CANONICAL),
     ).toBe(true);
   });
 
   test("rejects a different database on the same domain", () => {
-    expect(sameHost("libsql://other-db-xyz.lite.bunnydb.net", CANONICAL)).toBe(
-      false,
-    );
+    expect(
+      sameEndpoint("libsql://other-db-xyz.lite.bunnydb.net", CANONICAL),
+    ).toBe(false);
   });
 
   test("rejects a foreign host", () => {
-    expect(sameHost("libsql://evil.example.com", CANONICAL)).toBe(false);
+    expect(sameEndpoint("libsql://evil.example.com", CANONICAL)).toBe(false);
   });
 
   test("rejects a host that only prefixes the canonical one", () => {
     expect(
-      sameHost("libsql://my-db-abc.lite.bunnydb.net.example.com", CANONICAL),
+      sameEndpoint(
+        "libsql://my-db-abc.lite.bunnydb.net.example.com",
+        CANONICAL,
+      ),
     ).toBe(false);
   });
 
   test("rejects unparseable input rather than treating it as a match", () => {
-    expect(sameHost("my-db-abc.lite.bunnydb.net", CANONICAL)).toBe(false);
-    expect(sameHost("", CANONICAL)).toBe(false);
+    expect(sameEndpoint("my-db-abc.lite.bunnydb.net", CANONICAL)).toBe(false);
+    expect(sameEndpoint("", CANONICAL)).toBe(false);
+  });
+});
+
+describe("resolveCredentials", () => {
+  test("rejects a plaintext explicit URL even with an explicit token", async () => {
+    await expect(
+      resolveCredentials({
+        profile: "default",
+        url: "http://my-db-abc.lite.bunnydb.net",
+        token: "explicit-token",
+      }),
+    ).rejects.toThrow("Database URL must use an encrypted connection.");
+  });
+
+  test("returns an encrypted explicit URL and token without an API lookup", async () => {
+    await expect(
+      resolveCredentials({
+        profile: "default",
+        url: CANONICAL,
+        token: "explicit-token",
+      }),
+    ).resolves.toEqual({
+      url: CANONICAL,
+      token: "explicit-token",
+      databaseId: undefined,
+      tokenGenerated: false,
+    });
+  });
+
+  test("rejects a plaintext .env URL before returning its ambient token", async () => {
+    const cwd = process.cwd();
+    const dir = mkdtempSync(join(tmpdir(), "bunny-db-credentials-"));
+    writeFileSync(
+      join(dir, ".env"),
+      [
+        "BUNNY_DATABASE_URL=http://my-db-abc.lite.bunnydb.net",
+        "BUNNY_DATABASE_AUTH_TOKEN=ambient-token",
+      ].join("\n"),
+    );
+    process.chdir(dir);
+
+    try {
+      await expect(resolveCredentials({ profile: "default" })).rejects.toThrow(
+        "Database URL must use an encrypted connection.",
+      );
+    } finally {
+      process.chdir(cwd);
+    }
   });
 });
