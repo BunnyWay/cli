@@ -35,6 +35,7 @@ bunny db create
 bunny db list
 bunny db shell
 bunny db migrations apply                             # run pending migrations/*.sql files
+bunny db migrations apply --pattern "*/migration.sql" # opt into a nested ORM layout
 
 # manage Edge Scripts
 bunny scripts init

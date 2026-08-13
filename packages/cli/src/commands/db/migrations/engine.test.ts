@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClient } from "@libsql/client";
+import { assertMigrationHistorySafe, migrationHistoryIssues } from "./drift.ts";
 import {
   applyMigration,
   checksum,
@@ -16,11 +17,13 @@ import {
   ensureMigrationsTable,
   fetchApplied,
   type MigrationClient,
+  migrationStatements,
   migrationStatuses,
   migrationsTableExists,
   nextSequence,
   pendingMigrations,
   readApplied,
+  resolveCreateMigrationsDir,
   resolveMigrationsDir,
   slugify,
 } from "./engine.ts";
@@ -67,6 +70,40 @@ describe("discoverMigrations", () => {
     expect(discoverMigrations(dir).map((f) => f.name)).toEqual([
       "0001_first.sql",
     ]);
+  });
+
+  test("supports nested layouts through a relative glob", () => {
+    mkdirSync(join(dir, "0002_second"));
+    mkdirSync(join(dir, "0001_first"));
+    writeFileSync(join(dir, "0002_second", "migration.sql"), "SELECT 2;");
+    writeFileSync(join(dir, "0001_first", "migration.sql"), "SELECT 1;");
+    write("README.md", "not sql");
+
+    expect(
+      discoverMigrations(dir, "*/migration.sql").map((file) => file.name),
+    ).toEqual(["0001_first/migration.sql", "0002_second/migration.sql"]);
+  });
+
+  test("can combine top-level and nested SQL with a recursive glob", () => {
+    write("0001_first.sql", "SELECT 1;");
+    mkdirSync(join(dir, "0002_second"));
+    writeFileSync(join(dir, "0002_second", "migration.sql"), "SELECT 2;");
+
+    expect(
+      discoverMigrations(dir, "**/*.sql").map((file) => file.name),
+    ).toEqual(["0001_first.sql", "0002_second/migration.sql"]);
+  });
+
+  test("rejects patterns that can escape the migrations directory", () => {
+    expect(() => discoverMigrations(dir, "../*.sql")).toThrow(
+      /Invalid migration pattern/,
+    );
+    expect(() => discoverMigrations(dir, "/tmp/*.sql")).toThrow(
+      /Invalid migration pattern/,
+    );
+    expect(() => discoverMigrations(dir, "!*.sql")).toThrow(
+      /Invalid migration pattern/,
+    );
   });
 
   test("throws a hinted error when the directory is missing", () => {
@@ -173,6 +210,13 @@ describe("resolveMigrationsDir", () => {
       detected: false,
     });
   });
+
+  test("create never auto-detects an ORM directory", () => {
+    process.chdir(dir);
+    mkdirSync(join(dir, "drizzle"));
+    expect(resolveCreateMigrationsDir()).toBe(join(dir, "migrations"));
+    expect(resolveCreateMigrationsDir("custom")).toBe(join(dir, "custom"));
+  });
 });
 
 describe("migrationStatuses", () => {
@@ -218,6 +262,58 @@ describe("migrationStatuses", () => {
         appliedAt: "2026-06-01 09:00:00",
       },
     ]);
+  });
+
+  test("marks a late-arriving file as out of order", () => {
+    write("0001_late.sql", "SELECT 1;");
+    write("0002_applied.sql", "SELECT 2;");
+    const files = discoverMigrations(dir);
+
+    expect(
+      migrationStatuses(files, [
+        {
+          name: "0002_applied.sql",
+          checksum: checksum("SELECT 2;"),
+          applied_at: "now",
+        },
+      ]),
+    ).toEqual([
+      { name: "0001_late.sql", state: "out_of_order" },
+      {
+        name: "0002_applied.sql",
+        state: "applied",
+        appliedAt: "now",
+      },
+    ]);
+  });
+});
+
+describe("migration history safety", () => {
+  test("blocks modified, missing, and out-of-order histories", () => {
+    const statuses = [
+      { name: "0001.sql", state: "modified" as const },
+      { name: "0002.sql", state: "missing" as const },
+      { name: "0000.sql", state: "out_of_order" as const },
+      { name: "0003.sql", state: "pending" as const },
+    ];
+
+    expect(migrationHistoryIssues(statuses)).toHaveLength(3);
+    expect(() => assertMigrationHistorySafe(statuses, false)).toThrow(
+      /Migration history needs attention/,
+    );
+    expect(() => assertMigrationHistorySafe(statuses, true)).not.toThrow();
+  });
+
+  test("accepts an ordinary applied and pending history", () => {
+    expect(() =>
+      assertMigrationHistorySafe(
+        [
+          { name: "0001.sql", state: "applied" },
+          { name: "0002.sql", state: "pending" },
+        ],
+        false,
+      ),
+    ).not.toThrow();
   });
 });
 
@@ -334,6 +430,22 @@ describe("applyMigration", () => {
     expect(cols.rows).toHaveLength(1);
   });
 
+  test("applies valid SQL containing semicolons in quoted identifiers", async () => {
+    const client = memoryClient();
+    await ensureMigrationsTable(client);
+
+    write(
+      "0001_quoted.sql",
+      'CREATE TABLE "semi;colon" (id INTEGER); INSERT INTO "semi;colon" VALUES (1);',
+    );
+    const [file] = discoverMigrations(dir);
+    if (!file) throw new Error("no migration discovered");
+
+    await applyMigration(client, file);
+    const rows = await client.execute('SELECT id FROM "semi;colon"');
+    expect(rows.rows).toHaveLength(1);
+  });
+
   test("rejects a file with no statements", async () => {
     const client = memoryClient();
     await ensureMigrationsTable(client);
@@ -345,6 +457,37 @@ describe("applyMigration", () => {
     await expect(applyMigration(client, file)).rejects.toThrow(
       /No SQL statements found/,
     );
+  });
+
+  test("reports parser errors with the migration filename", () => {
+    write("0001_truncated.sql", "SELECT 1; /* never closed");
+    const [file] = discoverMigrations(dir);
+    if (!file) throw new Error("no migration discovered");
+
+    expect(() => migrationStatements(file)).toThrow(
+      /Could not parse 0001_truncated.sql: Unterminated block comment/,
+    );
+  });
+
+  test("does not write or record a lexically invalid migration", async () => {
+    const client = memoryClient();
+    await ensureMigrationsTable(client);
+
+    write(
+      "0001_truncated.sql",
+      "CREATE TABLE should_not_exist (id INTEGER); /* never closed",
+    );
+    const [file] = discoverMigrations(dir);
+    if (!file) throw new Error("no migration discovered");
+
+    await expect(applyMigration(client, file)).rejects.toThrow(
+      /Unterminated block comment/,
+    );
+    expect(await fetchApplied(client)).toEqual([]);
+    const table = await client.execute(
+      "SELECT name FROM sqlite_master WHERE name = 'should_not_exist'",
+    );
+    expect(table.rows).toHaveLength(0);
   });
 });
 

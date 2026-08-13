@@ -1,7 +1,35 @@
 import { describe, expect, test } from "bun:test";
-import { envTokenAllowedFor, isEncrypted, sameHost } from "./credentials.ts";
+import {
+  databaseTarget,
+  envTokenAllowedFor,
+  isEncrypted,
+  sameHost,
+} from "./credentials.ts";
 
 const CANONICAL = "libsql://my-db-abc.lite.bunnydb.net/";
+
+describe("databaseTarget", () => {
+  test("shows the database ID and host without URL credentials or paths", () => {
+    expect(
+      databaseTarget(
+        "libsql://user:secret@my-db-abc.lite.bunnydb.net/private?token=nope",
+        "db_123",
+      ),
+    ).toEqual({
+      databaseId: "db_123",
+      host: "my-db-abc.lite.bunnydb.net",
+      label: "db_123 (my-db-abc.lite.bunnydb.net)",
+    });
+  });
+
+  test("falls back to the host when no database ID is known", () => {
+    expect(databaseTarget(CANONICAL)).toEqual({
+      databaseId: null,
+      host: "my-db-abc.lite.bunnydb.net",
+      label: "my-db-abc.lite.bunnydb.net",
+    });
+  });
+});
 
 describe("envTokenAllowedFor", () => {
   test("allows the .env token when no --url overrides it", () => {

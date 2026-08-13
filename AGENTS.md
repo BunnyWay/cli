@@ -292,12 +292,12 @@ bunny-cli/
 │           │   │   ├── usage.ts               # Show database usage statistics
 │           │   │   ├── migrations/
 │           │   │   │   ├── index.ts     # defineNamespace("migrations", ...) — registers migration commands
-│           │   │   │   ├── constants.ts # Default dir, drizzle fallback dir, tracking table name
-│           │   │   │   ├── engine.ts    # Shared: discover files, checksums, applied/pending state, apply one migration
-│           │   │   │   ├── drift.ts     # Shared: warn when applied migrations were edited or deleted
-│           │   │   │   ├── apply.ts     # Apply pending migrations in filename order
-│           │   │   │   ├── create.ts    # Write an empty numbered migration file
-│           │   │   │   └── list.ts      # Show applied/pending/modified/missing state
+│           │   │   │   ├── constants.ts # Default dir/pattern, drizzle fallback dir, tracking table name
+│           │   │   │   ├── engine.ts    # Shared: glob discovery, checksums, applied/pending state, preflight parsing, apply one migration
+│           │   │   │   ├── drift.ts     # Shared: report and block modified/missing/out-of-order histories unless explicitly allowed
+│           │   │   │   ├── apply.ts     # Apply pending migrations in relative-path order; shows credential-free target
+│           │   │   │   ├── create.ts    # Write an empty numbered top-level migration file (never auto-detects ORM dirs)
+│           │   │   │   └── list.ts      # Show applied/pending/modified/missing/out-of-order state
 │           │   │   ├── regions/
 │           │   │   │   ├── index.ts     # defineNamespace("regions", ...) — registers region commands
 │           │   │   │   ├── add.ts       # Add primary/replica regions (interactive multiselect or flags)
@@ -1060,12 +1060,12 @@ bunny
 │   ├── list            (alias: ls) [--group-id]
 │   │                                       List all databases
 │   ├── migrations                          Create and apply SQL migrations (files are the source of truth)
-│   │   ├── apply       [database-id] [--dir] [--url] [--token] [--dry-run] [--force]
+│   │   ├── apply       [database-id] [--dir] [--pattern] [--url] [--token] [--dry-run] [--force] [--allow-drift]
 │   │   │                                   Apply pending migrations in filename order (each file + its tracking row is one atomic batch)
 │   │   ├── create      [name] (alias: new) [--dir]
 │   │   │                                   Write an empty migrations/NNNN_<slug>.sql (prompts for name when omitted)
-│   │   └── list        [database-id] (aliases: ls, status) [--dir] [--url] [--token]
-│   │                                       Show applied / pending / modified / missing migrations
+│   │   └── list        [database-id] (aliases: ls, status) [--dir] [--pattern] [--url] [--token]
+│   │                                       Show applied / pending / modified / missing / out-of-order migrations
 │   ├── quickstart      [database-id] [--lang] [--url] [--token]
 │   │                                       Generate quickstart guide for a database
 │   ├── regions
@@ -1456,7 +1456,7 @@ The shell is split across two packages:
 - **Formatting** (`format.ts`) — `printResultSet()` with 5 output modes: `default`, `table`, `json`, `csv`, `markdown`. Sensitive column masking (full mask for passwords/secrets, email mask for email columns).
 - **Views** (`views.ts`) — Saved queries scoped per database. Stored at `~/.config/bunny/views/<databaseId>/` (respects `XDG_CONFIG_HOME`). Callers can override via `ShellOptions.viewsDir`.
 - **History** (`history.ts`) — Stored at `~/.config/bunny/shell_history` (respects `XDG_CONFIG_HOME`). Max 1000 entries.
-- **SQL parsing** (`parser.ts`) — `splitStatements()` for `.sql` file execution. Splits on `;` outside string literals, strips `--` comments (so drizzle's `--> statement-breakpoint` markers are ignored), and keeps `CREATE TRIGGER ... BEGIN ... END;` bodies intact.
+- **SQL parsing** (`parser.ts`) — `splitStatements()` for `.sql` file execution. Splits on `;` outside single-quoted strings and SQLite's double-quote/backtick/bracket identifier forms, strips line and block comments (so drizzle's `--> statement-breakpoint` markers are ignored), keeps `CREATE TRIGGER ... BEGIN ... END;` bodies intact, and rejects unterminated quotes/comments rather than returning truncated SQL.
 
 **Dependency injection** — The shell engine accepts a `ShellLogger` interface instead of importing the CLI logger directly:
 
@@ -1515,38 +1515,42 @@ Schema changes live in plain `.sql` files that the developer writes (or generate
 ### Convention
 
 - Files live in `migrations/` by default, one statement group per file, named `NNNN_<slug>.sql`.
-- The **filename is the migration's identity**, and its numeric prefix is the order. Nothing else (no journal, no manifest) tracks migrations locally.
-- Files are applied in lexicographic filename order, which is why prefixes are zero-padded to four digits.
+- The **relative path is the migration's identity**, and its numeric prefix is the order. Flat files use the filename; nested layouts opt in with `--pattern`. Nothing else (no journal, no manifest) tracks migrations locally.
+- Files are applied in lexicographic relative-path order, which is why prefixes are zero-padded to four digits.
 - Applied migrations are recorded in `__bunny_migrations` (`id`, `name`, `checksum`, `applied_at`). The `__` prefix means `DEFAULT_EXCLUDE_PATTERNS` in `packages/database-adapter-libsql/src/introspect.ts` already hides it from `db studio` and the REST layer.
 
 ### Engine (`packages/cli/src/commands/db/migrations/engine.ts`)
 
 All file and state logic is here so the commands stay thin and the logic is testable against an in-memory libSQL database (`engine.test.ts`, no network):
 
-- `resolveMigrationsDir(dirArg?)` — `--dir` wins; otherwise `migrations/`, falling back to `drizzle/` when `migrations/` doesn't exist (`detected: true` so the caller can say which directory it used).
-- `discoverMigrations(dir)` — every `.sql` file, sorted by name. Skips dotfiles and subdirectories, so `drizzle/meta/` is ignored.
+- `resolveMigrationsDir(dirArg?)` — `--dir` wins; otherwise `migrations/`, falling back to `drizzle/` when `migrations/` doesn't exist (`detected: true` so the caller can say which directory it used). `resolveCreateMigrationsDir()` deliberately skips fallback detection so `create` never writes an unjournaled file into an ORM directory.
+- `discoverMigrations(dir, pattern)` — every `.sql` file matched by a positive `Bun.Glob` relative to `dir`, sorted by portable slash-separated relative path. The default `*.sql` stays top-level; `*/migration.sql` and `**/*.sql` opt into nested layouts. Absolute/traversing/negated patterns are rejected.
 - `checksum(sql)` — sha256 of the body with CRLF normalized and edges trimmed, so reformatting line endings isn't reported as a change.
-- `migrationStatuses(files, applied)` / `pendingMigrations(files, applied)` — join disk against the table. A recorded migration whose file changed is `modified`; one whose file is gone is `missing`. Both are warnings (`drift.ts`), never fatal: pending migrations still apply cleanly, and the remedy is the developer's call.
-- `applyMigration(client, file)` — splits the file with `splitStatements()` and runs the statements plus the tracking-row insert through `client.migrate()`, so a migration either lands and is recorded or neither happens.
+- `migrationStatuses(files, applied)` / `pendingMigrations(files, applied)` — join disk against the table. A recorded migration whose file changed is `modified`; one whose file is gone is `missing`; an unseen file that sorts before the newest applied path is `out_of_order`.
+- `migrationStatements(file)` — parses one file and converts lexical failures into a hinted `UserError`. `apply` calls it for every pending migration before the first database write, so a malformed later file cannot cause a predictably partial run.
+- `applyMigration(client, file, options)` — runs the prepared statements plus the tracking-row insert through `client.migrate()`, so a migration either lands and is recorded or neither happens.
 - `readApplied(client)` — the read path for `list` and for `apply` before confirmation. Checks `sqlite_master` rather than creating the tracking table, so a preview never writes, and converts connection or query failures into a hinted `UserError` instead of an unexpected-error exit.
 
 `client.migrate()` is used rather than `client.batch()` because it defers foreign key enforcement for the batch, which table rebuilds and `ALTER TABLE` need. `db shell <file>.sql` still uses `batch()` and is not migration-aware.
 
 ### ORM-generated migrations
 
-`drizzle-kit generate` (sqlite/turso dialect) writes flat `0000_<name>.sql` files, matching this convention, so no glob or pattern config is needed. Generate with the ORM, apply with the CLI:
+Flat `drizzle-kit generate` output writes `0000_<name>.sql` files, matching this convention with no pattern override. Nested ORM layouts use a glob relative to `--dir`:
 
 ```bash
 drizzle-kit generate                      # writes drizzle/0000_curly_bat.sql
 bunny db migrations apply                 # finds drizzle/ automatically
 bunny db migrations apply --dir drizzle    # or be explicit
+bunny db migrations apply --dir migrations --pattern "*/migration.sql"
 ```
 
-`db migrations create` only writes top-level files; use the ORM's own generate command when an ORM owns the schema.
+`db migrations create` only writes top-level files and always defaults to `migrations/`; use the ORM's own generate command when an ORM owns the schema. One runner owns a migration history: Bunny records relative paths in `__bunny_migrations` and does not read or update another tool's journal, so users should run Drizzle/Prisma/dbmate directly rather than alternating runners over the same files.
 
 ### Applying
 
-`apply` runs pending migrations sequentially and stops at the first failure, reporting how many applied and how many are still pending (the failed file counts as pending, since its tracking row rolled back with it). It confirms before writing when a TTY is attached, and skips the prompt under `--force` or any non-interactive run (`--output json`, no TTY) so CI and agents aren't blocked. `--dry-run` lists what would run without writing.
+`apply` runs pending migrations sequentially and stops at the first database failure, reporting how many applied and how many are still pending (the failed file counts as pending, since its tracking row rolled back with it). It refuses to extend modified, missing, or out-of-order histories unless `--allow-drift` is explicit. It confirms before writing when a TTY is attached, and skips the prompt under `--force` or any non-interactive run (`--output json`, no TTY) so CI and agents aren't blocked. `--dry-run` lists what would run without writing.
+
+Both `list` and `apply` display a credential-free target (`database-id (host)` when the ID is known, otherwise the host). JSON output includes `{ database_id, host }`, the discovery pattern, and history issues; it never includes the token, URL path, query, or user info.
 
 Nothing is written before confirmation, including the tracking table: `ensureMigrationsTable()` runs only after the confirm and after the `--dry-run` exit, so a preview against read-only credentials lists pending files instead of failing on a schema write.
 

@@ -549,6 +549,26 @@ describe("splitStatements", () => {
     ]);
   });
 
+  test("preserves semicolons inside quoted identifiers", () => {
+    expect(
+      splitStatements(
+        'CREATE TABLE "double;quote" (id INT); CREATE TABLE `back;tick` (id INT); CREATE TABLE [bracket;name] (id INT);',
+      ),
+    ).toEqual([
+      'CREATE TABLE "double;quote" (id INT)',
+      "CREATE TABLE `back;tick` (id INT)",
+      "CREATE TABLE [bracket;name] (id INT)",
+    ]);
+  });
+
+  test("handles escaped quoted-identifier delimiters", () => {
+    expect(
+      splitStatements(
+        'CREATE TABLE "double""quote;name" (id INT); CREATE TABLE `back``tick;name` (id INT);',
+      ),
+    ).toHaveLength(2);
+  });
+
   test("handles multiple statements with embedded semicolons", () => {
     const sql =
       "INSERT INTO t VALUES ('x;y');\nSELECT * FROM t WHERE name = 'a;b';";
@@ -612,8 +632,19 @@ describe("splitStatements", () => {
     expect(splitStatements(sql)[0]?.endsWith("END")).toBe(true);
   });
 
-  test("stops at an unterminated block comment without losing the statement", () => {
-    expect(splitStatements("SELECT 1; /* never closed")).toEqual(["SELECT 1"]);
+  test("rejects an unterminated block comment instead of truncating the file", () => {
+    expect(() => splitStatements("SELECT 1; /* never closed")).toThrow(
+      /Unterminated block comment at line 1, column 11/,
+    );
+  });
+
+  test("rejects unterminated strings and quoted identifiers", () => {
+    expect(() => splitStatements("SELECT 'never closed")).toThrow(
+      /Unterminated quoted value/,
+    );
+    expect(() => splitStatements('CREATE TABLE "never;closed')).toThrow(
+      /Unterminated quoted value/,
+    );
   });
 
   test("keeps a trigger body whose statement ends in CASE ... END intact", () => {

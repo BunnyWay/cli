@@ -9,7 +9,7 @@ import { ARG_DIR } from "./constants.ts";
 import {
   discoverMigrations,
   nextSequence,
-  resolveMigrationsDir,
+  resolveCreateMigrationsDir,
   slugify,
 } from "./engine.ts";
 
@@ -75,7 +75,7 @@ export const dbMigrationsCreateCommand = defineCommand<CreateArgs>({
     }
     if (!name) throw new UserError("Migration name is required.");
 
-    const { dir } = resolveMigrationsDir(dirArg);
+    const dir = resolveCreateMigrationsDir(dirArg);
 
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 

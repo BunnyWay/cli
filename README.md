@@ -44,8 +44,9 @@ bun ny <command>
 bun ny login
 bun ny db list
 bun ny db migrations create add_users    # write migrations/0001_add_users.sql (numeric prefix = apply order)
-bun ny db migrations list                # show applied / pending migrations
-bun ny db migrations apply               # apply pending migrations in order (--dry-run to preview, --dir drizzle for drizzle-kit output)
+bun ny db migrations list                # show applied / pending / changed migrations
+bun ny db migrations apply               # apply pending migrations in order (--dry-run to preview, --dir drizzle for flat drizzle-kit output)
+bun ny db migrations apply --pattern "*/migration.sql" # nested ORM layout; paths are tracked relative to migrations/
 bun ny apps deploy ghcr.io/me/api:v1.2     # deploy a pre-built image
 bun ny apps deploy --dockerfile             # build ./Dockerfile and deploy
 bun ny apps deploy                          # first run? Imports docker-compose.yml if present; otherwise auto-detects Dockerfile(s) (including monorepo subdirs) so you can pick one or many, or falls back to a pre-built image.

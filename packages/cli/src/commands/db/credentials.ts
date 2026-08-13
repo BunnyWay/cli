@@ -16,6 +16,12 @@ export interface ResolvedCredentials {
   tokenGenerated: boolean;
 }
 
+export interface DatabaseTarget {
+  databaseId: string | null;
+  host: string;
+  label: string;
+}
+
 export interface ResolveCredentialsOptions {
   url?: string;
   token?: string;
@@ -27,6 +33,25 @@ export interface ResolveCredentialsOptions {
 
 /** Schemes that encrypt in transit. `libsql:` resolves to `https:`/`wss:` unless it opts out with `?tls=0`. */
 const ENCRYPTED_SCHEMES = new Set(["libsql:", "https:", "wss:"]);
+
+/** A credential-free database identity suitable for prompts and structured output. */
+export function databaseTarget(
+  url: string,
+  databaseId?: string,
+): DatabaseTarget {
+  let host = "unknown host";
+  try {
+    host = new URL(url).host || host;
+  } catch {
+    // Credential resolution or the client will provide the actionable URL error.
+  }
+
+  return {
+    databaseId: databaseId ?? null,
+    host,
+    label: databaseId ? `${databaseId} (${host})` : host,
+  };
+}
 
 /**
  * True when traffic to this URL is encrypted, so a token we create can be sent to it.

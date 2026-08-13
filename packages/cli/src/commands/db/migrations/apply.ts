@@ -4,13 +4,23 @@ import { errorMessage, UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, isInteractive, spinner } from "../../../core/ui.ts";
 import { ARG_DATABASE_ID, TOKEN_TTL_MINUTES } from "../constants.ts";
-import { resolveCredentials } from "../credentials.ts";
-import { ARG_DIR, MIGRATIONS_TABLE } from "./constants.ts";
-import { warnOnDrift } from "./drift.ts";
+import { databaseTarget, resolveCredentials } from "../credentials.ts";
+import {
+  ARG_DIR,
+  ARG_PATTERN,
+  DEFAULT_MIGRATIONS_PATTERN,
+  MIGRATIONS_TABLE,
+} from "./constants.ts";
+import {
+  assertMigrationHistorySafe,
+  migrationHistoryIssues,
+  warnOnDrift,
+} from "./drift.ts";
 import {
   applyMigration,
   discoverMigrations,
   ensureMigrationsTable,
+  migrationStatements,
   migrationStatuses,
   pendingMigrations,
   readApplied,
@@ -25,14 +35,17 @@ const ARG_TOKEN = "token";
 const ARG_DRY_RUN = "dry-run";
 const ARG_FORCE = "force";
 const ARG_FORCE_ALIAS = "f";
+const ARG_ALLOW_DRIFT = "allow-drift";
 
 interface ApplyArgs {
   [ARG_DATABASE_ID]?: string;
   [ARG_DIR]?: string;
+  [ARG_PATTERN]?: string;
   [ARG_URL]?: string;
   [ARG_TOKEN]?: string;
   [ARG_DRY_RUN]?: boolean;
   [ARG_FORCE]?: boolean;
+  [ARG_ALLOW_DRIFT]?: boolean;
 }
 
 /**
@@ -69,6 +82,11 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
         type: "string",
         describe: "Migrations directory (default: migrations)",
       })
+      .option(ARG_PATTERN, {
+        type: "string",
+        default: DEFAULT_MIGRATIONS_PATTERN,
+        describe: "Migration glob relative to --dir",
+      })
       .option(ARG_URL, {
         type: "string",
         describe: "Database URL (skips API lookup)",
@@ -87,15 +105,22 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
         type: "boolean",
         default: false,
         describe: "Skip confirmation prompts",
+      })
+      .option(ARG_ALLOW_DRIFT, {
+        type: "boolean",
+        default: false,
+        describe: "Apply despite modified, missing, or out-of-order history",
       }),
 
   handler: async ({
     [ARG_DATABASE_ID]: databaseIdArg,
     [ARG_DIR]: dirArg,
+    [ARG_PATTERN]: pattern = DEFAULT_MIGRATIONS_PATTERN,
     [ARG_URL]: urlArg,
     [ARG_TOKEN]: tokenArg,
     [ARG_DRY_RUN]: dryRun,
     [ARG_FORCE]: force,
+    [ARG_ALLOW_DRIFT]: allowDrift,
     profile,
     output,
     verbose,
@@ -104,26 +129,34 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
     const json = output === "json";
 
     const { dir, detected } = resolveMigrationsDir(dirArg);
-    const files = discoverMigrations(dir);
+    const files = discoverMigrations(dir, pattern);
     const displayDir = relative(process.cwd(), dir) || ".";
 
     if (files.length === 0) {
+      const nested =
+        pattern === DEFAULT_MIGRATIONS_PATTERN
+          ? discoverMigrations(dir, "**/*.sql")
+          : [];
       throw new UserError(
-        `No migrations found in ${displayDir}.`,
-        "Run `bunny db migrations create <name>` to add one.",
+        `No migrations matched ${pattern} in ${displayDir}.`,
+        nested.length > 0
+          ? 'Nested SQL files were found. Pass a matching glob such as `--pattern "*/migration.sql"`.'
+          : "Run `bunny db migrations create <name>` to add one.",
       );
     }
 
     if (detected && !json) logger.dim(`Using ${displayDir}`);
 
-    const { url, token, tokenGenerated } = await resolveCredentials({
-      url: urlArg,
-      token: tokenArg,
-      databaseId: databaseIdArg,
-      profile,
-      apiKey,
-      verbose,
-    });
+    const { url, token, tokenGenerated, databaseId } = await resolveCredentials(
+      {
+        url: urlArg,
+        token: tokenArg,
+        databaseId: databaseIdArg,
+        profile,
+        apiKey,
+        verbose,
+      },
+    );
 
     if (tokenGenerated && !json) {
       logger.dim(
@@ -133,11 +166,15 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
 
     const { createClient } = await import("@libsql/client/web");
     const client = createClient({ url, authToken: token });
+    const target = databaseTarget(url, databaseId);
+
+    if (!json) logger.dim(`Database: ${target.label}`);
 
     // Read without creating the table, so --dry-run and a declined confirm leave the database untouched.
     const applied = await readApplied(client);
     const statuses = migrationStatuses(files, applied);
     const pending = pendingMigrations(files, applied);
+    const issues = migrationHistoryIssues(statuses);
 
     /** `pending` is what was outstanding at the start; `done` is what actually ran. */
     const report = (done: string[]) =>
@@ -145,9 +182,18 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
         JSON.stringify(
           {
             dir: displayDir,
+            pattern,
             table: MIGRATIONS_TABLE,
-            pending: pending.map((f) => f.name),
+            target: {
+              database_id: target.databaseId,
+              host: target.host,
+            },
+            planned: pending.map((f) => f.name),
             applied: done,
+            remaining: pending
+              .filter((file) => !done.includes(file.name))
+              .map((file) => file.name),
+            issues: issues.map(({ name, state }) => ({ name, state })),
             dry_run: Boolean(dryRun),
           },
           null,
@@ -160,7 +206,9 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
         report([]);
         return;
       }
-      logger.success("Already up to date.");
+      logger.success(
+        issues.length === 0 ? "Already up to date." : "No pending migrations.",
+      );
       warnOnDrift(statuses);
       return;
     }
@@ -174,6 +222,14 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
       warnOnDrift(statuses);
     }
 
+    assertMigrationHistorySafe(statuses, Boolean(allowDrift));
+
+    // Parse every pending file before the first database write, so a malformed
+    // later file cannot leave the run predictably half-complete.
+    const prepared = new Map(
+      pending.map((file) => [file.name, migrationStatements(file)]),
+    );
+
     if (dryRun) {
       if (json) {
         report([]);
@@ -184,7 +240,7 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
     }
 
     // Prompt only when a human is watching, so CI and agent runs aren't blocked.
-    const confirmed = await confirm("Apply now?", {
+    const confirmed = await confirm(`Apply to ${target.label}?`, {
       force: force || !isInteractive(output),
       initial: true,
     });
@@ -202,7 +258,9 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
       if (!json) spin.start();
 
       try {
-        const { statements } = await applyMigration(client, file);
+        const { statements } = await applyMigration(client, file, {
+          statements: prepared.get(file.name),
+        });
         spin.stop();
         done.push(file.name);
         if (!json) {

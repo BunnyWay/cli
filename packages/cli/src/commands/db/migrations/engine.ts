@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { splitStatements } from "@bunny.net/database-shell";
 import type { Client } from "@libsql/client";
 import { errorMessage, UserError } from "../../../core/errors.ts";
 import {
   DEFAULT_MIGRATIONS_DIR,
+  DEFAULT_MIGRATIONS_PATTERN,
   FALLBACK_MIGRATIONS_DIRS,
   MIGRATIONS_TABLE,
 } from "./constants.ts";
@@ -27,12 +28,17 @@ export interface AppliedMigration {
   applied_at: string;
 }
 
-export type MigrationState = "applied" | "pending" | "modified" | "missing";
+export type MigrationState =
+  | "applied"
+  | "pending"
+  | "modified"
+  | "missing"
+  | "out_of_order";
 
 export interface MigrationStatus {
   name: string;
   state: MigrationState;
-  /** Set for every state except `pending`. */
+  /** Set for states backed by an applied tracking row. */
   appliedAt?: string;
 }
 
@@ -76,18 +82,31 @@ export function resolveMigrationsDir(dirArg?: string): {
   return { dir: resolve(DEFAULT_MIGRATIONS_DIR), detected: false };
 }
 
+/**
+ * Pick the directory used by `migrations create`.
+ *
+ * Creation never auto-detects an ORM output directory: writing a hand-authored
+ * file there would bypass the ORM's journal. An explicit `--dir` still wins.
+ */
+export function resolveCreateMigrationsDir(dirArg?: string): string {
+  return resolve(dirArg ?? DEFAULT_MIGRATIONS_DIR);
+}
+
 function isDirectory(path: string): boolean {
   return existsSync(path) && statSync(path).isDirectory();
 }
 
 /**
- * Read every `.sql` file in `dir`, sorted by filename.
+ * Read every `.sql` file matching `pattern` in `dir`, sorted by relative path.
  *
- * Filenames are the migration identity, so the numeric prefix written by
- * `db migrations create` (and by `drizzle-kit generate`) determines order.
- * Subdirectories are ignored, which skips `drizzle/meta/`.
+ * The portable, slash-separated relative path is the migration identity. The
+ * default pattern only considers top-level files; `--pattern` opts into nested
+ * ORM layouts without teaching the runner about ORM-specific journals.
  */
-export function discoverMigrations(dir: string): MigrationFile[] {
+export function discoverMigrations(
+  dir: string,
+  pattern = DEFAULT_MIGRATIONS_PATTERN,
+): MigrationFile[] {
   if (!isDirectory(dir)) {
     throw new UserError(
       `Migrations directory not found: ${dir}`,
@@ -95,19 +114,61 @@ export function discoverMigrations(dir: string): MigrationFile[] {
     );
   }
 
+  validateMigrationPattern(pattern);
+
   const files: MigrationFile[] = [];
 
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isFile()) continue;
-    if (entry.name.startsWith(".")) continue;
-    if (!entry.name.endsWith(".sql")) continue;
+  try {
+    const glob = new Bun.Glob(pattern);
+    for (const match of glob.scanSync({
+      cwd: dir,
+      dot: false,
+      absolute: false,
+      followSymlinks: false,
+      onlyFiles: true,
+    })) {
+      if (!match.endsWith(".sql")) continue;
 
-    const path = join(dir, entry.name);
-    const sql = readFileSync(path, "utf-8");
-    files.push({ name: entry.name, path, sql, checksum: checksum(sql) });
+      const path = resolve(dir, match);
+      const relativePath = relative(dir, path);
+      if (
+        relativePath === ".." ||
+        relativePath.startsWith(`..${sep}`) ||
+        isAbsolute(relativePath)
+      ) {
+        throw new UserError(
+          `Migration pattern must stay inside the migrations directory: ${pattern}`,
+        );
+      }
+
+      const name = relativePath.replaceAll("\\", "/");
+      const sql = readFileSync(path, "utf-8");
+      files.push({ name, path, sql, checksum: checksum(sql) });
+    }
+  } catch (err: unknown) {
+    if (err instanceof UserError) throw err;
+    throw new UserError(
+      `Could not discover migrations with pattern ${pattern}: ${errorMessage(err)}`,
+    );
   }
 
   return files.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+function validateMigrationPattern(pattern: string): void {
+  const portable = pattern.replaceAll("\\", "/");
+  if (
+    !pattern.trim() ||
+    pattern.startsWith("!") ||
+    isAbsolute(pattern) ||
+    /^[A-Za-z]:\//.test(portable) ||
+    portable.split("/").includes("..")
+  ) {
+    throw new UserError(
+      `Invalid migration pattern: ${pattern}`,
+      "Use a positive glob relative to the migrations directory, such as `*.sql` or `*/migration.sql`.",
+    );
+  }
 }
 
 /** Next zero-padded sequence number, one above the highest numeric prefix present. */
@@ -216,10 +277,22 @@ export function migrationStatuses(
   applied: AppliedMigration[],
 ): MigrationStatus[] {
   const byName = new Map(applied.map((row) => [row.name, row]));
+  const newestApplied = applied.reduce(
+    (newest, row) => (row.name > newest ? row.name : newest),
+    "",
+  );
 
   const statuses: MigrationStatus[] = files.map((file) => {
     const record = byName.get(file.name);
-    if (!record) return { name: file.name, state: "pending" };
+    if (!record) {
+      return {
+        name: file.name,
+        state:
+          newestApplied && file.name < newestApplied
+            ? "out_of_order"
+            : "pending",
+      };
+    }
     return {
       name: file.name,
       state: record.checksum === file.checksum ? "applied" : "modified",
@@ -249,6 +322,25 @@ export function pendingMigrations(
   return files.filter((file) => !byName.has(file.name));
 }
 
+/** Parse and validate a migration before any database write occurs. */
+export function migrationStatements(file: MigrationFile): string[] {
+  let statements: string[];
+  try {
+    statements = splitStatements(file.sql);
+  } catch (err: unknown) {
+    throw new UserError(
+      `Could not parse ${file.name}: ${errorMessage(err)}`,
+      "Fix the migration file before applying any pending migrations.",
+    );
+  }
+
+  if (statements.length === 0) {
+    throw new UserError(`No SQL statements found in ${file.name}.`);
+  }
+
+  return statements;
+}
+
 /**
  * Apply one migration.
  *
@@ -260,13 +352,10 @@ export function pendingMigrations(
 export async function applyMigration(
   client: MigrationClient,
   file: MigrationFile,
-  table = MIGRATIONS_TABLE,
+  options: { table?: string; statements?: string[] } = {},
 ): Promise<{ statements: number }> {
-  const statements = splitStatements(file.sql);
-
-  if (statements.length === 0) {
-    throw new UserError(`No SQL statements found in ${file.name}.`);
-  }
+  const table = options.table ?? MIGRATIONS_TABLE;
+  const statements = options.statements ?? migrationStatements(file);
 
   await client.migrate([
     ...statements.map((sql) => ({ sql })),

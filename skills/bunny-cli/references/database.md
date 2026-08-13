@@ -214,7 +214,7 @@ Spins up a local server, generates a short-lived auth token if needed, and opens
 
 ## `bunny db migrations` — Create and apply SQL migrations
 
-Migrations are plain `.sql` files in `migrations/`, named `NNNN_<slug>.sql`. The filename is the migration's identity and its numeric prefix is the apply order. Applied migrations are recorded in a `__bunny_migrations` table in the database. There is no rollback: fix a bad migration with another migration.
+Migrations are plain `.sql` files in `migrations/`, named `NNNN_<slug>.sql`. The filename (or relative path for a nested layout) is the migration's identity and its numeric prefix is the apply order. Applied migrations are recorded in a `__bunny_migrations` table in the database. There is no rollback: fix a bad migration with another migration.
 
 ```bash
 bunny db migrations create add_users_table   # writes migrations/0001_add_users_table.sql
@@ -222,6 +222,7 @@ bunny db migrations list                     # applied / pending / modified / mi
 bunny db migrations apply --dry-run          # show what would run
 bunny db migrations apply                    # apply pending migrations in order
 bunny db migrations apply --dir drizzle      # apply drizzle-kit generate output
+bunny db migrations apply --pattern "*/migration.sql" # apply a nested ORM layout
 ```
 
 ### `bunny db migrations create <name>` (alias: `new`)
@@ -234,36 +235,46 @@ Numbers the file one above the highest existing prefix and slugifies the name. C
 
 ### `bunny db migrations list` (aliases: `ls`, `status`)
 
-| Flag      | Default      | Description                         |
-| --------- | ------------ | ----------------------------------- |
-| `--dir`   | `migrations` | Migrations directory                |
-| `--url`   |              | Database URL (skips API lookup)     |
-| `--token` |              | Auth token (skips token generation) |
+| Flag        | Default      | Description                                      |
+| ----------- | ------------ | ------------------------------------------------ |
+| `--dir`     | `migrations` | Migrations directory                             |
+| `--pattern` | `*.sql`      | Migration glob relative to the migrations folder |
+| `--url`     |              | Database URL (skips API lookup)                  |
+| `--token`   |              | Auth token (skips token generation)              |
 
-Never creates the tracking table, so it is safe against a database that has never had a migration applied. States are `Applied`, `Pending`, `Modified` (the file changed after being applied), and `Missing` (the file was deleted). Modified and missing are warnings, not errors.
+Never creates the tracking table, so it is safe against a database that has never had a migration applied. States are `Applied`, `Pending`, `Modified` (the file changed after being applied), `Missing` (the file was deleted), and `Out of order` (a new file sorts before an applied one). The database ID and host are shown without credentials.
 
 ### `bunny db migrations apply`
 
-| Flag        | Short | Default      | Description                          |
-| ----------- | ----- | ------------ | ------------------------------------ |
-| `--dir`     |       | `migrations` | Migrations directory                 |
-| `--dry-run` |       | `false`      | List what would run without applying |
-| `--force`   | `-f`  | `false`      | Skip the confirmation prompt         |
-| `--url`     |       |              | Database URL (skips API lookup)      |
-| `--token`   |       |              | Auth token (skips token generation)  |
+| Flag            | Short | Default      | Description                                         |
+| --------------- | ----- | ------------ | --------------------------------------------------- |
+| `--dir`         |       | `migrations` | Migrations directory                                |
+| `--pattern`     |       | `*.sql`      | Migration glob relative to the migrations folder    |
+| `--dry-run`     |       | `false`      | List what would run without applying                |
+| `--force`       | `-f`  | `false`      | Skip the confirmation prompt                        |
+| `--allow-drift` |       | `false`      | Apply despite modified, missing, or late migrations |
+| `--url`         |       |              | Database URL (skips API lookup)                     |
+| `--token`       |       |              | Auth token (skips token generation)                 |
 
-Each file runs as one atomic batch together with its tracking row, so a migration either lands and is recorded or neither happens. Foreign keys are deferred for the duration, so table rebuilds and `ALTER TABLE` work. The run stops at the first failure and leaves the rest pending.
+Each file runs as one atomic batch together with its tracking row, so a migration either lands and is recorded or neither happens. Foreign keys are deferred for the duration, so table rebuilds and `ALTER TABLE` work. Every pending file is parsed before the first write. The run stops at the first database failure and leaves the rest pending.
+
+Modified, missing, and out-of-order histories are shown by `list` but block `apply` when more migrations are pending. Restore or rename the affected files; use `--allow-drift` only when the divergence is intentional.
 
 Confirms before writing when a TTY is attached; the prompt is skipped under `--force`, `--output json`, or any non-interactive run, so CI and agent flows aren't blocked. Credential resolution mirrors `db shell`.
 
 ### ORM-generated migrations
 
-`drizzle-kit generate` writes flat `0000_<name>.sql` files, which match this convention. When `migrations/` doesn't exist, `drizzle/` is used automatically. Generate with the ORM, apply with the CLI:
+Flat `drizzle-kit generate` output uses `0000_<name>.sql`, which matches this convention. When `migrations/` doesn't exist, `drizzle/` is used automatically by `list` and `apply`. For nested layouts, set a glob relative to `--dir`:
 
 ```bash
 drizzle-kit generate
 bunny db migrations apply
+bunny db migrations apply --dir migrations --pattern "*/migration.sql"
 ```
+
+`db migrations create` always defaults to `migrations/` and only writes top-level files; it never silently writes into an auto-detected ORM directory. Use the ORM's own generator when it owns the schema.
+
+Choose one migration runner for each history. Bunny records paths in `__bunny_migrations` and does not read or update Drizzle, Prisma, dbmate, or other tools' journals. Existing tools remain supported by running their own migration command instead of alternating runners over the same files.
 
 ---
 

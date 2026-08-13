@@ -3,12 +3,18 @@ import { defineCommand } from "../../../core/define-command.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { ARG_DATABASE_ID } from "../constants.ts";
-import { resolveCredentials } from "../credentials.ts";
-import { ARG_DIR, MIGRATIONS_TABLE } from "./constants.ts";
-import { warnOnDrift } from "./drift.ts";
+import { databaseTarget, resolveCredentials } from "../credentials.ts";
+import {
+  ARG_DIR,
+  ARG_PATTERN,
+  DEFAULT_MIGRATIONS_PATTERN,
+  MIGRATIONS_TABLE,
+} from "./constants.ts";
+import { migrationHistoryIssues, warnOnDrift } from "./drift.ts";
 import {
   discoverMigrations,
   migrationStatuses,
+  pendingMigrations,
   readApplied,
   resolveMigrationsDir,
 } from "./engine.ts";
@@ -25,11 +31,13 @@ const STATE_LABELS = {
   pending: "Pending",
   modified: "Modified",
   missing: "Missing",
+  out_of_order: "Out of order",
 } as const;
 
 interface ListArgs {
   [ARG_DATABASE_ID]?: string;
   [ARG_DIR]?: string;
+  [ARG_PATTERN]?: string;
   [ARG_URL]?: string;
   [ARG_TOKEN]?: string;
 }
@@ -63,6 +71,11 @@ export const dbMigrationsListCommand = defineCommand<ListArgs>({
         type: "string",
         describe: "Migrations directory (default: migrations)",
       })
+      .option(ARG_PATTERN, {
+        type: "string",
+        default: DEFAULT_MIGRATIONS_PATTERN,
+        describe: "Migration glob relative to --dir",
+      })
       .option(ARG_URL, {
         type: "string",
         describe: "Database URL (skips API lookup)",
@@ -75,6 +88,7 @@ export const dbMigrationsListCommand = defineCommand<ListArgs>({
   handler: async ({
     [ARG_DATABASE_ID]: databaseIdArg,
     [ARG_DIR]: dirArg,
+    [ARG_PATTERN]: pattern = DEFAULT_MIGRATIONS_PATTERN,
     [ARG_URL]: urlArg,
     [ARG_TOKEN]: tokenArg,
     profile,
@@ -83,14 +97,14 @@ export const dbMigrationsListCommand = defineCommand<ListArgs>({
     apiKey,
   }) => {
     const { dir, detected } = resolveMigrationsDir(dirArg);
-    const files = discoverMigrations(dir);
+    const files = discoverMigrations(dir, pattern);
     const displayDir = relative(process.cwd(), dir) || ".";
 
     if (detected && output !== "json") {
       logger.dim(`Using ${displayDir}`);
     }
 
-    const { url, token } = await resolveCredentials({
+    const { url, token, databaseId } = await resolveCredentials({
       url: urlArg,
       token: tokenArg,
       databaseId: databaseIdArg,
@@ -101,6 +115,9 @@ export const dbMigrationsListCommand = defineCommand<ListArgs>({
 
     const { createClient } = await import("@libsql/client/web");
     const client = createClient({ url, authToken: token });
+    const target = databaseTarget(url, databaseId);
+
+    if (output !== "json") logger.dim(`Database: ${target.label}`);
 
     // Don't create the tracking table from a read-only command.
     const applied = await readApplied(client);
@@ -112,7 +129,12 @@ export const dbMigrationsListCommand = defineCommand<ListArgs>({
         JSON.stringify(
           {
             dir: displayDir,
+            pattern,
             table: MIGRATIONS_TABLE,
+            target: {
+              database_id: target.databaseId,
+              host: target.host,
+            },
             migrations: statuses.map((s) => ({
               name: s.name,
               state: s.state,
@@ -128,7 +150,15 @@ export const dbMigrationsListCommand = defineCommand<ListArgs>({
 
     if (statuses.length === 0) {
       logger.info(`No migrations found in ${displayDir}.`);
-      logger.dim("Run `bunny db migrations create <name>` to add one.");
+      const nested =
+        pattern === DEFAULT_MIGRATIONS_PATTERN
+          ? discoverMigrations(dir, "**/*.sql")
+          : [];
+      logger.dim(
+        nested.length > 0
+          ? 'Nested SQL files were found. Pass a matching glob such as `--pattern "*/migration.sql"`.'
+          : "Run `bunny db migrations create <name>` to add one.",
+      );
       return;
     }
 
@@ -144,11 +174,14 @@ export const dbMigrationsListCommand = defineCommand<ListArgs>({
       ),
     );
 
-    const pending = statuses.filter((s) => s.state === "pending").length;
+    const pending = pendingMigrations(files, applied).length;
+    const issues = migrationHistoryIssues(statuses).length;
     logger.log("");
     logger.dim(
       pending === 0
-        ? "Up to date."
+        ? issues === 0
+          ? "Up to date."
+          : "No pending migrations; history needs attention."
         : `${pending} pending. Run \`bunny db migrations apply\` to apply ${pending === 1 ? "it" : "them"}.`,
     );
 
