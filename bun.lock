@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "bun-ny-cli",
@@ -17,7 +16,7 @@
     },
     "packages/cli": {
       "name": "@bunny.net/cli",
-      "version": "0.9.1",
+      "version": "0.13.0",
       "bin": {
         "bunny": "./bin/bunny.cjs",
       },
@@ -50,27 +49,27 @@
     },
     "packages/cli-darwin-arm64": {
       "name": "@bunny.net/cli-darwin-arm64",
-      "version": "0.9.1",
+      "version": "0.13.0",
     },
     "packages/cli-darwin-x64": {
       "name": "@bunny.net/cli-darwin-x64",
-      "version": "0.9.1",
+      "version": "0.13.0",
     },
     "packages/cli-linux-arm64": {
       "name": "@bunny.net/cli-linux-arm64",
-      "version": "0.9.1",
+      "version": "0.13.0",
     },
     "packages/cli-linux-x64": {
       "name": "@bunny.net/cli-linux-x64",
-      "version": "0.9.1",
+      "version": "0.13.0",
     },
     "packages/cli-windows-x64": {
       "name": "@bunny.net/cli-windows-x64",
-      "version": "0.9.1",
+      "version": "0.13.0",
     },
     "packages/config": {
       "name": "@bunny.net/config",
-      "version": "0.1.2",
+      "version": "0.1.4",
       "dependencies": {
         "@bunny.net/openapi-client": "workspace:*",
         "zod": "^4.3.6",
@@ -83,6 +82,13 @@
         "@bunny.net/database-openapi": "workspace:*",
         "@bunny.net/database-rest": "workspace:*",
         "@libsql/client": "^0.17.0",
+      },
+    },
+    "packages/database-client": {
+      "name": "@bunny.net/database-client",
+      "version": "0.0.0",
+      "devDependencies": {
+        "typescript": "^5",
       },
     },
     "packages/database-openapi": {
@@ -175,7 +181,7 @@
     },
     "packages/openapi-client": {
       "name": "@bunny.net/openapi-client",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "dependencies": {
         "openapi-fetch": "^0.17.0",
       },
@@ -186,7 +192,7 @@
     },
     "packages/sandbox": {
       "name": "@bunny.net/sandbox",
-      "version": "0.3.0",
+      "version": "0.3.3",
       "dependencies": {
         "@bunny.net/openapi-client": "workspace:*",
         "@types/ssh2": "^1.15.0",
@@ -275,6 +281,8 @@
     "@bunny.net/config": ["@bunny.net/config@workspace:packages/config"],
 
     "@bunny.net/database-adapter-libsql": ["@bunny.net/database-adapter-libsql@workspace:packages/database-adapter-libsql"],
+
+    "@bunny.net/database-client": ["@bunny.net/database-client@workspace:packages/database-client"],
 
     "@bunny.net/database-openapi": ["@bunny.net/database-openapi@workspace:packages/database-openapi"],
 

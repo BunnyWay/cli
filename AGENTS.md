@@ -69,10 +69,11 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 
 ## Project Structure
 
-This is a Bun workspace monorepo with six packages:
+This is a Bun workspace monorepo with seven packages:
 
 - **`@bunny.net/openapi-client`** (`packages/openapi-client/`) — Standalone, type-safe OpenAPI client for bunny.net, generated from OpenAPI specs. Zero CLI dependencies. Publishable to npm.
 - **`@bunny.net/config`** (`packages/config/`) — Shared `bunny.jsonc` schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. The root `BunnyConfigSchema` has optional `app` (Magic Containers) and `sites` (static sites) blocks; `BunnyAppConfigSchema` narrows it to require `app`. Used by the CLI and potentially other tools.
+- **`@bunny.net/database-client`** (`packages/database-client/`) — Standalone SQL client for Bunny Database, for application code rather than the CLI. Speaks hrana-over-HTTP (`POST /v2/pipeline`) using only `fetch`, so it runs unchanged on Edge Scripting (Deno), Bun, and Node. Zero dependencies. **Server-side only, and documented as such:** an auth token is a bearer credential for the whole database and the client sends raw SQL, so it must never reach a browser or other untrusted client. Do not describe it as browser-compatible even though `fetch`-only code would technically run there; the correct pattern is an Edge Script (or `database-rest` behind an auth check) that holds the token and exposes only intended queries. D1-shaped surface: `connect()`, `prepare().bind()`, `.all()`/`.first()`/`.raw()`/`.run()`, plus `batch()` (one transaction, one round trip) and `exec()` (multi-statement script). Deliberately stateless: no baton tracking, no connection pool, no interactive transactions, no cursor streaming. Publishable to npm.
 - **`@bunny.net/database-shell`** (`packages/database-shell/`) — Standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
 - **`@bunny.net/scriptable-dns-types`** (`packages/scriptable-dns-types/`): Ambient TypeScript declarations for the Scriptable DNS runtime globals (`ARecord`, `Monitoring`, `RoutingEngine`, etc.). Types-only, no runtime code: the DNS runtime can't `import`, so these power editor autocomplete and an optional typecheck step. Scaffolded into projects by `bunny dns scripts init`; intended to also feed the dashboard editor. Publishable to npm.
 - **`@bunny.net/sandbox`** (`packages/sandbox/`) — Standalone sandbox SDK. Code-first DX (`Sandbox.create`, `writeFiles`, `runCommand`, `exposePort`, `setEnv`/`getEnv`/`unsetEnv`, `listFiles`/`deleteFile`/`rename`/`exists`) over Magic Containers provisioning plus an `ssh2` SSH/SFTP transport. Blocking `runCommand` accepts `timeout` (rejects with `CommandTimeoutError` carrying partial output), `signal` for cancellation, and `onStdout`/`onStderr` callbacks for live output. Env vars can be baked in at `create` (persisted), passed per-command via `runCommand({ env })` (temporary), or persisted after creation via `setEnv`. The handle implements `Symbol.dispose`/`Symbol.asyncDispose` so `using`/`await using` release the SSH connection (without deleting the sandbox). Zero CLI dependencies.
@@ -136,6 +137,21 @@ bunny-cli/
 │   │   ├── package.json                 # types-only; exports "./index.d.ts" under the "types" condition
 │   │   ├── index.d.ts                   # Ambient globals: ARecord/AaaaRecord/CnameRecord/TxtRecord/PullZoneRecord/Server, Monitoring/GeoDatabase/GeoDistance/RoutingEngine, DnsRequest/DnsQuery/GeoLocation
 │   │   └── README.md
+│   │
+│   ├── database-client/                 # @bunny.net/database-client package (SQL client for app code)
+│   │   ├── package.json                  # exports/main/types point at dist/ for npm consumers
+│   │   ├── tsconfig.json
+│   │   ├── tsconfig.build.json           # Emits dist/ (JS + .d.ts); paths:{} so nothing resolves from source
+│   │   ├── examples/
+│   │   │   └── smoke.ts                  # Live end-to-end run on Bun and Deno; creates and drops its own tables
+│   │   └── src/
+│   │       ├── index.ts                  # Barrel export: connect, Database, Statement, DatabaseError, types
+│   │       ├── client.ts                 # Database + Statement; batch() wraps steps in BEGIN/COMMIT/ROLLBACK
+│   │       ├── protocol.ts               # Hrana wire types, value codecs, normalizeUrl(), /v2/pipeline transport
+│   │       ├── errors.ts                 # DatabaseError (code + status)
+│   │       ├── env.ts                    # BUNNY_DATABASE_URL / _AUTH_TOKEN names, cross-runtime readEnv()
+│   │       ├── client.test.ts            # Client behaviour against a fake fetch (no network)
+│   │       └── protocol.test.ts          # URL normalization and value codec tests
 │   │
 │   ├── database-shell/                   # @bunny.net/database-shell package
 │   │   ├── package.json                  # bin: { "bsql": "./src/cli.ts" }
@@ -475,7 +491,7 @@ bunny-cli/
 
 ### Conventions
 
-- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
+- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-client/` is the standalone SQL client for application code; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
 - **API clients use `ClientOptions`** — an options object with `apiKey`, `baseUrl`, `verbose`, `userAgent`, and `onDebug`. The CLI provides a `clientOptions(config, verbose)` helper to build this from `ResolvedConfig`.
 - **One command per file.** Each file in `commands/` exports a single command or namespace.
 - **Commands are grouped by domain** in subdirectories (`config/`, `db/`, `scripts/`).
@@ -936,6 +952,12 @@ Two differences from openapi-client:
 
 - Sandbox depends on `@bunny.net/openapi-client` with `workspace:*`, so the `publish-sandbox` job in `release.yml` uses `bun publish` (not `npm publish`) — bun rewrites `workspace:*` to the local package version in the published tarball; npm would ship the unresolvable `workspace:*` spec verbatim. `bun publish` authenticates via the `NPM_CONFIG_TOKEN` env var.
 - Its `tsconfig.build.json` overrides `paths` to `{}` so openapi-client resolves via its package `exports` (`dist/`) instead of source — otherwise openapi-client's sources would enter the program and violate `rootDir`. The publish job therefore builds openapi-client before building sandbox.
+
+### Publishing `@bunny.net/database-client`
+
+`@bunny.net/database-client` follows the same compiled-library pattern as `@bunny.net/sandbox`, and is the simplest case of it: zero dependencies, so `npm publish` works (there is no `workspace:*` spec for bun to rewrite), and no declaration transformer, so emitted `.d.ts` keep their `.ts` import specifiers for TypeScript to resolve against the sibling `.d.ts`. Its `tsconfig.build.json` sets `include: ["src"]` so `examples/` stays out of the program and does not violate `rootDir`.
+
+Nothing in the repo imports it: the CLI talks to databases through `@bunny.net/database-shell`, and this package exists for user application code. It therefore has no root `tsconfig.json` `paths` entry, and its tests run against its own source directly.
 
 `@bunny.net/config` is a private workspace package (not published); the CLI consumes it from source via the workspace symlink.
 
