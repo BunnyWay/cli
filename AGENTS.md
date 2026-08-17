@@ -1213,12 +1213,18 @@ Only fall back to `string`, `any`, or `number` when no generated type exists (e.
 
 Specs are committed as JSON files in `packages/openapi-client/specs/`. Generated types go to `packages/openapi-client/src/generated/` (gitignored). The `redocly.yaml` config and `openapi-typescript` devDependency live in the `@bunny.net/openapi-client` package.
 
-| Spec file                                             | Source URL                                                    |
-| ----------------------------------------------------- | ------------------------------------------------------------- |
-| `packages/openapi-client/specs/core.json`             | `https://core-api-public-docs.b-cdn.net/docs/v3/public.json`  |
-| `packages/openapi-client/specs/compute.json`          | `https://core-api-public-docs.b-cdn.net/docs/v3/compute.json` |
-| `packages/openapi-client/specs/database.json`         | `https://api.bunny.net/database/docs/private/api.json`        |
-| `packages/openapi-client/specs/magic-containers.json` | `https://api-mc.opsbunny.net/docs/public/swagger.json`        |
+Source URLs are listed at https://bunny.net/docs/openapi; `scripts/update-specs.ts` is the authority for which ones this repo pulls.
+
+| Spec file                                             | Source URL                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------- |
+| `packages/openapi-client/specs/core.json`             | `https://core-api-public-docs.b-cdn.net/docs/v3/public.json`        |
+| `packages/openapi-client/specs/compute.json`          | `https://core-api-public-docs.b-cdn.net/docs/v3/compute.json`       |
+| `packages/openapi-client/specs/database.json`         | `https://api.bunny.net/database/docs/private/api.json`              |
+| `packages/openapi-client/specs/magic-containers.json` | `https://api-mc.opsbunny.net/docs/public/swagger.json`              |
+| `packages/openapi-client/specs/origin-errors.json`    | `https://bunny.net/docs/api-reference/origin-errors/openapi.json`   |
+| `packages/openapi-client/specs/shield.json`           | `https://api.bunny.net/shield/docs/v1/swagger.json`                 |
+| `packages/openapi-client/specs/storage.json`          | `https://bunny.net/docs/api-reference/storage/openapi.json`         |
+| `packages/openapi-client/specs/stream.json`           | `https://video.bunnycdn.com/openapi/bunnynet-video-api.public.json` |
 
 To regenerate types after updating specs:
 

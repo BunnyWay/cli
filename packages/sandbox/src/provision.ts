@@ -189,7 +189,7 @@ export async function createApp(
           {
             displayName: "ssh",
             anycast: {
-              type: "ipv4",
+              type: "iPv4",
               portMappings: [
                 {
                   containerPort: SSH_PORT,

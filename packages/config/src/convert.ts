@@ -162,7 +162,7 @@ function endpointConfigToRequest(ep: EndpointConfig): EndpointRequest {
     };
   } else if (ep.type === "anycast") {
     req.anycast = {
-      type: "ipv4",
+      type: "iPv4",
       portMappings: (ep.ports ?? []).map((p) => ({
         containerPort: p.container,
         exposedPort: p.public,
