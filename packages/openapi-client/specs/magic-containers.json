@@ -2,7 +2,7 @@
   "openapi": "3.0.4",
   "info": {
     "title": "Public API",
-    "description": "Public API endpoints for user consumption. Release version: v1.9.22.0",
+    "description": "Public API endpoints for user consumption. Release version: v1.10.2.0",
     "version": "1.0"
   },
   "servers": [
@@ -1586,6 +1586,65 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/registries/image-config": {
+      "post": {
+        "tags": ["ContainerRegistries"],
+        "summary": "Get Image Config",
+        "description": "Retrieves endpoint and volume suggestions for a container image from a registry.",
+        "operationId": "GetImageConfig",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListContainerImageExposedPortsRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListContainerImageExposedPortsRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListContainerImageExposedPortsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image configuration was successfully retrieved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageConfig"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "User is unauthorized.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -3486,6 +3545,7 @@
         "tags": ["Log Forwarding"],
         "summary": "List log-forwarding configurations",
         "description": "Get a list of all log-forwarding configurations for the authenticated user.",
+        "operationId": "ListLogForwardingConfigurations",
         "responses": {
           "200": {
             "description": "List of log-forwarding configurations retrieved successfully.",
@@ -3509,6 +3569,7 @@
         "tags": ["Log Forwarding"],
         "summary": "Create log forwarding configuration",
         "description": "Create a new log forwarding configuration.",
+        "operationId": "CreateLogForwardingConfiguration",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3547,6 +3608,7 @@
         "tags": ["Log Forwarding"],
         "summary": "Get log-forwarding configuration",
         "description": "Get a specific log-forwarding configuration by ID.",
+        "operationId": "GetLogForwardingConfiguration",
         "parameters": [
           {
             "name": "appId",
@@ -3584,6 +3646,7 @@
         "tags": ["Log Forwarding"],
         "summary": "Update log-forwarding configuration",
         "description": "Update an existing log-forwarding configuration.",
+        "operationId": "UpdateLogForwardingConfiguration",
         "parameters": [
           {
             "name": "appId",
@@ -3634,6 +3697,7 @@
         "tags": ["Log Forwarding"],
         "summary": "Delete log-forwarding configuration",
         "description": "Delete a log-forwarding configuration.",
+        "operationId": "DeleteLogForwardingConfiguration",
         "parameters": [
           {
             "name": "appId",
@@ -3808,7 +3872,7 @@
         "additionalProperties": false
       },
       "AnycastIpProtocolVersion": {
-        "enum": ["ipv4"],
+        "enum": ["iPv4"],
         "type": "string"
       },
       "AppListItem": {
@@ -3973,6 +4037,12 @@
               "$ref": "#/components/schemas/EnvironmentVariableSuggestion"
             }
           },
+          "volumeSuggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VolumeSuggestion"
+            }
+          },
           "appName": {
             "type": "string",
             "nullable": true
@@ -3995,6 +4065,7 @@
       "ContainerEndpoint": {
         "required": [
           "displayName",
+          "id",
           "isSslEnabled",
           "portMappings",
           "publicHost",
@@ -4003,6 +4074,11 @@
         ],
         "type": "object",
         "properties": {
+          "id": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Unique endpoint id. Use this value as `container_endpoint_id` when creating a pull zone that targets this endpoint."
+          },
           "displayName": {
             "minLength": 1,
             "type": "string"
@@ -4265,6 +4341,9 @@
             "type": "boolean",
             "nullable": true
           },
+          "isPlatformManaged": {
+            "type": "boolean"
+          },
           "lastUpdatedAt": {
             "type": "string",
             "format": "date-time",
@@ -4278,6 +4357,7 @@
         "type": "object",
         "properties": {
           "displayName": {
+            "maxLength": 50,
             "minLength": 1,
             "type": "string",
             "description": "Container registry display name"
@@ -5014,6 +5094,24 @@
         ],
         "type": "string"
       },
+      "ImageConfig": {
+        "type": "object",
+        "properties": {
+          "endpointSuggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EndpointRequest"
+            }
+          },
+          "volumeSuggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VolumeSuggestion"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "ImagePullPolicy": {
         "enum": ["always", "ifNotPresent"],
         "type": "string"
@@ -5069,6 +5167,33 @@
         },
         "additionalProperties": false,
         "description": "List applications response"
+      },
+      "ListContainerImageExposedPortsRequest": {
+        "required": ["imageName", "imageNamespace", "registryId", "tag"],
+        "type": "object",
+        "properties": {
+          "registryId": {
+            "minLength": 1,
+            "type": "string",
+            "description": "The registry identifier. Can be \"dockerhub\", \"github\", or a private registry ID."
+          },
+          "imageName": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "imageNamespace": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "tag": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       },
       "ListContainerImageTagsRequest": {
         "required": ["imageName", "imageNamespace", "registryId"],
@@ -5484,6 +5609,16 @@
             "type": "number",
             "format": "double",
             "nullable": true
+          },
+          "outboundConnectionsLimit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "outboundConnectionsRejectedDiff": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
           }
         },
         "additionalProperties": false,
@@ -5762,7 +5897,7 @@
         "description": "Region settings model"
       },
       "RegistryType": {
-        "enum": ["dockerHub", "gitHub"],
+        "enum": ["dockerHub", "gitHub", "bunnyRegistry"],
         "type": "string"
       },
       "RemoveContainerRegistryResponseStatus": {
@@ -6208,6 +6343,9 @@
           "usage": {
             "type": "number",
             "format": "double"
+          },
+          "set": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
@@ -6259,9 +6397,22 @@
           "creating",
           "notScheduled",
           "scheduled",
-          "failed"
+          "failed",
+          "maintenance"
         ],
         "type": "string"
+      },
+      "VolumeSuggestion": {
+        "type": "object",
+        "properties": {
+          "containerPath": {
+            "type": "string"
+          },
+          "suggestedVolumeName": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       },
       "VolumeTemplate": {
         "required": ["name", "size"],
