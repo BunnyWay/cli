@@ -9,6 +9,7 @@ import {
   deleteDeployFiles,
   deletePreviewZone,
   findPreviewZones,
+  readRemoteState,
   writeRemoteState,
 } from "../api.ts";
 import { isValidDeployId, type RemoteSiteState } from "../constants.ts";
@@ -84,7 +85,8 @@ export const sitesDeploymentsDeleteCommand = defineCommand<DeleteArgs>({
       output,
       force: args.force,
     });
-    const { state, connection, etag } = site;
+    // No etag here: the destructive phase re-reads state and writes with the fresh one.
+    const { state, connection } = site;
 
     const record = state.deploys.find((d) => d.id === id);
     if (!record) {
@@ -123,28 +125,44 @@ export const sitesDeploymentsDeleteCommand = defineCommand<DeleteArgs>({
       return;
     }
 
-    await withSpinner(`Deleting deploy ${id}...`, async () => {
-      // Same order as prune. One listing backfills a record that lost its zone id and catches duplicate zones a concurrent same-id deploy left behind.
-      let discovered: number[] | undefined;
+    const deleted = await withSpinner(`Deleting deploy ${id}...`, async () => {
+      // Revalidate on fresh state right before anything destructive: the confirmation window is long enough for a concurrent publish to make this deploy live (on a fast-forward merge, PR-close cleanup and the production deploy carry the same sha).
+      const fresh = await readRemoteState(connection);
+      if (fresh === null) {
+        throw new UserError(
+          "Couldn't re-read the site state.",
+          "Retry the delete; nothing was deleted.",
+        );
+      }
+      const { state: latest, etag: latestEtag } = fresh;
+      const freshRecord = latest.deploys.find((d) => d.id === id);
+      if (!freshRecord) return false; // gone since the first read; same no-op as above
+      const freshBlocker = deleteBlocker(latest, id);
+      if (freshBlocker) {
+        throw new UserError(
+          `Deploy ${id} became ${freshBlocker} and can't be deleted.`,
+          "Publish another deploy first, or use `sites deployments prune` for retention cleanup.",
+        );
+      }
+
+      // Same order as prune. One listing backfills a record that lost its zone id and catches duplicate zones a concurrent same-id deploy left behind. Unlike prune, a delete forgets the record for good, so a stranded duplicate would never be retried: a failed listing always aborts.
+      let discovered: number[];
       try {
-        discovered = (await findPreviewZones(client, state.storageZoneId))
+        discovered = (await findPreviewZones(client, latest.storageZoneId))
           .filter((z) => z.deployId === id)
           .map((z) => z.id);
       } catch (err) {
-        discovered = undefined;
-        logger.warn(`Couldn't list preview zones: ${errorMessage(err)}`);
-      }
-      // With the listing down, a record without a zone id can't prove its zone doesn't exist; keep it so a retry converges instead of stranding an orphan.
-      if (discovered === undefined && record.previewZoneId === undefined) {
         throw new UserError(
-          `Couldn't check deploy ${id} for a preview zone.`,
+          `Couldn't check deploy ${id} for preview zones: ${errorMessage(err)}`,
           "Retry the delete; the deploy record was kept.",
         );
       }
       // Zones first: a failed zone deletion keeps the record (and files), so a retry picks the zone back up instead of orphaning it until site delete.
       const zoneIds = new Set([
-        ...(record.previewZoneId !== undefined ? [record.previewZoneId] : []),
-        ...(discovered ?? []),
+        ...(freshRecord.previewZoneId !== undefined
+          ? [freshRecord.previewZoneId]
+          : []),
+        ...discovered,
       ]);
       for (const zoneId of zoneIds) {
         if (!(await deletePreviewZone(client, zoneId))) {
@@ -155,16 +173,23 @@ export const sitesDeploymentsDeleteCommand = defineCommand<DeleteArgs>({
         }
       }
       await deleteDeployFiles(connection, id);
-      state.deploys = state.deploys.filter((d) => d.id !== id);
-      await writeRemoteState(connection, state, etag, { removedIds: [id] });
+      latest.deploys = latest.deploys.filter((d) => d.id !== id);
+      await writeRemoteState(connection, latest, latestEtag, {
+        removedIds: [id],
+      });
+      return true;
     });
 
     if (output === "json") {
-      logger.log(
-        JSON.stringify({ site: state.name, id, deleted: true }, null, 2),
-      );
+      logger.log(JSON.stringify({ site: state.name, id, deleted }, null, 2));
       return;
     }
-    logger.success(`Deleted deploy ${id}.`);
+    if (deleted) {
+      logger.success(`Deleted deploy ${id}.`);
+    } else {
+      logger.info(
+        `Deploy ${id} not found on ${state.name}; nothing to delete.`,
+      );
+    }
   },
 });
