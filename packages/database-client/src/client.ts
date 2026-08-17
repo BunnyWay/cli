@@ -40,7 +40,8 @@ function toResult<T>(wire: WireStmtResult): Result<T> {
     (col, index) => col.name ?? `column${index + 1}`,
   );
   const rows = wire.rows.map((row) => {
-    const out: Row = {};
+    // Null prototype so a column named __proto__ (or constructor, toString, ...) is a plain own property.
+    const out: Row = Object.create(null);
     for (let i = 0; i < columns.length; i++)
       out[columns[i] as string] = decodeValue(row[i] as WireValue);
     return out as T;
@@ -84,7 +85,7 @@ export class Statement {
     const row = result.rows[0];
     if (!row) return null;
     if (column === undefined) return row as T;
-    if (!(column in row)) {
+    if (!Object.hasOwn(row, column)) {
       throw new DatabaseError(
         `column "${column}" is not in the result; got ${result.columns.join(", ")}`,
         "COLUMN_NOT_FOUND",

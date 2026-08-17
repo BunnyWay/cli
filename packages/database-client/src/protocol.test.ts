@@ -93,6 +93,34 @@ describe("encodeValue", () => {
     );
   });
 
+  test("rejects integer numbers past 2^53 instead of silently rounding them", () => {
+    expect(() => encodeValue(Number.MAX_SAFE_INTEGER + 2)).toThrow(
+      /pass a bigint/,
+    );
+    expect(() => encodeValue(Number.MIN_SAFE_INTEGER - 2)).toThrow(
+      /pass a bigint/,
+    );
+    expect(encodeValue(Number.MAX_SAFE_INTEGER)).toEqual({
+      type: "integer",
+      value: "9007199254740991",
+    });
+  });
+
+  test("accepts the int64 bounds as bigint but rejects beyond them", () => {
+    expect(encodeValue(2n ** 63n - 1n)).toEqual({
+      type: "integer",
+      value: "9223372036854775807",
+    });
+    expect(encodeValue(-(2n ** 63n))).toEqual({
+      type: "integer",
+      value: "-9223372036854775808",
+    });
+    expect(() => encodeValue(2n ** 63n)).toThrow(/64-bit integer range/);
+    expect(() => encodeValue(-(2n ** 63n) - 1n)).toThrow(
+      /64-bit integer range/,
+    );
+  });
+
   test("points Date binds at an explicit conversion instead of guessing one", () => {
     expect(() => encodeValue(new Date(0))).toThrow(
       /toISOString\(\) or date.getTime\(\)/,

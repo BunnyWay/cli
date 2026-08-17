@@ -957,6 +957,8 @@ Two differences from openapi-client:
 
 `@bunny.net/database-client` follows the same compiled-library pattern as `@bunny.net/sandbox`, and is the simplest case of it: zero dependencies, so `npm publish` works (there is no `workspace:*` spec for bun to rewrite), and no declaration transformer, so emitted `.d.ts` keep their `.ts` import specifiers for TypeScript to resolve against the sibling `.d.ts`. Its `tsconfig.build.json` sets `include: ["src"]` so `examples/` stays out of the program and does not violate `rootDir`.
 
+The `publish-database-client` job in `release.yml` (gated on a version bump detected via `npm view`, like the other independently versioned packages) builds with `bun run --filter @bunny.net/database-client build`, then runs `cd packages/database-client && npm publish`. The package versions independently of the CLI; it is not part of any `fixed` group in `.changeset/config.json`.
+
 Nothing in the repo imports it: the CLI talks to databases through `@bunny.net/database-shell`, and this package exists for user application code. It therefore has no root `tsconfig.json` `paths` entry, and its tests run against its own source directly.
 
 `@bunny.net/config` is a private workspace package (not published); the CLI consumes it from source via the workspace symlink.

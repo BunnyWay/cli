@@ -67,6 +67,8 @@ Binds positional `?` parameters and returns a new statement. Accepts `null`, `bo
 
 Anything else throws instead of being quietly converted, because SQLite has nowhere to put it. `Date` gets its own message suggesting `.toISOString()` or `.getTime()`, since guessing which one you meant would change what ends up in the column.
 
+Integer `number`s past 2^53 are rejected rather than rounded: by the time the client sees one it has already lost precision, so pass a `bigint` for values that large. Bigints must fit SQLite's signed 64-bit range.
+
 ### Executing
 
 Four ways to run a statement:
@@ -261,5 +263,5 @@ bun test
 
 ```bash
 bun run examples/smoke.ts
-deno run --allow-net --allow-env examples/smoke.ts
+deno run --env-file=.env --allow-net --allow-env examples/smoke.ts
 ```

@@ -58,6 +58,8 @@ interface WireResponse {
 
 const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE = BigInt(Number.MIN_SAFE_INTEGER);
+const INT64_MAX = 2n ** 63n - 1n;
+const INT64_MIN = -(2n ** 63n);
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -81,8 +83,15 @@ export function encodeValue(value: unknown): WireValue {
   if (typeof value === "boolean") {
     return { type: "integer", value: value ? "1" : "0" };
   }
-  if (typeof value === "bigint")
+  if (typeof value === "bigint") {
+    if (value > INT64_MAX || value < INT64_MIN) {
+      throw new DatabaseError(
+        `cannot bind bigint ${value}; outside SQLite's 64-bit integer range`,
+        "ARGUMENT_INVALID",
+      );
+    }
     return { type: "integer", value: value.toString() };
+  }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
       throw new DatabaseError(
@@ -90,9 +99,16 @@ export function encodeValue(value: unknown): WireValue {
         "ARGUMENT_INVALID",
       );
     }
-    return Number.isInteger(value)
-      ? { type: "integer", value: value.toString() }
-      : { type: "float", value };
+    if (Number.isInteger(value)) {
+      if (!Number.isSafeInteger(value)) {
+        throw new DatabaseError(
+          `cannot bind unsafe integer ${value}; numbers past 2^53 have already lost precision, pass a bigint instead`,
+          "ARGUMENT_INVALID",
+        );
+      }
+      return { type: "integer", value: value.toString() };
+    }
+    return { type: "float", value };
   }
   if (typeof value === "string") return { type: "text", value };
   if (value instanceof Uint8Array)

@@ -95,11 +95,21 @@ describe("transport", () => {
   });
 
   test("omits the auth header when no token is configured", async () => {
-    const fake = fakeFetch([okExecute(["a"], [[1]])]);
-    await connect({ url: URL_, fetch: fake.fetch })
-      .prepare("SELECT 1 AS a")
-      .all();
-    expect((fake.captures[0] as Capture).headers.authorization).toBeUndefined();
+    const previousToken = process.env[ENV_DATABASE_AUTH_TOKEN];
+    delete process.env[ENV_DATABASE_AUTH_TOKEN];
+
+    try {
+      const fake = fakeFetch([okExecute(["a"], [[1]])]);
+      await connect({ url: URL_, fetch: fake.fetch })
+        .prepare("SELECT 1 AS a")
+        .all();
+      expect(
+        (fake.captures[0] as Capture).headers.authorization,
+      ).toBeUndefined();
+    } finally {
+      if (previousToken !== undefined)
+        process.env[ENV_DATABASE_AUTH_TOKEN] = previousToken;
+    }
   });
 
   test("caller headers ride along", async () => {
@@ -201,6 +211,23 @@ describe("statement", () => {
     await expect(db.prepare("SELECT a, b").first("nope")).rejects.toThrow(
       /got a, b/,
     );
+  });
+
+  test("first(column) does not fall back to inherited object members", async () => {
+    const fake = fakeFetch([okExecute(["a"], [[1]])]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+    await expect(db.prepare("SELECT a").first("toString")).rejects.toThrow(
+      /not in the result/,
+    );
+  });
+
+  test("a column named __proto__ survives as a real row field", async () => {
+    const fake = fakeFetch([okExecute(["__proto__", "n"], [["evil", 7]])]);
+    const row = await connect({ url: URL_, fetch: fake.fetch })
+      .prepare("SELECT '__proto__', n")
+      .first();
+    expect(row?.["__proto__"]).toBe("evil");
+    expect(row?.n).toBe(7);
   });
 
   test("raw returns positional arrays", async () => {
