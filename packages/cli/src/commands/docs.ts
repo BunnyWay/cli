@@ -2,7 +2,7 @@ import { defineCommand } from "../core/define-command.ts";
 import { logger } from "../core/logger.ts";
 import { openBrowser } from "../core/ui.ts";
 
-export const DOCS_BASE_URL = "https://docs.bunny.net";
+export const DOCS_BASE_URL = "https://bunny.net/docs";
 
 const COMMAND = "docs";
 const DESCRIPTION = "Open bunny.net documentation in the browser.";

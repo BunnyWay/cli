@@ -1,6 +1,6 @@
 # @bunny.net/scriptable-dns-types
 
-Ambient TypeScript types for the [bunny.net Scriptable DNS](https://docs.bunny.net/docs/dns-scripting) runtime.
+Ambient TypeScript types for the [bunny.net Scriptable DNS](https://bunny.net/docs/dns/scriptable/introduction) runtime.
 
 Scriptable DNS scripts run with a set of globals injected by the runtime (`ARecord`, `Monitoring`, `RoutingEngine`, and so on). Because the runtime does not support `import`, these are provided as ambient declarations: they power editor autocomplete and an optional typecheck step, but are never imported at runtime.
 
