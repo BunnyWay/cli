@@ -97,7 +97,8 @@ bunny-cli/
 │   │   ├── scripts/
 │   │   │   └── update-specs.ts           # Downloads latest specs from bunny.net endpoints
 │   │   └── src/
-│   │       ├── index.ts                  # Barrel export: clients, errors, ClientOptions type, DNS scan type corrections
+│   │       ├── index.ts                  # Barrel export: clients, authMiddleware, errors, ClientOptions type, DNS scan type corrections
+│   │       ├── core.ts … stream.ts       # Per-API subpath entrypoints (core, compute, database, magic-containers, origin-errors, shield, storage, stream): each re-exports its client factory + generated spec types (backs the package.json "./<api>" exports)
 │   │       ├── middleware.ts             # authMiddleware(options) — dependency-inverted (no CLI imports)
 │   │       ├── errors.ts                 # UserError, ApiError classes
 │   │       ├── dns.ts                    # Hand-authored corrections for lossy generated DNS types: DnsDiscoveredRecord (adds Flags/Tag the scan returns but generation drops), DnsRecordScanJob/Trigger, DnsRecordScanStatus enum. Pattern for enriching generated types.
@@ -485,7 +486,7 @@ bunny-cli/
 - **Shared internal code lives in `packages/cli/src/core/`** — command factories, errors, logger, format utilities, UI helpers, and shared types. Keep this mostly flat; a cohesive, reusable feature spanning several files may use a subdirectory (e.g. `core/hostnames/` — the pull-zone hostname helpers + the `createHostnamesCommands` factory mounted by both `scripts` and, in future, `apps`).
 - **Config logic lives in `packages/cli/src/config/`** — schema, file resolution, and profile management.
 - **Error classes are split.** `UserError` and `ApiError` live in `@bunny.net/openapi-client` (the SDK needs them). `ConfigError` lives in the CLI and extends `UserError`. The CLI's `errors.ts` re-exports `UserError` and `ApiError` from `@bunny.net/openapi-client`.
-- **Import API clients from `@bunny.net/openapi-client`**, not relative paths. Import generated types from `@bunny.net/openapi-client/generated/<spec>.d.ts`.
+- **Import API clients from `@bunny.net/openapi-client`**, not relative paths. Import generated types from the per-API entrypoints (`@bunny.net/openapi-client/<spec>`, e.g. `@bunny.net/openapi-client/core`); the older `@bunny.net/openapi-client/generated/<spec>.d.ts` paths remain supported.
 - **Mask secrets in human output; reveal only behind an explicit flag.** Any sensitive value (API keys, passwords, S3 secret keys, auth tokens) must be masked in the default table/text output and shown in full only when the user opts in with a flag (e.g. `--show-secret`). Use `maskSecret()` from `core/format.ts` for the masked form (it keeps the last 4 characters for identification). Tool-config output (`--format rclone|aws|...`) is the exception because it exists to be consumed by tools: it always emits full values. `--output json` masks like the table; `--show-secret` reveals there too. Never print a secret the user did not explicitly ask to see. Reference: `storage zones credentials` masks the S3 secret access key by default in both the table and JSON and reveals it with `--show-secret`, while never leaking it from inspect/list commands (see `toSafeStorageZone`).
 - **Pull-zone settings are exposed via "Hybrid D" across surfaces.** Scripts and apps are backed by a pull zone, which has a large settings surface (hostnames, caching, edge rules, origin, security, purge, CORS, optimizer, logging, …). To keep each owner's help legible:
   - **Flatten only first-class groups** directly into the owner — picked by user mental model, kept to one or two. `scripts domains` is the flattened group (a custom domain is "my site's address," not a CDN setting).
@@ -926,7 +927,7 @@ Its `package.json` `exports`/`main`/`types` point at `dist/`, so npm consumers g
 
 - `bun run --filter @bunny.net/openapi-client build` runs `generate` (the `src/generated/` types are gitignored, so they are regenerated from the committed specs), then `scripts/build.ts`.
 - `scripts/build.ts` drives the TypeScript compiler API (using `tsconfig.build.json`) to emit JS + declarations, then copies the generated `.d.ts` files into `dist/generated/` (tsc never emits its inputs, and those files back the `./generated/*` subpath export). `rewriteRelativeImportExtensions` rewrites `./x.ts` → `./x.js` in the emitted **JS**; TypeScript has no equivalent for declaration emit, so an `afterDeclarations` transformer rewrites the `.ts`/`.d.ts` specifiers in the emitted **`.d.ts`** files on the AST.
-- The `publish-openapi-client` job in `release.yml` (gated on a version bump detected via `npm view`) builds, then runs `cd packages/openapi-client && npm publish` (`files` ships `dist` + `README.md`). The package versions independently of the CLI — it is not part of any `fixed` group in `.changeset/config.json`.
+- The `publish-openapi-client` job in `release.yml` (gated on a version bump detected via `npm view`) builds, then runs `cd packages/openapi-client && npm publish` (`files` ships `dist` + `README.md` + `LICENSE`). The package versions independently of the CLI — it is not part of any `fixed` group in `.changeset/config.json`.
 
 ### Publishing `@bunny.net/sandbox`
 
@@ -1161,7 +1162,7 @@ API calls use `openapi-fetch` with types generated from OpenAPI specs by `openap
 | Storage                  | `createStorageClient()`      | `https://storage.bunnycdn.com`         | Storage Zone password  |
 | Stream                   | `createStreamClient()`       | `https://video.bunnycdn.com`           | Stream Library API key |
 
-All clients accept a `ClientOptions` object and inject `AccessKey` and `User-Agent` headers via shared `authMiddleware()` in `packages/openapi-client/src/middleware.ts`.
+All clients accept a `ClientOptions` object and inject `AccessKey` and `User-Agent` headers via shared `authMiddleware()` in `packages/openapi-client/src/middleware.ts` (also exported from the package root so external consumers can compose custom `openapi-fetch` clients). Each API additionally has a subpath entrypoint (`@bunny.net/openapi-client/<api>`) re-exporting its factory plus the generated spec types.
 
 ### ClientOptions
 
@@ -1253,6 +1254,7 @@ handler: async ({ profile, apiKey, verbose }) => {
 2. Add an entry to `packages/openapi-client/redocly.yaml`.
 3. Run `bun run openapi:generate`.
 4. Create a client factory in `packages/openapi-client/src/` following the existing pattern and export it from `packages/openapi-client/src/index.ts`.
+5. Add a per-API entrypoint module (`packages/openapi-client/src/<api>.ts` re-exporting the factory + `export type * from "./generated/<spec>.d.ts"`) and a matching `./<api>` entry in the package `exports` map.
 
 ---
 

@@ -44,7 +44,7 @@ This is a Bun workspace monorepo with five packages:
 - Handle `--output json` first in every handler, then pass `output` to format functions.
 - Use `logger` from `packages/cli/src/core/logger.ts` for all user-facing output.
 - Throw `UserError` for expected errors.
-- Import API clients from `@bunny.net/openapi-client`, not relative paths. Import generated types from `@bunny.net/openapi-client/generated/<spec>.d.ts`.
+- Import API clients from `@bunny.net/openapi-client`, not relative paths. Import generated types from the per-API entrypoints (`@bunny.net/openapi-client/<spec>`, e.g. `@bunny.net/openapi-client/core`); the older `generated/<spec>.d.ts` paths remain supported.
 - Use `clientOptions(config, verbose)` from `packages/cli/src/core/client-options.ts` when creating API clients in command handlers.
 - Database commands use v2 API endpoints (`/v2/databases/...`).
 - Apps (Magic Containers) commands use `bunny.jsonc` as the single source of truth. App ID is stored in the config (no separate manifest file). Use `resolveAppId()` and `resolveContainerId()` from `packages/cli/src/commands/apps/config.ts`. Types and conversion functions come from `@bunny.net/config`.

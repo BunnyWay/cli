@@ -9,7 +9,7 @@ export type {
 export { DnsRecordScanStatus } from "./dns.ts";
 export { ApiError, UserError } from "./errors.ts";
 export { createMcClient } from "./mc-client.ts";
-export type { ClientOptions } from "./middleware.ts";
+export { authMiddleware, type ClientOptions } from "./middleware.ts";
 export { createOriginErrorsClient } from "./origin-errors-client.ts";
 export { createShieldClient } from "./shield-client.ts";
 export { createStorageClient } from "./storage-client.ts";
