@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { resolve } from "node:path";
-import type { SiteContext } from "./api.ts";
+import type { RemoteSiteState } from "./constants.ts";
 import { deployUrls, resolveDeployDir } from "./deploy.ts";
 
 const ROOT = "/project/root";
@@ -25,28 +25,31 @@ test("nothing specified falls back to the root, not cwd", () => {
   expect(resolveDeployDir(undefined, undefined, undefined, ROOT)).toBe(ROOT);
 });
 
-const siteWithDomain = (domain?: string) =>
-  ({ state: { domain } }) as SiteContext;
+const stateWithDomain = (domain?: string) => ({ domain }) as RemoteSiteState;
 
-test("deployUrls has no preview URL without a custom domain", () => {
+test("deployUrls: production prefers the custom domain over the system host", () => {
   expect(
-    deployUrls(siteWithDomain(undefined), "abc123", {
-      systemHost: "site.b-cdn.net",
-    }),
+    deployUrls(stateWithDomain("example.com"), undefined, "site.b-cdn.net"),
+  ).toEqual({ production: "https://example.com", preview: undefined });
+  expect(
+    deployUrls(stateWithDomain(undefined), undefined, "site.b-cdn.net"),
   ).toEqual({ production: "https://site.b-cdn.net", preview: undefined });
 });
 
-// Until the wildcard's certificate issues, an https preview URL fails TLS and a plaintext http one would expose traffic; the URL is reported as pending instead of reachable.
-test("deployUrls holds the preview URL as pending until the wildcard certificate issued", () => {
-  const site = siteWithDomain("example.com");
-  expect(deployUrls(site, "abc123", { previewSecure: true }).preview).toBe(
-    "https://dpl-abc123.preview.example.com",
-  );
-  const pending = deployUrls(site, "abc123", { previewSecure: false });
-  expect(pending.preview).toBeUndefined();
-  expect(pending.previewPending).toBe("https://dpl-abc123.preview.example.com");
-  // Zone unreadable: fall back to https rather than downgrading a working preview.
-  expect(deployUrls(site, "abc123", {}).preview).toBe(
-    "https://dpl-abc123.preview.example.com",
-  );
+test("deployUrls: the preview URL comes from the deploy's own zone and needs no domain", () => {
+  expect(
+    deployUrls(
+      stateWithDomain(undefined),
+      { previewHost: "sites-dpl-abc123-x1y2z3.b-cdn.net" },
+      "site.b-cdn.net",
+    ),
+  ).toEqual({
+    production: "https://site.b-cdn.net",
+    preview: "https://sites-dpl-abc123-x1y2z3.b-cdn.net",
+  });
+  // A record without a zone (creation failed, or an older CLI wrote it) simply has no preview URL.
+  expect(deployUrls(stateWithDomain(undefined), {}, undefined)).toEqual({
+    production: undefined,
+    preview: undefined,
+  });
 });

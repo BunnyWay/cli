@@ -1,17 +1,18 @@
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import { ApiError } from "../../core/errors.ts";
-import type { Hostname } from "../../core/hostnames/index.ts";
 import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
 import {
   type ComputeClient,
   createSite,
+  deletePreviewZone,
   deleteSiteResources,
+  ensurePreviewZone,
+  ensureRouterCurrent,
   fetchSites,
-  previewZone,
+  findPreviewZones,
   promoteDeploy,
   promoteVerification,
   readRemoteState,
-  reconcilePreviewDomain,
   siteContextFromZone,
   siteFiles,
   writeRemoteState,
@@ -21,6 +22,7 @@ import {
   type RemoteSiteState,
   STATE_VERSION,
 } from "./constants.ts";
+import { ROUTER_VERSION } from "./router/source.ts";
 
 // ---- in-memory storage-file store (replaces the storage SDK) ----
 
@@ -303,6 +305,7 @@ test("writeRemoteState merges concurrent deploy records on an etag mismatch", as
     id: "zzz",
     createdAt: "2026-01-02T00:00:00.000Z",
     source: "git" as const,
+    contentHash: "hashzzz",
     files: 1,
     bytes: 10,
   };
@@ -315,6 +318,7 @@ test("writeRemoteState merges concurrent deploy records on an etag mismatch", as
     id: "aaa",
     createdAt: "2026-01-03T00:00:00.000Z",
     source: "git" as const,
+    contentHash: "hashaaa",
     files: 1,
     bytes: 10,
   };
@@ -340,6 +344,7 @@ test("a non-promoting write adopts the concurrent writer's current/previous", as
     id: "zzz",
     createdAt: "2026-01-02T00:00:00.000Z",
     source: "git" as const,
+    contentHash: "hashzzz",
     files: 1,
     bytes: 10,
   };
@@ -354,6 +359,7 @@ test("a non-promoting write adopts the concurrent writer's current/previous", as
     id: "aaa",
     createdAt: "2026-01-03T00:00:00.000Z",
     source: "git" as const,
+    contentHash: "hashaaa",
     files: 1,
     bytes: 10,
   };
@@ -371,6 +377,7 @@ test("writeRemoteState does not resurrect intentionally removed deploys on a pru
     id: "keep",
     createdAt: "2026-01-03T00:00:00.000Z",
     source: "content" as const,
+    contentHash: "hashkeep",
     files: 1,
     bytes: 10,
   };
@@ -484,12 +491,19 @@ test("createSite re-run reuses existing resources and converges", async () => {
   // Everything already exists; but no remote state (a half-finished create).
   const coreClient = fakeCoreClient({
     calls: coreCalls,
-    storageZones: [ZONE],
-    pullZones: [{ Id: 30, Name: "my-site", Hostnames: [] }],
+    storageZones: [{ ...ZONE, Name: "sites-my-site-abc123" }],
+    pullZones: [
+      {
+        Id: 30,
+        Name: "sites-my-site-abc123",
+        StorageZoneId: 10,
+        Hostnames: [],
+      },
+    ],
   });
   const computeClient = fakeComputeClient({
     calls: computeCalls,
-    scripts: [{ Id: 20, Name: "my-site-router" }],
+    scripts: [{ Id: 20, Name: "sites-my-site-abc123-router" }],
   });
 
   const result = await createSite({
@@ -558,16 +572,6 @@ test("createSite resumes a half-created suffixed site", async () => {
   });
   // The site keeps its clean display name; only the zones carry the suffix.
   expect(result.state.name).toBe("my-site");
-});
-
-test("createSite refuses to re-provision an existing site", async () => {
-  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
-  const coreClient = fakeCoreClient({ calls: [], storageZones: [ZONE] });
-  const computeClient = fakeComputeClient({ calls: [] });
-
-  await expect(
-    createSite({ coreClient, computeClient, name: "my-site", region: "DE" }),
-  ).rejects.toThrow('Site "my-site" already exists.');
 });
 
 test("createSite refuses to re-provision an existing suffixed site", async () => {
@@ -740,14 +744,12 @@ test("fetchSites keeps only middleware+storage pull zones with matching state", 
   expect(sites[0]?.systemHostname).toBe("my-site.b-cdn.net");
 });
 
-// `list` reads the same listing, so a domain the zone doesn't back must not be shown as live; another domain's wildcard never takes its place.
-test("fetchSites reconciles each site's domain against its pull zone hostnames", async () => {
-  store.set(
-    REMOTE_STATE_PATH,
-    JSON.stringify(fakeState({ domain: "stale.example" })),
-  );
+// Preview zones share the middleware+storage shape with real sites; the name pattern must skip them before any per-zone state read happens.
+test("fetchSites skips preview zones without reading their state", async () => {
+  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
+  const calls: Call[] = [];
   const coreClient = fakeCoreClient({
-    calls: [],
+    calls,
     storageZones: [ZONE],
     pullZones: [
       {
@@ -755,69 +757,257 @@ test("fetchSites reconciles each site's domain against its pull zone hostnames",
         Name: "my-site",
         MiddlewareScriptId: 20,
         StorageZoneId: 10,
-        Hostnames: [
-          { IsSystemHostname: true, Value: "my-site.b-cdn.net" },
-          { Value: "*.preview.live.example" },
-        ],
+        Hostnames: [{ IsSystemHostname: true, Value: "my-site.b-cdn.net" }],
+      },
+      {
+        Id: 77,
+        Name: "sites-dpl-a1b2c3d4-abc123",
+        MiddlewareScriptId: 20,
+        StorageZoneId: 10,
       },
     ],
   });
 
   const sites = await fetchSites(coreClient);
-  expect(sites[0]?.state.domain).toBeUndefined();
+  expect(sites).toHaveLength(1);
+  expect(calls.filter((c) => c.path === "/storagezone/{id}")).toHaveLength(1);
 });
 
-test("previewZone tells a failed hostname read apart from a zone with no wildcard", () => {
-  // Null is "unknown", so a fetch failure can never be mistaken for "previews are off".
-  expect(previewZone(null)).toEqual({ fetched: false });
-  expect(previewZone([])).toEqual({ fetched: true, previewDomain: undefined });
-  expect(
-    previewZone([{ Value: "*.preview.example.com" }] as Hostname[]),
-  ).toEqual({
-    fetched: true,
-    previewDomain: "example.com",
-    previewSecure: false,
+// ---- preview zones ----
+
+test("ensurePreviewZone creates the zone, attaches the router, and returns its host", async () => {
+  const calls: Call[] = [];
+  const coreClient = fakeCoreClient({ calls });
+
+  const zone = await ensurePreviewZone({
+    coreClient,
+    state: fakeState(),
+    deployId: "a1b2c3d4",
   });
+
+  expect(zone?.host).toMatch(/^sites-dpl-a1b2c3d4-[a-z0-9]{6}\.b-cdn\.net$/);
+  const create = calls.find(
+    (c) => c.method === "POST" && c.path === "/pullzone",
+  );
+  expect((create?.body as { StorageZoneId: number }).StorageZoneId).toBe(10);
+  const attach = calls.find(
+    (c) => c.method === "POST" && c.path === "/pullzone/{id}",
+  );
+  expect(attach?.body).toEqual({ MiddlewareScriptId: 20 });
+  expect(zone?.ready).toBe(true);
 });
 
-// Preview URLs print with the scheme the wildcard can actually serve, so a pending certificate reads as http, never a TLS-failing https.
-test("previewZone reports whether the wildcard's certificate has issued", () => {
+// A pull zone is public the moment it exists, and an unrouted one serves the storage origin (every deploy plus _bunny/), so the router must be attached by the create itself, not only afterwards.
+test("ensurePreviewZone attaches the router in the create call", async () => {
+  const calls: Call[] = [];
+  await ensurePreviewZone({
+    coreClient: fakeCoreClient({ calls }),
+    state: fakeState(),
+    deployId: "a1b2c3d4",
+  });
+
+  const create = calls.find(
+    (c) => c.method === "POST" && c.path === "/pullzone",
+  );
   expect(
-    previewZone([
-      { Value: "*.preview.example.com", HasCertificate: true },
-    ] as Hostname[]).previewSecure,
+    (create?.body as { MiddlewareScriptId: number }).MiddlewareScriptId,
+  ).toBe(20);
+});
+
+// If the confirming attach fails, the zone can't be proven routed; one this run created is taken back down rather than left exposed at a public URL.
+test("ensurePreviewZone deletes a zone it created when the router attach fails", async () => {
+  const calls: Call[] = [];
+  const client = fakeCoreClient({ calls });
+  const attachDown = {
+    ...client,
+    POST: async (path: string, options?: unknown) => {
+      if (path === "/pullzone/{id}") throw new Error("attach failed");
+      return (client.POST as (p: string, o?: unknown) => Promise<unknown>)(
+        path,
+        options,
+      );
+    },
+  } as unknown as CoreClient;
+
+  expect(
+    await ensurePreviewZone({
+      coreClient: attachDown,
+      state: fakeState(),
+      deployId: "a1b2c3d4",
+    }),
+  ).toBeNull();
+  expect(
+    calls.some((c) => c.method === "DELETE" && c.path === "/pullzone/{id}"),
   ).toBe(true);
-  expect(
-    previewZone([
-      { Value: "*.preview.example.com", HasCertificate: false },
-    ] as Hostname[]).previewSecure,
-  ).toBe(false);
-  expect(
-    previewZone([{ Value: "example.com" }] as Hostname[]).previewSecure,
-  ).toBeUndefined();
 });
 
-// A recorded primary is only ever matched, never replaced: another domain's wildcard surfaces as an alternate to switch to, not as a silent takeover.
-test("previewZone never swaps the recorded domain for another wildcard", () => {
-  const two = [
-    { Value: "*.preview.first.com", HasCertificate: true },
-    { Value: "*.preview.second.com", HasCertificate: false },
-  ] as Hostname[];
-  expect(previewZone(two, "second.com")).toEqual({
-    fetched: true,
-    previewDomain: "second.com",
-    previewSecure: false,
-    alternateDomain: undefined,
+// A Force SSL failure only costs the HTTP-to-HTTPS redirect (the b-cdn.net host serves HTTPS regardless), so the preview is still usable; reporting it as not-ready keeps it out of the deploy record, which is what makes the next deploy re-adopt and retry it.
+test("ensurePreviewZone reports a zone whose Force SSL failed as not ready", async () => {
+  const client = fakeCoreClient({ calls: [] });
+  const forceSslDown = {
+    ...client,
+    POST: async (path: string, options?: unknown) => {
+      if (path === "/pullzone/{id}/setForceSSL") throw new Error("nope");
+      return (client.POST as (p: string, o?: unknown) => Promise<unknown>)(
+        path,
+        options,
+      );
+    },
+  } as unknown as CoreClient;
+
+  const zone = await ensurePreviewZone({
+    coreClient: forceSslDown,
+    state: fakeState(),
+    deployId: "a1b2c3d4",
   });
-  // The recorded wildcard is gone: report previews off plus the attached alternate; adopting it is the user's call.
-  expect(previewZone(two, "gone.com")).toEqual({
-    fetched: true,
-    previewDomain: undefined,
-    previewSecure: undefined,
-    alternateDomain: "first.com",
+
+  // Still a usable preview: the host is returned, just not recorded as configured.
+  expect(zone?.host).toMatch(/^sites-dpl-a1b2c3d4-[a-z0-9]{6}\.b-cdn\.net$/);
+  expect(zone?.ready).toBe(false);
+});
+
+// A create/list response without hostnames must not silently skip Force SSL and still report the zone configured: that would record it as done with no repair path. The host is derived from the zone name instead, and only the API call decides ready.
+test("ensurePreviewZone still forces SSL when the response carries no hostnames", async () => {
+  const calls: Call[] = [];
+  const client = fakeCoreClient({ calls });
+  const noHostnames = {
+    ...client,
+    POST: async (path: string, options?: { body?: unknown }) => {
+      const result = (await (
+        client.POST as (p: string, o?: unknown) => Promise<{ data?: unknown }>
+      )(path, options)) as { data?: Record<string, unknown> };
+      if (path === "/pullzone" && result.data) {
+        return { data: { ...result.data, Hostnames: undefined } };
+      }
+      return result;
+    },
+  } as unknown as CoreClient;
+
+  const zone = await ensurePreviewZone({
+    coreClient: noHostnames,
+    state: fakeState(),
+    deployId: "a1b2c3d4",
   });
-  // No recorded domain: the first wildcard heals a lost state write.
-  expect(previewZone(two).previewDomain).toBe("first.com");
+
+  expect(zone?.ready).toBe(true);
+  const forceSsl = calls.find((c) => c.path === "/pullzone/{id}/setForceSSL");
+  expect(forceSsl?.body).toEqual({ Hostname: zone?.host, ForceSSL: true });
+});
+
+// A zone created before a failed state write must be adopted on retry, not duplicated.
+test("ensurePreviewZone adopts an existing zone for the deploy", async () => {
+  const calls: Call[] = [];
+  const coreClient = fakeCoreClient({
+    calls,
+    pullZones: [
+      // Same name shape but another site's storage zone: never adopted.
+      {
+        Id: 76,
+        Name: "sites-dpl-a1b2c3d4-zzzzzz",
+        StorageZoneId: 99,
+        Hostnames: [
+          {
+            IsSystemHostname: true,
+            Value: "sites-dpl-a1b2c3d4-zzzzzz.b-cdn.net",
+          },
+        ],
+      },
+      {
+        Id: 77,
+        Name: "sites-dpl-a1b2c3d4-abc123",
+        StorageZoneId: 10,
+        Hostnames: [
+          {
+            IsSystemHostname: true,
+            Value: "sites-dpl-a1b2c3d4-abc123.b-cdn.net",
+          },
+        ],
+      },
+    ],
+  });
+
+  const zone = await ensurePreviewZone({
+    coreClient,
+    state: fakeState(),
+    deployId: "a1b2c3d4",
+  });
+
+  expect(zone).toEqual({
+    id: 77,
+    host: "sites-dpl-a1b2c3d4-abc123.b-cdn.net",
+    ready: true,
+  });
+  // Never a create...
+  expect(calls.some((c) => c.method === "POST" && c.path === "/pullzone")).toBe(
+    false,
+  );
+  // ...but the router attach re-runs: the orphan may exist precisely because the attach failed last time, and an unrouted zone would serve the raw storage root.
+  const attach = calls.find(
+    (c) => c.method === "POST" && c.path === "/pullzone/{id}",
+  );
+  expect(attach?.params).toEqual({ path: { id: 77 } });
+  expect(attach?.body).toEqual({ MiddlewareScriptId: 20 });
+});
+
+// A preview failure must not fail the deploy; the caller warns and the next run retries.
+test("ensurePreviewZone returns null when creation fails", async () => {
+  const coreClient = fakeCoreClient({
+    calls: [],
+    createError: {
+      path: "/pullzone",
+      error: new ApiError("boom", 500, "boom"),
+    },
+  });
+
+  expect(
+    await ensurePreviewZone({
+      coreClient,
+      state: fakeState(),
+      deployId: "a1b2c3d4",
+    }),
+  ).toBeNull();
+});
+
+test("findPreviewZones matches by name shape and the site's storage zone", async () => {
+  const coreClient = fakeCoreClient({
+    calls: [],
+    pullZones: [
+      { Id: 30, Name: "my-site", StorageZoneId: 10 },
+      { Id: 77, Name: "sites-dpl-a1b2c3d4-abc123", StorageZoneId: 10 },
+      { Id: 78, Name: "sites-dpl-ffff0000-abc123", StorageZoneId: 10 },
+      { Id: 79, Name: "sites-dpl-a1b2c3d4-zzzzzz", StorageZoneId: 99 },
+    ],
+  });
+
+  expect(await findPreviewZones(coreClient, 10)).toEqual([
+    { id: 77, deployId: "a1b2c3d4" },
+    { id: 78, deployId: "ffff0000" },
+  ]);
+});
+
+// ---- router upgrades ----
+
+test("ensureRouterCurrent republishes an outdated router and stamps the version", async () => {
+  const calls: Call[] = [];
+  const computeClient = fakeComputeClient({ calls });
+  const state = fakeState();
+
+  expect(await ensureRouterCurrent({ computeClient, state })).toBe(true);
+  expect(state.routerVersion).toBe(ROUTER_VERSION);
+  expect(calls.map((c) => c.path)).toEqual([
+    "/compute/script/{id}/code",
+    "/compute/script/{id}/publish",
+  ]);
+
+  // Already current: no calls at all.
+  const noCalls: Call[] = [];
+  expect(
+    await ensureRouterCurrent({
+      computeClient: fakeComputeClient({ calls: noCalls }),
+      state,
+    }),
+  ).toBe(false);
+  expect(noCalls).toHaveLength(0);
 });
 
 test("siteContextFromZone is null for a zone without site state", async () => {
@@ -915,47 +1105,85 @@ test("fetchSites pages through the /pullzone envelope", async () => {
   expect(sites[0]?.state.name).toBe("my-site");
 });
 
-// `state.domain` decides whether deploys preview or publish, but its write is best-effort, so the zone's wildcard reconciles it before anything reads it.
-test("reconcilePreviewDomain heals drifted domain state from the zone", () => {
-  const state = (domain?: string) => ({ domain }) as RemoteSiteState;
+// Preview zones reference the script and storage zone, so teardown must take them down too: the recorded ids plus a name-shape sweep for orphans.
+test("deleteSiteResources deletes preview zones before the site's own resources", async () => {
+  const coreCalls: Call[] = [];
+  const coreClient = fakeCoreClient({
+    calls: coreCalls,
+    pullZones: [
+      // Orphan: preview-shaped, this site's storage zone, missing from state.
+      { Id: 78, Name: "sites-dpl-ffff0000-abc123", StorageZoneId: 10 },
+    ],
+  });
+  const computeClient = fakeComputeClient({ calls: [] });
 
-  // Wildcard attached but the state write failed: previews work, so a CI preview build must not publish to production.
-  const stranded = state(undefined);
+  const state = fakeState({
+    deploys: [
+      {
+        id: "a1b2c3d4",
+        createdAt: "2026-01-01T00:00:00Z",
+        source: "git",
+        contentHash: "hash1",
+        files: 1,
+        bytes: 1,
+        previewZoneId: 77,
+        previewHost: "sites-dpl-a1b2c3d4-abc123.b-cdn.net",
+      },
+    ],
+  });
+  const results = await deleteSiteResources({
+    coreClient,
+    computeClient,
+    state,
+  });
+
+  const deletedPullZoneIds = coreCalls
+    .filter((c) => c.method === "DELETE" && c.path === "/pullzone/{id}")
+    .map((c) => (c.params as { path: { id: number } }).path.id);
+  expect(deletedPullZoneIds).toEqual([77, 78, 30]);
   expect(
-    reconcilePreviewDomain(stranded, {
-      fetched: true,
-      previewDomain: "example.com",
+    results.filter((r) => r.resource === "preview zone" && r.deleted),
+  ).toHaveLength(2);
+});
+
+// Retries must converge: a zone something else already removed counts as deleted, so prune doesn't keep a record alive forever over a 404.
+test("deletePreviewZone treats an already-gone zone as deleted", async () => {
+  const notFound = {
+    DELETE: async () => {
+      throw new ApiError("gone", 404, "Not Found");
+    },
+  } as unknown as CoreClient;
+  expect(await deletePreviewZone(notFound, 77)).toBe(true);
+
+  const broken = {
+    DELETE: async () => {
+      throw new ApiError("boom", 500, "boom");
+    },
+  } as unknown as CoreClient;
+  expect(await deletePreviewZone(broken, 77)).toBe(false);
+});
+
+// The storage zone is the association key for the orphan sweep; deleting it after a failed sweep would strand unfindable preview zones, so teardown aborts untouched instead.
+test("deleteSiteResources aborts before deleting anything when the preview sweep fails", async () => {
+  const calls: Call[] = [];
+  const client = fakeCoreClient({ calls });
+  const failingList = {
+    ...client,
+    GET: async (path: string, options?: unknown) => {
+      if (path === "/pullzone") throw new Error("listing down");
+      return (client.GET as (p: string, o?: unknown) => Promise<unknown>)(
+        path,
+        options,
+      );
+    },
+  } as unknown as CoreClient;
+
+  await expect(
+    deleteSiteResources({
+      coreClient: failingList,
+      computeClient: fakeComputeClient({ calls: [] }),
+      state: fakeState(),
     }),
-  ).toBe("attached");
-  expect(stranded.domain).toBe("example.com");
-
-  // Wildcard removed behind the CLI's back: previews can't serve, so don't advertise them.
-  const dangling = state("example.com");
-  expect(reconcilePreviewDomain(dangling, { fetched: true })).toBe("detached");
-  expect(dangling.domain).toBeUndefined();
-
-  // A recorded domain is authoritative: reconciliation never replaces it with another.
-  const recorded = state("old.example");
-  expect(
-    reconcilePreviewDomain(recorded, {
-      fetched: true,
-      previewDomain: "new.example",
-    }),
-  ).toBeUndefined();
-  expect(recorded.domain).toBe("old.example");
-
-  // Agreement is not drift.
-  const agreed = state("example.com");
-  expect(
-    reconcilePreviewDomain(agreed, {
-      fetched: true,
-      previewDomain: "example.com",
-    }),
-  ).toBeUndefined();
-  expect(agreed.domain).toBe("example.com");
-
-  // An unreadable zone proves nothing; keep the recorded value.
-  const unknown = state("example.com");
-  expect(reconcilePreviewDomain(unknown, { fetched: false })).toBeUndefined();
-  expect(unknown.domain).toBe("example.com");
+  ).rejects.toThrow(/preview zones/);
+  expect(calls.some((c) => c.method === "DELETE")).toBe(false);
 });

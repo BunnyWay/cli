@@ -120,17 +120,21 @@ export function liveHostnames(hostnames: Hostname[]): {
 // PullZoneOriginType: 2 = StorageZone.
 const ORIGIN_TYPE_STORAGE_ZONE = 2;
 
-/** Create a pull zone served from a storage zone, with delivery enabled in every geo region. */
+/** Create a pull zone served from a storage zone, with delivery enabled in every geo region. Pass `middlewareScriptId` to attach a router in the same call: a zone is publicly reachable the moment it exists, so attaching afterwards leaves a window where it serves the raw storage origin. */
 export async function createPullZone(
   client: CoreClient,
   name: string,
   storageZoneId: number,
+  opts?: { middlewareScriptId?: number },
 ): Promise<components["schemas"]["PullZoneModel"]> {
   const { data } = await client.POST("/pullzone", {
     body: {
       Name: name,
       StorageZoneId: storageZoneId,
       OriginType: ORIGIN_TYPE_STORAGE_ZONE,
+      ...(opts?.middlewareScriptId != null
+        ? { MiddlewareScriptId: opts.middlewareScriptId }
+        : {}),
       EnableGeoZoneUS: true,
       EnableGeoZoneEU: true,
       EnableGeoZoneASIA: true,
@@ -189,6 +193,24 @@ export async function setForceSsl(
   });
 }
 
+/** Whether the pull zone reports an active certificate on exactly `hostname`; null when the check itself failed. */
+export async function hostnameHasCertificate(
+  client: CoreClient,
+  pullZoneId: number,
+  hostname: string,
+): Promise<boolean | null> {
+  try {
+    const hostnames = await fetchPullZoneHostnames(client, pullZoneId);
+    return hostnames.some(
+      (h) =>
+        (h.Value ?? "").toLowerCase() === hostname.toLowerCase() &&
+        h.HasCertificate === true,
+    );
+  } catch {
+    return null;
+  }
+}
+
 /** Issue a free SSL certificate for a hostname on a pull zone, then set its Force SSL state. */
 export async function enableSsl(
   client: CoreClient,
@@ -214,6 +236,40 @@ export async function enableSsl(
   await client.GET("/pullzone/loadFreeCertificate", {
     params: { query: { hostname } },
   });
+  // The endpoint can 200 without an exact-name certificate landing (e.g. an overlapping wildcard elsewhere), so trust the zone, not the status code; a failed check (null) must not fail an issuance that likely worked.
+  const certified = await hostnameHasCertificate(client, pullZoneId, hostname);
+  if (certified === false) {
+    throw new UserError(
+      `bunny.net accepted the request, but no certificate is active on "${hostname}" yet.`,
+      "Retry in a minute; if it keeps happening, check for a wildcard hostname on another pull zone that overlaps this name.",
+    );
+  }
   // Always set Force SSL to the requested value so --no-force-ssl can also turn it off.
   await setForceSsl(client, pullZoneId, hostname, forceSSL);
+}
+
+export type TlsProbeResult = "ok" | "bad-certificate" | "unreachable";
+
+const TLS_PROBE_TIMEOUT_MS = 8_000;
+
+/** Best-effort HTTPS handshake check: "ok" when the certificate verifies for `hostname`, "bad-certificate" when TLS fails (mismatched or missing cert at the edge), "unreachable" when the host can't be reached at all (DNS lag, offline). */
+export async function probeTlsCertificate(
+  hostname: string,
+): Promise<TlsProbeResult> {
+  try {
+    await fetch(`https://${hostname}/`, {
+      method: "HEAD",
+      redirect: "manual",
+      signal: AbortSignal.timeout(TLS_PROBE_TIMEOUT_MS),
+    });
+    return "ok";
+  } catch (err) {
+    for (let e: unknown = err; e instanceof Error; e = e.cause) {
+      const text = `${(e as NodeJS.ErrnoException).code ?? ""} ${e.message}`;
+      if (/cert|tls|ssl|handshake|altname|principal|verify/i.test(text)) {
+        return "bad-certificate";
+      }
+    }
+    return "unreachable";
+  }
 }

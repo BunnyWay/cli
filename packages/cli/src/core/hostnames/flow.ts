@@ -1,6 +1,6 @@
 import { UserError } from "../errors.ts";
 import { logger } from "../logger.ts";
-import { confirm, spinner } from "../ui.ts";
+import { confirm, spinner, withSpinner } from "../ui.ts";
 import {
   type BunnyDnsMatch,
   findBunnyDnsZone,
@@ -11,6 +11,7 @@ import {
   type CoreClient,
   enableSsl,
   hostnameUrl,
+  probeTlsCertificate,
 } from "./client.ts";
 import { anyResolverPointsAt, defaultResolvers } from "./dns.ts";
 
@@ -48,6 +49,47 @@ export interface DnsSslFlowOptions {
 export function printSslHint(sslHint: string): void {
   logger.log("Then enable HTTPS once DNS is live:");
   logger.accent(`  ${sslHint}`);
+}
+
+// One retry: a certificate issued a moment ago can still be rolling out to the edge.
+const TLS_PROBE_RETRY_DELAY_MS = 5_000;
+
+/**
+ * Print the issued-certificate summary, but verify the edge actually answers
+ * with a valid certificate first (best effort). Issuance can succeed while
+ * serving stays broken, e.g. when a single-label wildcard hostname elsewhere
+ * on the account shadows a deeper subdomain; that must warn, not claim "Live".
+ */
+export async function reportIssuedCertificate(
+  hostname: string,
+  forceSsl: boolean,
+): Promise<void> {
+  logger.success(
+    forceSsl
+      ? `SSL certificate issued for ${hostname} and HTTPS forced.`
+      : `SSL certificate issued for ${hostname}.`,
+  );
+
+  // A wildcard has no probeable name; trust issuance for it.
+  if (hostname.includes("*")) return;
+
+  const probe = await withSpinner("Verifying HTTPS...", async () => {
+    const first = await probeTlsCertificate(hostname);
+    if (first !== "bad-certificate") return first;
+    await Bun.sleep(TLS_PROBE_RETRY_DELAY_MS);
+    return probeTlsCertificate(hostname);
+  });
+
+  if (probe === "bad-certificate") {
+    logger.warn(`HTTPS for ${hostname} isn't serving a valid certificate yet.`);
+    logger.dim(
+      "  Fresh certificates can take a minute to reach the edge. If this persists, another hostname (often a wildcard on a different pull zone) may be answering for this name.",
+    );
+    logger.dim(`  Check again with: curl -vI https://${hostname}`);
+    return;
+  }
+
+  logger.log(`  Live at: ${hostnameUrl(hostname, { hasCertificate: true })}`);
 }
 
 /**
@@ -156,14 +198,7 @@ export async function offerDnsWaitAndSsl(
 
   if (!opts.json) {
     logger.success("DNS is live.");
-    logger.success(
-      opts.forceSsl
-        ? `SSL certificate issued for ${opts.hostname} and HTTPS forced.`
-        : `SSL certificate issued for ${opts.hostname}.`,
-    );
-    logger.log(
-      `  Live at: ${hostnameUrl(opts.hostname, { hasCertificate: true })}`,
-    );
+    await reportIssuedCertificate(opts.hostname, opts.forceSsl);
   }
   return true;
 }

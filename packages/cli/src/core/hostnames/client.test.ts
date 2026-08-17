@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   addHostname,
   type CoreClient,
+  enableSsl,
   type Hostname,
   hostnameUrl,
   toSafeHostname,
@@ -119,5 +120,58 @@ describe("addHostname", () => {
         "shop.example.com",
       ),
     ).rejects.toThrow("hostname is already taken");
+  });
+});
+
+describe("enableSsl", () => {
+  // Issuance 200s, then the zone reports whether a certificate actually landed on the hostname.
+  const stubClient = (opts: { certified?: boolean; verifyFails?: boolean }) => {
+    const calls = { forceSsl: 0 };
+    const client = {
+      GET: async (route: string) => {
+        if (route === "/pullzone/loadFreeCertificate") {
+          return { data: undefined };
+        }
+        if (opts.verifyFails) throw new Error("zone fetch failed");
+        return {
+          data: {
+            Hostnames: [
+              {
+                Value: "shop.example.com",
+                HasCertificate: opts.certified === true,
+              },
+            ],
+          },
+        };
+      },
+      POST: async (route: string) => {
+        if (route === "/pullzone/{id}/setForceSSL") calls.forceSsl++;
+        return { data: undefined };
+      },
+    } as unknown as CoreClient;
+    return { client, calls };
+  };
+  const known = [{ Value: "shop.example.com" }] as Hostname[];
+
+  // loadFreeCertificate can 200 without an exact-name certificate landing (e.g. an overlapping wildcard elsewhere); claiming success (and forcing HTTPS) then would break the site.
+  test("throws and skips Force SSL when no certificate lands on the hostname", async () => {
+    const { client, calls } = stubClient({ certified: false });
+    expect(
+      enableSsl(client, 1, "shop.example.com", true, known),
+    ).rejects.toThrow(/no certificate is active/);
+    expect(calls.forceSsl).toBe(0);
+  });
+
+  test("forces SSL once the certificate shows on the zone", async () => {
+    const { client, calls } = stubClient({ certified: true });
+    await enableSsl(client, 1, "shop.example.com", true, known);
+    expect(calls.forceSsl).toBe(1);
+  });
+
+  // The verification is a safety net; when the check itself fails it must not fail an issuance that likely worked.
+  test("proceeds when the verification fetch fails", async () => {
+    const { client, calls } = stubClient({ verifyFails: true });
+    await enableSsl(client, 1, "shop.example.com", true, known);
+    expect(calls.forceSsl).toBe(1);
   });
 });
