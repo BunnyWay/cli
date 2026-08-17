@@ -1,6 +1,6 @@
 # @bunny.net/database-client
 
-A small SQL client for [Bunny Database](https://bunny.net). It uses `fetch` and nothing else, so the same code runs on Bunny Edge Scripting (Deno), Bun, and Node. No dependencies.
+A small SQL client for [Bunny Database](https://bunny.net). It has no dependencies and uses `fetch` and nothing else, so the same code runs on Bunny Edge Scripting (Deno), Bun, and Node.
 
 > [!WARNING]
 > **Server-side only. Never ship this to a browser or any other untrusted client.**
@@ -67,7 +67,7 @@ Binds positional `?` parameters and returns a new statement. Accepts `null`, `bo
 
 Anything else throws instead of being quietly converted, because SQLite has nowhere to put it. `Date` gets its own message suggesting `.toISOString()` or `.getTime()`, since guessing which one you meant would change what ends up in the column.
 
-Integer `number`s past 2^53 are rejected rather than rounded: by the time the client sees one it has already lost precision, so pass a `bigint` for values that large. Bigints must fit SQLite's signed 64-bit range.
+Integer `number`s past 2^53 also throw: JavaScript has already lost the precision by the time the client sees the value, so storing it would quietly write the wrong number. Pass a `bigint` for values that large. Bigints must fit SQLite's signed 64-bit range.
 
 ### Executing
 
@@ -244,7 +244,7 @@ BunnySDK.net.http.serve(async (request: Request): Promise<Response> => {
 });
 ```
 
-The browser calls your endpoint, and your endpoint decides what SQL runs. If you would rather not hand-write endpoints
+The browser calls your endpoint, and your endpoint decides what SQL runs.
 
 ### Handling tokens
 

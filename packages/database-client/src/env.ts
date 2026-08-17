@@ -10,8 +10,7 @@ export function readEnv(name: string): string | undefined {
       const value = deno.env.get(name);
       if (value) return value;
     } catch {
-      // No env permission.
-      // Fall through to process.env, then to the caller's error.
+      // No env permission; fall through to process.env, then to the caller's error.
     }
   }
 
