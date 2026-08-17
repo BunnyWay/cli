@@ -44,9 +44,7 @@ test("deployUrls holds the preview URL as pending until the wildcard certificate
   );
   const pending = deployUrls(site, "abc123", { previewSecure: false });
   expect(pending.preview).toBeUndefined();
-  expect(pending.previewPending).toBe(
-    "https://dpl-abc123.preview.example.com",
-  );
+  expect(pending.previewPending).toBe("https://dpl-abc123.preview.example.com");
   // Zone unreadable: fall back to https rather than downgrading a working preview.
   expect(deployUrls(site, "abc123", {}).preview).toBe(
     "https://dpl-abc123.preview.example.com",

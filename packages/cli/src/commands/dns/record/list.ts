@@ -1,21 +1,33 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import { dnsRecordsList } from "@bunny.net/actions";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
-import {
-  formatRecordValue,
-  recordName,
-  recordTypeLabel,
-} from "../record-types.ts";
 
-interface ListArgs {
-  domain?: string;
+/** Render a normalized record's value with its type-specific fields inline. */
+function recordValue(record: {
+  type: string;
+  value: string;
+  priority?: number;
+  weight?: number;
+  port?: number;
+  flags?: number;
+  tag?: string;
+}): string {
+  switch (record.type) {
+    case "MX":
+      return `${record.priority ?? 0} ${record.value}`;
+    case "SRV":
+      return `${record.priority ?? 0} ${record.weight ?? 0} ${record.port ?? 0} ${record.value}`;
+    case "CAA":
+      return `${record.flags ?? 0} ${record.tag ?? ""} "${record.value}"`;
+    default:
+      return record.value;
+  }
 }
 
-export const dnsRecordListCommand = defineCommand<ListArgs>({
+export const dnsRecordListCommand = defineActionCommand({
+  action: dnsRecordsList,
   command: "list [domain]",
   aliases: ["ls"],
   describe: "List the records within a zone.",
@@ -30,26 +42,19 @@ export const dnsRecordListCommand = defineCommand<ListArgs>({
       describe: "Domain or zone ID",
     }),
 
-  handler: async ({ domain, profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+  progress: "Fetching records...",
 
-    const zone = await resolveZoneInteractive(client, domain, {
+  prepare: async ({ domain, output }, ctx) => {
+    const zone = await resolveZoneInteractive(ctx.clients.core, domain, {
       output,
       offerLink: true,
     });
+    return { input: { zone: String(zone.Id) } };
+  },
 
-    const records = (zone.Records ?? []).sort((a, b) =>
-      recordName(a.Name).localeCompare(recordName(b.Name)),
-    );
-
-    if (output === "json") {
-      logger.log(JSON.stringify(records, null, 2));
-      return;
-    }
-
+  render: (records, { output }) => {
     if (records.length === 0) {
-      logger.info(`No records found in ${zone.Domain}.`);
+      logger.info("No records found.");
       return;
     }
 
@@ -57,11 +62,11 @@ export const dnsRecordListCommand = defineCommand<ListArgs>({
       formatTable(
         ["ID", "Name", "Type", "Value", "TTL"],
         records.map((r) => [
-          String(r.Id ?? ""),
-          recordName(r.Name),
-          recordTypeLabel(r.Type),
-          formatRecordValue(r),
-          String(r.Ttl ?? ""),
+          String(r.id),
+          r.name,
+          r.type,
+          recordValue(r),
+          r.ttl != null ? String(r.ttl) : "",
         ]),
         output,
       ),

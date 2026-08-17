@@ -1,17 +1,11 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import { dnsZonesDelete } from "@bunny.net/actions";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { confirm } from "../../../core/ui.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
 
-interface ZoneRemoveArgs {
-  domain?: string;
-  force?: boolean;
-}
-
-export const dnsZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
+export const dnsZoneRemoveCommand = defineActionCommand({
+  action: dnsZonesDelete,
   command: "remove [domain]",
   aliases: ["rm"],
   describe: "Delete a DNS zone and all of its records.",
@@ -31,42 +25,23 @@ export const dnsZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
         describe: "Skip confirmation prompt",
       }),
 
-  handler: async ({ domain, force, profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+  progress: "Deleting zone...",
 
-    const zone = await resolveZoneInteractive(client, domain, { output });
-
-    const confirmed = await confirm(
-      `Delete zone ${zone.Domain} and all ${(zone.Records ?? []).length} record(s)?`,
-      { force },
-    );
-    if (!confirmed) {
-      logger.log("Cancelled.");
-      return;
-    }
-
-    const removeSpin = spinner("Deleting zone...");
-    removeSpin.start();
-    try {
-      await client.DELETE("/dnszone/{id}", {
-        params: { path: { id: zone.Id as number } },
-      });
-    } finally {
-      removeSpin.stop();
-    }
-
-    if (output === "json") {
-      logger.log(
-        JSON.stringify(
-          { id: zone.Id, domain: zone.Domain, removed: true },
-          null,
-          2,
+  prepare: async ({ domain, force, output }, ctx) => {
+    const zone = await resolveZoneInteractive(ctx.clients.core, domain, {
+      output,
+    });
+    return {
+      input: { zone: String(zone.Id) },
+      confirm: () =>
+        confirm(
+          `Delete zone ${zone.Domain} and all ${(zone.Records ?? []).length} record(s)?`,
+          { force },
         ),
-      );
-      return;
-    }
+    };
+  },
 
-    logger.success(`Deleted DNS zone ${zone.Domain}.`);
+  render: (result) => {
+    logger.success(`Deleted DNS zone ${result.domain}.`);
   },
 });

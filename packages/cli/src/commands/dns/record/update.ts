@@ -1,12 +1,9 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
+import { dnsRecordsUpdate } from "@bunny.net/actions";
 import prompts from "prompts";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { isInteractive, spinner } from "../../../core/ui.ts";
+import { isInteractive } from "../../../core/ui.ts";
 import {
   resolveRecordInteractive,
   resolveZoneInteractive,
@@ -14,12 +11,13 @@ import {
 import {
   CAA_TAGS,
   type DnsRecordModel,
-  parseRecordType,
   RECORD_TYPES,
   recordName,
 } from "../record-types.ts";
 
-type UpdateDnsRecordModel = components["schemas"]["UpdateDnsRecordModel"];
+type Changes = NonNullable<
+  Parameters<typeof dnsRecordsUpdate.run>[1]
+>["changes"];
 
 interface UpdateArgs {
   domain?: string;
@@ -56,60 +54,62 @@ const FIELD_FLAGS = [
 ] as const;
 
 const FIELD_PROMPTS = {
-  Value: { message: "Value:", kind: "text" },
-  Name: { message: "Record name ('@' for apex):", kind: "text" },
-  Ttl: { message: "TTL (seconds):", kind: "number" },
-  Priority: { message: "Priority:", kind: "number" },
-  Weight: { message: "Weight:", kind: "number" },
-  Port: { message: "Port:", kind: "number" },
-  Flags: { message: "Flags:", kind: "number" },
-  Tag: { message: "Tag:", kind: "tag" },
-  Comment: { message: "Comment:", kind: "text" },
-  PullZoneId: { message: "Pull zone ID:", kind: "number" },
-  ScriptId: { message: "Edge Script ID:", kind: "number" },
+  value: { message: "Value:", kind: "text", existing: "Value" },
+  name: {
+    message: "Record name ('@' for apex):",
+    kind: "text",
+    existing: "Name",
+  },
+  ttl: { message: "TTL (seconds):", kind: "number", existing: "Ttl" },
+  priority: { message: "Priority:", kind: "number", existing: "Priority" },
+  weight: { message: "Weight:", kind: "number", existing: "Weight" },
+  port: { message: "Port:", kind: "number", existing: "Port" },
+  flags: { message: "Flags:", kind: "number", existing: "Flags" },
+  tag: { message: "Tag:", kind: "tag", existing: "Tag" },
+  comment: { message: "Comment:", kind: "text", existing: "Comment" },
+  pullZoneId: { message: "Pull zone ID:", kind: "number", existing: null },
+  scriptId: { message: "Edge Script ID:", kind: "number", existing: null },
 } as const;
 type PromptableField = keyof typeof FIELD_PROMPTS;
 
-async function promptFieldChanges(
-  existing: DnsRecordModel,
-): Promise<Partial<UpdateDnsRecordModel>> {
-  const fields: { title: string; value: PromptableField | "Disabled" }[] = [];
+async function promptFieldChanges(existing: DnsRecordModel): Promise<Changes> {
+  const fields: { title: string; value: PromptableField | "disabled" }[] = [];
   // PullZone/Script records have no Value; their target is the linked resource ID.
   if (existing.Type === RECORD_TYPES.PULLZONE) {
     fields.push({
       title: `Pull zone (${existing.LinkName || "unknown"})`,
-      value: "PullZoneId",
+      value: "pullZoneId",
     });
   } else if (existing.Type === RECORD_TYPES.SCRIPT) {
     fields.push({
       title: `Script (${existing.LinkName || "unknown"})`,
-      value: "ScriptId",
+      value: "scriptId",
     });
   } else {
-    fields.push({ title: `Value (${existing.Value ?? ""})`, value: "Value" });
+    fields.push({ title: `Value (${existing.Value ?? ""})`, value: "value" });
   }
-  fields.push({ title: `Name (${recordName(existing.Name)})`, value: "Name" });
-  fields.push({ title: `TTL (${existing.Ttl ?? "default"})`, value: "Ttl" });
+  fields.push({ title: `Name (${recordName(existing.Name)})`, value: "name" });
+  fields.push({ title: `TTL (${existing.Ttl ?? "default"})`, value: "ttl" });
   if (existing.Type === RECORD_TYPES.MX || existing.Type === RECORD_TYPES.SRV)
     fields.push({
       title: `Priority (${existing.Priority ?? 0})`,
-      value: "Priority",
+      value: "priority",
     });
   if (existing.Type === RECORD_TYPES.SRV) {
-    fields.push({ title: `Weight (${existing.Weight ?? 0})`, value: "Weight" });
-    fields.push({ title: `Port (${existing.Port ?? 0})`, value: "Port" });
+    fields.push({ title: `Weight (${existing.Weight ?? 0})`, value: "weight" });
+    fields.push({ title: `Port (${existing.Port ?? 0})`, value: "port" });
   }
   if (existing.Type === RECORD_TYPES.CAA) {
-    fields.push({ title: `Flags (${existing.Flags ?? 0})`, value: "Flags" });
-    fields.push({ title: `Tag (${existing.Tag ?? ""})`, value: "Tag" });
+    fields.push({ title: `Flags (${existing.Flags ?? 0})`, value: "flags" });
+    fields.push({ title: `Tag (${existing.Tag ?? ""})`, value: "tag" });
   }
   fields.push({
     title: `Comment (${existing.Comment || "none"})`,
-    value: "Comment",
+    value: "comment",
   });
   fields.push({
     title: existing.Disabled ? "Enable the record" : "Disable the record",
-    value: "Disabled",
+    value: "disabled",
   });
 
   const { picked } = await prompts({
@@ -124,20 +124,20 @@ async function promptFieldChanges(
     throw new UserError("No changes requested.");
   }
 
-  const changes: Partial<UpdateDnsRecordModel> = {};
-  for (const field of picked as (PromptableField | "Disabled")[]) {
-    if (field === "Disabled") {
-      changes.Disabled = !existing.Disabled;
+  const changes: Changes = {};
+  for (const field of picked as (PromptableField | "disabled")[]) {
+    if (field === "disabled") {
+      changes.disabled = !existing.Disabled;
       continue;
     }
     const spec = FIELD_PROMPTS[field];
     // Tag derives its initial from CAA_TAGS below; the linked PullZoneId/ScriptId aren't on the record model.
     const initial =
-      field === "Name"
+      field === "name"
         ? recordName(existing.Name)
-        : field === "PullZoneId" || field === "ScriptId" || field === "Tag"
+        : spec.existing === null || spec.kind === "tag"
           ? undefined
-          : (existing[field] ?? undefined);
+          : (existing[spec.existing] ?? undefined);
     const { value } = await prompts({
       type: spec.kind === "tag" ? "select" : spec.kind,
       name: "value",
@@ -150,16 +150,17 @@ async function promptFieldChanges(
         : { initial }),
     });
     if (value === undefined) {
-      // Report the prompt's label ("Pull zone ID"), not the model field name ("PullZoneId").
+      // Report the prompt's label ("Pull zone ID"), not the field name ("pullZoneId").
       const label = spec.message.split(" (")[0]?.replace(/:$/, "");
       throw new UserError(`${label} is required.`);
     }
-    changes[field] = field === "Name" && value === "@" ? "" : value;
+    changes[field] = value as never;
   }
   return changes;
 }
 
-export const dnsUpdateCommand = defineCommand<UpdateArgs>({
+export const dnsUpdateCommand = defineActionCommand({
+  action: dnsRecordsUpdate,
   command: "update [domain] [id]",
   aliases: ["edit"],
   describe: "Update an existing DNS record (prompts when args are omitted).",
@@ -203,91 +204,60 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
         describe: "Edge Script ID (for Script records)",
       }),
 
-  handler: async (args) => {
-    const { domain, id, profile, output, verbose, apiKey } = args;
+  progress: "Updating record...",
 
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
-
-    const zone = await resolveZoneInteractive(client, domain, {
-      output,
+  prepare: async (args, ctx) => {
+    const zone = await resolveZoneInteractive(ctx.clients.core, args.domain, {
+      output: args.output,
       offerLink: true,
     });
-    const existing = await resolveRecordInteractive(zone, id, "update", output);
-    const recordId = existing.Id as number;
+    const existing = await resolveRecordInteractive(
+      zone,
+      args.id,
+      "update",
+      args.output,
+    );
 
-    const hasFieldFlags = FIELD_FLAGS.some((f) => args[f] !== undefined);
-    if (!hasFieldFlags && !isInteractive(output)) {
+    const hasFieldFlags = FIELD_FLAGS.some(
+      (f) => (args as UpdateArgs)[f] !== undefined,
+    );
+    if (!hasFieldFlags && !isInteractive(args.output)) {
       throw new UserError(
         "No changes requested.",
         "Pass at least one field flag, e.g. --value 198.51.100.2 or --ttl 3600.",
       );
     }
 
-    // Seed from the existing record so unspecified fields (including advanced settings) are preserved.
-    const body: UpdateDnsRecordModel = {
-      Type: existing.Type ?? null,
-      Ttl: existing.Ttl ?? null,
-      Value: existing.Value ?? null,
-      Name: existing.Name ?? null,
-      Weight: existing.Weight ?? null,
-      Priority: existing.Priority ?? null,
-      Flags: existing.Flags ?? null,
-      Tag: existing.Tag ?? null,
-      Port: existing.Port ?? null,
-      Disabled: existing.Disabled ?? null,
-      Comment: existing.Comment ?? null,
-      Accelerated: existing.Accelerated ?? null,
-      MonitorType: existing.MonitorType ?? null,
-      GeolocationLatitude: existing.GeolocationLatitude ?? null,
-      GeolocationLongitude: existing.GeolocationLongitude ?? null,
-      LatencyZone: existing.LatencyZone ?? null,
-      SmartRoutingType: existing.SmartRoutingType ?? null,
-      EnviromentalVariables: existing.EnviromentalVariables ?? null,
-      AutoSslIssuance: existing.AutoSslIssuance ?? null,
+    const changes: Changes = hasFieldFlags
+      ? {}
+      : await promptFieldChanges(existing);
+
+    if (args.name !== undefined) changes.name = args.name;
+    if (args.value !== undefined) changes.value = args.value;
+    if (args.type !== undefined) changes.type = args.type;
+    if (args.ttl !== undefined) changes.ttl = args.ttl;
+    if (args.priority !== undefined) changes.priority = args.priority;
+    if (args.weight !== undefined) changes.weight = args.weight;
+    if (args.port !== undefined) changes.port = args.port;
+    if (args.flags !== undefined) changes.flags = args.flags;
+    if (args.tag !== undefined) changes.tag = args.tag;
+    if (args.comment !== undefined) changes.comment = args.comment;
+    if (args.disabled !== undefined) changes.disabled = args.disabled;
+    if (args["pull-zone"] !== undefined) changes.pullZoneId = args["pull-zone"];
+    if (args.script !== undefined) changes.scriptId = args.script;
+
+    return {
+      input: {
+        zone: String(zone.Id),
+        record: existing.Id as number,
+        changes,
+      },
     };
+  },
 
-    // AcceleratedPullZoneId is the CDN-acceleration pull zone, not a PullZone-type record's link — only seed it when actually accelerated.
-    if (existing.Accelerated && existing.AcceleratedPullZoneId != null) {
-      body.PullZoneId = existing.AcceleratedPullZoneId;
-    }
-
-    if (!hasFieldFlags) Object.assign(body, await promptFieldChanges(existing));
-
-    if (args.name !== undefined) body.Name = args.name === "@" ? "" : args.name;
-    if (args.value !== undefined) body.Value = args.value;
-    if (args.type !== undefined) body.Type = parseRecordType(args.type);
-    if (args.ttl !== undefined) body.Ttl = args.ttl;
-    if (args.priority !== undefined) body.Priority = args.priority;
-    if (args.weight !== undefined) body.Weight = args.weight;
-    if (args.port !== undefined) body.Port = args.port;
-    if (args.flags !== undefined) body.Flags = args.flags;
-    if (args.tag !== undefined) body.Tag = args.tag;
-    if (args.comment !== undefined) body.Comment = args.comment;
-    if (args.disabled !== undefined) body.Disabled = args.disabled;
-    if (args["pull-zone"] !== undefined) body.PullZoneId = args["pull-zone"];
-    if (args.script !== undefined) body.ScriptId = args.script;
-
-    const spin = spinner("Updating record...");
-    spin.start();
-    try {
-      await client.POST("/dnszone/{zoneId}/records/{id}", {
-        params: { path: { zoneId: zone.Id as number, id: recordId } },
-        body,
-      });
-    } finally {
-      spin.stop();
-    }
-
-    if (output === "json") {
-      logger.log(
-        JSON.stringify({ zoneId: zone.Id, id: recordId, ...body }, null, 2),
-      );
-      return;
-    }
-
+  render: (record) => {
     logger.success(
-      `Updated record ${recordName(body.Name)} (ID: ${recordId}) in ${zone.Domain}.`,
+      `Updated record ${record.name} (ID: ${record.id}) in ${record.domain}.`,
     );
   },
 });

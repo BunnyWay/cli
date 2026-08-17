@@ -1,16 +1,11 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import { dnsZonesGet } from "@bunny.net/actions";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { formatDateTime, formatKeyValue } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { resolveZoneInteractive } from "../interactive.ts";
 
-interface ShowArgs {
-  domain?: string;
-}
-
-export const dnsZoneShowCommand = defineCommand<ShowArgs>({
+export const dnsZoneShowCommand = defineActionCommand({
+  action: dnsZonesGet,
   command: "show [domain]",
   describe: "Show details for a DNS zone.",
   examples: [
@@ -24,43 +19,36 @@ export const dnsZoneShowCommand = defineCommand<ShowArgs>({
       describe: "Domain or zone ID",
     }),
 
-  handler: async ({ domain, profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+  progress: "Fetching zone...",
 
-    const zone = await resolveZoneInteractive(client, domain, {
+  prepare: async ({ domain, output }, ctx) => {
+    const zone = await resolveZoneInteractive(ctx.clients.core, domain, {
       output,
       offerLink: true,
     });
+    return { input: { zone: String(zone.Id) } };
+  },
 
-    if (output === "json") {
-      logger.log(JSON.stringify(zone, null, 2));
-      return;
-    }
-
-    const nameservers = zone.CustomNameserversEnabled
-      ? [zone.Nameserver1, zone.Nameserver2].filter(Boolean).join(", ")
-      : "bunny.net (default)";
-
+  render: (zone, { output }) => {
     logger.log(
       formatKeyValue(
         [
-          { key: "ID", value: String(zone.Id ?? "") },
-          { key: "Domain", value: zone.Domain ?? "" },
-          { key: "Records", value: String((zone.Records ?? []).length) },
+          { key: "ID", value: String(zone.id) },
+          { key: "Domain", value: zone.domain },
+          { key: "Records", value: String(zone.records.length) },
           {
             key: "Nameservers",
-            value: zone.NameserversDetected ? "Detected" : "Pending",
+            value: zone.nameserversDetected ? "Detected" : "Pending",
           },
-          { key: "Nameserver config", value: nameservers },
-          { key: "SOA email", value: zone.SoaEmail ?? "—" },
-          { key: "DNSSEC", value: zone.DnsSecEnabled ? "Enabled" : "Disabled" },
+          { key: "Nameserver config", value: zone.nameservers.join(", ") },
+          { key: "SOA email", value: zone.soaEmail ?? "-" },
+          { key: "DNSSEC", value: zone.dnssecEnabled ? "Enabled" : "Disabled" },
           {
             key: "Logging",
-            value: zone.LoggingEnabled ? "Enabled" : "Disabled",
+            value: zone.loggingEnabled ? "Enabled" : "Disabled",
           },
-          { key: "Created", value: formatDateTime(zone.DateCreated) },
-          { key: "Modified", value: formatDateTime(zone.DateModified) },
+          { key: "Created", value: formatDateTime(zone.dateCreated) },
+          { key: "Modified", value: formatDateTime(zone.dateModified) },
         ],
         output,
       ),

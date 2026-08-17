@@ -1,5 +1,6 @@
 import { UserError } from "@bunny.net/openapi-client";
 import { dbActions } from "./actions/db/index.ts";
+import { dnsActions } from "./actions/dns/index.ts";
 import { registriesActions } from "./actions/registries/index.ts";
 import { storageActions } from "./actions/storage/index.ts";
 import type { ActionContext } from "./context.ts";
@@ -18,8 +19,8 @@ function index(all: Action[]): Map<string, Action> {
 
 /** Every action, sorted by name. This is the curated surface an agent gets. */
 export const actions: readonly Action[] = Object.freeze(
-  [...storageActions, ...dbActions, ...registriesActions].sort((a, b) =>
-    a.name.localeCompare(b.name),
+  [...storageActions, ...dbActions, ...dnsActions, ...registriesActions].sort(
+    (a, b) => a.name.localeCompare(b.name),
   ),
 );
 

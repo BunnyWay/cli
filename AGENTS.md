@@ -169,13 +169,21 @@ bunny-cli/
 │   │           │   ├── files-api.ts      # connect/list/upload/download/delete over @bunny.net/storage-sdk + StorageFileEntry (moved out of the CLI)
 │   │           │   ├── model.ts          # StorageZone normalized shape + toStorageZone/isS3Enabled/s3Endpoint/s3Credentials
 │   │           │   └── regions.ts        # STORAGE_REGIONS/STORAGE_REGION_CODES + replication normalization
-│   │           └── db/
-│   │               ├── index.ts          # db.list, db.get; aggregates the lifecycle/regions/tokens action arrays
-│   │               ├── lifecycle.ts      # db.create, db.delete, db.usage
-│   │               ├── regions.ts        # db.regions.available/suggest/list/set (set replaces the region set wholesale)
-│   │               ├── tokens.ts         # db.tokens.create/invalidate
-│   │               ├── api.ts            # fetchDatabase/fetchAllDatabases/fetchRegionConfig/fetchLiveStatus/generateToken/regionNameMap (moved out of the CLI)
-│   │               └── model.ts          # Database normalized shape + toDatabase (region codes resolved to names)
+│   │           ├── db/
+│   │           │   ├── index.ts          # db.list, db.get; aggregates the lifecycle/regions/tokens action arrays
+│   │           │   ├── lifecycle.ts      # db.create, db.delete, db.usage
+│   │           │   ├── regions.ts        # db.regions.available/suggest/list/set (set replaces the region set wholesale)
+│   │           │   ├── tokens.ts         # db.tokens.create/invalidate
+│   │           │   ├── api.ts            # fetchDatabase/fetchAllDatabases/fetchRegionConfig/fetchLiveStatus/generateToken/regionNameMap (moved out of the CLI)
+│   │           │   └── model.ts          # Database normalized shape + toDatabase (region codes resolved to names)
+│   │           └── dns/
+│   │               ├── index.ts          # Aggregates the zone + record action arrays
+│   │               ├── zones.ts          # dns.zones.list/get/create/delete (list can resolve live delegation via checkDelegation)
+│   │               ├── records.ts        # dns.records.list/create/update/delete/scan/import (update seeds the body from the existing record so unspecified fields survive)
+│   │               ├── api.ts            # fetchZones/fetchZone/resolveZone/scanZoneRecords/writeRecords/discoverImportableRecords (moved out of the CLI)
+│   │               ├── model.ts          # DnsZone/DnsRecord normalized shapes + DnsRecordInput flat shape with toAddRecordModel per-type validation
+│   │               ├── nameservers.ts    # BUNNY_NAMESERVERS + checkDelegation(s) parent-referral NS lookup (moved out of the CLI)
+│   │               └── record-types.ts   # RECORD_TYPES map, labels, parseRecordType, recordName, formatRecordValue (moved out of the CLI)
 │   │
 │   ├── sandbox/                          # @bunny.net/sandbox package
 │   │   ├── package.json
@@ -203,8 +211,8 @@ bunny-cli/
 │           │   ├── define-action-command.ts # Action-backed command factory: prepare → confirm → spinner → after → render (see "Action Layer" below)
 │           │   ├── define-command.ts     # Command factory (see "Command Pattern" below)
 │           │   ├── define-namespace.ts   # Namespace/group factory for subcommand trees
-│           │   ├── dns-nameservers.ts    # BUNNY_NAMESERVERS + expectedNameservers(zone) + checkDelegation()/checkDelegations(): reads the parent zone's NS referral (raw UDP query of the registry, not the recursive answer a child host could spoof; falls back to dns.resolveNs when the referral is unreadable), matches the full expected set both ways, ground truth over bunny's NameserversDetected flag which defaults true on a fresh zone; checkDelegations is bounded-concurrency for the zone list
-│           │   ├── dns-record-types.ts   # Canonical DNS record-type name⇄integer map (RECORD_TYPES) + RECORD_TYPE_META (dashboard taxonomy: short label, friendly name, Standard/Bunny group) + recordTypeLabel() (bunny's canonical labels: PZ/RDR/SCR/Flatten for the bunny-specific types) + recordTypeFromLabel() (parses canonical labels and enum-key names); shared by commands/dns + core/hostnames
+│           │   ├── dns-nameservers.ts    # Shim re-exporting BUNNY_NAMESERVERS/expectedNameservers/checkDelegation(s) from @bunny.net/actions (logic moved there)
+│           │   ├── dns-record-types.ts   # Shim re-exporting RECORD_TYPES/RECORD_TYPE_META/recordTypeLabel/recordTypeFromLabel from @bunny.net/actions (logic moved there)
 │           │   ├── errors.ts             # Re-exports UserError/ApiError from @bunny.net/openapi-client + ConfigError + errorMessage()
 │           │   ├── format.ts             # Shared table/key-value rendering (text, table, csv, markdown)
 │           │   ├── format.test.ts        # Tests for format utilities
@@ -329,10 +337,10 @@ bunny-cli/
 │           │   │       └── invalidate.ts # Invalidate all tokens for a database (with confirmation)
 │           │   ├── dns/
 │           │   │   ├── index.ts          # defineNamespace("dns", ...): registers the records + zones + scripts groups (+ hidden domain aliases)
-│           │   │   ├── api.ts            # CoreClient type, fetchZones/fetchZone, resolveZone (domain-or-ID → zone), scanZoneRecords (trigger + poll bunny's server-side record scan via /dnszone/records/scan; matches the triggered JobId, falling back to "differs from the prior job" when the trigger omits one; returns corrected DnsDiscoveredRecord[] with Flags/Tag; uses DnsRecordScanStatus enum)
+│           │   │   ├── api.ts            # Shim re-exporting fetchZones/fetchZone/resolveZone/scanZoneRecords/writeRecords/discoverImportableRecords and the zone/record types from @bunny.net/actions (logic moved there)
 │           │   │   ├── constants.ts      # DNS_MANIFEST (".bunny/dns.json") + DnsManifest type, written by `dns zones link`
 │           │   │   ├── interactive.ts    # resolveZoneInteractive (arg → .bunny/dns.json manifest → zone picker; errors instead of prompting when non-interactive (json output or no TTY, see core/ui.ts isInteractive); ignoreManifest forces the picker for `zones link`; offerLink prompts to link a picked zone) + resolveRecordInteractive; autoLinkDnsZone (link a zone found in another flow — silent write, confirm before relinking a different zone) reused by scripts custom-domain setup
-│           │   │   ├── record-types.ts   # Re-exports RECORD_TYPES/RECORD_TYPE_META/recordTypeLabel from core/dns-record-types.ts; adds parseRecordType (accepts canonical labels + enum-key names), recordName, formatRecordValue
+│           │   │   ├── record-types.ts   # Shim re-exporting the record-type maps plus parseRecordType/recordName/formatRecordValue from @bunny.net/actions
 │           │   │   ├── record/            # `dns records` — entries within a zone (canonical: records; aliases: record, rec)
 │           │   │   │   ├── index.ts      # defineNamespace("records", ...)
 │           │   │   │   ├── list.ts       # List records in a zone (alias: ls)
@@ -342,9 +350,8 @@ bunny-cli/
 │           │   │   │   ├── preset.ts     # `records preset [name] [domain]` (`list` lists; `--param key=value` repeatable for non-interactive runs): pick/apply a preset, gather params (flags then prompts in text mode), summarize, confirm, bulk-write. `--output json` writes then serializes the result; mid-sequence failures report how many records landed. Exports pickAndApplyPreset reused by add.ts
 │           │   │   │   ├── presets.ts    # Preset catalog (data + pure build fns): google-workspace, microsoft365/outlook, zoho, mailgun, resend, proton, bluesky, dmarc, caa, no-email. findPreset(id|alias)
 │           │   │   │   ├── presets.test.ts # Tests for the pure preset build fns + alias resolution
-│           │   │   │   ├── write.ts      # Shared writeRecords (per-record PUT, resilient: collects {applied, failures} so one bad record can't strand the batch) + reviewAndApply (multiselect pre-checked records in text, write, report partial failures, serialize on json); used by preset.ts, scan.ts, zone/add.ts
-│           │   │   │   ├── scan-records.ts # discoverImportableRecords: scanZoneRecords + map discovered → AddDnsRecordModel (carries Flags/Tag, reconstructs CAA flags/tag from rdata as a fallback), drop apex SOA/NS but keep delegated subdomain NS, dedupe vs existing records by type + normalized name/value (trailing-dot/case) + type-specific fields (priority/weight/port/flags/tag)
-│           │   │   │   ├── scan-records.test.ts # Tests for the discovered-record mapping/filter/dedupe
+│           │   │   │   ├── write.ts      # Re-exports writeRecords from @bunny.net/actions + reviewAndApply (multiselect pre-checked records in text, write, report partial failures, serialize on json); used by preset.ts, scan.ts, zone/add.ts
+│           │   │   │   ├── scan-records.ts # Shim re-exporting discoverImportableRecords from @bunny.net/actions (logic + tests moved there)
 │           │   │   │   ├── scan.ts       # `records scan [domain]` (--yes): discover the domain's existing records (server-side scan) and reviewAndApply them; reused at zone creation
 │           │   │   │   ├── import.ts     # Import records from a BIND zone file (prompts for zone/file when omitted). Exports importZoneFile reused by zone/add.ts's next-steps menu
 │           │   │   │   └── export.ts     # Export records as a BIND zone file (stdout, --file <path>, or --save → <domain>.zone)
@@ -594,7 +601,7 @@ Namespaces automatically enforce `demandCommand(1)` so that running `bunny db` w
 
 `@bunny.net/actions` holds the work; the CLI holds the experience. One action definition backs every surface: a yargs command, a tool published by some other host, and a direct import in an agent.
 
-**Target architecture: total abstraction.** Every remote operation lives in an action (the repository/adapter layer); a CLI command is glue: flags in, prompts and confirmations, action invocation, rendering out. Command modules must not create API clients or call endpoints directly. This is enforced by `packages/cli/src/core/actions-boundary.test.ts`, a ratchet test with an explicit `PENDING_MIGRATION` allowlist: new direct client use fails the test, and migrating a family removes its entries (the list only shrinks). Currently migrated: `storage`, `db`, `registries`. Host-inherent flows stay in the CLI even at the end state: `auth login` (browser + local OAuth callback), docker build/push in `apps deploy`, interactive pickers, and `.env`/`bunny.jsonc` writes.
+**Target architecture: total abstraction.** Every remote operation lives in an action (the repository/adapter layer); a CLI command is glue: flags in, prompts and confirmations, action invocation, rendering out. Command modules must not create API clients or call endpoints directly. This is enforced by `packages/cli/src/core/actions-boundary.test.ts`, a ratchet test with an explicit `PENDING_MIGRATION` allowlist: new direct client use fails the test, and migrating a family removes its entries (the list only shrinks). Currently migrated: `storage`, `db`, `registries`, and the core `dns` zone/record commands (the interactive flows `dns records add`/`preset`/`import`/`scan` and `dns zones add`, plus dnssec/logging/stats/nameservers, still call clients directly). Host-inherent flows stay in the CLI even at the end state: `auth login` (browser + local OAuth callback), docker build/push in `apps deploy`, interactive pickers, and `.env`/`bunny.jsonc` writes.
 
 ### `defineAction(def)`
 

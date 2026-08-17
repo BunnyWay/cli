@@ -142,6 +142,16 @@ Prints the registry an agent would import, the tool definition a server would pu
 | `db.regions.suggest`        | read        | Probes the nearest bunny.net edge            |
 | `db.regions.list`           | read        | A database's current placement               |
 | `db.regions.set`            | destructive | Removing a region drops its data copy        |
+| `dns.zones.list`            | read        | Optional live nameserver delegation check    |
+| `dns.zones.get`             | read        | By domain or numeric ID; includes records    |
+| `dns.zones.create`          | write       | Returns the zone with its starter records    |
+| `dns.zones.delete`          | destructive | Deletes every record in the zone             |
+| `dns.records.list`          | read        | Sorted by name                               |
+| `dns.records.create`        | write       | Per-type required fields enforced            |
+| `dns.records.update`        | write       | Unspecified fields keep their current values |
+| `dns.records.delete`        | destructive | By record ID                                 |
+| `dns.records.scan`          | read        | Discovers records at the current DNS host    |
+| `dns.records.import`        | write       | Bulk write with a per-record failure list    |
 | `registries.list`           | read        | Container registries for Magic Containers    |
 | `registries.get`            | read        | By registry ID                               |
 | `registries.create`         | write       | Type derived from `server` when omitted      |

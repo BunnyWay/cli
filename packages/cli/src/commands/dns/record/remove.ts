@@ -1,9 +1,7 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import { dnsRecordsDelete } from "@bunny.net/actions";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { confirm } from "../../../core/ui.ts";
 import {
   resolveRecordInteractive,
   resolveZoneInteractive,
@@ -14,13 +12,8 @@ import {
   recordTypeLabel,
 } from "../record-types.ts";
 
-interface RemoveArgs {
-  domain?: string;
-  id?: number;
-  force?: boolean;
-}
-
-export const dnsRemoveCommand = defineCommand<RemoveArgs>({
+export const dnsRemoveCommand = defineActionCommand({
+  action: dnsRecordsDelete,
   command: "remove [domain] [id]",
   aliases: ["rm"],
   describe: "Remove a DNS record from a zone (prompts when args are omitted).",
@@ -41,46 +34,23 @@ export const dnsRemoveCommand = defineCommand<RemoveArgs>({
         describe: "Skip confirmation prompt",
       }),
 
-  handler: async ({ domain, id, force, profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+  progress: "Removing record...",
 
-    const zone = await resolveZoneInteractive(client, domain, {
+  prepare: async ({ domain, id, force, output }, ctx) => {
+    const zone = await resolveZoneInteractive(ctx.clients.core, domain, {
       output,
       offerLink: true,
     });
     const record = await resolveRecordInteractive(zone, id, "remove", output);
 
     const label = `${recordTypeLabel(record.Type)} ${recordName(record.Name)} → ${formatRecordValue(record)}`;
-    const confirmed = await confirm(`Remove ${label}?`, { force });
-    if (!confirmed) {
-      logger.log("Cancelled.");
-      return;
-    }
+    return {
+      input: { zone: String(zone.Id), record: record.Id as number },
+      confirm: () => confirm(`Remove ${label}?`, { force }),
+    };
+  },
 
-    const removeSpin = spinner("Removing record...");
-    removeSpin.start();
-    try {
-      await client.DELETE("/dnszone/{zoneId}/records/{id}", {
-        params: {
-          path: { zoneId: zone.Id as number, id: record.Id as number },
-        },
-      });
-    } finally {
-      removeSpin.stop();
-    }
-
-    if (output === "json") {
-      logger.log(
-        JSON.stringify(
-          { zoneId: zone.Id, id: record.Id, removed: true },
-          null,
-          2,
-        ),
-      );
-      return;
-    }
-
-    logger.success(`Removed record ${record.Id} from ${zone.Domain}.`);
+  render: (result) => {
+    logger.success(`Removed record ${result.id} from ${result.domain}.`);
   },
 });

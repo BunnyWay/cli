@@ -1,17 +1,7 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import {
-  checkDelegations,
-  type DelegationCheck,
-  type DelegationStatus,
-  expectedNameservers,
-} from "../../../core/dns-nameservers.ts";
+import { type DelegationStatus, dnsZonesList } from "@bunny.net/actions";
+import { defineActionCommand } from "../../../core/define-action-command.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
-import { type DnsZoneModel, fetchZones } from "../api.ts";
 
 const DELEGATION_LABEL: Record<DelegationStatus, string> = {
   bunny: "Detected",
@@ -19,7 +9,8 @@ const DELEGATION_LABEL: Record<DelegationStatus, string> = {
   unknown: "Unknown",
 };
 
-export const dnsZoneListCommand = defineCommand({
+export const dnsZoneListCommand = defineActionCommand({
+  action: dnsZonesList,
   command: "list",
   aliases: ["ls"],
   describe: "List all DNS zones.",
@@ -28,55 +19,12 @@ export const dnsZoneListCommand = defineCommand({
     ["$0 dns zones list --output json", "JSON output"],
   ],
 
-  handler: async ({ profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+  progress: "Fetching DNS zones...",
 
-    const spin = spinner("Fetching DNS zones...");
-    spin.start();
-    let zones: DnsZoneModel[];
-    try {
-      zones = await fetchZones(client);
-    } finally {
-      spin.stop();
-    }
+  // bunny's NameserversDetected defaults to true on a fresh zone; resolve the real delegation live.
+  prepare: async () => ({ input: { checkDelegation: true } }),
 
-    // bunny's NameserversDetected defaults to true on a fresh zone; resolve the real delegation live.
-    let checks: DelegationCheck[] = [];
-    if (zones.length > 0) {
-      const checkSpin = spinner("Checking nameserver delegation...");
-      checkSpin.start();
-      try {
-        checks = await checkDelegations(
-          zones.map((z) => ({
-            domain: z.Domain ?? "",
-            expected: expectedNameservers(z),
-          })),
-        );
-      } finally {
-        checkSpin.stop();
-      }
-    }
-    const delegation: DelegationStatus[] = checks.map((c) => c.status);
-
-    if (output === "json") {
-      const corrected = zones.map((z, i) => {
-        const check = checks[i];
-        return {
-          ...z,
-          // Trust the live result only when conclusive; on "unknown" keep the API flag so a transient resolver failure doesn't flip every zone to pending.
-          NameserversDetected:
-            check && check.status !== "unknown"
-              ? check.status === "bunny"
-              : z.NameserversDetected,
-          NameserversDelegation: check?.status ?? "unknown",
-          NameserversResolved: check?.resolved ?? [],
-        };
-      });
-      logger.log(JSON.stringify(corrected, null, 2));
-      return;
-    }
-
+  render: (zones, { output }) => {
     if (zones.length === 0) {
       logger.info("No DNS zones found.");
       return;
@@ -85,12 +33,12 @@ export const dnsZoneListCommand = defineCommand({
     logger.log(
       formatTable(
         ["ID", "Domain", "Records", "DNSSEC", "Nameservers"],
-        zones.map((z, i) => [
-          String(z.Id ?? ""),
-          z.Domain ?? "",
-          String((z.Records ?? []).length),
-          z.DnsSecEnabled ? "Yes" : "No",
-          DELEGATION_LABEL[delegation[i] ?? "unknown"],
+        zones.map((zone) => [
+          String(zone.id),
+          zone.domain,
+          String(zone.recordCount),
+          zone.dnssecEnabled ? "Yes" : "No",
+          DELEGATION_LABEL[zone.delegation?.status ?? "unknown"],
         ]),
         output,
       ),

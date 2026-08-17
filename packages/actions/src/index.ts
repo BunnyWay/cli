@@ -59,6 +59,94 @@ export {
   InvalidatedTokensSchema,
 } from "./actions/db/tokens.ts";
 export type {
+  AddDnsRecordModel,
+  DnsDiscoveredRecord,
+  DnsRecordModel,
+  DnsZoneModel,
+  RecordWriteFailure,
+  UpdateDnsRecordModel,
+  WriteRecordsResult,
+} from "./actions/dns/api.ts";
+export {
+  discoverImportableRecords,
+  fetchZone,
+  fetchZones,
+  resolveZone,
+  scanZoneRecords,
+  writeRecords,
+} from "./actions/dns/api.ts";
+export { dnsActions } from "./actions/dns/index.ts";
+export type {
+  Delegation,
+  DnsRecord,
+  DnsRecordInput,
+  DnsZone,
+  DnsZoneSummary,
+} from "./actions/dns/model.ts";
+export {
+  DelegationSchema,
+  DnsRecordInputSchema,
+  DnsRecordSchema,
+  DnsZoneSchema,
+  DnsZoneSummarySchema,
+  fromAddRecordModel,
+  toAddRecordModel,
+  toDnsRecord,
+  toDnsZone,
+  toDnsZoneSummary,
+} from "./actions/dns/model.ts";
+export type {
+  DelegationCheck,
+  DelegationStatus,
+} from "./actions/dns/nameservers.ts";
+export {
+  BUNNY_NAMESERVERS,
+  checkDelegation,
+  checkDelegations,
+  expectedNameservers,
+} from "./actions/dns/nameservers.ts";
+export type {
+  DnsRecordTypes,
+  RecordTypeGroup,
+} from "./actions/dns/record-types.ts";
+export {
+  CAA_TAGS,
+  formatRecordValue,
+  parseRecordType,
+  RECORD_TYPE_LABELS,
+  RECORD_TYPE_META,
+  RECORD_TYPES,
+  recordName,
+  recordTypeFromLabel,
+  recordTypeLabel,
+} from "./actions/dns/record-types.ts";
+export type {
+  CreatedDnsRecord,
+  DeletedDnsRecord,
+  ImportedDnsRecords,
+} from "./actions/dns/records.ts";
+export {
+  CreatedDnsRecordSchema,
+  DeletedDnsRecordSchema,
+  dnsRecordActions,
+  dnsRecordsCreate,
+  dnsRecordsDelete,
+  dnsRecordsImport,
+  dnsRecordsList,
+  dnsRecordsScan,
+  dnsRecordsUpdate,
+  ImportedDnsRecordsSchema,
+} from "./actions/dns/records.ts";
+export type { DeletedDnsZone } from "./actions/dns/zones.ts";
+export {
+  DeletedDnsZoneSchema,
+  dnsZoneActions,
+  dnsZonesCreate,
+  dnsZonesDelete,
+  dnsZonesGet,
+  dnsZonesList,
+} from "./actions/dns/zones.ts";
+export type {
   ContainerRegistryModel,
   RegistryType,
 } from "./actions/registries/api.ts";
@@ -156,6 +244,7 @@ export {
   STORAGE_REGIONS,
   StorageRegionSchema,
 } from "./actions/storage/regions.ts";
+export { mapWithConcurrency } from "./concurrency.ts";
 export type {
   ActionClients,
   ActionContext,

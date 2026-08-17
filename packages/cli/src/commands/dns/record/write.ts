@@ -1,4 +1,5 @@
-import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
+import type { AddDnsRecordModel, WriteRecordsResult } from "@bunny.net/actions";
+import { writeRecords } from "@bunny.net/actions";
 import prompts from "prompts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
@@ -6,51 +7,17 @@ import { spinner } from "../../../core/ui.ts";
 import type { CoreClient, DnsZoneModel } from "../api.ts";
 import { recordName, recordTypeLabel } from "../record-types.ts";
 
-type AddDnsRecordModel = components["schemas"]["AddDnsRecordModel"];
-
-export interface RecordWriteFailure {
-  record: AddDnsRecordModel;
-  message: string;
-}
-export interface WriteRecordsResult {
-  applied: AddDnsRecordModel[];
-  failures: RecordWriteFailure[];
-}
+export type {
+  RecordWriteFailure,
+  WriteRecordsResult,
+} from "@bunny.net/actions";
+export { writeRecords } from "@bunny.net/actions";
 
 function describeRecord(r: AddDnsRecordModel): string {
   const head = `${recordTypeLabel(r.Type)}  ${recordName(r.Name) || "@"}`;
   const value = r.Value ? `  ${r.Value}` : "";
   const priority = r.Priority != null ? `  (priority ${r.Priority})` : "";
   return `${head}${value}${priority}`;
-}
-
-/**
- * Write records one at a time, recording each outcome. A failed record never
- * aborts the rest: callers get every success and every failure so one bad
- * record can't strand a migration half-applied.
- */
-export async function writeRecords(
-  client: CoreClient,
-  zone: DnsZoneModel,
-  records: AddDnsRecordModel[],
-): Promise<WriteRecordsResult> {
-  const applied: AddDnsRecordModel[] = [];
-  const failures: RecordWriteFailure[] = [];
-  for (const record of records) {
-    try {
-      await client.PUT("/dnszone/{zoneId}/records", {
-        params: { path: { zoneId: zone.Id as number } },
-        body: record,
-      });
-      applied.push(record);
-    } catch (err) {
-      failures.push({
-        record,
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-  return { applied, failures };
 }
 
 /**

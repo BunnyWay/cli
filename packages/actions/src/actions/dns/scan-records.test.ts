@@ -1,13 +1,25 @@
-import { describe, expect, mock, test } from "bun:test";
-import { RECORD_TYPES } from "../../../core/dns-record-types.ts";
-import type { DnsDiscoveredRecord } from "../api.ts";
+import { describe, expect, test } from "bun:test";
+import {
+  type DnsDiscoveredRecord,
+  DnsRecordScanStatus,
+} from "@bunny.net/openapi-client";
+import type { CoreClient } from "../../context.ts";
+import { discoverImportableRecords } from "./api.ts";
+import { RECORD_TYPES } from "./record-types.ts";
 
 let discovered: DnsDiscoveredRecord[] = [];
-mock.module("../api.ts", () => ({
-  scanZoneRecords: async () => discovered,
-}));
 
-const { discoverImportableRecords } = await import("./scan-records.ts");
+// A core client whose scan endpoints immediately report a completed job.
+const client = {
+  GET: async () => ({
+    data: {
+      JobId: "job-1",
+      Status: DnsRecordScanStatus.Completed,
+      Records: discovered,
+    },
+  }),
+  POST: async () => ({ data: { JobId: "job-1" } }),
+} as unknown as CoreClient;
 
 const SOA = 16;
 const zone = {
@@ -32,7 +44,7 @@ describe("discoverImportableRecords", () => {
       { Type: RECORD_TYPES.A, Name: "dup", Value: "192.0.2.4" },
     ];
 
-    const records = await discoverImportableRecords({} as never, zone);
+    const records = await discoverImportableRecords(client, zone);
 
     // SOA, NS, and the already-present "dup" record are filtered out.
     expect(records).toHaveLength(3);
@@ -56,7 +68,7 @@ describe("discoverImportableRecords", () => {
         Tag: "issue",
       },
     ];
-    const [caa] = await discoverImportableRecords({} as never, zone);
+    const [caa] = await discoverImportableRecords(client, zone);
     expect(caa?.Flags).toBe(0);
     expect(caa?.Tag).toBe("issue");
     expect(caa?.Value).toBe("letsencrypt.org");
@@ -66,7 +78,7 @@ describe("discoverImportableRecords", () => {
     discovered = [
       { Type: RECORD_TYPES.CAA, Name: "@", Value: '0 issue "letsencrypt.org"' },
     ];
-    const [caa] = await discoverImportableRecords({} as never, zone);
+    const [caa] = await discoverImportableRecords(client, zone);
     expect(caa?.Flags).toBe(0);
     expect(caa?.Tag).toBe("issue");
     expect(caa?.Value).toBe("letsencrypt.org");
@@ -77,7 +89,7 @@ describe("discoverImportableRecords", () => {
       { Type: RECORD_TYPES.NS, Name: "@", Value: "kiki.bunny.net" },
       { Type: RECORD_TYPES.NS, Name: "dev", Value: "ns1.vendor.com" },
     ];
-    const records = await discoverImportableRecords({} as never, zone);
+    const records = await discoverImportableRecords(client, zone);
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({
       Type: RECORD_TYPES.NS,
@@ -113,7 +125,7 @@ describe("discoverImportableRecords", () => {
         Priority: 20,
       },
     ];
-    const records = await discoverImportableRecords({} as never, mxZone);
+    const records = await discoverImportableRecords(client, mxZone);
     expect(records).toHaveLength(1);
     expect(records[0]?.Priority).toBe(20);
   });
@@ -129,16 +141,14 @@ describe("discoverImportableRecords", () => {
     discovered = [
       { Type: RECORD_TYPES.CNAME, Name: "www", Value: "example.com." },
     ];
-    expect(
-      await discoverImportableRecords({} as never, cnameZone),
-    ).toHaveLength(0);
+    expect(await discoverImportableRecords(client, cnameZone)).toHaveLength(0);
   });
 
   test("reconstructs CAA records with non-standard tags from rdata", async () => {
     discovered = [
       { Type: RECORD_TYPES.CAA, Name: "@", Value: '0 issuevmc "example.com"' },
     ];
-    const [caa] = await discoverImportableRecords({} as never, zone);
+    const [caa] = await discoverImportableRecords(client, zone);
     expect(caa?.Tag).toBe("issuevmc");
     expect(caa?.Value).toBe("example.com");
   });
@@ -149,6 +159,6 @@ describe("discoverImportableRecords", () => {
       { Type: SOA, Name: "@", Value: "soa" },
       { Type: RECORD_TYPES.A, Name: "dup", Value: "192.0.2.4" },
     ];
-    expect(await discoverImportableRecords({} as never, zone)).toHaveLength(0);
+    expect(await discoverImportableRecords(client, zone)).toHaveLength(0);
   });
 });
