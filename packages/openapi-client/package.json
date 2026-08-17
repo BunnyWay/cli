@@ -1,7 +1,32 @@
 {
   "name": "@bunny.net/openapi-client",
   "version": "0.2.0",
+  "description": "Type-safe TypeScript client for the bunny.net APIs (CDN, DNS, Edge Storage, Stream, Shield, Magic Containers), generated from official OpenAPI specs.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BunnyWay/cli.git",
+    "directory": "packages/openapi-client"
+  },
+  "homepage": "https://github.com/BunnyWay/cli/tree/main/packages/openapi-client#readme",
+  "bugs": "https://github.com/BunnyWay/cli/issues",
+  "keywords": [
+    "bunny",
+    "bunny.net",
+    "bunnycdn",
+    "cdn",
+    "dns",
+    "edge-storage",
+    "stream",
+    "api-client",
+    "openapi",
+    "typescript"
+  ],
   "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,11 +40,44 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js"
+    },
+    "./compute": {
+      "types": "./dist/compute.d.ts",
+      "import": "./dist/compute.js"
+    },
+    "./database": {
+      "types": "./dist/database.d.ts",
+      "import": "./dist/database.js"
+    },
+    "./magic-containers": {
+      "types": "./dist/magic-containers.d.ts",
+      "import": "./dist/magic-containers.js"
+    },
+    "./origin-errors": {
+      "types": "./dist/origin-errors.d.ts",
+      "import": "./dist/origin-errors.js"
+    },
+    "./shield": {
+      "types": "./dist/shield.d.ts",
+      "import": "./dist/shield.js"
+    },
+    "./storage": {
+      "types": "./dist/storage.d.ts",
+      "import": "./dist/storage.js"
+    },
+    "./stream": {
+      "types": "./dist/stream.d.ts",
+      "import": "./dist/stream.js"
+    },
     "./generated/*": "./dist/generated/*"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"
