@@ -133,8 +133,8 @@ describe("installProjectSkill", () => {
     const files = installProjectSkill(cwd, SKILL);
     expect(files).toEqual([
       AGENTS_FILE,
-      ".claude/skills/bunny-test/SKILL.md",
       ".claude/skills/bunny-test/references/extra.md",
+      ".claude/skills/bunny-test/SKILL.md",
     ]);
     const skill = readFileSync(
       join(cwd, ".claude/skills/bunny-test/SKILL.md"),
@@ -192,16 +192,17 @@ describe("installGlobalSkill", () => {
     expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(false);
     const files = installGlobalSkill(SKILL, cwd);
     expect(files).toEqual([
-      join(cwd, ".agents/skills/bunny-test/SKILL.md"),
       join(cwd, ".agents/skills/bunny-test/references/extra.md"),
-      join(cwd, ".claude/skills/bunny-test/SKILL.md"),
+      join(cwd, ".agents/skills/bunny-test/SKILL.md"),
       join(cwd, ".claude/skills/bunny-test/references/extra.md"),
+      join(cwd, ".claude/skills/bunny-test/SKILL.md"),
     ]);
     for (const file of files) expect(existsSync(file)).toBe(true);
     expect(existsSync(join(cwd, AGENTS_FILE))).toBe(false);
     expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(true);
+    // A missing root means a partial install, which must count as not installed so it re-offers.
     rmSync(join(cwd, ".agents"), { recursive: true, force: true });
-    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(true);
+    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(false);
   });
 });
 
