@@ -19,9 +19,6 @@ import scriptsMd from "../../../../../skills/bunny-cli/references/scripts.md" wi
 import sitesMd from "../../../../../skills/bunny-cli/references/sites.md" with {
   type: "text",
 };
-import storageMd from "../../../../../skills/bunny-cli/references/storage.md" with {
-  type: "text",
-};
 import skillMd from "../../../../../skills/bunny-cli/SKILL.md" with {
   type: "text",
 };
@@ -34,10 +31,11 @@ This project uses bunny.net. Manage its resources with the \`bunny\` CLI: databa
 - Authenticate once with \`bunny login\` (or set \`BUNNYNET_API_KEY\`); verify with \`bunny api GET /user\`.
 - Discover commands with \`bunny --help\` and \`bunny <namespace> --help\`; resource commands support \`--output json\` for machine-readable output (a few browser-opening helpers like \`bunny docs\` do not).
 - In unattended runs, pass a flag for every value a command would prompt for, and \`--force\` on destructive commands; prompts otherwise block or cancel without a TTY.
-- Key namespaces: \`bunny db\` (Bunny Database: create, shell, studio, tokens), \`bunny dns\` (zones, records, presets), \`bunny sites\` (static hosting and deploys), \`bunny scripts\` (Edge Scripts), \`bunny storage\` (zones and files), \`bunny sandbox\` (cloud sandboxes).
+- Key namespaces: \`bunny db\` (Bunny Database: create, shell, studio, tokens), \`bunny dns\` (zones, records, presets), \`bunny sites\` (static hosting and deploys), \`bunny scripts\` (Edge Scripts), \`bunny sandbox\` (cloud sandboxes).
 - When the CLI has no command for something, fall back to \`bunny api <METHOD> <path>\` against api.bunny.net.`;
 
 /** The shipped bunny-cli skill, embedded at bundle time from skills/bunny-cli/. */
+// Experimental namespaces (apps, registries, storage) stay out of the skill until they stabilize.
 export const BUNNY_CLI_SKILL: ProjectSkill = {
   name: "bunny-cli",
   agentsSection: AGENTS_SECTION,
@@ -50,6 +48,5 @@ export const BUNNY_CLI_SKILL: ProjectSkill = {
     "references/sandbox.md": sandboxMd,
     "references/scripts.md": scriptsMd,
     "references/sites.md": sitesMd,
-    "references/storage.md": storageMd,
   },
 };

@@ -25,4 +25,19 @@ describe("BUNNY_CLI_SKILL", () => {
     expect(BUNNY_CLI_SKILL.agentsSection).toContain("--output json");
     expect(BUNNY_CLI_SKILL.agentsSection.split("\n").length).toBeLessThan(20);
   });
+
+  test("does not reference experimental namespaces hidden from help", () => {
+    const texts = [
+      BUNNY_CLI_SKILL.agentsSection,
+      ...Object.values(BUNNY_CLI_SKILL.files),
+    ];
+    for (const namespace of [
+      "bunny apps",
+      "bunny registries",
+      "bunny registry",
+      "bunny storage",
+    ]) {
+      for (const text of texts) expect(text).not.toContain(namespace);
+    }
+  });
 });

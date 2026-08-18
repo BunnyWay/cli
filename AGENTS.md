@@ -1344,6 +1344,7 @@ So coding agents discover the CLI at all, `bunny skills install` writes the ship
 - **Global install (`--global`)**: writes the skill to `~/.agents/skills/bunny-cli/` (the cross-tool Agent Skills directory read by Cursor, Codex, OpenCode, Copilot, and others) and `~/.claude/skills/bunny-cli/` so AI coding tools pick it up in every project; nothing project-local is touched.
 - **Removal**: `bunny skills remove [--global]` undoes either scope; it strips the marked block (deleting AGENTS.md only when the installer's own scaffold heading is all that remains) and deletes the skill directories. Everything removed is regenerable with `bunny skills install`, and `update` is an install alias since reinstalling refreshes in place.
 - **Single source of truth**: `packages/cli/src/commands/skills/content.ts` embeds `skills/bunny-cli/**` at bundle time via Bun text imports (`with { type: "text" }`), so the installed skill is always the shipped one; only the compact AGENTS.md section is authored separately. `content.test.ts` fails if SKILL.md routes to a reference that isn't embedded.
+- **Experimental namespaces stay out**: commands hidden from help while experimental (`apps`, `registries`, `storage`) are not referenced by the skill or the AGENTS.md section; add their references back when they graduate to the visible command list in `cli.ts`.
 - Commands that create project resources can offer this install (via `isProjectSkillInstalled()` + `confirm()`) at natural first-use moments.
 
 ---
