@@ -149,7 +149,7 @@ bunny-cli/
 │   │       ├── client.ts                 # Database + Statement; batch() wraps steps in BEGIN/COMMIT/ROLLBACK
 │   │       ├── protocol.ts               # Hrana wire types, value codecs, normalizeUrl(), /v2/pipeline transport
 │   │       ├── errors.ts                 # DatabaseError (code + status)
-│   │       ├── env.ts                    # BUNNY_DATABASE_URL / _AUTH_TOKEN names, cross-runtime readEnv()
+│   │       ├── env.ts                    # BUNNY_DATABASE_URL / _AUTH_TOKEN names, readEnv() over process.env (unreadable reads as unset)
 │   │       ├── client.test.ts            # Client behaviour against a fake fetch (no network)
 │   │       └── protocol.test.ts          # URL normalization and value codec tests
 │   │

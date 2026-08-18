@@ -5,13 +5,12 @@
  *   bun run examples/smoke.ts
  *   deno run --env-file=.env --allow-net --allow-env examples/smoke.ts
  */
-import { readEnv } from "../src/env.ts";
 import { connect, DatabaseError, ENV_DATABASE_URL } from "../src/index.ts";
 
 // No arguments: url and token come from the environment.
 const db = connect();
 
-const url = readEnv(ENV_DATABASE_URL) as string;
+const url = process.env[ENV_DATABASE_URL] as string;
 console.log(`endpoint: ${new URL(url).host}`);
 
 function check(label: string, ok: boolean, detail?: unknown) {
