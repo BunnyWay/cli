@@ -17,6 +17,7 @@ import {
   installProjectSkill,
   isProjectSkillInstalled,
   type ProjectSkill,
+  upsertMarkedBlock,
   usesClaude,
 } from "./agent-skill.ts";
 
@@ -37,6 +38,46 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(cwd, { recursive: true, force: true });
+});
+
+describe("upsertMarkedBlock", () => {
+  const { start, end } = agentsMarkers("bunny-test");
+
+  test("null starts a fresh file with a heading", () => {
+    const result = upsertMarkedBlock(null, "bunny-test", "body");
+    expect(result.startsWith("# Agent instructions\n")).toBe(true);
+    expect(result).toContain(`${start}\n\nbody\n\n${end}`);
+  });
+
+  test("appends when no markers exist, preserving content", () => {
+    const result = upsertMarkedBlock("# Mine\n", "bunny-test", "body");
+    expect(result.startsWith("# Mine\n")).toBe(true);
+    expect(result.endsWith(`${end}\n`)).toBe(true);
+  });
+
+  test("replaces a well-formed block in place", () => {
+    const before = `intro\n\n${start}\n\nold\n\n${end}\n\noutro\n`;
+    const result = upsertMarkedBlock(before, "bunny-test", "new");
+    expect(result).toBe(`intro\n\n${start}\n\nnew\n\n${end}\n\noutro\n`);
+  });
+
+  test("throws on a missing end marker instead of corrupting the file", () => {
+    expect(() =>
+      upsertMarkedBlock(`${start}\nno end`, "bunny-test", "body"),
+    ).toThrow("malformed bunny-test block");
+  });
+
+  test("throws on a missing start marker", () => {
+    expect(() =>
+      upsertMarkedBlock(`no start\n${end}`, "bunny-test", "body"),
+    ).toThrow("malformed bunny-test block");
+  });
+
+  test("throws when end precedes start", () => {
+    expect(() =>
+      upsertMarkedBlock(`${end}\nmiddle\n${start}`, "bunny-test", "body"),
+    ).toThrow("malformed bunny-test block");
+  });
 });
 
 describe("installProjectSkill", () => {
