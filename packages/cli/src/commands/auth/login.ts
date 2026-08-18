@@ -48,18 +48,27 @@ const SUCCESS_HTML = `<!doctype html>
 </body>
 </html>`;
 
-export const authLoginCommand = defineCommand<{ force: boolean }>({
+export const authLoginCommand = defineCommand<{
+  force: boolean;
+  installSkill?: boolean;
+}>({
   command: "login",
   describe: "Authenticate with bunny.net via the browser.",
 
   builder: (yargs) =>
-    yargs.option("force", {
-      type: "boolean",
-      default: false,
-      describe: "Overwrite existing profile without confirmation",
-    }),
+    yargs
+      .option("force", {
+        type: "boolean",
+        default: false,
+        describe: "Overwrite existing profile without confirmation",
+      })
+      .option("install-skill", {
+        type: "boolean",
+        describe:
+          "Install the agent skill after login without prompting (--no-install-skill skips the offer)",
+      }),
 
-  handler: async ({ profile, force, verbose, output }) => {
+  handler: async ({ profile, force, verbose, output, installSkill }) => {
     if (profileExists(profile)) {
       logger.warn(
         `Profile "${profile}" already exists and will be overwritten.`,
@@ -187,7 +196,7 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
       "You can now use the CLI to manage edge scripts, databases, apps, and storage.",
     );
 
-    await offerGlobalSkillInstall(output);
+    await offerGlobalSkillInstall(output, installSkill);
     server.stop(true);
   },
 });

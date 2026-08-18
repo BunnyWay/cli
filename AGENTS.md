@@ -959,7 +959,7 @@ Tests and type-checking run on every pull request via `.github/workflows/ci.yml`
 
 ```
 bunny
-├── login              [--force]            Authenticate via browser
+├── login              [--force] [--install-skill]  Authenticate via browser; --install-skill/--no-install-skill decides the agent-skill offer without prompting
 ├── logout             [--force]            Remove stored authentication profile
 ├── whoami                                  Show authenticated account (name, email, account id, profile)
 ├── config
@@ -1347,7 +1347,7 @@ So coding agents discover the CLI at all, `bunny skills install` writes the ship
 - **Single source of truth**: `packages/cli/src/commands/skills/content.ts` embeds `skills/bunny-cli/**` at bundle time via Bun text imports (`with { type: "text" }`), so the installed skill is always the shipped one; only the compact AGENTS.md section is authored separately. `content.test.ts` fails if SKILL.md routes to a reference that isn't embedded.
 - **Experimental namespaces stay out**: commands hidden from help while experimental (`apps`, `registries`, `storage`) are not referenced by the skill or the AGENTS.md section; add their references back when they graduate to the visible command list in `cli.ts`.
 - Commands that create project resources can offer this install (via `isProjectSkillInstalled()` + `confirm()`) at natural first-use moments.
-- **Onboarding**: `bunny login` makes a one-time offer to install the skill globally after authenticating (`commands/skills/offer.ts`; interactive runs only, skipped when any global root already has the skill; the marker is written after the answer so a Ctrl-C'd prompt re-offers, and an install failure prints the manual command instead of failing silently). Users who authenticate without `bunny login` (env var, pre-existing profile) get a one-time passive stderr hint after their next interactive command instead (`hintGlobalSkillInstall()` in `index.ts`; requires credentials, skips `skills` commands and projects with the skill installed, never prompts). Both nudges share one marker file in the XDG cache dir, so users see at most one. `install.sh` also mentions `bunny skills install --global` in its outro.
+- **Onboarding**: `bunny login` makes a one-time offer to install the skill globally after authenticating (`commands/skills/offer.ts`; interactive runs only, skipped when any global root already has the skill). The marker is written on a decline or a successful install only, so a Ctrl-C'd prompt or a failed install (reported as a warning with the manual command) re-offers on the next login. `bunny login --install-skill` installs without prompting and `--no-install-skill` skips the offer, keeping scripted TTY logins unattended. Users who authenticate without `bunny login` (env var, pre-existing profile) get a one-time passive stderr hint after their next interactive command instead (`hintGlobalSkillInstall()` in `index.ts`; requires credentials, skips `skills` commands and projects with the skill installed, never prompts). Both nudges share one marker file in the XDG cache dir, so users see at most one. `install.sh` also mentions `bunny skills install --global` in its outro.
 
 ---
 

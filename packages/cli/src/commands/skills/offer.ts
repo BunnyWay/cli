@@ -16,7 +16,7 @@ const OFFER_MARKER = join(CACHE_DIR, "skills-offered");
 
 const INSTALL_COMMAND = "bunny skills install --global";
 
-// Set once the login prompt has run, so the post-command hint stays quiet in the same process.
+// Set once login has handled the offer (prompt or flag), so the post-command hint stays quiet in the same process.
 let promptedThisRun = false;
 
 function shouldOffer(output?: string): boolean {
@@ -32,9 +32,33 @@ function markOffered(): void {
   writeFileSync(OFFER_MARKER, `${new Date().toISOString()}\n`);
 }
 
-/** One-time interactive offer to install the agent skill globally; never throws or blocks unattended runs. */
-export async function offerGlobalSkillInstall(output?: string): Promise<void> {
+// Marks offered only on success, so a failed install is offered again on the next login.
+function installAndReport(): void {
   try {
+    installGlobalSkill(BUNNY_CLI_SKILL);
+    markOffered();
+    logger.success(
+      "Agent skill installed to ~/.agents/skills and ~/.claude/skills.",
+    );
+  } catch (err) {
+    logger.warn(
+      `Couldn't install the agent skill (${err instanceof Error ? err.message : err}); run: ${INSTALL_COMMAND}`,
+    );
+  }
+}
+
+/** One-time interactive offer to install the agent skill globally; never throws or blocks unattended runs. An explicit `installSkill` flag decides without prompting. */
+export async function offerGlobalSkillInstall(
+  output?: string,
+  installSkill?: boolean,
+): Promise<void> {
+  try {
+    if (installSkill === false) return;
+    if (installSkill === true) {
+      promptedThisRun = true;
+      installAndReport();
+      return;
+    }
     if (!shouldOffer(output)) return;
     promptedThisRun = true;
     logger.log();
@@ -44,21 +68,12 @@ export async function offerGlobalSkillInstall(output?: string): Promise<void> {
     );
     // An interrupted prompt is not an answer; the next login offers again.
     if (answer === "cancel") return;
-    markOffered();
     if (answer === "no") {
+      markOffered();
       logger.dim(`You can install it any time with: ${INSTALL_COMMAND}`);
       return;
     }
-    try {
-      installGlobalSkill(BUNNY_CLI_SKILL);
-      logger.success(
-        "Agent skill installed to ~/.agents/skills and ~/.claude/skills.",
-      );
-    } catch {
-      logger.dim(
-        `Couldn't install the skill automatically; run: ${INSTALL_COMMAND}`,
-      );
-    }
+    installAndReport();
   } catch {}
 }
 
