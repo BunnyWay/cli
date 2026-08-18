@@ -189,6 +189,7 @@ describe("installProjectSkill", () => {
 
 describe("installGlobalSkill", () => {
   test("writes skill files under the home .agents/skills and .claude/skills dirs", () => {
+    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(false);
     const files = installGlobalSkill(SKILL, cwd);
     expect(files).toEqual([
       join(cwd, ".agents/skills/bunny-test/SKILL.md"),
@@ -198,6 +199,9 @@ describe("installGlobalSkill", () => {
     ]);
     for (const file of files) expect(existsSync(file)).toBe(true);
     expect(existsSync(join(cwd, AGENTS_FILE))).toBe(false);
+    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(true);
+    rmSync(join(cwd, ".agents"), { recursive: true, force: true });
+    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(true);
   });
 });
 
@@ -267,16 +271,6 @@ describe("removeGlobalSkill", () => {
     ]);
     for (const dir of removed) expect(existsSync(dir)).toBe(false);
     expect(removeGlobalSkill("bunny-test", cwd)).toEqual([]);
-  });
-});
-
-describe("isGlobalSkillInstalled", () => {
-  test("true while any global root still has the skill", () => {
-    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(false);
-    installGlobalSkill(SKILL, cwd);
-    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(true);
-    rmSync(join(cwd, ".agents"), { recursive: true, force: true });
-    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(true);
   });
 });
 

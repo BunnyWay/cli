@@ -3,7 +3,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { VERSION } from "./version.ts";
 
-const CACHE_DIR = join(
+/** CLI state dir for throttle markers and caches (also used by the skills offer). */
+export const CACHE_DIR = join(
   process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"),
   "bunnynet",
 );

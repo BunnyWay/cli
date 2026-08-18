@@ -1,5 +1,4 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   installGlobalSkill,
@@ -7,21 +6,22 @@ import {
 } from "../../core/agent-skill.ts";
 import { logger } from "../../core/logger.ts";
 import { confirm, isInteractive } from "../../core/ui.ts";
+import { CACHE_DIR } from "../../core/update-check.ts";
 import { BUNNY_CLI_SKILL } from "./content.ts";
 
-// Same state dir as the update check; losing the marker only means one repeat offer.
-const OFFER_MARKER = join(
-  process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"),
-  "bunnynet",
-  "skills-offered",
-);
+// Losing the cache dir only means one repeat offer.
+const OFFER_MARKER = join(CACHE_DIR, "skills-offered");
 
 /** One-time interactive offer to install the agent skill globally; never throws or blocks unattended runs. */
 export async function offerGlobalSkillInstall(output?: string): Promise<void> {
   try {
-    if (!isInteractive(output)) return;
-    if (existsSync(OFFER_MARKER)) return;
-    if (isGlobalSkillInstalled(BUNNY_CLI_SKILL.name)) return;
+    if (
+      !isInteractive(output) ||
+      existsSync(OFFER_MARKER) ||
+      isGlobalSkillInstalled(BUNNY_CLI_SKILL.name)
+    ) {
+      return;
+    }
     // Marked before prompting so an interrupted prompt still counts as offered.
     mkdirSync(dirname(OFFER_MARKER), { recursive: true });
     writeFileSync(OFFER_MARKER, `${new Date().toISOString()}\n`);
