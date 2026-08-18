@@ -26,6 +26,9 @@ Config is stored in (first match wins):
 # authenticate
 bunny login
 
+# install this skill for AI coding tools (AGENTS.md + .claude/skills; --global for ~/.claude/skills)
+bunny skills install
+
 # make a raw API request
 bunny api GET /pullzone
 bunny api GET /user

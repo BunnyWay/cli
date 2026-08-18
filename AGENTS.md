@@ -174,6 +174,8 @@ bunny-cli/
 │           ├── cli.ts                    # Root yargs instance, global flags, command registration
 │           │
 │           ├── core/
+│           │   ├── agent-skill.ts        # Generic project skill installer: marked AGENTS.md block upsert + .claude/skills writes (Claude-gated for projects, ~/.claude/skills for --global)
+│           │   ├── agent-skill.test.ts   # Tests for install/upsert idempotency, marker scoping, Claude gating
 │           │   ├── client-options.ts     # clientOptions() helper — builds ClientOptions from ResolvedConfig
 │           │   ├── define-command.ts     # Command factory (see "Command Pattern" below)
 │           │   ├── define-namespace.ts   # Namespace/group factory for subcommand trees
@@ -416,6 +418,11 @@ bunny-cli/
 │           │   │   └── remove.ts         # Remove registry
 │           │   ├── docs.ts               # Open bunny.net documentation in browser (top-level: bunny docs)
 │           │   ├── open.ts               # Open bunny.net dashboard in browser (top-level: bunny open)
+│           │   ├── skills/
+│           │   │   ├── index.ts          # defineNamespace("skills", ...) registers skills commands
+│           │   │   ├── content.ts        # BUNNY_CLI_SKILL: embeds skills/bunny-cli/** at bundle time via Bun text imports (single source of truth) + compact AGENTS.md section
+│           │   │   ├── content.test.ts   # Guards: every reference SKILL.md routes to is embedded; section stays compact
+│           │   │   └── install.ts        # bunny skills install [--global]: project (AGENTS.md + Claude-gated .claude/skills) or global (~/.claude/skills)
 │           │   └── scripts/
 │           │       ├── index.ts          # defineNamespace("scripts", ...) — registers all script commands
 │           │       ├── constants.ts      # SCRIPT_MANIFEST, SCRIPT_TYPE_LABELS
@@ -1131,6 +1138,8 @@ bunny
 │   ├── unlink                              Remove .bunny/site.json
 │   ├── upgrade-router  [site] [--link]     Republish the site's router script with the CLI's current source
 │   └── delete          [site] [--force] [--keep-storage]  Delete pull zone → router → storage zone (typed-name confirmation, so unattended runs need --force; best-effort so re-runs finish a partial delete)
+├── skills
+│   └── install         (alias: add) [--global]  Install the bunny agent skill: marked AGENTS.md block + .claude/skills/bunny-cli/ when the project uses Claude Code; --global writes ~/.claude/skills/bunny-cli/ for every project
 ├── docs                                    Open bunny.net documentation in browser
 ├── open               [--print]            Open bunny.net dashboard in browser (or print URL)
 ├── --profile, -p       <string>            Profile to use (default: "default")
@@ -1324,6 +1333,15 @@ handler: async ({ output, profile, apiKey }) => {
   logger.log(formatKeyValue([{ key: "Name", value: "Alice" }], output));
 };
 ```
+
+### Agent skill installer (`bunny skills install`)
+
+So coding agents discover the CLI at all, `bunny skills install` writes the shipped `skills/bunny-cli/` skill into the user's environment. The generic machinery lives in `packages/cli/src/core/agent-skill.ts` so future per-resource skills can reuse it:
+
+- **Project install (default)**: upserts a marked block (`<!-- bunny-cli:start/end -->`) into the project's `AGENTS.md` (created if missing, replaced in place on reinstall; markers are per-skill so multiple blocks coexist). When the project uses Claude Code (`.claude/` or `CLAUDE.md` exists) it also writes the full skill with all references to `.claude/skills/bunny-cli/`.
+- **Global install (`--global`)**: writes the skill to `~/.claude/skills/bunny-cli/` so Claude Code picks it up in every project; nothing project-local is touched.
+- **Single source of truth**: `packages/cli/src/commands/skills/content.ts` embeds `skills/bunny-cli/**` at bundle time via Bun text imports (`with { type: "text" }`), so the installed skill is always the shipped one; only the compact AGENTS.md section is authored separately. `content.test.ts` fails if SKILL.md routes to a reference that isn't embedded.
+- Commands that create project resources can offer this install (via `isProjectSkillInstalled()` + `confirm()`) at natural first-use moments.
 
 ---
 
