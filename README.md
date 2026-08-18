@@ -41,7 +41,7 @@ bun install
 bun ny <command>
 
 # Examples
-bun ny login
+bun ny login                                # offers to install the agent skill after authenticating; --install-skill/--no-install-skill decides without prompting
 bun ny db list
 bun ny skills install                       # install the bunny agent skill into this project (AGENTS.md block + .claude/skills when Claude Code is used) so AI coding tools know how to use the CLI; alias: skills update
 bun ny skills install --global              # install to ~/.agents/skills and ~/.claude/skills for every project

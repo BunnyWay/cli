@@ -9,6 +9,7 @@ import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
 import { confirm, openBrowser, spinner } from "../../core/ui.ts";
+import { offerGlobalSkillInstall } from "../skills/offer.ts";
 
 const DASHBOARD_URL =
   process.env.BUNNYNET_DASHBOARD_URL ?? "https://dash.bunny.net";
@@ -47,18 +48,27 @@ const SUCCESS_HTML = `<!doctype html>
 </body>
 </html>`;
 
-export const authLoginCommand = defineCommand<{ force: boolean }>({
+export const authLoginCommand = defineCommand<{
+  force: boolean;
+  installSkill?: boolean;
+}>({
   command: "login",
   describe: "Authenticate with bunny.net via the browser.",
 
   builder: (yargs) =>
-    yargs.option("force", {
-      type: "boolean",
-      default: false,
-      describe: "Overwrite existing profile without confirmation",
-    }),
+    yargs
+      .option("force", {
+        type: "boolean",
+        default: false,
+        describe: "Overwrite existing profile without confirmation",
+      })
+      .option("install-skill", {
+        type: "boolean",
+        describe:
+          "Install the agent skill after login without prompting (--no-install-skill skips the offer)",
+      }),
 
-  handler: async ({ profile, force, verbose }) => {
+  handler: async ({ profile, force, verbose, output, installSkill }) => {
     if (profileExists(profile)) {
       logger.warn(
         `Profile "${profile}" already exists and will be overwritten.`,
@@ -145,39 +155,48 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
       );
     });
 
+    let apiKey: string;
     try {
-      const apiKey = await Promise.race([apiKeyPromise, timeout]);
-      setProfile(profile, apiKey);
-
-      // Fetch user details for a personalised greeting
-      const config = resolveConfig(profile, undefined, verbose);
-      const client = createCoreClient(clientOptions(config, verbose));
-
-      const spin = spinner("Verifying credentials...");
-      spin.start();
-      const { data } = await client.GET("/user");
-      spin.stop();
-
-      const name = data
-        ? [data.FirstName, data.LastName].filter(Boolean).join(" ")
-        : null;
-
-      logger.log();
-      logger.success(
-        name
-          ? `Welcome, ${name}! 🐰`
-          : `Authenticated! Profile "${profile}" saved. 🐇`,
-      );
-      logger.log();
-      logger.dim(
-        "You can now use the CLI to manage edge scripts, databases, apps, and storage.",
-      );
+      apiKey = await Promise.race([apiKeyPromise, timeout]);
     } catch (err: any) {
       logger.error(`Authentication failed: ${err.message}`);
       process.exit(1);
     } finally {
       clearTimeout(timeoutId);
-      server.stop(true);
+      // Graceful stop: the success page is still flushing to the browser; force-closed at the end.
+      server.stop();
     }
+
+    setProfile(profile, apiKey);
+
+    // The greeting fetch is best-effort: the profile is already saved.
+    let name: string | null = null;
+    const spin = spinner("Verifying credentials...");
+    try {
+      const config = resolveConfig(profile, undefined, verbose);
+      const client = createCoreClient(clientOptions(config, verbose));
+      spin.start();
+      const { data } = await client.GET("/user");
+      name = data
+        ? [data.FirstName, data.LastName].filter(Boolean).join(" ")
+        : null;
+    } catch {
+    } finally {
+      spin.stop();
+    }
+
+    logger.log();
+    logger.success(
+      name
+        ? `Welcome, ${name}! 🐰`
+        : `Authenticated! Profile "${profile}" saved. 🐇`,
+    );
+    logger.log();
+    logger.dim(
+      "You can now use the CLI to manage edge scripts, databases, apps, and storage.",
+    );
+
+    await offerGlobalSkillInstall(output, installSkill);
+    server.stop(true);
   },
 });

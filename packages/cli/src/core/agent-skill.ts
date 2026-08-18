@@ -132,19 +132,24 @@ function upsertAgentsFile(cwd: string, name: string, body: string): string {
   return AGENTS_FILE;
 }
 
-/** Write the skill's files under `root`, returning their slash-separated relative paths. */
+/** Write the skill's files under `root`, returning their slash-separated relative paths in write order. */
 function writeSkillFiles(
   root: string,
   skill: ProjectSkill,
   boundary?: string,
 ): string[] {
-  for (const [relPath, contents] of Object.entries(skill.files)) {
+  // SKILL.md is the completion sentinel: removed first and written last, so an interrupted install or refresh reads as incomplete.
+  rmSync(join(root, "SKILL.md"), { force: true });
+  const entries = Object.entries(skill.files).sort(
+    ([a], [b]) => Number(a === "SKILL.md") - Number(b === "SKILL.md"),
+  );
+  for (const [relPath, contents] of entries) {
     const target = join(root, relPath);
     if (boundary) assertWriteWithin(boundary, target, relPath);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, contents);
   }
-  return Object.keys(skill.files);
+  return entries.map(([relPath]) => relPath);
 }
 
 /** Install or update a skill in the project (AGENTS.md block always, .claude/skills/<name>/ when the project uses Claude Code), returning the cwd-relative paths written. */
@@ -210,6 +215,16 @@ export function installGlobalSkill(
     }
   }
   return written;
+}
+
+/** True when every global root has a completed install (SKILL.md is written last), so a partial or failed install re-offers. */
+export function isGlobalSkillInstalled(
+  name: string,
+  home = homedir(),
+): boolean {
+  return globalSkillRoots(home, name).every((root) =>
+    existsSync(join(root, "SKILL.md")),
+  );
 }
 
 /** Delete a skill from every global root, returning the directories removed. */
