@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -37,6 +38,29 @@ export function usesClaude(cwd: string): boolean {
   return existsSync(join(cwd, ".claude")) || existsSync(join(cwd, "CLAUDE.md"));
 }
 
+/** Heading written when the installer creates AGENTS.md from scratch. */
+const DEFAULT_AGENTS_HEADING = "# Agent instructions";
+
+/** Locate the named block's markers, throwing on any malformed arrangement; null when absent. */
+function locateMarkedBlock(
+  current: string,
+  name: string,
+): { startAt: number; endAt: number } | null {
+  const { start, end } = agentsMarkers(name);
+  const startAt = current.indexOf(start);
+  const endAt = current.indexOf(end);
+  if (startAt === -1 && endAt === -1) return null;
+  const duplicated =
+    current.indexOf(start, startAt + start.length) !== -1 ||
+    current.indexOf(end, endAt + end.length) !== -1;
+  if (startAt === -1 || endAt === -1 || endAt < startAt || duplicated) {
+    throw new UserError(
+      `${AGENTS_FILE} has a malformed ${name} block: expected a single "${start}" followed by a single "${end}". Fix or remove the markers, then rerun.`,
+    );
+  }
+  return { startAt, endAt };
+}
+
 /**
  * Return `current` with the named marked block created or replaced.
  *
@@ -53,25 +77,34 @@ export function upsertMarkedBlock(
 ): string {
   const { start, end } = agentsMarkers(name);
   const section = `${start}\n\n${body.trim()}\n\n${end}`;
-  if (current === null) return `# Agent instructions\n\n${section}\n`;
+  if (current === null) return `${DEFAULT_AGENTS_HEADING}\n\n${section}\n`;
 
-  const startAt = current.indexOf(start);
-  const endAt = current.indexOf(end);
-  if (startAt === -1 && endAt === -1) {
+  const at = locateMarkedBlock(current, name);
+  if (at === null) {
     const separator = current.endsWith("\n") ? "\n" : "\n\n";
     return `${current}${separator}${section}\n`;
   }
-  const duplicated =
-    current.indexOf(start, startAt + start.length) !== -1 ||
-    current.indexOf(end, endAt + end.length) !== -1;
-  if (startAt === -1 || endAt === -1 || endAt < startAt || duplicated) {
-    throw new UserError(
-      `${AGENTS_FILE} has a malformed ${name} block: expected a single "${start}" followed by a single "${end}". Fix or remove the markers, then rerun.`,
-    );
-  }
-  const before = current.slice(0, startAt);
-  const after = current.slice(endAt + end.length);
+  const before = current.slice(0, at.startAt);
+  const after = current.slice(at.endAt + end.length);
   return `${before}${section}${after}`;
+}
+
+/**
+ * Return `current` without the named marked block, collapsing the whitespace
+ * the block occupied. Returns null when no block is present (nothing to do)
+ * and throws on malformed markers, mirroring upsertMarkedBlock.
+ */
+export function removeMarkedBlock(
+  current: string,
+  name: string,
+): string | null {
+  const at = locateMarkedBlock(current, name);
+  if (at === null) return null;
+  const { end } = agentsMarkers(name);
+  const before = current.slice(0, at.startAt).trimEnd();
+  const after = current.slice(at.endAt + end.length).trim();
+  const merged = [before, after].filter(Boolean).join("\n\n");
+  return merged === "" ? "" : `${merged}\n`;
 }
 
 /** Throw when writing `target` would follow a symlink to land outside `boundary`. */
@@ -154,15 +187,78 @@ export function installProjectSkill(
 }
 
 /**
+ * Remove a skill from the current project.
+ *
+ * Strips the marked block from AGENTS.md (deleting the file when only the
+ * installer's own scaffold heading would remain) and deletes
+ * .claude/skills/<name>/. Returns the paths it changed relative to `cwd`,
+ * empty when nothing was installed. Symlink-guarded like the install path.
+ */
+export function removeProjectSkill(cwd: string, name: string): string[] {
+  const removed: string[] = [];
+  const path = join(cwd, AGENTS_FILE);
+  if (existsSync(path)) {
+    assertWriteWithin(cwd, path, AGENTS_FILE);
+    const updated = removeMarkedBlock(readFileSync(path, "utf8"), name);
+    if (updated !== null) {
+      if (updated === "" || updated.trim() === DEFAULT_AGENTS_HEADING) {
+        rmSync(path);
+      } else {
+        writeFileSync(path, updated);
+      }
+      removed.push(AGENTS_FILE);
+    }
+  }
+  const skillRoot = `.claude/skills/${name}`;
+  const dir = join(cwd, skillRoot);
+  if (existsSync(dir)) {
+    assertWriteWithin(cwd, dir, skillRoot);
+    rmSync(dir, { recursive: true, force: true });
+    removed.push(skillRoot);
+  }
+  return removed;
+}
+
+/** Global skill roots: the cross-tool .agents standard plus Claude Code's own dir. */
+function globalSkillRoots(home: string, name: string): string[] {
+  return [
+    join(home, ".agents/skills", name),
+    join(home, ".claude/skills", name),
+  ];
+}
+
+/**
  * Install or update a skill globally for the current user.
  *
- * Writes the skill files under ~/.claude/skills/<name>/ so Claude Code picks it
- * up in every project. Returns the absolute paths written.
+ * Writes the skill files under ~/.agents/skills/<name>/ (the cross-tool
+ * directory read by Cursor, Codex, OpenCode, Copilot, and others) and
+ * ~/.claude/skills/<name>/ so every project picks it up. Returns the
+ * absolute paths written.
  */
 export function installGlobalSkill(
   skill: ProjectSkill,
   home = homedir(),
 ): string[] {
-  const root = join(home, ".claude/skills", skill.name);
-  return writeSkillFiles(root, skill).map((relPath) => join(root, relPath));
+  const written: string[] = [];
+  for (const root of globalSkillRoots(home, skill.name)) {
+    for (const relPath of writeSkillFiles(root, skill)) {
+      written.push(join(root, relPath));
+    }
+  }
+  return written;
+}
+
+/**
+ * Remove a globally installed skill from every global root.
+ *
+ * Returns the absolute directories deleted, empty when none existed.
+ */
+export function removeGlobalSkill(name: string, home = homedir()): string[] {
+  const removed: string[] = [];
+  for (const root of globalSkillRoots(home, name)) {
+    if (!existsSync(root)) continue;
+    rmSync(root, { recursive: true, force: true });
+    removed.push(root);
+  }
+  return removed;
 }

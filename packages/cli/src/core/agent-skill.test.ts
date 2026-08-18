@@ -18,6 +18,9 @@ import {
   installProjectSkill,
   isProjectSkillInstalled,
   type ProjectSkill,
+  removeGlobalSkill,
+  removeMarkedBlock,
+  removeProjectSkill,
   upsertMarkedBlock,
   usesClaude,
 } from "./agent-skill.ts";
@@ -207,14 +210,94 @@ describe("installProjectSkill", () => {
 });
 
 describe("installGlobalSkill", () => {
-  test("writes skill files under the home .claude/skills dir", () => {
+  test("writes skill files under the home .agents/skills and .claude/skills dirs", () => {
     const files = installGlobalSkill(SKILL, cwd);
     expect(files).toEqual([
+      join(cwd, ".agents/skills/bunny-test/SKILL.md"),
+      join(cwd, ".agents/skills/bunny-test/references/extra.md"),
       join(cwd, ".claude/skills/bunny-test/SKILL.md"),
       join(cwd, ".claude/skills/bunny-test/references/extra.md"),
     ]);
-    expect(existsSync(files[0] as string)).toBe(true);
+    for (const file of files) expect(existsSync(file)).toBe(true);
     expect(existsSync(join(cwd, AGENTS_FILE))).toBe(false);
+  });
+});
+
+describe("removeMarkedBlock", () => {
+  const { start, end } = agentsMarkers("bunny-test");
+
+  test("null when no block is present", () => {
+    expect(removeMarkedBlock("# Mine\n", "bunny-test")).toBeNull();
+  });
+
+  test("removes the block and collapses the surrounding whitespace", () => {
+    const content = `intro\n\n${start}\n\nbody\n\n${end}\n\noutro\n`;
+    expect(removeMarkedBlock(content, "bunny-test")).toBe("intro\n\noutro\n");
+  });
+
+  test("empty string when the block was the whole file", () => {
+    expect(
+      removeMarkedBlock(`${start}\n\nbody\n\n${end}\n`, "bunny-test"),
+    ).toBe("");
+  });
+
+  test("throws on malformed markers like upsert does", () => {
+    expect(() => removeMarkedBlock(`${start}\nno end`, "bunny-test")).toThrow(
+      "malformed bunny-test block",
+    );
+  });
+});
+
+describe("removeProjectSkill", () => {
+  test("returns nothing when the skill was never installed", () => {
+    expect(removeProjectSkill(cwd, "bunny-test")).toEqual([]);
+  });
+
+  test("strips the block, keeps the user's content, and deletes skill files", () => {
+    writeFileSync(join(cwd, AGENTS_FILE), "# My project\n\nUse tabs.\n");
+    mkdirSync(join(cwd, ".claude"));
+    installProjectSkill(cwd, SKILL);
+    const removed = removeProjectSkill(cwd, "bunny-test");
+    expect(removed).toEqual([AGENTS_FILE, ".claude/skills/bunny-test"]);
+    const content = readFileSync(join(cwd, AGENTS_FILE), "utf8");
+    expect(content).toContain("Use tabs.");
+    expect(content).not.toContain(agentsMarkers("bunny-test").start);
+    expect(existsSync(join(cwd, ".claude/skills/bunny-test"))).toBe(false);
+  });
+
+  test("deletes an AGENTS.md the installer created from scratch", () => {
+    installProjectSkill(cwd, SKILL);
+    removeProjectSkill(cwd, "bunny-test");
+    expect(existsSync(join(cwd, AGENTS_FILE))).toBe(false);
+  });
+
+  test("leaves other skills' blocks in place", () => {
+    installProjectSkill(cwd, SKILL);
+    installProjectSkill(cwd, {
+      name: "bunny-other",
+      agentsSection: "## Other\n\nOther guidance.",
+      files: {},
+    });
+    removeProjectSkill(cwd, "bunny-test");
+    const content = readFileSync(join(cwd, AGENTS_FILE), "utf8");
+    expect(content).not.toContain(agentsMarkers("bunny-test").start);
+    expect(content).toContain(agentsMarkers("bunny-other").start);
+  });
+});
+
+describe("removeGlobalSkill", () => {
+  test("removes the skill from every global root it exists in", () => {
+    installGlobalSkill(SKILL, cwd);
+    const removed = removeGlobalSkill("bunny-test", cwd);
+    expect(removed).toEqual([
+      join(cwd, ".agents/skills/bunny-test"),
+      join(cwd, ".claude/skills/bunny-test"),
+    ]);
+    for (const dir of removed) expect(existsSync(dir)).toBe(false);
+  });
+
+  test("returns nothing when not installed", () => {
+    expect(removeGlobalSkill("bunny-test", cwd)).toEqual([]);
   });
 });
 

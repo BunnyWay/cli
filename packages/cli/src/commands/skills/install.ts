@@ -7,7 +7,7 @@ import { logger } from "../../core/logger.ts";
 import { BUNNY_CLI_SKILL } from "./content.ts";
 
 const COMMAND = "install";
-const ALIASES = ["add"] as const;
+const ALIASES = ["add", "update"] as const;
 const DESCRIPTION =
   "Install the bunny agent skill so AI coding tools know how to use the CLI.";
 
@@ -21,8 +21,9 @@ interface InstallArgs {
  * Project install (default) maintains a marked block in AGENTS.md, which most
  * coding agents read, and writes the full skill with references under
  * .claude/skills/bunny-cli/ when the project uses Claude Code. A global install
- * writes the skill to ~/.claude/skills/bunny-cli/ so Claude Code picks it up in
- * every project.
+ * writes the skill to ~/.agents/skills/bunny-cli/ (the cross-tool directory)
+ * and ~/.claude/skills/bunny-cli/ so AI coding tools pick it up in every
+ * project. Reinstalling refreshes the same files, so `update` is an alias.
  *
  * @example
  * ```bash
@@ -41,7 +42,7 @@ export const skillsInstallCommand = defineCommand<InstallArgs>({
     ],
     [
       "$0 skills install --global",
-      "Install to ~/.claude/skills for every project",
+      "Install to ~/.agents/skills and ~/.claude/skills for every project",
     ],
   ],
 
@@ -49,7 +50,8 @@ export const skillsInstallCommand = defineCommand<InstallArgs>({
     yargs.option("global", {
       type: "boolean",
       default: false,
-      describe: "Install to ~/.claude/skills instead of the current project",
+      describe:
+        "Install to ~/.agents/skills and ~/.claude/skills instead of the current project",
     }),
 
   handler: async ({ global: isGlobal, output }) => {
@@ -71,7 +73,7 @@ export const skillsInstallCommand = defineCommand<InstallArgs>({
     for (const file of files) logger.success(`Wrote ${file}`);
     logger.dim(
       isGlobal
-        ? "Claude Code now knows how to use the bunny CLI in every project."
+        ? "AI coding tools now know how to use the bunny CLI in every project."
         : "AI coding tools working in this project now know how to use the bunny CLI.",
     );
   },

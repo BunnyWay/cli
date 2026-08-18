@@ -43,8 +43,9 @@ bun ny <command>
 # Examples
 bun ny login
 bun ny db list
-bun ny skills install                       # install the bunny agent skill into this project (AGENTS.md block + .claude/skills when Claude Code is used) so AI coding tools know how to use the CLI
-bun ny skills install --global              # install to ~/.claude/skills for every project
+bun ny skills install                       # install the bunny agent skill into this project (AGENTS.md block + .claude/skills when Claude Code is used) so AI coding tools know how to use the CLI; alias: skills update
+bun ny skills install --global              # install to ~/.agents/skills and ~/.claude/skills for every project
+bun ny skills remove                        # remove the skill from this project (or --global); everything is regenerable with skills install
 bun ny apps deploy ghcr.io/me/api:v1.2     # deploy a pre-built image
 bun ny apps deploy --dockerfile             # build ./Dockerfile and deploy
 bun ny apps deploy                          # first run? Imports docker-compose.yml if present; otherwise auto-detects Dockerfile(s) (including monorepo subdirs) so you can pick one or many, or falls back to a pre-built image.

@@ -174,7 +174,7 @@ bunny-cli/
 │           ├── cli.ts                    # Root yargs instance, global flags, command registration
 │           │
 │           ├── core/
-│           │   ├── agent-skill.ts        # Generic project skill installer: marked AGENTS.md block upsert + .claude/skills writes (Claude-gated for projects, ~/.claude/skills for --global); project writes refuse symlink escapes
+│           │   ├── agent-skill.ts        # Generic project skill installer/remover: marked AGENTS.md block upsert/remove + skill file writes (Claude-gated for projects; ~/.agents/skills + ~/.claude/skills for --global); project writes refuse symlink escapes
 │           │   ├── agent-skill.test.ts   # Tests for install/upsert idempotency, marker scoping, Claude gating
 │           │   ├── client-options.ts     # clientOptions() helper — builds ClientOptions from ResolvedConfig
 │           │   ├── define-command.ts     # Command factory (see "Command Pattern" below)
@@ -422,7 +422,8 @@ bunny-cli/
 │           │   │   ├── index.ts          # defineNamespace("skills", ...) registers skills commands
 │           │   │   ├── content.ts        # BUNNY_CLI_SKILL: embeds skills/bunny-cli/** at bundle time via Bun text imports (single source of truth) + compact AGENTS.md section
 │           │   │   ├── content.test.ts   # Guards: every reference SKILL.md routes to is embedded; section stays compact
-│           │   │   └── install.ts        # bunny skills install [--global]: project (AGENTS.md + Claude-gated .claude/skills) or global (~/.claude/skills)
+│           │   │   ├── install.ts        # bunny skills install [--global]: project (AGENTS.md + Claude-gated .claude/skills) or global (~/.agents/skills + ~/.claude/skills)
+│           │   │   └── remove.ts         # bunny skills remove [--global] [--force]: strips the AGENTS.md block and deletes the skill dirs for either scope
 │           │   └── scripts/
 │           │       ├── index.ts          # defineNamespace("scripts", ...) — registers all script commands
 │           │       ├── constants.ts      # SCRIPT_MANIFEST, SCRIPT_TYPE_LABELS
@@ -1139,7 +1140,8 @@ bunny
 │   ├── upgrade-router  [site] [--link]     Republish the site's router script with the CLI's current source
 │   └── delete          [site] [--force] [--keep-storage]  Delete pull zone → router → storage zone (typed-name confirmation, so unattended runs need --force; best-effort so re-runs finish a partial delete)
 ├── skills
-│   └── install         (alias: add) [--global]  Install the bunny agent skill: marked AGENTS.md block + .claude/skills/bunny-cli/ when the project uses Claude Code; --global writes ~/.claude/skills/bunny-cli/ for every project
+│   ├── install         (aliases: add, update) [--global]  Install the bunny agent skill: marked AGENTS.md block + .claude/skills/bunny-cli/ when the project uses Claude Code; --global writes ~/.agents/skills/bunny-cli/ and ~/.claude/skills/bunny-cli/ for every project
+│   └── remove          (aliases: rm, uninstall) [--global] [--force]  Remove the skill: strips the AGENTS.md block (deleting the file when only the installer's scaffold heading remains) and deletes the skill dirs; confirmed unless --force
 ├── docs                                    Open bunny.net documentation in browser
 ├── open               [--print]            Open bunny.net dashboard in browser (or print URL)
 ├── --profile, -p       <string>            Profile to use (default: "default")
@@ -1339,7 +1341,8 @@ handler: async ({ output, profile, apiKey }) => {
 So coding agents discover the CLI at all, `bunny skills install` writes the shipped `skills/bunny-cli/` skill into the user's environment. The generic machinery lives in `packages/cli/src/core/agent-skill.ts` so future per-resource skills can reuse it:
 
 - **Project install (default)**: upserts a marked block (`<!-- bunny-cli:start/end -->`) into the project's `AGENTS.md` (created if missing, replaced in place on reinstall; markers are per-skill so multiple blocks coexist; a malformed block, meaning a missing, reversed, or duplicated marker, errors instead of guessing). When the project uses Claude Code (`.claude/` or `CLAUDE.md` exists) it also writes the full skill with all references to `.claude/skills/bunny-cli/`. Writes that a symlink would redirect outside the project are refused, so a checkout can't plant links that make the installer overwrite unrelated files (symlinks resolving inside the project, e.g. `AGENTS.md -> CLAUDE.md`, are followed).
-- **Global install (`--global`)**: writes the skill to `~/.claude/skills/bunny-cli/` so Claude Code picks it up in every project; nothing project-local is touched.
+- **Global install (`--global`)**: writes the skill to `~/.agents/skills/bunny-cli/` (the cross-tool Agent Skills directory read by Cursor, Codex, OpenCode, Copilot, and others) and `~/.claude/skills/bunny-cli/` so AI coding tools pick it up in every project; nothing project-local is touched.
+- **Removal**: `bunny skills remove [--global]` undoes either scope; it strips the marked block (deleting AGENTS.md only when the installer's own scaffold heading is all that remains) and deletes the skill directories. Everything removed is regenerable with `bunny skills install`, and `update` is an install alias since reinstalling refreshes in place.
 - **Single source of truth**: `packages/cli/src/commands/skills/content.ts` embeds `skills/bunny-cli/**` at bundle time via Bun text imports (`with { type: "text" }`), so the installed skill is always the shipped one; only the compact AGENTS.md section is authored separately. `content.test.ts` fails if SKILL.md routes to a reference that isn't embedded.
 - Commands that create project resources can offer this install (via `isProjectSkillInstalled()` + `confirm()`) at natural first-use moments.
 
