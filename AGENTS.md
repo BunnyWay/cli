@@ -423,6 +423,7 @@ bunny-cli/
 │           │   │   ├── content.ts        # BUNNY_CLI_SKILL: embeds skills/bunny-cli/** at bundle time via Bun text imports (single source of truth) + compact AGENTS.md section
 │           │   │   ├── content.test.ts   # Guards: every reference SKILL.md routes to is embedded; section stays compact
 │           │   │   ├── install.ts        # bunny skills install [--global]: project (AGENTS.md + Claude-gated .claude/skills) or global (~/.agents/skills + ~/.claude/skills)
+│           │   │   ├── offer.ts          # One-time interactive offer to install the skill globally (used by bunny login; marker in the XDG cache dir)
 │           │   │   └── remove.ts         # bunny skills remove [--global] [--force]: strips the AGENTS.md block and deletes the skill dirs for either scope
 │           │   └── scripts/
 │           │       ├── index.ts          # defineNamespace("scripts", ...) — registers all script commands
@@ -1346,6 +1347,7 @@ So coding agents discover the CLI at all, `bunny skills install` writes the ship
 - **Single source of truth**: `packages/cli/src/commands/skills/content.ts` embeds `skills/bunny-cli/**` at bundle time via Bun text imports (`with { type: "text" }`), so the installed skill is always the shipped one; only the compact AGENTS.md section is authored separately. `content.test.ts` fails if SKILL.md routes to a reference that isn't embedded.
 - **Experimental namespaces stay out**: commands hidden from help while experimental (`apps`, `registries`, `storage`) are not referenced by the skill or the AGENTS.md section; add their references back when they graduate to the visible command list in `cli.ts`.
 - Commands that create project resources can offer this install (via `isProjectSkillInstalled()` + `confirm()`) at natural first-use moments.
+- **Onboarding**: `bunny login` makes a one-time offer to install the skill globally after authenticating (`commands/skills/offer.ts`; interactive runs only, marker file in the XDG cache dir, skipped when any global root already has the skill), and `install.sh` mentions `bunny skills install --global` in its outro.
 
 ---
 

@@ -9,6 +9,7 @@ import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
 import { confirm, openBrowser, spinner } from "../../core/ui.ts";
+import { offerGlobalSkillInstall } from "../skills/offer.ts";
 
 const DASHBOARD_URL =
   process.env.BUNNYNET_DASHBOARD_URL ?? "https://dash.bunny.net";
@@ -58,7 +59,7 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
       describe: "Overwrite existing profile without confirmation",
     }),
 
-  handler: async ({ profile, force, verbose }) => {
+  handler: async ({ profile, force, verbose, output }) => {
     if (profileExists(profile)) {
       logger.warn(
         `Profile "${profile}" already exists and will be overwritten.`,
@@ -179,5 +180,7 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
       clearTimeout(timeoutId);
       server.stop(true);
     }
+
+    await offerGlobalSkillInstall(output);
   },
 });

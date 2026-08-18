@@ -16,6 +16,7 @@ import {
   agentsMarkers,
   installGlobalSkill,
   installProjectSkill,
+  isGlobalSkillInstalled,
   isProjectSkillInstalled,
   type ProjectSkill,
   removeGlobalSkill,
@@ -266,6 +267,16 @@ describe("removeGlobalSkill", () => {
     ]);
     for (const dir of removed) expect(existsSync(dir)).toBe(false);
     expect(removeGlobalSkill("bunny-test", cwd)).toEqual([]);
+  });
+});
+
+describe("isGlobalSkillInstalled", () => {
+  test("true while any global root still has the skill", () => {
+    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(false);
+    installGlobalSkill(SKILL, cwd);
+    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(true);
+    rmSync(join(cwd, ".agents"), { recursive: true, force: true });
+    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(true);
   });
 });
 

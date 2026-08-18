@@ -212,6 +212,16 @@ export function installGlobalSkill(
   return written;
 }
 
+/** True when the named skill is already installed in any global root. */
+export function isGlobalSkillInstalled(
+  name: string,
+  home = homedir(),
+): boolean {
+  return globalSkillRoots(home, name).some((root) =>
+    existsSync(join(root, "SKILL.md")),
+  );
+}
+
 /** Delete a skill from every global root, returning the directories removed. */
 export function removeGlobalSkill(name: string, home = homedir()): string[] {
   const removed: string[] = [];
