@@ -146,33 +146,9 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
       );
     });
 
+    let apiKey: string;
     try {
-      const apiKey = await Promise.race([apiKeyPromise, timeout]);
-      setProfile(profile, apiKey);
-
-      // Fetch user details for a personalised greeting
-      const config = resolveConfig(profile, undefined, verbose);
-      const client = createCoreClient(clientOptions(config, verbose));
-
-      const spin = spinner("Verifying credentials...");
-      spin.start();
-      const { data } = await client.GET("/user");
-      spin.stop();
-
-      const name = data
-        ? [data.FirstName, data.LastName].filter(Boolean).join(" ")
-        : null;
-
-      logger.log();
-      logger.success(
-        name
-          ? `Welcome, ${name}! 🐰`
-          : `Authenticated! Profile "${profile}" saved. 🐇`,
-      );
-      logger.log();
-      logger.dim(
-        "You can now use the CLI to manage edge scripts, databases, apps, and storage.",
-      );
+      apiKey = await Promise.race([apiKeyPromise, timeout]);
     } catch (err: any) {
       logger.error(`Authentication failed: ${err.message}`);
       process.exit(1);
@@ -180,6 +156,35 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
       clearTimeout(timeoutId);
       server.stop(true);
     }
+
+    setProfile(profile, apiKey);
+
+    // The greeting fetch is best-effort: the profile is already saved.
+    let name: string | null = null;
+    const spin = spinner("Verifying credentials...");
+    try {
+      const config = resolveConfig(profile, undefined, verbose);
+      const client = createCoreClient(clientOptions(config, verbose));
+      spin.start();
+      const { data } = await client.GET("/user");
+      name = data
+        ? [data.FirstName, data.LastName].filter(Boolean).join(" ")
+        : null;
+    } catch {
+    } finally {
+      spin.stop();
+    }
+
+    logger.log();
+    logger.success(
+      name
+        ? `Welcome, ${name}! 🐰`
+        : `Authenticated! Profile "${profile}" saved. 🐇`,
+    );
+    logger.log();
+    logger.dim(
+      "You can now use the CLI to manage edge scripts, databases, apps, and storage.",
+    );
 
     await offerGlobalSkillInstall(output);
   },

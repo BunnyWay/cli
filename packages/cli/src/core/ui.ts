@@ -38,6 +38,28 @@ export async function confirm(
   return confirmed ?? false;
 }
 
+/** Like confirm, but reports Ctrl-C as "cancel" instead of folding it into "no". */
+export async function confirmOrCancel(
+  message: string,
+  opts?: { initial?: boolean },
+): Promise<"yes" | "no" | "cancel"> {
+  let cancelled = false;
+  const { confirmed } = await prompts(
+    {
+      type: "confirm",
+      name: "confirmed",
+      message,
+      initial: opts?.initial ?? false,
+    },
+    {
+      onCancel: () => {
+        cancelled = true;
+      },
+    },
+  );
+  return cancelled ? "cancel" : confirmed ? "yes" : "no";
+}
+
 export async function confirmTyped(
   expected: string,
   opts?: { force?: boolean },
