@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import {
   AGENTS_FILE,
   removeGlobalSkill,
@@ -99,11 +97,9 @@ export const skillsRemoveCommand = defineCommand<RemoveArgs>({
       return;
     }
     for (const path of removed) {
-      const sectionOnly =
-        path === AGENTS_FILE && existsSync(join(process.cwd(), AGENTS_FILE));
       logger.success(
-        sectionOnly
-          ? `Removed the skill section from ${AGENTS_FILE}`
+        path === AGENTS_FILE
+          ? `Removed the bunny skill from ${AGENTS_FILE}`
           : `Removed ${path}`,
       );
     }

@@ -61,15 +61,7 @@ function locateMarkedBlock(
   return { startAt, endAt };
 }
 
-/**
- * Return `current` with the named marked block created or replaced.
- *
- * Pure so every marker state is unit-testable: `null` starts a fresh file, no
- * markers appends, a well-formed pair is replaced in place, and a malformed
- * pair (one marker missing, end before start, or duplicated markers) throws
- * instead of guessing, since slicing across misplaced markers would corrupt
- * the user's file.
- */
+/** Return `current` with the named block created, appended, or replaced in place; malformed markers throw instead of guessing. */
 export function upsertMarkedBlock(
   current: string | null,
   name: string,
@@ -89,11 +81,7 @@ export function upsertMarkedBlock(
   return `${before}${section}${after}`;
 }
 
-/**
- * Return `current` without the named marked block, collapsing the whitespace
- * the block occupied. Returns null when no block is present (nothing to do)
- * and throws on malformed markers, mirroring upsertMarkedBlock.
- */
+/** Return `current` without the named block and the whitespace it occupied, or null when no block is present. */
 export function removeMarkedBlock(
   current: string,
   name: string,
@@ -150,26 +138,16 @@ function writeSkillFiles(
   skill: ProjectSkill,
   boundary?: string,
 ): string[] {
-  const relPaths = Object.keys(skill.files);
-  for (const relPath of relPaths) {
+  for (const [relPath, contents] of Object.entries(skill.files)) {
     const target = join(root, relPath);
     if (boundary) assertWriteWithin(boundary, target, relPath);
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, skill.files[relPath] as string);
+    writeFileSync(target, contents);
   }
-  return relPaths;
+  return Object.keys(skill.files);
 }
 
-/**
- * Install or update a skill in the current project.
- *
- * Always maintains a marked block in AGENTS.md; additionally writes the skill
- * files under .claude/skills/<name>/ when the project already uses Claude Code.
- * Returns the written paths relative to `cwd`, slash-separated for display.
- * Idempotent: reruns refresh the same files. Refuses any write that a symlink
- * would redirect outside the project, so a checkout can't plant links that
- * make the installer overwrite unrelated files.
- */
+/** Install or update a skill in the project (AGENTS.md block always, .claude/skills/<name>/ when the project uses Claude Code), returning the cwd-relative paths written. */
 export function installProjectSkill(
   cwd: string,
   skill: ProjectSkill,
@@ -186,14 +164,7 @@ export function installProjectSkill(
   return written;
 }
 
-/**
- * Remove a skill from the current project.
- *
- * Strips the marked block from AGENTS.md (deleting the file when only the
- * installer's own scaffold heading would remain) and deletes
- * .claude/skills/<name>/. Returns the paths it changed relative to `cwd`,
- * empty when nothing was installed. Symlink-guarded like the install path.
- */
+/** Undo installProjectSkill: strip the AGENTS.md block (deleting the file when only the scaffold heading remains) and delete .claude/skills/<name>/, returning the changed paths. */
 export function removeProjectSkill(cwd: string, name: string): string[] {
   const removed: string[] = [];
   const path = join(cwd, AGENTS_FILE);
@@ -227,14 +198,7 @@ function globalSkillRoots(home: string, name: string): string[] {
   ];
 }
 
-/**
- * Install or update a skill globally for the current user.
- *
- * Writes the skill files under ~/.agents/skills/<name>/ (the cross-tool
- * directory read by Cursor, Codex, OpenCode, Copilot, and others) and
- * ~/.claude/skills/<name>/ so every project picks it up. Returns the
- * absolute paths written.
- */
+/** Install or update a skill under every global root so AI coding tools pick it up in every project, returning the absolute paths written. */
 export function installGlobalSkill(
   skill: ProjectSkill,
   home = homedir(),
@@ -248,11 +212,7 @@ export function installGlobalSkill(
   return written;
 }
 
-/**
- * Remove a globally installed skill from every global root.
- *
- * Returns the absolute directories deleted, empty when none existed.
- */
+/** Delete a skill from every global root, returning the directories removed. */
 export function removeGlobalSkill(name: string, home = homedir()): string[] {
   const removed: string[] = [];
   for (const root of globalSkillRoots(home, name)) {

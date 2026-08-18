@@ -65,42 +65,19 @@ describe("upsertMarkedBlock", () => {
     expect(result).toBe(`intro\n\n${start}\n\nnew\n\n${end}\n\noutro\n`);
   });
 
-  test("throws on a missing end marker instead of corrupting the file", () => {
-    expect(() =>
-      upsertMarkedBlock(`${start}\nno end`, "bunny-test", "body"),
-    ).toThrow("malformed bunny-test block");
-  });
-
-  test("throws on a missing start marker", () => {
-    expect(() =>
-      upsertMarkedBlock(`no start\n${end}`, "bunny-test", "body"),
-    ).toThrow("malformed bunny-test block");
-  });
-
-  test("throws when end precedes start", () => {
-    expect(() =>
-      upsertMarkedBlock(`${end}\nmiddle\n${start}`, "bunny-test", "body"),
-    ).toThrow("malformed bunny-test block");
-  });
-
-  test("throws on a duplicate start marker instead of eating content between them", () => {
-    expect(() =>
-      upsertMarkedBlock(
-        `${start}\nold\n${start}\nkeep me\n${end}`,
-        "bunny-test",
-        "body",
-      ),
-    ).toThrow("malformed bunny-test block");
-  });
-
-  test("throws on a duplicate end marker", () => {
-    expect(() =>
-      upsertMarkedBlock(
-        `${start}\nold\n${end}\nkeep me\n${end}`,
-        "bunny-test",
-        "body",
-      ),
-    ).toThrow("malformed bunny-test block");
+  test("throws on malformed markers instead of corrupting the file", () => {
+    const malformed = [
+      `${start}\nno end`,
+      `no start\n${end}`,
+      `${end}\nmiddle\n${start}`,
+      `${start}\nold\n${start}\nkeep me\n${end}`,
+      `${start}\nold\n${end}\nkeep me\n${end}`,
+    ];
+    for (const content of malformed) {
+      expect(() => upsertMarkedBlock(content, "bunny-test", "body")).toThrow(
+        "malformed bunny-test block",
+      );
+    }
   });
 });
 
@@ -226,16 +203,10 @@ describe("installGlobalSkill", () => {
 describe("removeMarkedBlock", () => {
   const { start, end } = agentsMarkers("bunny-test");
 
-  test("null when no block is present", () => {
-    expect(removeMarkedBlock("# Mine\n", "bunny-test")).toBeNull();
-  });
-
-  test("removes the block and collapses the surrounding whitespace", () => {
+  test("removes the block, collapsing whitespace; null when absent, empty when the block was the whole file", () => {
     const content = `intro\n\n${start}\n\nbody\n\n${end}\n\noutro\n`;
     expect(removeMarkedBlock(content, "bunny-test")).toBe("intro\n\noutro\n");
-  });
-
-  test("empty string when the block was the whole file", () => {
+    expect(removeMarkedBlock("# Mine\n", "bunny-test")).toBeNull();
     expect(
       removeMarkedBlock(`${start}\n\nbody\n\n${end}\n`, "bunny-test"),
     ).toBe("");
@@ -286,7 +257,7 @@ describe("removeProjectSkill", () => {
 });
 
 describe("removeGlobalSkill", () => {
-  test("removes the skill from every global root it exists in", () => {
+  test("removes the skill from every global root; nothing left for a second call", () => {
     installGlobalSkill(SKILL, cwd);
     const removed = removeGlobalSkill("bunny-test", cwd);
     expect(removed).toEqual([
@@ -294,24 +265,15 @@ describe("removeGlobalSkill", () => {
       join(cwd, ".claude/skills/bunny-test"),
     ]);
     for (const dir of removed) expect(existsSync(dir)).toBe(false);
-  });
-
-  test("returns nothing when not installed", () => {
     expect(removeGlobalSkill("bunny-test", cwd)).toEqual([]);
   });
 });
 
 describe("isProjectSkillInstalled", () => {
-  test("false without AGENTS.md", () => {
+  test("false without AGENTS.md or marker, true after install, scoped by name", () => {
     expect(isProjectSkillInstalled(cwd, "bunny-test")).toBe(false);
-  });
-
-  test("false when AGENTS.md lacks the marker", () => {
     writeFileSync(join(cwd, AGENTS_FILE), "# My project\n");
     expect(isProjectSkillInstalled(cwd, "bunny-test")).toBe(false);
-  });
-
-  test("true after install, scoped by name", () => {
     installProjectSkill(cwd, SKILL);
     expect(isProjectSkillInstalled(cwd, "bunny-test")).toBe(true);
     expect(isProjectSkillInstalled(cwd, "bunny-other")).toBe(false);
@@ -319,11 +281,8 @@ describe("isProjectSkillInstalled", () => {
 });
 
 describe("usesClaude", () => {
-  test("false in a bare project", () => {
+  test("false in a bare project, true with .claude/", () => {
     expect(usesClaude(cwd)).toBe(false);
-  });
-
-  test("true with .claude/ or CLAUDE.md", () => {
     mkdirSync(join(cwd, ".claude"));
     expect(usesClaude(cwd)).toBe(true);
   });
