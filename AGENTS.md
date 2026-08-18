@@ -174,7 +174,7 @@ bunny-cli/
 │           ├── cli.ts                    # Root yargs instance, global flags, command registration
 │           │
 │           ├── core/
-│           │   ├── agent-skill.ts        # Generic project skill installer/remover: marked AGENTS.md block upsert/remove + skill file writes (Claude-gated for projects; ~/.agents/skills + ~/.claude/skills for --global); project writes refuse symlink escapes; SKILL.md is written last per root and the installed check requires every global root, so partial installs re-offer
+│           │   ├── agent-skill.ts        # Generic project skill installer/remover: marked AGENTS.md block upsert/remove + skill file writes (Claude-gated for projects; ~/.agents/skills + ~/.claude/skills for --global); project writes refuse symlink escapes; SKILL.md is a completion sentinel (removed first, written last per root) and the installed check requires every global root, so partial installs and failed refreshes re-offer
 │           │   ├── agent-skill.test.ts   # Tests for install/upsert idempotency, marker scoping, Claude gating
 │           │   ├── client-options.ts     # clientOptions() helper — builds ClientOptions from ResolvedConfig
 │           │   ├── define-command.ts     # Command factory (see "Command Pattern" below)

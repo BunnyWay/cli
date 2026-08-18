@@ -138,7 +138,8 @@ function writeSkillFiles(
   skill: ProjectSkill,
   boundary?: string,
 ): string[] {
-  // SKILL.md is written last so its presence marks a completed root.
+  // SKILL.md is the completion sentinel: removed first and written last, so an interrupted install or refresh reads as incomplete.
+  rmSync(join(root, "SKILL.md"), { force: true });
   const entries = Object.entries(skill.files).sort(
     ([a], [b]) => Number(a === "SKILL.md") - Number(b === "SKILL.md"),
   );

@@ -204,6 +204,19 @@ describe("installGlobalSkill", () => {
     rmSync(join(cwd, ".agents"), { recursive: true, force: true });
     expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(false);
   });
+
+  test("a failed refresh clears the completion sentinel so it counts as not installed", () => {
+    installGlobalSkill(SKILL, cwd);
+    const conflict = join(cwd, ".claude/skills/bunny-test/references/extra.md");
+    rmSync(conflict);
+    // A directory where a file belongs makes the refresh fail mid-write.
+    mkdirSync(conflict);
+    expect(() => installGlobalSkill(SKILL, cwd)).toThrow();
+    expect(existsSync(join(cwd, ".claude/skills/bunny-test/SKILL.md"))).toBe(
+      false,
+    );
+    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(false);
+  });
 });
 
 describe("removeMarkedBlock", () => {
