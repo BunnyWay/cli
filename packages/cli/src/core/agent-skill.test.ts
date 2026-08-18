@@ -6,6 +6,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -78,6 +79,26 @@ describe("upsertMarkedBlock", () => {
       upsertMarkedBlock(`${end}\nmiddle\n${start}`, "bunny-test", "body"),
     ).toThrow("malformed bunny-test block");
   });
+
+  test("throws on a duplicate start marker instead of eating content between them", () => {
+    expect(() =>
+      upsertMarkedBlock(
+        `${start}\nold\n${start}\nkeep me\n${end}`,
+        "bunny-test",
+        "body",
+      ),
+    ).toThrow("malformed bunny-test block");
+  });
+
+  test("throws on a duplicate end marker", () => {
+    expect(() =>
+      upsertMarkedBlock(
+        `${start}\nold\n${end}\nkeep me\n${end}`,
+        "bunny-test",
+        "body",
+      ),
+    ).toThrow("malformed bunny-test block");
+  });
 });
 
 describe("installProjectSkill", () => {
@@ -145,6 +166,43 @@ describe("installProjectSkill", () => {
     writeFileSync(join(cwd, "CLAUDE.md"), "# Claude\n");
     const files = installProjectSkill(cwd, SKILL);
     expect(files).toContain(".claude/skills/bunny-test/SKILL.md");
+  });
+
+  test("refuses an AGENTS.md symlink that points outside the project", () => {
+    const outside = join(cwd, "..", `bunny-agent-skill-outside-${Date.now()}`);
+    writeFileSync(outside, "precious\n");
+    try {
+      symlinkSync(outside, join(cwd, AGENTS_FILE));
+      expect(() => installProjectSkill(cwd, SKILL)).toThrow(
+        "resolves outside the project",
+      );
+      expect(readFileSync(outside, "utf8")).toBe("precious\n");
+    } finally {
+      rmSync(outside, { force: true });
+    }
+  });
+
+  test("follows an AGENTS.md symlink that stays inside the project", () => {
+    writeFileSync(join(cwd, "CLAUDE.md"), "# Claude\n");
+    symlinkSync(join(cwd, "CLAUDE.md"), join(cwd, AGENTS_FILE));
+    installProjectSkill(cwd, SKILL);
+    expect(readFileSync(join(cwd, "CLAUDE.md"), "utf8")).toContain(
+      agentsMarkers("bunny-test").start,
+    );
+  });
+
+  test("refuses skill writes when .claude/skills escapes via a symlink", () => {
+    const outside = mkdtempSync(join(tmpdir(), "bunny-agent-skill-escape-"));
+    try {
+      mkdirSync(join(cwd, ".claude"));
+      symlinkSync(outside, join(cwd, ".claude/skills"));
+      expect(() => installProjectSkill(cwd, SKILL)).toThrow(
+        "resolves outside the project",
+      );
+      expect(existsSync(join(outside, "bunny-test/SKILL.md"))).toBe(false);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });
 

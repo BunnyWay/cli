@@ -174,7 +174,7 @@ bunny-cli/
 │           ├── cli.ts                    # Root yargs instance, global flags, command registration
 │           │
 │           ├── core/
-│           │   ├── agent-skill.ts        # Generic project skill installer: marked AGENTS.md block upsert + .claude/skills writes (Claude-gated for projects, ~/.claude/skills for --global)
+│           │   ├── agent-skill.ts        # Generic project skill installer: marked AGENTS.md block upsert + .claude/skills writes (Claude-gated for projects, ~/.claude/skills for --global); project writes refuse symlink escapes
 │           │   ├── agent-skill.test.ts   # Tests for install/upsert idempotency, marker scoping, Claude gating
 │           │   ├── client-options.ts     # clientOptions() helper — builds ClientOptions from ResolvedConfig
 │           │   ├── define-command.ts     # Command factory (see "Command Pattern" below)
@@ -1338,7 +1338,7 @@ handler: async ({ output, profile, apiKey }) => {
 
 So coding agents discover the CLI at all, `bunny skills install` writes the shipped `skills/bunny-cli/` skill into the user's environment. The generic machinery lives in `packages/cli/src/core/agent-skill.ts` so future per-resource skills can reuse it:
 
-- **Project install (default)**: upserts a marked block (`<!-- bunny-cli:start/end -->`) into the project's `AGENTS.md` (created if missing, replaced in place on reinstall; markers are per-skill so multiple blocks coexist). When the project uses Claude Code (`.claude/` or `CLAUDE.md` exists) it also writes the full skill with all references to `.claude/skills/bunny-cli/`.
+- **Project install (default)**: upserts a marked block (`<!-- bunny-cli:start/end -->`) into the project's `AGENTS.md` (created if missing, replaced in place on reinstall; markers are per-skill so multiple blocks coexist; a malformed block, meaning a missing, reversed, or duplicated marker, errors instead of guessing). When the project uses Claude Code (`.claude/` or `CLAUDE.md` exists) it also writes the full skill with all references to `.claude/skills/bunny-cli/`. Writes that a symlink would redirect outside the project are refused, so a checkout can't plant links that make the installer overwrite unrelated files (symlinks resolving inside the project, e.g. `AGENTS.md -> CLAUDE.md`, are followed).
 - **Global install (`--global`)**: writes the skill to `~/.claude/skills/bunny-cli/` so Claude Code picks it up in every project; nothing project-local is touched.
 - **Single source of truth**: `packages/cli/src/commands/skills/content.ts` embeds `skills/bunny-cli/**` at bundle time via Bun text imports (`with { type: "text" }`), so the installed skill is always the shipped one; only the compact AGENTS.md section is authored separately. `content.test.ts` fails if SKILL.md routes to a reference that isn't embedded.
 - Commands that create project resources can offer this install (via `isProjectSkillInstalled()` + `confirm()`) at natural first-use moments.

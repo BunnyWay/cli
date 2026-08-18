@@ -1,6 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { UserError } from "./errors.ts";
 
 /** AGENTS.md is the cross-agent instruction file; managed blocks are created or replaced there. */
@@ -35,8 +42,9 @@ export function usesClaude(cwd: string): boolean {
  *
  * Pure so every marker state is unit-testable: `null` starts a fresh file, no
  * markers appends, a well-formed pair is replaced in place, and a malformed
- * pair (one marker missing, or end before start) throws instead of guessing,
- * since slicing across reversed markers would corrupt the user's file.
+ * pair (one marker missing, end before start, or duplicated markers) throws
+ * instead of guessing, since slicing across misplaced markers would corrupt
+ * the user's file.
  */
 export function upsertMarkedBlock(
   current: string | null,
@@ -53,9 +61,12 @@ export function upsertMarkedBlock(
     const separator = current.endsWith("\n") ? "\n" : "\n\n";
     return `${current}${separator}${section}\n`;
   }
-  if (startAt === -1 || endAt === -1 || endAt < startAt) {
+  const duplicated =
+    current.indexOf(start, startAt + start.length) !== -1 ||
+    current.indexOf(end, endAt + end.length) !== -1;
+  if (startAt === -1 || endAt === -1 || endAt < startAt || duplicated) {
     throw new UserError(
-      `${AGENTS_FILE} has a malformed ${name} block: expected "${start}" followed by "${end}". Fix or remove the markers, then rerun.`,
+      `${AGENTS_FILE} has a malformed ${name} block: expected a single "${start}" followed by a single "${end}". Fix or remove the markers, then rerun.`,
     );
   }
   const before = current.slice(0, startAt);
@@ -63,18 +74,53 @@ export function upsertMarkedBlock(
   return `${before}${section}${after}`;
 }
 
+/** Throw when writing `target` would follow a symlink to land outside `boundary`. */
+function assertWriteWithin(
+  boundary: string,
+  target: string,
+  label: string,
+): void {
+  const boundaryReal = realpathSync(boundary);
+  const inside = (p: string) =>
+    p === boundaryReal || p.startsWith(boundaryReal + sep);
+  let existing = dirname(target);
+  while (!existsSync(existing)) existing = dirname(existing);
+  let escapes = !inside(realpathSync(existing));
+  if (
+    !escapes &&
+    lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink()
+  ) {
+    try {
+      escapes = !inside(realpathSync(target));
+    } catch {
+      escapes = true;
+    }
+  }
+  if (escapes) {
+    throw new UserError(
+      `Refusing to write ${label}: it resolves outside the project through a symlink. Remove the symlink, then rerun.`,
+    );
+  }
+}
+
 function upsertAgentsFile(cwd: string, name: string, body: string): string {
   const path = join(cwd, AGENTS_FILE);
+  assertWriteWithin(cwd, path, AGENTS_FILE);
   const current = existsSync(path) ? readFileSync(path, "utf8") : null;
   writeFileSync(path, upsertMarkedBlock(current, name, body));
   return AGENTS_FILE;
 }
 
 /** Write the skill's files under `root`, returning their slash-separated relative paths. */
-function writeSkillFiles(root: string, skill: ProjectSkill): string[] {
+function writeSkillFiles(
+  root: string,
+  skill: ProjectSkill,
+  boundary?: string,
+): string[] {
   const relPaths = Object.keys(skill.files);
   for (const relPath of relPaths) {
     const target = join(root, relPath);
+    if (boundary) assertWriteWithin(boundary, target, relPath);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, skill.files[relPath] as string);
   }
@@ -87,7 +133,9 @@ function writeSkillFiles(root: string, skill: ProjectSkill): string[] {
  * Always maintains a marked block in AGENTS.md; additionally writes the skill
  * files under .claude/skills/<name>/ when the project already uses Claude Code.
  * Returns the written paths relative to `cwd`, slash-separated for display.
- * Idempotent: reruns refresh the same files.
+ * Idempotent: reruns refresh the same files. Refuses any write that a symlink
+ * would redirect outside the project, so a checkout can't plant links that
+ * make the installer overwrite unrelated files.
  */
 export function installProjectSkill(
   cwd: string,
@@ -98,7 +146,7 @@ export function installProjectSkill(
   ];
   if (usesClaude(cwd)) {
     const skillRoot = `.claude/skills/${skill.name}`;
-    for (const relPath of writeSkillFiles(join(cwd, skillRoot), skill)) {
+    for (const relPath of writeSkillFiles(join(cwd, skillRoot), skill, cwd)) {
       written.push(`${skillRoot}/${relPath}`);
     }
   }

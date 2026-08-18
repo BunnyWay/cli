@@ -32,8 +32,8 @@ const AGENTS_SECTION = `## bunny.net CLI
 This project uses bunny.net. Manage its resources with the \`bunny\` CLI: databases, DNS, storage, Edge Scripts, static sites, and cloud sandboxes.
 
 - Authenticate once with \`bunny login\` (or set \`BUNNYNET_API_KEY\`); verify with \`bunny api GET /user\`.
-- Discover commands with \`bunny --help\` and \`bunny <namespace> --help\`; every command supports \`--output json\` for machine-readable output.
-- Interactive prompts are skipped automatically in non-TTY runs; pass \`--force\` explicitly on destructive commands in scripts.
+- Discover commands with \`bunny --help\` and \`bunny <namespace> --help\`; resource commands support \`--output json\` for machine-readable output (a few browser-opening helpers like \`bunny docs\` do not).
+- In unattended runs, pass a flag for every value a command would prompt for, and \`--force\` on destructive commands; prompts otherwise block or cancel without a TTY.
 - Key namespaces: \`bunny db\` (Bunny Database: create, shell, studio, tokens), \`bunny dns\` (zones, records, presets), \`bunny sites\` (static hosting and deploys), \`bunny scripts\` (Edge Scripts), \`bunny storage\` (zones and files), \`bunny sandbox\` (cloud sandboxes).
 - When the CLI has no command for something, fall back to \`bunny api <METHOD> <path>\` against api.bunny.net.`;
 
