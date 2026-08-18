@@ -64,6 +64,7 @@ bun ny sites deploy --build                 # run `sites.build` from bunny.jsonc
 bun ny sites deployments list               # list deploys with the live one marked
 bun ny sites deployments publish --previous # instant rollback to the previous deploy
 bun ny sites deployments prune              # delete old deploys and their preview URLs (keeps the newest 5, never current/previous)
+bun ny sites deployments delete a1b2c3d4    # delete one deploy and its preview URL (never current/previous)
 bun ny sites domains add example.com        # attach a custom production domain
 bun ny sites ssl --no-force-ssl             # stop forcing HTTPS on the site's b-cdn.net system host
 bun ny sites open                           # open the site's live URL in the browser
