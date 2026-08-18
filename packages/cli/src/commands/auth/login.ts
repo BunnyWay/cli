@@ -154,7 +154,8 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
       process.exit(1);
     } finally {
       clearTimeout(timeoutId);
-      server.stop(true);
+      // Graceful stop: the success page is still flushing to the browser; force-closed at the end.
+      server.stop();
     }
 
     setProfile(profile, apiKey);
@@ -187,5 +188,6 @@ export const authLoginCommand = defineCommand<{ force: boolean }>({
     );
 
     await offerGlobalSkillInstall(output);
+    server.stop(true);
   },
 });
