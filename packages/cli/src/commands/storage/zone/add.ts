@@ -28,10 +28,12 @@ import {
   type ConnectionType,
   clientType,
   connectionJson,
+  hasSecret,
   offerConnectionEnv,
   printConnection,
   promptClient,
   promptConnectionType,
+  type StorageConnection,
   storageConnection,
 } from "../connection.ts";
 import {
@@ -56,6 +58,19 @@ async function zoneWithPassword(
 ): Promise<StorageZoneModel> {
   if (zone.Password || !zone.Id) return zone;
   return fetchStorageZone(client, zone.Id);
+}
+
+// S3 support is create-time only, so credentials for a zone without it can never work.
+function warnUnusableS3(
+  zone: StorageZoneModel,
+  type: ConnectionType,
+  zoneName: string,
+): void {
+  if (type === "s3" && !isS3Enabled(zone)) {
+    logger.warn(
+      `S3 is not enabled on ${zoneName}, so these credentials will not work.`,
+    );
+  }
 }
 
 interface ZoneAddArgs {
@@ -186,11 +201,37 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       );
     }
 
+    // --format only makes sense for the protocol it configures, as in `zones credentials`.
+    if (format && connection && clientType(format) !== connection) {
+      throw new UserError(
+        `--format ${format} is ${clientType(format)} config, but --connection ${connection} was given.`,
+        `Drop --format, or pass --connection ${clientType(format)}.`,
+      );
+    }
+
+    const requestedType =
+      connection ?? (format ? clientType(format) : undefined);
+
+    if (requestedType === "s3" && s3 === false) {
+      throw new UserError(
+        "--connection s3 needs S3 compatibility, but --no-s3 was given.",
+        "Drop --no-s3, or pass --connection http or --connection ftp.",
+      );
+    }
+
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
     // JSON output, non-TTY, and --force all stay non-interactive; values must come from flags.
     const interactive = isInteractive(output) && !force;
+
+    // Only the interactive flow can still pick a protocol, so elsewhere this would be a silent no-op.
+    if (saveEnv && !requestedType && !interactive) {
+      throw new UserError(
+        "--save-env needs connection details to save.",
+        "Pass --connection http, ftp, or s3 (or --format).",
+      );
+    }
 
     // Region, tier, and replication all drive storage pricing, so flag it up front.
     if (
@@ -391,13 +432,16 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       const linked = link === true && Boolean(created);
       if (linked && created) writeStorageManifest(created);
 
-      const conn =
-        connection && created
-          ? storageConnection(
-              await zoneWithPassword(client, created),
-              connection,
-            )
-          : undefined;
+      let conn: StorageConnection | undefined;
+      if (requestedType && created) {
+        const zoneWithSecret = await zoneWithPassword(client, created);
+        warnUnusableS3(zoneWithSecret, requestedType, zoneName);
+        conn = storageConnection(zoneWithSecret, requestedType);
+        // Asked for explicitly, so the JSON carries the secret in full.
+        if (hasSecret(conn)) {
+          logger.warn("Treat these credentials like a password.");
+        }
+      }
 
       const savedToEnv = conn
         ? await offerConnectionEnv(conn, { saveEnv, interactive: false })
@@ -439,6 +483,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       }
     }
 
+    let domainError: unknown;
     if (pullZoneResult?.id) {
       let customDomain = domain;
       if (
@@ -455,20 +500,28 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       }
       if (customDomain) {
         const host = normalizeHostname(customDomain);
-        await setupHostname({
-          coreClient: client,
-          pullZoneId: pullZoneResult.id,
-          domain: host,
-          sslHint: `bunny storage zones domains ssl ${host} ${zoneName}`,
-          retryHint: `bunny storage zones domains add ${host} ${zoneName}`,
-          forceSsl: true,
-          interactive,
-          verbose,
-        });
+        try {
+          await setupHostname({
+            coreClient: client,
+            pullZoneId: pullZoneResult.id,
+            domain: host,
+            sslHint: `bunny storage zones domains ssl ${host} ${zoneName}`,
+            retryHint: `bunny storage zones domains add ${host} ${zoneName}`,
+            forceSsl: true,
+            interactive,
+            verbose,
+          });
+        } catch (err) {
+          // The zone is already created, so finish the requested follow-ups before failing.
+          domainError = err;
+        }
       }
     }
 
-    if (!created) return;
+    if (!created) {
+      if (domainError) throw domainError;
+      return;
+    }
 
     const existing = loadManifest<StorageZoneManifest>(STORAGE_MANIFEST);
     let shouldLink = link;
@@ -484,8 +537,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       logger.success(`Linked this directory to storage zone ${zoneName}.`);
     }
 
-    let connectionType =
-      connection ?? (format ? clientType(format) : undefined);
+    let connectionType = requestedType;
     let toolFormat = format;
     if (connectionType === undefined && interactive) {
       if (await confirm("Show connection details?")) {
@@ -496,11 +548,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
 
     if (connectionType) {
       const zoneWithSecret = await zoneWithPassword(client, created);
-      if (connectionType === "s3" && !isS3Enabled(zoneWithSecret)) {
-        logger.warn(
-          `S3 is not enabled on ${zoneName}, so these credentials will not work.`,
-        );
-      }
+      warnUnusableS3(zoneWithSecret, connectionType, zoneName);
       const conn = storageConnection(zoneWithSecret, connectionType);
       printConnection(zoneWithSecret, conn, { output, format: toolFormat });
 
@@ -511,5 +559,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       `  Upload files:  bunny storage files upload <file> -z ${zoneName}`,
     );
     logger.dim(`  Credentials:   bunny storage zones credentials ${zoneName}`);
+
+    if (domainError) throw domainError;
   },
 });
