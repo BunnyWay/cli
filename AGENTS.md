@@ -195,6 +195,8 @@ bunny-cli/
 │           │   │   ├── bunny-dns.test.ts  # Tests for longest-suffix zone matching + record-name derivation with a fake core client
 │           │   │   └── commands.ts       # createHostnamesCommands(): add/ssl/list/remove factory parameterized by a pull-zone resolver; add treats an already-attached hostname as success (reported, and onAdded still runs, so retries finish companion/state work); onAdded runs AFTER the DNS/SSL flow (try/finally: it runs even when that flow throws, since the hostname did attach; only an attach failure skips it), so hook output never interleaves with the apex messages; remove guards its confirmation with requireConfirmable (unattended runs need --force)
 │           │   ├── bunny-config.ts       # Shared bunny.jsonc discovery + raw read (findConfigRoot, configPath, configExists, readBunnyConfig); used by apps/ and sites/ config.ts
+│           │   ├── headless.ts           # detectHeadless(): flags shells with no visible browser (SSH/CI/container/no-display/unsupported platform); env + platform are injectable for tests
+│           │   ├── headless.test.ts      # Tests for detection order and per-platform display rules
 │           │   ├── jsonc.ts              # syncJsonc(): surgical JSONC editing that preserves comments, key order, and sibling blocks
 │           │   ├── jsonc.test.ts         # Tests for syncJsonc (comment/formatting preservation, key add/remove)
 │           │   ├── logger.ts             # Chalk-based structured logger
@@ -265,7 +267,7 @@ bunny-cli/
 │           │   │       ├── list.ts       # List available regions
 │           │   │       └── show.ts       # Show app region settings
 │           │   ├── auth/
-│           │   │   ├── login.ts          # Browser-based login via Bun.serve() callback (top-level: bunny login)
+│           │   │   ├── login.ts          # Browser-based login via Bun.serve() callback, with headless detection and an API key fallback (top-level: bunny login)
 │           │   │   └── logout.ts         # Profile removal with --force confirmation bypass (top-level: bunny logout)
 │           │   ├── config/
 │           │   │   ├── index.ts          # defineNamespace("config", ...) — registers init, show, profile
@@ -687,7 +689,7 @@ This is an browser-based auth flow using a local HTTP callback server. It is a d
 6. Wait for the callback with a 5-minute timeout.
 7. On callback, validate the state parameter and extract the `apiKey` query param.
 8. Serve an embedded HTML success page to the browser.
-9. Save the API key to the profile via `setProfile()`.
+9. Verify the key against `/user` and save it to the profile via `setProfile()`.
 10. Shut down the local server.
 
 **Error cases:**
@@ -696,6 +698,24 @@ This is an browser-based auth flow using a local HTTP callback server. It is a d
 - Missing apiKey in callback → reject.
 - 5-minute timeout → exit with timeout error.
 - Profile already exists → prompt for confirmation (bypass with `--force`).
+- Key rejected with 401 → `UserError`, and the profile is left untouched. Any other verification failure is treated as unverified and the key is still saved.
+
+### Headless login (remote machines, containers, CI)
+
+The loopback flow needs a browser the user can actually see, which rules out SSH sessions, containers, and CI. `detectHeadless()` in `core/headless.ts` returns a `HeadlessReason` (`ssh` | `ci` | `container` | `no-display` | `unsupported-platform`) or `null` when a browser is plausible. Signals are checked in that order and only the first is reported, since SSH is the likeliest explanation when several match.
+
+`bunny login` branches on the result:
+
+| Situation                     | Behaviour                                                                                                                                                                                          |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--api-key` passed            | Skips detection entirely; verifies and saves the key.                                                                                                                                              |
+| Browser plausible             | Opens the browser as before.                                                                                                                                                                       |
+| Headless, TTY available       | Warns with the reason, then offers "Paste an API key" (masked prompt) or "Print the login URL" (prints the matching `ssh -L` forward, since the callback port is random and bound to `127.0.0.1`). |
+| Headless, no TTY (agents, CI) | Throws `UserError` pointing at `--api-key` / `BUNNYNET_API_KEY` rather than waiting 5 minutes on a browser that will never open.                                                                   |
+
+`detectHeadless()` takes `env`, `platform`, and the container-marker probe (`fileExists`, defaulting to `existsSync`) as injectable parameters, so every signal comes from the fixture and the branches are unit-testable even when the suite itself runs in a container (`core/headless.test.ts`).
+
+Under `--output json`, login prints one object (`{ authenticated, profile, name }`) instead of the greeting, so an unattended `bunny login --api-key ... --output json` is parseable.
 
 **Success page:**
 

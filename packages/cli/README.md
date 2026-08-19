@@ -43,7 +43,26 @@ bunny login --profile staging
 
 # Overwrite existing profile without prompting
 bunny login --force
+
+# Skip the browser entirely (remote machines, containers, CI)
+bunny login --api-key "$BUNNYNET_API_KEY"
 ```
+
+#### Remote and headless machines
+
+The browser flow needs a browser you can actually see, which rules out SSH sessions, CI jobs, containers, and Unix hosts with no display server. `bunny login` checks for those before it opens anything.
+
+With a terminal, it warns which case it hit, then offers to take an API key at a masked prompt (create one in the dashboard under Account Settings > API) or to print the login URL together with the `ssh -L` forward that makes the callback reachable. Without one, as with an agent or a CI job, it exits with a hint instead of waiting on a callback nothing can answer.
+
+So for unattended runs, pass the key:
+
+```bash
+bunny login --api-key "$BUNNYNET_API_KEY"
+```
+
+Add `--output json` to get `{ "authenticated": true, "profile": "...", "name": "..." }` on stdout instead of the greeting.
+
+The CLI checks the key against the API before writing the profile, so a bad one fails here rather than on the next command. You can also skip `bunny login` entirely and export `BUNNYNET_API_KEY`; it takes priority over any stored profile.
 
 ### `bunny logout`
 
