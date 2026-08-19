@@ -4,6 +4,7 @@ import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
+import { formatKeyValue } from "../../../core/format.ts";
 import {
   addHostname,
   createPullZone,
@@ -12,22 +13,70 @@ import {
   systemHostname,
 } from "../../../core/hostnames/index.ts";
 import { logger } from "../../../core/logger.ts";
+import { loadManifest } from "../../../core/manifest.ts";
 import { confirm, isInteractive, spinner } from "../../../core/ui.ts";
-import { type StorageZoneModel, toSafeStorageZone } from "../api.ts";
+import { readEnvValue, writeEnvValue } from "../../../utils/env-file.ts";
+import {
+  type CoreClient,
+  fetchStorageZone,
+  type StorageZoneModel,
+  toSafeStorageZone,
+} from "../api.ts";
+import {
+  CONNECTION_TYPES,
+  type ConnectionType,
+  connectionChoices,
+  connectionJson,
+  connectionRows,
+  hasSecret,
+  type StorageConnection,
+  storageConnection,
+} from "../connection.ts";
 import {
   confirmAddedReplicationRegions,
   normalizeReplicationRegions,
   replicationChoices,
+  SSD_PRIMARY_REGION,
+  STORAGE_MANIFEST,
   STORAGE_REGIONS,
+  type StorageZoneManifest,
+  ZONE_TIER_CHOICES,
+  type ZoneTierChoice,
+  zoneTierValue,
 } from "../constants.ts";
+import { writeStorageManifest } from "../interactive.ts";
+import { isS3Enabled } from "../s3.ts";
+import { zoneDetailRows } from "./details.ts";
+
+async function zoneWithPassword(
+  client: CoreClient,
+  zone: StorageZoneModel,
+): Promise<StorageZoneModel> {
+  if (zone.Password || !zone.Id) return zone;
+  return fetchStorageZone(client, zone.Id);
+}
+
+function saveConnectionEnv(connection: StorageConnection): void {
+  const envPath = connection.env
+    .map(({ key }) => readEnvValue(key)?.envPath)
+    .find(Boolean);
+  for (const { key, value } of connection.env) {
+    writeEnvValue(key, value, envPath);
+  }
+}
 
 interface ZoneAddArgs {
   name?: string;
   region?: string;
+  tier?: ZoneTierChoice;
+  s3?: boolean;
   replication?: string[];
   pullZone?: boolean;
   pullZoneName?: string;
   domain?: string;
+  link?: boolean;
+  connection?: ConnectionType;
+  saveEnv?: boolean;
   force?: boolean;
 }
 
@@ -35,7 +84,10 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
   command: "add [name]",
   describe: "Create a new storage zone.",
   examples: [
-    ["$0 storage zones add", "Interactive: prompts for name and region"],
+    [
+      "$0 storage zones add",
+      "Interactive: prompts for name, tier, region, and S3",
+    ],
     [
       "$0 storage zones add my-zone --region DE",
       "Create a zone in Falkenstein",
@@ -43,6 +95,10 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     [
       "$0 storage zones add my-zone --region NY --replication LA,SG",
       "Create a zone with replication regions",
+    ],
+    [
+      "$0 storage zones add my-zone --tier ssd --s3",
+      "Create an SSD zone (always DE) with S3-compatible access",
     ],
   ],
 
@@ -55,6 +111,15 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       .option("region", {
         type: "string",
         describe: "Main storage region code (e.g. DE, NY, LA, SG)",
+      })
+      .option("tier", {
+        type: "string",
+        choices: ZONE_TIER_CHOICES,
+        describe: "Storage tier: hdd (Standard) or ssd (Edge)",
+      })
+      .option("s3", {
+        type: "boolean",
+        describe: "Enable S3-compatible API access on the zone",
       })
       .option("replication", {
         type: "string",
@@ -73,6 +138,20 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
         type: "string",
         describe: "Custom domain to add to the pull zone (implies --pull-zone)",
       })
+      .option("link", {
+        type: "boolean",
+        describe:
+          "Link this directory to the new zone (skips prompt). Use --no-link to skip without prompting.",
+      })
+      .option("connection", {
+        type: "string",
+        choices: CONNECTION_TYPES,
+        describe: "Show connection details for ftp (FTP/HTTP API) or s3",
+      })
+      .option("save-env", {
+        type: "boolean",
+        describe: "Save the connection details to .env (needs --connection)",
+      })
       .option("force", {
         alias: "f",
         type: "boolean",
@@ -83,10 +162,15 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
   handler: async ({
     name,
     region,
+    tier,
+    s3,
     replication,
     pullZone,
     pullZoneName,
     domain,
+    link,
+    connection,
+    saveEnv,
     force,
     profile,
     output,
@@ -107,9 +191,12 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     // JSON output, non-TTY, and --force all stay non-interactive; values must come from flags.
     const interactive = isInteractive(output) && !force;
 
-    // The region and replication choices both drive storage pricing, so flag it up front.
-    if (interactive && (region === undefined || replication === undefined)) {
-      logger.dim("Region and replication regions both affect storage pricing.");
+    // Region, tier, and replication all drive storage pricing, so flag it up front.
+    if (
+      interactive &&
+      (region === undefined || tier === undefined || replication === undefined)
+    ) {
+      logger.dim("Region, tier, and replication all affect storage pricing.");
     }
 
     let zoneName = name;
@@ -123,9 +210,47 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     }
     if (!zoneName) throw new UserError("A storage zone name is required.");
 
+    // Asked before the region because Edge (SSD) fixes it. Neither can change later.
+    let zoneTier = tier;
+    if (!zoneTier && interactive) {
+      const { picked } = await prompts({
+        type: "select",
+        name: "picked",
+        message: "Storage tier:",
+        choices: [
+          {
+            title: "Standard (HDD)",
+            description: "Lower cost, any primary region",
+            value: "hdd" as const,
+          },
+          {
+            title: "Edge (SSD)",
+            description: `Faster reads, higher cost, ${SSD_PRIMARY_REGION} only`,
+            value: "ssd" as const,
+          },
+        ],
+      });
+      if (picked === undefined) throw new UserError("Creation cancelled.");
+      zoneTier = picked;
+    }
+
     // The main region cannot be changed after creation, so prompt for it too.
     let mainRegion = region;
-    if (!mainRegion && interactive) {
+    if (zoneTier === "ssd") {
+      // The API would rewrite this to DE without saying so.
+      if (mainRegion && mainRegion.toUpperCase() !== SSD_PRIMARY_REGION) {
+        throw new UserError(
+          `The Edge (SSD) tier is only available with ${SSD_PRIMARY_REGION} as the main region, but --region ${mainRegion} was given.`,
+          `Drop --region to use ${SSD_PRIMARY_REGION}, or pass --tier hdd to keep ${mainRegion.toUpperCase()}. Replication regions are unaffected.`,
+        );
+      }
+      mainRegion = SSD_PRIMARY_REGION;
+      if (interactive) {
+        logger.dim(
+          `Edge (SSD) zones are always stored in ${SSD_PRIMARY_REGION} first. Replication can still span other regions.`,
+        );
+      }
+    } else if (!mainRegion && interactive) {
       const { picked } = await prompts({
         type: "select",
         name: "picked",
@@ -144,6 +269,12 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       );
     }
     mainRegion = mainRegion.toUpperCase();
+
+    let s3Enabled = s3;
+    if (s3Enabled === undefined && interactive) {
+      logger.dim("S3 compatibility cannot be turned on later.");
+      s3Enabled = await confirm("Enable S3 compatibility?", { initial: true });
+    }
 
     let replicationRegions = replication;
     if (replicationRegions === undefined && interactive) {
@@ -183,6 +314,10 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
           Name: zoneName,
           Region: mainRegion,
           ReplicationRegions: replicationCodes.length ? replicationCodes : null,
+          // Omitted when unset so the API keeps applying its own defaults.
+          ZoneTier: zoneTier ? zoneTierValue(zoneTier) : undefined,
+          StorageZoneType:
+            s3Enabled === undefined ? undefined : s3Enabled ? 1 : 0,
         },
       });
       created = data;
@@ -251,12 +386,30 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
         }
       }
 
+      // No prompts here, so the follow-ups are flag-driven.
+      const linked = link === true && Boolean(created);
+      if (linked && created) writeStorageManifest(created);
+
+      const conn =
+        connection && created
+          ? storageConnection(
+              await zoneWithPassword(client, created),
+              connection,
+            )
+          : undefined;
+
+      const savedToEnv = Boolean(saveEnv && conn);
+      if (savedToEnv && conn) saveConnectionEnv(conn);
+
       logger.log(
         JSON.stringify(
           {
             ...(created ? toSafeStorageZone(created) : { Name: zoneName }),
             PullZone: pullZoneResult ?? null,
             CustomDomain: customDomainResult ?? null,
+            Linked: linked,
+            Connection: conn ? connectionJson(conn) : null,
+            SavedToEnv: savedToEnv,
           },
           null,
           2,
@@ -270,6 +423,13 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
         ? `Created storage zone ${zoneName} (ID: ${zoneId}).`
         : `Created storage zone ${zoneName}.`,
     );
+    if (created) {
+      logger.log();
+      logger.log(
+        formatKeyValue(zoneDetailRows(created, { usage: false }), output),
+      );
+      logger.log();
+    }
     if (pullZoneResult) {
       logger.success(`Created pull zone ${pullZoneResult.name}.`);
       if (pullZoneResult.url) {
@@ -305,5 +465,72 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
         });
       }
     }
+
+    if (!created) return;
+
+    const existing = loadManifest<StorageZoneManifest>(STORAGE_MANIFEST);
+    let shouldLink = link;
+    if (shouldLink === undefined && interactive) {
+      shouldLink = await confirm(
+        existing.id && existing.id !== zoneId
+          ? `Link this directory to ${zoneName}? (replaces the existing link to ${existing.name ?? existing.id})`
+          : `Link this directory to ${zoneName}?`,
+      );
+    }
+    if (shouldLink) {
+      writeStorageManifest(created);
+      logger.success(`Linked this directory to storage zone ${zoneName}.`);
+    }
+
+    let connectionType = connection;
+    if (connectionType === undefined && interactive) {
+      const choices = connectionChoices(created);
+      if (await confirm("Show connection details?")) {
+        const { picked } = await prompts({
+          type: "select",
+          name: "picked",
+          message: "Connection type:",
+          choices,
+        });
+        connectionType = picked;
+      }
+    }
+
+    if (connectionType) {
+      const zoneWithSecret = await zoneWithPassword(client, created);
+      if (connectionType === "s3" && !isS3Enabled(zoneWithSecret)) {
+        logger.warn(
+          `S3 is not enabled on ${zoneName}, so these credentials will not work.`,
+        );
+      }
+      const conn = storageConnection(zoneWithSecret, connectionType);
+      logger.log();
+      logger.log(`${conn.label} connection`);
+      logger.log(formatKeyValue(connectionRows(conn), output));
+      if (hasSecret(conn)) {
+        logger.warn("Treat these credentials like a password.");
+      }
+
+      let shouldSaveEnv = saveEnv;
+      const clash = conn.env.find(({ key }) => readEnvValue(key));
+      if (shouldSaveEnv === undefined && interactive) {
+        shouldSaveEnv = await confirm(
+          clash
+            ? `${clash.key} already exists in ${readEnvValue(clash.key)?.envPath}. Overwrite?`
+            : "Save these credentials to .env?",
+        );
+      }
+      if (shouldSaveEnv) {
+        saveConnectionEnv(conn);
+        logger.success(
+          `Saved ${conn.env.map(({ key }) => key).join(", ")} to .env`,
+        );
+      }
+    }
+
+    logger.dim(
+      `  Upload files:  bunny storage files upload <file> -z ${zoneName}`,
+    );
+    logger.dim(`  Credentials:   bunny storage zones credentials ${zoneName}`);
   },
 });
