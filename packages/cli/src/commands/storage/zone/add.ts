@@ -15,7 +15,6 @@ import {
 import { logger } from "../../../core/logger.ts";
 import { loadManifest } from "../../../core/manifest.ts";
 import { confirm, isInteractive, spinner } from "../../../core/ui.ts";
-import { readEnvValue, writeEnvValue } from "../../../utils/env-file.ts";
 import {
   type CoreClient,
   fetchStorageZone,
@@ -23,13 +22,16 @@ import {
   toSafeStorageZone,
 } from "../api.ts";
 import {
+  CLIENT_FORMATS,
+  type ClientFormat,
   CONNECTION_TYPES,
   type ConnectionType,
-  connectionChoices,
+  clientType,
   connectionJson,
-  connectionRows,
-  hasSecret,
-  type StorageConnection,
+  offerConnectionEnv,
+  printConnection,
+  promptClient,
+  promptConnectionType,
   storageConnection,
 } from "../connection.ts";
 import {
@@ -56,15 +58,6 @@ async function zoneWithPassword(
   return fetchStorageZone(client, zone.Id);
 }
 
-function saveConnectionEnv(connection: StorageConnection): void {
-  const envPath = connection.env
-    .map(({ key }) => readEnvValue(key)?.envPath)
-    .find(Boolean);
-  for (const { key, value } of connection.env) {
-    writeEnvValue(key, value, envPath);
-  }
-}
-
 interface ZoneAddArgs {
   name?: string;
   region?: string;
@@ -76,6 +69,7 @@ interface ZoneAddArgs {
   domain?: string;
   link?: boolean;
   connection?: ConnectionType;
+  format?: ClientFormat;
   saveEnv?: boolean;
   force?: boolean;
 }
@@ -146,7 +140,13 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       .option("connection", {
         type: "string",
         choices: CONNECTION_TYPES,
-        describe: "Show connection details for ftp (FTP/HTTP API) or s3",
+        describe: "Show connection details for http (HTTP API), ftp, or s3",
+      })
+      .option("format", {
+        type: "string",
+        choices: CLIENT_FORMATS,
+        describe:
+          "Emit client config (sdk, rclone, aws, s3cmd, env) instead of the table",
       })
       .option("save-env", {
         type: "boolean",
@@ -170,6 +170,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     domain,
     link,
     connection,
+    format,
     saveEnv,
     force,
     profile,
@@ -398,8 +399,9 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
             )
           : undefined;
 
-      const savedToEnv = Boolean(saveEnv && conn);
-      if (savedToEnv && conn) saveConnectionEnv(conn);
+      const savedToEnv = conn
+        ? await offerConnectionEnv(conn, { saveEnv, interactive: false })
+        : false;
 
       logger.log(
         JSON.stringify(
@@ -482,17 +484,13 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       logger.success(`Linked this directory to storage zone ${zoneName}.`);
     }
 
-    let connectionType = connection;
+    let connectionType =
+      connection ?? (format ? clientType(format) : undefined);
+    let toolFormat = format;
     if (connectionType === undefined && interactive) {
-      const choices = connectionChoices(created);
       if (await confirm("Show connection details?")) {
-        const { picked } = await prompts({
-          type: "select",
-          name: "picked",
-          message: "Connection type:",
-          choices,
-        });
-        connectionType = picked;
+        connectionType = await promptConnectionType(created);
+        if (connectionType) toolFormat = await promptClient(connectionType);
       }
     }
 
@@ -504,28 +502,9 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
         );
       }
       const conn = storageConnection(zoneWithSecret, connectionType);
-      logger.log();
-      logger.log(`${conn.label} connection`);
-      logger.log(formatKeyValue(connectionRows(conn), output));
-      if (hasSecret(conn)) {
-        logger.warn("Treat these credentials like a password.");
-      }
+      printConnection(zoneWithSecret, conn, { output, format: toolFormat });
 
-      let shouldSaveEnv = saveEnv;
-      const clash = conn.env.find(({ key }) => readEnvValue(key));
-      if (shouldSaveEnv === undefined && interactive) {
-        shouldSaveEnv = await confirm(
-          clash
-            ? `${clash.key} already exists in ${readEnvValue(clash.key)?.envPath}. Overwrite?`
-            : "Save these credentials to .env?",
-        );
-      }
-      if (shouldSaveEnv) {
-        saveConnectionEnv(conn);
-        logger.success(
-          `Saved ${conn.env.map(({ key }) => key).join(", ")} to .env`,
-        );
-      }
+      await offerConnectionEnv(conn, { saveEnv, interactive });
     }
 
     logger.dim(

@@ -3,6 +3,7 @@ import {
   normalizeReplicationRegions,
   replicationChoices,
   STORAGE_REGIONS,
+  sdkRegionKey,
   zoneTierLabel,
   zoneTierValue,
 } from "./constants.ts";
@@ -55,4 +56,10 @@ test("zone tiers map between the CLI vocabulary and the API enum", () => {
   expect(zoneTierLabel({ ZoneTier: 0 }, "long")).toBe("Standard (HDD)");
   expect(zoneTierLabel({ ZoneTier: 1 }, "long")).toBe("Edge (SSD)");
   expect(zoneTierLabel({})).toBe("-");
+});
+
+test("sdkRegionKey maps a zone region code to the SDK enum member", () => {
+  expect(sdkRegionKey("DE")).toBe("Falkenstein");
+  expect(sdkRegionKey("ny")).toBe("NewYork");
+  expect(sdkRegionKey("XX")).toBeUndefined();
 });

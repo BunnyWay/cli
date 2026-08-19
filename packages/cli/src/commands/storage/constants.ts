@@ -51,6 +51,15 @@ export const STORAGE_REGIONS: StorageRegion[] = Object.entries(
 
 const REGION_CODES = new Set(STORAGE_REGIONS.map((region) => region.code));
 
+export function sdkRegionKey(
+  code: string | null | undefined,
+): string | undefined {
+  const wanted = (code ?? "").toLowerCase();
+  return Object.entries(BunnyStorage.regions.StorageRegion).find(
+    ([, value]) => value === wanted,
+  )?.[0];
+}
+
 // Replication uses the same storage regions as the primary, minus the primary itself.
 // (The SDK file ZoneSchema is the physical replication footprint and includes internal
 // POPs the create API rejects, so it must not be used as the input set.)
