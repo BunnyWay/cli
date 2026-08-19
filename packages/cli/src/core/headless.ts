@@ -20,6 +20,13 @@ const CI_VARS = [
 
 const SSH_VARS = ["SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"];
 
+/** CI markers are often exported as `CI=false` to opt out; treat false-like values as unset. */
+function isAffirmative(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized !== "" && normalized !== "false" && normalized !== "0";
+}
+
 /** Platforms with a browser opener in `openBrowser`. */
 const BROWSER_PLATFORMS = new Set(["darwin", "linux", "win32"]);
 
@@ -39,7 +46,7 @@ export function detectHeadless(
     };
   }
 
-  const ci = CI_VARS.find((v) => env[v]);
+  const ci = CI_VARS.find((v) => isAffirmative(env[v]));
   if (ci) {
     return {
       kind: "ci",

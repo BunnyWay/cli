@@ -31,6 +31,16 @@ describe("detectHeadless", () => {
     expect(reason?.message).toContain("GITHUB_ACTIONS");
   });
 
+  test("ignores false-like CI values", () => {
+    expect(detectHeadless({ CI: "false", DISPLAY: ":0" }, "linux")).toBeNull();
+    expect(detectHeadless({ CI: "0", DISPLAY: ":0" }, "linux")).toBeNull();
+    expect(detectHeadless({ CI: "FALSE" }, "darwin")).toBeNull();
+    expect(detectHeadless({ CI: "", DISPLAY: ":0" }, "linux")).toBeNull();
+    expect(
+      detectHeadless({ CI: "false", GITHUB_ACTIONS: "true" }, "darwin")?.kind,
+    ).toBe("ci");
+  });
+
   test("flags a Linux box with no display server", () => {
     expect(detectHeadless({}, "linux")?.kind).toBe("no-display");
     expect(
