@@ -52,6 +52,9 @@ any stored profile and needs no config file. Keys given to `bunny login` are
 checked against `/user` first, so a bad key fails there instead of on the next
 command.
 
+With `--output json`, login prints `{"authenticated": true, "profile": "...",
+"name": "..."}` on stdout and nothing else, so the result is parseable.
+
 ---
 
 ## `bunny auth logout` — Remove a profile

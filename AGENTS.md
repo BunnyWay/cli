@@ -713,7 +713,9 @@ The loopback flow needs a browser the user can actually see, which rules out SSH
 | Headless, TTY available       | Warns with the reason, then offers "Paste an API key" (masked prompt) or "Print the login URL" (prints the matching `ssh -L` forward, since the callback port is random and bound to `127.0.0.1`). |
 | Headless, no TTY (agents, CI) | Throws `UserError` pointing at `--api-key` / `BUNNYNET_API_KEY` rather than waiting 5 minutes on a browser that will never open.                                                                   |
 
-`detectHeadless()` takes `env` and `platform` as injectable parameters so the branches are unit-testable (`core/headless.test.ts`).
+`detectHeadless()` takes `env`, `platform`, and the container-marker probe (`fileExists`, defaulting to `existsSync`) as injectable parameters, so every signal comes from the fixture and the branches are unit-testable even when the suite itself runs in a container (`core/headless.test.ts`).
+
+Under `--output json`, login prints one object (`{ authenticated, profile, name }`) instead of the greeting, so an unattended `bunny login --api-key ... --output json` is parseable.
 
 **Success page:**
 

@@ -289,16 +289,22 @@ export const authLoginCommand = defineCommand<{
 
     setProfile(profile, apiKey);
 
-    logger.log();
-    logger.success(
-      name
-        ? `Welcome, ${name}! 🐰`
-        : `Authenticated! Profile "${profile}" saved. 🐇`,
-    );
-    logger.log();
-    logger.dim(
-      "You can now use the CLI to manage edge scripts, databases, apps, and storage.",
-    );
+    if (output === "json") {
+      logger.log(
+        JSON.stringify({ authenticated: true, profile, name }, null, 2),
+      );
+    } else {
+      logger.log();
+      logger.success(
+        name
+          ? `Welcome, ${name}! 🐰`
+          : `Authenticated! Profile "${profile}" saved. 🐇`,
+      );
+      logger.log();
+      logger.dim(
+        "You can now use the CLI to manage edge scripts, databases, apps, and storage.",
+      );
+    }
 
     await offerGlobalSkillInstall(output, installSkill);
   },

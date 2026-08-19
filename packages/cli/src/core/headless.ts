@@ -33,10 +33,11 @@ const BROWSER_PLATFORMS = new Set(["darwin", "linux", "win32"]);
 /** Container runtimes drop these markers in the root filesystem. */
 const CONTAINER_MARKERS = ["/.dockerenv", "/run/.containerenv"];
 
-/** Detect a shell where a browser either won't launch or won't be visible to the user; `null` means the browser flow is plausible. */
+/** Detect a shell where a browser either won't launch or won't be visible to the user; `null` means the browser flow is plausible. `fileExists` is injectable so tests control the container probe instead of reading the runner's own filesystem. */
 export function detectHeadless(
   env: Record<string, string | undefined> = process.env,
   platform: string = process.platform,
+  fileExists: (path: string) => boolean = existsSync,
 ): HeadlessReason | null {
   if (SSH_VARS.some((v) => env[v])) {
     return {
@@ -72,7 +73,7 @@ export function detectHeadless(
     }
   }
 
-  if (CONTAINER_MARKERS.some((path) => existsSync(path))) {
+  if (CONTAINER_MARKERS.some((path) => fileExists(path))) {
     return {
       kind: "container",
       message: "This looks like a container, which usually has no browser.",

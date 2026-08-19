@@ -60,6 +60,8 @@ So for unattended runs, pass the key:
 bunny login --api-key "$BUNNYNET_API_KEY"
 ```
 
+Add `--output json` to get `{ "authenticated": true, "profile": "...", "name": "..." }` on stdout instead of the greeting.
+
 The CLI checks the key against the API before writing the profile, so a bad one fails here rather than on the next command. You can also skip `bunny login` entirely and export `BUNNYNET_API_KEY`; it takes priority over any stored profile.
 
 ### `bunny logout`
