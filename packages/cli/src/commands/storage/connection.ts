@@ -15,7 +15,6 @@ import {
   s3Credentials,
 } from "./s3.ts";
 
-
 export const CONNECTION_TYPES = ["http", "ftp", "s3"] as const;
 export type ConnectionType = (typeof CONNECTION_TYPES)[number];
 
