@@ -20,9 +20,9 @@ export const sandboxFilesListCommand = defineCommand<ListArgs>({
   aliases: ["ls"],
   describe: "List files in a sandbox directory.",
   examples: [
-    ["$0 sandbox files ls my-sandbox", "List /workplace"],
-    ["$0 sandbox files ls my-sandbox:/workplace/src", "List a directory"],
-    ["$0 sandbox files ls my-sandbox:src --output json", "List as JSON"],
+    ["$0 sandbox files list my-sandbox", "List /workplace"],
+    ["$0 sandbox files list my-sandbox:src", "List a directory"],
+    ["$0 sandbox files list my-sandbox -o json", "List as JSON"],
   ],
 
   builder: (yargs) =>

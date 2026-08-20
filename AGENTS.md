@@ -463,14 +463,15 @@ bunny-cli/
 │           │   ├── list.ts               # List sandboxes
 │           │   ├── delete.ts             # Delete a sandbox and its MC app (--force)
 │           │   ├── exec.ts               # Run a command via SSH (-e/--env + --env-file inject temporary env vars; --timeout kills after N seconds, exit 124)
-│           │   ├── cp.ts                 # Copy a file to/from a sandbox over SFTP (<sandbox>:<path> picks direction)
 │           │   ├── resolve.ts            # Shared helpers: parseRemoteRef, sandboxFromName (rebuild a Sandbox from the stored record), connectSandbox (requires SSH endpoint)
 │           │   ├── ssh.ts                # Open an interactive SSH shell (-e/--env + --env-file inject temporary env vars)
 │           │   ├── ssh-exec.ts           # Shared SSH helpers: sshArgs, withSshEnv (askpass token), envPrefix (inline KEY='v' assignments)
 │           │   ├── env-args.ts           # Shared -e/--env + --env-file parsing: withEnvOptions, collectEnv, parseDotenv, splitPair
+│           │   ├── cp.ts                 # Hidden `cp [args..]` stub at the old `sandbox cp` path; errors with the shell-quoted `sandbox files cp` replacement (yargs would otherwise suggest `ls`)
 │           │   ├── files/                 # `sandbox files` (alias: file): file operations over SFTP
 │           │   │   ├── index.ts          # defineNamespace("files", ...)
-│           │   │   └── list.ts           # List files in a sandbox directory (alias: ls; bare name = /workplace, or <sandbox>:<path>)
+│           │   │   ├── list.ts           # List files in a sandbox directory (alias: ls; bare name = /workplace, or <sandbox>:<path>)
+│           │   │   └── cp.ts             # Copy a file to/from a sandbox over SFTP (<sandbox>:<path> picks direction)
 │           │   ├── url/                   # `sandbox url`: expose/list/delete public CDN endpoints for a port
 │           │   │   ├── index.ts          # defineNamespace("url", ...)
 │           │   │   └── add.ts / list.ts / delete.ts
@@ -558,6 +559,8 @@ export const myCommand = defineCommand<{
 ```
 
 The factory wraps every handler in a try/catch that distinguishes `UserError` (clean message + exit 1) from unexpected errors (stack trace in verbose mode + exit 2).
+
+Pass `hidden: true` to keep a command out of help while it still parses; used for moved-command stubs such as `bunny sandbox cp`, which errors and points at `bunny sandbox files cp`.
 
 ### `defineNamespace(command, describe, subcommands)`
 

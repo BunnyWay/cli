@@ -6,6 +6,8 @@ interface CommandDef<A = Record<string, never>> {
   command: string;
   aliases?: readonly string[];
   describe: string;
+  /** Keeps the command out of help while it still runs (e.g. a deprecated mount point). */
+  hidden?: boolean;
   /** Usage examples shown in `--help` output. Each entry is `[command, description]`. */
   examples?: ReadonlyArray<readonly [string, string]>;
   /** Define command-specific flags and positional arguments. */
@@ -57,7 +59,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
   return {
     command: def.command,
     aliases: def.aliases,
-    describe: def.describe,
+    describe: def.hidden ? (false as never) : def.describe,
     builder: wrappedBuilder as any,
     handler: async (argv) => {
       const args = argv as unknown as A & GlobalArgs;
