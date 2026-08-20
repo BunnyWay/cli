@@ -1,5 +1,11 @@
 # @bunny.net/scriptable-dns-types
 
+## 0.1.2
+
+### Patch Changes
+
+- [#156](https://github.com/BunnyWay/cli/pull/156) [`3dff411`](https://github.com/BunnyWay/cli/commit/3dff411468a9bf3602dfd66f0bdc0a9f2cbf851e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - point documentation links at bunny.net/docs, including the Scriptable DNS link that had gone dead
+
 ## 0.1.1
 
 ### Patch Changes
