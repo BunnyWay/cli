@@ -5,7 +5,7 @@ import { dbMigrationsListCommand } from "./list.ts";
 
 export const dbMigrationsNamespace = defineNamespace(
   "migrations",
-  "Create and apply SQL migrations.",
+  "Create and apply SQL migrations. (experimental)",
   [
     dbMigrationsApplyCommand,
     dbMigrationsCreateCommand,

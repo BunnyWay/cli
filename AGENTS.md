@@ -1097,7 +1097,7 @@ bunny
 │   ├── docs                                Open database documentation in browser
 │   ├── list            (alias: ls) [--group-id]
 │   │                                       List all databases
-│   ├── migrations                          Create and apply SQL migrations (files are the source of truth)
+│   ├── migrations                          (experimental) Create and apply SQL migrations (files are the source of truth)
 │   │   ├── apply       [database-id] [--dir] [--pattern] [--url] [--token] [--dry-run] [--force] [--allow-drift]
 │   │   │                                   Apply pending migrations in filename order (each file + its tracking row is one atomic batch)
 │   │   ├── create      [name] (alias: new) [--dir]
