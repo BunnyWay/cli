@@ -1075,8 +1075,8 @@ bunny sandbox cp ./app.js my-sandbox:/workplace/app.js
 # Upload relative to /workplace
 bunny sandbox cp ./app.js my-sandbox:app.js
 
-# A trailing slash on the destination keeps the source filename
-bunny sandbox cp ./app.js my-sandbox:/workplace/src/
+# An existing remote directory (or a trailing slash) keeps the source filename
+bunny sandbox cp ./app.js my-sandbox:/workplace/src
 
 # Download a file from the sandbox
 bunny sandbox cp my-sandbox:/workplace/out.log ./out.log

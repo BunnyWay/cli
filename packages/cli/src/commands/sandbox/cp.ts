@@ -1,5 +1,5 @@
 import { stat } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, posix } from "node:path";
 import { SandboxError } from "@bunny.net/sandbox";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
@@ -18,6 +18,21 @@ async function isDirectory(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Resolve where a copied file lands. A trailing slash or an existing
+ * directory destination means "into it", keeping the source filename.
+ * The trailing-slash check comes first so it never probes the destination.
+ */
+export async function resolveCopyDest(
+  dest: string,
+  sourceName: string,
+  isDir: (path: string) => Promise<boolean>,
+): Promise<string> {
+  return dest.endsWith("/") || (await isDir(dest))
+    ? posix.join(dest, sourceName)
+    : dest;
 }
 
 export const sandboxCpCommand = defineCommand<CpArgs>({
@@ -83,10 +98,11 @@ export const sandboxCpCommand = defineCommand<CpArgs>({
             `${local} is a directory. Only single files can be copied.`,
           );
         }
-        // A trailing slash on the remote path means "into this directory".
-        const remotePath = ref.path.endsWith("/")
-          ? `${ref.path}${basename(local)}`
-          : ref.path;
+        const remotePath = await resolveCopyDest(
+          ref.path,
+          basename(local),
+          async (path) => (await sandbox.stat(path))?.type === "directory",
+        );
         const content = Buffer.from(await Bun.file(local).arrayBuffer());
         await sandbox.writeFiles([
           { path: remotePath, content, mode: info.mode & 0o777 },
@@ -98,11 +114,11 @@ export const sandboxCpCommand = defineCommand<CpArgs>({
         if (content === null) {
           throw new UserError(`File not found in sandbox: ${ref.path}`);
         }
-        // An existing local directory (or trailing slash) means "into it".
-        const localPath =
-          dest.endsWith("/") || (await isDirectory(dest))
-            ? join(dest, basename(ref.path))
-            : dest;
+        const localPath = await resolveCopyDest(
+          dest,
+          basename(ref.path),
+          isDirectory,
+        );
         await Bun.write(localPath, content);
         from = `${ref.sandbox}:${ref.path}`;
         to = localPath;
