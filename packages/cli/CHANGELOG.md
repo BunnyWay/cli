@@ -1,5 +1,13 @@
 # @bunny.net/cli
 
+## 0.14.1
+
+### Patch Changes
+
+- [#174](https://github.com/BunnyWay/cli/pull/174) [`e2a7110`](https://github.com/BunnyWay/cli/commit/e2a7110e71d81e1e53243653ca994412f5751db2) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(skills): always write .agents/skills, refuse home installs
+
+- [#176](https://github.com/BunnyWay/cli/pull/176) [`040b6fd`](https://github.com/BunnyWay/cli/commit/040b6fd9e94ec50d08b7ac811d930321fc5d5804) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Refuse project agent skill installs into the filesystem root
+
 ## 0.14.0
 
 ### Minor Changes
