@@ -1,10 +1,9 @@
 import { Sandbox, SandboxError } from "@bunny.net/sandbox";
-import prompts from "prompts";
 import { resolveConfig, setSandbox } from "../../config/index.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { prompts, spinner } from "../../core/ui.ts";
 import { collectEnv, type EnvOptionArgs, withEnvOptions } from "./env-args.ts";
 
 const DEFAULT_REGION = "AMS";

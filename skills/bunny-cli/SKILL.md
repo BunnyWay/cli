@@ -100,4 +100,4 @@ Available on every command:
 
 - **Forgetting to authenticate**: Run `bunny login` first. Without it, commands fail with a missing API key error. Use `bunny api GET /user` to verify.
 - **Hardcoding API keys in scripts**: Use `BUNNYNET_API_KEY` env var or `--api-key` flag instead of embedding keys. Better yet, use `bunny login` profiles.
-- **Forgetting `--force` in CI/CD**: Interactive prompts block in non-TTY environments. Use `--force` to skip confirmations in automated pipelines.
+- **Relying on prompts in automation**: Prompts are for terminals. In scripts, CI, and agent sessions, pass every value as a flag and add `--force` to skip confirmations. A command that would need a prompt with stdin closed does not wait: it fails fast with exit code 1 and names the flag to pass, so treat that as "retry with flags", never as success.

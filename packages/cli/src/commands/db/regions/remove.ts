@@ -1,12 +1,11 @@
 import { createDbClient } from "@bunny.net/openapi-client";
-import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { confirm, prompts, spinner } from "../../../core/ui.ts";
 import { fetchDatabaseWithRegions, regionNameMap } from "../api.ts";
 import { ARG_DATABASE_ID } from "../constants.ts";
 import { resolveDbId } from "../resolve-db.ts";

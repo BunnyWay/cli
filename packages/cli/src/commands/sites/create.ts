@@ -2,7 +2,6 @@ import {
   createComputeClient,
   createCoreClient,
 } from "@bunny.net/openapi-client";
-import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -11,7 +10,7 @@ import { formatKeyValue } from "../../core/format.ts";
 import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifest } from "../../core/manifest.ts";
-import { confirm, isInteractive } from "../../core/ui.ts";
+import { confirm, isInteractive, prompts } from "../../core/ui.ts";
 import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
 import { siteContextFromZone } from "./api.ts";
 import {
@@ -225,7 +224,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
         logger.log();
         const setup = await confirm(
           "Set up GitHub deployments (preview on PRs, production on main)?",
-          { initial: true },
+          { initial: true, optional: true },
         );
         if (setup) {
           const scaffold = await scaffoldSitesWorkflow({

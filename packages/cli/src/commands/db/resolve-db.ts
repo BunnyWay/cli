@@ -1,9 +1,8 @@
 import type { createDbClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
-import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
 import { loadManifest } from "../../core/manifest.ts";
-import { spinner } from "../../core/ui.ts";
+import { prompts, spinner } from "../../core/ui.ts";
 import { readEnvValue } from "../../utils/env-file.ts";
 import { fetchAllDatabases } from "./api.ts";
 import {

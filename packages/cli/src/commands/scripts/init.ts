@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import prompts from "prompts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { normalizeHostname } from "../../core/hostnames/index.ts";
@@ -10,7 +9,7 @@ import {
   detectFromLockfile,
   pickPackageManager,
 } from "../../core/package-manager.ts";
-import { confirm, spinner } from "../../core/ui.ts";
+import { confirm, prompts, spinner } from "../../core/ui.ts";
 import { promptOpenInBrowser } from "./api.ts";
 import {
   type EdgeScriptTypes,
@@ -240,6 +239,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
     } else if (interactive) {
       enableGithubActions = await confirm(
         "Enable continuous integration with GitHub Actions?",
+        { optional: true },
       );
     } else {
       enableGithubActions = false;
@@ -305,7 +305,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
       // would otherwise run silently in non-interactive mode.
       const shouldInstall =
         interactive || args[ARG_TEMPLATE_REPO]
-          ? await confirm("Install dependencies?")
+          ? await confirm("Install dependencies?", { optional: true })
           : true;
       if (shouldInstall) {
         const pm = await pickPackageManager(dirPath);
@@ -355,7 +355,9 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
     if (args[ARG_SKIP_GIT] !== true) {
       const shouldGit =
         enableGithubActions ||
-        (interactive ? await confirm("Initialize git repository?") : true);
+        (interactive
+          ? await confirm("Initialize git repository?", { optional: true })
+          : true);
       if (shouldGit) {
         const gitInit = Bun.spawn(["git", "init"], {
           cwd: dirPath,
@@ -391,7 +393,7 @@ export const scriptsInitCommand = defineCommand<InitArgs>({
       args[ARG_DEPLOY] !== undefined
         ? args[ARG_DEPLOY]
         : interactive
-          ? await confirm("Create script on bunny.net?")
+          ? await confirm("Create script on bunny.net?", { optional: true })
           : false;
 
     if (shouldDeploy) {

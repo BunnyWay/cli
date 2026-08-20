@@ -1,6 +1,5 @@
 import { createDbClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
-import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -8,7 +7,7 @@ import { UserError } from "../../core/errors.ts";
 import { formatKeyValue } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
-import { confirm, spinner } from "../../core/ui.ts";
+import { confirm, prompts, spinner } from "../../core/ui.ts";
 import { readEnvValue, writeEnvValue } from "../../utils/env-file.ts";
 import { fetchRegionConfig, generateToken } from "./api.ts";
 import {
@@ -365,7 +364,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     if (linkArg !== undefined) {
       shouldLink = linkArg;
     } else if (isInteractive) {
-      shouldLink = await confirm(linkPrompt, { force: false });
+      shouldLink = await confirm(linkPrompt, { force: false, optional: true });
     } else {
       shouldLink = false;
     }
@@ -389,6 +388,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     } else if (isInteractive) {
       shouldCreateToken = await confirm("Create an auth token?", {
         force: false,
+        optional: true,
       });
     } else {
       shouldCreateToken = false;
@@ -434,10 +434,13 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
           if (existingToken) {
             shouldWrite = await confirm(
               `${ENV_DATABASE_AUTH_TOKEN} already exists in ${existingToken.envPath} — overwrite?`,
-              { force: false },
+              { force: false, optional: true },
             );
           } else {
-            shouldWrite = await confirm(`Save to .env?`, { force: false });
+            shouldWrite = await confirm(`Save to .env?`, {
+              force: false,
+              optional: true,
+            });
           }
         } else {
           shouldWrite = false;
