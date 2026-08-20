@@ -21,8 +21,8 @@ interface InstallArgs {
  * Project install (default) maintains a marked block in AGENTS.md, which most
  * coding agents read, and writes the full skill with references under
  * .agents/skills/bunny-cli/, plus .claude/skills/bunny-cli/ when the project
- * uses Claude Code. Installing into the home directory is refused, since files
- * there are not project scoped. A global install writes the skill to
+ * uses Claude Code. Installing into the home directory or the filesystem root
+ * is refused, since neither is a project. A global install writes the skill to
  * ~/.agents/skills/bunny-cli/ (the cross-tool directory) and
  * ~/.claude/skills/bunny-cli/ so AI coding tools pick it up in every project.
  * Reinstalling refreshes the same files, so `update` is an alias.
