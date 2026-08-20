@@ -6,25 +6,38 @@ import { logger } from "./logger.ts";
 let stdinEnded = false;
 let eofWarned = false;
 
-// Destroying stdin stops the poll; the escape code re-shows the cursor that prompts hid.
-function abortPromptAtEof(): null {
+// Destroying stdin stops the library's poll; the escape code re-shows the cursor in case a prompt already hid it.
+function abortUnanswerablePrompt(): null {
   process.stdin.destroy();
   if (!eofWarned) {
     eofWarned = true;
     process.stdout.write(process.stdout.isTTY ? "\x1b[?25h\n" : "\n");
     logger.warn(
-      "stdin closed before the prompt was answered. Pass the value as a flag, or --force to skip confirmations.",
+      "Can't prompt: stdin is not an interactive terminal. Pass values as flags, or --force to skip confirmations.",
     );
   }
   return null;
 }
 
-// prompts busy-polls a closed stdin (100% CPU, forever), so EOF must abort the prompt; the null result maps to "cancelled" at each call site.
+// Injected test answers resolve without touching stdin, so they are exempt from the terminal requirement.
+function hasInjectedAnswers(): boolean {
+  const injected = (promptsLib as unknown as { _injected?: unknown[] })
+    ._injected;
+  return (injected?.length ?? 0) > 0;
+}
+
+// Prompts require an interactive terminal: piped stdin is refused up front, and the EOF race below is a backstop for a terminal that hangs up mid-prompt, where the prompts library would otherwise busy-poll the dead stream at 100% CPU forever. The null result maps to "cancelled" at each call site.
 async function promptOrEof<T extends object>(
   run: () => Promise<T>,
 ): Promise<T | null> {
-  if (stdinEnded || process.stdin.readableEnded || process.stdin.destroyed) {
-    return abortPromptAtEof();
+  if (
+    !hasInjectedAnswers() &&
+    (!process.stdin.isTTY ||
+      stdinEnded ||
+      process.stdin.readableEnded ||
+      process.stdin.destroyed)
+  ) {
+    return abortUnanswerablePrompt();
   }
   let onEnd = () => {};
   const eof = new Promise<null>((resolve) => {
@@ -37,16 +50,16 @@ async function promptOrEof<T extends object>(
   });
   try {
     const result = await Promise.race([run(), eof]);
-    return result === null ? abortPromptAtEof() : result;
+    return result === null ? abortUnanswerablePrompt() : result;
   } finally {
     process.stdin.off("end", onEnd);
   }
 }
 
 /**
- * EOF-safe drop-in for the `prompts` library; always use this instead of
- * importing `prompts` directly. Same call shape, but when stdin can no longer
- * answer (closed, ended, `< /dev/null`) it returns `{}` instead of spinning,
+ * Terminal-safe drop-in for the `prompts` library; always use this instead of
+ * importing `prompts` directly. Same call shape, but when stdin cannot answer
+ * (not a terminal, closed, `< /dev/null`) it returns `{}` without prompting,
  * so missing answers surface as `undefined` exactly like a Ctrl-C cancel.
  */
 export async function prompts<T extends string = string>(
@@ -77,7 +90,7 @@ export async function readPassword(message: string): Promise<string> {
 // Unanswerable gate confirmations must exit non-zero: agents and CI trust exit codes, and a 0 after "Cancelled." reads as success for work that never happened.
 function stdinClosedError(): UserError {
   return new UserError(
-    "Confirmation required, but stdin closed before the prompt was answered.",
+    "Confirmation required, but stdin is not an interactive terminal.",
     "Re-run with --force to skip the confirmation.",
   );
 }

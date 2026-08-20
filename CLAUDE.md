@@ -43,7 +43,7 @@ This is a Bun workspace monorepo with five packages:
 - Use `formatTable()` / `formatKeyValue()` from `packages/cli/src/core/format.ts` for non-JSON output.
 - Handle `--output json` first in every handler, then pass `output` to format functions.
 - Use `logger` from `packages/cli/src/core/logger.ts` for all user-facing output.
-- Import `prompts` from `packages/cli/src/core/ui.ts`, never from the `prompts` package directly: the wrapper aborts safely when stdin is at EOF, while the raw library spins at 100% CPU.
+- Import `prompts` from `packages/cli/src/core/ui.ts`, never from the `prompts` package directly: the wrapper refuses to prompt when stdin is not an interactive terminal (the raw library spins at 100% CPU on a closed stdin). Piped prompt answers are deliberately unsupported; flags and `--force` are the automation contract. `prompts.inject()` in tests still works.
 - `confirm()` is a gate by default: if stdin closes before an answer it throws, so the command exits non-zero. Pass `optional: true` only for offer-style prompts (link this directory? save to .env?) where declining is a normal outcome and the command should continue.
 - Throw `UserError` for expected errors.
 - Import API clients from `@bunny.net/openapi-client`, not relative paths. Import generated types from the per-API entrypoints (`@bunny.net/openapi-client/<spec>`, e.g. `@bunny.net/openapi-client/core`); the older `generated/<spec>.d.ts` paths remain supported.

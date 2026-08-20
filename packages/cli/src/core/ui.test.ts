@@ -40,11 +40,17 @@ test("optional confirm declines quietly when stdin is at EOF", async () => {
   expect(run.stdout).toContain("result:false");
 }, 10_000);
 
-test("confirm still reads piped answers", async () => {
-  expect((await runConfirm(new Blob(["y\n"]))).stdout).toContain("result:true");
-  expect((await runConfirm(new Blob(["n\n"]))).stdout).toContain(
-    "result:false",
+// Piped answers are deliberately unsupported: flags and --force are the automation contract.
+test("piped stdin is refused instead of prompted", async () => {
+  const gate = await runConfirm(new Blob(["y\n"]));
+  expect(gate.exitCode).not.toBe(0);
+  expect(gate.stderr).toContain("Confirmation required");
+  const offer = await runConfirm(
+    new Blob(["y\n"]),
+    'confirm("sure?", { optional: true })',
   );
+  expect(offer.exitCode).toBe(0);
+  expect(offer.stdout).toContain("result:false");
 }, 10_000);
 
 // Only ui.ts may import the raw library: its EOF-safe prompts() wrapper is what keeps CI runs from spinning (type-only imports and prompts.inject in tests are fine).
