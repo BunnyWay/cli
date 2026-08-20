@@ -10,6 +10,8 @@ import {
   type StorageZoneModel,
   toSafeStorageZone,
 } from "../api.ts";
+import { zoneTierLabel } from "../constants.ts";
+import { isS3Enabled } from "../s3.ts";
 
 export const storageZoneListCommand = defineCommand({
   command: "list",
@@ -45,11 +47,13 @@ export const storageZoneListCommand = defineCommand({
 
     logger.log(
       formatTable(
-        ["ID", "Name", "Region", "Files", "Used"],
+        ["ID", "Name", "Region", "Tier", "S3", "Files", "Used"],
         zones.map((z) => [
           String(z.Id ?? ""),
           z.Name ?? "",
           z.Region ?? "",
+          zoneTierLabel(z),
+          isS3Enabled(z) ? "Yes" : "No",
           String(z.FilesStored ?? 0),
           formatBytes(z.StorageUsed ?? 0),
         ]),

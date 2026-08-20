@@ -1,6 +1,7 @@
 import * as BunnyStorage from "@bunny.net/storage-sdk";
 import { UserError } from "../../core/errors.ts";
 import { confirm } from "../../core/ui.ts";
+import type { StorageZoneModel } from "./api.ts";
 
 export interface StorageRegion {
   code: string;
@@ -15,6 +16,31 @@ export interface StorageZoneManifest {
   name?: string;
 }
 
+export const ZONE_TIER_CHOICES = ["hdd", "ssd"] as const;
+
+export const SSD_PRIMARY_REGION = "DE";
+export type ZoneTierChoice = (typeof ZONE_TIER_CHOICES)[number];
+
+const ZONE_TIERS: Record<
+  ZoneTierChoice,
+  { value: 0 | 1; short: string; long: string }
+> = {
+  hdd: { value: 0, short: "HDD", long: "Standard (HDD)" },
+  ssd: { value: 1, short: "SSD", long: "Edge (SSD)" },
+};
+
+export function zoneTierValue(choice: ZoneTierChoice): 0 | 1 {
+  return ZONE_TIERS[choice].value;
+}
+
+export function zoneTierLabel(
+  zone: StorageZoneModel,
+  form: "short" | "long" = "short",
+): string {
+  const tier = Object.values(ZONE_TIERS).find((t) => t.value === zone.ZoneTier);
+  return tier?.[form] ?? "-";
+}
+
 // The create API expects uppercase codes (e.g. "DE"), matching what existing zones report.
 export const STORAGE_REGIONS: StorageRegion[] = Object.entries(
   BunnyStorage.regions.StorageRegion,
@@ -24,6 +50,15 @@ export const STORAGE_REGIONS: StorageRegion[] = Object.entries(
 }));
 
 const REGION_CODES = new Set(STORAGE_REGIONS.map((region) => region.code));
+
+export function sdkRegionKey(
+  code: string | null | undefined,
+): string | undefined {
+  const wanted = (code ?? "").toLowerCase();
+  return Object.entries(BunnyStorage.regions.StorageRegion).find(
+    ([, value]) => value === wanted,
+  )?.[0];
+}
 
 // Replication uses the same storage regions as the primary, minus the primary itself.
 // (The SDK file ZoneSchema is the physical replication footprint and includes internal
