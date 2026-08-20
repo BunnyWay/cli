@@ -43,7 +43,7 @@ bun ny <command>
 # Examples
 bun ny login                                # offers to install the agent skill after authenticating; --install-skill/--no-install-skill decides without prompting
 bun ny db list
-bun ny skills install                       # install the bunny agent skill into this project (AGENTS.md block + .claude/skills when Claude Code is used) so AI coding tools know how to use the CLI; alias: skills update
+bun ny skills install                       # install the bunny agent skill into this project (AGENTS.md block + .agents/skills, plus .claude/skills when Claude Code is used) so AI coding tools know how to use the CLI; alias: skills update
 bun ny skills install --global              # install to ~/.agents/skills and ~/.claude/skills for every project
 bun ny skills remove                        # remove the skill from this project (or --global); everything is regenerable with skills install
 bun ny apps deploy ghcr.io/me/api:v1.2     # deploy a pre-built image

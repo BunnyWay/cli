@@ -21,9 +21,9 @@ interface RemoveArgs {
  * Remove the bunny-cli agent skill.
  *
  * Project removal (default) strips the marked block from AGENTS.md and deletes
- * .claude/skills/bunny-cli/. A global removal deletes the skill from
- * ~/.agents/skills/ and ~/.claude/skills/. Everything removed is regenerable
- * with `bunny skills install`.
+ * .agents/skills/bunny-cli/ and .claude/skills/bunny-cli/. A global removal
+ * deletes the skill from ~/.agents/skills/ and ~/.claude/skills/. Everything
+ * removed is regenerable with `bunny skills install`.
  *
  * @example
  * ```bash
@@ -38,7 +38,7 @@ export const skillsRemoveCommand = defineCommand<RemoveArgs>({
   examples: [
     [
       "$0 skills remove",
-      "Remove from this project (AGENTS.md and .claude/skills)",
+      "Remove from this project (AGENTS.md and .agents/skills)",
     ],
     [
       "$0 skills remove --global",
