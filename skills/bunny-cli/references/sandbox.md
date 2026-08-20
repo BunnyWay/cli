@@ -1,6 +1,6 @@
 # Sandbox Commands
 
-All sandbox commands live under `bunny sandbox`. Each sandbox is a fully isolated Ubuntu container (Bunny Magic Containers) with Node.js, Bun, Python, the bunny CLI, and Claude Code pre-installed, alongside the tooling agents reach for: `git`, `gh`, `ripgrep`, `fd`, `jq`, `tmux`, `sqlite3`, `tree`, and `fzf`. A 10 GB persistent volume is mounted at `/workplace`, the default working directory; relative remote paths resolve against it.
+All sandbox commands live under `bunny sandbox`. Each sandbox is a fully isolated Ubuntu container (Bunny Magic Containers) with Node.js, Bun, Python (plus `uv`), the bunny CLI, and Claude Code pre-installed, alongside the tooling agents reach for: `git`, `gh`, `ripgrep`, `fd`, `jq`, `tmux`, `sqlite3`, `tree`, and `fzf`. A 10 GB persistent volume is mounted at `/workplace`, the default working directory; relative remote paths resolve against it.
 
 Sandbox credentials (app ID, SSH endpoint, agent token) are stored in the CLI's local config (same candidate paths as in SKILL.md), so commands reference sandboxes by name.
 
