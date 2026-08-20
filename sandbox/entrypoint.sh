@@ -12,6 +12,7 @@ echo "root:${AGENT_TOKEN}" | chpasswd
 # config directories have to be created here — anything created at build time is
 # hidden by the mount.
 mkdir -p /workplace/.claude \
-         /workplace/.config
+         /workplace/.config \
+         /workplace/bin
 
 exec /usr/sbin/sshd -D

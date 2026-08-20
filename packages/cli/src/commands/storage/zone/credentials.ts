@@ -2,36 +2,50 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
-import { formatKeyValue, maskSecret } from "../../../core/format.ts";
+import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { resolveStorageZoneInteractive } from "../interactive.ts";
+import { isInteractive } from "../../../core/ui.ts";
 import {
-  isS3Enabled,
-  renderS3ToolConfig,
-  S3_TOOL_FORMATS,
-  type S3ToolFormat,
-  s3Credentials,
-} from "../s3.ts";
+  CLIENT_FORMATS,
+  type ClientFormat,
+  CONNECTION_TYPES,
+  type ConnectionType,
+  clientType,
+  connectionJson,
+  offerConnectionEnv,
+  printConnection,
+  promptClient,
+  promptConnectionType,
+  storageConnection,
+} from "../connection.ts";
+import { resolveStorageZoneInteractive } from "../interactive.ts";
+import { isS3Enabled } from "../s3.ts";
 
 interface CredentialsArgs {
   zone?: string;
-  format?: S3ToolFormat;
+  connection?: ConnectionType;
+  format?: ClientFormat;
   readOnly?: boolean;
   showSecret?: boolean;
+  saveEnv?: boolean;
 }
 
 export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
   command: "credentials [zone]",
   aliases: ["creds"],
-  describe: "Show S3 credentials for a storage zone, or config for an S3 tool.",
+  describe: "Show connection credentials for a storage zone.",
   examples: [
     [
       "$0 storage zones credentials my-zone",
-      "Show endpoint and keys (secret masked)",
+      "Pick a connection type and show its credentials",
     ],
     [
-      "$0 storage zones credentials my-zone --show-secret",
-      "Reveal the secret access key",
+      "$0 storage zones credentials my-zone --connection ftp --show-secret",
+      "Show FTP credentials with the password revealed",
+    ],
+    [
+      "$0 storage zones credentials my-zone --format sdk",
+      "Print a @bunny.net/storage-sdk snippet",
     ],
     [
       "$0 storage zones credentials my-zone --format rclone >> ~/.config/rclone/rclone.conf",
@@ -49,10 +63,16 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
         type: "string",
         describe: "Storage zone name or ID",
       })
+      .option("connection", {
+        type: "string",
+        choices: CONNECTION_TYPES,
+        describe: "Connection type: http (HTTP API), ftp, or s3",
+      })
       .option("format", {
         type: "string",
-        choices: S3_TOOL_FORMATS,
-        describe: "Emit config for an S3 tool instead of the default table",
+        choices: CLIENT_FORMATS,
+        describe:
+          "Emit client config (sdk, rclone, aws, s3cmd, env) instead of the table",
       })
       .option("read-only", {
         type: "boolean",
@@ -62,19 +82,32 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
       .option("show-secret", {
         type: "boolean",
         default: false,
-        describe: "Reveal the secret access key (masked by default)",
+        describe: "Reveal the secret (masked by default)",
+      })
+      .option("save-env", {
+        type: "boolean",
+        describe: "Save the connection's variables to .env (skips the prompt)",
       }),
 
   handler: async ({
     zone: ref,
+    connection,
     format,
     readOnly,
     showSecret,
+    saveEnv,
     profile,
     output,
     verbose,
     apiKey,
   }) => {
+    if (format && connection && clientType(format) !== connection) {
+      throw new UserError(
+        `--format ${format} is ${clientType(format)} config, but --connection ${connection} was given.`,
+        `Drop --format, or pass --connection ${clientType(format)}.`,
+      );
+    }
+
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
@@ -82,29 +115,41 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
       output,
       offerLink: true,
     });
-    const creds = s3Credentials(zone, readOnly ?? false);
 
-    if (!isS3Enabled(zone)) {
+    const interactive = isInteractive(output);
+    // Flags are taken as given; only the unguided path opens a picker.
+    let type = connection ?? (format ? clientType(format) : undefined);
+    let toolFormat = format;
+    if (!type && interactive) {
+      type = await promptConnectionType(zone);
+      if (!type) return;
+      toolFormat = await promptClient(type);
+    }
+    // Callers from before the picker existed still expect S3.
+    type ??= "s3";
+
+    if (type === "s3" && !isS3Enabled(zone)) {
       logger.warn(
-        `S3 is not enabled on ${zone.Name}. These credentials only work once it has S3 preview access.`,
+        `S3 is not enabled on ${zone.Name}, so these credentials will not work.`,
       );
     }
 
-    if (format) {
-      logger.log(renderS3ToolConfig(format, creds, zone.Name as string));
-      return;
-    }
+    const conn = storageConnection(zone, type, { readOnly });
 
     if (output === "json") {
-      // Mask by default like the table; --show-secret opts into the raw key.
+      await offerConnectionEnv(conn, { saveEnv, interactive: false });
+      // A client config is paste-ready by definition, so it carries the secret even when the fields are masked.
+      if (toolFormat && !showSecret) {
+        logger.warn("Treat the config in this payload like a password.");
+      }
       logger.log(
         JSON.stringify(
-          {
-            ...creds,
-            secretAccessKey: showSecret
-              ? creds.secretAccessKey
-              : maskSecret(creds.secretAccessKey),
-          },
+          connectionJson(conn, {
+            mask: !showSecret,
+            client: toolFormat
+              ? { zone, format: toolFormat, readOnly }
+              : undefined,
+          }),
           null,
           2,
         ),
@@ -112,26 +157,12 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
       return;
     }
 
-    logger.log(
-      formatKeyValue(
-        [
-          { key: "Endpoint", value: creds.endpoint },
-          { key: "Region", value: creds.region },
-          { key: "Access Key ID", value: creds.accessKeyId },
-          {
-            key: "Secret Access Key",
-            value: showSecret
-              ? creds.secretAccessKey
-              : maskSecret(creds.secretAccessKey),
-          },
-        ],
-        output,
-      ),
-    );
-    if (showSecret) {
-      logger.warn("Treat the secret access key like a password.");
-    } else {
-      logger.dim("Secret masked. Pass --show-secret to reveal it.");
-    }
+    printConnection(zone, conn, {
+      output,
+      mask: !showSecret,
+      format: toolFormat,
+      readOnly,
+    });
+    await offerConnectionEnv(conn, { saveEnv, interactive });
   },
 });

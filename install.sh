@@ -122,3 +122,4 @@ esac
 
 echo ""
 echo "Run 'bunny --help' to get started."
+echo "Using AI coding tools? Run 'bunny skills install --global' so they know how to use the CLI."

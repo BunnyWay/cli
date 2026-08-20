@@ -43,7 +43,26 @@ bunny login --profile staging
 
 # Overwrite existing profile without prompting
 bunny login --force
+
+# Skip the browser entirely (remote machines, containers, CI)
+bunny login --api-key "$BUNNYNET_API_KEY"
 ```
+
+#### Remote and headless machines
+
+The browser flow needs a browser you can actually see, which rules out SSH sessions, CI jobs, containers, and Unix hosts with no display server. `bunny login` checks for those before it opens anything.
+
+With a terminal, it warns which case it hit, then offers to take an API key at a masked prompt (create one in the dashboard under Account Settings > API) or to print the login URL together with the `ssh -L` forward that makes the callback reachable. Without one, as with an agent or a CI job, it exits with a hint instead of waiting on a callback nothing can answer.
+
+So for unattended runs, pass the key:
+
+```bash
+bunny login --api-key "$BUNNYNET_API_KEY"
+```
+
+Add `--output json` to get `{ "authenticated": true, "profile": "...", "name": "..." }` on stdout instead of the greeting.
+
+The CLI checks the key against the API before writing the profile, so a bad one fails here rather than on the next command. You can also skip `bunny login` entirely and export `BUNNYNET_API_KEY`; it takes priority over any stored profile.
 
 ### `bunny logout`
 
@@ -497,6 +516,10 @@ Manage Edge Storage through two resource groups: **`bunny storage zones`** (the 
 
 A storage zone only holds files; a **pull zone** is what serves them on the web. `zones add` offers to create one (origin set to the new storage zone) and then to add a custom domain, or pass `--pull-zone`/`--domain` to do it non-interactively. Custom domains live on the pull zone and are managed with `bunny storage zones domains`.
 
+The tier (`--tier hdd|ssd`, Standard or Edge), the main region, and S3 compatibility (`--s3`) are all fixed at creation, so `zones add` prompts for each of them when the flag is omitted. Edge (SSD) zones are always primaried in `DE`, so `--tier ssd` rejects any other `--region` rather than letting the API rewrite it silently; replication regions are unaffected. `zones list` reports the tier and S3 support per zone, and `zones show` reports both plus the S3 endpoint when it's enabled.
+
+After creating a zone, `add` offers to link the directory to it (`--link`/`--no-link`), to print connection details (`--connection http|ftp|s3`, optionally as a client config with `--format`), and to save those details to `.env` (`--save-env`). Credentials are shown in full there because they were explicitly asked for; `zones credentials` masks them by default.
+
 ```bash
 # Zones (lifecycle)
 bunny storage zones list
@@ -505,6 +528,8 @@ bunny storage zones add my-zone --region DE
 bunny storage zones add my-zone --region NY --replication LA,SG
 bunny storage zones add my-zone --region DE --pull-zone   # also create a pull zone to serve it on the web
 bunny storage zones add my-zone --region DE --domain cdn.example.com   # pull zone + custom domain
+bunny storage zones add my-zone --tier ssd --s3        # Edge (SSD) tier (always DE) with S3-compatible access
+bunny storage zones add my-zone --region DE --connection s3 --save-env   # print S3 credentials and write them to .env
 bunny storage zones show my-zone
 bunny storage zones update my-zone                     # interactive: edit settings, pre-filled with current values
 bunny storage zones update my-zone --custom-404-path /404.html
@@ -517,12 +542,14 @@ bunny storage unlink
 # List the available storage regions
 bunny storage regions
 
-# S3-compatible credentials (for zones with S3 preview access)
-bunny storage zones credentials my-zone                # show endpoint + access key (secret masked)
-bunny storage zones credentials my-zone --show-secret  # reveal the secret access key
-bunny storage zones credentials my-zone --read-only    # use the read-only password as the secret
+# Connection credentials: HTTP API, FTP, or S3 (one zone password, shaped per protocol)
+bunny storage zones credentials my-zone                # pick a connection type, secret masked
+bunny storage zones credentials my-zone --connection ftp --show-secret   # FTP host, username, password
+bunny storage zones credentials my-zone --connection s3 --read-only      # use the read-only password as the secret
+bunny storage zones credentials my-zone --format sdk   # @bunny.net/storage-sdk snippet (HTTP API)
 bunny storage zones credentials my-zone --format rclone >> ~/.config/rclone/rclone.conf
 eval "$(bunny storage zones credentials my-zone --format env)"   # AWS-compatible env vars
+bunny storage zones credentials my-zone --connection http --save-env     # write the variables to .env
 
 # Files: list, upload, download, delete (paths are relative to the zone root)
 bunny storage files list --zone my-zone
@@ -545,19 +572,24 @@ bunny storage docs
 
 A trailing slash on a `files` path denotes a directory: `files list images/` lists that directory, and `files remove images/` deletes it and its contents recursively. Edge Storage file operations are powered by the [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage).
 
-bunny.net's S3-compatible API is in closed preview and is opt-in per zone (it cannot be enabled on an existing zone). When a zone has access, `bunny storage zones show` surfaces its S3 endpoint, and `bunny storage zones credentials` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table and JSON output mask the secret by default; pass `--show-secret` to reveal it (`--format` always emits it in full, since it's meant to be consumed by tools). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
+bunny.net's S3-compatible API is in preview and is opt-in per zone at creation (`zones add --s3`); it cannot be enabled on an existing zone. When a zone has it, `bunny storage zones show` surfaces its S3 endpoint, and `bunny storage zones credentials --connection s3` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table and JSON output mask the secret by default; pass `--show-secret` to reveal it (`--format` always emits it in full, since it's meant to be consumed by tools, and under `--output json` the config rides along in a `config` field). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
 
-| Flag                                                                               | Commands                                 | Description                                                                                                                        |
-| ---------------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `--region`, `--replication`                                                        | `zones add`                              | Primary region code, plus optional replication regions (any storage region except the primary; run `storage regions` to list them) |
-| `--pull-zone`, `--pull-zone-name`, `--domain`                                      | `zones add`                              | Also create a pull zone (what serves the stored files on the web) and optionally a custom domain; interactively, `add` offers both |
-| `--custom-404-path`, `--rewrite-404-to-200`, `--replication`                       | `zones update`                           | Edit zone settings; replication is additive since replicas can't be removed (see `bunny storage zones update --help`)              |
-| `--format` (`rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only`, `--show-secret` | `zones credentials`                      | Emit S3 config for a tool; use the read-only password as the secret; reveal the secret masked in the table and JSON                |
-| `--zone`, `-z`                                                                     | all `files` commands                     | Storage zone name or ID (defaults to the linked zone)                                                                              |
-| `--to`                                                                             | `files upload`                           | Remote path; a trailing slash uploads into that directory                                                                          |
-| `--checksum`, `--content-type`                                                     | `files upload`                           | Send a SHA256 checksum for server-side verification; set the stored content type                                                   |
-| `--out`                                                                            | `files download`                         | Local destination path (defaults to the file name)                                                                                 |
-| `--force`                                                                          | `zones remove`, `files remove`, `unlink` | Skip the confirmation prompts                                                                                                      |
+The same command also serves the two protocols every zone has: `--connection http` (the base URL and `AccessKey` header, plus a `--format sdk` snippet for [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage)) and `--connection ftp` (host, username, password). `--format` implies its protocol, so a conflicting `--connection` is an error. `--save-env` writes the protocol's variables (`BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, `BUNNY_STORAGE_REGION`, or the `AWS_*` quad for S3) into whichever `.env` already holds one of them.
+
+| Flag                                                                                        | Commands                                 | Description                                                                                                                        |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `--region`, `--replication`                                                                 | `zones add`                              | Primary region code, plus optional replication regions (any storage region except the primary; run `storage regions` to list them) |
+| `--tier` (`hdd` \| `ssd`), `--s3`                                                           | `zones add`                              | Storage tier and S3-compatible access; both are create-time only, and `--tier ssd` forces `DE` as the main region                  |
+| `--link`, `--connection` (`http` \| `ftp` \| `s3`), `--format`, `--save-env`                | `zones add`                              | Post-create follow-ups: link the directory, print connection details (or a client config), and save them to `.env`                 |
+| `--pull-zone`, `--pull-zone-name`, `--domain`                                               | `zones add`                              | Also create a pull zone (what serves the stored files on the web) and optionally a custom domain; interactively, `add` offers both |
+| `--custom-404-path`, `--rewrite-404-to-200`, `--replication`                                | `zones update`                           | Edit zone settings; replication is additive since replicas can't be removed (see `bunny storage zones update --help`)              |
+| `--connection` (`http` \| `ftp` \| `s3`), `--save-env`                                      | `zones credentials`                      | Pick the protocol to print (prompts when omitted); save its variables to `.env`                                                    |
+| `--format` (`sdk` \| `rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only`, `--show-secret` | `zones credentials`                      | Emit a client config (`sdk` for the HTTP API, the rest for S3); use the read-only password; reveal the masked secret               |
+| `--zone`, `-z`                                                                              | all `files` commands                     | Storage zone name or ID (defaults to the linked zone)                                                                              |
+| `--to`                                                                                      | `files upload`                           | Remote path; a trailing slash uploads into that directory                                                                          |
+| `--checksum`, `--content-type`                                                              | `files upload`                           | Send a SHA256 checksum for server-side verification; set the stored content type                                                   |
+| `--out`                                                                                     | `files download`                         | Local destination path (defaults to the file name)                                                                                 |
+| `--force`                                                                                   | `zones remove`, `files remove`, `unlink` | Skip the confirmation prompts                                                                                                      |
 
 ### `bunny scripts`
 
@@ -874,6 +906,8 @@ bunny scripts docs
 
 ### `bunny sites`
 
+> **Experimental**: hidden from `--help` and the landing page while it stabilizes.
+
 Host static sites on bunny.net. Each site is three resources provisioned and wired together for you: a **storage zone** holding the files, a **pull zone** serving them over the CDN, and a **middleware router** (an Edge Script) that maps incoming requests to the deploy that should answer them. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
 
 Deploys are immutable: every `sites deploy` uploads to its own `deploys/<id>/` directory and gets its own preview pull zone, a permanent root-served HTTPS URL (`sites-dpl-<id>-<suffix>.b-cdn.net`) that needs no DNS or certificate setup. Publishing flips the router's `CURRENT_DEPLOY` variable and purges the cache, so going live and rolling back are instant and move no files. Deploy IDs are the git short SHA when the working tree is clean and a content hash otherwise, which makes redeploying identical content a no-op.
@@ -947,7 +981,9 @@ A deploy's preview URL is `https://sites-dpl-<id>-<suffix>.b-cdn.net`: its own p
 
 ### `bunny sandbox`
 
-Manage on-demand cloud sandbox environments backed by Bunny Magic Containers. Each sandbox is a fully isolated Ubuntu container with Node.js, Bun, Python, the bunny CLI, and Claude Code pre-installed, alongside the tooling agents reach for: `git`, `gh`, `ripgrep`, `fd`, `jq`, `tmux`, `sqlite3`, `tree`, and `fzf`. A 10 GB persistent volume is mounted at `/workplace`, your default working directory.
+Manage on-demand cloud sandbox environments backed by Bunny Magic Containers. Each sandbox is a fully isolated Ubuntu container with Node.js, Bun, Python (plus `uv`), the bunny CLI, and Claude Code pre-installed, alongside the tooling agents reach for: `git`, `gh`, `ripgrep`, `fd`, `jq`, `tmux`, `sqlite3`, `tree`, and `fzf`. A 10 GB persistent volume is mounted at `/workplace`, your default working directory.
+
+`/workplace/bin` is included in the PATH, so anything you put there runs by name after a redeploy without an absolute path.
 
 Claude Code is pre-installed but needs your own Anthropic credentials before it can do anything: pass an API key at create time (prefer `--env-file .env` so the key stays out of your shell history), or run `claude` inside the sandbox and complete the login prompt it prints. Both survive restarts and redeploys: baked env vars live on the container, and config and credentials are pinned to the persistent volume — `/workplace/.claude` for Claude Code, and `/workplace/.config` for the bunny CLI and `gh`.
 
@@ -1054,8 +1090,8 @@ bunny sandbox cp ./app.js my-sandbox:/workplace/app.js
 # Upload relative to /workplace
 bunny sandbox cp ./app.js my-sandbox:app.js
 
-# A trailing slash on the destination keeps the source filename
-bunny sandbox cp ./app.js my-sandbox:/workplace/src/
+# An existing remote directory (or a trailing slash) keeps the source filename
+bunny sandbox cp ./app.js my-sandbox:/workplace/src
 
 # Download a file from the sandbox
 bunny sandbox cp my-sandbox:/workplace/out.log ./out.log

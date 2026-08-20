@@ -99,7 +99,7 @@ Interactive `deploy` adds three conveniences (all skipped under `--output json`)
 
 ---
 
-## `bunny sites deployments`; List, publish, prune
+## `bunny sites deployments`; List, publish, prune, delete
 
 ```bash
 bunny sites deployments list
@@ -107,9 +107,12 @@ bunny sites deployments publish a1b2c3d4    # confirm prompt; --force to skip
 bunny sites deployments publish --previous  # instant rollback
 bunny sites deployments prune --keep 10     # never prunes current/previous
 bunny sites deployments prune my-site       # or --site my-site
+bunny sites deployments delete a1b2c3d4 --force   # delete one deploy + its preview URL
 ```
 
 `publish` (alias `promote`) flips production to a past deploy; the files are already on the CDN, so this is instant plus a cache purge.
+
+`delete` removes a single deploy — its preview zone, its files, and its record — and is built for CI cleanup (e.g. deleting a closed PR's preview). The live deploy and the rollback target are refused (`--force` only skips the confirmation), and deleting an ID that's already gone is a no-op success, so re-runs converge. `--output json` prints `{ site, id, deleted }`. For retention cleanup, use `prune`.
 
 ---
 

@@ -158,6 +158,7 @@ Disposal calls `disconnect()` — it releases the connection but does **not** de
 | `sandbox.deleteFile(path)`                    | Delete a file; `false` if it did not exist.               |
 | `sandbox.rename(from, to)`                    | Rename or move; fails if the destination exists.          |
 | `sandbox.exists(path)`                        | Whether a file or directory exists.                       |
+| `sandbox.stat(path)`                          | Stat a file or directory; `null` if missing.              |
 | `sandbox.mkDir(path)`                         | Create a directory.                                       |
 | `sandbox.exposePort(port, label?)`            | Expose a port as a public CDN URL.                        |
 | `sandbox.domain(port)`                        | Return the URL of an already exposed port.                |

@@ -3,6 +3,9 @@ import {
   normalizeReplicationRegions,
   replicationChoices,
   STORAGE_REGIONS,
+  sdkRegionKey,
+  zoneTierLabel,
+  zoneTierValue,
 } from "./constants.ts";
 
 test("primary regions use uppercase codes and include DE", () => {
@@ -43,4 +46,20 @@ test("normalizeReplicationRegions rejects codes that are not storage regions", (
   expect(() => normalizeReplicationRegions(["NY", "CZ"])).toThrow(
     /Unknown replication region/,
   );
+});
+
+test("zone tiers map between the CLI vocabulary and the API enum", () => {
+  expect(zoneTierValue("hdd")).toBe(0);
+  expect(zoneTierValue("ssd")).toBe(1);
+  expect(zoneTierLabel({ ZoneTier: 0 })).toBe("HDD");
+  expect(zoneTierLabel({ ZoneTier: 1 })).toBe("SSD");
+  expect(zoneTierLabel({ ZoneTier: 0 }, "long")).toBe("Standard (HDD)");
+  expect(zoneTierLabel({ ZoneTier: 1 }, "long")).toBe("Edge (SSD)");
+  expect(zoneTierLabel({})).toBe("-");
+});
+
+test("sdkRegionKey maps a zone region code to the SDK enum member", () => {
+  expect(sdkRegionKey("DE")).toBe("Falkenstein");
+  expect(sdkRegionKey("ny")).toBe("NewYork");
+  expect(sdkRegionKey("XX")).toBeUndefined();
 });
