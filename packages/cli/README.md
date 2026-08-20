@@ -887,6 +887,8 @@ bunny scripts docs
 
 ### `bunny sites`
 
+> **Experimental**: hidden from `--help` and the landing page while it stabilizes.
+
 Host static sites on bunny.net. Each site is three resources provisioned and wired together for you: a **storage zone** holding the files, a **pull zone** serving them over the CDN, and a **middleware router** (an Edge Script) that maps incoming requests to the deploy that should answer them. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
 
 Deploys are immutable: every `sites deploy` uploads to its own `deploys/<id>/` directory and gets its own preview pull zone, a permanent root-served HTTPS URL (`sites-dpl-<id>-<suffix>.b-cdn.net`) that needs no DNS or certificate setup. Publishing flips the router's `CURRENT_DEPLOY` variable and purges the cache, so going live and rolling back are instant and move no files. Deploy IDs are the git short SHA when the working tree is clean and a content hash otherwise, which makes redeploying identical content a no-op.
