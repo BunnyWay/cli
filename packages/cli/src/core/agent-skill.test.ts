@@ -146,6 +146,12 @@ describe("installProjectSkill", () => {
     ]);
   });
 
+  test("refuses to install into the filesystem root", () => {
+    expect(() => installProjectSkill("/", SKILL)).toThrow(
+      "Refusing to install into the filesystem root",
+    );
+  });
+
   test("refuses to install into the home directory", () => {
     expect(() => installProjectSkill(cwd, SKILL, cwd)).toThrow(
       "Refusing to install into your home directory",

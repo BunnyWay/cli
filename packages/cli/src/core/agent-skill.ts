@@ -57,12 +57,27 @@ function isSamePath(a: string, b: string): boolean {
   }
 }
 
-/** Throw when cwd is the user's home directory, where per-user config dirs like ~/.claude would read as project markers. */
-function assertNotHome(cwd: string, home: string): void {
-  if (!isSamePath(cwd, home)) return;
-  throw new UserError(
-    "Refusing to install into your home directory: it is not a project, and files here apply to every directory you work in. Run `bunny skills install --global` for a machine-wide install, or rerun this from a project directory.",
-  );
+/** True when the path is its own parent, which only the filesystem root is. */
+function isFilesystemRoot(path: string): boolean {
+  let resolved = path;
+  try {
+    resolved = realpathSync(path);
+  } catch {}
+  return dirname(resolved) === resolved;
+}
+
+/** Throw when cwd is somewhere a project install makes no sense: the user's home, where per-user config dirs like ~/.claude would read as project markers, or the filesystem root. */
+function assertProjectDir(cwd: string, home: string): void {
+  if (isSamePath(cwd, home)) {
+    throw new UserError(
+      "Refusing to install into your home directory: it is not a project, and files here apply to every directory you work in. Run `bunny skills install --global` for a machine-wide install, or rerun this from a project directory.",
+    );
+  }
+  if (isFilesystemRoot(cwd)) {
+    throw new UserError(
+      "Refusing to install into the filesystem root: it is not a project. Rerun this from a project directory.",
+    );
+  }
 }
 
 /** Heading written when the installer creates AGENTS.md from scratch. */
@@ -188,7 +203,7 @@ export function installProjectSkill(
   skill: ProjectSkill,
   home = homedir(),
 ): string[] {
-  assertNotHome(cwd, home);
+  assertProjectDir(cwd, home);
   const written: string[] = [
     upsertAgentsFile(cwd, skill.name, skill.agentsSection),
   ];
