@@ -138,8 +138,21 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
 
     if (output === "json") {
       await offerConnectionEnv(conn, { saveEnv, interactive: false });
+      // A client config is paste-ready by definition, so it carries the secret even when the fields are masked.
+      if (toolFormat && !showSecret) {
+        logger.warn("Treat the config in this payload like a password.");
+      }
       logger.log(
-        JSON.stringify(connectionJson(conn, { mask: !showSecret }), null, 2),
+        JSON.stringify(
+          connectionJson(conn, {
+            mask: !showSecret,
+            client: toolFormat
+              ? { zone, format: toolFormat, readOnly }
+              : undefined,
+          }),
+          null,
+          2,
+        ),
       );
       return;
     }

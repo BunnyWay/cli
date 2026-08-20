@@ -433,10 +433,15 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       if (linked && created) writeStorageManifest(created);
 
       let conn: StorageConnection | undefined;
+      let connJson: Record<string, string> | undefined;
       if (requestedType && created) {
         const zoneWithSecret = await zoneWithPassword(client, created);
         warnUnusableS3(zoneWithSecret, requestedType, zoneName);
         conn = storageConnection(zoneWithSecret, requestedType);
+        // A requested --format is still honoured here, as a config string beside the fields.
+        connJson = connectionJson(conn, {
+          client: format ? { zone: zoneWithSecret, format } : undefined,
+        });
         // Asked for explicitly, so the JSON carries the secret in full.
         if (hasSecret(conn)) {
           logger.warn("Treat these credentials like a password.");
@@ -454,7 +459,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
             PullZone: pullZoneResult ?? null,
             CustomDomain: customDomainResult ?? null,
             Linked: linked,
-            Connection: conn ? connectionJson(conn) : null,
+            Connection: connJson ?? null,
             SavedToEnv: savedToEnv,
           },
           null,

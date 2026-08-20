@@ -167,16 +167,35 @@ export function connectionRows(
   }));
 }
 
+/** JSON twin of printConnection: the credential fields, plus the client config when one was asked for. */
 export function connectionJson(
   connection: StorageConnection,
-  opts?: { mask?: boolean },
+  opts?: {
+    mask?: boolean;
+    client?: {
+      zone: StorageZoneModel;
+      format: ClientFormat;
+      readOnly?: boolean;
+    };
+  },
 ): Record<string, string> {
+  const client = opts?.client;
   return Object.fromEntries([
     ["type", connection.type],
     ...connection.fields.map((field) => [
       field.name,
       render(field, opts?.mask ?? false),
     ]),
+    // The config is meant to be pasted into a tool, so it carries the real secret as it does in text output.
+    ...(client
+      ? [
+          ["format", client.format],
+          [
+            "config",
+            renderClient(client.zone, client.format, client.readOnly ?? false),
+          ],
+        ]
+      : []),
   ]);
 }
 

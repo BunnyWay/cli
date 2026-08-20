@@ -90,3 +90,18 @@ test("clients belong to the protocol that can use them", () => {
   expect(clientType("sdk")).toBe("http");
   expect(clientType("rclone")).toBe("s3");
 });
+
+test("a requested client format rides along in the JSON, secret intact", () => {
+  const json = connectionJson(storageConnection(ZONE, "s3"), {
+    mask: true,
+    client: { zone: ZONE, format: "rclone" },
+  });
+  expect(json.format).toBe("rclone");
+  expect(json.config).toContain("secret_access_key = rw-pass");
+  expect(json.secretAccessKey).not.toBe("rw-pass");
+  expect(
+    connectionJson(storageConnection(ZONE, "http"), {
+      client: { zone: ZONE, format: "sdk", readOnly: true },
+    }).config,
+  ).toContain("StorageRegion.NewYork");
+});
