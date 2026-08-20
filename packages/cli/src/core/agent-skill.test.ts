@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -123,44 +124,33 @@ describe("installProjectSkill", () => {
     expect(content).toContain(agentsMarkers("bunny-other").start);
   });
 
-  test("writes the full skill to .agents/skills without any Claude marker", () => {
-    const files = installProjectSkill(cwd, SKILL);
-    expect(files).toEqual([
+  test("writes the full skill to .agents/skills", () => {
+    expect(installProjectSkill(cwd, SKILL)).toEqual([
       AGENTS_FILE,
       ".agents/skills/bunny-test/references/extra.md",
       ".agents/skills/bunny-test/SKILL.md",
     ]);
-    const skill = readFileSync(
-      join(cwd, ".agents/skills/bunny-test/SKILL.md"),
-      "utf8",
-    );
-    expect(skill).toContain("name: bunny-test");
-    expect(existsSync(join(cwd, ".claude"))).toBe(false);
+    expect(
+      readFileSync(join(cwd, ".agents/skills/bunny-test/SKILL.md"), "utf8"),
+    ).toContain("name: bunny-test");
   });
 
   test("adds .claude/skills on top when .claude/ exists", () => {
     mkdirSync(join(cwd, ".claude"));
-    const files = installProjectSkill(cwd, SKILL);
-    expect(files).toEqual([
+    expect(installProjectSkill(cwd, SKILL)).toEqual([
       AGENTS_FILE,
       ".agents/skills/bunny-test/references/extra.md",
       ".agents/skills/bunny-test/SKILL.md",
       ".claude/skills/bunny-test/references/extra.md",
       ".claude/skills/bunny-test/SKILL.md",
     ]);
-    const skill = readFileSync(
-      join(cwd, ".claude/skills/bunny-test/SKILL.md"),
-      "utf8",
-    );
-    expect(skill).toContain("name: bunny-test");
   });
 
   test("refuses to install into the home directory", () => {
     expect(() => installProjectSkill(cwd, SKILL, cwd)).toThrow(
       "Refusing to install into your home directory",
     );
-    expect(existsSync(join(cwd, AGENTS_FILE))).toBe(false);
-    expect(existsSync(join(cwd, ".agents"))).toBe(false);
+    expect(readdirSync(cwd)).toEqual([]);
   });
 
   test("writes skill files when CLAUDE.md exists", () => {
@@ -192,15 +182,22 @@ describe("installProjectSkill", () => {
     );
   });
 
-  test("refuses skill writes when .claude/skills escapes via a symlink", () => {
+  // Planting a SKILL.md outside proves the boundary check runs before the sentinel delete, not just before the writes.
+  test.each([
+    ".agents",
+    ".claude",
+  ])("refuses skill writes when %s/skills escapes via a symlink", (parent) => {
     const outside = mkdtempSync(join(tmpdir(), "bunny-agent-skill-escape-"));
+    const planted = join(outside, "bunny-test/SKILL.md");
     try {
-      mkdirSync(join(cwd, ".claude"));
-      symlinkSync(outside, join(cwd, ".claude/skills"));
+      mkdirSync(join(outside, "bunny-test"));
+      writeFileSync(planted, "precious\n");
+      mkdirSync(join(cwd, parent));
+      symlinkSync(outside, join(cwd, parent, "skills"));
       expect(() => installProjectSkill(cwd, SKILL)).toThrow(
         "resolves outside the project",
       );
-      expect(existsSync(join(outside, "bunny-test/SKILL.md"))).toBe(false);
+      expect(readFileSync(planted, "utf8")).toBe("precious\n");
     } finally {
       rmSync(outside, { recursive: true, force: true });
     }
@@ -296,6 +293,16 @@ describe("removeProjectSkill", () => {
     const content = readFileSync(join(cwd, AGENTS_FILE), "utf8");
     expect(content).not.toContain(agentsMarkers("bunny-test").start);
     expect(content).toContain(agentsMarkers("bunny-other").start);
+  });
+  test("in the home directory strips AGENTS.md but leaves the global skill dirs", () => {
+    installGlobalSkill(SKILL, cwd);
+    writeFileSync(
+      join(cwd, AGENTS_FILE),
+      upsertMarkedBlock(null, "bunny-test", SKILL.agentsSection),
+    );
+    const removed = removeProjectSkill(cwd, "bunny-test", cwd);
+    expect(removed).toEqual([AGENTS_FILE]);
+    expect(isGlobalSkillInstalled("bunny-test", cwd)).toBe(true);
   });
 });
 

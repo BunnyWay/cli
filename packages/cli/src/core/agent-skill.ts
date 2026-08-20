@@ -48,16 +48,18 @@ function projectSkillRoots(cwd: string, name: string): string[] {
   return roots;
 }
 
+/** True when two paths resolve to the same directory, falling back to a literal match when either cannot be resolved. */
+function isSamePath(a: string, b: string): boolean {
+  try {
+    return realpathSync(a) === realpathSync(b);
+  } catch {
+    return a === b;
+  }
+}
+
 /** Throw when cwd is the user's home directory, where per-user config dirs like ~/.claude would read as project markers. */
 function assertNotHome(cwd: string, home: string): void {
-  const same = (a: string, b: string) => {
-    try {
-      return realpathSync(a) === realpathSync(b);
-    } catch {
-      return a === b;
-    }
-  };
-  if (!same(cwd, home)) return;
+  if (!isSamePath(cwd, home)) return;
   throw new UserError(
     "Refusing to install into your home directory: it is not a project, and files here apply to every directory you work in. Run `bunny skills install --global` for a machine-wide install, or rerun this from a project directory.",
   );
@@ -164,7 +166,10 @@ function writeSkillFiles(
   boundary?: string,
 ): string[] {
   // SKILL.md is the completion sentinel: removed first and written last, so an interrupted install or refresh reads as incomplete.
-  rmSync(join(root, "SKILL.md"), { force: true });
+  const sentinel = join(root, "SKILL.md");
+  // Validated before the delete, so a symlinked root cannot get an external SKILL.md removed on the way to being rejected.
+  if (boundary) assertWriteWithin(boundary, sentinel, "SKILL.md");
+  rmSync(sentinel, { force: true });
   const entries = Object.entries(skill.files).sort(
     ([a], [b]) => Number(a === "SKILL.md") - Number(b === "SKILL.md"),
   );
@@ -195,8 +200,12 @@ export function installProjectSkill(
   return written;
 }
 
-/** Undo installProjectSkill: strip the AGENTS.md block (deleting the file when only the scaffold heading remains) and delete both skill directories, returning the changed paths. Unlike install, this runs in the home directory so an install made there can be cleaned up. */
-export function removeProjectSkill(cwd: string, name: string): string[] {
+/** Undo installProjectSkill: strip the AGENTS.md block (deleting the file when only the scaffold heading remains) and delete both skill directories, returning the changed paths. Unlike install, this runs in the home directory, but there it touches only AGENTS.md, since the skill directories under home are the global install and only `--global` may delete those. */
+export function removeProjectSkill(
+  cwd: string,
+  name: string,
+  home = homedir(),
+): string[] {
   const removed: string[] = [];
   const path = join(cwd, AGENTS_FILE);
   if (existsSync(path)) {
@@ -211,6 +220,8 @@ export function removeProjectSkill(cwd: string, name: string): string[] {
       removed.push(AGENTS_FILE);
     }
   }
+  // In home these paths are the global install, not a project one, so a scopeless remove leaves them to `--global`.
+  if (isSamePath(cwd, home)) return removed;
   // Both roots are cleaned whatever this project now detects as, so installs made under older detection rules still come out.
   for (const skillRoot of [
     `${UNIVERSAL_SKILL_DIR}/${name}`,
