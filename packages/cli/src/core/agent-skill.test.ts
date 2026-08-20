@@ -85,7 +85,7 @@ describe("upsertMarkedBlock", () => {
 describe("installProjectSkill", () => {
   test("creates AGENTS.md with a marked block when missing", () => {
     const files = installProjectSkill(cwd, SKILL);
-    expect(files).toEqual([AGENTS_FILE]);
+    expect(files[0]).toBe(AGENTS_FILE);
     const content = readFileSync(join(cwd, AGENTS_FILE), "utf8");
     expect(content).toContain(agentsMarkers("bunny-test").start);
     expect(content).toContain("Use `bunny test` for testing.");
@@ -123,16 +123,28 @@ describe("installProjectSkill", () => {
     expect(content).toContain(agentsMarkers("bunny-other").start);
   });
 
-  test("skips .claude/skills when the project does not use Claude", () => {
-    installProjectSkill(cwd, SKILL);
+  test("writes the full skill to .agents/skills without any Claude marker", () => {
+    const files = installProjectSkill(cwd, SKILL);
+    expect(files).toEqual([
+      AGENTS_FILE,
+      ".agents/skills/bunny-test/references/extra.md",
+      ".agents/skills/bunny-test/SKILL.md",
+    ]);
+    const skill = readFileSync(
+      join(cwd, ".agents/skills/bunny-test/SKILL.md"),
+      "utf8",
+    );
+    expect(skill).toContain("name: bunny-test");
     expect(existsSync(join(cwd, ".claude"))).toBe(false);
   });
 
-  test("writes all skill files when .claude/ exists", () => {
+  test("adds .claude/skills on top when .claude/ exists", () => {
     mkdirSync(join(cwd, ".claude"));
     const files = installProjectSkill(cwd, SKILL);
     expect(files).toEqual([
       AGENTS_FILE,
+      ".agents/skills/bunny-test/references/extra.md",
+      ".agents/skills/bunny-test/SKILL.md",
       ".claude/skills/bunny-test/references/extra.md",
       ".claude/skills/bunny-test/SKILL.md",
     ]);
@@ -141,6 +153,14 @@ describe("installProjectSkill", () => {
       "utf8",
     );
     expect(skill).toContain("name: bunny-test");
+  });
+
+  test("refuses to install into the home directory", () => {
+    expect(() => installProjectSkill(cwd, SKILL, cwd)).toThrow(
+      "Refusing to install into your home directory",
+    );
+    expect(existsSync(join(cwd, AGENTS_FILE))).toBe(false);
+    expect(existsSync(join(cwd, ".agents"))).toBe(false);
   });
 
   test("writes skill files when CLAUDE.md exists", () => {
@@ -248,7 +268,11 @@ describe("removeProjectSkill", () => {
     mkdirSync(join(cwd, ".claude"));
     installProjectSkill(cwd, SKILL);
     const removed = removeProjectSkill(cwd, "bunny-test");
-    expect(removed).toEqual([AGENTS_FILE, ".claude/skills/bunny-test"]);
+    expect(removed).toEqual([
+      AGENTS_FILE,
+      ".agents/skills/bunny-test",
+      ".claude/skills/bunny-test",
+    ]);
     const content = readFileSync(join(cwd, AGENTS_FILE), "utf8");
     expect(content).toContain("Use tabs.");
     expect(content).not.toContain(agentsMarkers("bunny-test").start);

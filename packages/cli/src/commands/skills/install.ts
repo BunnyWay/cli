@@ -20,10 +20,12 @@ interface InstallArgs {
  *
  * Project install (default) maintains a marked block in AGENTS.md, which most
  * coding agents read, and writes the full skill with references under
- * .claude/skills/bunny-cli/ when the project uses Claude Code. A global install
- * writes the skill to ~/.agents/skills/bunny-cli/ (the cross-tool directory)
- * and ~/.claude/skills/bunny-cli/ so AI coding tools pick it up in every
- * project. Reinstalling refreshes the same files, so `update` is an alias.
+ * .agents/skills/bunny-cli/, plus .claude/skills/bunny-cli/ when the project
+ * uses Claude Code. Installing into the home directory is refused, since files
+ * there are not project scoped. A global install writes the skill to
+ * ~/.agents/skills/bunny-cli/ (the cross-tool directory) and
+ * ~/.claude/skills/bunny-cli/ so AI coding tools pick it up in every project.
+ * Reinstalling refreshes the same files, so `update` is an alias.
  *
  * @example
  * ```bash
@@ -38,7 +40,7 @@ export const skillsInstallCommand = defineCommand<InstallArgs>({
   examples: [
     [
       "$0 skills install",
-      "Install into this project (AGENTS.md and .claude/skills)",
+      "Install into this project (AGENTS.md and .agents/skills)",
     ],
     [
       "$0 skills install --global",

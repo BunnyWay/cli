@@ -33,9 +33,34 @@ export function isProjectSkillInstalled(cwd: string, name: string): boolean {
   return readFileSync(path, "utf8").includes(agentsMarkers(name).start);
 }
 
-/** True when the project shows Claude Code usage, gating .claude/skills writes. */
+/** True when the project shows Claude Code usage, adding .claude/skills to the project install. */
 export function usesClaude(cwd: string): boolean {
   return existsSync(join(cwd, ".claude")) || existsSync(join(cwd, "CLAUDE.md"));
+}
+
+/** Cross-tool skills directory, written by every project install so the skill lands whatever the agent. */
+const UNIVERSAL_SKILL_DIR = ".agents/skills";
+
+/** Skill roots a project install writes, relative to cwd: the cross-tool directory always, Claude Code's when detected. */
+function projectSkillRoots(cwd: string, name: string): string[] {
+  const roots = [`${UNIVERSAL_SKILL_DIR}/${name}`];
+  if (usesClaude(cwd)) roots.push(`.claude/skills/${name}`);
+  return roots;
+}
+
+/** Throw when cwd is the user's home directory, where per-user config dirs like ~/.claude would read as project markers. */
+function assertNotHome(cwd: string, home: string): void {
+  const same = (a: string, b: string) => {
+    try {
+      return realpathSync(a) === realpathSync(b);
+    } catch {
+      return a === b;
+    }
+  };
+  if (!same(cwd, home)) return;
+  throw new UserError(
+    "Refusing to install into your home directory: it is not a project, and files here apply to every directory you work in. Run `bunny skills install --global` for a machine-wide install, or rerun this from a project directory.",
+  );
 }
 
 /** Heading written when the installer creates AGENTS.md from scratch. */
@@ -152,16 +177,17 @@ function writeSkillFiles(
   return entries.map(([relPath]) => relPath);
 }
 
-/** Install or update a skill in the project (AGENTS.md block always, .claude/skills/<name>/ when the project uses Claude Code), returning the cwd-relative paths written. */
+/** Install or update a skill in the project (AGENTS.md block, .agents/skills/<name>/, plus .claude/skills/<name>/ when the project uses Claude Code), returning the cwd-relative paths written. */
 export function installProjectSkill(
   cwd: string,
   skill: ProjectSkill,
+  home = homedir(),
 ): string[] {
+  assertNotHome(cwd, home);
   const written: string[] = [
     upsertAgentsFile(cwd, skill.name, skill.agentsSection),
   ];
-  if (usesClaude(cwd)) {
-    const skillRoot = `.claude/skills/${skill.name}`;
+  for (const skillRoot of projectSkillRoots(cwd, skill.name)) {
     for (const relPath of writeSkillFiles(join(cwd, skillRoot), skill, cwd)) {
       written.push(`${skillRoot}/${relPath}`);
     }
@@ -169,7 +195,7 @@ export function installProjectSkill(
   return written;
 }
 
-/** Undo installProjectSkill: strip the AGENTS.md block (deleting the file when only the scaffold heading remains) and delete .claude/skills/<name>/, returning the changed paths. */
+/** Undo installProjectSkill: strip the AGENTS.md block (deleting the file when only the scaffold heading remains) and delete both skill directories, returning the changed paths. Unlike install, this runs in the home directory so an install made there can be cleaned up. */
 export function removeProjectSkill(cwd: string, name: string): string[] {
   const removed: string[] = [];
   const path = join(cwd, AGENTS_FILE);
@@ -185,9 +211,13 @@ export function removeProjectSkill(cwd: string, name: string): string[] {
       removed.push(AGENTS_FILE);
     }
   }
-  const skillRoot = `.claude/skills/${name}`;
-  const dir = join(cwd, skillRoot);
-  if (existsSync(dir)) {
+  // Both roots are cleaned whatever this project now detects as, so installs made under older detection rules still come out.
+  for (const skillRoot of [
+    `${UNIVERSAL_SKILL_DIR}/${name}`,
+    `.claude/skills/${name}`,
+  ]) {
+    const dir = join(cwd, skillRoot);
+    if (!existsSync(dir)) continue;
     assertWriteWithin(cwd, dir, skillRoot);
     rmSync(dir, { recursive: true, force: true });
     removed.push(skillRoot);
