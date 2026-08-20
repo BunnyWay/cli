@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { requireConfirmable } from "./ui.ts";
+import promptsLib from "prompts";
+import { confirm, requireConfirmable } from "./ui.ts";
+
+// Pins the injection escape hatch: this runner has no TTY, so if the wrapper's probe of the library's injected-answers state ever breaks, this fails instead of every inject-driven test silently getting cancelled prompts.
+test("prompts.inject() bypasses the terminal requirement", async () => {
+  promptsLib.inject([true]);
+  expect(await confirm("sure?")).toBe(true);
+});
 
 const UI_PATH = new URL("./ui.ts", import.meta.url).pathname;
 
