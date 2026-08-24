@@ -16,7 +16,6 @@
     "@bunny.net/database-shell": "workspace:*",
     "@bunny.net/sandbox": "workspace:*",
     "@bunny.net/database-studio": "workspace:*",
-    "@libsql/client": "^0.17.0",
     "@types/prompts": "^2.4.9",
     "@types/yargs": "^17.0.35",
     "chalk": "^5.6.2",
@@ -26,7 +25,8 @@
     "prompts": "^2.4.2",
     "yaml": "^2.9.0",
     "yargs": "^18.0.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@bunny.net/database-client": "workspace:*"
   },
   "optionalDependencies": {
     "@bunny.net/cli-linux-x64": "0.14.1",

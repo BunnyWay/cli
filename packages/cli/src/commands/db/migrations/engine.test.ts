@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   mkdirSync,
@@ -8,7 +9,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createClient } from "@libsql/client";
 import { assertMigrationHistorySafe, migrationHistoryIssues } from "./drift.ts";
 import {
   applyMigration,
@@ -43,8 +43,40 @@ function write(name: string, sql: string) {
   writeFileSync(join(dir, name), sql);
 }
 
+/**
+ * A real SQLite database behind the engine's client surface. `migrate()` mirrors
+ * what the wire batch does: foreign keys off, outside a deferred transaction.
+ */
 function memoryClient(): MigrationClient {
-  return createClient({ url: ":memory:" });
+  const db = new Database(":memory:");
+  const run = (sql: string, args: unknown[]) =>
+    db.prepare(sql).all(...(args as never[])) as Record<string, unknown>[];
+
+  return {
+    execute: async (statement) => {
+      const { sql, args } =
+        typeof statement === "string"
+          ? { sql: statement, args: [] }
+          : statement;
+      return { rows: run(sql, args) };
+    },
+    migrate: async (statements) => {
+      db.exec("PRAGMA foreign_keys=off");
+      try {
+        db.exec("BEGIN DEFERRED");
+        try {
+          for (const { sql, args } of statements) run(sql, args ?? []);
+          db.exec("COMMIT");
+        } catch (err) {
+          db.exec("ROLLBACK");
+          throw err;
+        }
+      } finally {
+        db.exec("PRAGMA foreign_keys=on");
+      }
+      return [];
+    },
+  };
 }
 
 describe("discoverMigrations", () => {

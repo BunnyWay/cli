@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { splitStatements } from "@bunny.net/database-shell";
-import type { Client } from "@libsql/client";
 import { errorMessage, UserError } from "../../../core/errors.ts";
 import {
   DEFAULT_MIGRATIONS_DIR,
@@ -11,8 +10,13 @@ import {
   MIGRATIONS_TABLE,
 } from "./constants.ts";
 
-/** The libSQL client surface the engine needs, so tests can pass an in-memory client. */
-export type MigrationClient = Pick<Client, "execute" | "migrate">;
+/** The client surface the engine needs, so tests can pass an in-memory client. */
+export interface MigrationClient {
+  execute(
+    statement: string | { sql: string; args: unknown[] },
+  ): Promise<{ rows: Record<string, unknown>[] }>;
+  migrate(statements: { sql: string; args?: unknown[] }[]): Promise<unknown>;
+}
 
 export interface MigrationFile {
   /** Filename including the `.sql` extension, e.g. `0001_add_users.sql`. */

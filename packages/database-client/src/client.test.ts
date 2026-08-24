@@ -347,6 +347,79 @@ describe("batch", () => {
     expect(results[0]?.rowsAffected).toBe(1);
   });
 
+  test("migrate brackets the transaction with the foreign key pragmas", async () => {
+    // The pragmas sit outside BEGIN/COMMIT because SQLite ignores them within a transaction.
+    const fake = fakeFetch([okBatch(4)]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    await db.migrate([
+      db.prepare("ALTER TABLE parent RENAME TO parent_old"),
+      db.prepare("DROP TABLE parent_old"),
+    ]);
+
+    const steps =
+      (fake.captures[0] as Capture).body.requests[0]?.batch?.steps ?? [];
+    expect(steps.map((s) => s.stmt.sql)).toEqual([
+      "PRAGMA foreign_keys=off",
+      "BEGIN DEFERRED",
+      "ALTER TABLE parent RENAME TO parent_old",
+      "DROP TABLE parent_old",
+      "COMMIT",
+      "ROLLBACK",
+      "PRAGMA foreign_keys=on",
+    ]);
+    expect(steps[2]?.condition).toEqual({ type: "ok", step: 1 });
+    expect(steps[3]?.condition).toEqual({ type: "ok", step: 2 });
+    expect(steps[4]?.condition).toEqual({ type: "ok", step: 3 });
+    expect(steps[5]?.condition).toEqual({
+      type: "not",
+      cond: { type: "ok", step: 4 },
+    });
+  });
+
+  test("migrate results line up with the caller's statements, not the pragmas", async () => {
+    const fake = fakeFetch([
+      {
+        type: "ok",
+        response: {
+          type: "batch",
+          result: {
+            // PRAGMA, BEGIN, stmt A, stmt B, COMMIT, ROLLBACK, PRAGMA
+            step_results: [
+              null,
+              null,
+              {
+                cols: [{ name: "a" }],
+                rows: [],
+                affected_row_count: 11,
+                last_insert_rowid: null,
+              },
+              {
+                cols: [{ name: "b" }],
+                rows: [],
+                affected_row_count: 22,
+                last_insert_rowid: null,
+              },
+              null,
+              null,
+              null,
+            ],
+            step_errors: Array.from({ length: 7 }, () => null),
+          },
+        },
+      },
+    ]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const results = await db.migrate([
+      db.prepare("SELECT 'a'"),
+      db.prepare("SELECT 'b'"),
+    ]);
+
+    expect(results.map((r) => r.rowsAffected)).toEqual([11, 22]);
+    expect(results.map((r) => r.columns)).toEqual([["a"], ["b"]]);
+  });
+
   test("an empty batch is a no-op that sends nothing", async () => {
     const fake = fakeFetch([]);
     const db = connect({ url: URL_, fetch: fake.fetch });

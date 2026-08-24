@@ -168,7 +168,24 @@ export class Database {
     return (await this.#batch(statements)).map(toRawResult);
   }
 
-  async #batch(statements: Statement[]): Promise<WireStmtResult[]> {
+  /**
+   * Run statements as a schema migration: one deferred transaction with foreign
+   * key enforcement off, which table rebuilds and `ALTER TABLE` need. Otherwise
+   * identical to `batch()`, including the all-or-nothing guarantee.
+   */
+  async migrate<T = Row>(statements: Statement[]): Promise<Result<T>[]> {
+    return (
+      await this.#batch(statements, {
+        begin: "BEGIN DEFERRED",
+        deferForeignKeys: true,
+      })
+    ).map((wire) => toResult<T>(wire));
+  }
+
+  async #batch(
+    statements: Statement[],
+    options: { begin?: string; deferForeignKeys?: boolean } = {},
+  ): Promise<WireStmtResult[]> {
     if (statements.length === 0) return [];
 
     const control = (sql: string, condition?: unknown) => ({
@@ -176,17 +193,27 @@ export class Database {
       ...(condition ? { condition } : {}),
     });
 
+    // SQLite ignores `PRAGMA foreign_keys` inside a transaction, so the pragmas
+    // bracket BEGIN/COMMIT instead of sitting within them.
+    const prelude = options.deferForeignKeys
+      ? [control("PRAGMA foreign_keys=off")]
+      : [];
+    const begin = prelude.length;
+    const last = begin + statements.length;
+
     const steps = [
-      control("BEGIN"),
+      ...prelude,
+      control(options.begin ?? "BEGIN"),
       ...statements.map((statement, index) => ({
         stmt: statement.wire,
-        condition: { type: "ok", step: index },
+        condition: { type: "ok", step: begin + index },
       })),
-      control("COMMIT", { type: "ok", step: statements.length }),
+      control("COMMIT", { type: "ok", step: last }),
       control("ROLLBACK", {
         type: "not",
-        cond: { type: "ok", step: statements.length + 1 },
+        cond: { type: "ok", step: last + 1 },
       }),
+      ...(options.deferForeignKeys ? [control("PRAGMA foreign_keys=on")] : []),
     ];
 
     const results = await this.#transport.send(
@@ -199,7 +226,7 @@ export class Database {
     if (failure) throw DatabaseError.fromWire(failure);
 
     return statements.map((_, index) => {
-      const step = batch.step_results[index + 1];
+      const step = batch.step_results[begin + 1 + index];
       if (!step) throw new DatabaseError("batch step returned no result");
       return step;
     });
