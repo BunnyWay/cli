@@ -358,7 +358,7 @@ bunny-cli/
 │           │   ├── storage/                 # Experimental (hidden from help and landing page)
 │           │   │   ├── index.ts          # defineNamespace("storage", ...): registers zone + file groups + link + regions + docs (+ hidden bucket aliases)
 │           │   │   ├── api.ts            # CoreClient type, fetchStorageZones/fetchStorageZone, resolveStorageZone (name-or-ID to zone, re-fetched by ID), toSafeStorageZone (strips Password/ReadOnlyPassword; used by every command that emits a raw zone as JSON: show/list/add)
-│           │   │   ├── constants.ts      # STORAGE_REGIONS (from SDK enum; /storagezone/regions API endpoint is not reliable) + sdkRegionKey (region code -> SDK enum member, for the code snippet) + replicationChoices/normalizeReplicationRegions (replication uses the same regions minus the primary; the SDK file ZoneSchema is the physical footprint, NOT the create input) + ZONE_TIER_CHOICES/zoneTierValue/zoneTierLabel (the hdd/ssd CLI vocabulary <-> ZoneTier 0/1, labelled "Standard (HDD)"/"Edge (SSD)" in long form; tier and S3 support are both create-time only, since the update API takes neither) + SSD_PRIMARY_REGION (DE: Edge zones are always primaried in Frankfurt, and the create API silently rewrites any other Region rather than erroring) + STORAGE_MANIFEST/StorageZoneManifest (.bunny/storage.json, written by storage link)
+│           │   │   ├── constants.ts      # REGION_CATALOG/STORAGE_REGIONS (15 regions in dashboard order; the /storagezone/regions API endpoint is not reliable, so the list is hand-maintained) + RegionScope/mainRegionChoices/replicationChoices/normalizeReplicationRegions/regionTierNote (the available set is a function of BOTH tier and S3, matching the dashboard: Standard = 9; Edge (SSD) adds the six replica-only regions ES/CZ/MI/WA/HK/JP, which have no storage endpoint and so can never be a main region; S3 drops BR and gains none of the six, so the tier stops mattering. Edge zones can only be primaried in DE, so mainRegionChoices returns just DE for ssd. normalizeReplicationRegions takes the zone's current replication regions as always-allowed, so a zone keeps validating against what it already has even when a region is no longer offered for new zones) + sdkRegionKey (region code -> SDK enum member, for the code snippet) + ZONE_TIER_CHOICES/zoneTierValue/zoneTierLabel (the hdd/ssd CLI vocabulary <-> ZoneTier 0/1, labelled "Standard (HDD)"/"Edge (SSD)" in long form; tier and S3 support are both create-time only, since the update API takes neither) + SSD_PRIMARY_REGION (DE: Edge zones are always primaried in Frankfurt, and the create API silently rewrites any other Region rather than erroring) + STORAGE_MANIFEST/StorageZoneManifest (.bunny/storage.json, written by storage link)
 │           │   │   ├── interactive.ts    # resolveStorageZoneInteractive: explicit name/ID arg → linked manifest (.bunny/storage.json, fetched by ID even when non-interactive) → zone picker; opts: force (no picker), offerLink (picker offers to link the directory), ignoreManifest (always pick, used by link); writeStorageManifest writer shared with link
 │           │   │   ├── link.ts           # Link the current directory to a storage zone (.bunny/storage.json) via the shared resolver with ignoreManifest; bunny storage link [zone]
 │           │   │   ├── unlink.ts         # Remove .bunny/storage.json (confirmation unless --force); bunny storage unlink
@@ -369,7 +369,7 @@ bunny-cli/
 │           │   │   ├── s3.ts             # S3 (open preview): isS3Enabled (StorageZoneType===1), s3Endpoint (<region>-s3.storage.bunnycdn.com), s3Credentials (name=access key, password=secret), renderS3ToolConfig (rclone/aws/s3cmd/env formatters)
 │           │   │   ├── s3.test.ts        # Tests for S3 derivation + tool-config formatters
 │           │   │   ├── docs.ts           # Open storage docs (bunny storage docs)
-│           │   │   ├── regions.ts        # List available storage regions (bunny storage regions)
+│           │   │   ├── regions.ts        # List available storage regions (bunny storage regions); --tier hdd|ssd and --s3 scope the list to one zone shape, and the Main/Replication columns say which role each region can take
 │           │   │   ├── zone/              # `bunny storage zones` (canonical: zones; aliases: zone; hidden: bucket, buckets)
 │           │   │   │   ├── index.ts      # defineNamespace("zones", ...) + storageZoneHiddenAliases (bucket/buckets)
 │           │   │   │   ├── details.ts    # zoneDetailRows(zone, {usage}): the key-value block shared by `zones show` and the `zones add` summary (usage:false drops the all-zero Files/Used/Modified rows right after a create)
@@ -385,7 +385,7 @@ bunny-cli/
 │           │   │       ├── list.ts       # List files in a directory (alias: ls; directories first; [path] positional, --zone flag)
 │           │   │       ├── upload.ts     # Upload a local file (<file> positional, --zone, --to, --checksum streams a SHA256, --content-type)
 │           │   │       ├── download.ts   # Download a file to disk (<path> positional, --zone, --out)
-│           │   │       └── remove.ts     # Delete a file or directory (alias: rm; <path> positional, --zone, trailing slash = recursive)
+│           │   │       └── remove.ts     # Delete a file or directory (alias: rm; <path> positional, --zone, trailing slash = recursive); `/` empties the zone and takes the same double confirmation as deleting the zone, and requireConfirmable means unattended runs need --force
 │           │   ├── sites/                 # Experimental (hidden from help and landing page) — static-site hosting (storage zone + pull zone + middleware router)
 │           │   │   ├── index.ts          # defineNamespace("sites", false, ...): create/list/show/deploy/deployments/domains/link/unlink/upgrade-router/delete; describe:false keeps it out of help while it stabilizes
 │           │   │   ├── constants.ts      # SITES_MANIFEST (.bunny/site.json), REMOTE_STATE_PATH (_bunny/site.json), RemoteSiteState/DeployRecord types (DeployRecord carries previewZoneId/previewHost; state carries routerVersion), parseRemoteState (shape-checked; null = not a site), deployPrefix, deploy-ID + site-name validators (3-47 chars; `dpl-` names reserved so a site can't collide with preview-zone names), suffixedResourceName/siteResourcePattern (zone names are `sites-{name}-{random 6}`: the prefix marks them in the dashboard, the suffix dodges the global zone namespace), previewZoneName/deployIdFromPreviewZoneName/isPreviewZoneName (`sites-dpl-{deployId}-{rand6}` preview zones: no dashes in deploy ids keeps parsing unambiguous, and the worst case fits the 63-char DNS label limit)
@@ -756,7 +756,7 @@ Confirmation prompt using `prompts` with `type: "confirm"`. If `opts.force` is `
 
 ### `requireConfirmable(output, { force, message, hint })`
 
-Guard called immediately before a `confirm()`/`confirmTyped()` that gates a destructive action. Returns silently with `force`, or when `isInteractive(output)`; otherwise throws a `UserError` with `hint`. Without it an unattended run (CI, `--output json`, no TTY) blocks forever on a prompt nobody can answer, and the prompt lands on stdout ahead of the JSON payload. Used by `sites delete`, `sites deployments publish/prune`, and the shared `domains remove`.
+Guard called immediately before a `confirm()`/`confirmTyped()` that gates a destructive action. Returns silently with `force`, or when `isInteractive(output)`; otherwise throws a `UserError` with `hint`. Without it an unattended run (CI, `--output json`, no TTY) blocks forever on a prompt nobody can answer, and the prompt lands on stdout ahead of the JSON payload. Used by `sites delete`, `sites deployments publish/prune`, `storage files remove`, and the shared `domains remove`.
 
 ### `spinner(text: string): ora.Ora`
 
@@ -1078,10 +1078,10 @@ bunny
 │   │   ├── list        [path] [--zone] (alias: ls)  List files in a directory (trailing slash on path)
 │   │   ├── upload      <file> [--zone] [--to] [--checksum] [--content-type]  Upload a local file
 │   │   ├── download    <path> [--zone] [--out]  Download a file
-│   │   └── remove      <path> [--zone] [--force] (alias: rm)  Delete a file or directory (trailing slash = recursive)
+│   │   └── remove      <path> [--zone] [--force] (alias: rm)  Delete a file or directory (trailing slash = recursive; `/` empties the zone, double confirmation)
 │   ├── link            [zone]              Link the current directory to a storage zone (.bunny/storage.json); interactive picker when omitted
 │   ├── unlink          [--force/-f]        Remove .bunny/storage.json, unlinking this directory (confirmation unless --force)
-│   ├── regions                             List available storage regions (replication uses the same set minus the primary)
+│   ├── regions                             List available storage regions (--tier hdd|ssd, --s3; the set depends on both)
 │   └── docs                                Open storage documentation in browser
 ├── db
 │   ├── create          [--name] [--primary] [--replicas] [--storage-region]

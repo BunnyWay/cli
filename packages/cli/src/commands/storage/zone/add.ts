@@ -38,11 +38,11 @@ import {
 } from "../connection.ts";
 import {
   confirmAddedReplicationRegions,
+  mainRegionChoices,
   normalizeReplicationRegions,
   replicationChoices,
   SSD_PRIMARY_REGION,
   STORAGE_MANIFEST,
-  STORAGE_REGIONS,
   type StorageZoneManifest,
   ZONE_TIER_CHOICES,
   type ZoneTierChoice,
@@ -97,10 +97,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       "$0 storage zones add",
       "Interactive: prompts for name, tier, region, and S3",
     ],
-    [
-      "$0 storage zones add my-zone --region DE",
-      "Create a zone in Falkenstein",
-    ],
+    ["$0 storage zones add my-zone --region DE", "Create a zone in Frankfurt"],
     [
       "$0 storage zones add my-zone --region NY --replication LA,SG",
       "Create a zone with replication regions",
@@ -276,6 +273,13 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       zoneTier = picked;
     }
 
+    let s3Enabled = s3;
+    if (s3Enabled === undefined && interactive) {
+      logger.dim("S3 compatibility cannot be turned on later.");
+      s3Enabled = await confirm("Enable S3 compatibility?", { initial: true });
+    }
+    const scope = { tier: zoneTier, s3: s3Enabled };
+
     // The main region cannot be changed after creation, so prompt for it too.
     let mainRegion = region;
     if (zoneTier === "ssd") {
@@ -283,7 +287,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       if (mainRegion && mainRegion.toUpperCase() !== SSD_PRIMARY_REGION) {
         throw new UserError(
           `The Edge (SSD) tier is only available with ${SSD_PRIMARY_REGION} as the main region, but --region ${mainRegion} was given.`,
-          `Drop --region to use ${SSD_PRIMARY_REGION}, or pass --tier hdd to keep ${mainRegion.toUpperCase()}. Replication regions are unaffected.`,
+          `Drop --region to use ${SSD_PRIMARY_REGION}, or pass --tier hdd to keep ${mainRegion.toUpperCase()}.`,
         );
       }
       mainRegion = SSD_PRIMARY_REGION;
@@ -297,7 +301,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
         type: "select",
         name: "picked",
         message: "Main region:",
-        choices: STORAGE_REGIONS.map((r) => ({
+        choices: mainRegionChoices(scope).map((r) => ({
           title: `${r.name} (${r.code})`,
           value: r.code,
         })),
@@ -312,10 +316,12 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     }
     mainRegion = mainRegion.toUpperCase();
 
-    let s3Enabled = s3;
-    if (s3Enabled === undefined && interactive) {
-      logger.dim("S3 compatibility cannot be turned on later.");
-      s3Enabled = await confirm("Enable S3 compatibility?", { initial: true });
+    const allowedMain = mainRegionChoices(scope);
+    if (!allowedMain.some((r) => r.code === mainRegion)) {
+      throw new UserError(
+        `${mainRegion} cannot be the main region of ${s3Enabled ? "an S3" : "a"} storage zone.`,
+        `Available main regions: ${allowedMain.map((r) => r.code).join(", ")}.`,
+      );
     }
 
     let replicationRegions = replication;
@@ -325,7 +331,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
         name: "picked",
         message:
           "Replication regions (each adds storage cost; space to toggle):",
-        choices: replicationChoices(mainRegion).map((region) => ({
+        choices: replicationChoices(mainRegion, scope).map((region) => ({
           title: `${region.name} (${region.code})`,
           value: region.code,
         })),
@@ -335,7 +341,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       replicationRegions = picked;
     }
     const replicationCodes = replicationRegions
-      ? normalizeReplicationRegions(replicationRegions, mainRegion)
+      ? normalizeReplicationRegions(replicationRegions, mainRegion, scope)
       : [];
 
     // Replicas can't be removed once added, so confirm before creating a zone with any.
