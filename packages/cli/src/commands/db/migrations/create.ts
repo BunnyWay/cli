@@ -1,10 +1,9 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import prompts from "prompts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { isInteractive } from "../../../core/ui.ts";
+import { isInteractive, prompts } from "../../../core/ui.ts";
 import { ARG_DIR } from "./constants.ts";
 import {
   discoverMigrations,
