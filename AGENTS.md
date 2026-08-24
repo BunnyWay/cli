@@ -1445,7 +1445,7 @@ The manifest system is generic. To add a new resource type (e.g. containers):
 4. Interactive prompt: fetches all databases and presents a select menu
 5. If no databases exist, a `UserError` with a hint to run `bunny db create`
 
-The URL (e.g. `libsql://...bunnydb.net/`) does not directly contain the `db_id`. The resolver fetches the database list and matches by URL to find the corresponding `db_id`. The manifest stores the `db_id` directly so no list lookup is needed for that path.
+The URL takes the form `libsql://<ulid>-<name>.lite.bunnydb.net/`, e.g. `libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net/`. The subdomain embeds the ULID half of the `db_id` (`db_<ulid>`), but the resolver does not parse it out: it fetches the database list and matches `db.url` exactly to find the corresponding `db_id`. The manifest stores the `db_id` directly so no list lookup is needed for that path.
 
 The manifest path mirrors `bunny scripts link`: both write to `.bunny/<resource>.json` via the same generic `saveManifest<T>()` helper in `packages/cli/src/core/manifest.ts`.
 

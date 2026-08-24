@@ -67,7 +67,7 @@ In `--output json` mode, prompts are suppressed entirely — flags are the only 
 {
   "db_id": "db_01KCHBG8C5KSFGG0VRNFQ7EK7X",
   "name": "my-app",
-  "url": "libsql://...bunnydb.net/",
+  "url": "libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net/",
   "linked": true,
   "token": "ey...",
   "saved_to_env": true
@@ -151,13 +151,13 @@ Displays: Rows read, Rows written, Queries, Avg latency (ms), Storage (with prog
 ## `bunny db shell` — Interactive SQL REPL
 
 ```bash
-bunny db shell                                       # interactive REPL
-bunny db shell db_01KCHBG8C5KSFGG0VRNFQ7EK7X        # specific database
-bunny db shell -e "SELECT * FROM users LIMIT 10"    # execute and exit
-bunny db shell -e query.sql                          # execute .sql file
-bunny db shell --mode json                           # JSON output
-bunny db shell --unmask                              # show sensitive values
-bunny db shell --url libsql://... --token ey...      # explicit credentials
+bunny db shell                                                             # interactive REPL
+bunny db shell db_01KCHBG8C5KSFGG0VRNFQ7EK7X                               # specific database
+bunny db shell -e "SELECT * FROM users LIMIT 10"                           # execute and exit
+bunny db shell -e query.sql                                                # execute .sql file
+bunny db shell --mode json                                                 # JSON output
+bunny db shell --unmask                                                    # show sensitive values
+bunny db shell --url libsql://<ulid>-<name>.lite.bunnydb.net --token ey... # explicit credentials
 ```
 
 ### Flags
@@ -194,11 +194,11 @@ In interactive mode, the shell supports dot-commands like `.tables`, `.schema`, 
 ## `bunny db studio` — Read-only table viewer
 
 ```bash
-bunny db studio                                      # auto-detect database
-bunny db studio db_01KCHBG8C5KSFGG0VRNFQ7EK7X       # specific database
-bunny db studio --port 3000                          # custom port
-bunny db studio --no-open                            # don't auto-open browser
-bunny db studio --url libsql://... --token ey...     # explicit credentials
+bunny db studio                                                             # auto-detect database
+bunny db studio db_01KCHBG8C5KSFGG0VRNFQ7EK7X                               # specific database
+bunny db studio --port 3000                                                 # custom port
+bunny db studio --no-open                                                   # don't auto-open browser
+bunny db studio --url libsql://<ulid>-<name>.lite.bunnydb.net --token ey... # explicit credentials
 ```
 
 | Flag        | Default | Description                          |
