@@ -26,9 +26,9 @@ function printUsage() {
     --help              Show this help message
 
   Examples:
-    bsql libsql://<your-database>.lite.bunnydb.net --token ey...
-    bsql libsql://<your-database>.lite.bunnydb.net "SELECT * FROM users"
-    bsql libsql://<your-database>.lite.bunnydb.net seed.sql --mode table
+    bsql libsql://<ulid>-<name>.lite.bunnydb.net --token ey...
+    bsql libsql://<ulid>-<name>.lite.bunnydb.net "SELECT * FROM users"
+    bsql libsql://<ulid>-<name>.lite.bunnydb.net seed.sql --mode table
 `);
 }
 

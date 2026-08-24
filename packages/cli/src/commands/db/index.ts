@@ -4,6 +4,7 @@ import { dbDeleteCommand } from "./delete.ts";
 import { dbDocsCommand } from "./docs.ts";
 import { dbLinkCommand } from "./link.ts";
 import { dbListCommand } from "./list.ts";
+import { dbMigrationsNamespace } from "./migrations/index.ts";
 import { dbQuickstartCommand } from "./quickstart.ts";
 import { dbRegionsNamespace } from "./regions/index.ts";
 import { dbShellCommand } from "./shell.ts";
@@ -18,6 +19,7 @@ export const dbNamespace = defineNamespace("db", "Manage databases.", [
   dbDocsCommand,
   dbLinkCommand,
   dbListCommand,
+  dbMigrationsNamespace,
   dbQuickstartCommand,
   dbRegionsNamespace,
   dbShellCommand,

@@ -46,7 +46,7 @@ const ARG_TOKEN = "token";
  * bunny db quickstart --lang typescript
  *
  * # Skip API lookup with pre-existing credentials
- * bunny db quickstart --lang go --url libsql://... --token ey...
+ * bunny db quickstart --lang go --url libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net --token ey...
  *
  * # JSON output for tooling integration
  * bunny db quickstart --output json
@@ -64,7 +64,7 @@ export const dbQuickstartCommand = defineCommand<{
     ["$0 db quickstart", "Interactive — prompts for language"],
     ["$0 db quickstart --lang typescript", "Non-interactive"],
     [
-      "$0 db quickstart --lang go --url libsql://… --token ey…",
+      "$0 db quickstart --lang go --url libsql://<ulid>-<name>.lite.bunnydb.net --token ey…",
       "Skip API lookup",
     ],
     ["$0 db quickstart --output json", "JSON output for tooling"],

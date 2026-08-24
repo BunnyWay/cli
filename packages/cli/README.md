@@ -314,7 +314,7 @@ bunny db shell seed.sql
 bunny db shell --unmask
 
 # Direct connection (skip API lookup)
-bunny db shell --url libsql://... --token ey...
+bunny db shell --url libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net --token ey...
 ```
 
 | Flag        | Alias | Description                                                |
@@ -368,7 +368,7 @@ bunny db studio --port 3000
 bunny db studio --no-open
 
 # Use explicit credentials (skips API lookup)
-bunny db studio --url libsql://... --token ey...
+bunny db studio --url libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net --token ey...
 ```
 
 | Flag        | Description                                     |

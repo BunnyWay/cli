@@ -43,6 +43,10 @@ bun ny <command>
 # Examples
 bun ny login                                # offers to install the agent skill after authenticating; --install-skill/--no-install-skill decides without prompting
 bun ny db list
+bun ny db migrations create add_users    # write migrations/0001_add_users.sql (numeric prefix = apply order)
+bun ny db migrations list                # show applied / pending / changed migrations
+bun ny db migrations apply               # apply pending migrations in order (--dry-run to preview, --dir drizzle for flat drizzle-kit output)
+bun ny db migrations apply --pattern "*/migration.sql" # nested ORM layout; paths are tracked relative to migrations/
 bun ny skills install                       # install the bunny agent skill into this project (AGENTS.md block + .agents/skills, plus .claude/skills when Claude Code is used) so AI coding tools know how to use the CLI; alias: skills update
 bun ny skills install --global              # install to ~/.agents/skills and ~/.claude/skills for every project
 bun ny skills remove                        # remove the skill from this project (or --global); everything is regenerable with skills install
@@ -81,7 +85,7 @@ bun ny sites ci init                        # add a GitHub Actions workflow (pre
 
 Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) so a deploy needs no flags: `bun ny sites deploy --build --prod`. `bun ny sites ci init` writes the same `build` and `dir` into the generated workflow. See [`examples/sites/`](examples/sites/) for ready-to-copy configs (Vite, Astro, Next.js static export, Hugo, plain HTML, and a combined app + site file).
 
-### Available Scripts
+### Available scripts
 
 ```bash
 # Type check the entire monorepo
