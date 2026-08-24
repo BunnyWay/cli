@@ -3,8 +3,8 @@ import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
-import { connectStorageZone, deleteFile } from "../files-api.ts";
+import { confirm, confirmTyped, spinner } from "../../../core/ui.ts";
+import { connectStorageZone, deleteFile, isZoneRoot } from "../files-api.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 
 interface RemoveArgs {
@@ -27,6 +27,7 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
       "$0 storage files remove images/photo.png --zone my-zone",
       "Delete from a specific zone",
     ],
+    ["$0 storage files remove /", "Delete every file in the zone"],
   ],
 
   builder: (yargs) =>
@@ -69,13 +70,22 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
 
     // A trailing slash deletes a directory and everything under it, recursively.
     const isDirectory = path.endsWith("/");
+    const isRoot = isZoneRoot(path);
     const confirmed = await confirm(
-      isDirectory
-        ? `Delete directory ${path} and all of its contents from ${zone.Name}?`
-        : `Delete ${path} from ${zone.Name}?`,
+      isRoot
+        ? `Delete every file in ${zone.Name}? This cannot be undone.`
+        : isDirectory
+          ? `Delete directory ${path} and all of its contents from ${zone.Name}?`
+          : `Delete ${path} from ${zone.Name}?`,
       { force },
     );
     if (!confirmed) {
+      logger.log("Cancelled.");
+      return;
+    }
+
+    // Emptying the zone root is as destructive as deleting the zone, so match its typed confirmation.
+    if (isRoot && !(await confirmTyped(zone.Name ?? "", { force }))) {
       logger.log("Cancelled.");
       return;
     }
@@ -95,6 +105,10 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
       return;
     }
 
-    logger.success(`Deleted ${path} from ${zone.Name}.`);
+    logger.success(
+      isRoot
+        ? `Deleted all files from ${zone.Name}.`
+        : `Deleted ${path} from ${zone.Name}.`,
+    );
   },
 });

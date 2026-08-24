@@ -10,9 +10,11 @@ import type { StorageZoneModel, StorageZoneSettingsModel } from "../api.ts";
 import {
   confirmAddedReplicationRegions,
   normalizeReplicationRegions,
+  type RegionScope,
   replicationChoices,
 } from "../constants.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
+import { isS3Enabled } from "../s3.ts";
 
 interface ZoneUpdateArgs {
   zone?: string;
@@ -33,10 +35,15 @@ function hasAnyFlag(args: ZoneUpdateArgs): boolean {
   );
 }
 
+function zoneScope(zone: StorageZoneModel): RegionScope {
+  return { tier: zone.ZoneTier === 1 ? "ssd" : "hdd", s3: isS3Enabled(zone) };
+}
+
 function settingsFromFlags(
   args: ZoneUpdateArgs,
-  primaryCode?: string,
+  zone: StorageZoneModel,
 ): StorageZoneSettingsModel {
+  const primaryCode = zone.Region ?? undefined;
   const settings: StorageZoneSettingsModel = {};
   // An empty value clears the custom 404, matching the prompt's blank-for-none behavior.
   if (args.custom404Path !== undefined)
@@ -47,6 +54,8 @@ function settingsFromFlags(
     settings.ReplicationZones = normalizeReplicationRegions(
       args.replication,
       primaryCode,
+      zoneScope(zone),
+      zone.ReplicationRegions ?? [],
     );
   return settings;
 }
@@ -57,9 +66,10 @@ async function promptSettings(
   const existing = (zone.ReplicationRegions ?? []).map((r) => r.toUpperCase());
   if (existing.length)
     logger.dim(`Already replicated (permanent): ${existing.join(", ")}`);
-  const addable = replicationChoices(zone.Region ?? undefined).filter(
-    (region) => !existing.includes(region.code),
-  );
+  const addable = replicationChoices(
+    zone.Region ?? undefined,
+    zoneScope(zone),
+  ).filter((region) => !existing.includes(region.code));
 
   const questions: prompts.PromptObject[] = [
     {
@@ -167,7 +177,7 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
     });
     // Flags take full precedence over the editor: a partial set of flags is a partial update.
     const settings = hasFlags
-      ? settingsFromFlags(args, zone.Region ?? undefined)
+      ? settingsFromFlags(args, zone)
       : await promptSettings(zone);
 
     if (settings.ReplicationZones) {
