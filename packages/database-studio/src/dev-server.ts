@@ -5,7 +5,7 @@
  *   bun run dev:server --url libsql://<ulid>-<name>.lite.bunnydb.net --token ...
  */
 import { parseArgs } from "node:util";
-import { createClient } from "@libsql/client";
+import { connect } from "@bunny.net/database-client";
 import { startStudio } from "./server.ts";
 
 const { values } = parseArgs({
@@ -24,6 +24,10 @@ if (!values.url) {
   process.exit(1);
 }
 
-const client = createClient({ url: values.url, authToken: values.token });
+const client = connect({
+  url: values.url,
+  authToken: values.token,
+  headers: { "User-Agent": "bunny-database-studio" },
+});
 
 await startStudio({ client, port: Number(values.port), open: false });

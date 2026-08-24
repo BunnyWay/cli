@@ -4,6 +4,7 @@ import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { ARG_DATABASE_ID } from "../constants.ts";
 import { databaseTarget, resolveCredentials } from "../credentials.ts";
+import { connectForMigrations } from "./client.ts";
 import {
   ARG_DIR,
   ARG_PATTERN,
@@ -113,8 +114,7 @@ export const dbMigrationsListCommand = defineCommand<ListArgs>({
       verbose,
     });
 
-    const { createClient } = await import("@libsql/client/web");
-    const client = createClient({ url, authToken: token });
+    const client = connectForMigrations({ url, authToken: token });
     const target = databaseTarget(url, databaseId);
 
     if (output !== "json") logger.dim(`Database: ${target.label}`);

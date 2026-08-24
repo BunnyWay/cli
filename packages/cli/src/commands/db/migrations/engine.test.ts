@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   mkdirSync,
@@ -8,7 +9,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createClient } from "@libsql/client";
 import { assertMigrationHistorySafe, migrationHistoryIssues } from "./drift.ts";
 import {
   applyMigration,
@@ -43,8 +43,33 @@ function write(name: string, sql: string) {
   writeFileSync(join(dir, name), sql);
 }
 
+/**
+ * A real SQLite database behind the engine's client surface. `batch()` mirrors
+ * what the wire batch does: foreign keys off, outside a deferred transaction.
+ */
 function memoryClient(): MigrationClient {
-  return createClient({ url: ":memory:" });
+  const db = new Database(":memory:");
+  const run = (sql: string, args: unknown[]) =>
+    db.prepare(sql).all(...(args as never[])) as Record<string, unknown>[];
+
+  return {
+    query: async (sql, args = []) => run(sql, args),
+    batch: async (statements) => {
+      db.exec("PRAGMA foreign_keys=off");
+      try {
+        db.exec("BEGIN DEFERRED");
+        try {
+          for (const { sql, args } of statements) run(sql, args ?? []);
+          db.exec("COMMIT");
+        } catch (err) {
+          db.exec("ROLLBACK");
+          throw err;
+        }
+      } finally {
+        db.exec("PRAGMA foreign_keys=on");
+      }
+    },
+  };
 }
 
 describe("discoverMigrations", () => {
@@ -358,8 +383,8 @@ describe("applyMigration", () => {
     const result = await applyMigration(client, file);
     expect(result.statements).toBe(2);
 
-    const rows = await client.execute("SELECT name FROM users");
-    expect(rows.rows).toHaveLength(1);
+    const rows = await client.query("SELECT name FROM users");
+    expect(rows).toHaveLength(1);
 
     const applied = await fetchApplied(client);
     expect(applied).toHaveLength(1);
@@ -382,10 +407,10 @@ describe("applyMigration", () => {
     await expect(applyMigration(client, file)).rejects.toThrow();
     expect(await fetchApplied(client)).toEqual([]);
 
-    const tables = await client.execute(
+    const tables = await client.query(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ok'",
     );
-    expect(tables.rows).toHaveLength(0);
+    expect(tables).toHaveLength(0);
   });
 
   test("applying the same migration twice is rejected by the unique name", async () => {
@@ -404,13 +429,13 @@ describe("applyMigration", () => {
   test("defers foreign keys so table rebuilds work", async () => {
     const client = memoryClient();
     await ensureMigrationsTable(client);
-    await client.execute("PRAGMA foreign_keys = ON");
-    await client.execute("CREATE TABLE parent (id INTEGER PRIMARY KEY)");
-    await client.execute(
+    await client.query("PRAGMA foreign_keys = ON");
+    await client.query("CREATE TABLE parent (id INTEGER PRIMARY KEY)");
+    await client.query(
       "CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES parent(id))",
     );
-    await client.execute("INSERT INTO parent VALUES (1)");
-    await client.execute("INSERT INTO child VALUES (1, 1)");
+    await client.query("INSERT INTO parent VALUES (1)");
+    await client.query("INSERT INTO child VALUES (1, 1)");
 
     write(
       "0001_rebuild.sql",
@@ -426,8 +451,8 @@ describe("applyMigration", () => {
 
     await applyMigration(client, file);
 
-    const cols = await client.execute("SELECT label FROM parent WHERE id = 1");
-    expect(cols.rows).toHaveLength(1);
+    const cols = await client.query("SELECT label FROM parent WHERE id = 1");
+    expect(cols).toHaveLength(1);
   });
 
   test("applies valid SQL containing semicolons in quoted identifiers", async () => {
@@ -442,8 +467,8 @@ describe("applyMigration", () => {
     if (!file) throw new Error("no migration discovered");
 
     await applyMigration(client, file);
-    const rows = await client.execute('SELECT id FROM "semi;colon"');
-    expect(rows.rows).toHaveLength(1);
+    const rows = await client.query('SELECT id FROM "semi;colon"');
+    expect(rows).toHaveLength(1);
   });
 
   test("rejects a file with no statements", async () => {
@@ -484,10 +509,10 @@ describe("applyMigration", () => {
       /Unterminated block comment/,
     );
     expect(await fetchApplied(client)).toEqual([]);
-    const table = await client.execute(
+    const table = await client.query(
       "SELECT name FROM sqlite_master WHERE name = 'should_not_exist'",
     );
-    expect(table.rows).toHaveLength(0);
+    expect(table).toHaveLength(0);
   });
 });
 
@@ -508,12 +533,12 @@ describe("readApplied", () => {
   });
 
   test("turns a connection failure into a hinted UserError", async () => {
-    const broken = {
-      execute: async () => {
+    const broken: MigrationClient = {
+      query: async () => {
         throw new Error("SERVER_ERROR: Server returned HTTP status 404");
       },
-      migrate: async () => [],
-    } as unknown as MigrationClient;
+      batch: async () => {},
+    };
 
     await expect(readApplied(broken)).rejects.toThrow(
       /Could not read migration state: SERVER_ERROR/,

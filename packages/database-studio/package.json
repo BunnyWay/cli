@@ -13,10 +13,10 @@
     "build:client": "cd client && bunx --bun vite build --outDir ../dist/client"
   },
   "dependencies": {
-    "@bunny.net/database-adapter-libsql": "workspace:*",
+    "@bunny.net/database-adapter": "workspace:*",
+    "@bunny.net/database-client": "workspace:*",
     "@bunny.net/database-openapi": "workspace:*",
-    "@bunny.net/database-rest": "workspace:*",
-    "@libsql/client": "^0.17.0"
+    "@bunny.net/database-rest": "workspace:*"
   },
   "devDependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",

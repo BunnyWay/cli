@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { splitStatements } from "@bunny.net/database-shell";
-import type { Client } from "@libsql/client";
 import { errorMessage, UserError } from "../../../core/errors.ts";
 import {
   DEFAULT_MIGRATIONS_DIR,
@@ -11,8 +10,18 @@ import {
   MIGRATIONS_TABLE,
 } from "./constants.ts";
 
-/** The libSQL client surface the engine needs, so tests can pass an in-memory client. */
-export type MigrationClient = Pick<Client, "execute" | "migrate">;
+export interface MigrationStatement {
+  sql: string;
+  args?: unknown[];
+}
+
+/** The client surface the engine needs, so tests can pass an in-memory client. */
+export interface MigrationClient {
+  /** Run one statement and return its rows. */
+  query(sql: string, args?: unknown[]): Promise<Record<string, unknown>[]>;
+  /** Run every statement in one transaction, with foreign keys off. */
+  batch(statements: MigrationStatement[]): Promise<void>;
+}
 
 export interface MigrationFile {
   /** Filename including the `.sql` extension, e.g. `0001_add_users.sql`. */
@@ -204,7 +213,7 @@ export async function ensureMigrationsTable(
   client: MigrationClient,
   table = MIGRATIONS_TABLE,
 ): Promise<void> {
-  await client.execute(
+  await client.query(
     `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(table)} (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       name       TEXT NOT NULL UNIQUE,
@@ -219,11 +228,11 @@ export async function migrationsTableExists(
   client: MigrationClient,
   table = MIGRATIONS_TABLE,
 ): Promise<boolean> {
-  const result = await client.execute({
-    sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-    args: [table],
-  });
-  return result.rows.length > 0;
+  const rows = await client.query(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    [table],
+  );
+  return rows.length > 0;
 }
 
 /** Read the applied migrations, oldest first. Assumes the table exists. */
@@ -231,11 +240,11 @@ export async function fetchApplied(
   client: MigrationClient,
   table = MIGRATIONS_TABLE,
 ): Promise<AppliedMigration[]> {
-  const result = await client.execute(
+  const rows = await client.query(
     `SELECT name, checksum, applied_at FROM ${quoteIdentifier(table)} ORDER BY id`,
   );
 
-  return (result.rows as unknown as AppliedMigration[]).map((row) => ({
+  return rows.map((row) => ({
     name: String(row.name),
     checksum: String(row.checksum),
     applied_at: String(row.applied_at),
@@ -341,14 +350,7 @@ export function migrationStatements(file: MigrationFile): string[] {
   return statements;
 }
 
-/**
- * Apply one migration.
- *
- * Uses `migrate()` rather than `batch()` so foreign keys are deferred for the
- * duration, which table rebuilds and `ALTER TABLE` need. The tracking row is
- * part of the same batch, so a migration either lands and is recorded or
- * neither happens.
- */
+/** Apply one migration with foreign keys off, tracking row included, so it either lands and is recorded or neither. */
 export async function applyMigration(
   client: MigrationClient,
   file: MigrationFile,
@@ -357,7 +359,7 @@ export async function applyMigration(
   const table = options.table ?? MIGRATIONS_TABLE;
   const statements = options.statements ?? migrationStatements(file);
 
-  await client.migrate([
+  await client.batch([
     ...statements.map((sql) => ({ sql })),
     {
       sql: `INSERT INTO ${quoteIdentifier(table)} (name, checksum) VALUES (?, ?)`,

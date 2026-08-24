@@ -1,3 +1,10 @@
+import { VERSION } from "../../core/version.ts";
+
+/** Identify CLI database traffic as `bunny-cli/<version> (<command>)`. */
+export function databaseUserAgent(command: string): string {
+  return `bunny-cli/${VERSION} (${command})`;
+}
+
 /** Positional argument name for the database ID. */
 export const ARG_DATABASE_ID = "database-id" as const;
 
