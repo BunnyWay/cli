@@ -24,6 +24,25 @@ export class DatabaseError extends Error {
     );
   }
 
+  /** Classify a failure that happened before any SQL ran: an aborted, timed out, or unreachable request. */
+  static fromTransport(error: unknown): DatabaseError {
+    if (error instanceof DatabaseError) return error;
+    const { name, message } = (error ?? {}) as {
+      name?: string;
+      message?: string;
+    };
+    if (name === "TimeoutError") {
+      return new DatabaseError("database request timed out", "TIMEOUT");
+    }
+    if (name === "AbortError") {
+      return new DatabaseError("database request was aborted", "ABORTED");
+    }
+    return new DatabaseError(
+      `could not reach the database${message ? `: ${message}` : ""}`,
+      "NETWORK",
+    );
+  }
+
   static fromHttp(status: number, body: string): DatabaseError {
     let message = `database request failed with HTTP ${status}`;
     try {

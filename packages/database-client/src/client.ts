@@ -9,6 +9,8 @@ import {
   type TransportConfig,
   unwrap,
   type WireBatchResult,
+  type WireNamedArg,
+  type WireStmt,
   type WireStmtResult,
   type WireValue,
 } from "./protocol.ts";
@@ -33,11 +35,25 @@ export interface Config extends TransportConfig {
   signal?: AbortSignal;
 }
 
+/** Options for `batch()` and `batchRaw()`. */
+export interface BatchOptions {
+  /** Enforce foreign key constraints. Pass `false` for schema changes that rebuild tables. */
+  foreignKeys?: boolean;
+}
+
 interface StatementInternals {
   sql: string;
   args: WireValue[];
+  namedArgs: WireNamedArg[];
   transport: Transport;
   signal?: AbortSignal;
+}
+
+/** A single plain object argument means named parameters; everything else binds positionally. */
+function isNamedArgs(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object") return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 function toRawResult(wire: WireStmtResult): RawResult {
@@ -74,9 +90,31 @@ export class Statement {
     this.#internals = internals;
   }
 
-  /** Return a copy of this statement with `values` bound to its `?` placeholders. */
+  /** Return a copy of this statement with `values` bound: positionally for `?`, or one object for `:name`, `@name`, and `$name`. */
   bind(...values: unknown[]): Statement {
-    return new Statement({ ...this.#internals, args: values.map(encodeValue) });
+    const named = values.find(isNamedArgs);
+    if (named && values.length > 1) {
+      throw new DatabaseError(
+        "cannot mix positional and named parameters; pass a list of values or a single object",
+        "ARGUMENT_INVALID",
+      );
+    }
+    if (named) {
+      return new Statement({
+        ...this.#internals,
+        args: [],
+        // The server resolves a bare name against :name, @name, and $name, so the sigil is optional.
+        namedArgs: Object.entries(named).map(([name, value]) => ({
+          name,
+          value: encodeValue(value),
+        })),
+      });
+    }
+    return new Statement({
+      ...this.#internals,
+      args: values.map(encodeValue),
+      namedArgs: [],
+    });
   }
 
   /** Execute and return every row as an object. */
@@ -117,10 +155,11 @@ export class Statement {
   }
 
   /** @internal exposed so `batch()` can read the wire form. */
-  get wire(): { sql: string; args: WireValue[]; want_rows: boolean } {
+  get wire(): WireStmt {
     return {
       sql: this.#internals.sql,
       args: this.#internals.args,
+      named_args: this.#internals.namedArgs,
       want_rows: true,
     };
   }
@@ -151,59 +190,52 @@ export class Database {
     return new Statement({
       sql,
       args: [],
+      namedArgs: [],
       transport: this.#transport,
       signal: this.#signal,
     });
   }
 
   /** Run every statement in one transaction. All succeed or none are applied. */
-  async batch<T = Row>(statements: Statement[]): Promise<Result<T>[]> {
-    return (await this.#batch(statements)).map(
-      (wire) => toResult<T>(wire) as Result<T>,
+  async batch<T = Row>(
+    statements: Statement[],
+    options: BatchOptions = {},
+  ): Promise<Result<T>[]> {
+    return (await this.#batch(statements, options)).map((wire) =>
+      toResult<T>(wire),
     );
   }
 
   /** Like `batch()`, but each result has positional rows. Keeps duplicate column names distinct. */
-  async batchRaw(statements: Statement[]): Promise<RawResult[]> {
-    return (await this.#batch(statements)).map(toRawResult);
-  }
-
-  /**
-   * Run statements as a schema migration: one deferred transaction with foreign
-   * key enforcement off, which table rebuilds and `ALTER TABLE` need. Otherwise
-   * identical to `batch()`, including the all-or-nothing guarantee.
-   */
-  async migrate<T = Row>(statements: Statement[]): Promise<Result<T>[]> {
-    return (
-      await this.#batch(statements, {
-        begin: "BEGIN DEFERRED",
-        deferForeignKeys: true,
-      })
-    ).map((wire) => toResult<T>(wire));
+  async batchRaw(
+    statements: Statement[],
+    options: BatchOptions = {},
+  ): Promise<RawResult[]> {
+    return (await this.#batch(statements, options)).map(toRawResult);
   }
 
   async #batch(
     statements: Statement[],
-    options: { begin?: string; deferForeignKeys?: boolean } = {},
+    options: BatchOptions,
   ): Promise<WireStmtResult[]> {
     if (statements.length === 0) return [];
 
     const control = (sql: string, condition?: unknown) => ({
-      stmt: { sql, args: [], want_rows: false },
+      stmt: { sql, args: [], named_args: [], want_rows: false },
       ...(condition ? { condition } : {}),
     });
 
     // SQLite ignores `PRAGMA foreign_keys` inside a transaction, so the pragmas
     // bracket BEGIN/COMMIT instead of sitting within them.
-    const prelude = options.deferForeignKeys
-      ? [control("PRAGMA foreign_keys=off")]
-      : [];
+    const unchecked = options.foreignKeys === false;
+    const prelude = unchecked ? [control("PRAGMA foreign_keys=off")] : [];
     const begin = prelude.length;
     const last = begin + statements.length;
 
+    // BEGIN is already DEFERRED in SQLite, so naming the mode would change nothing.
     const steps = [
       ...prelude,
-      control(options.begin ?? "BEGIN"),
+      control("BEGIN"),
       ...statements.map((statement, index) => ({
         stmt: statement.wire,
         condition: { type: "ok", step: begin + index },
@@ -213,7 +245,8 @@ export class Database {
         type: "not",
         cond: { type: "ok", step: last + 1 },
       }),
-      ...(options.deferForeignKeys ? [control("PRAGMA foreign_keys=on")] : []),
+      // Matches @libsql/client, which hardcodes `on` too; harmless here because the stream closes in this same request.
+      ...(unchecked ? [control("PRAGMA foreign_keys=on")] : []),
     ];
 
     const results = await this.#transport.send(

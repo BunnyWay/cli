@@ -42,15 +42,19 @@ describe("normalizeUrl", () => {
   });
 
   test("drops query and fragment", () => {
-    expect(
-      normalizeUrl("libsql://db.lite.bunnydb.net?authToken=leaked#frag"),
-    ).toBe("https://db.lite.bunnydb.net");
+    expect(normalizeUrl("libsql://db.lite.bunnydb.net?region=eu#frag")).toBe(
+      "https://db.lite.bunnydb.net",
+    );
   });
 
   test("rejects credentials embedded in the URL", () => {
     expect(() =>
       normalizeUrl("libsql://user:pass@db.lite.bunnydb.net"),
     ).toThrow(/must not contain credentials/);
+    // Dropping this silently would leave the caller with an unexplained 401.
+    expect(() =>
+      normalizeUrl("libsql://db.lite.bunnydb.net?authToken=leaked"),
+    ).toThrow(/must not carry an authToken/);
   });
 
   test("rejects unknown schemes and non-URLs", () => {
@@ -66,7 +70,6 @@ describe("normalizeUrl", () => {
 describe("encodeValue", () => {
   test("encodes SQLite's storage classes", () => {
     expect(encodeValue(null)).toEqual({ type: "null" });
-    expect(encodeValue(undefined)).toEqual({ type: "null" });
     expect(encodeValue("hi")).toEqual({ type: "text", value: "hi" });
     expect(encodeValue(7)).toEqual({ type: "integer", value: "7" });
     expect(encodeValue(1.5)).toEqual({ type: "float", value: 1.5 });
@@ -91,6 +94,8 @@ describe("encodeValue", () => {
     expect(() => encodeValue({ a: 1 })).toThrow(
       /cannot bind value of type object/,
     );
+    // A mistyped property should surface, not land in the column as NULL.
+    expect(() => encodeValue(undefined)).toThrow(/cannot bind undefined/);
   });
 
   test("rejects integer numbers past 2^53 instead of silently rounding them", () => {

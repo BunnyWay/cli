@@ -345,14 +345,7 @@ export function migrationStatements(file: MigrationFile): string[] {
   return statements;
 }
 
-/**
- * Apply one migration.
- *
- * Uses `migrate()` rather than `batch()` so foreign keys are deferred for the
- * duration, which table rebuilds and `ALTER TABLE` need. The tracking row is
- * part of the same batch, so a migration either lands and is recorded or
- * neither happens.
- */
+/** Apply one migration with foreign keys off, tracking row included, so it either lands and is recorded or neither. */
 export async function applyMigration(
   client: MigrationClient,
   file: MigrationFile,

@@ -1,4 +1,5 @@
 export {
+  type BatchOptions,
   type Config,
   connect,
   Database,

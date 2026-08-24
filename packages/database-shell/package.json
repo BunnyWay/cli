@@ -13,11 +13,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@bunny.net/database-client": "workspace:*",
     "chalk": "^5.6.2",
     "cli-table3": "^0.6.5"
-  },
-  "devDependencies": {
-    "@bunny.net/database-client": "workspace:*"
   },
   "optionalDependencies": {
     "@bunny.net/database-shell-linux-x64": "0.2.4",

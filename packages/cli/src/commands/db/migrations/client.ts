@@ -1,7 +1,7 @@
 import { connect, type Database } from "@bunny.net/database-client";
 import type { MigrationClient } from "./engine.ts";
 
-/** Adapt a connection to the engine's surface, keeping `migrate()` semantics intact. */
+/** Adapt a connection to the engine's surface, applying migrations with foreign keys off. */
 export function migrationClient(db: Database): MigrationClient {
   return {
     execute: (statement) => {
@@ -15,10 +15,11 @@ export function migrationClient(db: Database): MigrationClient {
         .run();
     },
     migrate: (statements) =>
-      db.migrate(
+      db.batch(
         statements.map(({ sql, args }) =>
           db.prepare(sql).bind(...(args ?? [])),
         ),
+        { foreignKeys: false },
       ),
   };
 }

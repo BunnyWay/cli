@@ -47,8 +47,11 @@ Returns a `Database`. Every option is optional.
 | `fetch`     | `typeof fetch`           | global `fetch`              | Override for testing, tracing, or a custom agent.     |
 | `headers`   | `Record<string, string>` | none                        | Extra headers on every request.                       |
 | `signal`    | `AbortSignal`            | none                        | Applied to every request.                             |
+| `timeout`   | `number`                 | none                        | Milliseconds before a single request is aborted.      |
 
-The client rewrites a `libsql://` URL to `https://`. It rejects credentials in the URL, so pass `authToken` instead.
+The client rewrites a `libsql://` URL to `https://`. It rejects credentials in the URL, both `user:pass@` and an `authToken` query parameter, so pass `authToken` instead. Dropping a token silently would leave you debugging an unexplained 401.
+
+Without `timeout` a request waits as long as the runtime allows, which on an edge function means a hung fetch can burn the whole invocation. `timeout` and `signal` compose: whichever fires first aborts the request.
 
 ### `db.prepare(sql)`
 
@@ -63,7 +66,26 @@ const bob = await byId.bind(2).first();
 
 ### `statement.bind(...values)`
 
-Binds positional `?` parameters and returns a new statement. Accepts `null`, `boolean`, `number`, `bigint`, `string`, and `Uint8Array`.
+Binds parameters and returns a new statement. Accepts `null`, `boolean`, `number`, `bigint`, `string`, and `Uint8Array`.
+
+Pass values in order for `?` placeholders:
+
+```ts
+await db.prepare("SELECT * FROM users WHERE id = ? AND active = ?").bind(1, true).all();
+```
+
+Pass a single object for SQLite's named forms, `:name`, `@name`, and `$name`:
+
+```ts
+await db
+  .prepare("SELECT * FROM users WHERE id = :id AND active = :active")
+  .bind({ id: 1, active: true })
+  .all();
+```
+
+Names may carry the sigil or leave it off, so `{ id: 1 }` and `{ ":id": 1 }` both bind `:id`. One statement uses one style: mixing positional values and an object in the same `bind()` call throws rather than picking a winner for you.
+
+`undefined` throws rather than binding NULL, so a mistyped property (`bind(user.nmae)`) surfaces instead of quietly writing NULL. Pass `null` when you mean NULL.
 
 Anything else throws instead of being quietly converted, because SQLite has nowhere to put it. `Date` gets its own message suggesting `.toISOString()` or `.getTime()`, since guessing which one you meant would change what ends up in the column.
 
@@ -112,7 +134,7 @@ const result = await db.prepare("SELECT a.id, b.id FROM a JOIN b").runRaw();
 
 Statements do nothing until one of these is called, so `prepare()` and `bind()` are safe to pass around.
 
-### `db.batch(statements)`
+### `db.batch(statements, options?)`
 
 Runs every statement in one transaction and one round trip. All of them commit or none do.
 
@@ -124,6 +146,20 @@ const [inserted, count] = await db.batch([
 ```
 
 You get one `Result` per statement you passed, in order. `batchRaw()` is the same but with positional rows. If any statement fails the transaction rolls back and `batch()` throws that statement's error.
+
+`{ foreignKeys: false }` brackets the transaction with `PRAGMA foreign_keys=off` and `=on`. Schema changes need it: SQLite's table rebuild procedure and several `ALTER TABLE` forms require enforcement genuinely off, not merely deferred to commit. `bunny db migrations apply` runs this way.
+
+```ts
+await db.batch(
+  [
+    db.prepare("ALTER TABLE users RENAME TO users_old"),
+    db.prepare("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL)"),
+    db.prepare("INSERT INTO users SELECT id, email FROM users_old"),
+    db.prepare("DROP TABLE users_old"),
+  ],
+  { foreignKeys: false },
+);
+```
 
 ### `db.exec(sql)`
 
@@ -159,6 +195,14 @@ try {
 | `message` | The server's message, or a description of the local validation failure.              |
 | `code`    | SQLite code (`SQLITE_CONSTRAINT`), or a client code (`UNAUTHORIZED`, `URL_MISSING`). |
 | `status`  | HTTP status, when the failure came from the transport rather than from SQL.          |
+
+Failures that happen before any SQL runs are wrapped too, so a single `catch (error) { if (error instanceof DatabaseError) ... }` covers the whole surface rather than letting a `TypeError` through:
+
+| `code`    | Cause                                                        |
+| --------- | ------------------------------------------------------------ |
+| `NETWORK` | DNS, TLS, connection refused, or a response that isn't JSON. |
+| `TIMEOUT` | The `timeout` deadline elapsed.                              |
+| `ABORTED` | The `signal` you passed was aborted.                         |
 
 ## Types
 

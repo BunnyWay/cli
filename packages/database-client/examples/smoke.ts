@@ -19,6 +19,21 @@ function check(label: string, ok: boolean, detail?: unknown) {
   );
 }
 
+/** Assert a call fails with a specific DatabaseError code. */
+async function checkFails(label: string, code: string, fn: () => unknown) {
+  try {
+    await fn();
+    check(label, false);
+  } catch (error) {
+    const err = error as DatabaseError;
+    check(
+      label,
+      err instanceof DatabaseError && err.code === code,
+      err.message,
+    );
+  }
+}
+
 // 1. plain select with binding
 const one = await db.prepare("SELECT ? AS a, ? AS b").bind(1, "two").first();
 check("bind + first", one?.a === 1 && one?.b === "two", one);
@@ -163,25 +178,40 @@ check(
   leaked,
 );
 
-// 15. rejects a URL carrying credentials
-try {
-  connect({ url: "libsql://user:pass@db.lite.bunnydb.net" });
-  check("reject credentials in URL", false);
-} catch (error) {
-  check(
-    "reject credentials in URL",
-    (error as DatabaseError).code === "URL_INVALID",
-  );
-}
+// 15. named parameters, with and without the sigil, against every SQLite prefix
+const named = await db
+  .prepare("SELECT :a AS a, @b AS b, $c AS c")
+  .bind({ a: 1, "@b": "two", $c: 3.5 })
+  .first();
+check(
+  "named parameters bind by name",
+  named?.a === 1 && named?.b === "two" && named?.c === 3.5,
+  named,
+);
 
-// 16. rejects unbindable values
-try {
-  db.prepare("SELECT ?").bind(new Date());
-  check("reject Date bind", false);
-} catch (error) {
-  check(
-    "reject Date bind with guidance",
-    (error as DatabaseError).code === "ARGUMENT_INVALID",
-    (error as Error).message,
-  );
-}
+// 16. an unreachable host is a DatabaseError, not a bare TypeError (.invalid never resolves)
+await checkFails("unreachable host becomes DatabaseError", "NETWORK", () =>
+  connect({ url: "libsql://nothing.invalid" }).prepare("SELECT 1").all(),
+);
+
+// 17. an elapsed deadline aborts the request
+await checkFails("timeout aborts the request", "TIMEOUT", () =>
+  connect({ timeout: 1 }).prepare("SELECT 1").all(),
+);
+
+// 18. the local guards that keep bad input from ever reaching the server
+await checkFails("reject credentials in URL", "URL_INVALID", () =>
+  connect({ url: "libsql://user:pass@db.lite.bunnydb.net" }),
+);
+await checkFails("reject authToken in URL", "URL_INVALID", () =>
+  connect({ url: "libsql://db.lite.bunnydb.net?authToken=leaked" }),
+);
+await checkFails("reject Date bind", "ARGUMENT_INVALID", () =>
+  db.prepare("SELECT ?").bind(new Date()),
+);
+await checkFails("reject undefined bind", "ARGUMENT_INVALID", () =>
+  db.prepare("SELECT ?").bind(undefined),
+);
+await checkFails("reject mixed parameter styles", "ARGUMENT_INVALID", () =>
+  db.prepare("SELECT ?, :b").bind(1, { b: 2 }),
+);
