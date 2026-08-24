@@ -162,7 +162,7 @@ export const dbTokensInvalidateCommand = defineCommand<{
     if (existingToken) {
       const shouldRemove = await confirm(
         `Remove ${ENV_DATABASE_AUTH_TOKEN} from ${existingToken.envPath}?`,
-        { force },
+        { force, optional: true },
       );
       if (shouldRemove) {
         removeEnvValue(ENV_DATABASE_AUTH_TOKEN, existingToken.envPath);
@@ -175,7 +175,7 @@ export const dbTokensInvalidateCommand = defineCommand<{
     // Without --force: prompt the user
     const shouldCreate = force
       ? !!regenerate
-      : await confirm("Generate a new token?");
+      : await confirm("Generate a new token?", { optional: true });
     if (!shouldCreate) {
       logger.warn("All tokens have been invalidated. No valid tokens remain.");
       logger.dim(
@@ -226,7 +226,9 @@ export const dbTokensInvalidateCommand = defineCommand<{
     const shouldSave =
       saveEnv !== undefined
         ? saveEnv
-        : await confirm(`Save ${ENV_DATABASE_AUTH_TOKEN} to .env?`);
+        : await confirm(`Save ${ENV_DATABASE_AUTH_TOKEN} to .env?`, {
+            optional: true,
+          });
     if (shouldSave) {
       const envPath = existingToken?.envPath;
       writeEnvValue(ENV_DATABASE_AUTH_TOKEN, newToken, envPath);

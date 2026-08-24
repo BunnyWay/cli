@@ -143,6 +143,7 @@ export const dbDeleteCommand = defineCommand<DeleteArgs>({
     if (envUrl && db.url && envUrl.value === db.url) {
       const shouldClean = await confirm(
         `Remove ${ENV_DATABASE_URL} from ${envUrl.envPath}?`,
+        { optional: true },
       );
 
       if (shouldClean) {

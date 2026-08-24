@@ -1,9 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
-import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { prompts, spinner } from "../../core/ui.ts";
 import {
   composeToConfig,
   findComposeFile,

@@ -1,11 +1,10 @@
 import { createMcClient } from "@bunny.net/openapi-client";
-import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { isInteractive, prompts, spinner } from "../../core/ui.ts";
 
 const COMMAND = "update <registry-id>";
 const DESCRIPTION = "Update a container registry.";
@@ -60,6 +59,17 @@ export const registryUpdateCommand = defineCommand<UpdateArgs>({
     verbose,
     apiKey,
   }) => {
+    const flagsProvided = Boolean(
+      nameFlag || usernameFlag !== undefined || passwordFlag !== undefined,
+    );
+    // Without flags this command is a pure interactive editor; unattended it would keep every value and report a no-op update as success.
+    if (!flagsProvided && !isInteractive(output)) {
+      throw new UserError(
+        "No changes requested.",
+        "Pass --name, or --username and --password, or run in a terminal to edit interactively.",
+      );
+    }
+
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
@@ -74,13 +84,9 @@ export const registryUpdateCommand = defineCommand<UpdateArgs>({
       throw new UserError(`Registry ${registryId} not found.`);
     }
 
-    const nonInteractive = Boolean(
-      nameFlag || usernameFlag !== undefined || passwordFlag !== undefined,
-    );
-
     // Resolve display name: flag → keep existing → prompt.
     let displayName = nameFlag ?? existing.displayName ?? "";
-    if (!nonInteractive) {
+    if (!flagsProvided) {
       const { value } = await prompts({
         type: "text",
         name: "value",
@@ -124,7 +130,7 @@ export const registryUpdateCommand = defineCommand<UpdateArgs>({
       if (!password) {
         throw new UserError("Password is required when rotating credentials.");
       }
-    } else if (!nonInteractive) {
+    } else if (!flagsProvided) {
       const { value: rotate } = await prompts({
         type: "confirm",
         name: "value",

@@ -59,13 +59,7 @@ export const storageFileListCommand = defineCommand<ListArgs>({
     }
 
     if (output === "json") {
-      // Drop the SDK-internal _tag and the lazy data() loader.
-      const plain = files.map((file) => ({
-        ...file,
-        _tag: undefined,
-        data: undefined,
-      }));
-      logger.log(JSON.stringify(plain, null, 2));
+      logger.log(JSON.stringify(files, null, 2));
       return;
     }
 

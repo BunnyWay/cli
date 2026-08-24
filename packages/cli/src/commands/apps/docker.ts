@@ -3,12 +3,11 @@ import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import type { createMcClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
-import prompts from "prompts";
 import { resolveRegistryEndpoint } from "../../core/bunny-registry.ts";
 import { dockerLogin, imageHostname } from "../../core/docker.ts";
 import { ApiError, UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { prompts, spinner } from "../../core/ui.ts";
 
 export {
   dockerLogin,

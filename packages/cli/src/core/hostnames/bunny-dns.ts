@@ -168,6 +168,7 @@ export async function offerBunnyDnsRecord(opts: {
     if (
       !(await confirm(`Point ${hostname} at this pull zone now?`, {
         initial: true,
+        optional: true,
       }))
     ) {
       return "declined";
@@ -186,7 +187,12 @@ export async function offerBunnyDnsRecord(opts: {
   logger.warn(
     `${hostname} already ${detail} in your Bunny DNS (${zoneDomain}).`,
   );
-  if (!(await confirm("Repoint it at this pull zone?", { initial: false }))) {
+  if (
+    !(await confirm("Repoint it at this pull zone?", {
+      initial: false,
+      optional: true,
+    }))
+  ) {
     return "declined";
   }
   if (existing.Id == null) {

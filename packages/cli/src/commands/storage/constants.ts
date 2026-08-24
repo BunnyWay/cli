@@ -41,15 +41,64 @@ export function zoneTierLabel(
   return tier?.[form] ?? "-";
 }
 
-// The create API expects uppercase codes (e.g. "DE"), matching what existing zones report.
-export const STORAGE_REGIONS: StorageRegion[] = Object.entries(
-  BunnyStorage.regions.StorageRegion,
-).map(([name, code]) => ({
-  code: code.toUpperCase(),
-  name: name.replace(/([a-z])([A-Z])/g, "$1 $2"),
-}));
+interface CatalogRegion extends StorageRegion {
+  replicaOnly?: boolean;
+  noS3?: boolean;
+}
 
-const REGION_CODES = new Set(STORAGE_REGIONS.map((region) => region.code));
+// TODO: Request API endpoint for these
+const REGION_CATALOG: CatalogRegion[] = [
+  { code: "DE", name: "Frankfurt" },
+  { code: "UK", name: "London" },
+  { code: "ES", name: "Madrid", replicaOnly: true },
+  { code: "CZ", name: "Prague", replicaOnly: true },
+  { code: "SE", name: "Stockholm" },
+  { code: "LA", name: "Los Angeles" },
+  { code: "MI", name: "Miami", replicaOnly: true },
+  { code: "NY", name: "New York" },
+  { code: "WA", name: "Seattle", replicaOnly: true },
+  { code: "HK", name: "Hong Kong", replicaOnly: true },
+  { code: "SG", name: "Singapore" },
+  { code: "SYD", name: "Sydney" },
+  { code: "JP", name: "Tokyo", replicaOnly: true },
+  { code: "BR", name: "Sao Paulo", noS3: true },
+  { code: "JH", name: "Johannesburg" },
+];
+
+export interface RegionScope {
+  tier?: ZoneTierChoice;
+  s3?: boolean;
+}
+
+function inScope(region: CatalogRegion, scope: RegionScope): boolean {
+  if (scope.s3 && region.noS3) return false;
+  if (region.replicaOnly) return scope.tier === "ssd" && !scope.s3;
+  return true;
+}
+
+export const STORAGE_REGIONS: StorageRegion[] = REGION_CATALOG.map(
+  ({ code, name }) => ({ code, name }),
+);
+
+export function mainRegionChoices(scope: RegionScope = {}): StorageRegion[] {
+  if (scope.tier === "ssd") {
+    return REGION_CATALOG.filter(
+      (region) => region.code === SSD_PRIMARY_REGION,
+    ).map(({ code, name }) => ({ code, name }));
+  }
+  return REGION_CATALOG.filter(
+    (region) => !region.replicaOnly && inScope(region, scope),
+  ).map(({ code, name }) => ({ code, name }));
+}
+
+export function regionTierNote(code: string): string {
+  const region = REGION_CATALOG.find((r) => r.code === code.toUpperCase());
+  if (region?.replicaOnly) return "Edge (SSD), replication only";
+  if (region?.noS3) return "No S3";
+  return "-";
+}
+
+const REGION_CODES = new Set(REGION_CATALOG.map((region) => region.code));
 
 export function sdkRegionKey(
   code: string | null | undefined,
@@ -60,30 +109,52 @@ export function sdkRegionKey(
   )?.[0];
 }
 
-// Replication uses the same storage regions as the primary, minus the primary itself.
-// (The SDK file ZoneSchema is the physical replication footprint and includes internal
-// POPs the create API rejects, so it must not be used as the input set.)
-// TODO: Request API endpoint for these
-export function replicationChoices(primaryCode?: string): StorageRegion[] {
+// Replication spans every region the zone's tier and S3 setting allow, minus the primary itself.
+export function replicationChoices(
+  primaryCode?: string,
+  scope: RegionScope = {},
+): StorageRegion[] {
   const primary = primaryCode?.toUpperCase();
-  return STORAGE_REGIONS.filter((region) => region.code !== primary);
+  return REGION_CATALOG.filter(
+    (region) => region.code !== primary && inScope(region, scope),
+  ).map(({ code, name }) => ({ code, name }));
+}
+
+function scopeLabel(scope: RegionScope): string {
+  const tier = scope.tier === "ssd" ? "Edge (SSD)" : "Standard (HDD)";
+  return scope.s3 ? `${tier} with S3` : tier;
 }
 
 // Uppercase, validate, and drop the primary region from a list of replication codes.
+// `existing` is what the zone already replicates to, which stays valid whether or not it is still on offer.
 export function normalizeReplicationRegions(
   regions: string[],
   primaryCode?: string,
+  scope: RegionScope = {},
+  existing: string[] = [],
 ): string[] {
   const primary = primaryCode?.toUpperCase();
   const normalized = regions
     .flatMap((region) => region.split(","))
     .map((region) => region.trim().toUpperCase())
     .filter(Boolean);
-  const unknown = normalized.filter((region) => !REGION_CODES.has(region));
-  if (unknown.length > 0) {
+
+  const allowed = new Set([
+    ...replicationChoices(undefined, scope).map((region) => region.code),
+    ...existing.map((region) => region.toUpperCase()),
+  ]);
+  const rejected = normalized.filter((region) => !allowed.has(region));
+  if (rejected.length > 0) {
+    const unknown = rejected.filter((region) => !REGION_CODES.has(region));
+    if (unknown.length > 0) {
+      throw new UserError(
+        `Unknown replication region(s): ${unknown.join(", ")}.`,
+        `Valid regions: ${[...REGION_CODES].join(", ")}.`,
+      );
+    }
     throw new UserError(
-      `Unknown replication region(s): ${unknown.join(", ")}.`,
-      `Valid regions: ${[...REGION_CODES].join(", ")}.`,
+      `Replication region(s) ${rejected.join(", ")} are not available on ${scopeLabel(scope)} zones.`,
+      `Available: ${[...allowed].join(", ")}.`,
     );
   }
   return normalized.filter((region) => region !== primary);

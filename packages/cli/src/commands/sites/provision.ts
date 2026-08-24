@@ -1,9 +1,8 @@
 import { basename } from "node:path";
-import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { saveManifest } from "../../core/manifest.ts";
-import { withSpinner } from "../../core/ui.ts";
+import { prompts, withSpinner } from "../../core/ui.ts";
 import type { CoreClient } from "../storage/api.ts";
 import {
   type ComputeClient,

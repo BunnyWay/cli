@@ -161,7 +161,9 @@ export function logLiveHostnames(
 
 /** Prompt to open a script's hostname in the browser, with a deploy hint otherwise. */
 export async function promptOpenInBrowser(hostname: string): Promise<void> {
-  const shouldOpen = await confirm("Open script in browser?");
+  const shouldOpen = await confirm("Open script in browser?", {
+    optional: true,
+  });
   if (shouldOpen) {
     const url = hostname.startsWith("http") ? hostname : `https://${hostname}`;
     logger.dim(`  Opening ${url}`);
