@@ -9,6 +9,8 @@ import {
   type TransportConfig,
   unwrap,
   type WireBatchResult,
+  type WireNamedArg,
+  type WireStmt,
   type WireStmtResult,
   type WireValue,
 } from "./protocol.ts";
@@ -23,32 +25,41 @@ export interface Result<T = Row> {
   lastInsertRowid: number | bigint | null;
 }
 
+/** Same as `Result`, with rows as positional arrays so duplicate column names survive. */
+export interface RawResult extends Omit<Result<never>, "rows"> {
+  rows: SqlValue[][];
+}
+
 export interface Config extends TransportConfig {
   /** Abort signal applied to every request unless a per-call signal is given. */
   signal?: AbortSignal;
 }
 
+/** Options for `batch()` and `batchRaw()`. */
+export interface BatchOptions {
+  /** Enforce foreign key constraints. Pass `false` for schema changes that rebuild tables. */
+  foreignKeys?: boolean;
+}
+
 interface StatementInternals {
   sql: string;
   args: WireValue[];
+  namedArgs: WireNamedArg[];
   transport: Transport;
   signal?: AbortSignal;
 }
 
-function toResult<T>(wire: WireStmtResult): Result<T> {
-  const columns = wire.cols.map(
-    (col, index) => col.name ?? `column${index + 1}`,
-  );
-  const rows = wire.rows.map((row) => {
-    // Null prototype so a column named __proto__ (or constructor, toString, ...) is a plain own property.
-    const out: Row = Object.create(null);
-    for (let i = 0; i < columns.length; i++)
-      out[columns[i] as string] = decodeValue(row[i] as WireValue);
-    return out as T;
-  });
+/** A single plain object argument means named parameters; everything else binds positionally. */
+function isNamedArgs(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object") return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function toRawResult(wire: WireStmtResult): RawResult {
   return {
-    rows,
-    columns,
+    rows: wire.rows.map((row) => row.map(decodeValue)),
+    columns: wire.cols.map((col, index) => col.name ?? `column${index + 1}`),
     rowsAffected: wire.affected_row_count,
     lastInsertRowid:
       wire.last_insert_rowid === null
@@ -59,6 +70,18 @@ function toResult<T>(wire: WireStmtResult): Result<T> {
   };
 }
 
+function toResult<T>(wire: WireStmtResult): Result<T> {
+  const raw = toRawResult(wire);
+  const rows = raw.rows.map((row) => {
+    // Null prototype so a column named __proto__ (or constructor, toString, ...) is a plain own property.
+    const out: Row = Object.create(null);
+    for (let i = 0; i < raw.columns.length; i++)
+      out[raw.columns[i] as string] = row[i] as SqlValue;
+    return out as T;
+  });
+  return { ...raw, rows } as Result<T>;
+}
+
 /** A SQL statement plus its bound arguments. Immutable and reusable. */
 export class Statement {
   readonly #internals: StatementInternals;
@@ -67,9 +90,31 @@ export class Statement {
     this.#internals = internals;
   }
 
-  /** Return a copy of this statement with `values` bound to its `?` placeholders. */
+  /** Return a copy of this statement with `values` bound: positionally for `?`, or one object for `:name`, `@name`, and `$name`. */
   bind(...values: unknown[]): Statement {
-    return new Statement({ ...this.#internals, args: values.map(encodeValue) });
+    const named = values.find(isNamedArgs);
+    if (named && values.length > 1) {
+      throw new DatabaseError(
+        "cannot mix positional and named parameters; pass a list of values or a single object",
+        "ARGUMENT_INVALID",
+      );
+    }
+    if (named) {
+      return new Statement({
+        ...this.#internals,
+        args: [],
+        // The server resolves a bare name against :name, @name, and $name, so the sigil is optional.
+        namedArgs: Object.entries(named).map(([name, value]) => ({
+          name,
+          value: encodeValue(value),
+        })),
+      });
+    }
+    return new Statement({
+      ...this.#internals,
+      args: values.map(encodeValue),
+      namedArgs: [],
+    });
   }
 
   /** Execute and return every row as an object. */
@@ -96,8 +141,12 @@ export class Statement {
 
   /** Execute and return rows as positional arrays, skipping object construction. */
   async raw(): Promise<SqlValue[][]> {
-    const wire = await this.#execute();
-    return wire.rows.map((row) => row.map(decodeValue));
+    return (await this.runRaw()).rows;
+  }
+
+  /** Execute and return positional rows with write metadata. Keeps duplicate column names distinct. */
+  async runRaw(): Promise<RawResult> {
+    return toRawResult(await this.#execute());
   }
 
   /** Execute and return rows together with write metadata. */
@@ -106,10 +155,11 @@ export class Statement {
   }
 
   /** @internal exposed so `batch()` can read the wire form. */
-  get wire(): { sql: string; args: WireValue[]; want_rows: boolean } {
+  get wire(): WireStmt {
     return {
       sql: this.#internals.sql,
       args: this.#internals.args,
+      named_args: this.#internals.namedArgs,
       want_rows: true,
     };
   }
@@ -140,31 +190,63 @@ export class Database {
     return new Statement({
       sql,
       args: [],
+      namedArgs: [],
       transport: this.#transport,
       signal: this.#signal,
     });
   }
 
   /** Run every statement in one transaction. All succeed or none are applied. */
-  async batch<T = Row>(statements: Statement[]): Promise<Result<T>[]> {
+  async batch<T = Row>(
+    statements: Statement[],
+    options: BatchOptions = {},
+  ): Promise<Result<T>[]> {
+    return (await this.#batch(statements, options)).map((wire) =>
+      toResult<T>(wire),
+    );
+  }
+
+  /** Like `batch()`, but each result has positional rows. Keeps duplicate column names distinct. */
+  async batchRaw(
+    statements: Statement[],
+    options: BatchOptions = {},
+  ): Promise<RawResult[]> {
+    return (await this.#batch(statements, options)).map(toRawResult);
+  }
+
+  async #batch(
+    statements: Statement[],
+    options: BatchOptions,
+  ): Promise<WireStmtResult[]> {
     if (statements.length === 0) return [];
 
     const control = (sql: string, condition?: unknown) => ({
-      stmt: { sql, args: [], want_rows: false },
+      stmt: { sql, args: [], named_args: [], want_rows: false },
       ...(condition ? { condition } : {}),
     });
 
+    // SQLite ignores `PRAGMA foreign_keys` inside a transaction, so the pragmas
+    // bracket BEGIN/COMMIT instead of sitting within them.
+    const unchecked = options.foreignKeys === false;
+    const prelude = unchecked ? [control("PRAGMA foreign_keys=off")] : [];
+    const begin = prelude.length;
+    const last = begin + statements.length;
+
+    // BEGIN is already DEFERRED in SQLite, so naming the mode would change nothing.
     const steps = [
+      ...prelude,
       control("BEGIN"),
       ...statements.map((statement, index) => ({
         stmt: statement.wire,
-        condition: { type: "ok", step: index },
+        condition: { type: "ok", step: begin + index },
       })),
-      control("COMMIT", { type: "ok", step: statements.length }),
+      control("COMMIT", { type: "ok", step: last }),
       control("ROLLBACK", {
         type: "not",
-        cond: { type: "ok", step: statements.length + 1 },
+        cond: { type: "ok", step: last + 1 },
       }),
+      // Matches @libsql/client, which hardcodes `on` too; harmless here because the stream closes in this same request.
+      ...(unchecked ? [control("PRAGMA foreign_keys=on")] : []),
     ];
 
     const results = await this.#transport.send(
@@ -177,9 +259,9 @@ export class Database {
     if (failure) throw DatabaseError.fromWire(failure);
 
     return statements.map((_, index) => {
-      const step = batch.step_results[index + 1];
+      const step = batch.step_results[begin + 1 + index];
       if (!step) throw new DatabaseError("batch step returned no result");
-      return toResult<T>(step);
+      return step;
     });
   }
 

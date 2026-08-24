@@ -164,8 +164,8 @@ export const dbMigrationsApplyCommand = defineCommand<ApplyArgs>({
       );
     }
 
-    const { createClient } = await import("@libsql/client/web");
-    const client = createClient({ url, authToken: token });
+    const { connectForMigrations } = await import("./client.ts");
+    const client = connectForMigrations({ url, authToken: token });
     const target = databaseTarget(url, databaseId);
 
     if (!json) logger.dim(`Database: ${target.label}`);

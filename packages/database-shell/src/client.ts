@@ -1,27 +1,37 @@
-import { type Client, createClient } from "@libsql/client/web";
+import {
+  connect,
+  type Database,
+  type RawResult,
+} from "@bunny.net/database-client";
 import pkg from "../package.json";
 
 const USER_AGENT = `${pkg.name}/${pkg.version}`;
 
 /**
- * Create a libSQL client with a custom `User-Agent` header
- * so requests from the CLI/shell can be identified server-side.
+ * The slice of a database connection the shell needs: run one statement, or a
+ * file's worth of them in a transaction. Rows stay positional so a result with
+ * two columns of the same name (`SELECT * FROM a JOIN b`) still prints both.
  */
+export interface ShellClient {
+  execute(sql: string): Promise<RawResult>;
+  batch(statements: string[]): Promise<RawResult[]>;
+}
+
+/** Connect to a database, tagging requests with a `User-Agent` we can identify server-side. */
 export function createShellClient(opts: {
   url: string;
   authToken?: string;
-}): Client {
-  return createClient({
-    ...opts,
-    fetch: (input: string | Request | URL, init?: RequestInit) => {
-      const headers = new Headers(init?.headers);
-      if (input instanceof Request) {
-        input.headers.forEach((v, k) => {
-          headers.set(k, v);
-        });
-      }
-      headers.set("User-Agent", USER_AGENT);
-      return fetch(input, { ...init, headers });
-    },
-  });
+}): ShellClient {
+  return fromDatabase(
+    connect({ ...opts, headers: { "User-Agent": USER_AGENT } }),
+  );
+}
+
+/** Wrap an existing connection, so a caller that already has one can reuse it. */
+export function fromDatabase(db: Database): ShellClient {
+  return {
+    execute: (sql) => db.prepare(sql).runRaw(),
+    batch: (statements) =>
+      db.batchRaw(statements.map((sql) => db.prepare(sql))),
+  };
 }

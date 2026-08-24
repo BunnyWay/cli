@@ -1,19 +1,20 @@
 {
-  "name": "@bunny.net/database-adapter-libsql",
+  "name": "@bunny.net/database-adapter",
   "version": "0.1.2",
   "private": true,
   "type": "module",
   "module": "src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./sqlite": "./src/sqlite.ts"
   },
   "scripts": {
     "test": "bun test",
     "typecheck": "bun run tsc --noEmit"
   },
   "dependencies": {
+    "@bunny.net/database-client": "workspace:*",
     "@bunny.net/database-openapi": "workspace:*",
-    "@bunny.net/database-rest": "workspace:*",
-    "@libsql/client": "^0.17.0"
+    "@bunny.net/database-rest": "workspace:*"
   }
 }

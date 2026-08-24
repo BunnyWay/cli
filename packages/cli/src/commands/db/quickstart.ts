@@ -221,5 +221,12 @@ export const dbQuickstartCommand = defineCommand<{
       logger.log(`     ${line}`);
     }
     logger.log();
+    // The token authorizes the whole database, so it must not reach a browser.
+    logger.log(
+      chalk.gray(
+        "     Keep this token on the server: it grants full access to the database.",
+      ),
+    );
+    logger.log();
   },
 });

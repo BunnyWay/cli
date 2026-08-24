@@ -1,4 +1,4 @@
-import type { ResultSet } from "@libsql/client";
+import type { RawResult } from "@bunny.net/database-client";
 import chalk from "chalk";
 import Table from "cli-table3";
 import type { PrintMode, ShellLogger } from "./types.ts";
@@ -71,7 +71,7 @@ export function csvEscape(value: string): string {
 
 /** Print a result set in the given mode, optionally masking sensitive columns. */
 export function printResultSet(
-  result: ResultSet,
+  result: RawResult,
   mode: PrintMode,
   masked: boolean,
   logger: ShellLogger,

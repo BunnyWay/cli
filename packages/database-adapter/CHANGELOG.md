@@ -1,4 +1,4 @@
-# @bunny.net/database-adapter-libsql
+# @bunny.net/database-adapter
 
 ## 0.1.2
 

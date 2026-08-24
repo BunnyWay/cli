@@ -8,11 +8,17 @@ const URL_ = "libsql://db.lite.bunnydb.net";
 interface Capture {
   url: string;
   headers: Record<string, string>;
+  signal?: AbortSignal | null;
   body: {
     baton: string | null;
     requests: {
       type: string;
-      stmt?: { sql: string; args: unknown[]; want_rows: boolean };
+      stmt?: {
+        sql: string;
+        args: unknown[];
+        named_args: unknown[];
+        want_rows: boolean;
+      };
       batch?: { steps: { stmt: { sql: string }; condition?: unknown }[] };
       sql?: string;
     }[];
@@ -25,6 +31,7 @@ function fakeFetch(results: unknown[], captures: Capture[] = []) {
     captures.push({
       url: String(input),
       headers: (init?.headers ?? {}) as Record<string, string>,
+      signal: init?.signal,
       body: JSON.parse(String(init?.body)),
     });
     return new Response(
@@ -139,6 +146,33 @@ describe("statement", () => {
       { type: "integer", value: "1" },
       { type: "text", value: "x" },
     ]);
+    expect(stmt?.named_args).toEqual([]);
+  });
+
+  test("a single object binds as named parameters", () => {
+    const stmt = connect({ url: URL_ })
+      .prepare("SELECT :a, @b")
+      .bind({ a: 1, ":b": "x" });
+
+    expect(stmt.wire.args).toEqual([]);
+    expect(stmt.wire.named_args).toEqual([
+      { name: "a", value: { type: "integer", value: "1" } },
+      { name: ":b", value: { type: "text", value: "x" } },
+    ]);
+  });
+
+  test("only a plain object counts as named parameters", () => {
+    const db = connect({ url: URL_ });
+
+    expect(
+      db.prepare("SELECT ?").bind(new Uint8Array([1, 2])).wire.args,
+    ).toEqual([{ type: "blob", base64: "AQI=" }]);
+    expect(() => db.prepare("SELECT ?").bind(new Date())).toThrow(
+      /cannot bind a Date/,
+    );
+    expect(() => db.prepare("SELECT ?, :b").bind(1, { b: 2 })).toThrow(
+      /cannot mix positional and named/,
+    );
   });
 
   test("bind returns a new statement and leaves the original unbound", async () => {
@@ -347,6 +381,82 @@ describe("batch", () => {
     expect(results[0]?.rowsAffected).toBe(1);
   });
 
+  test("foreignKeys: false brackets the transaction with the pragmas", async () => {
+    // The pragmas sit outside BEGIN/COMMIT because SQLite ignores them within a transaction.
+    const fake = fakeFetch([okBatch(4)]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    await db.batch(
+      [
+        db.prepare("ALTER TABLE parent RENAME TO parent_old"),
+        db.prepare("DROP TABLE parent_old"),
+      ],
+      { foreignKeys: false },
+    );
+
+    const steps =
+      (fake.captures[0] as Capture).body.requests[0]?.batch?.steps ?? [];
+    expect(steps.map((s) => s.stmt.sql)).toEqual([
+      "PRAGMA foreign_keys=off",
+      "BEGIN",
+      "ALTER TABLE parent RENAME TO parent_old",
+      "DROP TABLE parent_old",
+      "COMMIT",
+      "ROLLBACK",
+      "PRAGMA foreign_keys=on",
+    ]);
+    expect(steps[2]?.condition).toEqual({ type: "ok", step: 1 });
+    expect(steps[3]?.condition).toEqual({ type: "ok", step: 2 });
+    expect(steps[4]?.condition).toEqual({ type: "ok", step: 3 });
+    expect(steps[5]?.condition).toEqual({
+      type: "not",
+      cond: { type: "ok", step: 4 },
+    });
+  });
+
+  test("unchecked results line up with the caller's statements, not the pragmas", async () => {
+    const fake = fakeFetch([
+      {
+        type: "ok",
+        response: {
+          type: "batch",
+          result: {
+            // PRAGMA, BEGIN, stmt A, stmt B, COMMIT, ROLLBACK, PRAGMA
+            step_results: [
+              null,
+              null,
+              {
+                cols: [{ name: "a" }],
+                rows: [],
+                affected_row_count: 11,
+                last_insert_rowid: null,
+              },
+              {
+                cols: [{ name: "b" }],
+                rows: [],
+                affected_row_count: 22,
+                last_insert_rowid: null,
+              },
+              null,
+              null,
+              null,
+            ],
+            step_errors: Array.from({ length: 7 }, () => null),
+          },
+        },
+      },
+    ]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const results = await db.batch(
+      [db.prepare("SELECT 'a'"), db.prepare("SELECT 'b'")],
+      { foreignKeys: false },
+    );
+
+    expect(results.map((r) => r.rowsAffected)).toEqual([11, 22]);
+    expect(results.map((r) => r.columns)).toEqual([["a"], ["b"]]);
+  });
+
   test("an empty batch is a no-op that sends nothing", async () => {
     const fake = fakeFetch([]);
     const db = connect({ url: URL_, fetch: fake.fetch });
@@ -402,36 +512,69 @@ describe("exec", () => {
 });
 
 describe("errors", () => {
-  test("a failed step throws with the server's code", async () => {
-    const fake = fakeFetch([
-      {
-        type: "error",
-        error: { message: "no such table: t", code: "SQLITE_UNKNOWN" },
-      },
-    ]);
-    const db = connect({ url: URL_, fetch: fake.fetch });
-
-    const error = (await db
+  /** Run one statement against `impl` and return the DatabaseError it rejects with. */
+  const failure = async (impl: typeof fetch): Promise<DatabaseError> =>
+    (await connect({ url: URL_, fetch: impl })
       .prepare("SELECT 1")
       .all()
       .catch((e) => e)) as DatabaseError;
+
+  const responds = (body: string, init?: ResponseInit) =>
+    (async () => new Response(body, init)) as unknown as typeof fetch;
+
+  test("a failed step throws with the server's code", async () => {
+    const error = await failure(
+      fakeFetch([
+        {
+          type: "error",
+          error: { message: "no such table: t", code: "SQLITE_UNKNOWN" },
+        },
+      ]).fetch,
+    );
 
     expect(error).toBeInstanceOf(DatabaseError);
     expect(error.code).toBe("SQLITE_UNKNOWN");
     expect(error.message).toBe("no such table: t");
   });
 
-  test("a 401 becomes UNAUTHORIZED and points at the token", async () => {
-    const impl = (async () =>
-      new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-      })) as unknown as typeof fetch;
-    const db = connect({ url: URL_, fetch: impl });
+  test("transport failures arrive as DatabaseError, classified by cause", async () => {
+    const named = (name: string) => Object.assign(new Error(name), { name });
+    const cases = [
+      [new TypeError("fetch failed"), "NETWORK"],
+      [named("AbortError"), "ABORTED"],
+      [named("TimeoutError"), "TIMEOUT"],
+    ] as const;
 
-    const error = (await db
-      .prepare("SELECT 1")
-      .all()
-      .catch((e) => e)) as DatabaseError;
+    for (const [thrown, code] of cases) {
+      const error = await failure((async () => {
+        throw thrown;
+      }) as unknown as typeof fetch);
+
+      expect(error).toBeInstanceOf(DatabaseError);
+      expect(error.code).toBe(code);
+    }
+  });
+
+  test("a body that is not JSON is a transport failure too", async () => {
+    expect((await failure(responds("<html>gateway</html>"))).code).toBe(
+      "NETWORK",
+    );
+  });
+
+  test("timeout attaches a deadline signal to the request", async () => {
+    const fake = fakeFetch([]);
+
+    await connect({ url: URL_, fetch: fake.fetch, timeout: 1000 })
+      .exec("SELECT 1")
+      .catch(() => undefined);
+
+    expect((fake.captures[0] as Capture).signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test("a 401 becomes UNAUTHORIZED and points at the token", async () => {
+    const error = await failure(
+      responds(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
+    );
 
     expect(error.code).toBe("UNAUTHORIZED");
     expect(error.status).toBe(401);
@@ -439,16 +582,7 @@ describe("errors", () => {
   });
 
   test("a non-JSON error body still yields a usable message", async () => {
-    const impl = (async () =>
-      new Response("upstream is down", {
-        status: 502,
-      })) as unknown as typeof fetch;
-    const db = connect({ url: URL_, fetch: impl });
-
-    const error = (await db
-      .prepare("SELECT 1")
-      .all()
-      .catch((e) => e)) as DatabaseError;
+    const error = await failure(responds("upstream is down", { status: 502 }));
 
     expect(error.status).toBe(502);
     expect(error.message).toBe("upstream is down");
@@ -456,58 +590,67 @@ describe("errors", () => {
 });
 
 describe("connect", () => {
-  test("falls back to the environment for url and token", async () => {
-    const previousUrl = process.env[ENV_DATABASE_URL];
-    const previousToken = process.env[ENV_DATABASE_AUTH_TOKEN];
-    process.env[ENV_DATABASE_URL] = URL_;
-    process.env[ENV_DATABASE_AUTH_TOKEN] = "from-env";
+  /** Run `fn` with `vars` applied to the environment, restoring what was there before. */
+  async function withEnv(
+    vars: Record<string, string | undefined>,
+    fn: () => Promise<void> | void,
+  ) {
+    const previous = Object.keys(vars).map(
+      (key) => [key, process.env[key]] as const,
+    );
+    const apply = (
+      entries: readonly (readonly [string, string | undefined])[],
+    ) => {
+      for (const [key, value] of entries) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    };
 
+    apply(Object.entries(vars));
     try {
-      const fake = fakeFetch([okExecute(["a"], [[1]])]);
-      await connect({ fetch: fake.fetch }).prepare("SELECT 1 AS a").all();
-
-      const capture = fake.captures[0] as Capture;
-      expect(capture.url).toBe("https://db.lite.bunnydb.net/v2/pipeline");
-      expect(capture.headers.authorization).toBe("Bearer from-env");
+      await fn();
     } finally {
-      if (previousUrl === undefined) delete process.env[ENV_DATABASE_URL];
-      else process.env[ENV_DATABASE_URL] = previousUrl;
-      if (previousToken === undefined)
-        delete process.env[ENV_DATABASE_AUTH_TOKEN];
-      else process.env[ENV_DATABASE_AUTH_TOKEN] = previousToken;
+      apply(previous);
     }
+  }
+
+  test("falls back to the environment for url and token", async () => {
+    await withEnv(
+      { [ENV_DATABASE_URL]: URL_, [ENV_DATABASE_AUTH_TOKEN]: "from-env" },
+      async () => {
+        const fake = fakeFetch([okExecute(["a"], [[1]])]);
+        await connect({ fetch: fake.fetch }).prepare("SELECT 1 AS a").all();
+
+        const capture = fake.captures[0] as Capture;
+        expect(capture.url).toBe("https://db.lite.bunnydb.net/v2/pipeline");
+        expect(capture.headers.authorization).toBe("Bearer from-env");
+      },
+    );
   });
 
   test("an explicit url wins over the environment", async () => {
-    const previousUrl = process.env[ENV_DATABASE_URL];
-    process.env[ENV_DATABASE_URL] = "libsql://from-env.lite.bunnydb.net";
+    await withEnv(
+      { [ENV_DATABASE_URL]: "libsql://from-env.lite.bunnydb.net" },
+      async () => {
+        const fake = fakeFetch([okExecute(["a"], [[1]])]);
+        await connect({
+          url: "libsql://explicit.lite.bunnydb.net",
+          fetch: fake.fetch,
+        })
+          .prepare("SELECT 1 AS a")
+          .all();
 
-    try {
-      const fake = fakeFetch([okExecute(["a"], [[1]])]);
-      await connect({
-        url: "libsql://explicit.lite.bunnydb.net",
-        fetch: fake.fetch,
-      })
-        .prepare("SELECT 1 AS a")
-        .all();
-      expect((fake.captures[0] as Capture).url).toBe(
-        "https://explicit.lite.bunnydb.net/v2/pipeline",
-      );
-    } finally {
-      if (previousUrl === undefined) delete process.env[ENV_DATABASE_URL];
-      else process.env[ENV_DATABASE_URL] = previousUrl;
-    }
+        expect((fake.captures[0] as Capture).url).toBe(
+          "https://explicit.lite.bunnydb.net/v2/pipeline",
+        );
+      },
+    );
   });
 
-  test("names the environment variable when there is no url at all", () => {
-    const previousUrl = process.env[ENV_DATABASE_URL];
-    delete process.env[ENV_DATABASE_URL];
-
-    try {
+  test("names the environment variable when there is no url at all", async () => {
+    await withEnv({ [ENV_DATABASE_URL]: undefined }, () => {
       expect(() => connect()).toThrow(ENV_DATABASE_URL);
-    } finally {
-      if (previousUrl !== undefined)
-        process.env[ENV_DATABASE_URL] = previousUrl;
-    }
+    });
   });
 });

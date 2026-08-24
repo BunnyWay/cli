@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as readline from "node:readline";
-import type { Client } from "@libsql/client";
 import chalk from "chalk";
+import type { ShellClient } from "./client.ts";
 import { executeDotCommand } from "./dot-commands.ts";
 import { printResultSet } from "./format.ts";
 import { HISTORY_MAX, loadHistory, saveHistory } from "./history.ts";
@@ -28,7 +28,7 @@ function defaultLogger(): ShellLogger {
  * Execute a single SQL query against the database and print the result.
  */
 export async function executeQuery(
-  client: Client,
+  client: ShellClient,
   sql: string,
   options?: ExecuteOptions,
 ): Promise<void> {
@@ -45,7 +45,7 @@ export async function executeQuery(
  * sequentially. Stops on the first error and reports which statement failed.
  */
 export async function executeFile(
-  client: Client,
+  client: ShellClient,
   filePath: string,
   options?: ExecuteOptions,
 ): Promise<void> {

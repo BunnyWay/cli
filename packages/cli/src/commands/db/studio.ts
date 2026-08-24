@@ -100,7 +100,7 @@ export const dbStudioCommand = defineCommand<{
       return;
     }
 
-    const { createClient } = await import("@libsql/client/web");
+    const { connect } = await import("@bunny.net/database-client");
     const { startStudio } = await import("@bunny.net/database-studio");
 
     const { url, token } = await resolveCredentials({
@@ -112,7 +112,7 @@ export const dbStudioCommand = defineCommand<{
       verbose,
     });
 
-    const client = createClient({ url, authToken: token });
+    const client = connect({ url, authToken: token });
 
     logger.log("");
     await startStudio({

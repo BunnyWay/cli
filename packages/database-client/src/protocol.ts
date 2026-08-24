@@ -31,9 +31,15 @@ export interface WireError {
   code?: string | null;
 }
 
-interface WireStmt {
+export interface WireNamedArg {
+  name: string;
+  value: WireValue;
+}
+
+export interface WireStmt {
   sql: string;
   args: WireValue[];
+  named_args: WireNamedArg[];
   want_rows: boolean;
 }
 
@@ -79,7 +85,13 @@ function base64ToBytes(base64: string): Uint8Array {
 }
 
 export function encodeValue(value: unknown): WireValue {
-  if (value === null || value === undefined) return { type: "null" };
+  if (value === null) return { type: "null" };
+  if (value === undefined) {
+    throw new DatabaseError(
+      "cannot bind undefined; pass null to store SQL NULL",
+      "ARGUMENT_INVALID",
+    );
+  }
   if (typeof value === "boolean") {
     return { type: "integer", value: value ? "1" : "0" };
   }
@@ -186,6 +198,12 @@ export function normalizeUrl(url: string): string {
       "URL_INVALID",
     );
   }
+  if (parsed.searchParams.has("authToken")) {
+    throw new DatabaseError(
+      "database URL must not carry an authToken query parameter; pass authToken instead",
+      "URL_INVALID",
+    );
+  }
   if (scheme === "libsql" && parsed.searchParams.get("tls") === "0") {
     parsed.protocol = "http:";
   }
@@ -206,6 +224,18 @@ export interface TransportConfig {
   authToken?: string;
   fetch?: typeof fetch;
   headers?: Record<string, string>;
+  /** Milliseconds before a single request is aborted. Unset means no deadline. */
+  timeout?: number;
+}
+
+/** Combine the caller's signal with the configured deadline, avoiding a wrapper when only one applies. */
+function requestSignal(
+  signal: AbortSignal | undefined,
+  timeout: number | undefined,
+): AbortSignal | undefined {
+  if (timeout === undefined) return signal;
+  const deadline = AbortSignal.timeout(timeout);
+  return signal ? AbortSignal.any([signal, deadline]) : deadline;
 }
 
 /** Build a stateless transport: every call is one self-contained POST to /v2/pipeline. */
@@ -221,22 +251,32 @@ export function createTransport(config: TransportConfig): Transport {
 
   return {
     async send(requests, signal) {
-      const response = await doFetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          baton: null,
-          requests: [...requests, { type: "close" }],
-        }),
-        signal,
-      });
+      let response: Response;
+      try {
+        response = await doFetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            baton: null,
+            requests: [...requests, { type: "close" }],
+          }),
+          signal: requestSignal(signal, config.timeout),
+        });
+      } catch (error) {
+        throw DatabaseError.fromTransport(error);
+      }
 
       if (!response.ok) {
         const body = await response.text().catch(() => "");
         throw DatabaseError.fromHttp(response.status, body);
       }
 
-      const payload = (await response.json()) as WireResponse;
+      let payload: WireResponse;
+      try {
+        payload = (await response.json()) as WireResponse;
+      } catch (error) {
+        throw DatabaseError.fromTransport(error);
+      }
       return payload.results;
     },
   };
