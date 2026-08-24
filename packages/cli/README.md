@@ -1079,29 +1079,6 @@ bunny sandbox exec my-sandbox --timeout 30 -- bun run build
 
 Variables passed here apply only to that single command and are **not** persisted. For persistent variables, use [`bunny sandbox env`](#bunny-sandbox-env).
 
-#### `bunny sandbox cp`
-
-Copy a file between your machine and a sandbox over SFTP. Exactly one of the two paths must reference a sandbox as `<sandbox>:<path>`; the other is a local path. Remote paths follow the same rules as elsewhere — relative paths resolve against `/workplace`.
-
-```bash
-# Upload a file into the sandbox
-bunny sandbox cp ./app.js my-sandbox:/workplace/app.js
-
-# Upload relative to /workplace
-bunny sandbox cp ./app.js my-sandbox:app.js
-
-# An existing remote directory (or a trailing slash) keeps the source filename
-bunny sandbox cp ./app.js my-sandbox:/workplace/src
-
-# Download a file from the sandbox
-bunny sandbox cp my-sandbox:/workplace/out.log ./out.log
-
-# Download into an existing directory (keeps the source filename)
-bunny sandbox cp my-sandbox:/workplace/out.log ./logs/
-```
-
-Uploads preserve the local file's Unix mode (so executables stay executable). Only single files are supported — directory and sandbox-to-sandbox copies are not.
-
 #### `bunny sandbox files`
 
 Manage files inside a sandbox over SFTP. A bare sandbox name targets `/workplace`; use `<sandbox>:<path>` for a specific directory (relative paths resolve against `/workplace`).
@@ -1112,14 +1089,37 @@ bunny sandbox files list my-sandbox
 bunny sandbox files ls my-sandbox    # alias
 
 # List a specific directory
-bunny sandbox files ls my-sandbox:/workplace/src
-bunny sandbox files ls my-sandbox:src
+bunny sandbox files list my-sandbox:/workplace/src
+bunny sandbox files list my-sandbox:src
 
 # Machine-readable listing (name, type, size, mode)
-bunny sandbox files ls my-sandbox --output json
+bunny sandbox files list my-sandbox --output json
 ```
 
-Columns: Name, Type (`file`/`directory`/`symlink`/`other`), Size, Mode (octal permissions). To copy files in and out, use [`bunny sandbox cp`](#bunny-sandbox-cp).
+Columns: Name, Type (`file`/`directory`/`symlink`/`other`), Size, Mode (octal permissions).
+
+Copy a single file between your machine and a sandbox with `cp`. Exactly one of the two paths must reference a sandbox as `<sandbox>:<path>`; the other is a local path.
+
+```bash
+# Upload a file into the sandbox
+bunny sandbox files cp ./app.js my-sandbox:/workplace/app.js
+
+# Upload relative to /workplace
+bunny sandbox files cp ./app.js my-sandbox:app.js
+
+# An existing remote directory (or a trailing slash) keeps the source filename
+bunny sandbox files cp ./app.js my-sandbox:/workplace/src
+
+# Download a file from the sandbox
+bunny sandbox files cp my-sandbox:/workplace/out.log ./out.log
+
+# Download into an existing directory (keeps the source filename)
+bunny sandbox files cp my-sandbox:/workplace/out.log ./logs/
+```
+
+Uploads preserve the local file's Unix mode, so executables stay executable. Only single files are supported: directory and sandbox-to-sandbox copies are not.
+
+`cp` used to live at `bunny sandbox cp`. That path now errors with the equivalent `bunny sandbox files cp` command to run instead.
 
 #### `bunny sandbox ssh`
 

@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/openapi-client",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Type-safe TypeScript client for the bunny.net APIs (CDN, DNS, Edge Storage, Stream, Shield, Magic Containers), generated from official OpenAPI specs.",
   "license": "MIT",
   "repository": {

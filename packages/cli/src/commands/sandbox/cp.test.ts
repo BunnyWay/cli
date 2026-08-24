@@ -1,29 +1,27 @@
 import { describe, expect, test } from "bun:test";
-import { resolveCopyDest } from "./cp.ts";
+import { rewriteCpCommand, sandboxCpMovedCommand } from "./cp.ts";
 
-describe("resolveCopyDest", () => {
-  test("a trailing slash appends the source filename without probing", async () => {
-    const path = await resolveCopyDest("/tmp/", "app.js", () => {
-      throw new Error("should not probe");
-    });
-    expect(path).toBe("/tmp/app.js");
+describe("the moved sandbox cp stub", () => {
+  test("stays out of help", () => {
+    expect(sandboxCpMovedCommand.describe).toBe(false);
   });
 
-  test("an existing directory appends the source filename", async () => {
-    expect(await resolveCopyDest("/tmp", "app.js", async () => true)).toBe(
-      "/tmp/app.js",
+  test("replays plain args against the new path", () => {
+    expect(rewriteCpCommand(["./app.js", "my-sandbox:app.js"])).toBe(
+      "bunny sandbox files cp ./app.js my-sandbox:app.js",
     );
+    expect(rewriteCpCommand([])).toBe("bunny sandbox files cp");
   });
 
-  test("a file or missing destination is used as-is", async () => {
-    expect(
-      await resolveCopyDest("/tmp/app.js", "app.js", async () => false),
-    ).toBe("/tmp/app.js");
-  });
-
-  test("relative directory destinations work too", async () => {
-    expect(await resolveCopyDest("src", "app.js", async () => true)).toBe(
-      "src/app.js",
+  test("quotes args the shell would otherwise re-split or interpret", () => {
+    expect(rewriteCpCommand(["my app.js", "box:my app.js"])).toBe(
+      "bunny sandbox files cp 'my app.js' 'box:my app.js'",
+    );
+    expect(rewriteCpCommand(["a;rm -rf b", ""])).toBe(
+      "bunny sandbox files cp 'a;rm -rf b' ''",
+    );
+    expect(rewriteCpCommand(["it's.js", "box:x"])).toBe(
+      "bunny sandbox files cp 'it'\\''s.js' box:x",
     );
   });
 });

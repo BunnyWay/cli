@@ -47,7 +47,7 @@ bun ny db migrations create add_users    # write migrations/0001_add_users.sql (
 bun ny db migrations list                # show applied / pending / changed migrations
 bun ny db migrations apply               # apply pending migrations in order (--dry-run to preview, --dir drizzle for flat drizzle-kit output)
 bun ny db migrations apply --pattern "*/migration.sql" # nested ORM layout; paths are tracked relative to migrations/
-bun ny skills install                       # install the bunny agent skill into this project (AGENTS.md block + .claude/skills when Claude Code is used) so AI coding tools know how to use the CLI; alias: skills update
+bun ny skills install                       # install the bunny agent skill into this project (AGENTS.md block + .agents/skills, plus .claude/skills when Claude Code is used) so AI coding tools know how to use the CLI; alias: skills update
 bun ny skills install --global              # install to ~/.agents/skills and ~/.claude/skills for every project
 bun ny skills remove                        # remove the skill from this project (or --global); everything is regenerable with skills install
 bun ny apps deploy ghcr.io/me/api:v1.2     # deploy a pre-built image

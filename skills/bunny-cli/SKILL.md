@@ -74,7 +74,7 @@ Use this to route to the correct reference file:
 - **DNS (zones, delegation checks, records, presets, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
 - **Static sites (create, deploy, rollback, custom domains, domain-gated previews, GitHub Actions)** -> `references/sites.md`
-- **Sandboxes (create, exec, ssh, cp, files, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
+- **Sandboxes (create, exec, ssh, files list/cp, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)
 
