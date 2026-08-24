@@ -1,12 +1,11 @@
 import { createDbClient } from "@bunny.net/openapi-client";
 import chalk from "chalk";
-import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { prompts, spinner } from "../../core/ui.ts";
 import { readEnvValue } from "../../utils/env-file.ts";
 import { generateToken } from "./api.ts";
 import {

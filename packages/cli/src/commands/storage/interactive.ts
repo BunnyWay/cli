@@ -1,9 +1,8 @@
-import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
 import type { OutputFormat } from "../../core/types.ts";
-import { confirm, isInteractive, spinner } from "../../core/ui.ts";
+import { confirm, isInteractive, prompts, spinner } from "../../core/ui.ts";
 import {
   type CoreClient,
   fetchStorageZone,
@@ -23,7 +22,10 @@ export function writeStorageManifest(zone: StorageZoneModel): void {
 
 // Offer to remember a zone picked from the prompt; a no-op if the user declines.
 async function maybeLinkZone(zone: StorageZoneModel): Promise<void> {
-  if (!(await confirm(`Link this directory to ${zone.Name}?`))) return;
+  if (
+    !(await confirm(`Link this directory to ${zone.Name}?`, { optional: true }))
+  )
+    return;
   writeStorageManifest(zone);
   logger.success(`Linked this directory to storage zone ${zone.Name}.`);
 }

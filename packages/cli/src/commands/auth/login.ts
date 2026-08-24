@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import { createCoreClient } from "@bunny.net/openapi-client";
-import prompts from "prompts";
 import {
   profileExists,
   resolveConfig,
@@ -15,6 +14,7 @@ import {
   confirm,
   isInteractive,
   openBrowser,
+  prompts,
   readPassword,
   spinner,
 } from "../../core/ui.ts";

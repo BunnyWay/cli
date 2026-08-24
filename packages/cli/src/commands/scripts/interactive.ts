@@ -1,12 +1,11 @@
 import type { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
-import prompts from "prompts";
 import type { Argv } from "yargs";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
 import type { OutputFormat } from "../../core/types.ts";
-import { confirm, spinner } from "../../core/ui.ts";
+import { confirm, prompts, spinner } from "../../core/ui.ts";
 import { fetchScript, fetchScripts } from "./api.ts";
 import { SCRIPT_MANIFEST } from "./constants.ts";
 
@@ -89,7 +88,9 @@ async function maybeLinkScript(
   const shouldLink =
     link !== undefined
       ? link
-      : await confirm(`Link this directory to ${script.Name}?`);
+      : await confirm(`Link this directory to ${script.Name}?`, {
+          optional: true,
+        });
   if (!shouldLink) return;
 
   saveManifest(SCRIPT_MANIFEST, {

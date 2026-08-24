@@ -1,5 +1,4 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
@@ -10,7 +9,7 @@ import {
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { detectRegistrar } from "../../../core/registrar.ts";
-import { isInteractive, spinner } from "../../../core/ui.ts";
+import { isInteractive, prompts, spinner } from "../../../core/ui.ts";
 import { type CoreClient, type DnsZoneModel, fetchZone } from "../api.ts";
 import { addRecordInteractive } from "../record/add.ts";
 import { importZoneFile } from "../record/import.ts";

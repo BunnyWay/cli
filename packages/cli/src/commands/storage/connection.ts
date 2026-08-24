@@ -1,9 +1,8 @@
-import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
 import { formatKeyValue, maskSecret } from "../../core/format.ts";
 import { logger } from "../../core/logger.ts";
 import type { OutputFormat } from "../../core/types.ts";
-import { confirm } from "../../core/ui.ts";
+import { confirm, prompts } from "../../core/ui.ts";
 import { readEnvValue, writeEnvValue } from "../../utils/env-file.ts";
 import { DOCS_BASE_URL } from "../docs.ts";
 import type { StorageZoneModel } from "./api.ts";
@@ -351,7 +350,7 @@ export async function offerConnectionEnv(
       clash
         ? `${clash.key} already exists in ${readEnvValue(clash.key)?.envPath}. Overwrite?`
         : "Save these credentials to .env?",
-      { initial: !clash },
+      { initial: !clash, optional: true },
     );
   }
   if (!save) return false;

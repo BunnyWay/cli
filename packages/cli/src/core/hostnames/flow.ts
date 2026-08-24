@@ -108,7 +108,10 @@ export async function offerDnsWaitAndSsl(
   const shouldWait =
     opts.dnsAlreadyLive ||
     opts.assumeYes ||
-    (await confirm("Wait for DNS and enable HTTPS now?", { initial: true }));
+    (await confirm("Wait for DNS and enable HTTPS now?", {
+      initial: true,
+      optional: true,
+    }));
 
   if (!shouldWait) {
     printSslHint(opts.sslHint);

@@ -1,11 +1,11 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import prompts from "prompts";
+import type promptsLib from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { isInteractive, spinner } from "../../../core/ui.ts";
+import { isInteractive, prompts, spinner } from "../../../core/ui.ts";
 import type { StorageZoneModel, StorageZoneSettingsModel } from "../api.ts";
 import {
   confirmAddedReplicationRegions,
@@ -71,7 +71,7 @@ async function promptSettings(
     zoneScope(zone),
   ).filter((region) => !existing.includes(region.code));
 
-  const questions: prompts.PromptObject[] = [
+  const questions: promptsLib.PromptObject[] = [
     {
       type: "text",
       name: "custom404Path",

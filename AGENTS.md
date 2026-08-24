@@ -206,8 +206,8 @@ bunny-cli/
 │           │   ├── stats.ts              # Shared stats rendering: sumChart(), renderBarChart(), formatBucketLabel() (UTC date labels), BAR_WIDTH (used by dns/zone/stats + scripts/stats)
 │           │   ├── stats.test.ts         # Tests for stats helpers
 │           │   ├── types.ts              # GlobalArgs, OutputFormat, and shared type definitions
-│           │   ├── ui.ts                 # readPassword(), confirm(), confirmTyped(), requireConfirmable() (unattended runs must pass --force instead of hanging on a prompt), spinner() wrappers
-│           │   ├── ui.test.ts            # Tests for requireConfirmable (no-TTY guard, --force bypass)
+│           │   ├── ui.ts                 # prompts() terminal-safe wrapper (always import it from here, never from the prompts package: raw prompts spins at 100% CPU when stdin hits EOF; the wrapper refuses non-TTY stdin up front, piped answers unsupported, prompts.inject() exempt), readPassword(), confirm() (gates throw with exit 1 when unanswerable; pass optional: true for offer prompts that should decline and continue), confirmTyped(), requireConfirmable() (unattended runs must pass --force instead of hanging on a prompt), spinner() wrappers
+│           │   ├── ui.test.ts            # Tests for requireConfirmable (no-TTY guard, --force bypass) + the terminal requirement (inject() exempt, gate confirm exits non-zero at EOF, optional confirm declines, piped stdin refused) + a ratchet test that fails if any file outside ui.ts imports the prompts library at runtime
 │           │   └── version.ts            # VERSION constant from package.json
 │           │
 │           ├── config/

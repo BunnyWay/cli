@@ -1,5 +1,4 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import prompts from "prompts";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
@@ -14,7 +13,7 @@ import {
 } from "../../../core/hostnames/index.ts";
 import { logger } from "../../../core/logger.ts";
 import { loadManifest } from "../../../core/manifest.ts";
-import { confirm, isInteractive, spinner } from "../../../core/ui.ts";
+import { confirm, isInteractive, prompts, spinner } from "../../../core/ui.ts";
 import {
   type CoreClient,
   fetchStorageZone,
@@ -276,7 +275,10 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     let s3Enabled = s3;
     if (s3Enabled === undefined && interactive) {
       logger.dim("S3 compatibility cannot be turned on later.");
-      s3Enabled = await confirm("Enable S3 compatibility?", { initial: true });
+      s3Enabled = await confirm("Enable S3 compatibility?", {
+        initial: true,
+        optional: true,
+      });
     }
     const scope = { tier: zoneTier, s3: s3Enabled };
 
@@ -381,6 +383,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     if (shouldCreatePullZone === undefined && interactive && zoneId) {
       shouldCreatePullZone = await confirm(
         `Make ${zoneName} available on the web? This creates a pull zone (bunny's CDN layer) in front of it.`,
+        { optional: true },
       );
     }
 
@@ -500,7 +503,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       if (
         customDomain === undefined &&
         interactive &&
-        (await confirm("Add a custom domain?"))
+        (await confirm("Add a custom domain?", { optional: true }))
       ) {
         const { value } = await prompts({
           type: "text",
@@ -541,6 +544,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
         existing.id && existing.id !== zoneId
           ? `Link this directory to ${zoneName}? (replaces the existing link to ${existing.name ?? existing.id})`
           : `Link this directory to ${zoneName}?`,
+        { optional: true },
       );
     }
     if (shouldLink) {
@@ -551,7 +555,7 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     let connectionType = requestedType;
     let toolFormat = format;
     if (connectionType === undefined && interactive) {
-      if (await confirm("Show connection details?")) {
+      if (await confirm("Show connection details?", { optional: true })) {
         connectionType = await promptConnectionType(created);
         if (connectionType) toolFormat = await promptClient(connectionType);
       }
