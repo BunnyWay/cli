@@ -3,7 +3,6 @@ import {
   createComputeClient,
   createCoreClient,
 } from "@bunny.net/openapi-client";
-import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -16,7 +15,7 @@ import {
 } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
-import { confirm, spinner } from "../../core/ui.ts";
+import { confirm, prompts, spinner } from "../../core/ui.ts";
 import { autoLinkDnsZone } from "../dns/interactive.ts";
 import { promptOpenInBrowser } from "./api.ts";
 import {
@@ -293,6 +292,7 @@ export const scriptsCreateCommand = defineCommand<CreateArgs>({
     } else if (isInteractive && manifest.id && manifest.id !== created.id) {
       shouldLink = await confirm(
         `Replace existing link to ${manifest.name ?? manifest.id}?`,
+        { optional: true },
       );
     } else {
       shouldLink = true;

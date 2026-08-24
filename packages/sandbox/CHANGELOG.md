@@ -1,5 +1,18 @@
 # @bunny.net/sandbox
 
+## 0.4.0
+
+### Minor Changes
+
+- [#143](https://github.com/BunnyWay/cli/pull/143) [`8884779`](https://github.com/BunnyWay/cli/commit/88847797d2216b5cf23ae3e335a7ea2becb3fd95) Thanks [@jedisct1](https://github.com/jedisct1)! - fix(sandbox): let cp copy into an existing remote directory without a trailing slash. The SDK gains a public `sandbox.stat(path)` method, and `bunny sandbox cp` now checks the destination on both sides: an existing directory (or a trailing slash) keeps the source filename instead of failing with "Failed to write".
+
+### Patch Changes
+
+- [#156](https://github.com/BunnyWay/cli/pull/156) [`3dff411`](https://github.com/BunnyWay/cli/commit/3dff411468a9bf3602dfd66f0bdc0a9f2cbf851e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - anycast endpoints now send the `iPv4` IP protocol version documented by the Magic Containers API
+
+- Updated dependencies [[`cdb130a`](https://github.com/BunnyWay/cli/commit/cdb130ad869c96eee4bee8eef610e360f51b4958), [`3dff411`](https://github.com/BunnyWay/cli/commit/3dff411468a9bf3602dfd66f0bdc0a9f2cbf851e)]:
+  - @bunny.net/openapi-client@0.3.0
+
 ## 0.3.3
 
 ### Patch Changes

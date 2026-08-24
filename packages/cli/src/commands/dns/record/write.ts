@@ -1,8 +1,7 @@
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import prompts from "prompts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
+import { prompts, spinner } from "../../../core/ui.ts";
 import type { CoreClient, DnsZoneModel } from "../api.ts";
 import { recordName, recordTypeLabel } from "../record-types.ts";
 

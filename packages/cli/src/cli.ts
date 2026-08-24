@@ -16,6 +16,7 @@ import { registryNamespace } from "./commands/registry/index.ts";
 import { sandboxNamespace } from "./commands/sandbox/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
 import { sitesNamespace } from "./commands/sites/index.ts";
+import { skillsNamespace } from "./commands/skills/index.ts";
 import { storageNamespace } from "./commands/storage/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { bunny } from "./core/colors.ts";
@@ -30,8 +31,8 @@ const commands: CommandModule[] = [
   dnsNamespace,
   scriptsNamespace,
   sandboxNamespace,
-  sitesNamespace,
   configNamespace,
+  skillsNamespace,
   docsCommand,
   openCommand,
   apiCommand,
@@ -42,6 +43,7 @@ const experimentalCommands: CommandModule[] = [
   appsNamespace,
   registriesNamespace,
   registryNamespace,
+  sitesNamespace,
   storageNamespace,
 ];
 
@@ -141,7 +143,7 @@ export const cli = instance
         ["Create an edge script", "bunny scripts init"],
         ["Add a domain to manage DNS", "bunny dns zones add example.com"],
         ["Create a dev sandbox", "bunny sandbox create my-sandbox"],
-        ["Deploy a static site", "bunny sites deploy"],
+        // ["Deploy a static site", "bunny sites deploy"],
         // ["Deploy an app", "bunny apps deploy"],
       ];
 

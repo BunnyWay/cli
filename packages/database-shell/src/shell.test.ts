@@ -549,6 +549,26 @@ describe("splitStatements", () => {
     ]);
   });
 
+  test("preserves semicolons inside quoted identifiers", () => {
+    expect(
+      splitStatements(
+        'CREATE TABLE "double;quote" (id INT); CREATE TABLE `back;tick` (id INT); CREATE TABLE [bracket;name] (id INT);',
+      ),
+    ).toEqual([
+      'CREATE TABLE "double;quote" (id INT)',
+      "CREATE TABLE `back;tick` (id INT)",
+      "CREATE TABLE [bracket;name] (id INT)",
+    ]);
+  });
+
+  test("handles escaped quoted-identifier delimiters", () => {
+    expect(
+      splitStatements(
+        'CREATE TABLE "double""quote;name" (id INT); CREATE TABLE `back``tick;name` (id INT);',
+      ),
+    ).toHaveLength(2);
+  });
+
   test("handles multiple statements with embedded semicolons", () => {
     const sql =
       "INSERT INTO t VALUES ('x;y');\nSELECT * FROM t WHERE name = 'a;b';";
@@ -570,6 +590,97 @@ describe("splitStatements", () => {
   test("does not split on semicolons in comments", () => {
     const sql = "-- this; is a comment\nSELECT 1;";
     expect(splitStatements(sql)).toEqual(["SELECT 1"]);
+  });
+
+  test("keeps a CREATE TRIGGER body intact", () => {
+    const sql =
+      "CREATE TRIGGER touch AFTER UPDATE ON users BEGIN\n  UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;\nEND;";
+    expect(splitStatements(sql)).toEqual([
+      "CREATE TRIGGER touch AFTER UPDATE ON users BEGIN\n  UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;\nEND",
+    ]);
+  });
+
+  test("keeps CREATE TRIGGER IF NOT EXISTS intact", () => {
+    const sql =
+      "CREATE TRIGGER IF NOT EXISTS touch AFTER UPDATE ON users BEGIN\n  UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;\nEND;";
+    expect(splitStatements(sql)).toEqual([sql.slice(0, -1)]);
+  });
+
+  test("keeps a multi-statement trigger body intact and splits what follows", () => {
+    const sql =
+      "CREATE TEMPORARY TRIGGER log AFTER INSERT ON t BEGIN\n  INSERT INTO audit VALUES (1);\n  INSERT INTO audit VALUES (2);\nEND;\nSELECT 1;";
+    expect(splitStatements(sql)).toEqual([
+      "CREATE TEMPORARY TRIGGER log AFTER INSERT ON t BEGIN\n  INSERT INTO audit VALUES (1);\n  INSERT INTO audit VALUES (2);\nEND",
+      "SELECT 1",
+    ]);
+  });
+
+  test("drops block comments and the semicolons inside them", () => {
+    expect(splitStatements("SELECT 1 /* a ; b */;")).toEqual(["SELECT 1"]);
+    expect(splitStatements("SELECT 1; /* between */ SELECT 2;")).toEqual([
+      "SELECT 1",
+      "SELECT 2",
+    ]);
+  });
+
+  test("ignores quotes inside block comments", () => {
+    expect(splitStatements("SELECT 1 /* it's fine */; SELECT 2;")).toEqual([
+      "SELECT 1",
+      "SELECT 2",
+    ]);
+  });
+
+  test("does not treat a block comment as a trigger block closer", () => {
+    const sql =
+      "CREATE TRIGGER t AFTER INSERT ON x BEGIN\n  /* END of story */\n  UPDATE x SET a = 1;\nEND;";
+    expect(splitStatements(sql)).toHaveLength(1);
+    expect(splitStatements(sql)[0]).toContain("UPDATE x SET a = 1;");
+    expect(splitStatements(sql)[0]?.endsWith("END")).toBe(true);
+  });
+
+  test("rejects an unterminated block comment instead of truncating the file", () => {
+    expect(() => splitStatements("SELECT 1; /* never closed")).toThrow(
+      /Unterminated block comment at line 1, column 11/,
+    );
+  });
+
+  test("rejects unterminated strings and quoted identifiers", () => {
+    expect(() => splitStatements("SELECT 'never closed")).toThrow(
+      /Unterminated quoted value/,
+    );
+    expect(() => splitStatements('CREATE TABLE "never;closed')).toThrow(
+      /Unterminated quoted value/,
+    );
+  });
+
+  test("keeps a trigger body whose statement ends in CASE ... END intact", () => {
+    const sql =
+      "CREATE TRIGGER grade AFTER UPDATE ON scores BEGIN\n  UPDATE scores SET band = CASE WHEN NEW.v > 90 THEN 'a' ELSE 'b' END;\n  UPDATE scores SET seen = 1;\nEND;";
+    expect(splitStatements(sql)).toEqual([sql.slice(0, -1)]);
+  });
+
+  test("handles nested CASE expressions in a trigger body", () => {
+    const sql =
+      "CREATE TRIGGER t AFTER INSERT ON x BEGIN\n  UPDATE x SET a = CASE WHEN b THEN CASE WHEN c THEN 1 ELSE 2 END ELSE 3 END;\nEND;\nSELECT 1;";
+    expect(splitStatements(sql)).toEqual([
+      "CREATE TRIGGER t AFTER INSERT ON x BEGIN\n  UPDATE x SET a = CASE WHEN b THEN CASE WHEN c THEN 1 ELSE 2 END ELSE 3 END;\nEND",
+      "SELECT 1",
+    ]);
+  });
+
+  test("ignores block keywords inside strings and quoted identifiers", () => {
+    const sql =
+      "CREATE TRIGGER t AFTER INSERT ON x BEGIN\n  INSERT INTO log (\"end\") VALUES ('CASE END');\nEND;";
+    expect(splitStatements(sql)).toEqual([sql.slice(0, -1)]);
+  });
+
+  test("splits drizzle statement-breakpoint files", () => {
+    const sql =
+      "CREATE TABLE `users` (\n\t`id` integer PRIMARY KEY NOT NULL\n);\n--> statement-breakpoint\nCREATE UNIQUE INDEX `users_id` ON `users` (`id`);";
+    expect(splitStatements(sql)).toEqual([
+      "CREATE TABLE `users` (\n\t`id` integer PRIMARY KEY NOT NULL\n)",
+      "CREATE UNIQUE INDEX `users_id` ON `users` (`id`)",
+    ]);
   });
 });
 

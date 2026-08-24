@@ -16,7 +16,7 @@ import { createLibSQLExecutor, introspect } from "@bunny.net/database-adapter-li
 import { createRestHandler } from "@bunny.net/database-rest";
 
 const client = createClient({
-  url: "libsql://your-db.lite.bunnydb.net",
+  url: "libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net",
   authToken: "your-token",
 });
 

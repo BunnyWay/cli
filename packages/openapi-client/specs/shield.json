@@ -1416,6 +1416,413 @@
         }
       }
     },
+    "/shield/shield-zone/{shieldZoneId}/bot-categorization": {
+      "get": {
+        "tags": ["Bot Categorization"],
+        "summary": "List bots available for explicit allow/block configuration on this Shield Zone, grouped by category.",
+        "operationId": "List Bot Categorizations",
+        "parameters": [
+          {
+            "name": "shieldZoneId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotCategorizationListResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotCategorizationListResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotCategorizationListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotCategorizationListResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotCategorizationListResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotCategorizationListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotCategorizationListResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotCategorizationListResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotCategorizationListResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/shield/shield-zone/{shieldZoneId}/bot-categorization/bots/{botId}": {
+      "put": {
+        "tags": ["Bot Categorization"],
+        "summary": "Set or clear the action applied to a categorised bot for this Shield Zone.",
+        "operationId": "Set Bot Categorization Action",
+        "parameters": [
+          {
+            "name": "shieldZoneId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "botId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategorizationConfigurationResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/shield/shield-zone/{shieldZoneId}/bot-categorization/categories/{category}": {
+      "put": {
+        "tags": ["Bot Categorization"],
+        "summary": "Set or clear the action applied to every bot in a category for this Shield Zone.",
+        "operationId": "Set Bot Category Action",
+        "parameters": [
+          {
+            "name": "shieldZoneId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "category",
+            "in": "path",
+            "description": "0 = None\n1 = SEO\n2 = AIScraper\n3 = AITool\n4 = Tool\n5 = Ads\n6 = Preview\n7 = Social\n255 = System",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotCategory"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBotCategoryConfigurationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBotCategoryConfigurationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBotCategoryConfigurationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategoryConfigurationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategoryConfigurationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategoryConfigurationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategoryConfigurationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategoryConfigurationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategoryConfigurationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategoryConfigurationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategoryConfigurationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategoryConfigurationResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategoryConfigurationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategoryConfigurationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBotCategoryConfigurationResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
     "/shield/shield-zone/{shieldZoneId}/bot-detection": {
       "get": {
         "tags": ["Bot Detection"],
@@ -2106,6 +2513,306 @@
         }
       }
     },
+    "/shield/event-logs/{shieldZoneId}/search": {
+      "post": {
+        "tags": ["Event Logs"],
+        "summary": "Search, filter and group Event Logs for a Shield Zone",
+        "operationId": "Search Event Logs",
+        "parameters": [
+          {
+            "name": "shieldZoneId",
+            "in": "path",
+            "description": "The ID of the Shield Zone.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "The ID of the Shield Zone.",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventLogsSearchRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventLogsSearchRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventLogsSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventLogsSearchResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventLogsSearchResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventLogsSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/shield/event-logs/{shieldZoneId}/export": {
+      "post": {
+        "tags": ["Event Logs"],
+        "summary": "Export the full filtered Event Logs set for a Shield Zone as CSV",
+        "operationId": "Export Event Logs",
+        "parameters": [
+          {
+            "name": "shieldZoneId",
+            "in": "path",
+            "description": "The ID of the Shield Zone.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "The ID of the Shield Zone.",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventLogsExportRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventLogsExportRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventLogsExportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/shield/metrics/overages/{shieldZoneId}": {
+      "get": {
+        "tags": ["Metrics"],
+        "summary": "Get the overage breakdown for the specified Shield Zone for a given month, segmented by billing plan changes",
+        "operationId": "Get Shield Zone Monthly Overages",
+        "parameters": [
+          {
+            "name": "shieldZoneId",
+            "in": "path",
+            "description": "The ID of the Shield Zone.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "The ID of the Shield Zone.",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "description": "The calendar year to query.",
+            "schema": {
+              "type": "integer",
+              "description": "The calendar year to query.",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "description": "The calendar month (1-12) to query.",
+            "schema": {
+              "type": "integer",
+              "description": "The calendar month (1-12) to query.",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShieldZoneMonthlyOveragesResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShieldZoneMonthlyOveragesResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShieldZoneMonthlyOveragesResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
     "/shield/metrics/overview/{shieldZoneId}": {
       "get": {
         "tags": ["Metrics"],
@@ -2207,6 +2914,7 @@
           {
             "name": "Resolution",
             "in": "query",
+            "description": "0 = Auto\n1 = TwoMinutes\n2 = TenMinutes\n3 = Hourly\n4 = Daily\n5 = Weekly\n6 = Monthly",
             "schema": {
               "$ref": "#/components/schemas/MetricsOverviewResolution"
             }
@@ -3476,6 +4184,170 @@
         }
       }
     },
+    "/shield/shield-zone/defaults": {
+      "get": {
+        "tags": ["Shield Zone"],
+        "summary": "Get the recommended defaults for creating a Shield Zone",
+        "operationId": "Get Shield Zone Defaults",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetShieldZoneDefaultsResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetShieldZoneDefaultsResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetShieldZoneDefaultsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedResult"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/shield/shield-zone/under-attack": {
+      "post": {
+        "tags": ["Shield Zone"],
+        "summary": "Create a Shield Zone in under-attack mode for your PullZone",
+        "operationId": "Create Shield Zone Under Attack",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUnderAttackShieldZoneRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUnderAttackShieldZoneRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUnderAttackShieldZoneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateShieldZoneResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateShieldZoneResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateShieldZoneResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateShieldZoneResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateShieldZoneResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateShieldZoneResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateShieldZoneResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateShieldZoneResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateShieldZoneResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
     "/shield/shield-zone": {
       "post": {
         "tags": ["Shield Zone"],
@@ -3504,6 +4376,26 @@
         "responses": {
           "200": {
             "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateShieldZoneResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateShieldZoneResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateShieldZoneResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
             "content": {
               "text/plain": {
                 "schema": {
@@ -5004,14 +5896,41 @@
       "AccessListAction": {
         "enum": [0, 1, 2, 3, 4, 5],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = None\n1 = Allow\n2 = Block\n3 = Challenge\n4 = Log\n5 = Bypass",
+        "format": "int32",
+        "x-enum-varnames": [
+          "None",
+          "Allow",
+          "Block",
+          "Challenge",
+          "Log",
+          "Bypass"
+        ]
       },
       "AccessListCategory": {
         "enum": [
           0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192
         ],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = None\n1 = VPNs\n2 = Datacenters\n4 = Proxies\n8 = TorExitNodes\n16 = Botnets\n32 = VulnerabilityScanners\n64 = WebScrapers\n128 = SearchEngines\n256 = SearchEngineCrawlers\n512 = AiSearch\n1024 = AiCrawlers\n2048 = AiAgents\n4096 = PagePreview\n8192 = InternetTools",
+        "format": "int32",
+        "x-enum-varnames": [
+          "None",
+          "VPNs",
+          "Datacenters",
+          "Proxies",
+          "TorExitNodes",
+          "Botnets",
+          "VulnerabilityScanners",
+          "WebScrapers",
+          "SearchEngines",
+          "SearchEngineCrawlers",
+          "AiSearch",
+          "AiCrawlers",
+          "AiAgents",
+          "PagePreview",
+          "InternetTools"
+        ]
       },
       "AccessListDetails": {
         "required": [
@@ -5085,7 +6004,16 @@
       "AccessListType": {
         "enum": [0, 1, 2, 3, 4, 5],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = IP\n1 = CIDR\n2 = ASN\n3 = Country\n4 = Organization\n5 = JA4",
+        "format": "int32",
+        "x-enum-varnames": [
+          "IP",
+          "CIDR",
+          "ASN",
+          "Country",
+          "Organization",
+          "JA4"
+        ]
       },
       "AccessListsDetailsResponse": {
         "type": "object",
@@ -5487,15 +6415,13 @@
         "additionalProperties": false
       },
       "ApiGuardianRateLimitType": {
-        "enum": [0, 1],
-        "type": "integer",
-        "format": "int32"
+        "enum": ["Global", "IP"],
+        "type": "string"
       },
       "AuthLocation": {
-        "enum": [0, 1, 2],
-        "type": "integer",
-        "description": "Where an authentication credential is transmitted in the HTTP request.",
-        "format": "int32"
+        "enum": ["Header", "Query", "Cookie"],
+        "type": "string",
+        "description": "Where an authentication credential is transmitted in the HTTP request."
       },
       "AuthSchemeDetails": {
         "type": "object",
@@ -5526,10 +6452,119 @@
         "description": "Describes a single authentication scheme required by an endpoint,\nas extracted from the OpenAPI specification's securitySchemes."
       },
       "AuthSchemeType": {
+        "enum": ["ApiKey", "Http", "OAuth2", "OpenIdConnect"],
+        "type": "string",
+        "description": "The type of security scheme as defined in the OpenAPI specification."
+      },
+      "BotCategorizationAction": {
         "enum": [0, 1, 2, 3],
         "type": "integer",
-        "description": "The type of security scheme as defined in the OpenAPI specification.",
-        "format": "int32"
+        "description": "0 = None\n1 = Block\n2 = Allow\n3 = Ignore",
+        "format": "int32",
+        "x-enum-varnames": ["None", "Block", "Allow", "Ignore"]
+      },
+      "BotCategorizationDetails": {
+        "required": [
+          "action",
+          "botId",
+          "category",
+          "isVerifiable",
+          "userAgentMatch"
+        ],
+        "type": "object",
+        "properties": {
+          "botId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "userAgentMatch": {
+            "type": "string",
+            "nullable": true
+          },
+          "category": {
+            "$ref": "#/components/schemas/BotCategory"
+          },
+          "action": {
+            "$ref": "#/components/schemas/BotCategorizationAction"
+          },
+          "isVerifiable": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "BotCategorizationGroup": {
+        "required": ["bots", "category", "categoryAction"],
+        "type": "object",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/BotCategory"
+          },
+          "categoryAction": {
+            "$ref": "#/components/schemas/BotCategoryAction"
+          },
+          "bots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BotCategorizationDetails"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BotCategorizationListResponse": {
+        "type": "object",
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BotCategorizationGroup"
+            },
+            "nullable": true
+          },
+          "error": {
+            "$ref": "#/components/schemas/GenericRequestResponse"
+          }
+        },
+        "additionalProperties": false
+      },
+      "BotCategory": {
+        "enum": [0, 1, 2, 3, 4, 5, 6, 7],
+        "type": "integer",
+        "description": "0 = None\n1 = SEO\n2 = AIScraper\n3 = AITool\n4 = Tool\n5 = Ads\n6 = Preview\n7 = Social\n255 = System",
+        "format": "int32",
+        "x-enum-varnames": [
+          "None",
+          "SEO",
+          "AIScraper",
+          "AITool",
+          "Tool",
+          "Ads",
+          "Preview",
+          "Social",
+          "System"
+        ]
+      },
+      "BotCategoryAction": {
+        "enum": [0, 1, 2],
+        "type": "integer",
+        "description": "0 = None\n1 = Block\n2 = Allow",
+        "format": "int32",
+        "x-enum-varnames": ["None", "Block", "Allow"]
+      },
+      "BotCategoryDetails": {
+        "required": ["action", "category"],
+        "type": "object",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/BotCategory"
+          },
+          "action": {
+            "$ref": "#/components/schemas/BotCategoryAction"
+          }
+        },
+        "additionalProperties": false
       },
       "BotDetectionConfigurationResponse": {
         "type": "object",
@@ -5583,17 +6618,23 @@
       "BotDetectionExecutionMode": {
         "enum": [0, 1],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = LogOnly\n1 = Challenge",
+        "format": "int32",
+        "x-enum-varnames": ["LogOnly", "Challenge"]
       },
       "BotDetectionSensitivity": {
         "enum": [0, 1, 2, 3],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = Off\n1 = Low\n2 = Medium\n3 = High",
+        "format": "int32",
+        "x-enum-varnames": ["Off", "Low", "Medium", "High"]
       },
       "BrowserFingerprintAggression": {
         "enum": [0, 1, 2, 3, 4],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = Unknown\n1 = Low\n2 = Medium\n3 = High\n4 = Custom",
+        "format": "int32",
+        "x-enum-varnames": ["Unknown", "Low", "Medium", "High", "Custom"]
       },
       "BrowserFingerprintConfiguration": {
         "type": "object",
@@ -5767,6 +6808,14 @@
             "type": "string",
             "nullable": true
           },
+          "isNegated": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "isRegexVariable": {
+            "type": "boolean",
+            "nullable": true
+          },
           "chainedRuleConditions": {
             "type": "array",
             "items": {
@@ -5808,6 +6857,22 @@
           "pullZoneId": {
             "type": "integer",
             "format": "int64"
+          },
+          "accessLists": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AccessListAction"
+            },
+            "nullable": true
+          },
+          "botDetectionExecutionMode": {
+            "$ref": "#/components/schemas/BotDetectionExecutionMode"
+          },
+          "csamScanningMode": {
+            "$ref": "#/components/schemas/UploadScanningScannerMode"
+          },
+          "antivirusScanningMode": {
+            "$ref": "#/components/schemas/UploadScanningScannerMode"
           }
         },
         "additionalProperties": false,
@@ -5825,6 +6890,20 @@
         },
         "additionalProperties": false,
         "description": "Response object for creating a new Shield Zone."
+      },
+      "CreateUnderAttackShieldZoneRequest": {
+        "required": ["planType", "pullZoneId"],
+        "type": "object",
+        "properties": {
+          "pullZoneId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "planType": {
+            "$ref": "#/components/schemas/ShieldPlanType"
+          }
+        },
+        "additionalProperties": false
       },
       "CreateWafRateLimitRequest": {
         "type": "object",
@@ -5956,6 +7035,14 @@
           },
           "value": {
             "type": "string",
+            "nullable": true
+          },
+          "isNegated": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "isRegexVariable": {
+            "type": "boolean",
             "nullable": true
           },
           "requestCount": {
@@ -6103,12 +7190,239 @@
       "DDoSExecutionMode": {
         "enum": [0, 1],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = Log\n1 = Block",
+        "format": "int32",
+        "x-enum-varnames": ["Log", "Block"]
       },
       "DDoSShieldSensitivity": {
         "enum": [0, 1, 2, 3, 4],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = Off\n1 = Low\n2 = Medium\n3 = High\n4 = Challenge",
+        "format": "int32",
+        "x-enum-varnames": ["Off", "Low", "Medium", "High", "Challenge"]
+      },
+      "EventGroup": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The group key: each requested groupBy dimension mapped to its value.",
+            "nullable": true
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of events in the group.",
+            "format": "int64"
+          },
+          "firstSeen": {
+            "type": "integer",
+            "description": "Earliest event time in the group (Unix time in milliseconds, UTC).",
+            "format": "int64"
+          },
+          "lastSeen": {
+            "type": "integer",
+            "description": "Most recent event time in the group (Unix time in milliseconds, UTC).",
+            "format": "int64"
+          },
+          "context": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Context aggregates for the group: country, asn, per-action counts (blocked/challenged/logged),\nand features/ruleIds touched. Counts are numbers; features/ruleIds are comma-joined strings.",
+            "nullable": true
+          },
+          "sparkline": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Per-group event counts bucketed across the requested window (mini time histogram), present only\nwhen the request set `buckets`. Bucket i covers [from + i*width, from + (i+1)*width).",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "An aggregated group of events (returned when the search request specifies groupBy)."
+      },
+      "EventLogsExportRequest": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "integer",
+            "description": "Window start as Unix time in milliseconds (UTC). Required.",
+            "format": "int64"
+          },
+          "to": {
+            "type": "integer",
+            "description": "Window end as Unix time in milliseconds (UTC). Required; must be after BunnyNet.Shield.Api.Entities.Waf.WafLogging.EventLogsExportRequest.from and within the last 72 hours.",
+            "format": "int64"
+          },
+          "query": {
+            "type": "string",
+            "description": "Optional free-text search across IP, ruleId, URL, User-Agent and rule name.",
+            "nullable": true
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventLogsFilter"
+            },
+            "description": "Optional filters, combined with AND. Repeated values within one filter combine with OR.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request body for exporting a Shield Zone's full filtered Event Logs set as CSV."
+      },
+      "EventLogsFilter": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "Dimension to filter on: feature, ruleId, ip, ja4, ua, url, asn, country or action.",
+            "nullable": true
+          },
+          "op": {
+            "type": "string",
+            "description": "Operator: eq, in, contains, cidr (ip only, IPv4/IPv6) or wildcard ('*' matches any run).",
+            "nullable": true
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Value(s) for the filter; multiple values are OR-combined.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A single Event Logs filter clause."
+      },
+      "EventLogsSearchRequest": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "integer",
+            "description": "Window start as Unix time in milliseconds (UTC). Required.",
+            "format": "int64"
+          },
+          "to": {
+            "type": "integer",
+            "description": "Window end as Unix time in milliseconds (UTC). Required; must be after BunnyNet.Shield.Api.Entities.Waf.WafLogging.EventLogsSearchRequest.from and within the last 72 hours.",
+            "format": "int64"
+          },
+          "query": {
+            "type": "string",
+            "description": "Optional free-text search across IP, ruleId, URL, User-Agent and rule name.",
+            "nullable": true
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventLogsFilter"
+            },
+            "description": "Optional filters, combined with AND. Repeated values within one filter combine with OR.",
+            "nullable": true
+          },
+          "groupBy": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional ordered dimensions to group by, e.g. [\"ip\",\"ja4\"]. Omit for flat rows.\nAllowed: feature, ruleId, ip, ja4, ua, url, asn, country, action.",
+            "nullable": true
+          },
+          "buckets": {
+            "type": "integer",
+            "description": "When grouping, the number of time buckets for each group's sparkline histogram over the\nwindow. 0 (default) omits the sparkline; clamped to 500.",
+            "format": "int32"
+          },
+          "page": {
+            "type": "integer",
+            "description": "Zero-based page index.",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "Page size; clamped to 1–500 (defaults to 50 when unset).",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request body for searching a Shield Zone's Event Logs within a time window."
+      },
+      "EventLogsSearchResponse": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventRow"
+            },
+            "description": "Flat event rows (populated when the request had no groupBy).",
+            "nullable": true
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventGroup"
+            },
+            "description": "Aggregated groups (populated when the request had a groupBy).",
+            "nullable": true
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total flat rows, or total distinct groups when grouped.",
+            "format": "int64"
+          },
+          "totalPages": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32"
+          },
+          "page": {
+            "type": "integer",
+            "description": "Zero-based index of the returned page.",
+            "format": "int32"
+          },
+          "errorResponse": {
+            "$ref": "#/components/schemas/GenericRequestResponse"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Result of an Event Logs search. Exactly one of BunnyNet.Shield.Api.Entities.Waf.WafLogging.EventLogsSearchResponse.rows or BunnyNet.Shield.Api.Entities.Waf.WafLogging.EventLogsSearchResponse.groups is populated."
+      },
+      "EventRow": {
+        "type": "object",
+        "properties": {
+          "logId": {
+            "type": "string",
+            "description": "Unique event identifier.",
+            "nullable": true
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "Event time as Unix time in milliseconds (UTC).",
+            "format": "int64"
+          },
+          "log": {
+            "description": "The full request context for the event (JSON object).",
+            "nullable": true
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Resolved dimension values for the event (e.g. ip, ruleId, url, ja4).",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A single event returned in a flat (ungrouped) search."
       },
       "GenericRequestResponse": {
         "type": "object",
@@ -6210,6 +7524,18 @@
           },
           "data": {
             "$ref": "#/components/schemas/ShieldZoneBotDetectionMetrics"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GetShieldZoneDefaultsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ShieldZoneDefaults"
+          },
+          "error": {
+            "$ref": "#/components/schemas/GenericRequestResponse"
           }
         },
         "additionalProperties": false
@@ -6391,7 +7717,77 @@
           506, 507, 508, 510, 511
         ],
         "type": "integer",
-        "format": "int32"
+        "description": "100 = Continue\n101 = SwitchingProtocols\n102 = Processing\n103 = EarlyHints\n200 = OK\n201 = Created\n202 = Accepted\n203 = NonAuthoritativeInformation\n204 = NoContent\n205 = ResetContent\n206 = PartialContent\n207 = MultiStatus\n208 = AlreadyReported\n226 = IMUsed\n300 = MultipleChoices\n300 = Ambiguous\n301 = MovedPermanently\n301 = Moved\n302 = Found\n302 = Redirect\n303 = SeeOther\n303 = RedirectMethod\n304 = NotModified\n305 = UseProxy\n306 = Unused\n307 = TemporaryRedirect\n307 = RedirectKeepVerb\n308 = PermanentRedirect\n400 = BadRequest\n401 = Unauthorized\n402 = PaymentRequired\n403 = Forbidden\n404 = NotFound\n405 = MethodNotAllowed\n406 = NotAcceptable\n407 = ProxyAuthenticationRequired\n408 = RequestTimeout\n409 = Conflict\n410 = Gone\n411 = LengthRequired\n412 = PreconditionFailed\n413 = RequestEntityTooLarge\n414 = RequestUriTooLong\n415 = UnsupportedMediaType\n416 = RequestedRangeNotSatisfiable\n417 = ExpectationFailed\n421 = MisdirectedRequest\n422 = UnprocessableEntity\n422 = UnprocessableContent\n423 = Locked\n424 = FailedDependency\n426 = UpgradeRequired\n428 = PreconditionRequired\n429 = TooManyRequests\n431 = RequestHeaderFieldsTooLarge\n451 = UnavailableForLegalReasons\n500 = InternalServerError\n501 = NotImplemented\n502 = BadGateway\n503 = ServiceUnavailable\n504 = GatewayTimeout\n505 = HttpVersionNotSupported\n506 = VariantAlsoNegotiates\n507 = InsufficientStorage\n508 = LoopDetected\n510 = NotExtended\n511 = NetworkAuthenticationRequired",
+        "format": "int32",
+        "x-enum-varnames": [
+          "Continue",
+          "SwitchingProtocols",
+          "Processing",
+          "EarlyHints",
+          "OK",
+          "Created",
+          "Accepted",
+          "NonAuthoritativeInformation",
+          "NoContent",
+          "ResetContent",
+          "PartialContent",
+          "MultiStatus",
+          "AlreadyReported",
+          "IMUsed",
+          "MultipleChoices",
+          "Ambiguous",
+          "MovedPermanently",
+          "Moved",
+          "Found",
+          "Redirect",
+          "SeeOther",
+          "RedirectMethod",
+          "NotModified",
+          "UseProxy",
+          "Unused",
+          "TemporaryRedirect",
+          "RedirectKeepVerb",
+          "PermanentRedirect",
+          "BadRequest",
+          "Unauthorized",
+          "PaymentRequired",
+          "Forbidden",
+          "NotFound",
+          "MethodNotAllowed",
+          "NotAcceptable",
+          "ProxyAuthenticationRequired",
+          "RequestTimeout",
+          "Conflict",
+          "Gone",
+          "LengthRequired",
+          "PreconditionFailed",
+          "RequestEntityTooLarge",
+          "RequestUriTooLong",
+          "UnsupportedMediaType",
+          "RequestedRangeNotSatisfiable",
+          "ExpectationFailed",
+          "MisdirectedRequest",
+          "UnprocessableEntity",
+          "UnprocessableContent",
+          "Locked",
+          "FailedDependency",
+          "UpgradeRequired",
+          "PreconditionRequired",
+          "TooManyRequests",
+          "RequestHeaderFieldsTooLarge",
+          "UnavailableForLegalReasons",
+          "InternalServerError",
+          "NotImplemented",
+          "BadGateway",
+          "ServiceUnavailable",
+          "GatewayTimeout",
+          "HttpVersionNotSupported",
+          "VariantAlsoNegotiates",
+          "InsufficientStorage",
+          "LoopDetected",
+          "NotExtended",
+          "NetworkAuthenticationRequired"
+        ]
       },
       "IOutputFormatter": {
         "type": "object",
@@ -6490,7 +7886,42 @@
       "MetricsOverviewResolution": {
         "enum": [0, 1, 2, 3, 4, 5, 6],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = Auto\n1 = TwoMinutes\n2 = TenMinutes\n3 = Hourly\n4 = Daily\n5 = Weekly\n6 = Monthly",
+        "format": "int32",
+        "x-enum-varnames": [
+          "Auto",
+          "TwoMinutes",
+          "TenMinutes",
+          "Hourly",
+          "Daily",
+          "Weekly",
+          "Monthly"
+        ]
+      },
+      "OverageSegment": {
+        "type": "object",
+        "properties": {
+          "periodStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "planType": {
+            "$ref": "#/components/schemas/ShieldPlanType"
+          },
+          "overageAllowance": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "overage": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
       },
       "OverviewMetric": {
         "type": "object",
@@ -6625,7 +8056,16 @@
       "RateLimitTimeframe": {
         "enum": [1, 10, 60, 300, 900, 3600],
         "type": "integer",
-        "format": "int32"
+        "description": "1 = PerSecond\n10 = PerTenSeconds\n60 = PerOneMinute\n300 = PerFiveMinutes\n900 = PerFifteenMinutes\n3600 = PerOneHour",
+        "format": "int32",
+        "x-enum-varnames": [
+          "PerSecond",
+          "PerTenSeconds",
+          "PerOneMinute",
+          "PerFiveMinutes",
+          "PerFifteenMinutes",
+          "PerOneHour"
+        ]
       },
       "Ratelimit": {
         "type": "object",
@@ -6668,7 +8108,9 @@
       "RatelimitRuleActionType": {
         "enum": [1, 2, 3],
         "type": "integer",
-        "format": "int32"
+        "description": "1 = RateLimit\n2 = Log\n3 = Challenge",
+        "format": "int32",
+        "x-enum-varnames": ["RateLimit", "Log", "Challenge"]
       },
       "RequestIntegrityConfiguration": {
         "type": "object",
@@ -6682,7 +8124,9 @@
       "ReviewActionType": {
         "enum": [0, 1, 2],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = Ignore\n1 = LogOnly\n2 = DisableRule",
+        "format": "int32",
+        "x-enum-varnames": ["Ignore", "LogOnly", "DisableRule"]
       },
       "ShieldOverview": {
         "type": "object",
@@ -6771,7 +8215,9 @@
       "ShieldPlanType": {
         "enum": [0, 1, 2, 3],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = Basic\n1 = Advanced\n2 = Business\n3 = Enterprise",
+        "format": "int32",
+        "x-enum-varnames": ["Basic", "Advanced", "Business", "Enterprise"]
       },
       "ShieldZoneBotDetectionMetrics": {
         "type": "object",
@@ -6790,6 +8236,38 @@
           "totalChallengedRequests": {
             "type": "integer",
             "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShieldZoneDefaults": {
+        "required": [
+          "accessLists",
+          "antivirusScanningMode",
+          "botDetectionExecutionMode",
+          "csamScanningMode",
+          "shieldZone"
+        ],
+        "type": "object",
+        "properties": {
+          "shieldZone": {
+            "$ref": "#/components/schemas/ShieldZoneRequest"
+          },
+          "botDetectionExecutionMode": {
+            "$ref": "#/components/schemas/BotDetectionExecutionMode"
+          },
+          "csamScanningMode": {
+            "$ref": "#/components/schemas/UploadScanningScannerMode"
+          },
+          "antivirusScanningMode": {
+            "$ref": "#/components/schemas/UploadScanningScannerMode"
+          },
+          "accessLists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuggestedAccessList"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -6877,6 +8355,42 @@
           },
           "uploadScanning": {
             "$ref": "#/components/schemas/UploadScanning"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShieldZoneMonthlyOveragesResult": {
+        "type": "object",
+        "properties": {
+          "shieldZoneId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "year": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "month": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalOverage": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalCleanRequests": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverageSegment"
+            },
+            "nullable": true
+          },
+          "error": {
+            "$ref": "#/components/schemas/GenericRequestResponse"
           }
         },
         "additionalProperties": false
@@ -6985,6 +8499,14 @@
             },
             "nullable": true
           },
+          "wafCustomRuleOrder": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "nullable": true
+          },
           "wafRequestHeaderLoggingEnabled": {
             "type": "boolean",
             "nullable": true
@@ -7025,9 +8547,6 @@
           },
           "dDoSShieldSensitivity": {
             "$ref": "#/components/schemas/DDoSShieldSensitivity"
-          },
-          "dDoSExecutionMode": {
-            "$ref": "#/components/schemas/DDoSExecutionMode"
           },
           "dDoSChallengeWindow": {
             "type": "integer",
@@ -7082,6 +8601,14 @@
             "type": "array",
             "items": {
               "type": "string"
+            },
+            "nullable": true
+          },
+          "wafCustomRuleOrder": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
             },
             "nullable": true
           },
@@ -7175,6 +8702,31 @@
         },
         "additionalProperties": false
       },
+      "SuggestedAccessList": {
+        "required": ["action", "listId", "name", "requiredPlan"],
+        "type": "object",
+        "properties": {
+          "listId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "requiredPlan": {
+            "$ref": "#/components/schemas/ShieldPlanType"
+          },
+          "action": {
+            "$ref": "#/components/schemas/AccessListAction"
+          }
+        },
+        "additionalProperties": false
+      },
       "TriggeredRuleItem": {
         "type": "object",
         "properties": {
@@ -7246,7 +8798,9 @@
       "UnmatchedPathAction": {
         "enum": [0, 1, 2],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = Block\n1 = Log\n2 = Ignore",
+        "format": "int32",
+        "x-enum-varnames": ["Block", "Log", "Ignore"]
       },
       "UpdateAccessListConfigurationRequest": {
         "type": "object",
@@ -7408,6 +8962,51 @@
         },
         "additionalProperties": false,
         "description": "Response for the PATCH /endpoint/{endpointId} endpoint."
+      },
+      "UpdateBotCategorizationConfigurationRequest": {
+        "required": ["action"],
+        "type": "object",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/BotCategorizationAction"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateBotCategorizationConfigurationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/BotCategorizationDetails"
+          },
+          "error": {
+            "$ref": "#/components/schemas/GenericRequestResponse"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateBotCategoryConfigurationRequest": {
+        "required": ["action"],
+        "type": "object",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/BotCategoryAction"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request body for setting a category-level action. Uses BunnyNet.Shield.Database.Enums.BotCategoryAction rather\nthan BunnyNet.Shield.Database.Enums.BotCategorizationAction so the contract can only express actions valid for a\ncategory (no Ignore)."
+      },
+      "UpdateBotCategoryConfigurationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/BotCategoryDetails"
+          },
+          "error": {
+            "$ref": "#/components/schemas/GenericRequestResponse"
+          }
+        },
+        "additionalProperties": false
       },
       "UpdateBotDetectionRequest": {
         "type": "object",
@@ -7634,7 +9233,9 @@
       "UploadScanningScannerMode": {
         "enum": [0, 1, 2],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = Disabled\n1 = Log\n2 = Block",
+        "format": "int32",
+        "x-enum-varnames": ["Disabled", "Log", "Block"]
       },
       "UpsertOpenApiSpecificationRequest": {
         "type": "object",
@@ -7669,12 +9270,16 @@
       "WAFExecutionMode": {
         "enum": [0, 1],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = Log\n1 = Block",
+        "format": "int32",
+        "x-enum-varnames": ["Log", "Block"]
       },
       "WAFPayloadLimitAction": {
         "enum": [0, 1, 2],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = Block\n1 = Log\n2 = Ignore",
+        "format": "int32",
+        "x-enum-varnames": ["Block", "Log", "Ignore"]
       },
       "Waf": {
         "type": "object",
@@ -7795,6 +9400,14 @@
           "value": {
             "type": "string",
             "nullable": true
+          },
+          "isNegated": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "isRegexVariable": {
+            "type": "boolean",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -7843,6 +9456,12 @@
           "value": {
             "type": "integer",
             "format": "int32"
+          },
+          "supportedValues": {
+            "$ref": "#/components/schemas/WafSupportedValues"
+          },
+          "recommendedOperator": {
+            "$ref": "#/components/schemas/WafRecommendedOperator"
           }
         },
         "additionalProperties": false
@@ -7900,17 +9519,62 @@
       "WafRateLimitTimeframeType": {
         "enum": [1, 10, 60, 300, 900, 3600],
         "type": "integer",
-        "format": "int32"
+        "description": "1 = PerSecond\n10 = PerTenSeconds\n60 = PerOneMinute\n300 = PerFiveMinutes\n900 = PerFifteenMinutes\n3600 = PerOneHour",
+        "format": "int32",
+        "x-enum-varnames": [
+          "PerSecond",
+          "PerTenSeconds",
+          "PerOneMinute",
+          "PerFiveMinutes",
+          "PerFifteenMinutes",
+          "PerOneHour"
+        ]
       },
       "WafRatelimitBlockType": {
         "enum": [30, 60, 300, 900, 1800, 3600],
         "type": "integer",
-        "format": "int32"
+        "description": "30 = ForThirtySeconds\n60 = ForOneMinute\n300 = ForFiveMinutes\n900 = ForFifteenMinutes\n1800 = ForThirtyMinutes\n3600 = ForOneHour",
+        "format": "int32",
+        "x-enum-varnames": [
+          "ForThirtySeconds",
+          "ForOneMinute",
+          "ForFiveMinutes",
+          "ForFifteenMinutes",
+          "ForThirtyMinutes",
+          "ForOneHour"
+        ]
       },
       "WafRatelimitCounterKeyType": {
         "enum": [0, 1, 2, 3, 4, 5, 6, 7],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = IP\n1 = Host\n2 = Country\n3 = City\n4 = ASN\n5 = Organization\n6 = JA4\n7 = IP_JA4",
+        "format": "int32",
+        "x-enum-varnames": [
+          "IP",
+          "Host",
+          "Country",
+          "City",
+          "ASN",
+          "Organization",
+          "JA4",
+          "IP_JA4"
+        ]
+      },
+      "WafRecommendedOperator": {
+        "type": "object",
+        "properties": {
+          "operator": {
+            "$ref": "#/components/schemas/WafRuleOperatorType"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
       },
       "WafRule": {
         "type": "object",
@@ -7937,7 +9601,9 @@
       "WafRuleActionType": {
         "enum": [1, 2, 3, 4, 5],
         "type": "integer",
-        "format": "int32"
+        "description": "1 = Block\n2 = Log\n3 = Challenge\n4 = Allow\n5 = Bypass",
+        "format": "int32",
+        "x-enum-varnames": ["Block", "Log", "Challenge", "Allow", "Bypass"]
       },
       "WafRuleGroupModel": {
         "type": "object",
@@ -8047,12 +9713,32 @@
       "WafRuleOperatorType": {
         "enum": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 14, 15, 17, 18],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = BEGINSWITH\n1 = ENDSWITH\n2 = CONTAINS\n3 = CONTAINSWORD\n4 = STRMATCH\n5 = EQ\n6 = GE\n7 = GT\n8 = LE\n9 = LT\n12 = WITHIN\n14 = RX\n15 = STREQ\n17 = DETECTSQLI\n18 = DETECTXSS",
+        "format": "int32",
+        "x-enum-varnames": [
+          "BEGINSWITH",
+          "ENDSWITH",
+          "CONTAINS",
+          "CONTAINSWORD",
+          "STRMATCH",
+          "EQ",
+          "GE",
+          "GT",
+          "LE",
+          "LT",
+          "WITHIN",
+          "RX",
+          "STREQ",
+          "DETECTSQLI",
+          "DETECTXSS"
+        ]
       },
       "WafRuleSeverityType": {
         "enum": [0, 1, 2],
         "type": "integer",
-        "format": "int32"
+        "description": "0 = NOTICE\n1 = WARNING\n2 = CRITICAL",
+        "format": "int32",
+        "x-enum-varnames": ["NOTICE", "WARNING", "CRITICAL"]
       },
       "WafRuleTransformationType": {
         "enum": [
@@ -8060,7 +9746,31 @@
           21
         ],
         "type": "integer",
-        "format": "int32"
+        "description": "1 = CMDLINE\n2 = COMPRESSWHITESPACE\n3 = CSSDECODE\n4 = HEXENCODE\n5 = HTMLENTITYDECODE\n6 = JSDECODE\n7 = LENGTH\n8 = LOWERCASE\n9 = MD5\n10 = NORMALIZEPATH\n11 = NORMALISEPATH\n12 = NORMALIZEPATHWIN\n13 = NORMALISEPATHWIN\n14 = REMOVECOMMENTS\n15 = REMOVENULLS\n16 = REMOVEWHITESPACE\n17 = REPLACECOMMENTS\n18 = SHA1\n19 = URLDECODE\n20 = URLDECODEUNI\n21 = UTF8TOUNICODE",
+        "format": "int32",
+        "x-enum-varnames": [
+          "CMDLINE",
+          "COMPRESSWHITESPACE",
+          "CSSDECODE",
+          "HEXENCODE",
+          "HTMLENTITYDECODE",
+          "JSDECODE",
+          "LENGTH",
+          "LOWERCASE",
+          "MD5",
+          "NORMALIZEPATH",
+          "NORMALISEPATH",
+          "NORMALIZEPATHWIN",
+          "NORMALISEPATHWIN",
+          "REMOVECOMMENTS",
+          "REMOVENULLS",
+          "REMOVEWHITESPACE",
+          "REPLACECOMMENTS",
+          "SHA1",
+          "URLDECODE",
+          "URLDECODEUNI",
+          "UTF8TOUNICODE"
+        ]
       },
       "WafRulesByPlanModel": {
         "type": "object",
@@ -8079,6 +9789,22 @@
               "$ref": "#/components/schemas/WafRuleMainGroupModel"
             },
             "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "WafSupportedValues": {
+        "type": "object",
+        "properties": {
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "editable": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false

@@ -8,6 +8,7 @@ import {
 /** Build a ContainerEndpoint with sane defaults for the fields we don't test. */
 function endpoint(over: Partial<ContainerEndpoint>): ContainerEndpoint {
   return {
+    id: "ep_1",
     displayName: "cdn",
     publicHost: "",
     type: "cdn",

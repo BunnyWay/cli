@@ -8,7 +8,7 @@ Also powers `bunny db shell` in the [bunny.net CLI](https://www.npmjs.com/packag
 
 ```bash
 npm install -g @bunny.net/database-shell
-bsql libsql://<your-database>.lite.bunnydb.net --token ey...
+bsql libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net --token ey...
 ```
 
 ## CLI Usage
@@ -54,7 +54,7 @@ import { createClient } from "@libsql/client";
 import { startShell } from "@bunny.net/database-shell";
 
 const client = createClient({
-  url: "libsql://...",
+  url: "libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net",
   authToken: "...",
 });
 
@@ -68,7 +68,7 @@ import { createClient } from "@libsql/client";
 import { executeQuery } from "@bunny.net/database-shell";
 
 const client = createClient({
-  url: "libsql://...",
+  url: "libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net",
   authToken: "...",
 });
 
@@ -82,7 +82,7 @@ import { createClient } from "@libsql/client";
 import { executeFile } from "@bunny.net/database-shell";
 
 const client = createClient({
-  url: "libsql://...",
+  url: "libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net",
   authToken: "...",
 });
 

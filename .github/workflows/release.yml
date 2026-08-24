@@ -330,7 +330,12 @@ jobs:
         run: |
           for pkg in cli-linux-x64 cli-linux-arm64 cli-darwin-x64 cli-darwin-arm64 cli-windows-x64; do
             cd packages/$pkg
-            npm publish --access public
+            VERSION=$(node -p "require('./package.json').version")
+            if [ -n "$(npm view "@bunny.net/$pkg@$VERSION" version 2>/dev/null)" ]; then
+              echo "Skipping @bunny.net/$pkg@$VERSION (already published)"
+            else
+              npm publish --access public
+            fi
             cd ../..
           done
         env:
@@ -339,7 +344,12 @@ jobs:
       - name: Publish @bunny.net/cli
         run: |
           cd packages/cli
-          npm publish --access public
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -n "$(npm view "@bunny.net/cli@$VERSION" version 2>/dev/null)" ]; then
+            echo "Skipping @bunny.net/cli@$VERSION (already published)"
+          else
+            npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -437,9 +447,15 @@ jobs:
 
       - name: Publish platform packages
         run: |
+          # Re-runs after a partial release must not die on packages that already went up.
           for pkg in database-shell-linux-x64 database-shell-linux-arm64 database-shell-darwin-x64 database-shell-darwin-arm64 database-shell-windows-x64; do
             cd packages/$pkg
-            npm publish --access public
+            VERSION=$(node -p "require('./package.json').version")
+            if [ -n "$(npm view "@bunny.net/$pkg@$VERSION" version 2>/dev/null)" ]; then
+              echo "Skipping @bunny.net/$pkg@$VERSION (already published)"
+            else
+              npm publish --access public
+            fi
             cd ../..
           done
         env:
@@ -448,7 +464,12 @@ jobs:
       - name: Publish @bunny.net/database-shell
         run: |
           cd packages/database-shell
-          npm publish --access public
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -n "$(npm view "@bunny.net/database-shell@$VERSION" version 2>/dev/null)" ]; then
+            echo "Skipping @bunny.net/database-shell@$VERSION (already published)"
+          else
+            npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -475,7 +496,12 @@ jobs:
       - name: Publish @bunny.net/openapi-client
         run: |
           cd packages/openapi-client
-          npm publish --access public
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -n "$(npm view "@bunny.net/openapi-client@$VERSION" version 2>/dev/null)" ]; then
+            echo "Skipping @bunny.net/openapi-client@$VERSION (already published)"
+          else
+            npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -502,7 +528,12 @@ jobs:
       - name: Publish @bunny.net/sandbox
         run: |
           cd packages/sandbox
-          bun publish --access public
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -n "$(npm view "@bunny.net/sandbox@$VERSION" version 2>/dev/null)" ]; then
+            echo "Skipping @bunny.net/sandbox@$VERSION (already published)"
+          else
+            bun publish --access public
+          fi
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -522,6 +553,11 @@ jobs:
       - name: Publish @bunny.net/scriptable-dns-types
         run: |
           cd packages/scriptable-dns-types
-          npm publish --access public
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -n "$(npm view "@bunny.net/scriptable-dns-types@$VERSION" version 2>/dev/null)" ]; then
+            echo "Skipping @bunny.net/scriptable-dns-types@$VERSION (already published)"
+          else
+            npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,9 +1,8 @@
-import prompts from "prompts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
 import type { OutputFormat } from "../../core/types.ts";
-import { confirm, isInteractive, spinner } from "../../core/ui.ts";
+import { confirm, isInteractive, prompts, spinner } from "../../core/ui.ts";
 import {
   type CoreClient,
   type DnsRecordModel,
@@ -26,7 +25,12 @@ function writeDnsManifest(id: number, domain: string | undefined): void {
 
 /** Offer to remember a zone picked from the prompt; a no-op if the user declines. */
 async function maybeLinkZone(zone: DnsZoneModel): Promise<void> {
-  if (!(await confirm(`Link this directory to ${zone.Domain}?`))) return;
+  if (
+    !(await confirm(`Link this directory to ${zone.Domain}?`, {
+      optional: true,
+    }))
+  )
+    return;
   writeDnsManifest(zone.Id as number, zone.Domain ?? undefined);
 }
 
@@ -45,6 +49,7 @@ export async function autoLinkDnsZone(zone: {
     existing.id &&
     !(await confirm(
       `This directory is linked to DNS zone ${existing.domain ?? existing.id}. Relink to ${zone.domain ?? zone.id}?`,
+      { optional: true },
     ))
   ) {
     return;

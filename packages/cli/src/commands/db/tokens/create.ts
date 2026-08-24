@@ -242,11 +242,12 @@ export const dbTokensCreateCommand = defineCommand<{
     if (existingToken) {
       shouldWrite = await confirm(
         `${ENV_DATABASE_AUTH_TOKEN} already exists in ${existingToken.envPath} — overwrite?`,
-        { force },
+        { force, optional: true },
       );
     } else {
       shouldWrite = await confirm(`Save ${ENV_DATABASE_AUTH_TOKEN} to .env?`, {
         force,
+        optional: true,
       });
     }
 

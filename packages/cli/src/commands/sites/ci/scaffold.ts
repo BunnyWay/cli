@@ -1,10 +1,9 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
-import prompts from "prompts";
 import { UserError } from "../../../core/errors.ts";
 import { runGit } from "../../../core/git.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm } from "../../../core/ui.ts";
+import { confirm, prompts } from "../../../core/ui.ts";
 import {
   detectFramework,
   detectPackageManager,
@@ -197,7 +196,10 @@ export async function scaffoldSitesWorkflow(opts: {
       );
     }
     if (
-      !(await confirm(`Overwrite ${SITES_WORKFLOW_PATH}?`, { initial: false }))
+      !(await confirm(`Overwrite ${SITES_WORKFLOW_PATH}?`, {
+        initial: false,
+        optional: true,
+      }))
     ) {
       return null;
     }
@@ -263,7 +265,7 @@ export async function offerGitHubSecret(opts: {
   if (opts.interactive && gh && opts.apiKey) {
     const proceed = await confirm(
       "Add the BUNNY_API_KEY secret to this GitHub repo now (runs `gh secret set`)?",
-      { initial: true },
+      { initial: true, optional: true },
     );
     if (proceed) {
       // The key goes via stdin, never argv: process arguments are visible in `ps`.

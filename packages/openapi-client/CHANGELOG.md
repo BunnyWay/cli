@@ -1,5 +1,15 @@
 # @bunny.net/openapi-client
 
+## 0.3.0
+
+### Minor Changes
+
+- [#157](https://github.com/BunnyWay/cli/pull/157) [`cdb130a`](https://github.com/BunnyWay/cli/commit/cdb130ad869c96eee4bee8eef610e360f51b4958) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Standalone-library DX improvements: export `authMiddleware` so custom `openapi-fetch` clients can reuse the shared auth/error-normalization middleware; add per-API subpath entrypoints (`@bunny.net/openapi-client/core`, `/compute`, `/database`, `/magic-containers`, `/origin-errors`, `/shield`, `/storage`, `/stream`) that bundle each client factory with its generated spec types (the `generated/*` paths remain for backwards compatibility); and fill in npm metadata — license (MIT, with a bundled LICENSE file), description, repository, homepage, bugs, keywords, `sideEffects: false`, and an `engines` field (Node ≥ 18).
+
+### Patch Changes
+
+- [#156](https://github.com/BunnyWay/cli/pull/156) [`3dff411`](https://github.com/BunnyWay/cli/commit/3dff411468a9bf3602dfd66f0bdc0a9f2cbf851e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - refresh OpenAPI specs from the sources listed at https://bunny.net/docs/openapi
+
 ## 0.2.0
 
 ### Minor Changes

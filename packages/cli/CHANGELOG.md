@@ -1,5 +1,45 @@
 # @bunny.net/cli
 
+## 0.14.1
+
+### Patch Changes
+
+- [#174](https://github.com/BunnyWay/cli/pull/174) [`e2a7110`](https://github.com/BunnyWay/cli/commit/e2a7110e71d81e1e53243653ca994412f5751db2) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(skills): always write .agents/skills, refuse home installs
+
+- [#176](https://github.com/BunnyWay/cli/pull/176) [`040b6fd`](https://github.com/BunnyWay/cli/commit/040b6fd9e94ec50d08b7ac811d930321fc5d5804) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Refuse project agent skill installs into the filesystem root
+
+## 0.14.0
+
+### Minor Changes
+
+- [#160](https://github.com/BunnyWay/cli/pull/160) [`c95da7e`](https://github.com/BunnyWay/cli/commit/c95da7ecab6eb0814ae640bdc7771df88cde1872) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(skills): `bunny skills install` (aliases: `add`, `update`) installs the bunny agent skill so AI coding tools know how to use the CLI; a project install upserts a marked block into AGENTS.md and, when the project uses Claude Code, writes the full skill with references to `.claude/skills/bunny-cli/`, while `--global` writes it to `~/.agents/skills/bunny-cli/` (the cross-tool directory) and `~/.claude/skills/bunny-cli/` for every project; `bunny skills remove` (aliases: `rm`, `uninstall`) undoes either scope; the installed content is the shipped `skills/bunny-cli/` skill embedded at build time
+
+- [#170](https://github.com/BunnyWay/cli/pull/170) [`9338eb0`](https://github.com/BunnyWay/cli/commit/9338eb0cbfb705f194c00f882dfa0dec81061027) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(auth): `bunny login` detects when no browser is usable (SSH, CI, containers, no display) and offers an API key instead; `--output json` prints the result as one object
+
+- [#167](https://github.com/BunnyWay/cli/pull/167) [`2757151`](https://github.com/BunnyWay/cli/commit/2757151535b00d1e4d4d9bcff535420c3d94c17c) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sandbox): breaking - `bunny sandbox cp` moves to `bunny sandbox files cp`, next to `bunny sandbox files list`, so every file command lives in one namespace; the old path no longer copies anything and instead errors with the exact replacement command to run, and `defineCommand` gains `hidden` for stubs like it
+
+- [#161](https://github.com/BunnyWay/cli/pull/161) [`80115c0`](https://github.com/BunnyWay/cli/commit/80115c01f50b9c0e87b63b12e7f276471902cb81) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(skills): `bunny login` offers a one-time global agent-skill install after authenticating (interactive runs only, skipped when already installed), and install.sh now points at `bunny skills install --global`
+
+### Patch Changes
+
+- [#156](https://github.com/BunnyWay/cli/pull/156) [`3dff411`](https://github.com/BunnyWay/cli/commit/3dff411468a9bf3602dfd66f0bdc0a9f2cbf851e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - anycast endpoints now send the `iPv4` IP protocol version documented by the Magic Containers API
+
+- [#156](https://github.com/BunnyWay/cli/pull/156) [`3dff411`](https://github.com/BunnyWay/cli/commit/3dff411468a9bf3602dfd66f0bdc0a9f2cbf851e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - point documentation links at bunny.net/docs, including the Scriptable DNS link that had gone dead
+
+- [#149](https://github.com/BunnyWay/cli/pull/149) [`19aec86`](https://github.com/BunnyWay/cli/commit/19aec86d94bff28a96d7649318de52887caafd4a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(domains): verify a certificate actually landed on the exact hostname before forcing HTTPS or reporting success, and TLS-probe the domain afterwards so a mismatched certificate (e.g. shadowed by another zone's wildcard) warns instead of printing a broken "Live at" URL
+
+- [#152](https://github.com/BunnyWay/cli/pull/152) [`81f9e4d`](https://github.com/BunnyWay/cli/commit/81f9e4dc2ea5edbb82b410a0bda05834e3eca7ca) Thanks [@jedisct1](https://github.com/jedisct1)! - Prevent JSON output from being truncated when piped.
+
+- [#143](https://github.com/BunnyWay/cli/pull/143) [`8884779`](https://github.com/BunnyWay/cli/commit/88847797d2216b5cf23ae3e335a7ea2becb3fd95) Thanks [@jedisct1](https://github.com/jedisct1)! - fix(sandbox): let cp copy into an existing remote directory without a trailing slash. The SDK gains a public `sandbox.stat(path)` method, and `bunny sandbox cp` now checks the destination on both sides: an existing directory (or a trailing slash) keeps the source filename instead of failing with "Failed to write".
+
+- [#145](https://github.com/BunnyWay/cli/pull/145) [`654fb29`](https://github.com/BunnyWay/cli/commit/654fb2992a64e32686cbdd3d45d0e6d51a8846a9) Thanks [@jedisct1](https://github.com/jedisct1)! - chore(sandbox): install uv in the sandbox image and add /workplace/bin to the PATH
+
+- [#159](https://github.com/BunnyWay/cli/pull/159) [`36e145f`](https://github.com/BunnyWay/cli/commit/36e145f2f98358c0fd66e7e06046be156ca2b936) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sites): `sites deployments delete <id>` deletes a single deploy — its preview zone, files, and record — for CI cleanup of a closed PR's preview; the live deploy and the rollback target are refused, and deleting an already-gone ID is a no-op success
+
+- [#149](https://github.com/BunnyWay/cli/pull/149) [`19aec86`](https://github.com/BunnyWay/cli/commit/19aec86d94bff28a96d7649318de52887caafd4a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sites): every deploy gets its own preview pull zone (`sites-dpl-<id>-<suffix>.b-cdn.net`) with instant HTTPS and no custom domain or DNS setup; publishing is explicit via `--production` (the interactive first deploy offers it), custom domains become production-only, and prune/delete clean up preview zones
+
+- [#169](https://github.com/BunnyWay/cli/pull/169) [`ef246eb`](https://github.com/BunnyWay/cli/commit/ef246ebceeec313445667c6fdc936c2b0bdbd5a7) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - storage zones surface tier and S3 support: Tier/S3 columns on `list`, both reported by `show`, and `add` prompts for them (`--tier hdd|ssd`, `--s3`) then offers to link the directory, show HTTP API, FTP, or S3 connection details, and save them to `.env`; `zones credentials` gains the same `--connection http|ftp|s3` picker with a docs link per protocol, `--format sdk` for a ready-to-paste `@bunny.net/storage-sdk` snippet alongside the rclone, aws, s3cmd, and env configs, and its own `.env` follow-up
+
 ## 0.13.0
 
 ### Minor Changes

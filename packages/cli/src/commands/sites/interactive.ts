@@ -1,10 +1,9 @@
-import prompts from "prompts";
 import type { Argv } from "yargs";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { loadManifest, saveManifest } from "../../core/manifest.ts";
 import type { OutputFormat } from "../../core/types.ts";
-import { confirm, isInteractive, withSpinner } from "../../core/ui.ts";
+import { confirm, isInteractive, prompts, withSpinner } from "../../core/ui.ts";
 import {
   type CoreClient,
   fetchStorageZone,
@@ -222,7 +221,11 @@ export async function selectSite(
   return {
     site: context,
     offerLink: async () => {
-      if (await confirm(`Link this directory to ${context.state.name}?`)) {
+      if (
+        await confirm(`Link this directory to ${context.state.name}?`, {
+          optional: true,
+        })
+      ) {
         linkDirectory(context, args.output);
       }
     },

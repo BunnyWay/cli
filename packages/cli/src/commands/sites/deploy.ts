@@ -4,7 +4,6 @@ import {
   createComputeClient,
   createCoreClient,
 } from "@bunny.net/openapi-client";
-import prompts from "prompts";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -13,7 +12,7 @@ import { errorMessage, UserError } from "../../core/errors.ts";
 import { formatBytes } from "../../core/format.ts";
 import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
-import { confirm, isInteractive, withSpinner } from "../../core/ui.ts";
+import { confirm, isInteractive, prompts, withSpinner } from "../../core/ui.ts";
 import {
   ensurePreviewZone,
   ensureRouterCurrent,
@@ -236,7 +235,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         const prompt = configured
           ? `Run ${auto.label} (\`${auto.command}\`) before deploying?`
           : `Detected ${auto.label}. Run \`${auto.command}\` before deploying?`;
-        if (await confirm(prompt, { initial: true })) {
+        if (await confirm(prompt, { initial: true, optional: true })) {
           await runBuildCommand(auto.command, root, {});
         }
       }
@@ -281,7 +280,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     if (!publish && state.current === undefined && isInteractive(output)) {
       publish = await confirm(
         "This site has no production deploy yet. Publish this one to production?",
-        { initial: true },
+        { initial: true, optional: true },
       );
     }
 

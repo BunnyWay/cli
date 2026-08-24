@@ -1,6 +1,6 @@
 # Sandbox Commands
 
-All sandbox commands live under `bunny sandbox`. Each sandbox is a fully isolated Ubuntu container (Bunny Magic Containers) with Node.js, Bun, Python, the bunny CLI, and Claude Code pre-installed, alongside the tooling agents reach for: `git`, `gh`, `ripgrep`, `fd`, `jq`, `tmux`, `sqlite3`, `tree`, and `fzf`. A 10 GB persistent volume is mounted at `/workplace`, the default working directory; relative remote paths resolve against it.
+All sandbox commands live under `bunny sandbox`. Each sandbox is a fully isolated Ubuntu container (Bunny Magic Containers) with Node.js, Bun, Python (plus `uv`), the bunny CLI, and Claude Code pre-installed, alongside the tooling agents reach for: `git`, `gh`, `ripgrep`, `fd`, `jq`, `tmux`, `sqlite3`, `tree`, and `fzf`. A 10 GB persistent volume is mounted at `/workplace`, the default working directory; relative remote paths resolve against it.
 
 Sandbox credentials (app ID, SSH endpoint, agent token) are stored in the CLI's local config (same candidate paths as in SKILL.md), so commands reference sandboxes by name.
 
@@ -16,8 +16,8 @@ bunny sandbox url add my-sandbox 3000        # public HTTPS URL for port 3000
 bunny sandbox delete my-sandbox --force
 
 # Move files in and out
-bunny sandbox cp ./app.js my-sandbox:app.js  # relative paths resolve against /workplace
-bunny sandbox cp my-sandbox:out.log ./out.log
+bunny sandbox files cp ./app.js my-sandbox:app.js  # relative paths resolve against /workplace
+bunny sandbox files cp my-sandbox:out.log ./out.log
 
 # Interactive work
 bunny sandbox ssh my-sandbox
@@ -90,28 +90,26 @@ bunny sandbox ssh my-sandbox -e DEBUG=1 --env-file .env   # session-only variabl
 
 ---
 
-## `bunny sandbox cp`
-
-Copy a single file between the local machine and a sandbox over SFTP. Exactly one path must be `<sandbox>:<path>`; relative remote paths resolve against `/workplace`. Uploads preserve the local Unix mode. Directory and sandbox-to-sandbox copies are not supported.
-
-```bash
-bunny sandbox cp ./app.js my-sandbox:/workplace/app.js
-bunny sandbox cp ./app.js my-sandbox:app.js            # relative to /workplace
-bunny sandbox cp ./app.js my-sandbox:/workplace/src/   # trailing slash keeps the filename
-bunny sandbox cp my-sandbox:/workplace/out.log ./logs/   # ./logs must already exist
-```
-
----
-
 ## `bunny sandbox files`
 
-Inspect files over SFTP. A bare sandbox name targets `/workplace`; use `<sandbox>:<path>` for a specific directory.
+Manage files over SFTP. A bare sandbox name targets `/workplace`; use `<sandbox>:<path>` for a specific directory.
 
 ```bash
 bunny sandbox files list my-sandbox               # alias: ls
-bunny sandbox files ls my-sandbox:src
-bunny sandbox files ls my-sandbox --output json   # name, type, size, mode
+bunny sandbox files list my-sandbox:src
+bunny sandbox files list my-sandbox --output json   # name, type, size, mode
 ```
+
+`cp` copies a single file between the local machine and a sandbox. Exactly one path must be `<sandbox>:<path>`; relative remote paths resolve against `/workplace`. Uploads preserve the local Unix mode. Directory and sandbox-to-sandbox copies are not supported.
+
+```bash
+bunny sandbox files cp ./app.js my-sandbox:/workplace/app.js
+bunny sandbox files cp ./app.js my-sandbox:app.js            # relative to /workplace
+bunny sandbox files cp ./app.js my-sandbox:/workplace/src    # existing dir (or trailing slash) keeps the filename
+bunny sandbox files cp my-sandbox:/workplace/out.log ./logs/   # ./logs must already exist
+```
+
+The old `bunny sandbox cp` path errors and prints the `bunny sandbox files cp` command to run instead.
 
 ---
 

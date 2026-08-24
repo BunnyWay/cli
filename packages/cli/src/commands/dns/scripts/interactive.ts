@@ -1,8 +1,7 @@
-import prompts from "prompts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { loadManifest } from "../../../core/manifest.ts";
-import { spinner } from "../../../core/ui.ts";
+import { prompts, spinner } from "../../../core/ui.ts";
 import {
   type ComputeClient,
   createDnsScript,

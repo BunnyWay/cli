@@ -1,19 +1,8 @@
-import { createDbClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
-import { confirm, spinner } from "../../core/ui.ts";
-import { readEnvValue } from "../../utils/env-file.ts";
-import { generateToken, tokenExpiryFromNow } from "./api.ts";
-import {
-  ARG_DATABASE_ID,
-  ENV_DATABASE_AUTH_TOKEN,
-  ENV_DATABASE_URL,
-  TOKEN_TTL_MINUTES,
-} from "./constants.ts";
-import { resolveDbId } from "./resolve-db.ts";
+import { confirm } from "../../core/ui.ts";
+import { ARG_DATABASE_ID, TOKEN_TTL_MINUTES } from "./constants.ts";
+import { resolveCredentials } from "./credentials.ts";
 
 const COMMAND = `studio [${ARG_DATABASE_ID}]`;
 const DESCRIPTION = "Open a visual database explorer in your browser.";
@@ -25,66 +14,6 @@ const ARG_NO_OPEN = "no-open";
 const ARG_DEV = "dev";
 const ARG_FORCE = "force";
 const ARG_FORCE_ALIAS = "f";
-
-/**
- * Resolve database credentials — same pattern as shell.ts.
- */
-async function resolveCredentials(
-  urlArg: string | undefined,
-  tokenArg: string | undefined,
-  databaseIdArg: string | undefined,
-  profile: string,
-  apiKeyOverride?: string,
-  verbose = false,
-): Promise<{ url: string; token: string; databaseId: string | undefined }> {
-  let url = urlArg ?? readEnvValue(ENV_DATABASE_URL)?.value;
-  let token = tokenArg ?? readEnvValue(ENV_DATABASE_AUTH_TOKEN)?.value;
-
-  if (url && token) return { url, token, databaseId: databaseIdArg };
-
-  const config = resolveConfig(profile, apiKeyOverride, verbose);
-  const apiClient = createDbClient(clientOptions(config, verbose));
-
-  const { id: databaseId } = await resolveDbId(apiClient, databaseIdArg);
-
-  const spin = spinner("Connecting...");
-  spin.start();
-
-  const fetches: Promise<any>[] = [];
-
-  if (!url) {
-    fetches.push(
-      apiClient.GET("/v2/databases/{db_id}", {
-        params: { path: { db_id: databaseId } },
-      }),
-    );
-  } else {
-    fetches.push(Promise.resolve(null));
-  }
-
-  if (!token) {
-    spin.text = "Generating token...";
-    fetches.push(
-      generateToken(apiClient, databaseId, {
-        authorization: "full-access",
-        expiresAt: tokenExpiryFromNow(),
-      }),
-    );
-  }
-
-  const [dbResult, tokenResult] = await Promise.all(fetches);
-
-  spin.stop();
-
-  if (!url && dbResult) url = dbResult.data?.db?.url;
-  if (!token && tokenResult) token = tokenResult.token;
-
-  if (!url || !token) {
-    throw new UserError("Could not resolve database URL or generate token.");
-  }
-
-  return { url, token, databaseId };
-}
 
 export const dbStudioCommand = defineCommand<{
   [ARG_DATABASE_ID]?: string;
@@ -174,14 +103,14 @@ export const dbStudioCommand = defineCommand<{
     const { createClient } = await import("@libsql/client/web");
     const { startStudio } = await import("@bunny.net/database-studio");
 
-    const { url, token } = await resolveCredentials(
-      urlArg,
-      tokenArg,
-      databaseIdArg,
+    const { url, token } = await resolveCredentials({
+      url: urlArg,
+      token: tokenArg,
+      databaseId: databaseIdArg,
       profile,
       apiKey,
       verbose,
-    );
+    });
 
     const client = createClient({ url, authToken: token });
 

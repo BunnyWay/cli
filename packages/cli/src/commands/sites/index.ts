@@ -13,7 +13,7 @@ import { sitesSslCommand } from "./ssl.ts";
 import { sitesUnlinkCommand } from "./unlink.ts";
 import { sitesUpgradeRouterCommand } from "./upgrade-router.ts";
 
-export const sitesNamespace = defineNamespace("sites", "Manage sites.", [
+export const sitesNamespace = defineNamespace("sites", false, [
   sitesCreateCommand,
   sitesListCommand,
   sitesShowCommand,

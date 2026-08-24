@@ -1,6 +1,6 @@
 # DNS Commands
 
-`bunny dns` manages Bunny DNS: zones, the records inside them, and Scriptable DNS scripts. The namespace is hidden from top-level help while experimental, but the commands work. Use `bunny dns <command> --help` for full flag details.
+`bunny dns` manages Bunny DNS: zones, the records inside them, and Scriptable DNS scripts. Use `bunny dns <command> --help` for full flag details.
 
 Three command groups:
 

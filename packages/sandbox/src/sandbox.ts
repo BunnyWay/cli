@@ -267,7 +267,12 @@ export class Sandbox {
 
   /** Whether a file or directory exists at the path. */
   async exists(path: string): Promise<boolean> {
-    return (await this.transport.stat(resolvePath(path))) !== null;
+    return (await this.stat(path)) !== null;
+  }
+
+  /** Stat a file or directory, or null when it does not exist. */
+  async stat(path: string): Promise<SandboxFileEntry | null> {
+    return this.transport.stat(resolvePath(path));
   }
 
   async mkDir(path: string): Promise<void> {

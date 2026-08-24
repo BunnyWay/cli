@@ -2,7 +2,7 @@
  * Standalone dev server for the database-studio API.
  *
  * Usage:
- *   bun run dev:server --url libsql://... --token ...
+ *   bun run dev:server --url libsql://<ulid>-<name>.lite.bunnydb.net --token ...
  */
 import { parseArgs } from "node:util";
 import { createClient } from "@libsql/client";
