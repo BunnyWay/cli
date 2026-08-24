@@ -385,7 +385,7 @@ bunny-cli/
 │           │   │       ├── list.ts       # List files in a directory (alias: ls; directories first; [path] positional, --zone flag)
 │           │   │       ├── upload.ts     # Upload a local file (<file> positional, --zone, --to, --checksum streams a SHA256, --content-type)
 │           │   │       ├── download.ts   # Download a file to disk (<path> positional, --zone, --out)
-│           │   │       └── remove.ts     # Delete a file or directory (alias: rm; <path> positional, --zone, trailing slash = recursive)
+│           │   │       └── remove.ts     # Delete a file or directory (alias: rm; <path> positional, --zone, trailing slash = recursive); `/` empties the zone and takes the same double confirmation as deleting the zone, and requireConfirmable means unattended runs need --force
 │           │   ├── sites/                 # Experimental (hidden from help and landing page) — static-site hosting (storage zone + pull zone + middleware router)
 │           │   │   ├── index.ts          # defineNamespace("sites", false, ...): create/list/show/deploy/deployments/domains/link/unlink/upgrade-router/delete; describe:false keeps it out of help while it stabilizes
 │           │   │   ├── constants.ts      # SITES_MANIFEST (.bunny/site.json), REMOTE_STATE_PATH (_bunny/site.json), RemoteSiteState/DeployRecord types (DeployRecord carries previewZoneId/previewHost; state carries routerVersion), parseRemoteState (shape-checked; null = not a site), deployPrefix, deploy-ID + site-name validators (3-47 chars; `dpl-` names reserved so a site can't collide with preview-zone names), suffixedResourceName/siteResourcePattern (zone names are `sites-{name}-{random 6}`: the prefix marks them in the dashboard, the suffix dodges the global zone namespace), previewZoneName/deployIdFromPreviewZoneName/isPreviewZoneName (`sites-dpl-{deployId}-{rand6}` preview zones: no dashes in deploy ids keeps parsing unambiguous, and the worst case fits the 63-char DNS label limit)
@@ -756,7 +756,7 @@ Confirmation prompt using `prompts` with `type: "confirm"`. If `opts.force` is `
 
 ### `requireConfirmable(output, { force, message, hint })`
 
-Guard called immediately before a `confirm()`/`confirmTyped()` that gates a destructive action. Returns silently with `force`, or when `isInteractive(output)`; otherwise throws a `UserError` with `hint`. Without it an unattended run (CI, `--output json`, no TTY) blocks forever on a prompt nobody can answer, and the prompt lands on stdout ahead of the JSON payload. Used by `sites delete`, `sites deployments publish/prune`, and the shared `domains remove`.
+Guard called immediately before a `confirm()`/`confirmTyped()` that gates a destructive action. Returns silently with `force`, or when `isInteractive(output)`; otherwise throws a `UserError` with `hint`. Without it an unattended run (CI, `--output json`, no TTY) blocks forever on a prompt nobody can answer, and the prompt lands on stdout ahead of the JSON payload. Used by `sites delete`, `sites deployments publish/prune`, `storage files remove`, and the shared `domains remove`.
 
 ### `spinner(text: string): ora.Ora`
 
@@ -1078,7 +1078,7 @@ bunny
 │   │   ├── list        [path] [--zone] (alias: ls)  List files in a directory (trailing slash on path)
 │   │   ├── upload      <file> [--zone] [--to] [--checksum] [--content-type]  Upload a local file
 │   │   ├── download    <path> [--zone] [--out]  Download a file
-│   │   └── remove      <path> [--zone] [--force] (alias: rm)  Delete a file or directory (trailing slash = recursive)
+│   │   └── remove      <path> [--zone] [--force] (alias: rm)  Delete a file or directory (trailing slash = recursive; `/` empties the zone, double confirmation)
 │   ├── link            [zone]              Link the current directory to a storage zone (.bunny/storage.json); interactive picker when omitted
 │   ├── unlink          [--force/-f]        Remove .bunny/storage.json, unlinking this directory (confirmation unless --force)
 │   ├── regions                             List available storage regions (--tier hdd|ssd, --s3; the set depends on both)

@@ -3,7 +3,12 @@ import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { logger } from "../../../core/logger.ts";
-import { confirm, confirmTyped, spinner } from "../../../core/ui.ts";
+import {
+  confirm,
+  confirmTyped,
+  requireConfirmable,
+  spinner,
+} from "../../../core/ui.ts";
 import { connectStorageZone, deleteFile, isZoneRoot } from "../files-api.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 
@@ -71,6 +76,13 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
     // A trailing slash deletes a directory and everything under it, recursively.
     const isDirectory = path.endsWith("/");
     const isRoot = isZoneRoot(path);
+    requireConfirmable(output, {
+      force,
+      message: isRoot
+        ? `Emptying ${zone.Name} needs a confirmation prompt.`
+        : `Deleting "${path}" needs a confirmation prompt.`,
+      hint: "Re-run with --force to delete non-interactively.",
+    });
     const confirmed = await confirm(
       isRoot
         ? `Delete every file in ${zone.Name}? This cannot be undone.`
