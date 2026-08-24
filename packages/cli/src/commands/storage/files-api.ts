@@ -67,7 +67,6 @@ export function connectStorageZone(zone: StorageZoneModel): StorageZone {
   );
 }
 
-
 function normalizePath(path: string): string {
   return path.replace(/^\/+/, "");
 }
