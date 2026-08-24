@@ -1613,10 +1613,10 @@ All file and state logic is here so the commands stay thin and the logic is test
 - `checksum(sql)`: sha256 of the body with CRLF normalized and edges trimmed, so reformatting line endings isn't reported as a change.
 - `migrationStatuses(files, applied)` / `pendingMigrations(files, applied)`: join disk against the table. A recorded migration whose file changed is `modified`; one whose file is gone is `missing`; an unseen file that sorts before the newest applied path is `out_of_order`.
 - `migrationStatements(file)`: parses one file and converts lexical failures into a hinted `UserError`. `apply` calls it for every pending migration before the first database write, so a malformed later file cannot cause a predictably partial run.
-- `applyMigration(client, file, options)`: runs the prepared statements plus the tracking-row insert through `client.migrate()`, so a migration either lands and is recorded or neither happens.
+- `applyMigration(client, file, options)`: runs the prepared statements plus the tracking-row insert through `client.batch()`, so a migration either lands and is recorded or neither happens.
 - `readApplied(client)`: the read path for `list` and for `apply` before confirmation. Checks `sqlite_master` rather than creating the tracking table, so a preview never writes, and converts connection or query failures into a hinted `UserError` instead of an unexpected-error exit.
 
-The engine's `migrate()` maps to `db.batch(statements, { foreignKeys: false })`, because table rebuilds and `ALTER TABLE` need enforcement genuinely off rather than deferred to commit. `packages/cli/src/commands/db/migrations/client.ts` adapts a `Database` to the engine's `MigrationClient` surface; the engine itself takes that structural interface so tests can back it with `bun:sqlite`. `db shell <file>.sql` still uses `batch()` and is not migration-aware.
+The engine's `batch()` maps to `db.batch(statements, { foreignKeys: false })`, because table rebuilds and `ALTER TABLE` need enforcement genuinely off rather than deferred to commit. `packages/cli/src/commands/db/migrations/client.ts` adapts a `Database` to the engine's two-method `MigrationClient` surface (`query()`, `batch()`) and tags requests with the CLI's `User-Agent`; the engine itself takes that structural interface so tests can back it with `bun:sqlite`. `db shell <file>.sql` still uses `batch()` and is not migration-aware.
 
 ### ORM-generated migrations
 
@@ -1629,7 +1629,7 @@ bunny db migrations apply --dir drizzle    # or be explicit
 bunny db migrations apply --dir migrations --pattern "*/migration.sql"
 ```
 
-A `drizzle-kit` table rebuild brackets its statements with `PRAGMA foreign_keys=OFF;` and `=ON;` and separates them with `--> statement-breakpoint`. The splitter drops those comments as ordinary SQL comments, and both pragmas are inert because they land inside the batch transaction, where SQLite ignores them. `apply` gets the behaviour they were asking for from `batch(..., { foreignKeys: false })`, which brackets `BEGIN`/`COMMIT` from outside; this is the same division of labour as `@libsql/client`, where the client and not the ORM owns the pragma.
+A `drizzle-kit` table rebuild brackets its statements with `PRAGMA foreign_keys=OFF;` and `=ON;` and separates them with `--> statement-breakpoint`. The splitter drops those comments as ordinary SQL comments, and both pragmas are inert because they land inside the batch transaction, where SQLite ignores them. `apply` gets the behaviour they were asking for from `batch(..., { foreignKeys: false })`, which brackets `BEGIN`/`COMMIT` from outside: the client, not the ORM, owns the pragma.
 
 `db migrations create` only writes top-level files and always defaults to `migrations/`; use the ORM's own generate command when an ORM owns the schema. One runner owns a migration history: Bunny records relative paths in `__bunny_migrations` and does not read or update another tool's journal, so users should run Drizzle/Prisma/dbmate directly rather than alternating runners over the same files.
 

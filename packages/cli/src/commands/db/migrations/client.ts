@@ -1,33 +1,30 @@
-import { connect, type Database } from "@bunny.net/database-client";
+import { connect } from "@bunny.net/database-client";
+import { VERSION } from "../../../core/version.ts";
 import type { MigrationClient } from "./engine.ts";
 
-/** Adapt a connection to the engine's surface, applying migrations with foreign keys off. */
-export function migrationClient(db: Database): MigrationClient {
+/** Connect to a database and adapt it to the engine's surface, applying migrations with foreign keys off. */
+export function connectForMigrations(opts: {
+  url: string;
+  authToken: string;
+}): MigrationClient {
+  const db = connect({
+    ...opts,
+    headers: { "User-Agent": `bunny-cli/${VERSION}` },
+  });
+
   return {
-    execute: (statement) => {
-      const { sql, args } =
-        typeof statement === "string"
-          ? { sql: statement, args: [] }
-          : statement;
-      return db
+    query: (sql, args = []) =>
+      db
         .prepare(sql)
         .bind(...args)
-        .run();
-    },
-    migrate: (statements) =>
-      db.batch(
+        .all(),
+    batch: async (statements) => {
+      await db.batch(
         statements.map(({ sql, args }) =>
           db.prepare(sql).bind(...(args ?? [])),
         ),
         { foreignKeys: false },
-      ),
+      );
+    },
   };
-}
-
-/** Connect to a database and adapt it for the migration engine. */
-export function connectForMigrations(opts: {
-  url: string;
-  authToken?: string;
-}): MigrationClient {
-  return migrationClient(connect(opts));
 }

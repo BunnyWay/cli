@@ -4,6 +4,7 @@ import { formatTable } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
 import { ARG_DATABASE_ID } from "../constants.ts";
 import { databaseTarget, resolveCredentials } from "../credentials.ts";
+import { connectForMigrations } from "./client.ts";
 import {
   ARG_DIR,
   ARG_PATTERN,
@@ -113,7 +114,6 @@ export const dbMigrationsListCommand = defineCommand<ListArgs>({
       verbose,
     });
 
-    const { connectForMigrations } = await import("./client.ts");
     const client = connectForMigrations({ url, authToken: token });
     const target = databaseTarget(url, databaseId);
 
