@@ -4,7 +4,11 @@ import type { PrintMode, ShellLogger } from "@bunny.net/database-shell";
 import { defineCommand } from "../../core/define-command.ts";
 import { UserError } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
-import { ARG_DATABASE_ID, TOKEN_TTL_MINUTES } from "./constants.ts";
+import {
+  ARG_DATABASE_ID,
+  databaseUserAgent,
+  TOKEN_TTL_MINUTES,
+} from "./constants.ts";
 import { resolveCredentials } from "./credentials.ts";
 
 const COMMAND = `shell [${ARG_DATABASE_ID}] [query]`;
@@ -146,7 +150,11 @@ export const dbShellCommand = defineCommand<{
       );
     }
 
-    const client = createShellClient({ url, authToken: token });
+    const client = createShellClient({
+      url,
+      authToken: token,
+      userAgent: databaseUserAgent("db shell"),
+    });
     const log = shellLogger();
 
     // Non-interactive: execute and exit

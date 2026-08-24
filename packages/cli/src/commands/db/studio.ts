@@ -1,7 +1,11 @@
 import { defineCommand } from "../../core/define-command.ts";
 import { logger } from "../../core/logger.ts";
 import { confirm } from "../../core/ui.ts";
-import { ARG_DATABASE_ID, TOKEN_TTL_MINUTES } from "./constants.ts";
+import {
+  ARG_DATABASE_ID,
+  databaseUserAgent,
+  TOKEN_TTL_MINUTES,
+} from "./constants.ts";
 import { resolveCredentials } from "./credentials.ts";
 
 const COMMAND = `studio [${ARG_DATABASE_ID}]`;
@@ -112,7 +116,11 @@ export const dbStudioCommand = defineCommand<{
       verbose,
     });
 
-    const client = connect({ url, authToken: token });
+    const client = connect({
+      url,
+      authToken: token,
+      headers: { "User-Agent": databaseUserAgent("db studio") },
+    });
 
     logger.log("");
     await startStudio({

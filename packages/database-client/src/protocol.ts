@@ -219,6 +219,8 @@ export interface Transport {
   ): Promise<WireResponse["results"]>;
 }
 
+const USER_AGENT = "bunny-database-client";
+
 export interface TransportConfig {
   url: string;
   authToken?: string;
@@ -245,8 +247,13 @@ export function createTransport(config: TransportConfig): Transport {
   const doFetch = config.fetch ?? fetch;
   const headers: Record<string, string> = {
     "content-type": "application/json",
-    ...config.headers,
+    "user-agent": USER_AGENT,
   };
+
+  for (const [name, value] of Object.entries(config.headers ?? {})) {
+    headers[name.toLowerCase()] = value;
+  }
+
   if (config.authToken) headers.authorization = `Bearer ${config.authToken}`;
 
   return {

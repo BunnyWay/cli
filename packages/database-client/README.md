@@ -51,6 +51,8 @@ Returns a `Database`. Every option is optional.
 
 The client rewrites a `libsql://` URL to `https://`. It rejects credentials in the URL, both `user:pass@` and an `authToken` query parameter, so pass `authToken` instead. Dropping a token silently would leave you debugging an unexplained 401.
 
+Every request carries `User-Agent: bunny-database-client`. Header names in `headers` are matched case-insensitively, so passing your own `User-Agent` replaces that default instead of sending both.
+
 Without `timeout` a request waits as long as the runtime allows, which on an edge function means a hung fetch can burn the whole invocation. `timeout` and `signal` compose: whichever fires first aborts the request.
 
 ### `db.prepare(sql)`

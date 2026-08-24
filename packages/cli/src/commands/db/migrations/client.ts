@@ -1,5 +1,5 @@
 import { connect } from "@bunny.net/database-client";
-import { VERSION } from "../../../core/version.ts";
+import { databaseUserAgent } from "../constants.ts";
 import type { MigrationClient } from "./engine.ts";
 
 /** Connect to a database and adapt it to the engine's surface, applying migrations with foreign keys off. */
@@ -9,7 +9,7 @@ export function connectForMigrations(opts: {
 }): MigrationClient {
   const db = connect({
     ...opts,
-    headers: { "User-Agent": `bunny-cli/${VERSION}` },
+    headers: { "User-Agent": databaseUserAgent("db migrations") },
   });
 
   return {

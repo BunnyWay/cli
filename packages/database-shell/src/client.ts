@@ -5,7 +5,7 @@ import {
 } from "@bunny.net/database-client";
 import pkg from "../package.json";
 
-const USER_AGENT = `${pkg.name}/${pkg.version}`;
+const USER_AGENT = `bunny-database-shell/${pkg.version}`;
 
 /**
  * The slice of a database connection the shell needs: run one statement, or a
@@ -21,9 +21,11 @@ export interface ShellClient {
 export function createShellClient(opts: {
   url: string;
   authToken?: string;
+  userAgent?: string;
 }): ShellClient {
+  const { userAgent = USER_AGENT, ...config } = opts;
   return fromDatabase(
-    connect({ ...opts, headers: { "User-Agent": USER_AGENT } }),
+    connect({ ...config, headers: { "User-Agent": userAgent } }),
   );
 }
 

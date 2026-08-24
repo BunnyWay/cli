@@ -86,7 +86,24 @@ describe("transport", () => {
     expect(capture.url).toBe("https://db.lite.bunnydb.net/v2/pipeline");
     expect(capture.headers.authorization).toBe("Bearer tok");
     expect(capture.headers["content-type"]).toBe("application/json");
+    expect(capture.headers["user-agent"]).toBe("bunny-database-client");
     expect(capture.body.baton).toBeNull();
+  });
+
+  test("a caller's header replaces the default rather than duplicating it", async () => {
+    const fake = fakeFetch([okExecute(["a"], [[1]])]);
+    const db = connect({
+      url: URL_,
+      fetch: fake.fetch,
+      headers: { "User-Agent": "bunny-cli/1.2.3", "X-Trace": "abc" },
+    });
+
+    await db.prepare("SELECT 1 AS a").all();
+
+    const { headers } = fake.captures[0] as Capture;
+    expect(headers["user-agent"]).toBe("bunny-cli/1.2.3");
+    expect(headers["User-Agent"]).toBeUndefined();
+    expect(headers["x-trace"]).toBe("abc");
   });
 
   test("closes the server-side session in the same request", async () => {

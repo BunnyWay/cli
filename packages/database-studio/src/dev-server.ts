@@ -24,6 +24,10 @@ if (!values.url) {
   process.exit(1);
 }
 
-const client = connect({ url: values.url, authToken: values.token });
+const client = connect({
+  url: values.url,
+  authToken: values.token,
+  headers: { "User-Agent": "bunny-database-studio" },
+});
 
 await startStudio({ client, port: Number(values.port), open: false });
