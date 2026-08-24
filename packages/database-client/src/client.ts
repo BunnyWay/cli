@@ -23,6 +23,11 @@ export interface Result<T = Row> {
   lastInsertRowid: number | bigint | null;
 }
 
+/** Same as `Result`, with rows as positional arrays so duplicate column names survive. */
+export interface RawResult extends Omit<Result<never>, "rows"> {
+  rows: SqlValue[][];
+}
+
 export interface Config extends TransportConfig {
   /** Abort signal applied to every request unless a per-call signal is given. */
   signal?: AbortSignal;
@@ -35,20 +40,10 @@ interface StatementInternals {
   signal?: AbortSignal;
 }
 
-function toResult<T>(wire: WireStmtResult): Result<T> {
-  const columns = wire.cols.map(
-    (col, index) => col.name ?? `column${index + 1}`,
-  );
-  const rows = wire.rows.map((row) => {
-    // Null prototype so a column named __proto__ (or constructor, toString, ...) is a plain own property.
-    const out: Row = Object.create(null);
-    for (let i = 0; i < columns.length; i++)
-      out[columns[i] as string] = decodeValue(row[i] as WireValue);
-    return out as T;
-  });
+function toRawResult(wire: WireStmtResult): RawResult {
   return {
-    rows,
-    columns,
+    rows: wire.rows.map((row) => row.map(decodeValue)),
+    columns: wire.cols.map((col, index) => col.name ?? `column${index + 1}`),
     rowsAffected: wire.affected_row_count,
     lastInsertRowid:
       wire.last_insert_rowid === null
@@ -57,6 +52,18 @@ function toResult<T>(wire: WireStmtResult): Result<T> {
             | number
             | bigint),
   };
+}
+
+function toResult<T>(wire: WireStmtResult): Result<T> {
+  const raw = toRawResult(wire);
+  const rows = raw.rows.map((row) => {
+    // Null prototype so a column named __proto__ (or constructor, toString, ...) is a plain own property.
+    const out: Row = Object.create(null);
+    for (let i = 0; i < raw.columns.length; i++)
+      out[raw.columns[i] as string] = row[i] as SqlValue;
+    return out as T;
+  });
+  return { ...raw, rows } as Result<T>;
 }
 
 /** A SQL statement plus its bound arguments. Immutable and reusable. */
@@ -96,8 +103,12 @@ export class Statement {
 
   /** Execute and return rows as positional arrays, skipping object construction. */
   async raw(): Promise<SqlValue[][]> {
-    const wire = await this.#execute();
-    return wire.rows.map((row) => row.map(decodeValue));
+    return (await this.runRaw()).rows;
+  }
+
+  /** Execute and return positional rows with write metadata. Keeps duplicate column names distinct. */
+  async runRaw(): Promise<RawResult> {
+    return toRawResult(await this.#execute());
   }
 
   /** Execute and return rows together with write metadata. */
@@ -147,6 +158,17 @@ export class Database {
 
   /** Run every statement in one transaction. All succeed or none are applied. */
   async batch<T = Row>(statements: Statement[]): Promise<Result<T>[]> {
+    return (await this.#batch(statements)).map(
+      (wire) => toResult<T>(wire) as Result<T>,
+    );
+  }
+
+  /** Like `batch()`, but each result has positional rows. Keeps duplicate column names distinct. */
+  async batchRaw(statements: Statement[]): Promise<RawResult[]> {
+    return (await this.#batch(statements)).map(toRawResult);
+  }
+
+  async #batch(statements: Statement[]): Promise<WireStmtResult[]> {
     if (statements.length === 0) return [];
 
     const control = (sql: string, condition?: unknown) => ({
@@ -179,7 +201,7 @@ export class Database {
     return statements.map((_, index) => {
       const step = batch.step_results[index + 1];
       if (!step) throw new DatabaseError("batch step returned no result");
-      return toResult<T>(step);
+      return step;
     });
   }
 

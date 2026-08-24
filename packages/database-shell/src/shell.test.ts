@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ResultSet } from "@libsql/client";
+import type { RawResult } from "@bunny.net/database-client";
 import {
   columnMaskType,
   csvEscape,
@@ -34,14 +34,12 @@ function makeResultSet(
   columns: string[],
   rows: unknown[][],
   rowsAffected = 0,
-): ResultSet {
+): RawResult {
   return {
     columns,
-    columnTypes: columns.map(() => "TEXT"),
     rows: rows as any,
     rowsAffected,
-    lastInsertRowid: undefined as any,
-    toJSON: () => ({}),
+    lastInsertRowid: null,
   };
 }
 

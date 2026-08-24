@@ -50,10 +50,9 @@ npm add @bunny.net/database-shell
 ### Interactive Shell
 
 ```typescript
-import { createClient } from "@libsql/client";
-import { startShell } from "@bunny.net/database-shell";
+import { createShellClient, startShell } from "@bunny.net/database-shell";
 
-const client = createClient({
+const client = createShellClient({
   url: "libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net",
   authToken: "...",
 });
@@ -64,10 +63,9 @@ await startShell({ client });
 ### Execute a Query
 
 ```typescript
-import { createClient } from "@libsql/client";
-import { executeQuery } from "@bunny.net/database-shell";
+import { createShellClient, executeQuery } from "@bunny.net/database-shell";
 
-const client = createClient({
+const client = createShellClient({
   url: "libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net",
   authToken: "...",
 });
@@ -78,10 +76,9 @@ await executeQuery(client, "SELECT * FROM users", { mode: "json" });
 ### Execute a SQL File
 
 ```typescript
-import { createClient } from "@libsql/client";
-import { executeFile } from "@bunny.net/database-shell";
+import { createShellClient, executeFile } from "@bunny.net/database-shell";
 
-const client = createClient({
+const client = createShellClient({
   url: "libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net",
   authToken: "...",
 });
@@ -95,7 +92,7 @@ await executeFile(client, "seed.sql");
 
 ```typescript
 interface ShellOptions {
-  client: Client; // @libsql/client instance
+  client: ShellClient; // from createShellClient() or fromDatabase()
   mode?: PrintMode; // Output mode (default: "default")
   masked?: boolean; // Mask sensitive columns (default: true)
   timing?: boolean; // Show query timing (default: false)

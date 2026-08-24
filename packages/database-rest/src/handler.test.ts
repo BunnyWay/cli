@@ -1,30 +1,34 @@
+import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { sqliteClient } from "@bunny.net/database-adapter/sqlite";
 import type { DatabaseSchema } from "@bunny.net/database-openapi";
-import { type Client, createClient } from "@libsql/client";
 import type { DatabaseExecutor } from "./executor.ts";
 import { createRestHandler } from "./handler.ts";
 
 // Minimal executor for testing - mirrors what an adapter would do
-const createTestExecutor = (client: Client): DatabaseExecutor => ({
-  execute: async (sql, args) => {
-    const result = await client.execute({ sql, args });
-    return {
-      columns: result.columns,
-      rows: result.rows as Record<string, unknown>[],
-    };
-  },
-});
+const createTestExecutor = (db: Database): DatabaseExecutor => {
+  const client = sqliteClient(db);
+  return {
+    execute: async (sql, args) => {
+      const result = await client
+        .prepare(sql)
+        .bind(...args)
+        .run();
+      return { columns: result.columns, rows: result.rows };
+    },
+  };
+};
 
-let client: Client;
+let db: Database;
 let executor: DatabaseExecutor;
 let schema: DatabaseSchema;
 let handler: (req: Request) => Promise<Response>;
 
 beforeAll(async () => {
-  client = createClient({ url: ":memory:" });
-  executor = createTestExecutor(client);
+  db = new Database(":memory:");
+  executor = createTestExecutor(db);
 
-  await client.executeMultiple(`
+  db.exec(`
     CREATE TABLE users (
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
@@ -113,7 +117,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  client.close();
+  db.close();
 });
 
 const req = (method: string, path: string, body?: unknown): Request => {

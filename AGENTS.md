@@ -35,17 +35,17 @@ Bun replaces the entire Node.js toolchain. There are no separate tools for trans
 
 ### Runtime dependencies
 
-| Package          | Purpose                                                        |
-| ---------------- | -------------------------------------------------------------- |
-| `yargs`          | Command routing, subcommands, flag parsing, auto-help          |
-| `chalk`          | Terminal string styling (colors, bold, dim)                    |
-| `ora`            | Terminal spinners for async operations                         |
-| `prompts`        | Interactive input: password masks, confirmations, multi-select |
-| `cli-table3`     | Formatted terminal tables                                      |
-| `zod`            | Schema validation for config files and CLI input               |
-| `@libsql/client` | libSQL database client (used by `db shell`)                    |
-| `openapi-fetch`  | Type-safe HTTP client generated from OpenAPI specs             |
-| `jsonc-parser`   | JSONC parser for `bunny.jsonc` config files                    |
+| Package          | Purpose                                                                  |
+| ---------------- | ------------------------------------------------------------------------ |
+| `yargs`          | Command routing, subcommands, flag parsing, auto-help                    |
+| `chalk`          | Terminal string styling (colors, bold, dim)                              |
+| `ora`            | Terminal spinners for async operations                                   |
+| `prompts`        | Interactive input: password masks, confirmations, multi-select           |
+| `cli-table3`     | Formatted terminal tables                                                |
+| `zod`            | Schema validation for config files and CLI input                         |
+| `@libsql/client` | libSQL database client (used by `db migrations`, for `client.migrate()`) |
+| `openapi-fetch`  | Type-safe HTTP client generated from OpenAPI specs                       |
+| `jsonc-parser`   | JSONC parser for `bunny.jsonc` config files                              |
 
 ### Dev dependencies
 
@@ -73,8 +73,8 @@ This is a Bun workspace monorepo with seven packages:
 
 - **`@bunny.net/openapi-client`** (`packages/openapi-client/`): standalone, type-safe OpenAPI client for bunny.net, generated from OpenAPI specs. Zero CLI dependencies. Publishable to npm.
 - **`@bunny.net/config`** (`packages/config/`): shared `bunny.jsonc` schemas (Zod), inferred types, JSON Schema generation, and API conversion functions. The root `BunnyConfigSchema` has optional `app` (Magic Containers) and `sites` (static sites) blocks; `BunnyAppConfigSchema` narrows it to require `app`. Used by the CLI and potentially other tools.
-- **`@bunny.net/database-client`** (`packages/database-client/`): standalone SQL client for Bunny Database, for application code rather than the CLI. Speaks hrana-over-HTTP (`POST /v2/pipeline`) using only `fetch`, so it runs unchanged on Edge Scripting (Deno), Bun, and Node. Zero dependencies. **Server-side only, and documented as such:** an auth token is a bearer credential for the whole database and the client sends raw SQL, so it must never reach a browser or other untrusted client. Do not describe it as browser-compatible even though `fetch`-only code would technically run there; the correct pattern is an Edge Script (or `database-rest` behind an auth check) that holds the token and exposes only intended queries. Prepared-statement surface: `connect()`, `prepare().bind()`, `.all()`/`.first()`/`.raw()`/`.run()`, plus `batch()` (one transaction, one round trip) and `exec()` (multi-statement script). Deliberately stateless: no baton tracking, no connection pool, no interactive transactions, no cursor streaming. Publishable to npm.
-- **`@bunny.net/database-shell`** (`packages/database-shell/`): standalone interactive SQL shell for libSQL databases. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
+- **`@bunny.net/database-client`** (`packages/database-client/`): the SQL client for Bunny Database, used by application code and by the CLI's own `db shell` and `db studio`. Speaks hrana-over-HTTP (`POST /v2/pipeline`) using only `fetch`, so it runs unchanged on Edge Scripting (Deno), Bun, and Node. Zero dependencies. **Server-side only, and documented as such:** an auth token is a bearer credential for the whole database and the client sends raw SQL, so it must never reach a browser or other untrusted client. Do not describe it as browser-compatible even though `fetch`-only code would technically run there; the correct pattern is an Edge Script (or `database-rest` behind an auth check) that holds the token and exposes only intended queries. Prepared-statement surface: `connect()`, `prepare().bind()`, `.all()`/`.first()`/`.raw()`/`.run()`, plus `batch()` (one transaction, one round trip) and `exec()` (multi-statement script). `runRaw()`/`batchRaw()` return the same results with positional rows, which tooling needs because object rows collapse duplicate column names. Deliberately stateless: no baton tracking, no connection pool, no interactive transactions, no cursor streaming. Publishable to npm.
+- **`@bunny.net/database-shell`** (`packages/database-shell/`): standalone interactive SQL shell for Bunny Database, built on `@bunny.net/database-client`. Framework-agnostic REPL, dot-commands, formatting, masking, and history. Also usable as a standalone CLI (binary: `bsql`).
 - **`@bunny.net/scriptable-dns-types`** (`packages/scriptable-dns-types/`): Ambient TypeScript declarations for the Scriptable DNS runtime globals (`ARecord`, `Monitoring`, `RoutingEngine`, etc.). Types-only, no runtime code: the DNS runtime can't `import`, so these power editor autocomplete and an optional typecheck step. Scaffolded into projects by `bunny dns scripts init`; intended to also feed the dashboard editor. Publishable to npm.
 - **`@bunny.net/sandbox`** (`packages/sandbox/`): standalone sandbox SDK. Code-first DX (`Sandbox.create`, `writeFiles`, `runCommand`, `exposePort`, `setEnv`/`getEnv`/`unsetEnv`, `listFiles`/`deleteFile`/`rename`/`exists`/`stat`) over Magic Containers provisioning plus an `ssh2` SSH/SFTP transport. Blocking `runCommand` accepts `timeout` (rejects with `CommandTimeoutError` carrying partial output), `signal` for cancellation, and `onStdout`/`onStderr` callbacks for live output. Env vars can be baked in at `create` (persisted), passed per-command via `runCommand({ env })` (temporary), or persisted after creation via `setEnv`. The handle implements `Symbol.dispose`/`Symbol.asyncDispose` so `using`/`await using` release the SSH connection (without deleting the sandbox). Zero CLI dependencies.
 - **`@bunny.net/cli`** (`packages/cli/`): the CLI. Depends on `@bunny.net/openapi-client`, `@bunny.net/config`, `@bunny.net/database-shell`, `@bunny.net/scriptable-dns-types`, and `@bunny.net/sandbox`.
@@ -139,7 +139,7 @@ bunny-cli/
 │   │   ├── index.d.ts                   # Ambient globals: ARecord/AaaaRecord/CnameRecord/TxtRecord/PullZoneRecord/Server, Monitoring/GeoDatabase/GeoDistance/RoutingEngine, DnsRequest/DnsQuery/GeoLocation
 │   │   └── README.md
 │   │
-│   ├── database-client/                 # @bunny.net/database-client package (SQL client for app code)
+│   ├── database-client/                 # @bunny.net/database-client package (SQL client)
 │   │   ├── package.json                  # exports/main/types point at dist/ for npm consumers
 │   │   ├── tsconfig.json
 │   │   ├── tsconfig.build.json           # Emits dist/ (JS + .d.ts); paths:{} so nothing resolves from source
@@ -516,7 +516,7 @@ bunny-cli/
 
 ### Conventions
 
-- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-client/` is the standalone SQL client for application code; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
+- **Monorepo with Bun workspaces.** `packages/openapi-client/` is the standalone API client SDK; `packages/config/` provides shared Zod schemas, types, and API conversion functions for `bunny.jsonc`; `packages/database-client/` is the SQL client the shell, studio, and application code all use; `packages/database-shell/` is the standalone SQL shell engine; `packages/sandbox/` is the standalone sandbox SDK (provisioning + SSH transport); `packages/cli/` is the CLI.
 - **API clients use `ClientOptions`**: an options object with `apiKey`, `baseUrl`, `verbose`, `userAgent`, and `onDebug`. The CLI provides a `clientOptions(config, verbose)` helper to build this from `ResolvedConfig`.
 - **One command per file.** Each file in `commands/` exports a single command or namespace.
 - **Commands are grouped by domain** in subdirectories (`config/`, `db/`, `scripts/`).
@@ -1004,7 +1004,7 @@ Two differences from openapi-client:
 
 The `publish-database-client` job in `release.yml` (gated on a version bump detected via `npm view`, like the other independently versioned packages) builds with `bun run --filter @bunny.net/database-client build`, then runs `cd packages/database-client && npm publish`. The package versions independently of the CLI; it is not part of any `fixed` group in `.changeset/config.json`.
 
-Nothing in the repo imports it: the CLI talks to databases through `@bunny.net/database-shell`, and this package exists for user application code. It therefore has no root `tsconfig.json` `paths` entry, and its tests run against its own source directly.
+`@bunny.net/database-shell` and `@bunny.net/database-adapter` both build on it, so `db shell` and `db studio` reach the database through it. The root `tsconfig.json` therefore maps it to source, the way it already does for the other compiled libraries. `db migrations` is the one holdout: it needs libSQL's `client.migrate()`, which has no equivalent here, so it stays on `@libsql/client`.
 
 `@bunny.net/config` is a private workspace package (not published); the CLI consumes it from source via the workspace symlink.
 
@@ -1527,13 +1527,13 @@ In-memory mutations during a deploy run (`targetContainer.image = imageRef`) are
 
 ### Overview
 
-The database shell is an interactive SQL REPL that connects to a Bunny Database via `@libsql/client`. It supports both interactive mode (readline-based REPL) and non-interactive mode (execute a query and exit).
+The database shell is an interactive SQL REPL that connects to a Bunny Database via `@bunny.net/database-client`. It supports both interactive mode (readline-based REPL) and non-interactive mode (execute a query and exit).
 
 ### Architecture
 
 The shell is split across two packages:
 
-- **`@bunny.net/database-shell`** (`packages/database-shell/`): framework-agnostic shell engine. Contains the REPL, dot-commands, result formatting, masking, history, and SQL parsing. Accepts a `@libsql/client` `Client` instance and an optional `ShellLogger` interface for output.
+- **`@bunny.net/database-shell`** (`packages/database-shell/`): framework-agnostic shell engine. Contains the REPL, dot-commands, result formatting, masking, history, and SQL parsing. Accepts a `ShellClient` (from `createShellClient()`, or `fromDatabase()` over an existing connection) and an optional `ShellLogger` interface for output. Rows stay positional so duplicate column names still render as separate columns.
 - **`@bunny.net/cli`** (`packages/cli/src/commands/db/shell.ts`): thin CLI wrapper. Handles credential resolution (API client, `.env` lookup, interactive prompts), yargs command definition, and delegates to the shell package.
 
 **Shell engine components** (in `packages/database-shell/src/`):
@@ -1603,7 +1603,7 @@ Schema changes live in plain `.sql` files that the developer writes (or generate
 - Files live in `migrations/` by default, one statement group per file, named `NNNN_<slug>.sql`.
 - The **relative path is the migration's identity**, and its numeric prefix is the order. Flat files use the filename; nested layouts opt in with `--pattern`. Nothing else (no journal, no manifest) tracks migrations locally.
 - Files are applied in lexicographic relative-path order, which is why prefixes are zero-padded to four digits.
-- Applied migrations are recorded in `__bunny_migrations` (`id`, `name`, `checksum`, `applied_at`). The `__` prefix means `DEFAULT_EXCLUDE_PATTERNS` in `packages/database-adapter-libsql/src/introspect.ts` already hides it from `db studio` and the REST layer.
+- Applied migrations are recorded in `__bunny_migrations` (`id`, `name`, `checksum`, `applied_at`). The `__` prefix means `DEFAULT_EXCLUDE_PATTERNS` in `packages/database-adapter/src/introspect.ts` already hides it from `db studio` and the REST layer.
 
 ### Engine (`packages/cli/src/commands/db/migrations/engine.ts`)
 

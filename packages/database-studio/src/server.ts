@@ -1,15 +1,12 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
-import {
-  createLibSQLExecutor,
-  introspect,
-} from "@bunny.net/database-adapter-libsql";
+import { createExecutor, introspect } from "@bunny.net/database-adapter";
+import type { Database } from "@bunny.net/database-client";
 import { createRestHandler, requireAuth } from "@bunny.net/database-rest";
-import type { Client } from "@libsql/client";
 import { assets } from "./client-manifest.ts";
 
 export interface StudioOptions {
-  client: Client;
+  client: Database;
   port?: number;
   open?: boolean;
   dev?: boolean;
@@ -85,7 +82,7 @@ export async function startStudio(options: StudioOptions): Promise<void> {
   const distDir = join(import.meta.dir, "..", "dist", "client");
 
   const schema = await introspect({ client });
-  const executor = createLibSQLExecutor({ client });
+  const executor = createExecutor({ client });
   // Random per-startup token. The auto-opened browser URL carries it once as
   // ?token=…; the client posts it to /api/auth which then sets an HttpOnly
   // cookie that gates every subsequent /api/* request.

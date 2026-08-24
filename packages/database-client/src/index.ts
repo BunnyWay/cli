@@ -2,6 +2,7 @@ export {
   type Config,
   connect,
   Database,
+  type RawResult,
   type Result,
   type Row,
   Statement,

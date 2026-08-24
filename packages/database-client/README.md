@@ -103,6 +103,13 @@ const result = await db
 // }
 ```
 
+`runRaw()` returns the same metadata with rows as positional arrays. Reach for it when a result may contain two columns of the same name, since object rows keep only the last one:
+
+```ts
+const result = await db.prepare("SELECT a.id, b.id FROM a JOIN b").runRaw();
+// { rows: [[1, 99]], columns: ["id", "id"], rowsAffected: 0, lastInsertRowid: null }
+```
+
 Statements do nothing until one of these is called, so `prepare()` and `bind()` are safe to pass around.
 
 ### `db.batch(statements)`
@@ -116,7 +123,7 @@ const [inserted, count] = await db.batch([
 ]);
 ```
 
-You get one `Result` per statement you passed, in order. If any statement fails the transaction rolls back and `batch()` throws that statement's error.
+You get one `Result` per statement you passed, in order. `batchRaw()` is the same but with positional rows. If any statement fails the transaction rolls back and `batch()` throws that statement's error.
 
 ### `db.exec(sql)`
 

@@ -16,7 +16,7 @@
     },
     "packages/cli": {
       "name": "@bunny.net/cli",
-      "version": "0.13.0",
+      "version": "0.14.1",
       "bin": {
         "bunny": "./bin/bunny.cjs",
       },
@@ -49,39 +49,39 @@
     },
     "packages/cli-darwin-arm64": {
       "name": "@bunny.net/cli-darwin-arm64",
-      "version": "0.13.0",
+      "version": "0.14.1",
     },
     "packages/cli-darwin-x64": {
       "name": "@bunny.net/cli-darwin-x64",
-      "version": "0.13.0",
+      "version": "0.14.1",
     },
     "packages/cli-linux-arm64": {
       "name": "@bunny.net/cli-linux-arm64",
-      "version": "0.13.0",
+      "version": "0.14.1",
     },
     "packages/cli-linux-x64": {
       "name": "@bunny.net/cli-linux-x64",
-      "version": "0.13.0",
+      "version": "0.14.1",
     },
     "packages/cli-windows-x64": {
       "name": "@bunny.net/cli-windows-x64",
-      "version": "0.13.0",
+      "version": "0.14.1",
     },
     "packages/config": {
       "name": "@bunny.net/config",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@bunny.net/openapi-client": "workspace:*",
         "zod": "^4.3.6",
       },
     },
-    "packages/database-adapter-libsql": {
-      "name": "@bunny.net/database-adapter-libsql",
+    "packages/database-adapter": {
+      "name": "@bunny.net/database-adapter",
       "version": "0.1.2",
       "dependencies": {
+        "@bunny.net/database-client": "workspace:*",
         "@bunny.net/database-openapi": "workspace:*",
         "@bunny.net/database-rest": "workspace:*",
-        "@libsql/client": "^0.17.0",
       },
     },
     "packages/database-client": {
@@ -105,7 +105,7 @@
         "@bunny.net/database-openapi": "workspace:*",
       },
       "devDependencies": {
-        "@bunny.net/database-adapter-libsql": "workspace:*",
+        "@bunny.net/database-adapter": "workspace:*",
       },
     },
     "packages/database-shell": {
@@ -115,9 +115,11 @@
         "bsql": "./bin/bsql.cjs",
       },
       "dependencies": {
-        "@libsql/client": "^0.17.0",
         "chalk": "^5.6.2",
         "cli-table3": "^0.6.5",
+      },
+      "devDependencies": {
+        "@bunny.net/database-client": "workspace:*",
       },
       "optionalDependencies": {
         "@bunny.net/database-shell-darwin-arm64": "0.2.4",
@@ -151,10 +153,10 @@
       "name": "@bunny.net/database-studio",
       "version": "0.2.0",
       "dependencies": {
-        "@bunny.net/database-adapter-libsql": "workspace:*",
+        "@bunny.net/database-adapter": "workspace:*",
+        "@bunny.net/database-client": "workspace:*",
         "@bunny.net/database-openapi": "workspace:*",
         "@bunny.net/database-rest": "workspace:*",
-        "@libsql/client": "^0.17.0",
       },
       "devDependencies": {
         "@radix-ui/react-checkbox": "^1.3.3",
@@ -181,7 +183,7 @@
     },
     "packages/openapi-client": {
       "name": "@bunny.net/openapi-client",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "dependencies": {
         "openapi-fetch": "^0.17.0",
       },
@@ -192,7 +194,7 @@
     },
     "packages/sandbox": {
       "name": "@bunny.net/sandbox",
-      "version": "0.3.3",
+      "version": "0.4.0",
       "dependencies": {
         "@bunny.net/openapi-client": "workspace:*",
         "@types/ssh2": "^1.15.0",
@@ -204,7 +206,7 @@
     },
     "packages/scriptable-dns-types": {
       "name": "@bunny.net/scriptable-dns-types",
-      "version": "0.1.1",
+      "version": "0.1.2",
     },
   },
   "packages": {
@@ -280,7 +282,7 @@
 
     "@bunny.net/config": ["@bunny.net/config@workspace:packages/config"],
 
-    "@bunny.net/database-adapter-libsql": ["@bunny.net/database-adapter-libsql@workspace:packages/database-adapter-libsql"],
+    "@bunny.net/database-adapter": ["@bunny.net/database-adapter@workspace:packages/database-adapter"],
 
     "@bunny.net/database-client": ["@bunny.net/database-client@workspace:packages/database-client"],
 

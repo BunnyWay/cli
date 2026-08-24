@@ -6,7 +6,7 @@ import type {
   IndexDefinition,
   TableDefinition,
 } from "@bunny.net/database-openapi";
-import type { Client } from "@libsql/client";
+import type { AdapterClient } from "./client.ts";
 
 const mapColumnType = (sqliteType: string): ColumnType => {
   const upper = sqliteType.toUpperCase();
@@ -31,24 +31,31 @@ const mapColumnType = (sqliteType: string): ColumnType => {
   return "TEXT";
 };
 
-const getTables = async (client: Client): Promise<string[]> => {
-  const result = await client.execute(`
+/** Run a statement and return its full result, the shape every helper below reads. */
+const query = (client: AdapterClient, sql: string) => client.prepare(sql).run();
+
+const getTables = async (client: AdapterClient): Promise<string[]> => {
+  const result = await query(
+    client,
+    `
     SELECT name FROM sqlite_master
     WHERE type='table'
     AND name NOT LIKE 'sqlite_%'
     AND name NOT LIKE '_litestream_%'
     AND name NOT LIKE 'libsql_%'
     ORDER BY name
-  `);
+  `,
+  );
 
   return result.rows.map((row) => row.name as string);
 };
 
 const getColumns = async (
-  client: Client,
+  client: AdapterClient,
   tableName: string,
 ): Promise<ColumnDefinition[]> => {
-  const result = await client.execute(
+  const result = await query(
+    client,
     `PRAGMA table_info("${tableName.replace(/"/g, '""')}")`,
   );
 
@@ -62,10 +69,11 @@ const getColumns = async (
 };
 
 const getForeignKeys = async (
-  client: Client,
+  client: AdapterClient,
   tableName: string,
 ): Promise<ForeignKey[]> => {
-  const result = await client.execute(
+  const result = await query(
+    client,
     `PRAGMA foreign_key_list("${tableName.replace(/"/g, '""')}")`,
   );
 
@@ -77,17 +85,18 @@ const getForeignKeys = async (
 };
 
 const getIndexes = async (
-  client: Client,
+  client: AdapterClient,
   tableName: string,
 ): Promise<IndexDefinition[]> => {
   const quotedTable = `"${tableName.replace(/"/g, '""')}"`;
-  const indexList = await client.execute(`PRAGMA index_list(${quotedTable})`);
+  const indexList = await query(client, `PRAGMA index_list(${quotedTable})`);
   const indexes: IndexDefinition[] = [];
 
   for (const row of indexList.rows) {
     const indexName = row.name as string;
     const unique = row.unique === 1;
-    const indexInfo = await client.execute(
+    const indexInfo = await query(
+      client,
       `PRAGMA index_info("${indexName.replace(/"/g, '""')}")`,
     );
     const columns = indexInfo.rows.map((r) => r.name as string);
@@ -99,7 +108,7 @@ const getIndexes = async (
 };
 
 const introspectTable = async (
-  client: Client,
+  client: AdapterClient,
   tableName: string,
 ): Promise<TableDefinition> => {
   const columns = await getColumns(client, tableName);
@@ -155,7 +164,7 @@ const shouldInclude = (
 };
 
 export interface IntrospectOptions {
-  client: Client;
+  client: AdapterClient;
   version?: string;
   /** Glob patterns for tables to exclude. Supports trailing `*` wildcards. Defaults to common migration/internal tables. Pass `[]` to show everything. */
   exclude?: string[];

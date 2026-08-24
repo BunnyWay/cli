@@ -1,13 +1,17 @@
+import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { type Client, createClient } from "@libsql/client";
+import type { AdapterClient } from "./client.ts";
 import { DEFAULT_EXCLUDE_PATTERNS, introspect } from "./introspect.ts";
+import { sqliteClient } from "./sqlite.ts";
 
-let client: Client;
+let db: Database;
+let client: AdapterClient;
 
 beforeAll(async () => {
-  client = createClient({ url: ":memory:" });
+  db = new Database(":memory:");
+  client = sqliteClient(db);
 
-  await client.executeMultiple(`
+  db.exec(`
     CREATE TABLE users (
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
@@ -36,7 +40,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  client.close();
+  db.close();
 });
 
 describe("introspect", () => {
