@@ -23,15 +23,13 @@ interface SnippetVars {
 const TEMPLATES: Record<QuickstartLang, (vars: SnippetVars) => Snippet> = {
   typescript: ({ urlEnv, tokenEnv }) => ({
     lang: "TypeScript",
-    install: "bun add @libsql/client",
-    code: `import { createClient } from "@libsql/client/web";
+    install: "bun add @bunny.net/database-client",
+    code: `import { connect } from "@bunny.net/database-client";
 
-const client = createClient({
-  url: process.env.${urlEnv},
-  authToken: process.env.${tokenEnv},
-});
+// Reads ${urlEnv} and ${tokenEnv}.
+const db = connect();
 
-await client.execute("SELECT * FROM users");`,
+const users = await db.prepare("SELECT * FROM users").all();`,
   }),
   go: ({ urlEnv, tokenEnv }) => ({
     lang: "Go",

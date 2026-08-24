@@ -304,7 +304,7 @@ bunny-cli/
 │           │   │   ├── link.ts                # Link directory to a database (.bunny/database.json)
 │           │   │   ├── list.ts                # List all databases
 │           │   │   ├── quickstart.ts          # Generate quickstart guide for connecting to a database
-│           │   │   ├── quickstart-snippets.ts # Shared: per-language connection code snippets (TypeScript, Go, Rust, .NET)
+│           │   │   ├── quickstart-snippets.ts # Shared: per-language connection snippets; TypeScript uses @bunny.net/database-client, other languages use their ecosystem's libSQL driver
 │           │   │   ├── region-choices.ts      # Shared: grouped region prompt choices by continent
 │           │   │   ├── resolve-db.ts          # Helper: resolve database ID from flag, manifest, .env, or interactive prompt
 │           │   │   ├── shell.ts               # Thin wrapper: credential resolution + delegates to @bunny.net/database-shell
@@ -1003,7 +1003,7 @@ Two differences from openapi-client:
 
 The `publish-database-client` job in `release.yml` (gated on a version bump detected via `npm view`, like the other independently versioned packages) builds with `bun run --filter @bunny.net/database-client build`, then runs `cd packages/database-client && npm publish`. The package versions independently of the CLI; it is not part of any `fixed` group in `.changeset/config.json`.
 
-`@bunny.net/database-shell`, `@bunny.net/database-adapter`, and the migration engine all build on it, so `db shell`, `db studio`, and `db migrations` reach the database through it and the repo no longer depends on `@libsql/client`. The root `tsconfig.json` therefore maps it to source, the way it already does for the other compiled libraries.
+`@bunny.net/database-shell`, `@bunny.net/database-adapter`, and the migration engine all build on it, so `db shell`, `db studio`, and `db migrations` reach the database through it and the repo no longer depends on `@libsql/client`. `db quickstart` recommends it for TypeScript too; the Go, Rust, and .NET snippets stay on their ecosystem's libSQL driver, since there is no Bunny client for those yet. The root `tsconfig.json` therefore maps it to source, the way it already does for the other compiled libraries.
 
 `@bunny.net/config` is a private workspace package (not published); the CLI consumes it from source via the workspace symlink.
 
