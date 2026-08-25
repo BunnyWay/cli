@@ -51,7 +51,7 @@ export async function recordSiteDomain(
   }
 }
 
-// Full custom-domain setup for a site (used by `sites create --domain` and deploy's first-run offer): interactive runs get the DNS-wait/SSL flow, JSON runs just attach and report. The domain is display-only (previews run on their own b-cdn.net zones), so it's recorded as soon as the hostname is on the zone.
+// Full custom-domain setup for a site (used by `sites create --domain` and deploy's first-run offer): interactive runs get the DNS-wait/SSL flow, JSON runs just attach and report. The domain is recorded as soon as the hostname is on the zone.
 export async function setupSiteDomain(opts: {
   coreClient: CoreClient;
   site: SiteContext;
@@ -115,7 +115,7 @@ export const sitesDomainsCommands = createHostnamesCommands({
     // A domain on a site with nothing published serves the router's 404; say so instead of letting the first visit read as breakage.
     if (args.output !== "json" && resolvedSite?.state.current === undefined) {
       logger.dim(
-        "  Nothing is published yet, so this domain serves a 404: publish with `bunny sites deploy --production`.",
+        "  Nothing is published yet, so this domain serves a 404: publish with `bunny sites deploy`.",
       );
     }
   },

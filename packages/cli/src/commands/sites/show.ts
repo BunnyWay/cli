@@ -45,7 +45,7 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
     });
     const { state } = site;
 
-    // Hostnames are informational; a fetch failure shouldn't hide the site (null, not [], so a failed read never reads as "no preview wildcard").
+    // Hostnames are informational; a fetch failure shouldn't hide the site (null, not [], so a failed read never reads as "no hostnames").
     const fetched = await withSpinner("Fetching hostnames...", () =>
       fetchPullZoneHostnames(client, state.pullZoneId).catch(() => null),
     );

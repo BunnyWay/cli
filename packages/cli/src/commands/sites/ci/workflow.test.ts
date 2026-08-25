@@ -20,24 +20,43 @@ test("astro + bun workflow builds with bun and deploys dist", () => {
   expect(yml).toContain(`uses: ${DEPLOY_SITE_ACTION}`);
   expect(yml).toContain('site: "my-site"');
   expect(yml).toContain('directory: "dist"');
-  // Preview by default; production only on pushes to main.
-  expect(yml).toContain("production: ${{ github.event_name == 'push' }}");
-  // Fork PRs are skipped, not failed.
-  expect(yml).toContain(
-    "github.event.pull_request.head.repo.full_name == github.repository",
-  );
+  expect(yml).toContain("api_key: ${{ secrets.BUNNY_API_KEY }}");
 });
 
-// Every deploy gets its own preview zone, so PR previews need no custom domain; the workflow always runs on PRs.
-test("the workflow always previews PRs and publishes pushes to main", () => {
+// Deploying is publishing, so the workflow only runs where a live deploy is wanted: pushes to main and an explicit dispatch.
+test("the workflow deploys on pushes to main and on demand, never on PRs", () => {
   const yml = renderSitesWorkflow({
     site: "my-site",
     preset: preset("astro"),
     packageManager: "bun",
   });
-  expect(yml).toContain("pull_request:");
-  expect(yml).toContain("pull-requests: write");
-  expect(yml).not.toContain("production: true");
+  expect(yml).toContain("  push:\n    branches: [main]");
+  expect(yml).toContain("workflow_dispatch:");
+  expect(yml).not.toContain("pull_request");
+  expect(yml).not.toContain("pull-requests: write");
+  expect(yml).not.toContain("production:");
+});
+
+// The deploy is recorded through the Deployments API, so the job needs that scope and nothing to do with PR comments.
+test("the workflow requests deployments: write and no PR write access", () => {
+  const yml = renderSitesWorkflow({
+    site: "my-site",
+    preset: preset("astro"),
+    packageManager: "bun",
+  });
+  expect(yml).toContain("contents: read");
+  expect(yml).toContain("deployments: write");
+});
+
+// A cancelled deploy can be killed mid-upload, leaving a half-written deploy directory that nothing records or prunes.
+test("production deploys serialize and are never cancelled in flight", () => {
+  const yml = renderSitesWorkflow({
+    site: "my-site",
+    preset: preset("astro"),
+    packageManager: "bun",
+  });
+  expect(yml).toContain("group: bunny-sites");
+  expect(yml).toContain("cancel-in-progress: false");
 });
 
 test("jekyll workflow uses ruby and deploys _site", () => {

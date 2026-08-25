@@ -70,21 +70,20 @@ bun ny storage zones add my-zone --tier ssd --s3   # create an Edge (SSD) zone (
 bun ny storage files list                   # list files in the linked storage zone
 bun ny storage files remove /               # empty the zone; asks twice (yes/no, then type the zone name), and unattended runs need --force
 bun ny sites create my-site                 # provision a static site (storage zone + pull zone + edge router; zones are named sites-my-site-<suffix>, served at sites-my-site-<suffix>.b-cdn.net)
-bun ny sites deploy                         # no linked site? offers to create one or pick an existing; detects the framework, offers to build, then deploys (a site's first deploy also offers to publish + attach a custom domain)
-bun ny sites deploy ./dist                  # deploy to an immutable HTTPS preview URL (sites-dpl-<id>-xxxxxx.b-cdn.net); no custom domain needed
-bun ny sites deploy ./dist --production     # publish as the live site (--prod works too)
+bun ny sites deploy                         # no linked site? offers to create one or pick an existing; detects the framework, offers to build, then deploys (a site's first deploy also offers to attach a custom domain)
+bun ny sites deploy ./dist                  # deploy a directory and publish it as the live site
 bun ny sites deploy --build                 # run `sites.build` from bunny.jsonc (else the detected framework's build), then deploy `sites.dir` (or the detected output dir)
 bun ny sites deployments list               # list deploys with the live one marked
 bun ny sites deployments publish --previous # instant rollback to the previous deploy
-bun ny sites deployments prune              # delete old deploys and their preview URLs (keeps the newest 5, never current/previous)
-bun ny sites deployments delete a1b2c3d4    # delete one deploy and its preview URL (never current/previous)
+bun ny sites deployments prune              # delete old deploys (keeps the newest 5, never current/previous)
+bun ny sites deployments delete a1b2c3d4    # delete one deploy (never current/previous)
 bun ny sites domains add example.com        # attach a custom production domain
 bun ny sites ssl --no-force-ssl             # stop forcing HTTPS on the site's b-cdn.net system host
 bun ny sites open                           # open the site's live URL in the browser
-bun ny sites ci init                        # add a GitHub Actions workflow (previews on PRs, production on main)
+bun ny sites ci init                        # add a GitHub Actions workflow (push to main goes live)
 ```
 
-Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) so a deploy needs no flags: `bun ny sites deploy --build --prod`. `bun ny sites ci init` writes the same `build` and `dir` into the generated workflow. See [`examples/sites/`](examples/sites/) for ready-to-copy configs (Vite, Astro, Next.js static export, Hugo, plain HTML, and a combined app + site file).
+Every deploy is published as the live site. Deploys are immutable under their own ID, so `bun ny sites deployments publish` rolls back to any earlier one without re-uploading. Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) so a deploy needs no flags: `bun ny sites deploy --build`. `bun ny sites ci init` writes the same `build` and `dir` into the generated workflow. See [`examples/sites/`](examples/sites/) for ready-to-copy configs (Vite, Astro, Next.js static export, Hugo, plain HTML, and a combined app + site file).
 
 ### Available scripts
 

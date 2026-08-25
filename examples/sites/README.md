@@ -22,15 +22,15 @@ installed.)
 With `name`, `build`, and `dir` set, the entire deploy is one command:
 
 ```bash
-bun ny sites deploy --build            # runs `build`, uploads `dir`, to a preview URL
-bun ny sites deploy --build --prod     # same, published as the live site
+bun ny sites deploy --build            # runs `build`, uploads `dir`, publishes it live
+bun ny sites deploy --build            # same, published as the live site
 ```
 
 No `--site`, no build command, no directory argument. Without the config you'd
 type them each time:
 
 ```bash
-bun ny sites deploy dist --build "npm run build" --site acme-app --prod
+bun ny sites deploy dist --build "npm run build" --site acme-app
 ```
 
 ## Examples
@@ -52,7 +52,7 @@ bun ny sites deploy dist --build "npm run build" --site acme-app --prod
 ```bash
 bun ny sites create acme-app     # provision the site + set `sites.name`
 # ...author bunny.jsonc from one of these examples...
-bun ny sites deploy --build --prod
+bun ny sites deploy --build
 ```
 
 For other frameworks, set `dir` to the framework's output folder (Gatsby

@@ -30,10 +30,6 @@ export interface DeployRecord {
   contentHash: string;
   files: number;
   bytes: number;
-  /** The deploy's preview pull zone, recorded only once fully configured; absent when creation or setup failed, which is what makes the next deploy of this id re-adopt and repair it. */
-  previewZoneId?: number;
-  /** The preview zone's `*.b-cdn.net` system hostname; always HTTPS-ready. */
-  previewHost?: string;
 }
 
 // Source of truth (at `_bunny/site.json`) for a site's resource triple and deploys; `.bunny/site.json` is just a local pointer to it.
@@ -43,9 +39,9 @@ export interface RemoteSiteState {
   storageZoneId: number;
   pullZoneId: number;
   scriptId: number;
-  /** Custom production domain, when one has been attached (display only; previews don't depend on it). */
+  /** Custom production domain, when one has been attached. */
   domain?: string;
-  /** The router source generation last published to the script; deploy republishes when it lags ROUTER_VERSION, so preview hostnames can't silently serve production. */
+  /** The router source generation last published to the script; deploy republishes when it lags ROUTER_VERSION. */
   routerVersion?: number;
   current?: string;
   previous?: string;
@@ -92,11 +88,11 @@ export function isValidDeployId(id: string): boolean {
   return DEPLOY_ID_RE.test(id);
 }
 
-// Site names become `sites-{name}-{suffix}` zone names; 3-47 chars keeps those within zone-name limits. `dpl-` is reserved: a site named like a deploy would make its zones indistinguishable from preview zones.
+// Site names become `sites-{name}-{suffix}` zone names; 3-47 chars keeps those within zone-name limits.
 const SITE_NAME_RE = /^[a-z0-9][a-z0-9-]{1,45}[a-z0-9]$/;
 
 export function isValidSiteName(name: string): boolean {
-  return SITE_NAME_RE.test(name) && !name.startsWith("dpl-");
+  return SITE_NAME_RE.test(name);
 }
 
 // Marks the zones as sites-managed in the dashboard; discovery doesn't key on it (that's pull zone shape + state).
@@ -117,30 +113,6 @@ export function randomResourceSuffix(): string {
 /** A site's storage/pull zone name: `sites-{name}-{suffix}`. */
 export function suffixedResourceName(siteName: string): string {
   return `${RESOURCE_PREFIX}${siteName}-${randomResourceSuffix()}`;
-}
-
-// Preview zones are per-deploy pull zones named `sites-dpl-{deployId}-{rand6}`: served at that name under b-cdn.net (instant HTTPS via bunny's own certificate), pointed at the site's storage zone, with the site's router attached. Deploy IDs contain no dashes, so the name parses unambiguously, and the worst case (40-char id) stays under the 63-char DNS label limit.
-export const PREVIEW_ZONE_PREFIX = `${RESOURCE_PREFIX}dpl-`;
-
-const PREVIEW_ZONE_RE = new RegExp(
-  `^${PREVIEW_ZONE_PREFIX}([a-z0-9]{4,40})-[a-z0-9]{${RESOURCE_SUFFIX_LENGTH}}$`,
-  "i",
-);
-
-/** A fresh globally-unique pull zone name for a deploy's preview. */
-export function previewZoneName(deployId: string): string {
-  return `${PREVIEW_ZONE_PREFIX}${deployId}-${randomResourceSuffix()}`;
-}
-
-/** The deploy a preview zone name serves, or undefined for any other zone name. */
-export function deployIdFromPreviewZoneName(
-  name: string | null | undefined,
-): string | undefined {
-  return PREVIEW_ZONE_RE.exec(name ?? "")?.[1]?.toLowerCase();
-}
-
-export function isPreviewZoneName(name: string | null | undefined): boolean {
-  return deployIdFromPreviewZoneName(name) !== undefined;
 }
 
 /** Matches a site's zone names: `sites-{name}-{suffix}`. */

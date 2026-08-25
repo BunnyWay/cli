@@ -910,7 +910,7 @@ bunny scripts docs
 
 Host static sites on bunny.net. Each site is three resources provisioned and wired together for you: a **storage zone** holding the files, a **pull zone** serving them over the CDN, and a **middleware router** (an Edge Script) that maps incoming requests to the deploy that should answer them. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
 
-Deploys are immutable: every `sites deploy` uploads to its own `deploys/<id>/` directory and gets its own preview pull zone, a permanent root-served HTTPS URL (`sites-dpl-<id>-<suffix>.b-cdn.net`) that needs no DNS or certificate setup. Publishing flips the router's `CURRENT_DEPLOY` variable and purges the cache, so going live and rolling back are instant and move no files. Deploy IDs are the git short SHA when the working tree is clean and a content hash otherwise, which makes redeploying identical content a no-op.
+Deploys are immutable: every `sites deploy` uploads to its own `deploys/<id>/` directory and then goes live. Publishing flips the router's `CURRENT_DEPLOY` variable and purges the cache, so going live and rolling back to any earlier deploy are instant and move no files. Deploy IDs are the git short SHA when the working tree is clean and a content hash otherwise, which makes redeploying identical content a no-op.
 
 Commands take the site as an optional positional (`[site]`), except `deploy`, `ci init`, and `deployments publish`, which use `--site`. Either accepts the site name or its storage zone ID. When omitted, the site resolves from the directory's linked site (`.bunny/site.json`, written by `sites link` or by `create`/`deploy`), then `sites.name` in `bunny.jsonc`, then an interactive picker that offers to link. Non-interactive runs (`--output json`, no TTY, or `--force` on a destructive command) error instead of prompting.
 
@@ -923,8 +923,7 @@ bunny sites create my-site --domain example.com       # also attach a custom pro
 
 # Deploy
 bunny sites deploy                                    # detects the framework, offers to build, then deploys
-bunny sites deploy ./dist                             # deploy a directory to an immutable HTTPS preview URL
-bunny sites deploy ./dist --production                # deploy and publish as the live site (--prod works too; the interactive first deploy offers this)
+bunny sites deploy ./dist                             # deploy a directory and publish it as the live site
 bunny sites deploy --build                            # run `sites.build` from bunny.jsonc (else the detected build), then deploy
 bunny sites deploy --build "npm run build" --env API_URL=https://api.example.com
 bunny sites deploy ./dist --site my-site --force      # target a site explicitly; redeploy unchanged content
@@ -933,9 +932,9 @@ bunny sites deploy ./dist --site my-site --force      # target a site explicitly
 bunny sites deployments list                          # ● Live / ○ Previous markers, created, source, files, size
 bunny sites deployments publish a1b2c3d4              # promote a past deploy (alias: promote)
 bunny sites deployments publish --previous            # instant rollback
-bunny sites deployments prune --keep 10               # delete old deploys and their preview zones (default keeps 5; never live/previous)
+bunny sites deployments prune --keep 10               # delete old deploys (default keeps 5; never live/previous)
 
-# Custom production domains (previews don't need one)
+# Custom production domains
 bunny sites domains list
 bunny sites domains add shop.example.com              # prints the DNS record to create
 bunny sites domains add shop.example.com --wait       # add, wait for DNS, then issue SSL and force HTTPS
@@ -950,7 +949,7 @@ bunny sites open --print
 bunny sites ssl --no-force-ssl
 
 # CI, linking, maintenance
-bunny sites ci init                                   # GitHub Actions: previews on PRs, production on main
+bunny sites ci init                                   # GitHub Actions: push to main goes live
 bunny sites ci init --framework astro
 bunny sites link my-site
 bunny sites unlink
@@ -958,16 +957,15 @@ bunny sites upgrade-router                            # republish the router wit
 bunny sites delete my-site --keep-storage             # typed-name confirmation; keeps the deploy files
 ```
 
-Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) and a deploy needs no arguments: `bunny sites deploy --build --prod`. `sites ci init` reads the same block, so the generated workflow builds and deploys exactly what the local command does; without it, the framework is detected from `package.json` deps, `Gemfile`, or a `hugo`/`python`/`zola` config file, with the lockfile picking the package manager. `sites create` offers to scaffold the workflow on GitHub repos.
+Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) and a deploy needs no arguments: `bunny sites deploy --build`. `sites ci init` reads the same block, so the generated workflow builds and deploys exactly what the local command does; without it, the framework is detected from `package.json` deps, `Gemfile`, or a `hugo`/`python`/`zola` config file, with the lockfile picking the package manager. `sites create` offers to scaffold the workflow on GitHub repos.
 
-A deploy's preview URL is `https://sites-dpl-<id>-<suffix>.b-cdn.net`: its own pull zone pointed at the same storage zone with the same router attached, so previews are root-served (client-side routing and absolute asset paths behave exactly like production) and HTTPS works immediately under bunny's own certificate. Previews never publish anything; only `--production` (or `deployments publish`) changes the live site. Site state lives at `_bunny/site.json` inside the storage zone (the router blocks it with a 403); `.bunny/site.json` is only a local pointer, so a fresh clone can `sites link` and pick up where the last machine left off.
+Every deploy publishes: the files land in an immutable `deploys/<id>/` directory and the router is pointed at it, so `deployments publish` rolls back to any earlier deploy by moving that pointer, with no files moving and nothing re-uploaded. Content is root-served, so client-side routing and absolute asset paths work as-is. Site state lives at `_bunny/site.json` inside the storage zone (the router blocks it with a 403); `.bunny/site.json` is only a local pointer, so a fresh clone can `sites link` and pick up where the last machine left off.
 
 | Flag                                   | Commands                                                   | Description                                                                                        |
 | -------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `--region`, `--domain`                 | `create`                                                   | Main storage region code (default `DE`); custom production domain to attach                        |
 | `--site`                               | `deploy`, `ci init`, `deployments publish`                 | Site name or storage zone ID (defaults to the linked site)                                         |
 | `--build [cmd]`, `--env`, `--env-file` | `deploy`                                                   | Build before deploying (bare flag uses the configured or detected build); build-time env overrides |
-| `--production`, `--prod`               | `deploy`                                                   | Publish the deploy as the live site instead of a preview only                                      |
 | `--force`                              | `deploy`                                                   | Deploy even when the content is unchanged                                                          |
 | `--previous`                           | `deployments publish`                                      | Publish the previous deploy (instant rollback)                                                     |
 | `--keep`                               | `deployments prune`                                        | Number of recent deploys to keep (default 5; live and previous are always kept)                    |

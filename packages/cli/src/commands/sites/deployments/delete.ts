@@ -2,13 +2,11 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
-import { errorMessage, UserError } from "../../../core/errors.ts";
+import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, requireConfirmable, withSpinner } from "../../../core/ui.ts";
 import {
   deleteDeployFiles,
-  deletePreviewZone,
-  findPreviewZones,
   readRemoteState,
   writeRemoteState,
 } from "../api.ts";
@@ -24,7 +22,7 @@ interface DeleteArgs extends SiteSelectorArgs {
   force?: boolean;
 }
 
-// The guard that makes `delete` safe to automate: the live deploy and the rollback target are never deletable, and `--force` only skips the confirmation, never this. It also covers the fast-forward-merge case where a PR preview's ID *is* the deploy that was just promoted.
+// The guard that makes `delete` safe to automate: the live deploy and the rollback target are never deletable, and `--force` only skips the confirmation, never this.
 export function deleteBlocker(
   state: Pick<RemoteSiteState, "current" | "previous">,
   id: string,
@@ -34,15 +32,15 @@ export function deleteBlocker(
   return undefined;
 }
 
-// Delete one deploy: its preview zone(s) first, then its files, then the record. Built for CI cleanup of a merged/closed PR's preview, so deleting an ID that's already gone is a no-op success and re-runs converge. Retention cleanup stays with `prune`.
+// Delete one deploy: its files, then its record. Deleting an ID that's already gone is a no-op success, so re-runs converge. Retention cleanup stays with `prune`.
 export const sitesDeploymentsDeleteCommand = defineCommand<DeleteArgs>({
   command: "delete [id]",
-  describe: "Delete a deploy and its preview URL.",
+  describe: "Delete a deploy.",
   examples: [
     ["$0 sites deployments delete a1b2c3d4", "Delete a deploy by ID"],
     [
       "$0 sites deployments delete a1b2c3d4 --site my-site --force",
-      "Non-interactive (CI) deletion",
+      "Non-interactive deletion",
     ],
   ],
 
@@ -116,17 +114,16 @@ export const sitesDeploymentsDeleteCommand = defineCommand<DeleteArgs>({
       message: `Deleting deploy ${id} needs a confirmation prompt.`,
       hint: "Re-run with --force to delete non-interactively.",
     });
-    const proceed = await confirm(
-      `Delete deploy ${id} (and its preview URL) from ${state.name}?`,
-      { force: args.force },
-    );
+    const proceed = await confirm(`Delete deploy ${id} from ${state.name}?`, {
+      force: args.force,
+    });
     if (!proceed) {
       logger.log("Cancelled.");
       return;
     }
 
     const deleted = await withSpinner(`Deleting deploy ${id}...`, async () => {
-      // Revalidate on fresh state right before anything destructive: the confirmation window is long enough for a concurrent publish to make this deploy live (on a fast-forward merge, PR-close cleanup and the production deploy carry the same sha).
+      // Revalidate on fresh state right before anything destructive: the confirmation window is long enough for a concurrent deploy to make this one live.
       const fresh = await readRemoteState(connection);
       if (fresh === null) {
         throw new UserError(
@@ -145,33 +142,6 @@ export const sitesDeploymentsDeleteCommand = defineCommand<DeleteArgs>({
         );
       }
 
-      // Same order as prune. One listing backfills a record that lost its zone id and catches duplicate zones a concurrent same-id deploy left behind. Unlike prune, a delete forgets the record for good, so a stranded duplicate would never be retried: a failed listing always aborts.
-      let discovered: number[];
-      try {
-        discovered = (await findPreviewZones(client, latest.storageZoneId))
-          .filter((z) => z.deployId === id)
-          .map((z) => z.id);
-      } catch (err) {
-        throw new UserError(
-          `Couldn't check deploy ${id} for preview zones: ${errorMessage(err)}`,
-          "Retry the delete; the deploy record was kept.",
-        );
-      }
-      // Zones first: a failed zone deletion keeps the record (and files), so a retry picks the zone back up instead of orphaning it until site delete.
-      const zoneIds = new Set([
-        ...(freshRecord.previewZoneId !== undefined
-          ? [freshRecord.previewZoneId]
-          : []),
-        ...discovered,
-      ]);
-      for (const zoneId of zoneIds) {
-        if (!(await deletePreviewZone(client, zoneId))) {
-          throw new UserError(
-            `The preview zone for deploy ${id} couldn't be deleted.`,
-            "Retry the delete; the deploy record was kept.",
-          );
-        }
-      }
       await deleteDeployFiles(connection, id);
       latest.deploys = latest.deploys.filter((d) => d.id !== id);
       await writeRemoteState(connection, latest, latestEtag, {
