@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.15.1
+
+### Patch Changes
+
+- [#184](https://github.com/BunnyWay/cli/pull/184) [`4565456`](https://github.com/BunnyWay/cli/commit/4565456964b467869d834ad4d910d137424aebee) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sites): `sites ci init` names the repository secret `BUNNYNET_API_KEY`, matching the environment variable the CLI reads, pins the generated workflow to a `deploy-site` action tag that exists.
+
 ## 0.15.0
 
 ### Minor Changes
