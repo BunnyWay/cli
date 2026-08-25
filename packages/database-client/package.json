@@ -1,7 +1,32 @@
 {
   "name": "@bunny.net/database-client",
   "version": "0.0.1",
+  "description": "Dependency-free SQL client for Bunny Database. Runs anywhere fetch does: Bunny Edge Scripting, Bun, Node, and Deno.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BunnyWay/cli.git",
+    "directory": "packages/database-client"
+  },
+  "homepage": "https://github.com/BunnyWay/cli/tree/main/packages/database-client#readme",
+  "bugs": "https://github.com/BunnyWay/cli/issues",
+  "keywords": [
+    "bunny",
+    "bunny.net",
+    "bunny-database",
+    "database",
+    "sql",
+    "sqlite",
+    "libsql",
+    "edge",
+    "serverless",
+    "typescript"
+  ],
   "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.17.0"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,7 +43,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "devDependencies": {
     "typescript": "^5"
