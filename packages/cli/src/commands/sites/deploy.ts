@@ -164,7 +164,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     // Republish an outdated router before deploying, so this deploy is served by the current source (state.routerVersion persists with this deploy's writes, including no-op runs, so it doesn't republish every time). A failure isn't fatal: the old router still resolves CURRENT_DEPLOY.
     let routerUpgraded = false;
     try {
-      routerUpgraded = await ensureRouterCurrent({ computeClient, state });
+      routerUpgraded = await ensureRouterCurrent({
+        coreClient,
+        computeClient,
+        state,
+      });
       if (routerUpgraded && output !== "json") {
         logger.info("Republished the site's router.");
       }

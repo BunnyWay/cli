@@ -4,6 +4,7 @@ import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
 import {
   type ComputeClient,
   createSite,
+  deleteDeployFiles,
   deleteSiteResources,
   ensureRouterCurrent,
   fetchSites,
@@ -456,7 +457,12 @@ test("createSite provisions storage zone → router → pull zone → state", as
   const attach = coreCalls.find(
     (c) => c.method === "POST" && c.path === "/pullzone/{id}",
   );
-  expect(attach?.body).toEqual({ MiddlewareScriptId: 20 });
+  // The router and the cache override go on together: the router decides what a
+  // response may be cached for, and the override would replace its answer.
+  expect(attach?.body).toEqual({
+    MiddlewareScriptId: 20,
+    CacheControlMaxAgeOverride: -1,
+  });
 
   // The system host redirects HTTP → HTTPS out of the box.
   const forceSsl = coreCalls.find(
@@ -772,19 +778,53 @@ test("fetchSites ignores another pull zone pointed at the site's storage zone", 
 test("ensureRouterCurrent republishes an outdated router and stamps the version", async () => {
   const calls: Call[] = [];
   const computeClient = fakeComputeClient({ calls });
-  const state = fakeState();
+  const coreCalls: Call[] = [];
+  const coreClient = fakeCoreClient({ calls: coreCalls });
+  const state = fakeState({
+    deploys: [
+      {
+        id: "a1b2c3d4",
+        createdAt: "2026-01-01T00:00:00Z",
+        source: "git",
+        contentHash: "hash1",
+        files: 1,
+        bytes: 1,
+      },
+    ],
+  });
 
-  expect(await ensureRouterCurrent({ computeClient, state })).toBe(true);
+  expect(await ensureRouterCurrent({ coreClient, computeClient, state })).toBe(
+    true,
+  );
   expect(state.routerVersion).toBe(ROUTER_VERSION);
   expect(calls.map((c) => c.path)).toEqual([
     "/compute/script/{id}/code",
     "/compute/script/{id}/publish",
   ]);
 
+  // The router owns Cache-Control from v6 on, so the zone override goes off on
+  // the site's zone. Leaving it on would have the edge replace every answer the
+  // router gives, including a 404 that must not outlive the deploy which fixes
+  // it.
+  expect(
+    coreCalls.map((c) => ({
+      path: c.path,
+      id: (c.params as { path: { id: number } }).path.id,
+      body: c.body,
+    })),
+  ).toEqual([
+    {
+      path: "/pullzone/{id}",
+      id: 30,
+      body: { CacheControlMaxAgeOverride: -1 },
+    },
+  ]);
+
   // Already current: no calls at all.
   const noCalls: Call[] = [];
   expect(
     await ensureRouterCurrent({
+      coreClient: fakeCoreClient({ calls: [] }),
       computeClient: fakeComputeClient({ calls: noCalls }),
       state,
     }),
@@ -885,4 +925,26 @@ test("fetchSites pages through the /pullzone envelope", async () => {
   const sites = await fetchSites(coreClient);
   expect(sites).toHaveLength(1);
   expect(sites[0]?.state.name).toBe("my-site");
+});
+
+test("fetchSites ignores a middleware pull zone with no storage zone", async () => {
+  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
+  const coreClient = fakeCoreClient({
+    calls: [],
+    storageZones: [ZONE],
+    pullZones: [
+      { Id: 30, Name: "my-site", MiddlewareScriptId: 20, StorageZoneId: -1 },
+    ],
+  });
+
+  expect(await fetchSites(coreClient)).toHaveLength(0);
+});
+
+test("deleting a deploy removes its files", async () => {
+  store.set("deploys/a1b2c3d4/index.html", "<h1>live</h1>");
+  store.set("deploys/e5f6a7b8/index.html", "<h1>other</h1>");
+
+  await deleteDeployFiles(fakeConnection(), "a1b2c3d4");
+
+  expect([...store.keys()].sort()).toEqual(["deploys/e5f6a7b8/index.html"]);
 });

@@ -10,6 +10,21 @@ export const DEPLOYS_DIR = "deploys";
 // Router env var selecting the production deploy; updating it is the promote/rollback lever (no republish).
 export const CURRENT_DEPLOY_VAR = "CURRENT_DEPLOY";
 
+/**
+ * Pull zone settings the router depends on. Applied to a site's zone at create
+ * and whenever the router is republished.
+ *
+ * `-1` turns the cache override off. With the zone default of 2592000 in place
+ * the edge rewrites every `Cache-Control` it forwards, so nothing the router
+ * returns reaches the visitor: an HTML page is a month stale in a browser that
+ * a purge cannot reach, and a 404 the next deploy fixes outlives it by weeks.
+ * With it off the edge follows the origin, and Bunny Storage sends no
+ * `Cache-Control` for HTML, so the router sets one on every response.
+ */
+export const STATIC_SITE_ZONE_SETTINGS = {
+  CacheControlMaxAgeOverride: -1,
+} as const;
+
 export const STATE_VERSION = 1;
 
 export const DEFAULT_KEEP_DEPLOYS = 5;

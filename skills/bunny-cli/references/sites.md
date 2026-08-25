@@ -41,6 +41,20 @@ This is the rule that shapes every other command here:
 
 Content is root-served, so client-side routers (TanStack Router, React Router, Vue Router in history mode) and root-absolute assets work as-is. Deploys are not individually addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served. To review a change before it goes live, build and serve it locally, or deploy it to a separate site.
 
+## What the deploy configures
+
+The router reads three file names out of the deploy it serves. Cloudflare Pages and Netlify read the same three, so a build that already writes them needs nothing bunny-specific.
+
+| File in the deploy | What it does                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `404.html`         | Answers a path the deploy does not hold, at status 404. Without it a miss gets bunny.net's error page             |
+| `_redirects`       | `/from /to [status]` per line. `#` comments, a trailing `*` captured as `:splat`, `!` to beat a file at that path |
+| `_headers`         | A `/path` line, then indented `Name: value` lines                                                                 |
+
+301 is the default status; 302, 303, 307 and 308 are read too. A rewrite (`200`) is not supported. A rule without `!` applies only where the deploy holds no file, so a real file always wins. A path matches with or without its trailing slash.
+
+The router also sets `Cache-Control` on every response, because Bunny Storage sends none for HTML: 60 seconds for a page, 30 days for anything else, and whatever `_headers` says. `sites create` turns the pull zone's own cache override off so that answer reaches the visitor, and `sites upgrade-router` does it for a site made by an earlier CLI.
+
 ## Deploy IDs
 
 - The deploy ID is the **git short-sha** when the working tree is clean, otherwise an 8-char **content hash**. Re-deploying identical content is a no-op (`--force` overrides).
