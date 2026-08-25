@@ -1,6 +1,6 @@
 # Examples
 
-Four takes on the same notes API, one per runtime. Paths are relative to `packages/database-client`.
+Five takes on the same notes API, one per runtime. Paths are relative to `packages/database-client`.
 
 | Example               | Runtime                     | Run it                                         |
 | --------------------- | --------------------------- | ---------------------------------------------- |
@@ -8,8 +8,11 @@ Four takes on the same notes API, one per runtime. Paths are relative to `packag
 | `bun/server.ts`       | Bun                         | `bun run examples/bun/server.ts`               |
 | `node/server.ts`      | Node 24 or newer            | `node --env-file=.env examples/node/server.ts` |
 | `hono/server.ts`      | Bun, Deno, Edge Scripting   | `bun run examples/hono/server.ts`              |
+| `astro/`              | Node, needs a server target | `cd examples/astro && bun run dev`             |
 
-The edge script is the full CRUD surface: list, create, read, replace, delete. The other three cover fewer routes on purpose, so what you are reading is the runtime wiring rather than a fourth copy of the same handlers.
+The edge script and the Hono app deploy to Edge Scripting as they are. The Bun, Node, and Astro examples need a process to run in, so they belong on a container or your own host; sites serves static output from storage and cannot host any of the three. The Astro README says so up front, since it is the one where that is easy to miss.
+
+The edge script is the full CRUD surface: list, create, read, replace, delete. The others cover fewer routes on purpose, so what you are reading is the runtime wiring rather than another copy of the same handlers.
 
 ## Before you run one
 

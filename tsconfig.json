@@ -44,6 +44,8 @@
     "packages/database-studio/client",
     "packages/*/dist",
     // Deno "npm:" specifiers, resolved by Edge Scripting rather than by tsc.
-    "packages/database-client/examples/edge-script"
+    "packages/database-client/examples/edge-script",
+    // A standalone Astro project with its own dependencies and tsconfig.
+    "packages/database-client/examples/astro"
   ]
 }

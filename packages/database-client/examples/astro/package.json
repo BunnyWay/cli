@@ -1,0 +1,15 @@
+{
+  "name": "bunny-database-client-example-astro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "start": "node ./dist/server/entry.mjs"
+  },
+  "dependencies": {
+    "@astrojs/node": "^11",
+    "@bunny.net/database-client": "^0.0.1",
+    "astro": "^7"
+  }
+}

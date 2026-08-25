@@ -146,7 +146,8 @@ bunny-cli/
 │   │   │   ├── edge-script/main.ts       # Full CRUD on Edge Scripting via npm: specifiers (excluded from root tsc)
 │   │   │   ├── bun/server.ts             # Bun.serve routes
 │   │   │   ├── node/server.ts            # node:http, needs --env-file
-│   │   │   └── hono/server.ts            # Hono app exported as a fetch handler
+│   │   │   ├── hono/server.ts            # Hono app exported as a fetch handler
+│   │   │   └── astro/                   # Standalone Astro project; needs a server target, excluded from root tsc
 │   │   ├── scripts/
 │   │   │   └── smoke.ts                  # Live end-to-end run on Bun and Deno; creates and drops its own tables
 │   │   └── src/
