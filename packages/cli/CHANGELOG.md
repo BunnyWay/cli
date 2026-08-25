@@ -1,5 +1,23 @@
 # @bunny.net/cli
 
+## 0.15.0
+
+### Minor Changes
+
+- [#136](https://github.com/BunnyWay/cli/pull/136) [`5e61ab6`](https://github.com/BunnyWay/cli/commit/5e61ab68dac1b14be16748560bdde8b623551c80) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(db): `bunny db migrations create/list/apply` runs numbered `.sql` files in `migrations/` (or `drizzle/`) once each, tracked in `__bunny_migrations`; `--pattern` supports nested ORM layouts while checksum drift and out-of-order files block unsafe applies unless `--allow-drift` is explicit; migration commands show the credential-free database target; `splitStatements` keeps `CREATE TRIGGER` bodies intact, supports every SQLite quote form, drops comments, and rejects truncated SQL; `db shell`, `db studio`, and `db migrations apply` now honour an explicit database ID over `.env` credentials, require encrypted hosted database URLs regardless of token source, and refuse to send an ambient or generated token to a different hostname or service port
+
+- [#182](https://github.com/BunnyWay/cli/pull/182) [`4616f46`](https://github.com/BunnyWay/cli/commit/4616f463fa800f2eea7ef1a7b5286ede2d298466) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sites): `bunny sites deploy` now publishes straight to production. One command puts your site live: no `--production` flag to remember, no publish prompt on a fresh site, and no half-deployed state to reason about. Deploys stay immutable under their own ID, so `sites deployments publish` still rolls back to any earlier one instantly without re-uploading a byte, and `ci init` writes a leaner workflow that goes live on every push to `main` (plus `workflow_dispatch` for on-demand redeploys) and records each run in the repository's Environments. This drops the per-deploy preview URL
+
+### Patch Changes
+
+- [#183](https://github.com/BunnyWay/cli/pull/183) [`7b6105b`](https://github.com/BunnyWay/cli/commit/7b6105b85fc7e80b29e235ebc5e83dae41170d4e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix: resolve open code scanning alerts; markdown table cells escape backslashes before pipes so a value containing `\|` no longer splits the cell, the SQL statement splitter counts block depth with a linear scan instead of a regex that rescanned from every offset on a run of unclosed `[`, `sites ci` detects a GitHub origin by remote host instead of a substring match, `database-rest` returns a generic 500 and hands the real error to an `onError` hook (wired to the studio's logger) instead of putting it in the response body, and the CI, template-upload, and install-script-upload workflows pin `GITHUB_TOKEN` to `contents: read`
+
+- [#154](https://github.com/BunnyWay/cli/pull/154) [`294ae07`](https://github.com/BunnyWay/cli/commit/294ae07086ab44ad47e55405a68f6e9397e005a4) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add `@bunny.net/database-client`, a zero-dependency server-side SQL client for Bunny Database that runs on Edge Scripting, Bun, and Node, and move `db shell`, `db studio`, and `db migrations` onto it in place of `@libsql/client`.
+
+- [#173](https://github.com/BunnyWay/cli/pull/173) [`5f88add`](https://github.com/BunnyWay/cli/commit/5f88add71dc3f75e0e105d47f42a5f2e4baa574a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(core): prompts no longer spin at 100% CPU forever when run without a terminal (CI, cron, `< /dev/null`); prompts now require an interactive terminal, so input prompts and destructive confirmations fail fast with exit 1 and a hint naming the flag to pass (`--force` or the value flag), offer-style prompts decline and continue, and piped prompt answers are no longer supported (pass flags instead)
+
+- [#177](https://github.com/BunnyWay/cli/pull/177) [`c71f358`](https://github.com/BunnyWay/cli/commit/c71f358e8c34e3e1936b5d418bfbcd4e9ddf3ef1) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(storage): correct file listing, path joining, root deletes. `storage files remove` now fails fast instead of prompting when nobody can answer. Also match the dashboard's region sets per tier and S3 support
+
 ## 0.14.1
 
 ### Patch Changes
