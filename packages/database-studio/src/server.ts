@@ -88,7 +88,13 @@ export async function startStudio(options: StudioOptions): Promise<void> {
   // cookie that gates every subsequent /api/* request.
   const sessionToken = randomBytes(32).toString("hex");
   const handleRest = requireAuth(
-    createRestHandler(executor, schema, { basePath: "/api" }),
+    createRestHandler(executor, schema, {
+      basePath: "/api",
+      onError: (err) =>
+        logger.error(
+          `API error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
+        ),
+    }),
     { token: sessionToken, cookieName: AUTH_COOKIE },
   );
 
@@ -118,8 +124,11 @@ export async function startStudio(options: StudioOptions): Promise<void> {
           try {
             return await handleRest(req);
           } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            return new Response(JSON.stringify({ message }), {
+            // Detail goes to the terminal running the studio, not to the browser.
+            logger.error(
+              `API error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
+            );
+            return new Response(JSON.stringify({ message: "Internal error" }), {
               status: 500,
               headers: { "Content-Type": "application/json" },
             });

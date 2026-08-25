@@ -65,6 +65,13 @@ describe("formatTable", () => {
     expect(lines[2]).toBe("| a\\|b |");
   });
 
+  // An escaped backslash must not consume the escape in front of the pipe.
+  test("markdown escapes backslashes before pipe characters", () => {
+    const result = formatTable(["Col"], [["a\\|b"]], "markdown");
+    const lines = result.split("\n");
+    expect(lines[2]).toBe("| a\\\\\\|b |");
+  });
+
   test("table format produces bordered table", () => {
     const result = formatTable(headers, rows, "table");
     expect(result).toContain("ID");

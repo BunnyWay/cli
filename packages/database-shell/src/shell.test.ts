@@ -672,6 +672,12 @@ describe("splitStatements", () => {
     expect(splitStatements(sql)).toEqual([sql.slice(0, -1)]);
   });
 
+  test("ignores block keywords inside bracket-quoted identifiers", () => {
+    const sql =
+      "CREATE TRIGGER t AFTER INSERT ON [end table] BEGIN\n  INSERT INTO log VALUES (1);\nEND;";
+    expect(splitStatements(sql)).toEqual([sql.slice(0, -1)]);
+  });
+
   test("splits drizzle statement-breakpoint files", () => {
     const sql =
       "CREATE TABLE `users` (\n\t`id` integer PRIMARY KEY NOT NULL\n);\n--> statement-breakpoint\nCREATE UNIQUE INDEX `users_id` ON `users` (`id`);";

@@ -18,6 +18,8 @@ export interface RestHandlerOptions {
   basePath?: string;
   /** Options passed to generateOpenAPISpec for the root endpoint. */
   openapi?: GenerateOptions;
+  /** Called with the real error behind a 500 so the host can log it; responses never carry the detail. */
+  onError?: (err: unknown) => void;
 }
 
 const json = (data: unknown, status = 200, headers?: Record<string, string>) =>
@@ -186,8 +188,9 @@ export const createRestHandler = (
           return errorResponse("Method not allowed", 405, "METHOD_NOT_ALLOWED");
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errorResponse(message, 500, "INTERNAL_ERROR");
+      // The detail goes to the host's logger, not the response: a mounted handler must not leak schema names or file paths.
+      options.onError?.(err);
+      return errorResponse("Internal error", 500, "INTERNAL_ERROR");
     }
   };
 };

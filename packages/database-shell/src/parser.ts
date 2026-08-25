@@ -2,7 +2,8 @@
 const BLOCK_BODY_START = /^CREATE\s+(?:TEMP\s+|TEMPORARY\s+)?TRIGGER\b/i;
 
 /** Quoted strings and identifiers, so keywords inside them don't affect nesting. */
-const QUOTED = /'(?:[^']|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]*\]/g;
+// The bracket body excludes `[` as well as `]`: a run of unclosed `[` would otherwise rescan to end of input from every offset.
+const QUOTED = /'(?:[^']|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^[\]]*\]/g;
 
 type QuoteTerminator = "'" | '"' | "`" | "]";
 

@@ -1567,6 +1567,8 @@ interface ShellLogger {
 
 The invariant behind all of it: a credential the user didn't pass on this command line is never sent to a target they did.
 
+`createRestHandler()` in `packages/database-rest/src/handler.ts` never puts a caught error's text in a response: the catch-all returns `{ message: "Internal error", code: "INTERNAL_ERROR" }` with a 500 and hands the real error to the optional `onError` hook. The handler is a mountable REST surface, so a raw SQLite error in the body would leak table names, column names, and file paths to whoever can reach it. `db studio` wires `onError` to its own logger, which is why a failing request prints the stack in the terminal that launched the studio rather than showing it in the browser.
+
 Every database connection the CLI opens identifies itself with `databaseUserAgent(command)` from `packages/cli/src/commands/db/constants.ts`, which produces `bunny-cli/<version> (db shell)`, `(db studio)`, or `(db migrations)`. It replaces the library's own default, which is right here: the CLI compiles `database-shell` and `database-studio` from source into its binary, so those packages' versions say nothing about the traffic. A standalone `bsql` run keeps `bunny-database-shell/<version>`, and anything embedding the shell can pass `userAgent` to `createShellClient()`.
 
 - `shellLogger()` adapter that wraps the CLI `logger`

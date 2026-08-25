@@ -557,3 +557,32 @@ describe("method handling", () => {
     expect(res.status).toBe(405);
   });
 });
+
+describe("internal errors", () => {
+  const boom = "no such column: secret_internal_column";
+  const failing: DatabaseExecutor = {
+    execute: async () => {
+      throw new Error(boom);
+    },
+  };
+
+  test("returns a generic 500 without the underlying error detail", async () => {
+    const h = createRestHandler(failing, schema);
+    const res = await h(req("GET", "/users"));
+    expect(res.status).toBe(500);
+    const body = await jsonBody(res);
+    expect(body.code).toBe("INTERNAL_ERROR");
+    expect(body.message).toBe("Internal error");
+    expect(JSON.stringify(body)).not.toContain("secret_internal_column");
+  });
+
+  test("hands the real error to onError so the host can log it", async () => {
+    const seen: unknown[] = [];
+    const h = createRestHandler(failing, schema, {
+      onError: (err) => seen.push(err),
+    });
+    await h(req("GET", "/users"));
+    expect(seen).toHaveLength(1);
+    expect((seen[0] as Error).message).toBe(boom);
+  });
+});
