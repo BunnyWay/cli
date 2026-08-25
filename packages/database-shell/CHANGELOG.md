@@ -1,5 +1,18 @@
 # @bunny.net/database-shell
 
+## 0.2.5
+
+### Patch Changes
+
+- [#183](https://github.com/BunnyWay/cli/pull/183) [`7b6105b`](https://github.com/BunnyWay/cli/commit/7b6105b85fc7e80b29e235ebc5e83dae41170d4e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix: resolve open code scanning alerts; markdown table cells escape backslashes before pipes so a value containing `\|` no longer splits the cell, the SQL statement splitter counts block depth with a linear scan instead of a regex that rescanned from every offset on a run of unclosed `[`, `sites ci` detects a GitHub origin by remote host instead of a substring match, `database-rest` returns a generic 500 and hands the real error to an `onError` hook (wired to the studio's logger) instead of putting it in the response body, and the CI, template-upload, and install-script-upload workflows pin `GITHUB_TOKEN` to `contents: read`
+
+- [#154](https://github.com/BunnyWay/cli/pull/154) [`294ae07`](https://github.com/BunnyWay/cli/commit/294ae07086ab44ad47e55405a68f6e9397e005a4) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add `@bunny.net/database-client`, a zero-dependency server-side SQL client for Bunny Database that runs on Edge Scripting, Bun, and Node, and move `db shell`, `db studio`, and `db migrations` onto it in place of `@libsql/client`.
+
+- [#136](https://github.com/BunnyWay/cli/pull/136) [`5e61ab6`](https://github.com/BunnyWay/cli/commit/5e61ab68dac1b14be16748560bdde8b623551c80) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(db): `bunny db migrations create/list/apply` runs numbered `.sql` files in `migrations/` (or `drizzle/`) once each, tracked in `__bunny_migrations`; `--pattern` supports nested ORM layouts while checksum drift and out-of-order files block unsafe applies unless `--allow-drift` is explicit; migration commands show the credential-free database target; `splitStatements` keeps `CREATE TRIGGER` bodies intact, supports every SQLite quote form, drops comments, and rejects truncated SQL; `db shell`, `db studio`, and `db migrations apply` now honour an explicit database ID over `.env` credentials, require encrypted hosted database URLs regardless of token source, and refuse to send an ambient or generated token to a different hostname or service port
+
+- Updated dependencies [[`294ae07`](https://github.com/BunnyWay/cli/commit/294ae07086ab44ad47e55405a68f6e9397e005a4)]:
+  - @bunny.net/database-client@0.0.1
+
 ## 0.2.4
 
 ### Patch Changes
