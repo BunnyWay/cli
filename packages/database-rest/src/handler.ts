@@ -189,7 +189,11 @@ export const createRestHandler = (
       }
     } catch (err: unknown) {
       // The detail goes to the host's logger, not the response: a mounted handler must not leak schema names or file paths.
-      options.onError?.(err);
+      try {
+        options.onError?.(err);
+      } catch {
+        // A reporting hook that throws must not replace the 500 with a rejection.
+      }
       return errorResponse("Internal error", 500, "INTERNAL_ERROR");
     }
   };

@@ -1542,7 +1542,7 @@ The shell is split across two packages:
 - **Formatting** (`format.ts`): `printResultSet()` with 5 output modes: `default`, `table`, `json`, `csv`, `markdown`. Sensitive column masking (full mask for passwords/secrets, email mask for email columns).
 - **Views** (`views.ts`): saved queries scoped per database. Stored at `~/.config/bunny/views/<databaseId>/` (respects `XDG_CONFIG_HOME`). Callers can override via `ShellOptions.viewsDir`.
 - **History** (`history.ts`): stored at `~/.config/bunny/shell_history` (respects `XDG_CONFIG_HOME`). Max 1000 entries.
-- **SQL parsing** (`parser.ts`): `splitStatements()` for `.sql` file execution. Splits on `;` outside single-quoted strings and SQLite's double-quote/backtick/bracket identifier forms, strips line and block comments (so drizzle's `--> statement-breakpoint` markers are ignored), keeps `CREATE TRIGGER ... BEGIN ... END;` bodies intact, and rejects unterminated quotes/comments rather than returning truncated SQL.
+- **SQL parsing** (`parser.ts`): `splitStatements()` for `.sql` file execution. Splits on `;` outside single-quoted strings and SQLite's double-quote/backtick/bracket identifier forms, strips line and block comments (so drizzle's `--> statement-breakpoint` markers are ignored), keeps `CREATE TRIGGER ... BEGIN ... END;` bodies intact, and rejects unterminated quotes/comments rather than returning truncated SQL. Block-depth counting runs over `stripQuoted()` rather than a regex: bracket identifiers end at the first `]` and so may contain a `[`, which `\[[^\]]*\]` only handles by rescanning to end of input from every offset once the brackets are unbalanced.
 
 **Dependency injection**: the shell engine accepts a `ShellLogger` interface instead of importing the CLI logger directly:
 

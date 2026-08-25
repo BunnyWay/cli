@@ -1,10 +1,6 @@
 /** Statements whose body is a `BEGIN ... END` block, so inner semicolons don't terminate them. */
 const BLOCK_BODY_START = /^CREATE\s+(?:TEMP\s+|TEMPORARY\s+)?TRIGGER\b/i;
 
-/** Quoted strings and identifiers, so keywords inside them don't affect nesting. */
-// The bracket body excludes `[` as well as `]`: a run of unclosed `[` would otherwise rescan to end of input from every offset.
-const QUOTED = /'(?:[^']|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^[\]]*\]/g;
-
 type QuoteTerminator = "'" | '"' | "`" | "]";
 
 function syntaxError(sql: string, offset: number, message: string): Error {
@@ -13,6 +9,37 @@ function syntaxError(sql: string, offset: number, message: string): Error {
   const lastNewline = before.lastIndexOf("\n");
   const column = offset - lastNewline;
   return new Error(`${message} at line ${line}, column ${column}.`);
+}
+
+/** Replace quoted strings and identifiers with a space so keywords inside them don't affect nesting; shares the quote rules of `splitStatements`. */
+function stripQuoted(sql: string): string {
+  let out = "";
+  let quote: QuoteTerminator | undefined;
+
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    if (ch === undefined) break;
+
+    if (quote) {
+      if (ch !== quote) continue;
+      if (quote !== "]" && sql[i + 1] === quote) {
+        i++;
+        continue;
+      }
+      quote = undefined;
+      continue;
+    }
+
+    if (ch === "'" || ch === '"' || ch === "`" || ch === "[") {
+      quote = ch === "[" ? "]" : ch;
+      out += " ";
+      continue;
+    }
+
+    out += ch;
+  }
+
+  return out;
 }
 
 /**
@@ -27,7 +54,7 @@ function inBlockBody(current: string): boolean {
   const trimmed = current.trim();
   if (!BLOCK_BODY_START.test(trimmed)) return false;
 
-  const bare = trimmed.replace(QUOTED, "");
+  const bare = stripQuoted(trimmed);
   const openers = (bare.match(/\b(?:BEGIN|CASE)\b/gi) ?? []).length;
   const closers = (bare.match(/\bEND\b/gi) ?? []).length;
 

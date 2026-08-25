@@ -576,6 +576,17 @@ describe("internal errors", () => {
     expect(JSON.stringify(body)).not.toContain("secret_internal_column");
   });
 
+  test("still returns the generic 500 when onError itself throws", async () => {
+    const h = createRestHandler(failing, schema, {
+      onError: () => {
+        throw new Error("logger exploded");
+      },
+    });
+    const res = await h(req("GET", "/users"));
+    expect(res.status).toBe(500);
+    expect((await jsonBody(res)).message).toBe("Internal error");
+  });
+
   test("hands the real error to onError so the host can log it", async () => {
     const seen: unknown[] = [];
     const h = createRestHandler(failing, schema, {
