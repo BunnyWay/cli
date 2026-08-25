@@ -20,7 +20,7 @@ test("astro + bun workflow builds with bun and deploys dist", () => {
   expect(yml).toContain(`uses: ${DEPLOY_SITE_ACTION}`);
   expect(yml).toContain('site: "my-site"');
   expect(yml).toContain('directory: "dist"');
-  expect(yml).toContain("api_key: ${{ secrets.BUNNY_API_KEY }}");
+  expect(yml).toContain("api_key: ${{ secrets.BUNNYNET_API_KEY }}");
 });
 
 // Deploying is publishing, so the workflow only runs where a live deploy is wanted: pushes to main and an explicit dispatch.
@@ -99,7 +99,7 @@ test("mkdocs uses the python toolchain and deploys site", () => {
     preset: preset("mkdocs"),
     packageManager: "npm",
   });
-  expect(yml).toContain("uses: actions/setup-python@v5");
+  expect(yml).toContain("uses: actions/setup-python@v7");
   expect(yml).toContain("run: pip install -r requirements.txt");
   expect(yml).toContain("run: mkdocs build");
   expect(yml).toContain('directory: "site"');
@@ -120,7 +120,7 @@ test("zola installs the zola binary and blazor uses dotnet", () => {
     preset: preset("blazor"),
     packageManager: "npm",
   });
-  expect(blazor).toContain("uses: actions/setup-dotnet@v4");
+  expect(blazor).toContain("uses: actions/setup-dotnet@v6");
   expect(blazor).toContain("run: dotnet publish -c Release");
   expect(blazor).toContain('directory: "bin/Release/net8.0/publish/wwwroot"');
 });
@@ -202,7 +202,7 @@ test("a configured build gets the JS install steps when installDeps is set", () 
     dir: "out",
     installDeps: true,
   });
-  expect(yml).toContain("uses: pnpm/action-setup@v4");
+  expect(yml).toContain("uses: pnpm/action-setup@v6");
   expect(yml).toContain("run: pnpm install --frozen-lockfile");
   expect(yml).toContain('run: "pnpm run build"');
   expect(yml).toContain('directory: "out"');
@@ -266,6 +266,6 @@ test("npm and pnpm projects get the matching install steps", () => {
     preset: preset("vite"),
     packageManager: "pnpm",
   });
-  expect(pnpm).toContain("uses: pnpm/action-setup@v4");
+  expect(pnpm).toContain("uses: pnpm/action-setup@v6");
   expect(pnpm).toContain("run: pnpm install --frozen-lockfile");
 });

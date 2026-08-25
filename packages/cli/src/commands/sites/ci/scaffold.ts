@@ -264,11 +264,11 @@ export async function printWorkflowInstructions(
 
 export function printSecretHint(): void {
   logger.log("Then add your API key as a repository secret:");
-  logger.accent("  gh secret set BUNNY_API_KEY");
+  logger.accent("  gh secret set BUNNYNET_API_KEY");
   logger.dim("  (or GitHub repo Settings -> Secrets and variables -> Actions)");
 }
 
-// Offer to add the BUNNY_API_KEY repo secret via the `gh` CLI (prompted); falls back to printing the manual steps when declined or unavailable.
+// Offer to add the BUNNYNET_API_KEY repo secret via the `gh` CLI (prompted); falls back to printing the manual steps when declined or unavailable.
 export async function offerGitHubSecret(opts: {
   apiKey: string | undefined;
   root: string;
@@ -277,12 +277,12 @@ export async function offerGitHubSecret(opts: {
   const gh = Bun.which("gh");
   if (opts.interactive && gh && opts.apiKey) {
     const proceed = await confirm(
-      "Add the BUNNY_API_KEY secret to this GitHub repo now (runs `gh secret set`)?",
+      "Add the BUNNYNET_API_KEY secret to this GitHub repo now (runs `gh secret set`)?",
       { initial: true, optional: true },
     );
     if (proceed) {
       // The key goes via stdin, never argv: process arguments are visible in `ps`.
-      const proc = Bun.spawn([gh, "secret", "set", "BUNNY_API_KEY"], {
+      const proc = Bun.spawn([gh, "secret", "set", "BUNNYNET_API_KEY"], {
         cwd: opts.root,
         stdout: "ignore",
         stderr: "pipe",
@@ -293,7 +293,7 @@ export async function offerGitHubSecret(opts: {
         new Response(proc.stderr).text(),
       ]);
       if (code === 0) {
-        logger.success("Added the BUNNY_API_KEY secret.");
+        logger.success("Added the BUNNYNET_API_KEY secret.");
         return;
       }
       logger.warn(
