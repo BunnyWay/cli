@@ -186,7 +186,7 @@ export function createHostnamesCommands(
 
       spin.stop();
 
-      // Companion hostnames (e.g. the sites preview wildcard) need the primary domain's DNS in place first, so the hook runs after the DNS/SSL flow, not here.
+      // Companion hostnames need the primary domain's DNS in place first, so the hook runs after the DNS/SSL flow, not here.
       let hookRan = false;
       const runOnAdded = async () => {
         if (hookRan || !opts.onAdded) return;

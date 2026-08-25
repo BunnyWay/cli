@@ -22,7 +22,7 @@ installed.)
 With `name`, `build`, and `dir` set, the entire deploy is one command:
 
 ```bash
-bun ny sites deploy --build            # runs `build`, uploads `dir`, to a preview URL
+bun ny sites deploy --build            # runs `build`, uploads `dir`, publishes it live
 bun ny sites deploy --build            # same, published as the live site
 ```
 

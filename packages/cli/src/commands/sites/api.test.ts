@@ -886,4 +886,3 @@ test("fetchSites pages through the /pullzone envelope", async () => {
   expect(sites).toHaveLength(1);
   expect(sites[0]?.state.name).toBe("my-site");
 });
-

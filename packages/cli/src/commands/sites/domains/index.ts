@@ -115,7 +115,7 @@ export const sitesDomainsCommands = createHostnamesCommands({
     // A domain on a site with nothing published serves the router's 404; say so instead of letting the first visit read as breakage.
     if (args.output !== "json" && resolvedSite?.state.current === undefined) {
       logger.dim(
-        "  Nothing is published yet, so this domain serves a 404: publish with `bunny sites deploy --production`.",
+        "  Nothing is published yet, so this domain serves a 404: publish with `bunny sites deploy`.",
       );
     }
   },
