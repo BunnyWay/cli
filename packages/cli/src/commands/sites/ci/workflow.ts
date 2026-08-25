@@ -141,7 +141,7 @@ export function workflowPath(prefix: string | undefined, path: string): string {
   return path === "." ? prefix : `${prefix.replace(/\/$/, "")}/${path}`;
 }
 
-// Render the GitHub Actions workflow via the BunnyWay/actions deploy-site action: PRs deploy previews (every deploy gets its own preview zone) and pushes to main go live. `dir`/`build` carry `sites.dir`/`sites.build` from bunny.jsonc, `workingDirectory` is where that config lives relative to the workflow root, and `installDeps` adds the JS setup/install steps to a configured build the preset wouldn't have installed for, so CI builds and deploys exactly what `sites deploy` does.
+// Render the GitHub Actions workflow via the BunnyWay/actions deploy-site action: pushes to main go live, and `workflow_dispatch` redeploys on demand. `dir`/`build` carry `sites.dir`/`sites.build` from bunny.jsonc, `workingDirectory` is where that config lives relative to the workflow root, and `installDeps` adds the JS setup/install steps to a configured build the preset wouldn't have installed for, so CI builds and deploys exactly what `sites deploy` does.
 export function renderSitesWorkflow(opts: {
   site: string;
   preset: FrameworkPreset;
@@ -166,22 +166,20 @@ export function renderSitesWorkflow(opts: {
     "on:",
     "  push:",
     "    branches: [main]",
-    "  pull_request:",
+    "  workflow_dispatch:",
     "",
-    "# One deploy at a time per ref; a newer commit cancels the older build.",
+    "# Production deploys serialize across every ref; cancelling mid-upload would leave a half-written deploy directory behind.",
     "concurrency:",
-    "  group: bunny-sites-${{ github.ref }}",
-    "  cancel-in-progress: true",
+    "  group: bunny-sites",
+    "  cancel-in-progress: false",
     "",
     "jobs:",
     "  deploy:",
     "    runs-on: ubuntu-latest",
     ...defaults,
-    "    # Fork PRs have no access to secrets; skip instead of failing.",
-    "    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository",
     "    permissions:",
     "      contents: read",
-    "      pull-requests: write # preview comment",
+    "      deployments: write # records the deploy in the repo's Environments",
     "    steps:",
     "      - uses: actions/checkout@v4",
     "",
@@ -198,7 +196,6 @@ export function renderSitesWorkflow(opts: {
     // Quote the interpolated values so they're always inert YAML scalars.
     `          site: ${JSON.stringify(site)}`,
     `          directory: ${JSON.stringify(workflowPath(workingDirectory, opts.dir ?? preset.dir))}`,
-    "          production: ${{ github.event_name == 'push' }}",
     "          api_key: ${{ secrets.BUNNY_API_KEY }}",
   ];
   return `${lines.join("\n")}\n`;

@@ -223,7 +223,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       if (root && (await hasGitHubOrigin(root))) {
         logger.log();
         const setup = await confirm(
-          "Set up GitHub deployments (preview on PRs, production on main)?",
+          "Set up GitHub deployments (push to main goes live)?",
           { initial: true, optional: true },
         );
         if (setup) {

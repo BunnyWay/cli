@@ -24,7 +24,7 @@ interface CiInitArgs extends SiteSelectorArgs {
   force?: boolean;
 }
 
-// Scaffold `.github/workflows/bunny-sites.yml` via the BunnyWay/actions deploy-site action: previews on PRs + production on merges to main (every deploy has its own preview zone, so no custom domain is needed).
+// Scaffold `.github/workflows/bunny-sites.yml` via the BunnyWay/actions deploy-site action: pushes to main go live, and `workflow_dispatch` redeploys on demand.
 export const sitesCiInitCommand = defineCommand<CiInitArgs>({
   command: "init",
   describe: "Add a GitHub Actions workflow that deploys this site.",
@@ -111,9 +111,7 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
     logger.log();
     await offerGitHubSecret({ apiKey: config.apiKey, root, interactive });
     logger.log();
-    logger.dim(
-      "  Push to GitHub: PRs get preview URLs, merges to main go live.",
-    );
+    logger.dim("  Push to main on GitHub and the site goes live.");
 
     await offerLink();
   },

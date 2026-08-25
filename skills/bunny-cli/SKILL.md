@@ -60,7 +60,7 @@ bunny dns records list example.com
 # host a static site
 bunny sites create my-site                            # provision (served at sites-my-site-<suffix>.b-cdn.net)
 bunny sites deploy ./dist                             # immutable preview URL (sites-dpl-<id>-<suffix>.b-cdn.net); first deploy offers to publish
-bunny sites deploy ./dist --production                # publish as the live site
+bunny sites deploy ./dist                            # deploy and publish as the live site
 bunny sites domains add example.com --wait            # custom production domain (previews never need one)
 bunny sites deployments publish --previous --force    # instant rollback
 ```

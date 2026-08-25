@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { resolve } from "node:path";
 import type { RemoteSiteState } from "./constants.ts";
-import { deployUrls, resolveDeployDir } from "./deploy.ts";
+import { productionUrl, resolveDeployDir } from "./deploy.ts";
 
 const ROOT = "/project/root";
 
@@ -27,29 +27,15 @@ test("nothing specified falls back to the root, not cwd", () => {
 
 const stateWithDomain = (domain?: string) => ({ domain }) as RemoteSiteState;
 
-test("deployUrls: production prefers the custom domain over the system host", () => {
-  expect(
-    deployUrls(stateWithDomain("example.com"), undefined, "site.b-cdn.net"),
-  ).toEqual({ production: "https://example.com", preview: undefined });
-  expect(
-    deployUrls(stateWithDomain(undefined), undefined, "site.b-cdn.net"),
-  ).toEqual({ production: "https://site.b-cdn.net", preview: undefined });
+test("productionUrl prefers the custom domain over the system host", () => {
+  expect(productionUrl(stateWithDomain("example.com"), "site.b-cdn.net")).toBe(
+    "https://example.com",
+  );
+  expect(productionUrl(stateWithDomain(undefined), "site.b-cdn.net")).toBe(
+    "https://site.b-cdn.net",
+  );
 });
 
-test("deployUrls: the preview URL comes from the deploy's own zone and needs no domain", () => {
-  expect(
-    deployUrls(
-      stateWithDomain(undefined),
-      { previewHost: "sites-dpl-abc123-x1y2z3.b-cdn.net" },
-      "site.b-cdn.net",
-    ),
-  ).toEqual({
-    production: "https://site.b-cdn.net",
-    preview: "https://sites-dpl-abc123-x1y2z3.b-cdn.net",
-  });
-  // A record without a zone (creation failed, or an older CLI wrote it) simply has no preview URL.
-  expect(deployUrls(stateWithDomain(undefined), {}, undefined)).toEqual({
-    production: undefined,
-    preview: undefined,
-  });
+test("productionUrl is undefined when the site has neither a domain nor a system host", () => {
+  expect(productionUrl(stateWithDomain(undefined), undefined)).toBeUndefined();
 });
