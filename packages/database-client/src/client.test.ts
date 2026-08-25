@@ -342,6 +342,68 @@ describe("statement", () => {
   });
 });
 
+describe("firstOrThrow", () => {
+  test("returns the row when one matched", async () => {
+    const fake = fakeFetch([okExecute(["id"], [[1]])]);
+    const row = await connect({ url: URL_, fetch: fake.fetch })
+      .prepare("SELECT id")
+      .firstOrThrow();
+
+    expect(row).toEqual({ id: 1 });
+  });
+
+  test("throws NO_ROWS when nothing matched", async () => {
+    const fake = fakeFetch([okExecute(["id"], [])]);
+    const statement = connect({ url: URL_, fetch: fake.fetch }).prepare(
+      "SELECT id",
+    );
+
+    await expect(statement.firstOrThrow()).rejects.toThrow(/returned no rows/);
+  });
+
+  test("carries the NO_ROWS code", async () => {
+    const fake = fakeFetch([okExecute(["id"], [])]);
+    try {
+      await connect({ url: URL_, fetch: fake.fetch })
+        .prepare("SELECT id")
+        .firstOrThrow();
+      throw new Error("expected firstOrThrow to reject");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DatabaseError);
+      expect((error as DatabaseError).code).toBe("NO_ROWS");
+    }
+  });
+
+  test("reads one column", async () => {
+    const fake = fakeFetch([okExecute(["name"], [["a"]])]);
+    const name = await connect({ url: URL_, fetch: fake.fetch })
+      .prepare("SELECT name")
+      .firstOrThrow("name");
+
+    expect(name).toBe("a");
+  });
+
+  test("a NULL column is a value, not a missing row", async () => {
+    const fake = fakeFetch([okExecute(["name"], [[null]])]);
+    const name = await connect({ url: URL_, fetch: fake.fetch })
+      .prepare("SELECT name")
+      .firstOrThrow("name");
+
+    expect(name).toBeNull();
+  });
+
+  test("an unknown column still throws COLUMN_NOT_FOUND", async () => {
+    const fake = fakeFetch([okExecute(["name"], [["a"]])]);
+    const statement = connect({ url: URL_, fetch: fake.fetch }).prepare(
+      "SELECT name",
+    );
+
+    await expect(statement.firstOrThrow("nope")).rejects.toThrow(
+      /column "nope" is not in the result/,
+    );
+  });
+});
+
 describe("batch", () => {
   function okBatch(count: number) {
     const step = {

@@ -134,6 +134,23 @@ const result = await db.prepare("SELECT a.id, b.id FROM a JOIN b").runRaw();
 // { rows: [[1, 99]], columns: ["id", "id"], rowsAffected: 0, lastInsertRowid: null }
 ```
 
+`firstOrThrow()` is `first()` for the queries where a missing row is a bug rather than a case to handle. It throws a `DatabaseError` with code `NO_ROWS` instead of handing back null:
+
+```ts
+const user = await db
+  .prepare("INSERT INTO users (name) VALUES (?) RETURNING id, name")
+  .bind("Erin")
+  .firstOrThrow<User>();
+```
+
+That insert either succeeded or already threw, so `first()` would have typed `user` as `User | null` and left you a branch that cannot happen. Keep `first()` for the reads where nothing found is a real answer, like a 404.
+
+It takes a column name too, and a column holding SQL NULL still counts as a row that matched, so `firstOrThrow("name")` returns null rather than throwing:
+
+```ts
+const name = await db.prepare("SELECT name FROM users WHERE id = ?").bind(1).firstOrThrow("name");
+```
+
 Statements do nothing until one of these is called, so `prepare()` and `bind()` are safe to pass around.
 
 ### `db.batch(statements, options?)`

@@ -126,17 +126,36 @@ export class Statement {
   async first<T = Row>(): Promise<T | null>;
   async first(column: string): Promise<SqlValue | null>;
   async first<T = Row>(column?: string): Promise<T | SqlValue | null> {
+    const found = await this.#first<T>(column);
+    return found.matched ? found.value : null;
+  }
+
+  /** Like `first()`, but throws `NO_ROWS` rather than returning null when nothing matched. */
+  async firstOrThrow<T = Row>(): Promise<T>;
+  async firstOrThrow(column: string): Promise<SqlValue>;
+  async firstOrThrow<T = Row>(column?: string): Promise<T | SqlValue> {
+    const found = await this.#first<T>(column);
+    if (!found.matched) {
+      throw new DatabaseError("query returned no rows", "NO_ROWS");
+    }
+    return found.value;
+  }
+
+  // Reports whether a row matched separately from its value, so a NULL column never reads as a missing row.
+  async #first<T>(
+    column?: string,
+  ): Promise<{ matched: false } | { matched: true; value: T | SqlValue }> {
     const result = await this.run<Row>();
     const row = result.rows[0];
-    if (!row) return null;
-    if (column === undefined) return row as T;
+    if (!row) return { matched: false };
+    if (column === undefined) return { matched: true, value: row as T };
     if (!Object.hasOwn(row, column)) {
       throw new DatabaseError(
         `column "${column}" is not in the result; got ${result.columns.join(", ")}`,
         "COLUMN_NOT_FOUND",
       );
     }
-    return row[column] as SqlValue;
+    return { matched: true, value: row[column] as SqlValue };
   }
 
   /** Execute and return rows as positional arrays, skipping object construction. */
