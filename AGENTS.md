@@ -130,6 +130,7 @@ bunny-cli/
 │   │   └── src/
 │   │       ├── index.ts                   # Barrel export: schemas, types, conversion functions
 │   │       ├── schema.ts                  # Zod schemas + inferred types: BunnyConfigSchema (root; optional app + sites), AppConfigSchema, SiteConfigSchema, BunnyAppConfigSchema (app required)
+│       ├── build-manifest.ts          # BuildManifestSchema: the `.bunny/build.json` a framework adapter writes, and the whole contract between an adapter and the CLI. It names the server entry, the client directory, the pull zone settings the build needs, and whether the build renders per request (`kind`). The CLI knows no framework: it reads the manifest
 │   │       ├── convert.ts                 # API ↔ config conversion (apiToConfig, configToAddRequest, configToPatchRequest)
 │   │       └── parse-image-ref.ts         # Docker image reference parser (parseImageRef)
 │   │
