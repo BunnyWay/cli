@@ -277,7 +277,10 @@ describe("statement", () => {
     const row = await connect({ url: URL_, fetch: fake.fetch })
       .prepare("SELECT '__proto__', n")
       .first();
-    expect(row?.["__proto__"]).toBe("evil");
+    // Assert an own data property, not a prototype read: that distinction is the whole point of the null-prototype row.
+    expect(Object.getOwnPropertyDescriptor(row ?? {}, "__proto__")?.value).toBe(
+      "evil",
+    );
     expect(row?.n).toBe(7);
   });
 
