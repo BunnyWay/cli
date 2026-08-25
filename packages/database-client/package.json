@@ -21,6 +21,7 @@
     "README.md"
   ],
   "devDependencies": {
+    "hono": "^4.13.3",
     "typescript": "^5"
   },
   "publishConfig": {

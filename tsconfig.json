@@ -40,5 +40,10 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "exclude": ["packages/database-studio/client", "packages/*/dist"]
+  "exclude": [
+    "packages/database-studio/client",
+    "packages/*/dist",
+    // Deno "npm:" specifiers, resolved by Edge Scripting rather than by tsc.
+    "packages/database-client/examples/edge-script"
+  ]
 }

@@ -142,7 +142,12 @@ bunny-cli/
 │   │   ├── package.json                  # exports/main/types point at dist/ for npm consumers
 │   │   ├── tsconfig.json
 │   │   ├── tsconfig.build.json           # Emits dist/ (JS + .d.ts); paths:{} so nothing resolves from source
-│   │   ├── examples/
+│   │   ├── examples/                     # Notes API per runtime; see examples/README.md
+│   │   │   ├── edge-script/main.ts       # Full CRUD on Edge Scripting via npm: specifiers (excluded from root tsc)
+│   │   │   ├── bun/server.ts             # Bun.serve routes
+│   │   │   ├── node/server.ts            # node:http, needs --env-file
+│   │   │   └── hono/server.ts            # Hono app exported as a fetch handler
+│   │   ├── scripts/
 │   │   │   └── smoke.ts                  # Live end-to-end run on Bun and Deno; creates and drops its own tables
 │   │   └── src/
 │   │       ├── index.ts                  # Barrel export: connect, Database, Statement, DatabaseError, types
