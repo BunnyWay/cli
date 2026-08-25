@@ -10,6 +10,7 @@ import { configNamespace } from "./commands/config/index.ts";
 import { dbNamespace } from "./commands/db/index.ts";
 import { dnsNamespace } from "./commands/dns/index.ts";
 import { docsCommand } from "./commands/docs.ts";
+import { labNamespace } from "./commands/lab/index.ts";
 import { openCommand } from "./commands/open.ts";
 import { registriesNamespace } from "./commands/registries/index.ts";
 import { registryNamespace } from "./commands/registry/index.ts";
@@ -41,6 +42,7 @@ const commands: CommandModule[] = [
 // Experimental commands — registered but hidden from help and landing page
 const experimentalCommands: CommandModule[] = [
   appsNamespace,
+  labNamespace,
   registriesNamespace,
   registryNamespace,
   sitesNamespace,
@@ -143,7 +145,7 @@ export const cli = instance
         ["Create an edge script", "bunny scripts init"],
         ["Add a domain to manage DNS", "bunny dns zones add example.com"],
         ["Create a dev sandbox", "bunny sandbox create my-sandbox"],
-        // ["Deploy a static site", "bunny sites deploy"],
+        // ["Deploy this project", "bunny sites deploy"],
         // ["Deploy an app", "bunny apps deploy"],
       ];
 

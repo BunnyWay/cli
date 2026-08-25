@@ -908,7 +908,9 @@ bunny scripts docs
 
 > **Experimental**: hidden from `--help` and the landing page while it stabilizes.
 
-Host static sites on bunny.net. Each site is three resources provisioned and wired together for you: a **storage zone** holding the files, a **pull zone** serving them over the CDN, and a **middleware router** (an Edge Script) that maps incoming requests to the deploy that should answer them. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
+Host sites on bunny.net. Each site is three resources provisioned and wired together for you: a **storage zone** holding the files, a **pull zone** serving them over the CDN, and an **Edge Script**. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
+
+`bunny sites` deploys a directory of files. A build that renders pages per request is a different shape, and this command does not deploy one: `bunny lab deploy astro` deploys an Astro project as an Edge Script of its own. The two flows share nothing, because a project that renders per request cannot use `CURRENT_DEPLOY` (one script serves one release), and a directory of files has no build manifest to read.
 
 Deploys are immutable: every `sites deploy` uploads to its own `deploys/<id>/` directory and then goes live. Publishing flips the router's `CURRENT_DEPLOY` variable and purges the cache, so going live and rolling back to any earlier deploy are instant and move no files. Deploy IDs are the git short SHA when the working tree is clean and a content hash otherwise, which makes redeploying identical content a no-op.
 

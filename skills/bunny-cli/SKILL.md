@@ -57,9 +57,10 @@ bunny dns records add example.com api A 198.51.100.1
 bunny dns records preset google-workspace example.com # apply a preset record set
 bunny dns records list example.com
 
-# host a static site
-bunny sites create my-site                            # provision (served at sites-my-site-<suffix>.b-cdn.net)
-bunny sites deploy ./dist                             # deploy a directory and publish it as the live site
+# host a site
+bunny sites create my-site                            # provision a static site (served at sites-my-site-<suffix>.b-cdn.net)
+bunny sites deploy ./dist                             # deploy a directory of files and publish it as the live site
+bunny lab deploy astro                                # deploy an Astro project that renders per request (experimental)
 bunny sites domains add example.com --wait            # custom production domain
 bunny sites deployments publish --previous --force    # instant rollback
 ```
@@ -72,7 +73,8 @@ Use this to route to the correct reference file:
 - **Database management (create, list, show, link, delete, shell, studio, migrations, regions, tokens)** -> `references/database.md`
 - **DNS (zones, delegation checks, records, presets, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
-- **Static sites (create, deploy, rollback, custom domains, GitHub Actions)** -> `references/sites.md`
+- **Sites (create, deploy a directory, rollback, custom domains, GitHub Actions)** -> `references/sites.md`
+- **Lab (experimental: `bunny lab deploy astro` for an Astro project that renders per request)** -> `references/lab.md`
 - **Sandboxes (create, exec, ssh, files list/cp, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)

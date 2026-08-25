@@ -1,6 +1,10 @@
-# Static Sites Commands
+# Sites Commands
 
-All site commands live under `bunny sites`. A site is one storage zone (files) + one pull zone (CDN) + one middleware router script, provisioned together by `sites create`. Deploys are immutable directories; promoting or rolling back flips a router env var and purges the cache; no files move, so it's instant.
+All site commands live under `bunny sites`. A site is one storage zone (files) + one pull zone (CDN) + one Edge Script, provisioned together by `sites create` or by the first `sites deploy`. Deploys are immutable directories.
+
+The Edge Script is the router this CLI generates. Promoting or rolling back flips a router env var and purges the cache; no files move, so it's instant.
+
+`bunny sites` deploys a directory of files. A build that renders pages per request is a different shape, and this command does not deploy one: see `references/lab.md` for `bunny lab deploy astro`.
 
 Most commands accept an optional site (a trailing `[site]` positional, or the `--site` flag on commands whose positionals are taken, like `deploy`). When omitted, the site resolves in this order:
 
@@ -14,7 +18,7 @@ Commands that can link the directory (`deploy`, `show`, `deployments list/publis
 ## Typical workflows
 
 ```bash
-# New site: provision, deploy, iterate
+# New static site: provision, deploy, iterate
 bunny sites create my-site                 # served at https://sites-my-site-<suffix>.b-cdn.net
 bunny sites deploy ./dist                  # deploy and publish as the live site
 
