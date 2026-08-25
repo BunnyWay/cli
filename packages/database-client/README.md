@@ -238,7 +238,7 @@ That type is an assertion. Nothing validates the rows against it at runtime, so 
 Edge Scripting runs Deno, so you can import straight from npm. A standalone script serves requests through the Edge Scripting SDK:
 
 ```ts
-import * as BunnySDK from "https://esm.sh/@bunny.net/edgescript-sdk@0.12.0";
+import * as BunnySDK from "npm:@bunny.net/edgescript-sdk@0.12.1";
 import { connect } from "npm:@bunny.net/database-client";
 
 const db = connect();
@@ -277,7 +277,7 @@ Keep the token on your server and expose only the queries you actually want to a
 
 ```ts
 // Edge Script: the token stays here, the browser gets only this shape.
-import * as BunnySDK from "https://esm.sh/@bunny.net/edgescript-sdk@0.12.0";
+import * as BunnySDK from "npm:@bunny.net/edgescript-sdk@0.12.1";
 import { connect } from "npm:@bunny.net/database-client";
 
 const db = connect();
