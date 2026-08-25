@@ -66,6 +66,8 @@ const alice = await byId.bind(1).first();
 const bob = await byId.bind(2).first();
 ```
 
+Pass a row type to have it flow through every execution of that statement. See [Types](#types).
+
 ### `statement.bind(...values)`
 
 Binds parameters and returns a new statement. Accepts `null`, `boolean`, `number`, `bigint`, `string`, and `Uint8Array`.
@@ -230,6 +232,17 @@ interface User {
 
 const users = await db.prepare("SELECT id, name FROM users").all<User>();
 ```
+
+Or type the statement once and let every execution of it inherit the shape:
+
+```ts
+const byId = db.prepare<User>("SELECT id, name FROM users WHERE id = ?");
+
+const alice = await byId.bind(1).first(); // User | null
+const both = await byId.bind(1).all(); // User[]
+```
+
+A type argument on the executor still wins over the statement's, so `all<Row>()` on a `Statement<User>` gives you rows back untyped.
 
 That type is an assertion. Nothing validates the rows against it at runtime, so it is only ever as accurate as your SQL.
 

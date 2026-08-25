@@ -342,6 +342,73 @@ describe("statement", () => {
   });
 });
 
+interface User {
+  id: number;
+  name: string;
+}
+
+describe("typed statements", () => {
+  test("prepare carries the row type to every executor", async () => {
+    const fake = fakeFetch([okExecute(["id", "name"], [[1, "a"]])]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+    const byId = db.prepare<User>("SELECT id, name FROM users WHERE id = ?");
+
+    const users = await byId.bind(1).all();
+    const user = await byId.bind(1).first();
+
+    // Typed as User[] and User | null rather than Row, so these read without a cast.
+    expect(users[0]?.name).toBe("a");
+    expect(user?.id).toBe(1);
+  });
+
+  test("a call-site type argument still wins", async () => {
+    const fake = fakeFetch([okExecute(["id"], [[1]])]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const rows = await db.prepare<User>("SELECT id FROM users").all<{
+      id: number;
+    }>();
+
+    expect(rows).toEqual([{ id: 1 }]);
+  });
+
+  test("a typed statement still passes to batch", async () => {
+    const fake = fakeFetch([
+      {
+        type: "ok",
+        response: {
+          type: "batch",
+          result: {
+            step_results: [
+              null,
+              okExecute(["id", "name"], [[1, "a"]]).response.result,
+              null,
+              null,
+            ],
+            step_errors: [null, null, null, null],
+          },
+        },
+      },
+    ]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const [users] = await db.batch<User>([
+      db.prepare<User>("SELECT id, name FROM users"),
+    ]);
+
+    expect(users?.rows[0]?.name).toBe("a");
+  });
+
+  test("column reads are unaffected by the row type", async () => {
+    const fake = fakeFetch([okExecute(["name"], [["a"]])]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const name = await db.prepare<User>("SELECT name FROM users").first("name");
+
+    expect(name).toBe("a");
+  });
+});
+
 describe("batch", () => {
   function okBatch(count: number) {
     const step = {
