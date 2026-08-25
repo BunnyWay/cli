@@ -66,6 +66,20 @@ const alice = await byId.bind(1).first();
 const bob = await byId.bind(2).first();
 ```
 
+### ``db.sql`...` ``
+
+A template literal that binds every interpolated value, so the shortest way to write a query is also the parameterized one:
+
+```ts
+const note = await db.sql`SELECT * FROM notes WHERE id = ${id}`.first();
+```
+
+Each `${...}` becomes a `?` placeholder and its value is bound, never spliced into the SQL string. It returns a `Statement`, so everything under [Executing](#executing) applies unchanged.
+
+Values follow the same rules as `bind()`, with one difference: an interpolated object throws instead of being read as named parameters, since inside a template it is far more likely to be a mistake.
+
+Only values can be parameterized, which is a SQLite limit rather than a client one. Build the statement with `prepare()` when a table or column name has to vary.
+
 ### `statement.bind(...values)`
 
 Binds parameters and returns a new statement. Accepts `null`, `boolean`, `number`, `bigint`, `string`, and `Uint8Array`.
