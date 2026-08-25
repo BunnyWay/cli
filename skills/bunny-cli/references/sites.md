@@ -55,6 +55,8 @@ The router reads three file names out of the deploy it serves. Cloudflare Pages 
 
 The router also sets `Cache-Control` on every response, because Bunny Storage sends none for HTML: 60 seconds for a page, 30 days for anything else, and whatever `_headers` says. `sites create` turns the pull zone's own cache override off so that answer reaches the visitor, and `sites upgrade-router` does it for a site made by an earlier CLI.
 
+A published `deploy` asks the live site for a path it cannot hold, and reports it when the answer is not the deploy's own 404 page.
+
 ## Deploy IDs
 
 - The deploy ID is the **git short-sha** when the working tree is clean, otherwise an 8-char **content hash**. Re-deploying identical content is a no-op (`--force` overrides).

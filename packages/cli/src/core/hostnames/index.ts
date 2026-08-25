@@ -15,6 +15,7 @@ export {
   hostnameHasCertificate,
   hostnameUrl,
   liveHostnames,
+  looksLikeHostname,
   normalizeHostname,
   probeTlsCertificate,
   type ResolvedPullZone,

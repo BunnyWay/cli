@@ -7,11 +7,14 @@ import {
   type CoreClient,
   createHostnamesCommands,
   fetchPullZoneHostnames,
+  looksLikeHostname,
+  normalizeHostname,
   type ResolvedPullZone,
   setupHostname,
 } from "../../../core/hostnames/index.ts";
 import { logger } from "../../../core/logger.ts";
 import type { GlobalArgs } from "../../../core/types.ts";
+import { prompts } from "../../../core/ui.ts";
 import { type SiteContext, writeRemoteState } from "../api.ts";
 import { selectSite } from "../interactive.ts";
 
@@ -125,3 +128,65 @@ export const sitesDomainsCommands = createHostnamesCommands({
     }
   },
 });
+
+/** The dim line a domainless site's later deploys print. */
+export const DOMAIN_HINT =
+  "  Add a custom production domain: bunny sites domains add <domain>";
+
+/**
+ * Offer a custom domain after a deploy, and hint at one otherwise.
+ *
+ * The site's first-ever deploy is the one moment worth asking: the list is never
+ * empty again, so a later offer would only be noise. Both deploy paths end here,
+ * because a site that renders per request needs a domain for the same reason a
+ * static one does.
+ */
+export async function offerFirstDomain(opts: {
+  coreClient: CoreClient;
+  site: SiteContext;
+  /** True when this deploy is the site's first, which is what makes the offer. */
+  firstDeploy: boolean;
+  interactive: boolean;
+  verbose: boolean;
+}): Promise<void> {
+  const { coreClient, site } = opts;
+  if (site.state.domain) return;
+
+  logger.log();
+  if (opts.firstDeploy && opts.interactive) {
+    const { value } = await prompts({
+      type: "text",
+      name: "value",
+      message:
+        "Custom domain for this site's production URL (leave blank to skip):",
+    });
+    const typed = normalizeHostname(value ?? "");
+    // A one-word answer here used to reach the API, which calls it "An error has
+    // occurred." and leaves the developer with nothing to fix.
+    if (typed && !looksLikeHostname(typed)) {
+      logger.warn(`"${typed}" is not a domain name. Skipping it.`);
+      logger.dim("  Add one later: bunny sites domains add www.example.com");
+    }
+    const domain = looksLikeHostname(typed) ? typed : undefined;
+    if (domain) {
+      try {
+        await setupSiteDomain({
+          coreClient,
+          site,
+          domain,
+          interactive: true,
+          verbose: opts.verbose,
+        });
+      } catch (err) {
+        logger.warn(
+          `Couldn't finish setting up ${domain}: ${errorMessage(err)}`,
+        );
+        logger.dim(
+          `  Retry later: bunny sites domains add ${domain} ${site.state.name}`,
+        );
+      }
+      return;
+    }
+  }
+  logger.dim(DOMAIN_HINT);
+}

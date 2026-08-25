@@ -118,6 +118,8 @@ export async function selectSite(
   args: SiteSelectorArgs & {
     output: OutputFormat;
     force?: boolean;
+    /** A name for a site to create, from `--name`. Enough to run unattended. */
+    name?: string;
     offerCreate?: () => Promise<SiteContext>;
   },
 ): Promise<SelectedSite> {
@@ -159,6 +161,10 @@ export async function selectSite(
     );
     return linked(site);
   }
+
+  // A name is an instruction, so an unattended run with one needs nothing else.
+  // Without it there is nothing to create and nobody to ask.
+  if (args.name && args.offerCreate) return linked(await args.offerCreate());
 
   // `--force` skips the confirmation too, so picking a site from a list would act on it unprompted.
   if (args.force || !isInteractive(args.output)) {

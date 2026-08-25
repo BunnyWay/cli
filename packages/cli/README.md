@@ -927,6 +927,7 @@ bunny sites deploy ./dist                             # deploy a directory and p
 bunny sites deploy --build                            # run `sites.build` from bunny.jsonc (else the detected build), then deploy
 bunny sites deploy --build "npm run build" --env API_URL=https://api.example.com
 bunny sites deploy ./dist --site my-site --force      # target a site explicitly; redeploy unchanged content
+bunny sites deploy --name my-site --region NY         # create the site this deploy needs, unattended
 
 # Deploys: list, publish (roll back), prune
 bunny sites deployments list                          # ● Live / ○ Previous markers, created, source, files, size
@@ -967,7 +968,7 @@ The router serves the deploy's own configuration, from three file names Cloudfla
 | `_redirects`       | One rule per line: `/from /to [status]`. A trailing `*` in the path is captured as `:splat`, and `!` beats a real file |
 | `_headers`         | A `/path` line, then indented `Name: value` lines. This is where a build asks for a CSP, or for immutable assets       |
 
-A rule needs no status, and 301 is the default; 302, 303, 307 and 308 are read too. A rewrite (`200`) is not: it would have the router fetch another path of its own site, which can be made to loop. A rule without `!` applies only when the deploy holds no file at that path, so a real file always wins. Both files are read once per deploy and held in memory.
+A rule needs no status, and 301 is the default; 302, 303, 307 and 308 are read too. A rewrite (`200`) is not: it would have the router fetch another path of its own site, which can be made to loop. A rule without `!` applies only when the deploy holds no file at that path, so a real file always wins. Both files are read once per deploy and held in memory, and `bunny sites deploy` asks the live site for a path it cannot hold, so a 404 page that never reaches a visitor is reported rather than shipped.
 
 The router also sets `Cache-Control` on every response, because Bunny Storage sends none for HTML: 60 seconds for a page, 30 days for anything else, and whatever `_headers` says where it says anything. So `sites create` turns the pull zone's own cache override off, which is what lets the router's answer through. `sites upgrade-router` applies both to a site made by an earlier CLI.
 
@@ -976,6 +977,7 @@ Every deploy publishes: the files land in an immutable `deploys/<id>/` directory
 | Flag                                   | Commands                                                   | Description                                                                                        |
 | -------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `--region`, `--domain`                 | `create`                                                   | Main storage region code (default `DE`); custom production domain to attach                        |
+| `--name`, `--region`                   | `deploy`                                                   | Site name and storage region, for a site this deploy creates                                       |
 | `--site`                               | `deploy`, `ci init`, `deployments publish`                 | Site name or storage zone ID (defaults to the linked site)                                         |
 | `--build [cmd]`, `--env`, `--env-file` | `deploy`                                                   | Build before deploying (bare flag uses the configured or detected build); build-time env overrides |
 | `--force`                              | `deploy`                                                   | Deploy even when the content is unchanged                                                          |

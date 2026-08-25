@@ -38,6 +38,26 @@ function manifestPath(filename: string): string {
   return join(findRoot(filename), MANIFEST_DIR, filename);
 }
 
+/**
+ * Add `.bunny/` to the repository's `.gitignore`, when it is not there already.
+ *
+ * `.bunny/` holds a build output and a link to a site, and neither belongs in a
+ * commit. Only a directory that is a git repository is touched, and an existing
+ * rule for `.bunny` is left alone. Returns true when the line was added, so the
+ * caller can say so.
+ */
+export function ignoreManifestDir(root: string = process.cwd()): boolean {
+  if (!existsSync(join(root, ".git"))) return false;
+
+  const path = join(root, ".gitignore");
+  const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
+  if (/^\s*\/?\.bunny\/?\s*$/m.test(existing)) return false;
+
+  const separator = existing === "" || existing.endsWith("\n") ? "" : "\n";
+  writeFileSync(path, `${existing}${separator}.bunny/\n`);
+  return true;
+}
+
 export function manifestDir(filename: string): string {
   return join(findRoot(filename), MANIFEST_DIR);
 }

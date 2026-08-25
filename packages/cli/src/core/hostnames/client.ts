@@ -46,6 +46,20 @@ export function normalizeHostname(value: string): string {
     .replace(/\/+$/, "");
 }
 
+/**
+ * True when this looks like a hostname somebody could own.
+ *
+ * The API answers "An error has occurred." for anything it does not like, which
+ * tells a developer who typed one word into the domain prompt nothing at all.
+ * Two labels and no illegal character is the whole test: the API still owns the
+ * question of whether the name is available.
+ */
+export function looksLikeHostname(value: string): boolean {
+  return /^(?=.{1,253}$)(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$/i.test(
+    value,
+  );
+}
+
 /** Build a URL from a hostname, respecting an existing scheme; else derive it from SSL state. */
 export function hostnameUrl(
   host: string,
@@ -117,21 +131,28 @@ export function liveHostnames(hostnames: Hostname[]): {
   };
 }
 
-// PullZoneOriginType: 2 = StorageZone.
+// PullZoneOriginType: 2 = StorageZone, 4 = EdgeScript.
 const ORIGIN_TYPE_STORAGE_ZONE = 2;
+const ORIGIN_TYPE_EDGE_SCRIPT = 4;
 
-/** Create a pull zone served from a storage zone, with delivery enabled in every geo region. Pass `middlewareScriptId` to attach a router in the same call: a zone is publicly reachable the moment it exists, so attaching afterwards leaves a window where it serves the raw storage origin. */
+/** Create a pull zone with delivery enabled in every geo region, served from a storage zone or (with `edgeScriptId`) from a standalone Edge Script. Pass `middlewareScriptId` to attach a router in the same call: a zone is publicly reachable the moment it exists, so attaching afterwards leaves a window where it serves the raw storage origin. */
 export async function createPullZone(
   client: CoreClient,
   name: string,
   storageZoneId: number,
-  opts?: { middlewareScriptId?: number },
+  opts?: { middlewareScriptId?: number; edgeScriptId?: number },
 ): Promise<components["schemas"]["PullZoneModel"]> {
+  const script = opts?.edgeScriptId;
   const { data } = await client.POST("/pullzone", {
     body: {
       Name: name,
-      StorageZoneId: storageZoneId,
-      OriginType: ORIGIN_TYPE_STORAGE_ZONE,
+      // A script is its own origin, so a script-backed zone has no storage zone.
+      ...(script != null
+        ? { OriginType: ORIGIN_TYPE_EDGE_SCRIPT, EdgeScriptId: script }
+        : {
+            OriginType: ORIGIN_TYPE_STORAGE_ZONE,
+            StorageZoneId: storageZoneId,
+          }),
       ...(opts?.middlewareScriptId != null
         ? { MiddlewareScriptId: opts.middlewareScriptId }
         : {}),
