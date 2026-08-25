@@ -1542,7 +1542,7 @@ The shell is split across two packages:
 - **Formatting** (`format.ts`): `printResultSet()` with 5 output modes: `default`, `table`, `json`, `csv`, `markdown`. Sensitive column masking (full mask for passwords/secrets, email mask for email columns).
 - **Views** (`views.ts`): saved queries scoped per database. Stored at `~/.config/bunny/views/<databaseId>/` (respects `XDG_CONFIG_HOME`). Callers can override via `ShellOptions.viewsDir`.
 - **History** (`history.ts`): stored at `~/.config/bunny/shell_history` (respects `XDG_CONFIG_HOME`). Max 1000 entries.
-- **SQL parsing** (`parser.ts`): `splitStatements()` for `.sql` file execution. Splits on `;` outside single-quoted strings and SQLite's double-quote/backtick/bracket identifier forms, strips line and block comments (so drizzle's `--> statement-breakpoint` markers are ignored), keeps `CREATE TRIGGER ... BEGIN ... END;` bodies intact, and rejects unterminated quotes/comments rather than returning truncated SQL.
+- **SQL parsing** (`parser.ts`): `splitStatements()` for `.sql` file execution. Splits on `;` outside single-quoted strings and SQLite's double-quote/backtick/bracket identifier forms, strips line and block comments (so drizzle's `--> statement-breakpoint` markers are ignored), keeps `CREATE TRIGGER ... BEGIN ... END;` bodies intact, and rejects unterminated quotes/comments rather than returning truncated SQL. Block-depth counting runs over `stripQuoted()` rather than a regex: bracket identifiers end at the first `]` and so may contain a `[`, which `\[[^\]]*\]` only handles by rescanning to end of input from every offset once the brackets are unbalanced.
 
 **Dependency injection**: the shell engine accepts a `ShellLogger` interface instead of importing the CLI logger directly:
 
@@ -1566,6 +1566,8 @@ interface ShellLogger {
 - Every database URL must be encrypted, including URLs paired with an explicit `--token`. `isEncrypted()` allows `libsql:`, `https:`, and `wss:`, and rejects `libsql://host:port?tls=0`, which downgrades to plaintext. The scheme check runs before any lookup or prompt so an unusable URL fails immediately instead of after a database prompt. This CLI targets hosted Bunny Database and does not support a plaintext local-database exception.
 
 The invariant behind all of it: a credential the user didn't pass on this command line is never sent to a target they did.
+
+`createRestHandler()` in `packages/database-rest/src/handler.ts` never puts a caught error's text in a response: the catch-all returns `{ message: "Internal error", code: "INTERNAL_ERROR" }` with a 500 and hands the real error to the optional `onError` hook. The handler is a mountable REST surface, so a raw SQLite error in the body would leak table names, column names, and file paths to whoever can reach it. `db studio` wires `onError` to its own logger, which is why a failing request prints the stack in the terminal that launched the studio rather than showing it in the browser.
 
 Every database connection the CLI opens identifies itself with `databaseUserAgent(command)` from `packages/cli/src/commands/db/constants.ts`, which produces `bunny-cli/<version> (db shell)`, `(db studio)`, or `(db migrations)`. It replaces the library's own default, which is right here: the CLI compiles `database-shell` and `database-studio` from source into its binary, so those packages' versions say nothing about the traffic. A standalone `bsql` run keeps `bunny-database-shell/<version>`, and anything embedding the shell can pass `userAgent` to `createShellClient()`.
 

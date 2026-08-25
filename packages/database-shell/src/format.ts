@@ -137,7 +137,8 @@ export function printResultSet(
   }
 
   if (mode === "markdown") {
-    const mdEscape = (v: string) => v.replace(/\|/g, "\\|");
+    const mdEscape = (v: string) =>
+      v.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
     logger.log(`| ${result.columns.map(mdEscape).join(" | ")} |`);
     logger.log(`| ${result.columns.map(() => "---").join(" | ")} |`);
     for (const row of result.rows) {

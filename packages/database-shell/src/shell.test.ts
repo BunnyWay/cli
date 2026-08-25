@@ -672,6 +672,31 @@ describe("splitStatements", () => {
     expect(splitStatements(sql)).toEqual([sql.slice(0, -1)]);
   });
 
+  test("ignores block keywords inside bracket-quoted identifiers", () => {
+    const sql =
+      "CREATE TRIGGER t AFTER INSERT ON [end table] BEGIN\n  INSERT INTO log VALUES (1);\nEND;";
+    expect(splitStatements(sql)).toEqual([sql.slice(0, -1)]);
+  });
+
+  // A bracket identifier ends at the first `]`, so an inner `[` is part of the name.
+  test("ignores block keywords inside a bracket identifier containing [", () => {
+    const sql =
+      "CREATE TRIGGER t AFTER INSERT ON [end[table] BEGIN\n  INSERT INTO log VALUES (1);\nEND;\nSELECT 1;";
+    expect(splitStatements(sql)).toEqual([
+      "CREATE TRIGGER t AFTER INSERT ON [end[table] BEGIN\n  INSERT INTO log VALUES (1);\nEND",
+      "SELECT 1",
+    ]);
+  });
+
+  test("keeps a trigger body intact when a string holds a doubled quote and a block keyword", () => {
+    const sql =
+      "CREATE TRIGGER t AFTER INSERT ON x BEGIN\n  INSERT INTO log VALUES ('it''s END; not');\nEND;\nSELECT 1;";
+    expect(splitStatements(sql)).toEqual([
+      "CREATE TRIGGER t AFTER INSERT ON x BEGIN\n  INSERT INTO log VALUES ('it''s END; not');\nEND",
+      "SELECT 1",
+    ]);
+  });
+
   test("splits drizzle statement-breakpoint files", () => {
     const sql =
       "CREATE TABLE `users` (\n\t`id` integer PRIMARY KEY NOT NULL\n);\n--> statement-breakpoint\nCREATE UNIQUE INDEX `users_id` ON `users` (`id`);";

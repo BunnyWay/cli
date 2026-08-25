@@ -24,9 +24,22 @@ export async function gitTopLevel(cwd: string): Promise<string | null> {
   return runGit(cwd, ["rev-parse", "--show-toplevel"]);
 }
 
+/** The host of a git remote URL, handling both scp-style (`git@host:path`) and URL forms; null when neither parses. */
+export function remoteHost(url: string): string | null {
+  const scp = url.match(/^(?:[^@/]+@)?([^/:]+):(?!\/)/);
+  if (scp?.[1]) return scp[1].toLowerCase();
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 export async function hasGitHubOrigin(root: string): Promise<boolean> {
   const url = await runGit(root, ["remote", "get-url", "origin"]);
-  return url?.includes("github.com") ?? false;
+  const host = url ? remoteHost(url) : null;
+  // A substring check would accept hosts like github.com.example.invalid.
+  return host === "github.com" || host?.endsWith(".github.com") === true;
 }
 
 export interface ScaffoldResult {

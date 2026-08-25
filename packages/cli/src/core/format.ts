@@ -50,9 +50,9 @@ export function csvEscape(value: string): string {
   return value;
 }
 
-/** Escape pipe characters for markdown table cells. */
+/** Escape backslashes then pipe characters for markdown table cells. */
 function mdEscape(value: string): string {
-  return value.replace(/\|/g, "\\|");
+  return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }
 
 /**
