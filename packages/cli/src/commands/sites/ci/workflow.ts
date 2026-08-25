@@ -9,7 +9,7 @@ export const SITES_WORKFLOW_PATH = ".github/workflows/bunny-sites.yml";
 
 // Bump the tag when a new major of the action ships; the action wraps the CLI.
 export const DEPLOY_SITE_ACTION =
-  "BunnyWay/actions/deploy-site@deploy-site_1.0.0";
+  "BunnyWay/actions/deploy-site@deploy-site_0.1.0";
 
 // Toolchain setup + dependency install, without the build line. setup-node looks for the lockfile at the checkout root, so a nested project passes its own path.
 function jsSetup(
@@ -29,8 +29,8 @@ function jsSetup(
       ];
     case "pnpm":
       return [
-        "      - uses: pnpm/action-setup@v4",
-        "      - uses: actions/setup-node@v4",
+        "      - uses: pnpm/action-setup@v6",
+        "      - uses: actions/setup-node@v7",
         "        with:",
         '          node-version: "lts/*"',
         "          cache: pnpm",
@@ -39,7 +39,7 @@ function jsSetup(
       ];
     case "yarn":
       return [
-        "      - uses: actions/setup-node@v4",
+        "      - uses: actions/setup-node@v7",
         "        with:",
         '          node-version: "lts/*"',
         "          cache: yarn",
@@ -48,7 +48,7 @@ function jsSetup(
       ];
     case "npm":
       return [
-        "      - uses: actions/setup-node@v4",
+        "      - uses: actions/setup-node@v7",
         "        with:",
         '          node-version: "lts/*"',
         "          cache: npm",
@@ -106,7 +106,7 @@ function buildSteps(
       ];
     case "python":
       return [
-        "      - uses: actions/setup-python@v5",
+        "      - uses: actions/setup-python@v7",
         "        with:",
         '          python-version: "3.x"',
         "      - run: pip install -r requirements.txt",
@@ -121,7 +121,7 @@ function buildSteps(
       ];
     case "dotnet":
       return [
-        "      - uses: actions/setup-dotnet@v4",
+        "      - uses: actions/setup-dotnet@v6",
         "        with:",
         '          dotnet-version: "8.0.x"',
         runStep(build, preset.build),
@@ -181,7 +181,7 @@ export function renderSitesWorkflow(opts: {
     "      contents: read",
     "      deployments: write # records the deploy in the repo's Environments",
     "    steps:",
-    "      - uses: actions/checkout@v4",
+    "      - uses: actions/checkout@v7",
     "",
     ...buildSteps(
       preset,
@@ -196,7 +196,7 @@ export function renderSitesWorkflow(opts: {
     // Quote the interpolated values so they're always inert YAML scalars.
     `          site: ${JSON.stringify(site)}`,
     `          directory: ${JSON.stringify(workflowPath(workingDirectory, opts.dir ?? preset.dir))}`,
-    "          api_key: ${{ secrets.BUNNY_API_KEY }}",
+    "          api_key: ${{ secrets.BUNNYNET_API_KEY }}",
   ];
   return `${lines.join("\n")}\n`;
 }
