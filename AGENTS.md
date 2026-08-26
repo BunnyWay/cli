@@ -142,7 +142,18 @@ bunny-cli/
 │   │   ├── package.json                  # exports/main/types point at dist/ for npm consumers
 │   │   ├── tsconfig.json
 │   │   ├── tsconfig.build.json           # Emits dist/ (JS + .d.ts); paths:{} so nothing resolves from source
-│   │   ├── examples/
+│   │   ├── examples/                     # Notes API per runtime; workspace members, excluded from root tsc because an @types/node here breaks database-shell against bun-types
+│   │   │   ├── edge-script/              # Full CRUD on Edge Scripting via npm: specifiers; npm start deploys with the global CLI
+│   │   │   ├── bun/                      # Bun.serve routes; resolves the client from src via the root tsconfig paths
+│   │   │   ├── node/                     # node:http, needs --env-file; resolves through exports → dist, so build the client first
+│   │   │   ├── hono/                     # Hono app exported as a fetch handler
+│   │   │   │   # The four above are workspace members: client pinned "*" so bun links the workspace and npm installs the published one
+│   │   │   ├── next/                     # Route handler; next dev loads .env into process.env (next.config.mjs turns off Next's AGENTS.md/CLAUDE.md writing)
+│   │   │   ├── astro/                    # Endpoint with prerender=false; credentials come from import.meta.env, node adapter for builds
+│   │   │   └── sveltekit/                # +server.ts reading $env/dynamic/private
+│   │   │       # The three frameworks stay OUT of the workspace so Next/Astro/Svelte never land in a repo install; they install the published client, and their build output is gitignored
+│   │   │       # Every example holds package.json, README.md, .env.example, and its route/server file
+│   │   ├── scripts/
 │   │   │   └── smoke.ts                  # Live end-to-end run on Bun and Deno; creates and drops its own tables
 │   │   └── src/
 │   │       ├── index.ts                  # Barrel export: connect, Database, Statement, DatabaseError, types

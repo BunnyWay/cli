@@ -1,0 +1,15 @@
+{
+  "name": "database-client-example-hono",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run server.ts"
+  },
+  "dependencies": {
+    "@bunny.net/database-client": "*",
+    "hono": "^4.13.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
