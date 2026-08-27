@@ -40,5 +40,10 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "exclude": ["packages/database-studio/client", "packages/*/dist"]
+  "exclude": [
+    "packages/database-studio/client",
+    "packages/*/dist",
+    // Standalone projects with their own dependencies, including an @types/node that clashes with bun-types.
+    "packages/database-client/examples"
+  ]
 }

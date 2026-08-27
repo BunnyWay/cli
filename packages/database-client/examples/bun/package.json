@@ -1,0 +1,14 @@
+{
+  "name": "database-client-example-bun",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run server.ts"
+  },
+  "dependencies": {
+    "@bunny.net/database-client": "*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

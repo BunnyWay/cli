@@ -34,6 +34,8 @@ const db = connect({
 });
 ```
 
+Runnable examples for Edge Scripting, Bun, Node, and Hono live in [`packages/database-client/examples`](https://github.com/BunnyWay/cli/tree/main/packages/database-client/examples).
+
 ## API
 
 ### `connect(config?)`
@@ -326,9 +328,9 @@ The browser calls your endpoint, and your endpoint decides what SQL runs.
 bun test
 ```
 
-`examples/smoke.ts` runs the client against a real database on both runtimes. It creates and drops its own tables, and leaves nothing behind:
+`scripts/smoke.ts` runs the client against a real database on both runtimes. It creates and drops its own tables, and leaves nothing behind:
 
 ```bash
-bun run examples/smoke.ts
-deno run --env-file=.env --allow-net --allow-env examples/smoke.ts
+bun run scripts/smoke.ts
+deno run --env-file=.env --allow-net --allow-env scripts/smoke.ts
 ```
