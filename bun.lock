@@ -16,7 +16,7 @@
     },
     "packages/cli": {
       "name": "@bunny.net/cli",
-      "version": "0.14.1",
+      "version": "0.15.1",
       "bin": {
         "bunny": "./bin/bunny.cjs",
       },
@@ -40,32 +40,32 @@
         "zod": "^4.3.6",
       },
       "optionalDependencies": {
-        "@bunny.net/cli-darwin-arm64": "0.14.1",
-        "@bunny.net/cli-darwin-x64": "0.14.1",
-        "@bunny.net/cli-linux-arm64": "0.14.1",
-        "@bunny.net/cli-linux-x64": "0.14.1",
-        "@bunny.net/cli-windows-x64": "0.14.1",
+        "@bunny.net/cli-darwin-arm64": "0.15.1",
+        "@bunny.net/cli-darwin-x64": "0.15.1",
+        "@bunny.net/cli-linux-arm64": "0.15.1",
+        "@bunny.net/cli-linux-x64": "0.15.1",
+        "@bunny.net/cli-windows-x64": "0.15.1",
       },
     },
     "packages/cli-darwin-arm64": {
       "name": "@bunny.net/cli-darwin-arm64",
-      "version": "0.14.1",
+      "version": "0.15.1",
     },
     "packages/cli-darwin-x64": {
       "name": "@bunny.net/cli-darwin-x64",
-      "version": "0.14.1",
+      "version": "0.15.1",
     },
     "packages/cli-linux-arm64": {
       "name": "@bunny.net/cli-linux-arm64",
-      "version": "0.14.1",
+      "version": "0.15.1",
     },
     "packages/cli-linux-x64": {
       "name": "@bunny.net/cli-linux-x64",
-      "version": "0.14.1",
+      "version": "0.15.1",
     },
     "packages/cli-windows-x64": {
       "name": "@bunny.net/cli-windows-x64",
-      "version": "0.14.1",
+      "version": "0.15.1",
     },
     "packages/config": {
       "name": "@bunny.net/config",
@@ -77,7 +77,7 @@
     },
     "packages/database-adapter": {
       "name": "@bunny.net/database-adapter",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "dependencies": {
         "@bunny.net/database-client": "workspace:*",
         "@bunny.net/database-openapi": "workspace:*",
@@ -86,9 +86,37 @@
     },
     "packages/database-client": {
       "name": "@bunny.net/database-client",
-      "version": "0.0.0",
+      "version": "0.0.1",
       "devDependencies": {
         "typescript": "^5",
+      },
+    },
+    "packages/database-client/examples/bun": {
+      "name": "database-client-example-bun",
+      "dependencies": {
+        "@bunny.net/database-client": "^0.0.1",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+    },
+    "packages/database-client/examples/edge-script": {
+      "name": "database-client-example-edge-script",
+    },
+    "packages/database-client/examples/hono": {
+      "name": "database-client-example-hono",
+      "dependencies": {
+        "@bunny.net/database-client": "^0.0.1",
+        "hono": "^4.13.3",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+    },
+    "packages/database-client/examples/node": {
+      "name": "database-client-example-node",
+      "dependencies": {
+        "@bunny.net/database-client": "*",
       },
     },
     "packages/database-openapi": {
@@ -110,7 +138,7 @@
     },
     "packages/database-shell": {
       "name": "@bunny.net/database-shell",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "bin": {
         "bsql": "./bin/bsql.cjs",
       },
@@ -120,36 +148,36 @@
         "cli-table3": "^0.6.5",
       },
       "optionalDependencies": {
-        "@bunny.net/database-shell-darwin-arm64": "0.2.4",
-        "@bunny.net/database-shell-darwin-x64": "0.2.4",
-        "@bunny.net/database-shell-linux-arm64": "0.2.4",
-        "@bunny.net/database-shell-linux-x64": "0.2.4",
-        "@bunny.net/database-shell-windows-x64": "0.2.4",
+        "@bunny.net/database-shell-darwin-arm64": "0.2.5",
+        "@bunny.net/database-shell-darwin-x64": "0.2.5",
+        "@bunny.net/database-shell-linux-arm64": "0.2.5",
+        "@bunny.net/database-shell-linux-x64": "0.2.5",
+        "@bunny.net/database-shell-windows-x64": "0.2.5",
       },
     },
     "packages/database-shell-darwin-arm64": {
       "name": "@bunny.net/database-shell-darwin-arm64",
-      "version": "0.2.4",
+      "version": "0.2.5",
     },
     "packages/database-shell-darwin-x64": {
       "name": "@bunny.net/database-shell-darwin-x64",
-      "version": "0.2.4",
+      "version": "0.2.5",
     },
     "packages/database-shell-linux-arm64": {
       "name": "@bunny.net/database-shell-linux-arm64",
-      "version": "0.2.4",
+      "version": "0.2.5",
     },
     "packages/database-shell-linux-x64": {
       "name": "@bunny.net/database-shell-linux-x64",
-      "version": "0.2.4",
+      "version": "0.2.5",
     },
     "packages/database-shell-windows-x64": {
       "name": "@bunny.net/database-shell-windows-x64",
-      "version": "0.2.4",
+      "version": "0.2.5",
     },
     "packages/database-studio": {
       "name": "@bunny.net/database-studio",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "dependencies": {
         "@bunny.net/database-adapter": "workspace:*",
         "@bunny.net/database-client": "workspace:*",
@@ -684,6 +712,14 @@
 
     "csstype": ["csstype@3.2.3", "", {}, "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ=="],
 
+    "database-client-example-bun": ["database-client-example-bun@workspace:packages/database-client/examples/bun"],
+
+    "database-client-example-edge-script": ["database-client-example-edge-script@workspace:packages/database-client/examples/edge-script"],
+
+    "database-client-example-hono": ["database-client-example-hono@workspace:packages/database-client/examples/hono"],
+
+    "database-client-example-node": ["database-client-example-node@workspace:packages/database-client/examples/node"],
+
     "dataloader": ["dataloader@1.4.0", "", {}, "sha512-68s5jYdlvasItOJnCuI2Q9s4q98g0pCyL3HrcKJu8KNugUl8ahgmZYg38ysLTgQjjXX3H8CJLkAvWrclWfcalw=="],
 
     "debug": ["debug@4.4.3", "", { "dependencies": { "ms": "^2.1.3" } }, "sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA=="],
@@ -745,6 +781,8 @@
     "globby": ["globby@11.1.0", "", { "dependencies": { "array-union": "^2.1.0", "dir-glob": "^3.0.1", "fast-glob": "^3.2.9", "ignore": "^5.2.0", "merge2": "^1.4.1", "slash": "^3.0.0" } }, "sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g=="],
 
     "graceful-fs": ["graceful-fs@4.2.11", "", {}, "sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ=="],
+
+    "hono": ["hono@4.13.3", "", {}, "sha512-r8AO2mYHoLxSHkgafNeC/BXyb2vWRxD3jem4Ts+ptav8oTG5FIRifAjuJEmZI4bSvvc2ns0GxmIYiZnHqN3mMw=="],
 
     "https-proxy-agent": ["https-proxy-agent@7.0.6", "", { "dependencies": { "agent-base": "^7.1.2", "debug": "4" } }, "sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw=="],
 
@@ -1072,6 +1110,10 @@
 
     "cliui/strip-ansi": ["strip-ansi@7.1.2", "", { "dependencies": { "ansi-regex": "^6.0.1" } }, "sha512-gmBGslpoQJtgnMAvOVqGZpEz9dyoKTCzy2nfz/n8aIFhN/jCE/rCmcxabB6jOOHV+0WNnylOxaxBQPSvcWklhA=="],
 
+    "database-client-example-bun/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
+    "database-client-example-hono/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
     "micromatch/picomatch": ["picomatch@2.3.1", "", {}, "sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA=="],
 
     "openapi-typescript/yargs-parser": ["yargs-parser@21.1.1", "", {}, "sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw=="],
@@ -1091,6 +1133,10 @@
     "cliui/string-width/emoji-regex": ["emoji-regex@10.6.0", "", {}, "sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A=="],
 
     "cliui/strip-ansi/ansi-regex": ["ansi-regex@6.2.2", "", {}, "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg=="],
+
+    "database-client-example-bun/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+
+    "database-client-example-hono/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "ora/string-width/strip-ansi": ["strip-ansi@7.1.2", "", { "dependencies": { "ansi-regex": "^6.0.1" } }, "sha512-gmBGslpoQJtgnMAvOVqGZpEz9dyoKTCzy2nfz/n8aIFhN/jCE/rCmcxabB6jOOHV+0WNnylOxaxBQPSvcWklhA=="],
 

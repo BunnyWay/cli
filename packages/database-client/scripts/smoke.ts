@@ -2,8 +2,8 @@
  * Exercises the client against a live database on both Bun and Deno. It creates and drops its own tables.
  *
  * Needs BUNNY_DATABASE_URL and BUNNY_DATABASE_AUTH_TOKEN in the environment:
- *   bun run examples/smoke.ts
- *   deno run --env-file=.env --allow-net --allow-env examples/smoke.ts
+ *   bun run scripts/smoke.ts
+ *   deno run --env-file=.env --allow-net --allow-env scripts/smoke.ts
  */
 import { connect, DatabaseError, ENV_DATABASE_URL } from "../src/index.ts";
 

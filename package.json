@@ -2,7 +2,11 @@
   "name": "@bunny.net/monorepo",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "packages/database-client/examples/bun",
+    "packages/database-client/examples/node",
+    "packages/database-client/examples/hono",
+    "packages/database-client/examples/edge-script"
   ],
   "scripts": {
     "dev": "bun run packages/cli/src/index.ts",

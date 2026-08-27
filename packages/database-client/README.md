@@ -34,6 +34,8 @@ const db = connect({
 });
 ```
 
+Runnable examples for Edge Scripting, Bun, Node, and Hono live in [`packages/database-client/examples`](https://github.com/BunnyWay/cli/tree/main/packages/database-client/examples).
+
 ## API
 
 ### `connect(config?)`
@@ -67,6 +69,20 @@ const bob = await byId.bind(2).first();
 ```
 
 Pass a row type to have it flow through every execution of that statement. See [Types](#types).
+
+### ``db.sql`...` ``
+
+A template literal that binds every interpolated value, so the shortest way to write a query is also the parameterized one:
+
+```ts
+const note = await db.sql`SELECT * FROM notes WHERE id = ${id}`.first();
+```
+
+Each `${...}` becomes a `?` placeholder and its value is bound, never spliced into the SQL string. It returns a `Statement`, so everything under [Executing](#executing) applies unchanged.
+
+Values follow the same rules as `bind()`, with one difference: an interpolated object throws instead of being read as named parameters, since inside a template it is far more likely to be a mistake.
+
+Only values can be parameterized, which is a SQLite limit rather than a client one. Build the statement with `prepare()` when a table or column name has to vary.
 
 ### `statement.bind(...values)`
 
@@ -251,7 +267,7 @@ That type is an assertion. Nothing validates the rows against it at runtime, so 
 Edge Scripting runs Deno, so you can import straight from npm. A standalone script serves requests through the Edge Scripting SDK:
 
 ```ts
-import * as BunnySDK from "https://esm.sh/@bunny.net/edgescript-sdk@0.12.0";
+import * as BunnySDK from "npm:@bunny.net/edgescript-sdk@0.12.1";
 import { connect } from "npm:@bunny.net/database-client";
 
 const db = connect();
@@ -290,7 +306,7 @@ Keep the token on your server and expose only the queries you actually want to a
 
 ```ts
 // Edge Script: the token stays here, the browser gets only this shape.
-import * as BunnySDK from "https://esm.sh/@bunny.net/edgescript-sdk@0.12.0";
+import * as BunnySDK from "npm:@bunny.net/edgescript-sdk@0.12.1";
 import { connect } from "npm:@bunny.net/database-client";
 
 const db = connect();
@@ -325,9 +341,9 @@ The browser calls your endpoint, and your endpoint decides what SQL runs.
 bun test
 ```
 
-`examples/smoke.ts` runs the client against a real database on both runtimes. It creates and drops its own tables, and leaves nothing behind:
+`scripts/smoke.ts` runs the client against a real database on both runtimes. It creates and drops its own tables, and leaves nothing behind:
 
 ```bash
-bun run examples/smoke.ts
-deno run --env-file=.env --allow-net --allow-env examples/smoke.ts
+bun run scripts/smoke.ts
+deno run --env-file=.env --allow-net --allow-env scripts/smoke.ts
 ```

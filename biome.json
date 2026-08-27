@@ -48,6 +48,16 @@
           "a11y": "off"
         }
       }
+    },
+    {
+      "includes": ["**/*.astro"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedVariables": "off"
+          }
+        }
+      }
     }
   ],
   "javascript": {

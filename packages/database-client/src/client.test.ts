@@ -409,6 +409,44 @@ describe("typed statements", () => {
   });
 });
 
+describe("sql template", () => {
+  test("interpolations become positional placeholders", () => {
+    const stmt = connect({ url: URL_ })
+      .sql`SELECT * FROM t WHERE a = ${1} AND b = ${"x"}`;
+
+    expect(stmt.wire.sql).toBe("SELECT * FROM t WHERE a = ? AND b = ?");
+    expect(stmt.wire.args).toEqual([
+      { type: "integer", value: "1" },
+      { type: "text", value: "x" },
+    ]);
+    expect(stmt.wire.named_args).toEqual([]);
+  });
+
+  test("a template with nothing interpolated is left alone", () => {
+    const stmt = connect({ url: URL_ }).sql`SELECT 1 AS a`;
+
+    expect(stmt.wire.sql).toBe("SELECT 1 AS a");
+    expect(stmt.wire.args).toEqual([]);
+  });
+
+  test("an interpolated object is rejected rather than read as named parameters", () => {
+    const db = connect({ url: URL_ });
+
+    expect(() => db.sql`SELECT ${{ a: 1 }}`).toThrow(/cannot bind value/);
+  });
+
+  test("executes like any other statement", async () => {
+    const fake = fakeFetch([okExecute(["id"], [[7]])]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    expect(await db.sql`SELECT id FROM t WHERE id = ${7}`.first("id")).toBe(7);
+
+    const stmt = (fake.captures[0] as Capture).body.requests[0]?.stmt;
+    expect(stmt?.sql).toBe("SELECT id FROM t WHERE id = ?");
+    expect(stmt?.args).toEqual([{ type: "integer", value: "7" }]);
+  });
+});
+
 describe("batch", () => {
   function okBatch(count: number) {
     const step = {

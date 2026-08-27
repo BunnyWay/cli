@@ -196,6 +196,18 @@ export class Database {
     });
   }
 
+  /** Build a statement from a template literal, binding every interpolated value positionally. */
+  sql(strings: TemplateStringsArray, ...values: unknown[]): Statement {
+    // Binding here rather than through bind() keeps an interpolated object a rejected value instead of named parameters.
+    return new Statement({
+      sql: strings.join("?"),
+      args: values.map(encodeValue),
+      namedArgs: [],
+      transport: this.#transport,
+      signal: this.#signal,
+    });
+  }
+
   /** Run every statement in one transaction. All succeed or none are applied. */
   async batch<T = Row>(
     statements: Statement[],
