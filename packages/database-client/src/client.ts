@@ -174,6 +174,11 @@ export class Statement<T = Row> {
   }
 }
 
+/** Maps each statement in a batch to the `Result` of its row type. */
+export type BatchResults<T extends readonly Statement<unknown>[]> = {
+  -readonly [K in keyof T]: T[K] extends Statement<infer R> ? Result<R> : never;
+};
+
 /** A connection to a bunny.net database. Stateless: each call is one HTTPS request. */
 export class Database {
   readonly #transport: Transport;
@@ -209,25 +214,25 @@ export class Database {
   }
 
   /** Run every statement in one transaction. All succeed or none are applied. */
-  async batch<T = Row>(
-    statements: Statement<T>[],
+  async batch<T extends readonly Statement<unknown>[]>(
+    statements: [...T],
     options: BatchOptions = {},
-  ): Promise<Result<T>[]> {
+  ): Promise<BatchResults<T>> {
     return (await this.#batch(statements, options)).map((wire) =>
-      toResult<T>(wire),
-    );
+      toResult<Row>(wire),
+    ) as BatchResults<T>;
   }
 
   /** Like `batch()`, but each result has positional rows. Keeps duplicate column names distinct. */
   async batchRaw(
-    statements: Statement<unknown>[],
+    statements: readonly Statement<unknown>[],
     options: BatchOptions = {},
   ): Promise<RawResult[]> {
     return (await this.#batch(statements, options)).map(toRawResult);
   }
 
   async #batch(
-    statements: Statement<unknown>[],
+    statements: readonly Statement<unknown>[],
     options: BatchOptions,
   ): Promise<WireStmtResult[]> {
     if (statements.length === 0) return [];

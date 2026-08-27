@@ -397,8 +397,40 @@ describe("typed statements", () => {
     ]);
 
     // Typed as string | undefined rather than SqlValue, so batch inherited User.
-    const name: string | undefined = users?.rows[0]?.name;
+    const name: string | undefined = users.rows[0]?.name;
     expect(name).toBe("a");
+  });
+
+  test("a mixed batch keeps each statement's own row type", async () => {
+    const fake = fakeFetch([
+      {
+        type: "ok",
+        response: {
+          type: "batch",
+          result: {
+            step_results: [
+              null,
+              okExecute(["id", "name"], [[1, "a"]]).response.result,
+              okExecute(["c"], [[2]]).response.result,
+              null,
+              null,
+            ],
+            step_errors: [null, null, null, null, null],
+          },
+        },
+      },
+    ]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const [users, counts] = await db.batch([
+      db.prepare<User>("SELECT id, name FROM users"),
+      db.prepare("SELECT COUNT(*) AS c FROM users"),
+    ]);
+
+    // Result<User> and Result<Row> respectively, so name reads as a string and c as a SqlValue.
+    const name: string | undefined = users.rows[0]?.name;
+    expect(name).toBe("a");
+    expect(counts.rows[0]?.c).toBe(2);
   });
 
   test("column reads are unaffected by the row type", async () => {
