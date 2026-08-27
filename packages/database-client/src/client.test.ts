@@ -372,7 +372,7 @@ describe("typed statements", () => {
     expect(rows).toEqual([{ id: 1 }]);
   });
 
-  test("a typed statement still passes to batch", async () => {
+  test("batch infers the row type from its statements", async () => {
     const fake = fakeFetch([
       {
         type: "ok",
@@ -392,11 +392,13 @@ describe("typed statements", () => {
     ]);
     const db = connect({ url: URL_, fetch: fake.fetch });
 
-    const [users] = await db.batch<User>([
+    const [users] = await db.batch([
       db.prepare<User>("SELECT id, name FROM users"),
     ]);
 
-    expect(users?.rows[0]?.name).toBe("a");
+    // Typed as string | undefined rather than SqlValue, so batch inherited User.
+    const name: string | undefined = users?.rows[0]?.name;
+    expect(name).toBe("a");
   });
 
   test("column reads are unaffected by the row type", async () => {

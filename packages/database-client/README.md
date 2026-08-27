@@ -167,6 +167,8 @@ const [inserted, count] = await db.batch([
 
 You get one `Result` per statement you passed, in order. `batchRaw()` is the same but with positional rows. If any statement fails the transaction rolls back and `batch()` throws that statement's error.
 
+`batch()` infers its row type from the statements, so passing `prepare<User>(...)` statements gives you `Result<User>[]` without repeating the type. See [Types](#types).
+
 `{ foreignKeys: false }` brackets the transaction with `PRAGMA foreign_keys=off` and `=on`. Schema changes need it: SQLite's table rebuild procedure and several `ALTER TABLE` forms require enforcement genuinely off, not merely deferred to commit. `bunny db migrations apply` runs this way.
 
 ```ts

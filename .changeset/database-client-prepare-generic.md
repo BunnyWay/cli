@@ -1,5 +1,5 @@
 ---
-"@bunny.net/database-client": minor
+"@bunny.net/database-client": patch
 ---
 
 Let `prepare<T>()` type every row the statement returns

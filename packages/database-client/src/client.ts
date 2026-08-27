@@ -210,7 +210,7 @@ export class Database {
 
   /** Run every statement in one transaction. All succeed or none are applied. */
   async batch<T = Row>(
-    statements: Statement[],
+    statements: Statement<T>[],
     options: BatchOptions = {},
   ): Promise<Result<T>[]> {
     return (await this.#batch(statements, options)).map((wire) =>
@@ -220,14 +220,14 @@ export class Database {
 
   /** Like `batch()`, but each result has positional rows. Keeps duplicate column names distinct. */
   async batchRaw(
-    statements: Statement[],
+    statements: Statement<unknown>[],
     options: BatchOptions = {},
   ): Promise<RawResult[]> {
     return (await this.#batch(statements, options)).map(toRawResult);
   }
 
   async #batch(
-    statements: Statement[],
+    statements: Statement<unknown>[],
     options: BatchOptions,
   ): Promise<WireStmtResult[]> {
     if (statements.length === 0) return [];
