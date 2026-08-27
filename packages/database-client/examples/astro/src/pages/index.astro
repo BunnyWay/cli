@@ -14,7 +14,10 @@ if (Astro.request.method === "POST") {
   const title = String(form.get("title") ?? "").trim();
 
   if (title) {
-    await db().prepare("INSERT INTO notes (title) VALUES (?)").bind(title).run();
+    await db()
+      .prepare("INSERT INTO notes (title) VALUES (?)")
+      .bind(title)
+      .run();
     return Astro.redirect("/");
   }
 }

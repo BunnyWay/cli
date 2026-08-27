@@ -15,7 +15,10 @@ export default async function Page() {
     const title = String(formData.get("title") ?? "").trim();
     if (!title) return;
 
-    await db().prepare("INSERT INTO notes (title) VALUES (?)").bind(title).run();
+    await db()
+      .prepare("INSERT INTO notes (title) VALUES (?)")
+      .bind(title)
+      .run();
     revalidatePath("/");
   }
 
