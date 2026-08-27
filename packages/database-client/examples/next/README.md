@@ -19,3 +19,5 @@ curl -s localhost:3000/api/notes -H 'content-type: application/json' -d '{"title
 ```
 
 `agentRules: false` in `next.config.mjs` stops `next dev` writing its own AGENTS.md and CLAUDE.md here.
+
+There is a `Dockerfile` here: `bunny apps deploy --dockerfile` puts it on [Magic Containers](../README.md#magic-containers).

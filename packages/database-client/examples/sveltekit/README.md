@@ -13,3 +13,5 @@ npm run dev
 curl -s localhost:5173/api/notes
 curl -s localhost:5173/api/notes -H 'content-type: application/json' -d '{"title":"First note"}'
 ```
+
+There is a `Dockerfile` here: `bunny apps deploy --dockerfile` puts it on [Magic Containers](../README.md#magic-containers).

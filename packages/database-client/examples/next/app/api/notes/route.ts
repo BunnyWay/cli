@@ -1,10 +1,10 @@
 import { connect } from "@bunny.net/database-client";
 
-const db = connect();
+const db = () => connect();
 
 export async function GET() {
   return Response.json(
-    await db.prepare("SELECT id, title FROM notes ORDER BY id").all(),
+    await db().prepare("SELECT id, title FROM notes ORDER BY id").all(),
   );
 }
 
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   }
 
   return Response.json(
-    await db
+    await db()
       .prepare("INSERT INTO notes (title) VALUES (?) RETURNING id, title")
       .bind(title.trim())
       .first(),

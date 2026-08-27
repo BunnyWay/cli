@@ -153,6 +153,8 @@ bunny-cli/
 │   │   │   └── sveltekit/                # +server.ts reading $env/dynamic/private
 │   │   │       # The three frameworks stay OUT of the workspace so Next/Astro/Svelte never land in a repo install; they install the published client, and their build output is gitignored
 │   │   │       # Every example holds package.json, README.md, .env.example, and its route/server file
+│   │   │       # All but edge-script ship a Dockerfile for Magic Containers (bunny apps deploy --dockerfile builds linux/amd64)
+│   │   │       # Framework examples call connect() per request, not at module scope: next build and vite build evaluate the module and would need credentials
 │   │   ├── scripts/
 │   │   │   └── smoke.ts                  # Live end-to-end run on Bun and Deno; creates and drops its own tables
 │   │   └── src/

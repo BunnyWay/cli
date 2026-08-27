@@ -29,6 +29,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 packages/database-client/examples/*/.next
 packages/database-client/examples/*/.svelte-kit
 packages/database-client/examples/*/.astro
+packages/database-client/examples/*/build
 packages/database-client/examples/*/next-env.d.ts
 packages/database-client/examples/*/package-lock.json
 

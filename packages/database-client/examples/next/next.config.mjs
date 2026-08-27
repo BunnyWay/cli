@@ -1,1 +1,5 @@
-export default { agentRules: false };
+export default {
+  agentRules: false,
+  output: "standalone",
+  outputFileTracingRoot: import.meta.dirname,
+};

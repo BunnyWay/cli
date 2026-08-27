@@ -19,3 +19,5 @@ curl -s localhost:4321/api/notes -H 'content-type: application/json' -d '{"title
 ```
 
 `prerender = false` is what makes both run per request, and the node adapter is what `astro build` needs to output a server.
+
+There is a `Dockerfile` here: `bunny apps deploy --dockerfile` puts it on [Magic Containers](../README.md#magic-containers).

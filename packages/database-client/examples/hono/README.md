@@ -22,3 +22,5 @@ deno serve server.ts
 ```
 
 For Edge Scripting, swap both imports to `npm:` specifiers the way [`edge-script/main.ts`](../edge-script/main.ts) does. A bare package name has nothing to resolve against once the file is up there on its own.
+
+There is a `Dockerfile` here: `bunny apps deploy --dockerfile` puts it on [Magic Containers](../README.md#magic-containers).

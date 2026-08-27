@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "build": "vite build",
     "prepare": "svelte-kit sync"
   },
   "dependencies": {

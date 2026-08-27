@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev"
+    "dev": "astro dev",
+    "build": "astro build"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.4",

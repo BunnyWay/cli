@@ -1,10 +1,12 @@
 import { connect } from "@bunny.net/database-client";
 import { revalidatePath } from "next/cache";
 
-const db = connect();
+const db = () => connect();
+
+export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const notes = await db
+  const notes = await db()
     .prepare("SELECT id, title FROM notes ORDER BY id")
     .all<{ id: number; title: string }>();
 
@@ -13,7 +15,7 @@ export default async function Page() {
     const title = String(formData.get("title") ?? "").trim();
     if (!title) return;
 
-    await db.prepare("INSERT INTO notes (title) VALUES (?)").bind(title).run();
+    await db().prepare("INSERT INTO notes (title) VALUES (?)").bind(title).run();
     revalidatePath("/");
   }
 

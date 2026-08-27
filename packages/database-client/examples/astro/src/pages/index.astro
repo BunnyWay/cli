@@ -3,22 +3,23 @@ import { connect } from "@bunny.net/database-client";
 
 export const prerender = false;
 
-const db = connect({
-  url: import.meta.env.BUNNY_DATABASE_URL,
-  authToken: import.meta.env.BUNNY_DATABASE_AUTH_TOKEN,
-});
+const db = () =>
+  connect({
+    url: import.meta.env.BUNNY_DATABASE_URL,
+    authToken: import.meta.env.BUNNY_DATABASE_AUTH_TOKEN,
+  });
 
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
   const title = String(form.get("title") ?? "").trim();
 
   if (title) {
-    await db.prepare("INSERT INTO notes (title) VALUES (?)").bind(title).run();
+    await db().prepare("INSERT INTO notes (title) VALUES (?)").bind(title).run();
     return Astro.redirect("/");
   }
 }
 
-const notes = await db
+const notes = await db()
   .prepare("SELECT id, title FROM notes ORDER BY id")
   .all<{ id: number; title: string }>();
 ---
