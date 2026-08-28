@@ -14,11 +14,7 @@ import {
   siteFiles,
   writeRemoteState,
 } from "./api.ts";
-import {
-  REMOTE_STATE_PATH,
-  type RemoteSiteState,
-  STATE_VERSION,
-} from "./constants.ts";
+import { REMOTE_STATE_PATH, type RemoteSiteState, STATE_VERSION } from "./constants.ts";
 import { ROUTER_VERSION } from "./router/source.ts";
 
 // ---- in-memory storage-file store (replaces the storage SDK) ----
@@ -33,9 +29,7 @@ beforeEach(() => {
   promoteVerification.wait = async () => {};
   promoteVerification.probe = async () => 200;
   siteFiles.connect = (zone) =>
-    ({ zoneName: zone.Name }) as unknown as ReturnType<
-      typeof siteFiles.connect
-    >;
+    ({ zoneName: zone.Name }) as unknown as ReturnType<typeof siteFiles.connect>;
   siteFiles.download = async (_zone, path) => {
     const content = store.get(path);
     if (content === undefined) throw new Error("404 Not Found");
@@ -152,10 +146,7 @@ function fakeCoreClient(opts: {
       }
       throw new Error(`unexpected GET ${path}`);
     },
-    POST: async (
-      path: string,
-      options?: { params?: unknown; body?: unknown },
-    ) => {
+    POST: async (path: string, options?: { params?: unknown; body?: unknown }) => {
       opts.calls.push({
         method: "POST",
         path,
@@ -163,10 +154,7 @@ function fakeCoreClient(opts: {
         body: options?.body,
       });
       if (opts.createError && path === opts.createError.path) {
-        if (
-          opts.createError.times === undefined ||
-          opts.createError.times > 0
-        ) {
+        if (opts.createError.times === undefined || opts.createError.times > 0) {
           if (opts.createError.times !== undefined) opts.createError.times--;
           throw opts.createError.error;
         }
@@ -230,10 +218,7 @@ function fakeComputeClient(opts: {
       }
       return { data: {} };
     },
-    PUT: async (
-      path: string,
-      options?: { params?: unknown; body?: unknown },
-    ) => {
+    PUT: async (path: string, options?: { params?: unknown; body?: unknown }) => {
       opts.calls.push({
         method: "PUT",
         path,
@@ -288,9 +273,9 @@ test("writeRemoteState refuses to overwrite an unparseable conflict", async () =
 
   // A concurrent writer left the state unparseable between our read and write.
   store.set(REMOTE_STATE_PATH, "garbage");
-  await expect(
-    writeRemoteState(connection, fakeState({ current: "aaa" }), etag),
-  ).rejects.toThrow("no longer parseable");
+  await expect(writeRemoteState(connection, fakeState({ current: "aaa" }), etag)).rejects.toThrow(
+    "no longer parseable",
+  );
 });
 
 test("writeRemoteState merges concurrent deploy records on an etag mismatch", async () => {
@@ -306,10 +291,7 @@ test("writeRemoteState merges concurrent deploy records on an etag mismatch", as
     files: 1,
     bytes: 10,
   };
-  store.set(
-    REMOTE_STATE_PATH,
-    JSON.stringify(fakeState({ current: "zzz", deploys: [theirs] })),
-  );
+  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState({ current: "zzz", deploys: [theirs] })));
 
   const ours = {
     id: "aaa",
@@ -319,12 +301,9 @@ test("writeRemoteState merges concurrent deploy records on an etag mismatch", as
     files: 1,
     bytes: 10,
   };
-  await writeRemoteState(
-    connection,
-    fakeState({ current: "aaa", deploys: [ours] }),
-    etag,
-    { promotedTo: "aaa" },
-  );
+  await writeRemoteState(connection, fakeState({ current: "aaa", deploys: [ours] }), etag, {
+    promotedTo: "aaa",
+  });
   const read = await readRemoteState(connection);
   // Our promote wins, their deploy record survives, and their promote becomes the rollback target.
   expect(read?.state.current).toBe("aaa");
@@ -347,9 +326,7 @@ test("a non-promoting write adopts the concurrent writer's current/previous", as
   };
   store.set(
     REMOTE_STATE_PATH,
-    JSON.stringify(
-      fakeState({ current: "zzz", previous: "yyy", deploys: [theirs] }),
-    ),
+    JSON.stringify(fakeState({ current: "zzz", previous: "yyy", deploys: [theirs] })),
   );
 
   const ours = {
@@ -379,17 +356,11 @@ test("writeRemoteState does not resurrect intentionally removed deploys on a pru
     bytes: 10,
   };
   const victim = { ...kept, id: "old", createdAt: "2026-01-01T00:00:00.000Z" };
-  const etag = await writeRemoteState(
-    connection,
-    fakeState({ deploys: [kept, victim] }),
-  );
+  const etag = await writeRemoteState(connection, fakeState({ deploys: [kept, victim] }));
 
   // A racing deploy re-writes the pre-prune state (still holding the victim) and adds its own record.
   const fresh = { ...kept, id: "new", createdAt: "2026-01-04T00:00:00.000Z" };
-  store.set(
-    REMOTE_STATE_PATH,
-    JSON.stringify(fakeState({ deploys: [fresh, kept, victim] })),
-  );
+  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState({ deploys: [fresh, kept, victim] })));
 
   // Prune deleted `old`'s files and dropped it from state; it reports the removal.
   await writeRemoteState(connection, fakeState({ deploys: [kept] }), etag, {
@@ -423,9 +394,7 @@ test("createSite provisions storage zone → router → pull zone → state", as
   });
 
   // Zone names are globally unique, so both carry a shared random suffix.
-  const zoneCreate = coreCalls.find(
-    (c) => c.method === "POST" && c.path === "/storagezone",
-  );
+  const zoneCreate = coreCalls.find((c) => c.method === "POST" && c.path === "/storagezone");
   const zoneName = (zoneCreate?.body as { Name: string }).Name;
   expect(zoneName).toMatch(/^sites-my-site-[a-z0-9]{6}$/);
   expect(result.systemHostname).toBe(`${zoneName}.b-cdn.net`);
@@ -439,23 +408,17 @@ test("createSite provisions storage zone → router → pull zone → state", as
     (c) => c.path === "/compute/script" && c.method === "POST",
   );
   expect(scriptCreate?.body).toMatchObject({ Name: `${zoneName}-router` });
-  const envSet = computeCalls.find(
-    (c) => c.path === "/compute/script/{id}/variables",
-  );
+  const envSet = computeCalls.find((c) => c.path === "/compute/script/{id}/variables");
   expect(envSet?.body).toEqual({ Name: "CURRENT_DEPLOY", DefaultValue: "" });
 
   // Exactly one pull zone (production) is created; the router is attached.
-  const pzCreates = coreCalls.filter(
-    (c) => c.method === "POST" && c.path === "/pullzone",
-  );
+  const pzCreates = coreCalls.filter((c) => c.method === "POST" && c.path === "/pullzone");
   expect(pzCreates).toHaveLength(1);
   expect(pzCreates[0]?.body).toMatchObject({
     Name: zoneName,
     StorageZoneId: 10,
   });
-  const attach = coreCalls.find(
-    (c) => c.method === "POST" && c.path === "/pullzone/{id}",
-  );
+  const attach = coreCalls.find((c) => c.method === "POST" && c.path === "/pullzone/{id}");
   expect(attach?.body).toEqual({ MiddlewareScriptId: 20 });
 
   // The system host redirects HTTP → HTTPS out of the box.
@@ -468,9 +431,7 @@ test("createSite provisions storage zone → router → pull zone → state", as
   });
 
   // Exactly one middleware script (the router) is created.
-  expect(computePaths.filter((p) => p === "POST /compute/script")).toHaveLength(
-    1,
-  );
+  expect(computePaths.filter((p) => p === "POST /compute/script")).toHaveLength(1);
 
   // Remote state marks the zone as a site.
   const written = await readRemoteState(fakeConnection());
@@ -516,21 +477,13 @@ test("createSite re-run reuses existing resources and converges", async () => {
     pullZone: true,
   });
   // Nothing new was created…
+  expect(coreCalls.filter((c) => c.method === "POST" && c.path === "/storagezone")).toHaveLength(0);
   expect(
-    coreCalls.filter((c) => c.method === "POST" && c.path === "/storagezone"),
-  ).toHaveLength(0);
-  expect(
-    computeCalls.filter(
-      (c) => c.method === "POST" && c.path === "/compute/script",
-    ),
+    computeCalls.filter((c) => c.method === "POST" && c.path === "/compute/script"),
   ).toHaveLength(0);
   // …but the router republish and attach still ran (idempotent convergence).
-  expect(computeCalls.map((c) => c.path)).toContain(
-    "/compute/script/{id}/code",
-  );
-  expect(coreCalls.map((c) => `${c.method} ${c.path}`)).toContain(
-    "POST /pullzone/{id}",
-  );
+  expect(computeCalls.map((c) => c.path)).toContain("/compute/script/{id}/code");
+  expect(coreCalls.map((c) => `${c.method} ${c.path}`)).toContain("POST /pullzone/{id}");
   expect(await readRemoteState(fakeConnection())).not.toBeNull();
 });
 
@@ -571,6 +524,46 @@ test("createSite resumes a half-created suffixed site", async () => {
   expect(result.state.name).toBe("my-site");
 });
 
+test("createSite refuses to resume a half-created zone on another tier", async () => {
+  const suffixed = { ...ZONE, Name: "sites-my-site-abc123" };
+  const coreClient = fakeCoreClient({ calls: [], storageZones: [suffixed] });
+  const computeClient = fakeComputeClient({ calls: [] });
+
+  // The zone is HDD, so an --tier ssd resume would silently finish on the wrong tier.
+  await expect(
+    createSite({
+      coreClient,
+      computeClient,
+      name: "my-site",
+      region: "DE",
+      tier: "ssd",
+    }),
+  ).rejects.toThrow("but `--tier ssd` was requested");
+});
+
+test("createSite resumes a half-created zone when the tier matches", async () => {
+  const suffixed = { ...ZONE, Name: "sites-my-site-abc123" };
+  const coreClient = fakeCoreClient({
+    calls: [],
+    storageZones: [suffixed],
+    pullZones: [{ Id: 30, Name: "sites-my-site-abc123", StorageZoneId: 10, Hostnames: [] }],
+  });
+  const computeClient = fakeComputeClient({
+    calls: [],
+    scripts: [{ Id: 20, Name: "sites-my-site-abc123-router" }],
+  });
+
+  const result = await createSite({
+    coreClient,
+    computeClient,
+    name: "my-site",
+    region: "DE",
+    tier: "hdd",
+  });
+
+  expect(result.reused.storageZone).toBe(true);
+});
+
 test("createSite refuses to re-provision an existing suffixed site", async () => {
   store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
   const suffixed = { ...ZONE, Name: "sites-my-site-abc123" };
@@ -590,26 +583,20 @@ test("createSite gives up after every storage zone suffix collides", async () =>
     calls: coreCalls,
     createError: {
       path: "/storagezone",
-      error: new ApiError(
-        "Conflict. The resource already exists or is in use.",
-        409,
-      ),
+      error: new ApiError("Conflict. The resource already exists or is in use.", 409),
     },
   });
   const computeClient = fakeComputeClient({ calls: [] });
 
   await expect(
     createSite({ coreClient, computeClient, name: "my-site", region: "DE" }),
-  ).rejects.toThrow(
-    'Couldn\'t find an available storage zone name for "my-site".',
-  );
+  ).rejects.toThrow('Couldn\'t find an available storage zone name for "my-site".');
   // Each attempt used a fresh suffixed candidate.
   const attempts = coreCalls
     .filter((c) => c.method === "POST" && c.path === "/storagezone")
     .map((c) => (c.body as { Name: string }).Name);
   expect(attempts).toHaveLength(3);
-  for (const name of attempts)
-    expect(name).toMatch(/^sites-my-site-[a-z0-9]{6}$/);
+  for (const name of attempts) expect(name).toMatch(/^sites-my-site-[a-z0-9]{6}$/);
 });
 
 test("createSite retries the pull zone with a fresh suffix when the name is taken", async () => {
@@ -651,9 +638,7 @@ test("createSite gives up after every pull zone suffix collides", async () => {
 
   await expect(
     createSite({ coreClient, computeClient, name: "my-site", region: "DE" }),
-  ).rejects.toThrow(
-    'Couldn\'t find an available pull zone name for "my-site".',
-  );
+  ).rejects.toThrow('Couldn\'t find an available pull zone name for "my-site".');
 });
 
 // ---- promote ----
@@ -677,9 +662,7 @@ test("promoteDeploy sets CURRENT_DEPLOY and purges the pull zone cache", async (
     DefaultValue: "a1b2c3d4",
   });
   // Purged twice: once immediately, once after the edge picks up the new deploy.
-  const purges = coreCalls.filter(
-    (c) => c.path === "/pullzone/{id}/purgeCache",
-  );
+  const purges = coreCalls.filter((c) => c.path === "/pullzone/{id}/purgeCache");
   expect(purges).toHaveLength(2);
   expect(purges[0]?.params).toEqual({ path: { id: 30 } });
 });
@@ -707,9 +690,7 @@ test("promoteDeploy waits for the edge to serve a deploy before the final purge"
   // Kept probing past the placeholder, then purged a second time.
   expect(probed.length).toBe(3);
   expect(probed[0]).toContain("my-site.b-cdn.net");
-  expect(
-    coreCalls.filter((c) => c.path === "/pullzone/{id}/purgeCache"),
-  ).toHaveLength(2);
+  expect(coreCalls.filter((c) => c.path === "/pullzone/{id}/purgeCache")).toHaveLength(2);
 });
 
 // ---- discovery ----
