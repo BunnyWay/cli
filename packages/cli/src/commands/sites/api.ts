@@ -15,6 +15,7 @@ import {
   fetchStorageZone,
   type StorageZoneModel,
 } from "../storage/api.ts";
+import { type ZoneTierChoice, zoneTierValue } from "../storage/constants.ts";
 import {
   connectStorageZone,
   deleteFile,
@@ -276,6 +277,7 @@ export interface CreateSiteOptions {
   computeClient: ComputeClient;
   name: string;
   region: string;
+  tier?: ZoneTierChoice;
   /** Progress callback; drives the spinner text. */
   onStep?: (message: string) => void;
 }
@@ -291,7 +293,7 @@ export interface CreateSiteResult {
 export async function createSite(
   opts: CreateSiteOptions,
 ): Promise<CreateSiteResult> {
-  const { coreClient, computeClient, name, region } = opts;
+  const { coreClient, computeClient, name, region, tier } = opts;
   const step = opts.onStep ?? (() => {});
   const reused = { storageZone: false, script: false, pullZone: false };
 
@@ -317,7 +319,12 @@ export async function createSite(
       const zoneName = suffixedResourceName(name);
       try {
         const { data } = await coreClient.POST("/storagezone", {
-          body: { Name: zoneName, Region: region, ReplicationRegions: null },
+          body: {
+            Name: zoneName,
+            Region: region,
+            ReplicationRegions: null,
+            ZoneTier: tier ? zoneTierValue(tier) : undefined,
+          },
         });
         if (!data?.Id) {
           throw new UserError(`Failed to create storage zone "${zoneName}".`);

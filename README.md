@@ -70,6 +70,7 @@ bun ny storage zones add my-zone --tier ssd --s3   # create an Edge (SSD) zone (
 bun ny storage files list                   # list files in the linked storage zone
 bun ny storage files remove /               # empty the zone; asks twice (yes/no, then type the zone name), and unattended runs need --force
 bun ny sites create my-site                 # provision a static site (storage zone + pull zone + edge router; zones are named sites-my-site-<suffix>, served at sites-my-site-<suffix>.b-cdn.net)
+bun ny sites create my-site --tier ssd      # provision a site whose files live on the Edge (SSD) storage tier (always DE)
 bun ny sites deploy                         # no linked site? offers to create one or pick an existing; detects the framework, offers to build, then deploys (a site's first deploy also offers to attach a custom domain)
 bun ny sites deploy ./dist                  # deploy a directory and publish it as the live site
 bun ny sites deploy --build                 # run `sites.build` from bunny.jsonc (else the detected framework's build), then deploy `sites.dir` (or the detected output dir)

@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import prompts from "prompts";
-import { promptSiteName, suggestSiteName } from "./provision.ts";
+import {
+  promptSiteName,
+  resolveSiteRegion,
+  suggestSiteName,
+} from "./provision.ts";
 
 test("promptSiteName normalizes and validates a passed name", async () => {
   expect(await promptSiteName("My-Site", false)).toBe("my-site");
@@ -33,4 +37,18 @@ test("suggestSiteName returns a slug or undefined, never an invalid name", () =>
   if (suggestion !== undefined) {
     expect(suggestion).toMatch(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/);
   }
+});
+
+test("resolveSiteRegion uppercases and defaults to DE", () => {
+  expect(resolveSiteRegion(undefined)).toBe("DE");
+  expect(resolveSiteRegion("ny")).toBe("NY");
+  expect(resolveSiteRegion("ny", "hdd")).toBe("NY");
+});
+
+test("resolveSiteRegion pins the Edge (SSD) tier to DE", () => {
+  expect(resolveSiteRegion(undefined, "ssd")).toBe("DE");
+  expect(resolveSiteRegion("de", "ssd")).toBe("DE");
+  expect(() => resolveSiteRegion("NY", "ssd")).toThrow(
+    "only available with DE",
+  );
 });

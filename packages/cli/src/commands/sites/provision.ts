@@ -5,6 +5,10 @@ import { saveManifest } from "../../core/manifest.ts";
 import { prompts, withSpinner } from "../../core/ui.ts";
 import type { CoreClient } from "../storage/api.ts";
 import {
+  SSD_PRIMARY_REGION,
+  type ZoneTierChoice,
+} from "../storage/constants.ts";
+import {
   type ComputeClient,
   type CreateSiteResult,
   createSite,
@@ -60,19 +64,38 @@ export async function promptSiteName(
   return name;
 }
 
+// Edge (SSD) storage only exists in one region, and the API rewrites the region silently, so a conflicting `--region` is rejected instead.
+export function resolveSiteRegion(
+  region: string | undefined,
+  tier?: ZoneTierChoice,
+): string {
+  const main = (region ?? "DE").toUpperCase();
+  if (tier !== "ssd") return main;
+  if (main !== SSD_PRIMARY_REGION) {
+    throw new UserError(
+      `The Edge (SSD) tier is only available with ${SSD_PRIMARY_REGION} as the storage region, but --region ${region} was given.`,
+      `Drop --region to use ${SSD_PRIMARY_REGION}, or pass --tier hdd to keep ${main}.`,
+    );
+  }
+  return SSD_PRIMARY_REGION;
+}
+
 /** Run {@link createSite} under a spinner whose text tracks each provisioning step. */
 export async function createSiteWithProgress(opts: {
   coreClient: CoreClient;
   computeClient: ComputeClient;
   name: string;
   region?: string;
+  tier?: ZoneTierChoice;
 }): Promise<CreateSiteResult> {
+  const region = resolveSiteRegion(opts.region, opts.tier);
   return withSpinner(`Creating site "${opts.name}"...`, (spin) =>
     createSite({
       coreClient: opts.coreClient,
       computeClient: opts.computeClient,
       name: opts.name,
-      region: (opts.region ?? "DE").toUpperCase(),
+      region,
+      tier: opts.tier,
       onStep: (message) => {
         spin.text = message;
       },
@@ -85,6 +108,7 @@ export async function createLinkedSite(opts: {
   computeClient: ComputeClient;
   name: string;
   region?: string;
+  tier?: ZoneTierChoice;
 }): Promise<SiteContext> {
   const result = await createSiteWithProgress(opts);
 
