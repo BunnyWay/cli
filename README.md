@@ -73,6 +73,7 @@ bun ny sites create my-site                 # provision a static site (storage z
 bun ny sites deploy                         # no linked site? offers to create one or pick an existing; detects the framework, offers to build, then deploys (a site's first deploy also offers to attach a custom domain)
 bun ny sites deploy ./dist                  # deploy a directory and publish it as the live site
 bun ny sites deploy --build                 # run `sites.build` from bunny.jsonc (else the detected framework's build), then deploy `sites.dir` (or the detected output dir)
+bun ny sites deploy ./catalog --deploy-id 20260827-1433-r42   # identify the deploy with your own release ID instead of the git sha / content hash
 bun ny sites deployments list               # list deploys with the live one marked
 bun ny sites deployments publish --previous # instant rollback to the previous deploy
 bun ny sites deployments prune              # delete old deploys (keeps the newest 5, never current/previous)

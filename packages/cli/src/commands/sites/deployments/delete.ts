@@ -10,7 +10,11 @@ import {
   readRemoteState,
   writeRemoteState,
 } from "../api.ts";
-import { isValidDeployId, type RemoteSiteState } from "../constants.ts";
+import {
+  findDeploy,
+  isValidDeployId,
+  type RemoteSiteState,
+} from "../constants.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -86,7 +90,7 @@ export const sitesDeploymentsDeleteCommand = defineCommand<DeleteArgs>({
     // No etag here: the destructive phase re-reads state and writes with the fresh one.
     const { state, connection } = site;
 
-    const record = state.deploys.find((d) => d.id === id);
+    const { deploy: record, caseVariant } = findDeploy(state.deploys, id);
     if (!record) {
       // Idempotent for CI: a retry after a successful delete still exits 0.
       if (output === "json") {
@@ -98,6 +102,12 @@ export const sitesDeploymentsDeleteCommand = defineCommand<DeleteArgs>({
       logger.info(
         `Deploy ${id} not found on ${state.name}; nothing to delete.`,
       );
+      // A case typo would otherwise look like a successful no-op.
+      if (caseVariant) {
+        logger.dim(
+          `  Did you mean ${caseVariant.id}? Deploy IDs are case-sensitive.`,
+        );
+      }
       return;
     }
 

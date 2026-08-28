@@ -82,3 +82,48 @@ test("clean git repo uses the short sha; dirty tree falls back to content", asyn
   expect(dirty.id).toBe(contentHashId(FILES));
   expect(dirty.gitSha).toBe(clean.id);
 });
+
+test("a custom id wins over git and content, but still records both", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "bunny-sites-custom-"));
+  await run(dir, ["init", "-q"]);
+  await Bun.write(join(dir, "index.html"), "<h1>hi</h1>");
+  await run(dir, ["add", "."]);
+  await run(dir, [
+    "-c",
+    "user.email=test@example.com",
+    "-c",
+    "user.name=test",
+    "commit",
+    "-q",
+    "-m",
+    "init",
+  ]);
+
+  const identity = await resolveDeployIdentity(dir, FILES, "20260827-1433-r42");
+  expect(identity.id).toBe("20260827-1433-r42");
+  expect(identity.source).toBe("custom");
+  // Provenance survives: the git sha is still recorded, and the content hash still drives the no-op check.
+  expect(identity.gitSha).toMatch(/^[0-9a-f]{8}$/);
+  expect(identity.contentHash).toBe(contentHashId(FILES));
+});
+
+test("a custom id works outside a git repo", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "bunny-sites-custom-nogit-"));
+  const identity = await resolveDeployIdentity(dir, FILES, "catalog_v3");
+  expect(identity.id).toBe("catalog_v3");
+  expect(identity.source).toBe("custom");
+  expect(identity.gitSha).toBeUndefined();
+  expect(identity.contentHash).toBe(contentHashId(FILES));
+});
+
+test("the same custom id with different content yields a different content hash", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "bunny-sites-custom-drift-"));
+  const a = await resolveDeployIdentity(dir, FILES, "r42");
+  const b = await resolveDeployIdentity(
+    dir,
+    [{ path: "index.html", sha256: "ff99" }],
+    "r42",
+  );
+  expect(a.id).toBe(b.id);
+  expect(a.contentHash).not.toBe(b.contentHash);
+});

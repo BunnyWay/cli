@@ -9,7 +9,7 @@ import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, requireConfirmable, withSpinner } from "../../../core/ui.ts";
 import { promoteDeploy, writeRemoteState } from "../api.ts";
-import { markCurrent } from "../constants.ts";
+import { findDeploy, markCurrent } from "../constants.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -88,11 +88,13 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       );
     }
 
-    const deploy = state.deploys.find((d) => d.id === targetId);
+    const { deploy, caseVariant } = findDeploy(state.deploys, targetId);
     if (!deploy) {
       throw new UserError(
         `Deploy ${targetId} not found for site ${state.name}.`,
-        "Run `bunny sites deployments list` to see available deploys.",
+        caseVariant
+          ? `Did you mean ${caseVariant.id}? Deploy IDs are case-sensitive.`
+          : "Run `bunny sites deployments list` to see available deploys.",
       );
     }
 

@@ -23,7 +23,8 @@ export interface SiteManifest {
 export interface DeployRecord {
   id: string;
   createdAt: string;
-  source: "git" | "content";
+  /** How the ID was chosen; "custom" means the caller supplied it with --deploy-id. */
+  source: "git" | "content" | "custom";
   gitSha?: string;
   dirty?: boolean;
   /** Hash of the deployed bytes; the no-op check keys on this. */
@@ -81,11 +82,38 @@ export function routerScriptName(siteName: string): string {
   return `${siteName}-router`;
 }
 
-// Deploy IDs are git short-shas or content hashes (lowercase hex-ish); the router regex and storage paths rely on this.
-const DEPLOY_ID_RE = /^[a-z0-9]{4,40}$/;
+// A deploy ID becomes a storage path and the router's CURRENT_DEPLOY, so its charset is a boundary, not a style choice: alphanumerics plus `-`, `_` and `.`, bounded by an alphanumeric, and never a traversal sequence. Case is preserved rather than folded: a caller-supplied ID exists to match whatever produced the deploy, and the ID never reaches a client-facing URL (the router builds the origin path itself), so nothing downstream needs it normalized.
+const DEPLOY_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{2,62}[A-Za-z0-9]$/;
+
+/** Why an ID is unusable, or null when it's fine. Phrased to complete "Deploy ID ...". */
+export function deployIdError(id: string): string | null {
+  if (id.length < 4 || id.length > 64) return "must be 4 to 64 characters";
+  if (id.includes("..")) return 'must not contain ".."';
+  if (!DEPLOY_ID_RE.test(id)) {
+    return "may use only letters, digits, and -, _ or ., and must start and end with a letter or digit";
+  }
+  return null;
+}
 
 export function isValidDeployId(id: string): boolean {
-  return DEPLOY_ID_RE.test(id);
+  return deployIdError(id) === null;
+}
+
+/**
+ * Look up a deploy by ID, exactly.
+ *
+ * `caseVariant` is the deploy that differs only in case, so a caller can say
+ * "did you mean" instead of a bare not-found: IDs preserve the case they were
+ * given, and eyeballing `Release-42` against `release-42` in a list is no fun.
+ */
+export function findDeploy(
+  deploys: DeployRecord[],
+  id: string,
+): { deploy?: DeployRecord; caseVariant?: DeployRecord } {
+  const deploy = deploys.find((d) => d.id === id);
+  if (deploy) return { deploy };
+  const lower = id.toLowerCase();
+  return { caseVariant: deploys.find((d) => d.id.toLowerCase() === lower) };
 }
 
 // Site names become `sites-{name}-{suffix}` zone names; 3-47 chars keeps those within zone-name limits.
