@@ -342,6 +342,107 @@ describe("statement", () => {
   });
 });
 
+interface User {
+  id: number;
+  name: string;
+}
+
+describe("typed statements", () => {
+  test("prepare carries the row type to every executor", async () => {
+    const fake = fakeFetch([okExecute(["id", "name"], [[1, "a"]])]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+    const byId = db.prepare<User>("SELECT id, name FROM users WHERE id = ?");
+
+    const users = await byId.bind(1).all();
+    const user = await byId.bind(1).first();
+
+    // Typed as User[] and User | null rather than Row, so these read without a cast.
+    expect(users[0]?.name).toBe("a");
+    expect(user?.id).toBe(1);
+  });
+
+  test("a call-site type argument still wins", async () => {
+    const fake = fakeFetch([okExecute(["id"], [[1]])]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const rows = await db.prepare<User>("SELECT id FROM users").all<{
+      id: number;
+    }>();
+
+    expect(rows).toEqual([{ id: 1 }]);
+  });
+
+  test("batch infers the row type from its statements", async () => {
+    const fake = fakeFetch([
+      {
+        type: "ok",
+        response: {
+          type: "batch",
+          result: {
+            step_results: [
+              null,
+              okExecute(["id", "name"], [[1, "a"]]).response.result,
+              null,
+              null,
+            ],
+            step_errors: [null, null, null, null],
+          },
+        },
+      },
+    ]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const [users] = await db.batch([
+      db.prepare<User>("SELECT id, name FROM users"),
+    ]);
+
+    // Typed as string | undefined rather than SqlValue, so batch inherited User.
+    const name: string | undefined = users.rows[0]?.name;
+    expect(name).toBe("a");
+  });
+
+  test("a mixed batch keeps each statement's own row type", async () => {
+    const fake = fakeFetch([
+      {
+        type: "ok",
+        response: {
+          type: "batch",
+          result: {
+            step_results: [
+              null,
+              okExecute(["id", "name"], [[1, "a"]]).response.result,
+              okExecute(["c"], [[2]]).response.result,
+              null,
+              null,
+            ],
+            step_errors: [null, null, null, null, null],
+          },
+        },
+      },
+    ]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const [users, counts] = await db.batch([
+      db.prepare<User>("SELECT id, name FROM users"),
+      db.prepare("SELECT COUNT(*) AS c FROM users"),
+    ]);
+
+    // Result<User> and Result<Row> respectively, so name reads as a string and c as a SqlValue.
+    const name: string | undefined = users.rows[0]?.name;
+    expect(name).toBe("a");
+    expect(counts.rows[0]?.c).toBe(2);
+  });
+
+  test("column reads are unaffected by the row type", async () => {
+    const fake = fakeFetch([okExecute(["name"], [["a"]])]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const name = await db.prepare<User>("SELECT name FROM users").first("name");
+
+    expect(name).toBe("a");
+  });
+});
+
 describe("sql template", () => {
   test("interpolations become positional placeholders", () => {
     const stmt = connect({ url: URL_ })

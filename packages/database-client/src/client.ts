@@ -82,8 +82,8 @@ function toResult<T>(wire: WireStmtResult): Result<T> {
   return { ...raw, rows } as Result<T>;
 }
 
-/** A SQL statement plus its bound arguments. Immutable and reusable. */
-export class Statement {
+/** A SQL statement plus its bound arguments. Immutable and reusable. `T` is the row shape its executors return. */
+export class Statement<T = Row> {
   readonly #internals: StatementInternals;
 
   constructor(internals: StatementInternals) {
@@ -91,7 +91,7 @@ export class Statement {
   }
 
   /** Return a copy of this statement with `values` bound: positionally for `?`, or one object for `:name`, `@name`, and `$name`. */
-  bind(...values: unknown[]): Statement {
+  bind(...values: unknown[]): Statement<T> {
     const named = values.find(isNamedArgs);
     if (named && values.length > 1) {
       throw new DatabaseError(
@@ -100,7 +100,7 @@ export class Statement {
       );
     }
     if (named) {
-      return new Statement({
+      return new Statement<T>({
         ...this.#internals,
         args: [],
         // The server resolves a bare name against :name, @name, and $name, so the sigil is optional.
@@ -110,7 +110,7 @@ export class Statement {
         })),
       });
     }
-    return new Statement({
+    return new Statement<T>({
       ...this.#internals,
       args: values.map(encodeValue),
       namedArgs: [],
@@ -118,18 +118,18 @@ export class Statement {
   }
 
   /** Execute and return every row as an object. */
-  async all<T = Row>(): Promise<T[]> {
-    return (await this.run<T>()).rows;
+  async all<R = T>(): Promise<R[]> {
+    return (await this.run<R>()).rows;
   }
 
   /** Execute and return the first row, or the value of one column of it. */
-  async first<T = Row>(): Promise<T | null>;
+  async first<R = T>(): Promise<R | null>;
   async first(column: string): Promise<SqlValue | null>;
-  async first<T = Row>(column?: string): Promise<T | SqlValue | null> {
+  async first<R = T>(column?: string): Promise<R | SqlValue | null> {
     const result = await this.run<Row>();
     const row = result.rows[0];
     if (!row) return null;
-    if (column === undefined) return row as T;
+    if (column === undefined) return row as R;
     if (!Object.hasOwn(row, column)) {
       throw new DatabaseError(
         `column "${column}" is not in the result; got ${result.columns.join(", ")}`,
@@ -150,8 +150,8 @@ export class Statement {
   }
 
   /** Execute and return rows together with write metadata. */
-  async run<T = Row>(): Promise<Result<T>> {
-    return toResult<T>(await this.#execute());
+  async run<R = T>(): Promise<Result<R>> {
+    return toResult<R>(await this.#execute());
   }
 
   /** @internal exposed so `batch()` can read the wire form. */
@@ -174,6 +174,11 @@ export class Statement {
   }
 }
 
+/** Maps each statement in a batch to the `Result` of its row type. */
+export type BatchResults<T extends readonly Statement<unknown>[]> = {
+  -readonly [K in keyof T]: T[K] extends Statement<infer R> ? Result<R> : never;
+};
+
 /** A connection to a bunny.net database. Stateless: each call is one HTTPS request. */
 export class Database {
   readonly #transport: Transport;
@@ -185,9 +190,9 @@ export class Database {
     this.#signal = config.signal;
   }
 
-  /** Create a statement from SQL. Bind arguments with `.bind()`. */
-  prepare(sql: string): Statement {
-    return new Statement({
+  /** Create a statement from SQL. Bind arguments with `.bind()`. Pass `T` to type every row it returns. */
+  prepare<T = Row>(sql: string): Statement<T> {
+    return new Statement<T>({
       sql,
       args: [],
       namedArgs: [],
@@ -209,25 +214,25 @@ export class Database {
   }
 
   /** Run every statement in one transaction. All succeed or none are applied. */
-  async batch<T = Row>(
-    statements: Statement[],
+  async batch<T extends readonly Statement<unknown>[]>(
+    statements: [...T],
     options: BatchOptions = {},
-  ): Promise<Result<T>[]> {
+  ): Promise<BatchResults<T>> {
     return (await this.#batch(statements, options)).map((wire) =>
-      toResult<T>(wire),
-    );
+      toResult<Row>(wire),
+    ) as BatchResults<T>;
   }
 
   /** Like `batch()`, but each result has positional rows. Keeps duplicate column names distinct. */
   async batchRaw(
-    statements: Statement[],
+    statements: readonly Statement<unknown>[],
     options: BatchOptions = {},
   ): Promise<RawResult[]> {
     return (await this.#batch(statements, options)).map(toRawResult);
   }
 
   async #batch(
-    statements: Statement[],
+    statements: readonly Statement<unknown>[],
     options: BatchOptions,
   ): Promise<WireStmtResult[]> {
     if (statements.length === 0) return [];

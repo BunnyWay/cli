@@ -68,6 +68,8 @@ const alice = await byId.bind(1).first();
 const bob = await byId.bind(2).first();
 ```
 
+Pass a row type to have it flow through every execution of that statement. See [Types](#types).
+
 ### ``db.sql`...` ``
 
 A template literal that binds every interpolated value, so the shortest way to write a query is also the parameterized one:
@@ -165,6 +167,8 @@ const [inserted, count] = await db.batch([
 
 You get one `Result` per statement you passed, in order. `batchRaw()` is the same but with positional rows. If any statement fails the transaction rolls back and `batch()` throws that statement's error.
 
+`batch()` infers each result's row type from its statement, so a `prepare<User>(...)` statement comes back as `Result<User>` even next to untyped ones. See [Types](#types).
+
 `{ foreignKeys: false }` brackets the transaction with `PRAGMA foreign_keys=off` and `=on`. Schema changes need it: SQLite's table rebuild procedure and several `ALTER TABLE` forms require enforcement genuinely off, not merely deferred to commit. `bunny db migrations apply` runs this way.
 
 ```ts
@@ -246,6 +250,17 @@ interface User {
 
 const users = await db.prepare("SELECT id, name FROM users").all<User>();
 ```
+
+Or type the statement once and let every execution of it inherit the shape:
+
+```ts
+const byId = db.prepare<User>("SELECT id, name FROM users WHERE id = ?");
+
+const alice = await byId.bind(1).first(); // User | null
+const both = await byId.bind(1).all(); // User[]
+```
+
+A type argument on the executor still wins over the statement's, so `all<Row>()` on a `Statement<User>` gives you rows back untyped.
 
 That type is an assertion. Nothing validates the rows against it at runtime, so it is only ever as accurate as your SQL.
 
