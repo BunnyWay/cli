@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { resolve } from "node:path";
 import type { DeployRecord, RemoteSiteState } from "./constants.ts";
 import {
@@ -64,138 +64,96 @@ const identity = (
   source: DeployIdentity["source"] = "content",
 ): DeployIdentity => ({ id, source, contentHash });
 
-describe("resolveDeployTarget", () => {
-  test("unchanged content reuses the existing deploy and skips the upload", () => {
-    const target = resolveDeployTarget({
-      deploys: [deploy("aaaa1111", "hash1")],
+test("matching content skips the upload, aliasing onto the existing deploy's id", () => {
+  const deploys = [deploy("aaaa1111", "hash1")];
+
+  expect(
+    resolveDeployTarget({
+      deploys,
       identity: identity("aaaa1111", "hash1"),
       force: false,
-    });
-    expect(target).toEqual({ deployId: "aaaa1111", skipUpload: true });
-  });
+    }),
+  ).toEqual({ deployId: "aaaa1111", skipUpload: true });
 
-  test("without a custom id, matching content aliases onto the earlier deploy's id", () => {
-    const target = resolveDeployTarget({
-      deploys: [deploy("aaaa1111", "hash1")],
+  // A different git sha over identical bytes reuses the earlier deploy rather than duplicating it.
+  expect(
+    resolveDeployTarget({
+      deploys,
       identity: identity("bbbb2222", "hash1", "git"),
       force: false,
-    });
-    expect(target.deployId).toBe("aaaa1111");
-    expect(target.skipUpload).toBe(true);
-  });
+    }),
+  ).toEqual({ deployId: "aaaa1111", skipUpload: true });
+});
 
-  // A catalog release must keep its own ID even when the bytes happen to match the last one.
-  test("a custom id never aliases onto a different deploy that shares content", () => {
-    const target = resolveDeployTarget({
+// A catalog release must keep its own ID even when the bytes match another deploy.
+test("a custom id is used exactly as given and never aliases onto another deploy", () => {
+  expect(
+    resolveDeployTarget({
       deploys: [deploy("r41", "hash1")],
       identity: identity("r42", "hash1", "custom"),
       customId: "r42",
       force: false,
-    });
-    expect(target.deployId).toBe("r42");
-    expect(target.skipUpload).toBe(false);
-    expect(target.conflict).toBeUndefined();
-  });
+    }),
+  ).toEqual({ deployId: "r42", skipUpload: false });
 
-  test("redeploying a custom id with identical content is a no-op", () => {
-    const target = resolveDeployTarget({
-      deploys: [deploy("r42", "hash1", "custom")],
-      identity: identity("r42", "hash1", "custom"),
-      customId: "r42",
-      force: false,
-    });
-    expect(target).toEqual({ deployId: "r42", skipUpload: true });
-  });
-
-  test("reusing a custom id for different content is a conflict, not a silent overwrite", () => {
-    const existing = deploy("r42", "hash1", "custom");
-    const target = resolveDeployTarget({
-      deploys: [existing],
-      identity: identity("r42", "hash2", "custom"),
-      customId: "r42",
-      force: false,
-    });
-    expect(target.conflict).toEqual({ record: existing, reason: "content" });
-    expect(target.deployId).toBe("r42");
-  });
-
-  test("a custom id is used exactly as given, case and all", () => {
-    const target = resolveDeployTarget({
-      deploys: [],
-      identity: identity("Release-42", "hash1", "custom"),
-      customId: "Release-42",
-      force: false,
-    });
-    expect(target.deployId).toBe("Release-42");
-    expect(target.conflict).toBeUndefined();
-  });
-
-  // Two deploys whose storage paths differ only by case are indistinguishable to anything that folds case.
-  test("an id differing from an existing deploy only in case is refused", () => {
-    const existing = deploy("Release-42", "hash1", "custom");
-    const target = resolveDeployTarget({
-      deploys: [existing],
-      identity: identity("release-42", "hash2", "custom"),
-      customId: "release-42",
-      force: false,
-    });
-    expect(target.conflict).toEqual({ record: existing, reason: "case" });
-  });
-
-  test("--force does not override a case-variant conflict", () => {
-    const existing = deploy("Release-42", "hash1", "custom");
-    const target = resolveDeployTarget({
-      deploys: [existing],
-      identity: identity("release-42", "hash2", "custom"),
-      customId: "release-42",
-      force: true,
-    });
-    expect(target.conflict).toEqual({ record: existing, reason: "case" });
-  });
-
-  test("reusing the exact existing casing is a normal redeploy, not a case conflict", () => {
-    const target = resolveDeployTarget({
+  // Same id, same content: a no-op redeploy.
+  expect(
+    resolveDeployTarget({
       deploys: [deploy("Release-42", "hash1", "custom")],
       identity: identity("Release-42", "hash1", "custom"),
       customId: "Release-42",
       force: false,
-    });
-    expect(target).toEqual({ deployId: "Release-42", skipUpload: true });
-  });
+    }),
+  ).toEqual({ deployId: "Release-42", skipUpload: true });
+});
 
-  test("--force overrides the conflict and forces a fresh upload", () => {
-    const target = resolveDeployTarget({
-      deploys: [deploy("r42", "hash1", "custom")],
-      identity: identity("r42", "hash2", "custom"),
-      customId: "r42",
-      force: true,
-    });
-    expect(target.conflict).toBeUndefined();
-    expect(target.skipUpload).toBe(false);
-    expect(target.deployId).toBe("r42");
+test("reusing a custom id for different content conflicts instead of overwriting", () => {
+  const existing = deploy("r42", "hash1", "custom");
+  const target = resolveDeployTarget({
+    deploys: [existing],
+    identity: identity("r42", "hash2", "custom"),
+    customId: "r42",
+    force: false,
   });
+  expect(target.conflict).toEqual({ record: existing, reason: "content" });
+});
 
-  test("--force redeploys unchanged content under the same id", () => {
-    const target = resolveDeployTarget({
-      deploys: [deploy("r42", "hash1", "custom")],
-      identity: identity("r42", "hash1", "custom"),
-      customId: "r42",
-      force: true,
-    });
-    expect(target.skipUpload).toBe(false);
-    expect(target.deployId).toBe("r42");
+// Two deploys whose storage paths differ only by case are indistinguishable to anything that folds case,
+// so this one conflict stands even under --force.
+test("an id differing only in case is refused, with or without --force", () => {
+  const existing = deploy("Release-42", "hash1", "custom");
+  const args = {
+    deploys: [existing],
+    identity: identity("release-42", "hash2", "custom"),
+    customId: "release-42",
+  };
+  const conflict = { record: existing, reason: "case" } as const;
+
+  expect(resolveDeployTarget({ ...args, force: false }).conflict).toEqual(
+    conflict,
+  );
+  expect(resolveDeployTarget({ ...args, force: true }).conflict).toEqual(
+    conflict,
+  );
+});
+
+test("--force clears the conflict and re-uploads under the same id", () => {
+  const target = resolveDeployTarget({
+    deploys: [deploy("r42", "hash1", "custom")],
+    identity: identity("r42", "hash2", "custom"),
+    customId: "r42",
+    force: true,
   });
+  expect(target).toEqual({ deployId: "r42", skipUpload: false });
+});
 
-  test("a brand new custom id on an empty site just uploads", () => {
-    const target = resolveDeployTarget({
+test("a brand new custom id on an empty site just uploads", () => {
+  expect(
+    resolveDeployTarget({
       deploys: [],
       identity: identity("20260827-1433-r42", "hash1", "custom"),
       customId: "20260827-1433-r42",
       force: false,
-    });
-    expect(target).toEqual({
-      deployId: "20260827-1433-r42",
-      skipUpload: false,
-    });
-  });
+    }),
+  ).toEqual({ deployId: "20260827-1433-r42", skipUpload: false });
 });

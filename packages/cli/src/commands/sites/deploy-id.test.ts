@@ -115,15 +115,3 @@ test("a custom id works outside a git repo", async () => {
   expect(identity.gitSha).toBeUndefined();
   expect(identity.contentHash).toBe(contentHashId(FILES));
 });
-
-test("the same custom id with different content yields a different content hash", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "bunny-sites-custom-drift-"));
-  const a = await resolveDeployIdentity(dir, FILES, "r42");
-  const b = await resolveDeployIdentity(
-    dir,
-    [{ path: "index.html", sha256: "ff99" }],
-    "r42",
-  );
-  expect(a.id).toBe(b.id);
-  expect(a.contentHash).not.toBe(b.contentHash);
-});

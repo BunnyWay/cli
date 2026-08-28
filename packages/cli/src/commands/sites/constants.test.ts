@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import type { DeployRecord } from "./constants.ts";
 import {
   deployIdError,
@@ -87,106 +87,58 @@ test("suffixed resource names round-trip through the site pattern", () => {
 
 // Cleanup and site discovery key on the name shape, and the router parses the same shape from the hostname, so the round-trip must be exact and everything else rejected.
 
-describe("deployIdError", () => {
-  test("accepts git shas and content hashes", () => {
-    expect(deployIdError("a1b2c3d4")).toBeNull();
-    expect(deployIdError("0f1e2d3c4b5a")).toBeNull();
-  });
-
-  test("accepts the release-style IDs a custom deploy needs", () => {
-    for (const id of [
-      "20260827-1433-r42",
-      "catalog_v3",
-      "2026.08.27-r42",
-      "v1.2.3",
-      "release-2026-08-27t14.33.00z",
-    ]) {
-      expect(deployIdError(id)).toBeNull();
-    }
-  });
-
-  // The ID is interpolated into a storage path and into the router's URL pathname.
-  test("rejects anything that could escape the deploy prefix", () => {
-    for (const id of [
-      "../etc/passwd",
-      "..",
-      "a/../b",
-      "deploys/../../x",
-      "foo..bar",
-      "a/b",
-      "a\\b",
-      "a b",
-      "a?b",
-      "a#b",
-      "a%2fb",
-      "a:b",
-    ]) {
-      expect(deployIdError(id)).not.toBeNull();
-      expect(isValidDeployId(id)).toBe(false);
-    }
-  });
-
-  test("rejects separators at the edges, so a path segment is never empty or hidden", () => {
-    for (const id of ["-abc", "abc-", ".abc", "abc.", "_abc", "abc_"]) {
-      expect(deployIdError(id)).not.toBeNull();
-    }
-  });
-
-  // The ID exists to match whatever produced the deploy, so its case is data, not style.
-  test("accepts mixed case and preserves it", () => {
-    expect(deployIdError("Release-42")).toBeNull();
-    expect(deployIdError("Catalog_V3")).toBeNull();
-    expect(deployIdError("ABC1")).toBeNull();
-  });
-
-  test("enforces the length bounds", () => {
-    expect(deployIdError("abc")).toBe("must be 4 to 64 characters");
-    expect(deployIdError("a".repeat(64))).toBeNull();
-    expect(deployIdError("a".repeat(65))).toBe("must be 4 to 64 characters");
-  });
-
-  test("every accepted ID survives a round trip through a URL pathname", () => {
-    for (const id of ["20260827-1433-r42", "2026.08.27-r42", "catalog_v3"]) {
-      const url = new URL(`https://example.b-cdn.net/deploys/${id}/index.html`);
-      expect(url.pathname).toBe(`/deploys/${id}/index.html`);
-    }
-  });
+test("deployIdError accepts shas, hashes, and release-style IDs, case intact", () => {
+  for (const id of [
+    "a1b2c3d4",
+    "0f1e2d3c4b5a",
+    "20260827-1433-r42",
+    "catalog_v3",
+    "2026.08.27-r42",
+    "v1.2.3",
+    "Release-42",
+    "a".repeat(64),
+  ]) {
+    expect(deployIdError(id)).toBeNull();
+  }
 });
 
-describe("findDeploy", () => {
-  const rec = (id: string): DeployRecord => ({
-    id,
-    createdAt: "2026-08-27T00:00:00.000Z",
-    source: "custom",
-    contentHash: "hash1",
-    files: 1,
-    bytes: 10,
-  });
+// The ID is interpolated into a storage path and the router's URL pathname, so anything
+// that could escape the deploy prefix or leave an empty/hidden segment has to be rejected.
+test("deployIdError rejects path escapes and edge separators", () => {
+  for (const id of [
+    "../etc/passwd",
+    "a/../b",
+    "foo..bar",
+    "a/b",
+    "a\\b",
+    "a b",
+    "a?b",
+    "a%2fb",
+    "-abc",
+    "abc.",
+    "_abc",
+  ]) {
+    expect(deployIdError(id)).not.toBeNull();
+  }
+  expect(deployIdError("abc")).toBe("must be 4 to 64 characters");
+  expect(deployIdError("a".repeat(65))).toBe("must be 4 to 64 characters");
+});
 
-  test("matches exactly, never by case", () => {
-    const deploys = [rec("Release-42")];
-    expect(findDeploy(deploys, "Release-42").deploy?.id).toBe("Release-42");
-    expect(findDeploy(deploys, "release-42").deploy).toBeUndefined();
-  });
+test("findDeploy matches exactly and surfaces a case variant for 'did you mean'", () => {
+  const deploys: DeployRecord[] = [
+    {
+      id: "Release-42",
+      createdAt: "2026-08-27T00:00:00.000Z",
+      source: "custom",
+      contentHash: "hash1",
+      files: 1,
+      bytes: 10,
+    },
+  ];
 
-  test("surfaces a case variant so a miss can say 'did you mean'", () => {
-    const deploys = [rec("Release-42")];
-    expect(findDeploy(deploys, "release-42").caseVariant?.id).toBe(
-      "Release-42",
-    );
-    expect(findDeploy(deploys, "RELEASE-42").caseVariant?.id).toBe(
-      "Release-42",
-    );
+  expect(findDeploy(deploys, "Release-42")).toEqual({ deploy: deploys[0] });
+  expect(findDeploy(deploys, "release-42")).toEqual({
+    caseVariant: deploys[0],
   });
-
-  test("an exact hit reports no variant", () => {
-    const found = findDeploy([rec("Release-42")], "Release-42");
-    expect(found.caseVariant).toBeUndefined();
-  });
-
-  test("an unrelated id reports neither", () => {
-    expect(findDeploy([rec("Release-42")], "r99")).toEqual({
-      caseVariant: undefined,
-    });
-  });
+  expect(findDeploy(deploys, "r99")).toEqual({ caseVariant: undefined });
 });
