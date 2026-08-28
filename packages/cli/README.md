@@ -908,7 +908,9 @@ bunny scripts docs
 
 > **Experimental**: hidden from `--help` and the landing page while it stabilizes.
 
-Host static sites on bunny.net. Each site is three resources provisioned and wired together for you: a **storage zone** holding the files, a **pull zone** serving them over the CDN, and a **middleware router** (an Edge Script) that maps incoming requests to the deploy that should answer them. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
+Host sites on bunny.net. Each site is three resources provisioned and wired together for you: a **storage zone** holding the files, a **pull zone** serving them over the CDN, and an **Edge Script**. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
+
+`bunny sites` deploys a directory of files. A build that renders pages per request is a different shape, and this command does not deploy one: `bunny lab deploy astro` deploys an Astro project as an Edge Script of its own. The two flows share nothing, because a project that renders per request cannot use `CURRENT_DEPLOY` (one script serves one release), and a directory of files has no build manifest to read.
 
 Deploys are immutable: every `sites deploy` uploads to its own `deploys/<id>/` directory and then goes live. Publishing flips the router's `CURRENT_DEPLOY` variable and purges the cache, so going live and rolling back to any earlier deploy are instant and move no files. Deploy IDs are the git short SHA when the working tree is clean and a content hash otherwise, which makes redeploying identical content a no-op.
 
@@ -927,6 +929,7 @@ bunny sites deploy ./dist                             # deploy a directory and p
 bunny sites deploy --build                            # run `sites.build` from bunny.jsonc (else the detected build), then deploy
 bunny sites deploy --build "npm run build" --env API_URL=https://api.example.com
 bunny sites deploy ./dist --site my-site --force      # target a site explicitly; redeploy unchanged content
+bunny sites deploy --name my-site --region NY         # create the site this deploy needs, unattended
 
 # Deploys: list, publish (roll back), prune
 bunny sites deployments list                          # ● Live / ○ Previous markers, created, source, files, size
@@ -959,11 +962,24 @@ bunny sites delete my-site --keep-storage             # typed-name confirmation;
 
 Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) and a deploy needs no arguments: `bunny sites deploy --build`. `sites ci init` reads the same block, so the generated workflow builds and deploys exactly what the local command does; without it, the framework is detected from `package.json` deps, `Gemfile`, or a `hugo`/`python`/`zola` config file, with the lockfile picking the package manager. `sites create` offers to scaffold the workflow on GitHub repos.
 
+The router serves the deploy's own configuration, from three file names Cloudflare Pages and Netlify read too. They belong to the build, not to bunny.net, so any framework that already writes them works here unchanged:
+
+| File in the deploy | What the router does with it                                                                                           |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `404.html`         | Answers a path the deploy does not hold, at status 404. Without it a miss gets bunny.net's error page                  |
+| `_redirects`       | One rule per line: `/from /to [status]`. A trailing `*` in the path is captured as `:splat`, and `!` beats a real file |
+| `_headers`         | A `/path` line, then indented `Name: value` lines. This is where a build asks for a CSP, or for immutable assets       |
+
+A rule needs no status, and 301 is the default; 302, 303, 307 and 308 are read too. A rewrite (`200`) is not: it would have the router fetch another path of its own site, which can be made to loop. A rule without `!` applies only when the deploy holds no file at that path, so a real file always wins. Both files are read once per deploy and held in memory, and `bunny sites deploy` asks the live site for a path it cannot hold, so a 404 page that never reaches a visitor is reported rather than shipped.
+
+The router also sets `Cache-Control` on every response, because Bunny Storage sends none for HTML: 60 seconds for a page, 30 days for anything else, and whatever `_headers` says where it says anything. So `sites create` turns the pull zone's own cache override off, which is what lets the router's answer through. `sites upgrade-router` applies both to a site made by an earlier CLI.
+
 Every deploy publishes: the files land in an immutable `deploys/<id>/` directory and the router is pointed at it, so `deployments publish` rolls back to any earlier deploy by moving that pointer, with no files moving and nothing re-uploaded. Content is root-served, so client-side routing and absolute asset paths work as-is. Site state lives at `_bunny/site.json` inside the storage zone (the router blocks it with a 403); `.bunny/site.json` is only a local pointer, so a fresh clone can `sites link` and pick up where the last machine left off.
 
 | Flag                                   | Commands                                                   | Description                                                                                        |
 | -------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `--region`, `--domain`                 | `create`                                                   | Main storage region code (default `DE`); custom production domain to attach                        |
+| `--name`, `--region`                   | `deploy`                                                   | Site name and storage region, for a site this deploy creates                                       |
 | `--site`                               | `deploy`, `ci init`, `deployments publish`                 | Site name or storage zone ID (defaults to the linked site)                                         |
 | `--build [cmd]`, `--env`, `--env-file` | `deploy`                                                   | Build before deploying (bare flag uses the configured or detected build); build-time env overrides |
 | `--force`                              | `deploy`                                                   | Deploy even when the content is unchanged                                                          |

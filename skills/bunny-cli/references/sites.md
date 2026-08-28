@@ -1,6 +1,10 @@
-# Static Sites Commands
+# Sites Commands
 
-All site commands live under `bunny sites`. A site is one storage zone (files) + one pull zone (CDN) + one middleware router script, provisioned together by `sites create`. Deploys are immutable directories; promoting or rolling back flips a router env var and purges the cache; no files move, so it's instant.
+All site commands live under `bunny sites`. A site is one storage zone (files) + one pull zone (CDN) + one Edge Script, provisioned together by `sites create` or by the first `sites deploy`. Deploys are immutable directories.
+
+The Edge Script is the router this CLI generates. Promoting or rolling back flips a router env var and purges the cache; no files move, so it's instant.
+
+`bunny sites` deploys a directory of files. A build that renders pages per request is a different shape, and this command does not deploy one: see `references/lab.md` for `bunny lab deploy astro`.
 
 Most commands accept an optional site (a trailing `[site]` positional, or the `--site` flag on commands whose positionals are taken, like `deploy`). When omitted, the site resolves in this order:
 
@@ -14,7 +18,7 @@ Commands that can link the directory (`deploy`, `show`, `deployments list/publis
 ## Typical workflows
 
 ```bash
-# New site: provision, deploy, iterate
+# New static site: provision, deploy, iterate
 bunny sites create my-site                 # served at https://sites-my-site-<suffix>.b-cdn.net
 bunny sites deploy ./dist                  # deploy and publish as the live site
 
@@ -40,6 +44,22 @@ This is the rule that shapes every other command here:
 - Custom domains are vanity hostnames on the site's pull zone; without one the site serves at `https://sites-<name>-<suffix>.b-cdn.net`.
 
 Content is root-served, so client-side routers (TanStack Router, React Router, Vue Router in history mode) and root-absolute assets work as-is. Deploys are not individually addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served. To review a change before it goes live, build and serve it locally, or deploy it to a separate site.
+
+## What the deploy configures
+
+The router reads three file names out of the deploy it serves. Cloudflare Pages and Netlify read the same three, so a build that already writes them needs nothing bunny-specific.
+
+| File in the deploy | What it does                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `404.html`         | Answers a path the deploy does not hold, at status 404. Without it a miss gets bunny.net's error page             |
+| `_redirects`       | `/from /to [status]` per line. `#` comments, a trailing `*` captured as `:splat`, `!` to beat a file at that path |
+| `_headers`         | A `/path` line, then indented `Name: value` lines                                                                 |
+
+301 is the default status; 302, 303, 307 and 308 are read too. A rewrite (`200`) is not supported. A rule without `!` applies only where the deploy holds no file, so a real file always wins. A path matches with or without its trailing slash.
+
+The router also sets `Cache-Control` on every response, because Bunny Storage sends none for HTML: 60 seconds for a page, 30 days for anything else, and whatever `_headers` says. `sites create` turns the pull zone's own cache override off so that answer reaches the visitor, and `sites upgrade-router` does it for a site made by an earlier CLI.
+
+A published `deploy` asks the live site for a path it cannot hold, and reports it when the answer is not the deploy's own 404 page.
 
 ## Deploy IDs
 

@@ -8,7 +8,7 @@ import { defineCommand } from "../../core/define-command.ts";
 import { errorMessage } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { withSpinner } from "../../core/ui.ts";
-import { writeRemoteState } from "./api.ts";
+import { applySiteZoneSettings, writeRemoteState } from "./api.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -53,6 +53,9 @@ export const sitesUpgradeRouterCommand = defineCommand<UpgradeArgs>({
         params: { path: { id: state.scriptId, uuid: null } },
         body: {},
       });
+      // The router decides what a response may be cached for, so the zone must
+      // stop overriding its answer. One change, applied together.
+      await applySiteZoneSettings({ coreClient, state });
     });
 
     // Record the published generation so deploy stops re-upgrading; best-effort (a missed write just republishes next deploy).

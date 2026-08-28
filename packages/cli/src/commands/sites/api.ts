@@ -30,6 +30,7 @@ import {
   type RemoteSiteState,
   routerScriptName,
   STATE_VERSION,
+  STATIC_SITE_ZONE_SETTINGS,
   siteResourcePattern,
   suffixedResourceName,
 } from "./constants.ts";
@@ -412,7 +413,7 @@ export async function createSite(
   }
   await coreClient.POST("/pullzone/{id}", {
     params: { path: { id: pullZone.Id } },
-    body: { MiddlewareScriptId: scriptId },
+    body: { MiddlewareScriptId: scriptId, ...STATIC_SITE_ZONE_SETTINGS },
   });
 
   // Force HTTPS on the <name>.b-cdn.net system host (already on bunny's wildcard cert, so this just redirects HTTP); best-effort.
@@ -464,8 +465,36 @@ export async function fetchSystemHostname(
   }
 }
 
+/**
+ * Apply {@link STATIC_SITE_ZONE_SETTINGS} to the site's pull zone.
+ *
+ * The router and these settings are one change: the router decides what a
+ * response may be cached for, and the zone's override would replace its answer.
+ * Best-effort, and idempotent, so a failure here is a warning rather than a
+ * failed deploy, and the next republish tries again.
+ */
+export async function applySiteZoneSettings(opts: {
+  coreClient: CoreClient;
+  state: RemoteSiteState;
+}): Promise<void> {
+  try {
+    await opts.coreClient.POST("/pullzone/{id}", {
+      params: { path: { id: opts.state.pullZoneId } },
+      body: { ...STATIC_SITE_ZONE_SETTINGS },
+    });
+  } catch (err) {
+    logger.warn(
+      `Couldn't turn the cache override off on pull zone ${opts.state.pullZoneId}: ${errorMessage(err)}`,
+    );
+    logger.dim(
+      "  Until it is off, the zone replaces the Cache-Control the router sends.",
+    );
+  }
+}
+
 // Republish the site's router when its recorded source generation lags the CLI's. Mutates state.routerVersion; the caller's next state write persists it, and a missed write just re-runs this next time.
 export async function ensureRouterCurrent(opts: {
+  coreClient: CoreClient;
   computeClient: ComputeClient;
   state: RemoteSiteState;
 }): Promise<boolean> {
@@ -480,6 +509,8 @@ export async function ensureRouterCurrent(opts: {
     params: { path: { id: state.scriptId, uuid: null } },
     body: {},
   });
+  // The new router owns Cache-Control, so the zone must stop overriding it.
+  await applySiteZoneSettings(opts);
   state.routerVersion = ROUTER_VERSION;
   return true;
 }

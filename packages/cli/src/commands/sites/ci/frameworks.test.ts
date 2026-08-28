@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   detectFramework,
   detectPackageManager,
+  detectWorkspace,
   findPreset,
   presetBuildCommand,
 } from "./frameworks.ts";
@@ -134,4 +135,70 @@ test("detectPackageManager reads the lockfile", async () => {
     "yarn",
   );
   expect(await detectPackageManager(tempRepo({}))).toBe("npm");
+});
+
+// The lockfile is at the root of a monorepo, not beside each package. Reading
+// only the package made `starlight/docs` look like an npm project, and `npm
+// install` then met `"@astrojs/starlight": "workspace:*"` and stopped.
+test("detectWorkspace finds the package manager up the tree", async () => {
+  const root = tempRepo({
+    "pnpm-lock.yaml": "",
+    "pnpm-workspace.yaml": "packages:\n  - 'docs'\n",
+    "package.json": JSON.stringify({ name: "root", private: true }),
+  });
+  const docs = join(root, "docs");
+  mkdirSync(docs);
+  writeFileSync(join(docs, "package.json"), pkg({ astro: "^7.0.0" }));
+
+  const workspace = await detectWorkspace(docs);
+  expect(workspace.pm).toBe("pnpm");
+  expect(workspace.root).toBe(root);
+  // The package is not the workspace root, so `pnpm add` needs no `-w`.
+  expect(workspace.isRoot).toBe(false);
+});
+
+test("detectWorkspace knows when the project is the workspace root", async () => {
+  const root = tempRepo({
+    "pnpm-lock.yaml": "",
+    "pnpm-workspace.yaml": "packages:\n  - 'packages/**'\n",
+    "package.json": JSON.stringify({ name: "root", private: true }),
+  });
+  expect((await detectWorkspace(root)).isRoot).toBe(true);
+});
+
+// astro.build has a pnpm-workspace.yaml holding only settings, and `pnpm add`
+// works there without `-w`.
+test("detectWorkspace does not call a settings-only pnpm-workspace.yaml a root", async () => {
+  const root = tempRepo({
+    "pnpm-lock.yaml": "",
+    "pnpm-workspace.yaml": "minimumReleaseAge: 4320\n",
+    "package.json": pkg({ astro: "^7.0.0" }),
+  });
+  expect((await detectWorkspace(root)).isRoot).toBe(false);
+});
+
+test("detectWorkspace reads npm and yarn workspaces too", async () => {
+  const npmRoot = tempRepo({
+    "package-lock.json": "{}",
+    "package.json": JSON.stringify({ name: "root", workspaces: ["apps/*"] }),
+  });
+  const npm = await detectWorkspace(npmRoot);
+  expect(npm.pm).toBe("npm");
+  expect(npm.isRoot).toBe(true);
+
+  const yarnRoot = tempRepo({
+    "yarn.lock": "",
+    "package.json": JSON.stringify({
+      name: "root",
+      workspaces: { packages: ["apps/*"] },
+    }),
+  });
+  const yarn = await detectWorkspace(yarnRoot);
+  expect(yarn.pm).toBe("yarn");
+  expect(yarn.isRoot).toBe(true);
+});
+
+test("detectPackageManager still answers npm when nothing says otherwise", async () => {
+  const dir = tempRepo({ "package.json": pkg({ astro: "^7.0.0" }) });
+  expect(await detectPackageManager(dir)).toBe("npm");
 });

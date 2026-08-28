@@ -1,7 +1,16 @@
 import { access } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  detectWorkspace,
+  type PackageManager,
+  readPackageJson,
+} from "../../../core/package-manager.ts";
 
-export type PackageManager = "bun" | "pnpm" | "yarn" | "npm";
+export type {
+  PackageManager,
+  Workspace,
+} from "../../../core/package-manager.ts";
+export { detectWorkspace } from "../../../core/package-manager.ts";
 
 export interface FrameworkPreset {
   id: string;
@@ -190,18 +199,7 @@ const JS_DETECTORS: Array<[dependency: string, presetId: string]> = [
   ["vite", "vite"],
 ];
 
-export async function readPackageJson(
-  root: string,
-): Promise<Record<string, unknown> | null> {
-  try {
-    return (await Bun.file(join(root, "package.json")).json()) as Record<
-      string,
-      unknown
-    >;
-  } catch {
-    return null;
-  }
-}
+export { readPackageJson } from "../../../core/package-manager.ts";
 
 async function readText(path: string): Promise<string | null> {
   try {
@@ -270,13 +268,5 @@ export async function detectFramework(
 export async function detectPackageManager(
   root: string,
 ): Promise<PackageManager> {
-  if (
-    (await exists(join(root, "bun.lock"))) ||
-    (await exists(join(root, "bun.lockb")))
-  ) {
-    return "bun";
-  }
-  if (await exists(join(root, "pnpm-lock.yaml"))) return "pnpm";
-  if (await exists(join(root, "yarn.lock"))) return "yarn";
-  return "npm";
+  return (await detectWorkspace(root)).pm;
 }

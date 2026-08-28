@@ -10,6 +10,9 @@ import databaseMd from "../../../../../skills/bunny-cli/references/database.md" 
 import dnsMd from "../../../../../skills/bunny-cli/references/dns.md" with {
   type: "text",
 };
+import labMd from "../../../../../skills/bunny-cli/references/lab.md" with {
+  type: "text",
+};
 import sandboxMd from "../../../../../skills/bunny-cli/references/sandbox.md" with {
   type: "text",
 };
@@ -45,6 +48,7 @@ export const BUNNY_CLI_SKILL: ProjectSkill = {
     "references/auth.md": authMd,
     "references/database.md": databaseMd,
     "references/dns.md": dnsMd,
+    "references/lab.md": labMd,
     "references/sandbox.md": sandboxMd,
     "references/scripts.md": scriptsMd,
     "references/sites.md": sitesMd,

@@ -72,6 +72,7 @@ bun ny storage files remove /               # empty the zone; asks twice (yes/no
 bun ny sites create my-site                 # provision a static site (storage zone + pull zone + edge router; zones are named sites-my-site-<suffix>, served at sites-my-site-<suffix>.b-cdn.net)
 bun ny sites deploy                         # no linked site? offers to create one or pick an existing; detects the framework, offers to build, then deploys (a site's first deploy also offers to attach a custom domain)
 bun ny sites deploy ./dist                  # deploy a directory and publish it as the live site
+bun ny lab deploy astro                     # deploy an Astro project that renders per request (experimental)
 bun ny sites deploy --build                 # run `sites.build` from bunny.jsonc (else the detected framework's build), then deploy `sites.dir` (or the detected output dir)
 bun ny sites deployments list               # list deploys with the live one marked
 bun ny sites deployments publish --previous # instant rollback to the previous deploy
@@ -84,6 +85,8 @@ bun ny sites ci init                        # add a GitHub Actions workflow (pus
 ```
 
 Every deploy is published as the live site. Deploys are immutable under their own ID, so `bun ny sites deployments publish` rolls back to any earlier one without re-uploading. Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) so a deploy needs no flags: `bun ny sites deploy --build`. `bun ny sites ci init` writes the same `build` and `dir` into the generated workflow. See [`examples/sites/`](examples/sites/) for ready-to-copy configs (Vite, Astro, Next.js static export, Hugo, plain HTML, and a combined app + site file).
+
+`bunny sites deploy` deploys a directory of files. A build that renders pages per request is a different shape: `bun ny lab deploy astro` deploys an Astro project as an Edge Script, with its client build in Bunny Storage. It reads the `.bunny/build.json` that [`@bunny.net/astro-adapter`](https://github.com/BunnyWay/bunny-adapters) writes, and it has one companion command, `bun ny lab undeploy astro`, which deletes the app again. `lab` means the interface is still being shaped.
 
 ### Available scripts
 

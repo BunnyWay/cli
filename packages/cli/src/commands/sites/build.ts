@@ -82,7 +82,7 @@ export async function runBuildCommand(
   if (code !== 0) {
     throw new UserError(
       `Build command failed with exit code ${code}.`,
-      "Fix the build and re-run `bunny sites deploy --build`.",
+      "Fix the build and run `bunny sites deploy --build` again.",
     );
   }
 }

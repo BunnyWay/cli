@@ -1,5 +1,17 @@
 // Schemas
 
+// The build manifest an adapter writes and `bunny sites deploy` reads.
+export {
+  BUILD_MANIFEST_PATH,
+  BUILD_MANIFEST_VERSION,
+  type BuildManifest,
+  BuildManifestSchema,
+  type ManifestEnv,
+  ManifestEnvSchema,
+  type ManifestPullZone,
+  ManifestPullZoneSchema,
+  ManifestRequiresSchema,
+} from "./build-manifest.ts";
 // API conversion
 export {
   apiToConfig,
