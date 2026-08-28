@@ -420,9 +420,10 @@ bunny-cli/
 │           │   │   └── file/              # `bunny storage files` (canonical: files; aliases: file); zone is the --zone/-z flag (defaults to linked zone), the positional is the file/path
 │           │   │       ├── index.ts      # defineNamespace("files", ...)
 │           │   │       ├── list.ts       # List files in a directory (alias: ls; directories first; [path] positional, --zone flag)
-│           │   │       ├── upload.ts     # Upload a local file (<file> positional, --zone, --to, --checksum streams a SHA256, --content-type)
-│           │   │       ├── download.ts   # Download a file to disk (<path> positional, --zone, --out)
-│           │   │       └── remove.ts     # Delete a file or directory (alias: rm; <path> positional, --zone, trailing slash = recursive); `/` empties the zone and takes the same double confirmation as deleting the zone, and requireConfirmable means unattended runs need --force
+│           │   │       ├── pick.ts       # promptStoragePath: browse the zone and pick a path, drilling into directories via listFiles (`../` walks back up, `allowDirectories` adds a "select this directory" entry below the root); used by download/remove when the path positional is omitted
+│           │   │       ├── upload.ts     # Upload a local file (<file> positional, --zone, --to, --checksum streams a SHA256, --content-type); prompts for the remote path when --to is omitted interactively, and a directory argument errors with a hint rather than "File not found"
+│           │   │       ├── download.ts   # Download a file to disk ([path] positional, --zone, --out); prompts with the promptStoragePath browser when the path is omitted
+│           │   │       └── remove.ts     # Delete a file or directory (alias: rm; [path] positional, --zone, trailing slash = recursive); prompts with the promptStoragePath browser (allowDirectories) when the path is omitted, which never offers the root so emptying a zone stays an explicit `remove /`; `/` takes the same double confirmation as deleting the zone, and requireConfirmable means unattended runs need --force
 │           │   ├── sites/                 # Experimental (hidden from help and landing page) — static-site hosting (storage zone + pull zone + middleware router)
 │           │   │   ├── index.ts          # defineNamespace("sites", false, ...): create/list/show/deploy/deployments/domains/link/unlink/upgrade-router/delete; describe:false keeps it out of help while it stabilizes
 │           │   │   ├── constants.ts      # SITES_MANIFEST (.bunny/site.json), REMOTE_STATE_PATH (_bunny/site.json), RemoteSiteState/DeployRecord types (state carries routerVersion), parseRemoteState (shape-checked; null = not a site), deployPrefix, deploy-ID + site-name validators (3-47 chars), suffixedResourceName/siteResourcePattern (zone names are `sites-{name}-{random 6}`: the prefix marks them in the dashboard, the suffix dodges the global zone namespace)
@@ -1121,9 +1122,9 @@ bunny
 │   │   └── domains                         (canonical; alias: hostnames) custom domains on the zone's pull zone; mounts core/hostnames createHostnamesCommands; resolver maps the storage zone (positional, else linked zone, else picker) to its linked pull zone
 │   ├── files                               (canonical; aliases: file) [--zone|-z] defaults to the linked zone on every file command
 │   │   ├── list        [path] [--zone] (alias: ls)  List files in a directory (trailing slash on path)
-│   │   ├── upload      <file> [--zone] [--to] [--checksum] [--content-type]  Upload a local file
-│   │   ├── download    <path> [--zone] [--out]  Download a file
-│   │   └── remove      <path> [--zone] [--force] (alias: rm)  Delete a file or directory (trailing slash = recursive; `/` empties the zone, double confirmation)
+│   │   ├── upload      <file> [--zone] [--to] [--checksum] [--content-type]  Upload a local file (prompts for the remote path when --to is omitted; takes one file, not a directory)
+│   │   ├── download    [path] [--zone] [--out]  Download a file (browses the zone to pick one when the path is omitted)
+│   │   └── remove      [path] [--zone] [--force] (alias: rm)  Delete a file or directory (browses the zone to pick one when the path is omitted; trailing slash = recursive; `/` empties the zone, double confirmation)
 │   ├── link            [zone]              Link the current directory to a storage zone (.bunny/storage.json); interactive picker when omitted
 │   ├── unlink          [--force/-f]        Remove .bunny/storage.json, unlinking this directory (confirmation unless --force)
 │   ├── regions                             List available storage regions (--tier hdd|ssd, --s3; the set depends on both)
