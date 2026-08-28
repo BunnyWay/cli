@@ -18,6 +18,35 @@ interface UploadArgs {
   checksum?: boolean;
 }
 
+/**
+ * The remote path to upload to, or undefined when the prompt was cancelled.
+ *
+ * A blank answer means the zone root, so cancelling has to be distinguished from it:
+ * treating both as "no destination" would upload to the root on Ctrl-C.
+ */
+export async function uploadDestination(
+  file: string,
+  to: string | undefined,
+  interactive: boolean,
+): Promise<string | undefined> {
+  let destination = to;
+  if (destination === undefined && interactive) {
+    const { value } = await prompts({
+      type: "text",
+      name: "value",
+      message: "Upload to (blank for the zone root):",
+      initial: "",
+    });
+    if (value === undefined) return undefined;
+    destination = value as string;
+  }
+
+  // A bare path uses the file as-is; a trailing slash means "into this directory".
+  return !destination || destination.endsWith("/")
+    ? `${destination ?? ""}${basename(file)}`
+    : destination;
+}
+
 export const storageFileUploadCommand = defineCommand<UploadArgs>({
   command: "upload <file>",
   describe: "Upload a local file to a storage zone.",
@@ -99,24 +128,11 @@ export const storageFileUploadCommand = defineCommand<UploadArgs>({
     });
     const connection = connectStorageZone(zone);
 
-    const destination =
-      to ??
-      (isInteractive(output)
-        ? ((
-            await prompts({
-              type: "text",
-              name: "value",
-              message: "Upload to (blank for the zone root):",
-              initial: "",
-            })
-          ).value as string | undefined)
-        : undefined);
-
-    // A bare path uses the file as-is; a trailing slash means "into this directory".
-    const remotePath =
-      !destination || destination.endsWith("/")
-        ? `${destination ?? ""}${basename(file)}`
-        : destination;
+    const remotePath = await uploadDestination(file, to, isInteractive(output));
+    if (remotePath === undefined) {
+      logger.log("Cancelled.");
+      return;
+    }
 
     const spin = spinner(`Uploading ${remotePath}...`);
     spin.start();

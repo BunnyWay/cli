@@ -85,7 +85,7 @@ describe("promptStoragePath", () => {
 
   test("returns undefined when the user cancels", async () => {
     tree({ "": [entry("a.png", false)] });
-    prompts.inject([undefined]);
+    prompts.inject([new Error("cancelled")]);
 
     expect(await promptStoragePath(zone, { message: "Pick" })).toBeUndefined();
   });
