@@ -120,3 +120,53 @@ export async function uploadDeploy(
     },
   );
 }
+
+// Every object under a deploy's prefix, as paths relative to it.
+async function listDeployObjects(
+  connection: StorageZone,
+  prefix: string,
+  dir = "",
+): Promise<string[]> {
+  const entries = await siteFiles.list(connection, `${prefix}/${dir}`);
+  const paths: string[] = [];
+  for (const entry of entries) {
+    const rel = `${dir}${entry.objectName}`;
+    if (entry.isDirectory) {
+      paths.push(...(await listDeployObjects(connection, prefix, `${rel}/`)));
+    } else {
+      paths.push(rel);
+    }
+  }
+  return paths;
+}
+
+/**
+ * Delete objects an earlier upload of the same deploy ID left behind.
+ *
+ * Re-uploading writes the new files but never removes ones the artifact has
+ * dropped, so without this a replaced deploy serves a mix of both. Runs after
+ * the new files are in place, so a live deploy is never missing a file mid-replace.
+ * Returns the paths removed.
+ */
+export async function pruneDeployOrphans(
+  connection: StorageZone,
+  deployId: string,
+  files: HashedLocalFile[],
+): Promise<string[]> {
+  const prefix = deployPrefix(deployId);
+  const keep = new Set(files.map((file) => file.path));
+  const orphans = (await listDeployObjects(connection, prefix)).filter(
+    (path) => !keep.has(path),
+  );
+
+  await mapWithConcurrency(
+    orphans,
+    DEFAULT_UPLOAD_CONCURRENCY,
+    async (path) => {
+      await withRetries(() =>
+        siteFiles.remove(connection, `${prefix}/${path}`),
+      );
+    },
+  );
+  return orphans;
+}

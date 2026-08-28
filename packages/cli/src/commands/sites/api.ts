@@ -19,6 +19,7 @@ import {
   connectStorageZone,
   deleteFile,
   downloadFile,
+  listFiles,
   type StorageZone,
   uploadFile,
 } from "../storage/files-api.ts";
@@ -42,6 +43,7 @@ type PullZone = components["schemas"]["PullZoneModel"];
 export const siteFiles = {
   connect: connectStorageZone,
   download: downloadFile,
+  list: listFiles,
   upload: uploadFile,
   remove: deleteFile,
 };

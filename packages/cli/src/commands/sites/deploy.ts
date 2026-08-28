@@ -42,7 +42,12 @@ import {
   siteOptionBuilder,
 } from "./interactive.ts";
 import { createLinkedSite, promptSiteName } from "./provision.ts";
-import { collectFiles, hashFiles, uploadDeploy } from "./uploader.ts";
+import {
+  collectFiles,
+  hashFiles,
+  pruneDeployOrphans,
+  uploadDeploy,
+} from "./uploader.ts";
 
 interface DeployArgs extends SiteSelectorArgs {
   dir?: string;
@@ -337,6 +342,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
     const { deployId, skipUpload } = target;
     const alreadyLive = state.current === deployId;
+    // Re-uploading onto an existing ID (--force, or a rebuilt artifact under the same git sha)
+    // leaves any file the new build dropped behind in the prefix, still reachable via the router.
+    const replacing =
+      !skipUpload && state.deploys.some((d) => d.id === deployId);
 
     // The production URL prefers the custom domain; only fetch the system host when there is none.
     const systemHost = state.domain
@@ -383,7 +392,18 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         }),
       );
 
-      // Record the deploy. A re-deployed ID keeps its slot but gets fresh metadata; the promote below purges the zone, so its old bytes can't be served.
+      if (replacing) {
+        const orphans = await withSpinner("Removing replaced files...", () =>
+          pruneDeployOrphans(connection, deployId, files),
+        );
+        if (orphans.length > 0 && output !== "json") {
+          logger.dim(
+            `Removed ${orphans.length} file(s) the new build no longer includes.`,
+          );
+        }
+      }
+
+      // Record the deploy. A re-deployed ID keeps its slot but gets fresh metadata; the purge on promote drops the old bytes from cache.
       const record: DeployRecord = {
         id: deployId,
         createdAt: new Date().toISOString(),

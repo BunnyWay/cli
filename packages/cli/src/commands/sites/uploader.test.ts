@@ -7,13 +7,18 @@ import { siteFiles } from "./api.ts";
 import {
   collectFiles,
   hashFiles,
+  pruneDeployOrphans,
   shouldSkipEntry,
   uploadDeploy,
 } from "./uploader.ts";
 
 const realUpload = siteFiles.upload;
+const realList = siteFiles.list;
+const realRemove = siteFiles.remove;
 afterEach(() => {
   siteFiles.upload = realUpload;
+  siteFiles.list = realList;
+  siteFiles.remove = realRemove;
 });
 
 const fakeConnection = {} as StorageZone;
@@ -112,4 +117,66 @@ test("uploadDeploy surfaces an error after retries are exhausted", async () => {
   await expect(uploadDeploy(fakeConnection, "a1b2c3d4", files)).rejects.toThrow(
     "permanent",
   );
+});
+
+// Stand in for a storage prefix: maps a listed directory to its entries.
+function fakeStorage(paths: string[]) {
+  siteFiles.list = (async (_zone, dir: string) => {
+    const under = paths.filter((p) => p.startsWith(dir));
+    const seen = new Map<string, boolean>();
+    for (const path of under) {
+      const rest = path.slice(dir.length);
+      const slash = rest.indexOf("/");
+      seen.set(slash === -1 ? rest : rest.slice(0, slash), slash !== -1);
+    }
+    return [...seen].map(([objectName, isDirectory]) => ({
+      objectName,
+      isDirectory,
+      length: 1,
+    }));
+  }) as typeof siteFiles.list;
+
+  const removed: string[] = [];
+  siteFiles.remove = (async (_zone, path: string) => {
+    removed.push(path);
+  }) as typeof siteFiles.remove;
+  return removed;
+}
+
+const hashed = (path: string) =>
+  ({ path, absPath: `/tmp/${path}`, size: 1, sha256: "ab" }) as const;
+
+test("pruneDeployOrphans deletes only files the new build dropped", async () => {
+  const removed = fakeStorage([
+    "deploys/r42/index.html",
+    "deploys/r42/old-page.html",
+    "deploys/r42/assets/app.js",
+    "deploys/r42/assets/old.css",
+  ]);
+
+  const orphans = await pruneDeployOrphans(fakeConnection, "r42", [
+    hashed("index.html"),
+    hashed("assets/app.js"),
+  ]);
+
+  expect(orphans.sort()).toEqual(["assets/old.css", "old-page.html"]);
+  expect(removed.sort()).toEqual([
+    "deploys/r42/assets/old.css",
+    "deploys/r42/old-page.html",
+  ]);
+});
+
+test("pruneDeployOrphans removes nothing when the build still has every file", async () => {
+  const removed = fakeStorage([
+    "deploys/r42/index.html",
+    "deploys/r42/assets/app.js",
+  ]);
+
+  const orphans = await pruneDeployOrphans(fakeConnection, "r42", [
+    hashed("index.html"),
+    hashed("assets/app.js"),
+  ]);
+
+  expect(orphans).toEqual([]);
+  expect(removed).toEqual([]);
 });

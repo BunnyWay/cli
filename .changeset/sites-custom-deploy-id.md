@@ -2,4 +2,4 @@
 "@bunny.net/cli": minor
 ---
 
-Add `--deploy-id` to `bunny sites deploy` so a deploy can carry your own release identifier
+Add `--deploy-id` to `bunny sites deploy` so a deploy can carry your own release identifier, and clear files a replaced deploy no longer includes
