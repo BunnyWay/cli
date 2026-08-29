@@ -68,6 +68,7 @@ bun ny storage regions                      # list every storage region, showing
 bun ny storage regions --tier ssd           # scope the list to one zone shape; the available set depends on both --tier hdd|ssd and --s3
 bun ny storage zones add my-zone --tier ssd --s3   # create an Edge (SSD) zone (always Frankfurt) with S3-compatible access
 bun ny storage files list                   # list files in the linked storage zone
+bun ny storage files download               # browse the zone and pick a file to download; same picker on `files remove`
 bun ny storage files remove /               # empty the zone; asks twice (yes/no, then type the zone name), and unattended runs need --force
 bun ny sites create my-site                 # provision a static site (storage zone + pull zone + edge router; zones are named sites-my-site-<suffix>, served at sites-my-site-<suffix>.b-cdn.net)
 bun ny sites deploy                         # no linked site? offers to create one or pick an existing; detects the framework, offers to build, then deploys (a site's first deploy also offers to attach a custom domain)
