@@ -16,6 +16,12 @@ import {
   type StorageZoneModel,
 } from "../storage/api.ts";
 import {
+  type ZoneTierChoice,
+  zoneTierChoice,
+  zoneTierLabel,
+  zoneTierValue,
+} from "../storage/constants.ts";
+import {
   connectStorageZone,
   deleteFile,
   downloadFile,
@@ -277,7 +283,9 @@ export interface CreateSiteOptions {
   coreClient: CoreClient;
   computeClient: ComputeClient;
   name: string;
-  region: string;
+  /** Explicitly requested region; a fresh zone falls back to DE, and a resumed zone must already be in it. */
+  region?: string;
+  tier?: ZoneTierChoice;
   /** Progress callback; drives the spinner text. */
   onStep?: (message: string) => void;
 }
@@ -293,7 +301,7 @@ export interface CreateSiteResult {
 export async function createSite(
   opts: CreateSiteOptions,
 ): Promise<CreateSiteResult> {
-  const { coreClient, computeClient, name, region } = opts;
+  const { coreClient, computeClient, name, region, tier } = opts;
   const step = opts.onStep ?? (() => {});
   const reused = { storageZone: false, script: false, pullZone: false };
 
@@ -312,6 +320,20 @@ export async function createSite(
     if (!existing && !storageZone) storageZone = zone;
   }
   if (storageZone) {
+    // Tier is fixed at creation, so a resumed zone can't be moved to the requested one; say so instead of finishing on the wrong tier.
+    if (tier && zoneTierChoice(storageZone) !== tier) {
+      throw new UserError(
+        `A half-finished site zone for "${name}" is on the ${zoneTierLabel(storageZone, "long")} tier, but \`--tier ${tier}\` was requested.`,
+        `Storage tier can't be changed after a zone is created. Re-run with \`--tier ${zoneTierChoice(storageZone)}\` (or without \`--tier\`) to resume it, or delete storage zone "${storageZone.Name}" to start over.`,
+      );
+    }
+    // The primary region is fixed at creation too; only an explicit --region mismatch is an error, so a flagless retry resumes the zone where it is.
+    if (region && storageZone.Region && storageZone.Region !== region) {
+      throw new UserError(
+        `A half-finished site zone for "${name}" is in the ${storageZone.Region} region, but \`--region ${region}\` was requested.`,
+        `Storage region can't be changed after a zone is created. Re-run with \`--region ${storageZone.Region}\` (or without \`--region\`) to resume it, or delete storage zone "${storageZone.Name}" to start over.`,
+      );
+    }
     reused.storageZone = true;
   } else {
     // The suffix keeps the globally-unique name from colliding with other accounts; retry fresh suffixes on the off chance one still does.
@@ -319,7 +341,12 @@ export async function createSite(
       const zoneName = suffixedResourceName(name);
       try {
         const { data } = await coreClient.POST("/storagezone", {
-          body: { Name: zoneName, Region: region, ReplicationRegions: null },
+          body: {
+            Name: zoneName,
+            Region: region ?? "DE",
+            ReplicationRegions: null,
+            ZoneTier: tier ? zoneTierValue(tier) : undefined,
+          },
         });
         if (!data?.Id) {
           throw new UserError(`Failed to create storage zone "${zoneName}".`);
@@ -395,7 +422,9 @@ export async function createSite(
           coreClient,
           pullZoneName,
           storageZoneId,
-          { middlewareScriptId: scriptId },
+          {
+            middlewareScriptId: scriptId,
+          },
         );
       } catch (err) {
         if (!isNameTaken(err)) throw err;
