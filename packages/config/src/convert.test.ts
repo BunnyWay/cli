@@ -482,4 +482,74 @@ describe("configToPatchRequest", () => {
     );
     expect(req.containerTemplates?.[1]?.id).toBeUndefined();
   });
+
+  test("no env block carries over the existing template's vars", () => {
+    const existing = app({
+      containerTemplates: [
+        template({
+          id: "ct_remote_1",
+          name: "api",
+          environmentVariables: [{ name: "FOO", value: "bar" }],
+        }),
+      ],
+    });
+    const req = configToPatchRequest(
+      {
+        version: CURRENT_VERSION,
+        app: { name: "x", containers: { api: { image: "nginx" } } },
+      },
+      existing,
+    );
+    expect(req.containerTemplates?.[0]?.environmentVariables).toEqual([
+      { name: "FOO", value: "bar" },
+    ]);
+  });
+
+  test("env block in config replaces the existing template's vars", () => {
+    const existing = app({
+      containerTemplates: [
+        template({
+          id: "ct_remote_1",
+          name: "api",
+          environmentVariables: [{ name: "FOO", value: "bar" }],
+        }),
+      ],
+    });
+    const req = configToPatchRequest(
+      {
+        version: CURRENT_VERSION,
+        app: {
+          name: "x",
+          containers: { api: { image: "nginx", env: { BAZ: "qux" } } },
+        },
+      },
+      existing,
+    );
+    expect(req.containerTemplates?.[0]?.environmentVariables).toEqual([
+      { name: "BAZ", value: "qux" },
+    ]);
+  });
+
+  test("empty env block clears the existing template's vars", () => {
+    const existing = app({
+      containerTemplates: [
+        template({
+          id: "ct_remote_1",
+          name: "api",
+          environmentVariables: [{ name: "FOO", value: "bar" }],
+        }),
+      ],
+    });
+    const req = configToPatchRequest(
+      {
+        version: CURRENT_VERSION,
+        app: {
+          name: "x",
+          containers: { api: { image: "nginx", env: {} } },
+        },
+      },
+      existing,
+    );
+    expect(req.containerTemplates?.[0]?.environmentVariables).toEqual([]);
+  });
 });

@@ -254,7 +254,12 @@ export function configToPatchRequest(
         ? existingApp.containerTemplates[0]
         : existingApp.containerTemplates.find((ct) => ct.name === name);
     const merged = mergeRegistry(name, c, registries);
-    containers.push(containerConfigToRequest(name, merged, existing?.id));
+    const req = containerConfigToRequest(name, merged, existing?.id);
+    // PATCH replaces the whole template, so a config without an env block must carry over the server's vars or they get wiped.
+    if (!merged.env && existing?.environmentVariables?.length) {
+      req.environmentVariables = existing.environmentVariables;
+    }
+    containers.push(req);
     collectVolumes(merged, volumes, seenVolumes);
   }
 
