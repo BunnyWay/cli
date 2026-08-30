@@ -94,10 +94,13 @@ export function resolveDeployTarget(opts: {
 
   const alreadyUploaded = force
     ? undefined
-    : deploys.find((d) =>
-        customId
-          ? d.id === customId && d.contentHash === identity.contentHash
-          : d.contentHash === identity.contentHash,
+    : deploys.find(
+        (d) =>
+          // A pending record marks an interrupted (or in-flight) write; its prefix can't be trusted to hold these bytes, so re-upload instead of skipping.
+          !d.pending &&
+          (customId
+            ? d.id === customId && d.contentHash === identity.contentHash
+            : d.contentHash === identity.contentHash),
       );
   // A skipped deploy reuses the already-uploaded deploy's id; that's where its files live.
   const deployId = alreadyUploaded?.id ?? identity.id;
@@ -193,7 +196,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         .option("force", {
           type: "boolean",
           default: false,
-          describe: "Deploy even when the content is unchanged",
+          describe:
+            "Deploy even when the content is unchanged, or replace an existing --deploy-id's content",
         })
         .option("deploy-id", {
           type: "string",
@@ -334,6 +338,12 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       );
     }
     if (target.conflict?.reason === "content") {
+      if (target.conflict.record.pending) {
+        throw new UserError(
+          `An earlier deploy of ${customId} to ${state.name} never finished, and this content differs from what it was uploading.`,
+          "Its files can't be trusted either way. Pass --force to replace it with this content, or delete it with `bunny sites deployments delete`.",
+        );
+      }
       throw new UserError(
         `Deploy ${customId} already exists for ${state.name} with different content.`,
         "Rolling back to that ID would serve these new files instead of the originals. Pick another ID, or pass --force to replace it.",
@@ -384,26 +394,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
 
     if (!skipUpload) {
-      await withSpinner(`Uploading ${files.length} files...`, (spin) =>
-        uploadDeploy(connection, deployId, files, {
-          onFileUploaded: (done, total) => {
-            spin.text = `Uploading ${done}/${total} files (${formatBytes(totalBytes)} total)...`;
-          },
-        }),
-      );
-
-      if (replacing) {
-        const orphans = await withSpinner("Removing replaced files...", () =>
-          pruneDeployOrphans(connection, deployId, files),
-        );
-        if (orphans.length > 0 && output !== "json") {
-          logger.dim(
-            `Removed ${orphans.length} file(s) the new build no longer includes.`,
-          );
-        }
-      }
-
-      // Record the deploy. A re-deployed ID keeps its slot but gets fresh metadata; the purge on promote drops the old bytes from cache.
+      // The deploy record. A re-deployed ID keeps its slot but gets fresh metadata; the purge on promote drops the old bytes from cache.
       const record: DeployRecord = {
         id: deployId,
         createdAt: new Date().toISOString(),
@@ -414,11 +405,49 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         files: files.length,
         bytes: totalBytes,
       };
+
+      // Claim the ID in state before touching any object, and finalize only once every file landed: an interrupted or raced write leaves a record that says the prefix can't be trusted, never one vouching for bytes that aren't all there. The claim write also surfaces a concurrent deploy of the same ID (via `claimedId`) before this one starts scribbling over its files.
+      state.deploys = [
+        { ...record, pending: true },
+        ...state.deploys.filter((d) => d.id !== deployId),
+      ];
+      etag = await writeRemoteState(connection, state, etag, {
+        claimedId: deployId,
+      });
+
+      try {
+        await withSpinner(`Uploading ${files.length} files...`, (spin) =>
+          uploadDeploy(connection, deployId, files, {
+            onFileUploaded: (done, total) => {
+              spin.text = `Uploading ${done}/${total} files (${formatBytes(totalBytes)} total)...`;
+            },
+          }),
+        );
+
+        if (replacing) {
+          const orphans = await withSpinner("Removing replaced files...", () =>
+            pruneDeployOrphans(connection, deployId, files),
+          );
+          if (orphans.length > 0 && output !== "json") {
+            logger.dim(
+              `Removed ${orphans.length} file(s) the new build no longer includes.`,
+            );
+          }
+        }
+      } catch (err) {
+        logger.warn(
+          `Deploy ${deployId} is marked incomplete; re-run the deploy to finish it.`,
+        );
+        throw err;
+      }
+
       state.deploys = [
         record,
         ...state.deploys.filter((d) => d.id !== deployId),
       ];
-      etag = await writeRemoteState(connection, state, etag);
+      etag = await writeRemoteState(connection, state, etag, {
+        claimedId: deployId,
+      });
     }
 
     await withSpinner("Publishing to production...", async () => {
@@ -431,6 +460,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       markCurrent(state, deployId);
       etag = await writeRemoteState(connection, state, etag, {
         promotedTo: deployId,
+        claimedId: deployId,
       });
     });
 

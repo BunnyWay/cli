@@ -370,6 +370,63 @@ test("a non-promoting write adopts the concurrent writer's current/previous", as
   expect(read?.state.deploys.map((d) => d.id)).toEqual(["aaa", "zzz"]);
 });
 
+test("writeRemoteState aborts a claim when a concurrent writer holds the same ID with different content", async () => {
+  const connection = fakeConnection();
+  const etag = await writeRemoteState(connection, fakeState());
+
+  // Another deploy claimed r42 (still uploading) between our read and our claim write.
+  const theirs = {
+    id: "r42",
+    createdAt: "2026-01-02T00:00:00.000Z",
+    source: "custom" as const,
+    contentHash: "hash-theirs",
+    files: 1,
+    bytes: 10,
+    pending: true,
+  };
+  store.set(
+    REMOTE_STATE_PATH,
+    JSON.stringify(fakeState({ deploys: [theirs] })),
+  );
+
+  const ours = { ...theirs, contentHash: "hash-ours" };
+  await expect(
+    writeRemoteState(connection, fakeState({ deploys: [ours] }), etag, {
+      claimedId: "r42",
+    }),
+  ).rejects.toThrow("different content");
+  // The abort leaves their claim untouched.
+  const read = await readRemoteState(connection);
+  expect(read?.state.deploys).toEqual([theirs]);
+});
+
+test("a concurrent claim of the same ID and content merges instead of aborting", async () => {
+  const connection = fakeConnection();
+  const etag = await writeRemoteState(connection, fakeState());
+
+  // Same bytes racing under the same ID: both writers upload identical objects, so ours-wins is safe.
+  const theirs = {
+    id: "r42",
+    createdAt: "2026-01-02T00:00:00.000Z",
+    source: "custom" as const,
+    contentHash: "hash1",
+    files: 1,
+    bytes: 10,
+    pending: true,
+  };
+  store.set(
+    REMOTE_STATE_PATH,
+    JSON.stringify(fakeState({ deploys: [theirs] })),
+  );
+
+  const ours = { ...theirs, createdAt: "2026-01-03T00:00:00.000Z" };
+  await writeRemoteState(connection, fakeState({ deploys: [ours] }), etag, {
+    claimedId: "r42",
+  });
+  const read = await readRemoteState(connection);
+  expect(read?.state.deploys).toEqual([ours]);
+});
+
 test("writeRemoteState does not resurrect intentionally removed deploys on a prune/deploy race", async () => {
   const connection = fakeConnection();
   const kept = {

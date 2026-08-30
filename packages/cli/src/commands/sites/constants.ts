@@ -31,6 +31,13 @@ export interface DeployRecord {
   contentHash: string;
   files: number;
   bytes: number;
+  /**
+   * Set while the deploy's files are being written, cleared once they all
+   * landed. A record still pending was interrupted (or is being written right
+   * now), so its prefix cannot be trusted to hold what `contentHash` says:
+   * deploy re-uploads it rather than no-op'ing, and publish refuses it.
+   */
+  pending?: boolean;
 }
 
 // Source of truth (at `_bunny/site.json`) for a site's resource triple and deploys; `.bunny/site.json` is just a local pointer to it.

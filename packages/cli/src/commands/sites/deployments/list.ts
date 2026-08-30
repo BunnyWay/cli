@@ -80,11 +80,14 @@ export const sitesDeploymentsListCommand = defineCommand<ListArgs>({
         ["ID", "Status", "Created", "Source", "Files", "Size"],
         state.deploys.map((d) => [
           d.id,
-          d.id === state.current
-            ? "● Live"
-            : d.id === state.previous
-              ? "○ Previous"
-              : "○",
+          // Incomplete trumps the pointer markers: an interrupted upload is the actionable state, whatever the pointers say.
+          d.pending
+            ? "⚠ Incomplete"
+            : d.id === state.current
+              ? "● Live"
+              : d.id === state.previous
+                ? "○ Previous"
+                : "○",
           formatDateTime(d.createdAt),
           deploySource(d),
           String(d.files),

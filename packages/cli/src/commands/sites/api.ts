@@ -108,7 +108,7 @@ export async function readRemoteState(
   return { state, etag: sha256Hex(raw) };
 }
 
-// Write `_bunny/site.json` (returns the new etag). On an `expectedEtag` mismatch a parseable concurrent state is reconciled: deploy records merge (minus any `removedIds` this writer intentionally deleted, so a prune racing a deploy doesn't resurrect pruned records), and the current/previous pointers follow `promotedTo` (last promote wins; a non-promoting writer adopts the concurrent pointers rather than clobber them with its stale read). An unparseable conflict aborts rather than overwrite.
+// Write `_bunny/site.json` (returns the new etag). On an `expectedEtag` mismatch a parseable concurrent state is reconciled: deploy records merge (minus any `removedIds` this writer intentionally deleted, so a prune racing a deploy doesn't resurrect pruned records), and the current/previous pointers follow `promotedTo` (last promote wins; a non-promoting writer adopts the concurrent pointers rather than clobber them with its stale read). A concurrent record under `claimedId` with different content aborts instead of merging, and an unparseable conflict aborts rather than overwrite.
 export async function writeRemoteState(
   connection: StorageZone,
   state: RemoteSiteState,
@@ -118,6 +118,8 @@ export async function writeRemoteState(
     promotedTo?: string;
     /** Deploy IDs this writer intentionally removed (e.g. prune); the conflict merge must not resurrect them from concurrent state. */
     removedIds?: readonly string[];
+    /** Deploy ID whose files this writer owns (deploy's claim/finalize/promote writes). A concurrent record under it with a different contentHash aborts: `deploys/{id}/` can only hold one artifact, so an ours-win merge would vouch for bytes another writer is scribbling over. Storage has no compare-and-swap, so this is detection, not a lock — but it shrinks the blind window from the whole upload to this read-check-write. */
+    claimedId?: string;
   },
 ): Promise<string> {
   if (expectedEtag) {
@@ -129,6 +131,20 @@ export async function writeRemoteState(
           "Remote site state changed since it was read and is no longer parseable.",
           "Another process may be writing it. Re-run the command.",
         );
+      }
+      if (opts?.claimedId) {
+        const ourClaim = state.deploys.find((d) => d.id === opts.claimedId);
+        const theirClaim = remote.deploys.find((d) => d.id === opts.claimedId);
+        if (
+          ourClaim &&
+          theirClaim &&
+          theirClaim.contentHash !== ourClaim.contentHash
+        ) {
+          throw new UserError(
+            `Another deploy is writing ${opts.claimedId} with different content.`,
+            `Two deploys raced the same ID, so deploys/${opts.claimedId}/ may hold a mix of both. Once the other finishes, re-run this deploy with --force to make this content the deploy, or leave the other writer's.`,
+          );
+        }
       }
       const ours = new Set(state.deploys.map((d) => d.id));
       const removed = new Set(opts?.removedIds ?? []);
