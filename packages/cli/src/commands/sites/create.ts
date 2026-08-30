@@ -96,10 +96,10 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
         describe:
           "Site name; the storage zone, pull zone, and b-cdn.net subdomain become sites-<name>-xxxxxx (defaults to `sites.name` in bunny.jsonc, else prompted)",
       })
+      // No parser default: an omitted --region must stay undefined so resuming a half-created zone in another region isn't rejected as a mismatch.
       .option("region", {
         type: "string",
-        default: "DE",
-        describe: "Main storage region code (e.g. DE, NY, LA, SG)",
+        describe: "Main storage region code (e.g. DE, NY, LA, SG; default DE)",
       })
       .option("tier", {
         type: "string",
