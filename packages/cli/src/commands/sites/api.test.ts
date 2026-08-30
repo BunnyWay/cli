@@ -323,7 +323,9 @@ test("writeRemoteState merges concurrent deploy records on an etag mismatch", as
     connection,
     fakeState({ current: "aaa", deploys: [ours] }),
     etag,
-    { promotedTo: "aaa" },
+    {
+      promotedTo: "aaa",
+    },
   );
   const read = await readRemoteState(connection);
   // Our promote wins, their deploy record survives, and their promote becomes the rollback target.
@@ -569,6 +571,97 @@ test("createSite resumes a half-created suffixed site", async () => {
   });
   // The site keeps its clean display name; only the zones carry the suffix.
   expect(result.state.name).toBe("my-site");
+});
+
+test("createSite refuses to resume a half-created zone on another tier", async () => {
+  const suffixed = { ...ZONE, Name: "sites-my-site-abc123" };
+  const coreClient = fakeCoreClient({ calls: [], storageZones: [suffixed] });
+  const computeClient = fakeComputeClient({ calls: [] });
+
+  // The zone is HDD, so an --tier ssd resume would silently finish on the wrong tier.
+  await expect(
+    createSite({
+      coreClient,
+      computeClient,
+      name: "my-site",
+      region: "DE",
+      tier: "ssd",
+    }),
+  ).rejects.toThrow("but `--tier ssd` was requested");
+});
+
+test("createSite refuses to resume a half-created zone in another region", async () => {
+  const suffixed = { ...ZONE, Name: "sites-my-site-abc123", Region: "LA" };
+  const coreClient = fakeCoreClient({ calls: [], storageZones: [suffixed] });
+  const computeClient = fakeComputeClient({ calls: [] });
+
+  // The zone lives in LA, so an explicit --region de resume would silently keep the files there.
+  await expect(
+    createSite({
+      coreClient,
+      computeClient,
+      name: "my-site",
+      region: "DE",
+    }),
+  ).rejects.toThrow("but `--region DE` was requested");
+});
+
+test("createSite resumes a half-created zone in another region when none was requested", async () => {
+  const suffixed = { ...ZONE, Name: "sites-my-site-abc123", Region: "LA" };
+  const coreClient = fakeCoreClient({
+    calls: [],
+    storageZones: [suffixed],
+    pullZones: [
+      {
+        Id: 30,
+        Name: "sites-my-site-abc123",
+        StorageZoneId: 10,
+        Hostnames: [],
+      },
+    ],
+  });
+  const computeClient = fakeComputeClient({
+    calls: [],
+    scripts: [{ Id: 20, Name: "sites-my-site-abc123-router" }],
+  });
+
+  const result = await createSite({
+    coreClient,
+    computeClient,
+    name: "my-site",
+  });
+
+  expect(result.reused.storageZone).toBe(true);
+});
+
+test("createSite resumes a half-created zone when the tier matches", async () => {
+  const suffixed = { ...ZONE, Name: "sites-my-site-abc123" };
+  const coreClient = fakeCoreClient({
+    calls: [],
+    storageZones: [suffixed],
+    pullZones: [
+      {
+        Id: 30,
+        Name: "sites-my-site-abc123",
+        StorageZoneId: 10,
+        Hostnames: [],
+      },
+    ],
+  });
+  const computeClient = fakeComputeClient({
+    calls: [],
+    scripts: [{ Id: 20, Name: "sites-my-site-abc123-router" }],
+  });
+
+  const result = await createSite({
+    coreClient,
+    computeClient,
+    name: "my-site",
+    region: "DE",
+    tier: "hdd",
+  });
+
+  expect(result.reused.storageZone).toBe(true);
 });
 
 test("createSite refuses to re-provision an existing suffixed site", async () => {

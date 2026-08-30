@@ -12,6 +12,12 @@ import { logger } from "../../core/logger.ts";
 import { saveManifest } from "../../core/manifest.ts";
 import { confirm, isInteractive, prompts } from "../../core/ui.ts";
 import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
+import {
+  ZONE_TIER_CHOICES,
+  type ZoneTierChoice,
+  zoneTierChoice,
+  zoneTierLabel,
+} from "../storage/constants.ts";
 import { siteContextFromZone } from "./api.ts";
 import {
   gitTopLevel,
@@ -28,6 +34,7 @@ import { createSiteWithProgress, promptSiteName } from "./provision.ts";
 interface CreateArgs {
   name?: string;
   region?: string;
+  tier?: ZoneTierChoice;
   domain?: string;
   link?: boolean;
 }
@@ -76,6 +83,10 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       "Create and attach a custom domain",
     ],
     ["$0 sites create my-site --region NY", "Store files in New York"],
+    [
+      "$0 sites create my-site --tier ssd",
+      "Store files on the Edge (SSD) tier (always DE)",
+    ],
   ],
 
   builder: (yargs) =>
@@ -85,10 +96,16 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
         describe:
           "Site name; the storage zone, pull zone, and b-cdn.net subdomain become sites-<name>-xxxxxx (defaults to `sites.name` in bunny.jsonc, else prompted)",
       })
+      // No parser default: an omitted --region must stay undefined so resuming a half-created zone in another region isn't rejected as a mismatch.
       .option("region", {
         type: "string",
-        default: "DE",
-        describe: "Main storage region code (e.g. DE, NY, LA, SG)",
+        describe: "Main storage region code (e.g. DE, NY, LA, SG; default DE)",
+      })
+      .option("tier", {
+        type: "string",
+        choices: ZONE_TIER_CHOICES,
+        describe:
+          "Storage tier for the site's files: hdd (Standard) or ssd (Edge, always DE)",
       })
       .option("domain", {
         type: "string",
@@ -129,6 +146,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       computeClient,
       name,
       region: args.region,
+      tier: args.tier,
     });
 
     if (args.link !== false) {
@@ -159,6 +177,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
             pullZoneId: result.state.pullZoneId,
             scriptId: result.state.scriptId,
             hostname: result.systemHostname ?? null,
+            tier: zoneTierChoice(result.storageZone),
             domain: domain ?? null,
             linked: args.link !== false,
             ...(domainError ? { domainError } : {}),
@@ -177,6 +196,10 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
         [
           { key: "Site", value: name },
           { key: "Storage zone", value: String(result.state.storageZoneId) },
+          {
+            key: "Storage tier",
+            value: zoneTierLabel(result.storageZone, "long"),
+          },
           { key: "Pull zone", value: String(result.state.pullZoneId) },
           { key: "Router script", value: String(result.state.scriptId) },
           ...(result.systemHostname

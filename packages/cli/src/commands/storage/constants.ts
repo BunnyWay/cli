@@ -33,6 +33,10 @@ export function zoneTierValue(choice: ZoneTierChoice): 0 | 1 {
   return ZONE_TIERS[choice].value;
 }
 
+export function zoneTierChoice(zone: StorageZoneModel): ZoneTierChoice {
+  return zone.ZoneTier === ZONE_TIERS.ssd.value ? "ssd" : "hdd";
+}
+
 export function zoneTierLabel(
   zone: StorageZoneModel,
   form: "short" | "long" = "short",
