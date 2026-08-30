@@ -147,6 +147,38 @@ test("--force clears the conflict and re-uploads under the same id", () => {
   expect(target).toEqual({ deployId: "r42", skipUpload: false });
 });
 
+// An interrupted upload leaves a pending record; its prefix may hold only part of these bytes.
+test("a pending record never satisfies the no-op check", () => {
+  expect(
+    resolveDeployTarget({
+      deploys: [{ ...deploy("r42", "hash1", "custom"), pending: true }],
+      identity: identity("r42", "hash1", "custom"),
+      customId: "r42",
+      force: false,
+    }),
+  ).toEqual({ deployId: "r42", skipUpload: false });
+
+  // Content-addressed deploys re-upload rather than alias onto a half-written prefix.
+  expect(
+    resolveDeployTarget({
+      deploys: [{ ...deploy("aaaa1111", "hash1"), pending: true }],
+      identity: identity("bbbb2222", "hash1"),
+      force: false,
+    }),
+  ).toEqual({ deployId: "bbbb2222", skipUpload: false });
+});
+
+test("a pending record with different content still conflicts under its custom id", () => {
+  const stuck = { ...deploy("r42", "hash1", "custom"), pending: true };
+  const target = resolveDeployTarget({
+    deploys: [stuck],
+    identity: identity("r42", "hash2", "custom"),
+    customId: "r42",
+    force: false,
+  });
+  expect(target.conflict).toEqual({ record: stuck, reason: "content" });
+});
+
 test("a brand new custom id on an empty site just uploads", () => {
   expect(
     resolveDeployTarget({

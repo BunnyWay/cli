@@ -927,9 +927,10 @@ bunny sites deploy ./dist                             # deploy a directory and p
 bunny sites deploy --build                            # run `sites.build` from bunny.jsonc (else the detected build), then deploy
 bunny sites deploy --build "npm run build" --env API_URL=https://api.example.com
 bunny sites deploy ./dist --site my-site --force      # target a site explicitly; redeploy unchanged content
+bunny sites deploy ./catalog --deploy-id 20260827-1433-r42   # your own release ID instead of the git sha / content hash
 
 # Deploys: list, publish (roll back), prune
-bunny sites deployments list                          # ● Live / ○ Previous markers, created, source, files, size
+bunny sites deployments list                          # ● Live / ○ Previous / ⚠ Incomplete markers, created, source, files, size
 bunny sites deployments publish a1b2c3d4              # promote a past deploy (alias: promote)
 bunny sites deployments publish --previous            # instant rollback
 bunny sites deployments prune --keep 10               # delete old deploys (default keeps 5; never live/previous)
@@ -959,14 +960,15 @@ bunny sites delete my-site --keep-storage             # typed-name confirmation;
 
 Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) and a deploy needs no arguments: `bunny sites deploy --build`. `sites ci init` reads the same block, so the generated workflow builds and deploys exactly what the local command does; without it, the framework is detected from `package.json` deps, `Gemfile`, or a `hugo`/`python`/`zola` config file, with the lockfile picking the package manager. `sites create` offers to scaffold the workflow on GitHub repos.
 
-Every deploy publishes: the files land in an immutable `deploys/<id>/` directory and the router is pointed at it, so `deployments publish` rolls back to any earlier deploy by moving that pointer, with no files moving and nothing re-uploaded. Content is root-served, so client-side routing and absolute asset paths work as-is. Site state lives at `_bunny/site.json` inside the storage zone (the router blocks it with a 403); `.bunny/site.json` is only a local pointer, so a fresh clone can `sites link` and pick up where the last machine left off.
+Every deploy publishes: the files land in an immutable `deploys/<id>/` directory and the router is pointed at it, so `deployments publish` rolls back to any earlier deploy by moving that pointer, with no files moving and nothing re-uploaded. The ID is the git short-sha when the tree is clean, a content hash otherwise, or whatever `--deploy-id` supplies (letters, digits, `-`, `_`, `.`; 4-64 chars; case-sensitive) — a custom ID never aliases onto another deploy's content, and reusing one for different content is refused unless `--force` deliberately replaces it (files the new build no longer includes are removed). A deploy interrupted mid-upload is marked `⚠ Incomplete` in `deployments list`, can't be published, and is finished by re-running the deploy. Content is root-served, so client-side routing and absolute asset paths work as-is. Site state lives at `_bunny/site.json` inside the storage zone (the router blocks it with a 403); `.bunny/site.json` is only a local pointer, so a fresh clone can `sites link` and pick up where the last machine left off.
 
 | Flag                                   | Commands                                                   | Description                                                                                        |
 | -------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `--region`, `--domain`                 | `create`                                                   | Main storage region code (default `DE`); custom production domain to attach                        |
 | `--site`                               | `deploy`, `ci init`, `deployments publish`                 | Site name or storage zone ID (defaults to the linked site)                                         |
 | `--build [cmd]`, `--env`, `--env-file` | `deploy`                                                   | Build before deploying (bare flag uses the configured or detected build); build-time env overrides |
-| `--force`                              | `deploy`                                                   | Deploy even when the content is unchanged                                                          |
+| `--force`                              | `deploy`                                                   | Deploy even when the content is unchanged, or replace an existing `--deploy-id`'s content          |
+| `--deploy-id`                          | `deploy`                                                   | Identify the deploy yourself (release tag, catalog ID); case-sensitive, used exactly as given      |
 | `--previous`                           | `deployments publish`                                      | Publish the previous deploy (instant rollback)                                                     |
 | `--keep`                               | `deployments prune`                                        | Number of recent deploys to keep (default 5; live and previous are always kept)                    |
 | `--ssl`, `--wait`, `--force-ssl`       | `domains add`                                              | Issue SSL now; wait up to 10 minutes for DNS then issue it; `--no-force-ssl` keeps HTTP working    |

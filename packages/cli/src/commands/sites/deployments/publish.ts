@@ -97,6 +97,13 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
           : "Run `bunny sites deployments list` to see available deploys.",
       );
     }
+    // A pending record's upload never finished, so its files may be missing or mixed with an earlier deploy's.
+    if (deploy.pending) {
+      throw new UserError(
+        `Deploy ${targetId} never finished uploading and can't be published.`,
+        "Re-run `bunny sites deploy` for that content to complete it, or remove it with `bunny sites deployments delete`.",
+      );
+    }
 
     if (state.current === targetId) {
       if (output === "json") {
