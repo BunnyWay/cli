@@ -2,11 +2,19 @@ import type { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { mapWithConcurrency } from "../../core/concurrency.ts";
 import { ApiError, errorMessage, UserError } from "../../core/errors.ts";
-import { createPullZone, setForceSsl, systemHostname } from "../../core/hostnames/index.ts";
+import {
+  createPullZone,
+  setForceSsl,
+  systemHostname,
+} from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { fetchScripts } from "../scripts/api.ts";
 import { SCRIPT_TYPE_MIDDLEWARE } from "../scripts/constants.ts";
-import { type CoreClient, fetchStorageZone, type StorageZoneModel } from "../storage/api.ts";
+import {
+  type CoreClient,
+  fetchStorageZone,
+  type StorageZoneModel,
+} from "../storage/api.ts";
 import {
   type ZoneTierChoice,
   zoneTierChoice,
@@ -70,7 +78,10 @@ function isNotFoundError(err: unknown): boolean {
   return err instanceof Error && /not found/i.test(err.message);
 }
 
-async function downloadText(connection: StorageZone, path: string): Promise<string | null> {
+async function downloadText(
+  connection: StorageZone,
+  path: string,
+): Promise<string | null> {
   try {
     const { stream } = await siteFiles.download(connection, path);
     return await new Response(stream).text();
@@ -127,7 +138,9 @@ export async function writeRemoteState(
         // Our promote wins (it set CURRENT_DEPLOY last), and the concurrent writer's production deploy becomes the rollback target.
         state.current = opts.promotedTo;
         state.previous =
-          remote.current && remote.current !== opts.promotedTo ? remote.current : remote.previous;
+          remote.current && remote.current !== opts.promotedTo
+            ? remote.current
+            : remote.previous;
       } else {
         state.current = remote.current;
         state.previous = remote.previous;
@@ -144,7 +157,9 @@ export async function writeRemoteState(
   return sha256Hex(raw);
 }
 
-export async function siteContextFromZone(zone: StorageZoneModel): Promise<SiteContext | null> {
+export async function siteContextFromZone(
+  zone: StorageZoneModel,
+): Promise<SiteContext | null> {
   const connection = siteFiles.connect(zone);
   const remote = await readRemoteState(connection);
   if (!remote) return null;
@@ -160,7 +175,10 @@ interface PullZonePage {
 }
 
 // List pull zones, tolerating both response shapes: the plain array the spec documents, and the `{ Items, CurrentPage, HasMoreItems }` envelope the live API returns for some queries.
-async function fetchPullZones(client: CoreClient, search?: string): Promise<PullZone[]> {
+async function fetchPullZones(
+  client: CoreClient,
+  search?: string,
+): Promise<PullZone[]> {
   const all: PullZone[] = [];
   let page: number | undefined;
   while (true) {
@@ -221,7 +239,10 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
 }
 
 // Account storage zones whose name is `sites-{name}-{suffix}`, re-fetched by ID because search results may omit the zone password.
-async function findSiteStorageZones(client: CoreClient, name: string): Promise<StorageZoneModel[]> {
+async function findSiteStorageZones(
+  client: CoreClient,
+  name: string,
+): Promise<StorageZoneModel[]> {
   const { data } = await client.GET("/storagezone", {
     params: { query: { search: name } },
   });
@@ -251,7 +272,8 @@ function isNameTaken(err: unknown): boolean {
   if (!(err instanceof ApiError)) return false;
   if (err.status === 409) return true;
   return (
-    err.status === 400 && /already (exists|taken|in use)|not available|is taken/i.test(err.message)
+    err.status === 400 &&
+    /already (exists|taken|in use)|not available|is taken/i.test(err.message)
   );
 }
 
@@ -259,7 +281,8 @@ export interface CreateSiteOptions {
   coreClient: CoreClient;
   computeClient: ComputeClient;
   name: string;
-  region: string;
+  /** Explicitly requested region; a fresh zone falls back to DE, and a resumed zone must already be in it. */
+  region?: string;
   tier?: ZoneTierChoice;
   /** Progress callback; drives the spinner text. */
   onStep?: (message: string) => void;
@@ -273,7 +296,9 @@ export interface CreateSiteResult {
 }
 
 // Provision a site (storage zone -> router script -> pull zone + router -> state); each step looks up by name first so a half-finished create re-runs cleanly, and a zone already carrying state is never re-provisioned.
-export async function createSite(opts: CreateSiteOptions): Promise<CreateSiteResult> {
+export async function createSite(
+  opts: CreateSiteOptions,
+): Promise<CreateSiteResult> {
   const { coreClient, computeClient, name, region, tier } = opts;
   const step = opts.onStep ?? (() => {});
   const reused = { storageZone: false, script: false, pullZone: false };
@@ -300,6 +325,13 @@ export async function createSite(opts: CreateSiteOptions): Promise<CreateSiteRes
         `Storage tier can't be changed after a zone is created. Re-run with \`--tier ${zoneTierChoice(storageZone)}\` (or without \`--tier\`) to resume it, or delete storage zone "${storageZone.Name}" to start over.`,
       );
     }
+    // The primary region is fixed at creation too; only an explicit --region mismatch is an error, so a flagless retry resumes the zone where it is.
+    if (region && storageZone.Region && storageZone.Region !== region) {
+      throw new UserError(
+        `A half-finished site zone for "${name}" is in the ${storageZone.Region} region, but \`--region ${region}\` was requested.`,
+        `Storage region can't be changed after a zone is created. Re-run with \`--region ${storageZone.Region}\` (or without \`--region\`) to resume it, or delete storage zone "${storageZone.Name}" to start over.`,
+      );
+    }
     reused.storageZone = true;
   } else {
     // The suffix keeps the globally-unique name from colliding with other accounts; retry fresh suffixes on the off chance one still does.
@@ -309,7 +341,7 @@ export async function createSite(opts: CreateSiteOptions): Promise<CreateSiteRes
         const { data } = await coreClient.POST("/storagezone", {
           body: {
             Name: zoneName,
-            Region: region,
+            Region: region ?? "DE",
             ReplicationRegions: null,
             ZoneTier: tier ? zoneTierValue(tier) : undefined,
           },
@@ -340,7 +372,9 @@ export async function createSite(opts: CreateSiteOptions): Promise<CreateSiteRes
   step("Creating router script...");
   const resourceName = storageZone.Name ?? name;
   const scriptName = routerScriptName(resourceName);
-  let scriptId = (await fetchScripts(computeClient)).find((s) => s.Name === scriptName)?.Id;
+  let scriptId = (await fetchScripts(computeClient)).find(
+    (s) => s.Name === scriptName,
+  )?.Id;
   if (scriptId != null) {
     reused.script = true;
   } else {
@@ -382,9 +416,14 @@ export async function createSite(opts: CreateSiteOptions): Promise<CreateSiteRes
     for (let attempt = 0; !pullZone && attempt < 3; attempt++) {
       try {
         // Router attached at creation time: an unrouted zone is already public and would serve the raw storage origin.
-        pullZone = await createPullZone(coreClient, pullZoneName, storageZoneId, {
-          middlewareScriptId: scriptId,
-        });
+        pullZone = await createPullZone(
+          coreClient,
+          pullZoneName,
+          storageZoneId,
+          {
+            middlewareScriptId: scriptId,
+          },
+        );
       } catch (err) {
         if (!isNameTaken(err)) throw err;
         pullZoneName = suffixedResourceName(name);
@@ -411,7 +450,9 @@ export async function createSite(opts: CreateSiteOptions): Promise<CreateSiteRes
     try {
       await setForceSsl(coreClient, pullZone.Id, systemHost, true);
     } catch (err) {
-      logger.warn(`Couldn't force HTTPS on ${systemHost}: ${errorMessage(err)}`);
+      logger.warn(
+        `Couldn't force HTTPS on ${systemHost}: ${errorMessage(err)}`,
+      );
     }
   }
 
@@ -487,7 +528,8 @@ export const promoteVerification = {
     });
     return res.status;
   },
-  wait: (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms)),
+  wait: (ms: number): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
 };
 
 // Wait until the edge serves a real deploy: the router's "no deploys yet" 404 means CURRENT_DEPLOY is unset/unpropagated, so any non-404 means it landed; best-effort (skip probing when the host can't be resolved).
@@ -607,6 +649,9 @@ export async function deleteSiteResources(opts: {
   return results;
 }
 
-export async function deleteDeployFiles(connection: StorageZone, deployId: string): Promise<void> {
+export async function deleteDeployFiles(
+  connection: StorageZone,
+  deployId: string,
+): Promise<void> {
   await siteFiles.remove(connection, `${deployPrefix(deployId)}/`);
 }

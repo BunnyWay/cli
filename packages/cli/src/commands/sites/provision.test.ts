@@ -39,14 +39,14 @@ test("suggestSiteName returns a slug or undefined, never an invalid name", () =>
   }
 });
 
-test("resolveSiteRegion uppercases and defaults to DE", () => {
-  expect(resolveSiteRegion(undefined)).toBe("DE");
+test("resolveSiteRegion uppercases an explicit region and passes through none", () => {
+  expect(resolveSiteRegion(undefined)).toBeUndefined();
   expect(resolveSiteRegion("ny")).toBe("NY");
   expect(resolveSiteRegion("ny", "hdd")).toBe("NY");
 });
 
 test("resolveSiteRegion pins the Edge (SSD) tier to DE", () => {
-  expect(resolveSiteRegion(undefined, "ssd")).toBe("DE");
+  expect(resolveSiteRegion(undefined, "ssd")).toBeUndefined();
   expect(resolveSiteRegion("de", "ssd")).toBe("DE");
   expect(() => resolveSiteRegion("NY", "ssd")).toThrow(
     "only available with DE",

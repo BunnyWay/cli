@@ -65,19 +65,20 @@ export async function promptSiteName(
 }
 
 // Edge (SSD) storage only exists in one region, and the API rewrites the region silently, so a conflicting `--region` is rejected instead.
+// Normalizes an explicit region only; without one, createSite picks the default for a fresh zone and a resumed zone keeps its own.
 export function resolveSiteRegion(
   region: string | undefined,
   tier?: ZoneTierChoice,
-): string {
-  const main = (region ?? "DE").toUpperCase();
-  if (tier !== "ssd") return main;
-  if (main !== SSD_PRIMARY_REGION) {
+): string | undefined {
+  if (!region) return undefined;
+  const main = region.toUpperCase();
+  if (tier === "ssd" && main !== SSD_PRIMARY_REGION) {
     throw new UserError(
       `The Edge (SSD) tier is only available with ${SSD_PRIMARY_REGION} as the storage region, but --region ${region} was given.`,
       `Drop --region to use ${SSD_PRIMARY_REGION}, or pass --tier hdd to keep ${main}.`,
     );
   }
-  return SSD_PRIMARY_REGION;
+  return main;
 }
 
 /** Run {@link createSite} under a spinner whose text tracks each provisioning step. */
