@@ -70,8 +70,15 @@ export interface DeployTarget {
    * `case`: an ID differing only in case exists. Not forceable, because two
    * deploys whose paths differ only by case are indistinguishable to anything
    * that folds case, and the loser's files would back the winner's rollback.
+   * `live`/`rollback`: the ID holds different bytes AND is the production
+   * deploy or the rollback target. Not forceable, because replacing it means
+   * rewriting the very prefix the router serves (or would roll back to)
+   * file-by-file, and a failure mid-replace strands it on a mix of both.
    */
-  conflict?: { record: DeployRecord; reason: "content" | "case" };
+  conflict?: {
+    record: DeployRecord;
+    reason: "content" | "case" | "live" | "rollback";
+  };
 }
 
 /**
@@ -89,8 +96,11 @@ export function resolveDeployTarget(opts: {
   identity: DeployIdentity;
   customId?: string;
   force: boolean;
+  /** The production deploy and the rollback target; their content is never replaced in place. */
+  current?: string;
+  previous?: string;
 }): DeployTarget {
-  const { deploys, identity, customId, force } = opts;
+  const { deploys, identity, customId, force, current, previous } = opts;
 
   const alreadyUploaded = force
     ? undefined
@@ -107,7 +117,7 @@ export function resolveDeployTarget(opts: {
   const skipUpload = alreadyUploaded !== undefined;
 
   if (customId && !skipUpload) {
-    const { deploy: exact, caseVariant } = findDeploy(deploys, customId);
+    const { caseVariant } = findDeploy(deploys, customId);
     if (caseVariant) {
       return {
         deployId,
@@ -115,12 +125,29 @@ export function resolveDeployTarget(opts: {
         conflict: { record: caseVariant, reason: "case" },
       };
     }
-    if (exact && exact.contentHash !== identity.contentHash && !force) {
-      return {
-        deployId,
-        skipUpload,
-        conflict: { record: exact, reason: "content" },
-      };
+  }
+
+  if (!skipUpload) {
+    const existing = deploys.find((d) => d.id === deployId);
+    if (existing && existing.contentHash !== identity.contentHash) {
+      // Replacing the deploy production serves (or would roll back to) rewrites its prefix while the router reads it, so it is refused outright — before the forceable content conflict, which would otherwise send the caller down a --force dead end. A same-bytes re-upload stays fine: every write is byte-identical.
+      if (deployId === current || deployId === previous) {
+        return {
+          deployId,
+          skipUpload,
+          conflict: {
+            record: existing,
+            reason: deployId === current ? "live" : "rollback",
+          },
+        };
+      }
+      if (customId && !force) {
+        return {
+          deployId,
+          skipUpload,
+          conflict: { record: existing, reason: "content" },
+        };
+      }
     }
   }
   return { deployId, skipUpload };
@@ -329,8 +356,23 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       identity,
       customId,
       force: args.force ?? false,
+      current: state.current,
+      previous: state.previous,
     });
 
+    if (
+      target.conflict?.reason === "live" ||
+      target.conflict?.reason === "rollback"
+    ) {
+      const role =
+        target.conflict.reason === "live"
+          ? "the live production deploy"
+          : "the rollback target";
+      throw new UserError(
+        `Deploy ${target.deployId} is ${role} for ${state.name}, and this content differs from what it holds.`,
+        "Replacing it in place would rewrite files while the router serves them. Deploy under a new --deploy-id, or publish another deploy first and re-run.",
+      );
+    }
     if (target.conflict?.reason === "case") {
       throw new UserError(
         `Deploy ${target.conflict.record.id} already exists for ${state.name}, differing from "${customId}" only in case.`,

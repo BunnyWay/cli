@@ -179,6 +179,51 @@ test("a pending record with different content still conflicts under its custom i
   expect(target.conflict).toEqual({ record: stuck, reason: "content" });
 });
 
+// Replacing the deploy production serves (or the rollback target) rewrites its prefix while the router reads it, so it is never forceable.
+test("replacing the live or rollback deploy's content is refused, even with --force", () => {
+  const live = deploy("r42", "hash1", "custom");
+  for (const pointers of [{ current: "r42" }, { previous: "r42" }]) {
+    for (const force of [false, true]) {
+      const target = resolveDeployTarget({
+        deploys: [live],
+        identity: identity("r42", "hash2", "custom"),
+        customId: "r42",
+        force,
+        ...pointers,
+      });
+      expect(target.conflict).toEqual({
+        record: live,
+        reason: "current" in pointers ? "live" : "rollback",
+      });
+    }
+  }
+});
+
+// Same git sha over different bytes lands on the same ID without a custom flag; the live guard must cover it too.
+test("a non-custom deploy replacing the live deploy's content is refused", () => {
+  const live = deploy("aaaa1111", "hash1", "git");
+  const target = resolveDeployTarget({
+    deploys: [live],
+    identity: identity("aaaa1111", "hash2", "git"),
+    force: false,
+    current: "aaaa1111",
+  });
+  expect(target.conflict).toEqual({ record: live, reason: "live" });
+});
+
+// --force's "redeploy unchanged content" path: every write is byte-identical, so in-place is safe.
+test("a forced same-content redeploy of the live deploy is allowed", () => {
+  expect(
+    resolveDeployTarget({
+      deploys: [deploy("r42", "hash1", "custom")],
+      identity: identity("r42", "hash1", "custom"),
+      customId: "r42",
+      force: true,
+      current: "r42",
+    }),
+  ).toEqual({ deployId: "r42", skipUpload: false });
+});
+
 test("a brand new custom id on an empty site just uploads", () => {
   expect(
     resolveDeployTarget({
