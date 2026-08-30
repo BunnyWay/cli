@@ -380,12 +380,6 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       );
     }
     if (target.conflict?.reason === "content") {
-      if (target.conflict.record.pending) {
-        throw new UserError(
-          `An earlier deploy of ${customId} to ${state.name} never finished, and this content differs from what it was uploading.`,
-          "Its files can't be trusted either way. Pass --force to replace it with this content, or delete it with `bunny sites deployments delete`.",
-        );
-      }
       throw new UserError(
         `Deploy ${customId} already exists for ${state.name} with different content.`,
         "Rolling back to that ID would serve these new files instead of the originals. Pick another ID, or pass --force to replace it.",
