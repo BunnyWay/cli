@@ -59,6 +59,7 @@ Content is root-served, so client-side routers (TanStack Router, React Router, V
 bunny sites create                         # uses `sites.name` from bunny.jsonc, else prompts (directory-name suggestion), then a custom domain
 bunny sites create my-site
 bunny sites create my-site --region NY
+bunny sites create my-site --tier ssd       # Edge (SSD) storage, always DE
 bunny sites create my-site --domain example.com
 bunny sites create my-site --no-link       # don't write .bunny/site.json
 ```
@@ -66,6 +67,7 @@ bunny sites create my-site --no-link       # don't write .bunny/site.json
 | Flag       | Description                                                                                        |
 | ---------- | -------------------------------------------------------------------------------------------------- |
 | `--region` | Main storage region code (default `DE`)                                                            |
+| `--tier`   | Storage tier: `hdd` (Standard) or `ssd` (Edge, always `DE`); create-time only                      |
 | `--domain` | Attach a custom production domain after provisioning; interactive runs prompt for one when omitted |
 | `--link`   | Link this directory (default true; `--no-link` to skip)                                            |
 

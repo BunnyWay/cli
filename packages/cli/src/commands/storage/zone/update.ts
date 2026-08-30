@@ -12,6 +12,7 @@ import {
   normalizeReplicationRegions,
   type RegionScope,
   replicationChoices,
+  zoneTierChoice,
 } from "../constants.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 import { isS3Enabled } from "../s3.ts";
@@ -36,7 +37,7 @@ function hasAnyFlag(args: ZoneUpdateArgs): boolean {
 }
 
 function zoneScope(zone: StorageZoneModel): RegionScope {
-  return { tier: zone.ZoneTier === 1 ? "ssd" : "hdd", s3: isS3Enabled(zone) };
+  return { tier: zoneTierChoice(zone), s3: isS3Enabled(zone) };
 }
 
 function settingsFromFlags(
