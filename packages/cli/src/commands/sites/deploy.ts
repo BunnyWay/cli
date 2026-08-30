@@ -12,8 +12,15 @@ import { errorMessage, UserError } from "../../core/errors.ts";
 import { formatBytes } from "../../core/format.ts";
 import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
-import { confirm, isInteractive, prompts, withSpinner } from "../../core/ui.ts";
 import {
+  confirm,
+  isInteractive,
+  prompts,
+  requireConfirmable,
+  withSpinner,
+} from "../../core/ui.ts";
+import {
+  deleteDeployFiles,
   ensureRouterCurrent,
   fetchSystemHostname,
   promoteDeploy,
@@ -42,12 +49,7 @@ import {
   siteOptionBuilder,
 } from "./interactive.ts";
 import { createLinkedSite, promptSiteName } from "./provision.ts";
-import {
-  collectFiles,
-  hashFiles,
-  pruneDeployOrphans,
-  uploadDeploy,
-} from "./uploader.ts";
+import { collectFiles, hashFiles, uploadDeploy } from "./uploader.ts";
 
 interface DeployArgs extends SiteSelectorArgs {
   dir?: string;
@@ -66,14 +68,15 @@ export interface DeployTarget {
   /**
    * An existing deploy that blocks this one.
    *
-   * `content`: the same ID already holds different bytes; --force replaces it.
-   * `case`: an ID differing only in case exists. Not forceable, because two
+   * `content`: the same ID already holds different bytes; the handler asks
+   * before replacing them (--force answers yes).
+   * `case`: an ID differing only in case exists. Never replaceable, because two
    * deploys whose paths differ only by case are indistinguishable to anything
    * that folds case, and the loser's files would back the winner's rollback.
    * `live`/`rollback`: the ID holds different bytes AND is the production
-   * deploy or the rollback target. Not forceable, because replacing it means
-   * rewriting the very prefix the router serves (or would roll back to)
-   * file-by-file, and a failure mid-replace strands it on a mix of both.
+   * deploy or the rollback target. Never replaceable, because a replacement
+   * empties and rewrites the very prefix the router serves (or would roll
+   * back to).
    */
   conflict?: {
     record: DeployRecord;
@@ -104,13 +107,10 @@ export function resolveDeployTarget(opts: {
 
   const alreadyUploaded = force
     ? undefined
-    : deploys.find(
-        (d) =>
-          // A pending record marks an interrupted (or in-flight) write; its prefix can't be trusted to hold these bytes, so re-upload instead of skipping.
-          !d.pending &&
-          (customId
-            ? d.id === customId && d.contentHash === identity.contentHash
-            : d.contentHash === identity.contentHash),
+    : deploys.find((d) =>
+        customId
+          ? d.id === customId && d.contentHash === identity.contentHash
+          : d.contentHash === identity.contentHash,
       );
   // A skipped deploy reuses the already-uploaded deploy's id; that's where its files live.
   const deployId = alreadyUploaded?.id ?? identity.id;
@@ -130,7 +130,7 @@ export function resolveDeployTarget(opts: {
   if (!skipUpload) {
     const existing = deploys.find((d) => d.id === deployId);
     if (existing && existing.contentHash !== identity.contentHash) {
-      // Replacing the deploy production serves (or would roll back to) rewrites its prefix while the router reads it, so it is refused outright — before the forceable content conflict, which would otherwise send the caller down a --force dead end. A same-bytes re-upload stays fine: every write is byte-identical.
+      // Replacing the deploy production serves (or would roll back to) rewrites its prefix while the router reads it, so it is refused outright — checked before the confirmable content conflict, which would otherwise send the caller down a dead end. A same-bytes re-upload stays fine: every write is byte-identical.
       if (deployId === current || deployId === previous) {
         return {
           deployId,
@@ -141,7 +141,7 @@ export function resolveDeployTarget(opts: {
           },
         };
       }
-      if (customId && !force) {
+      if (customId) {
         return {
           deployId,
           skipUpload,
@@ -224,7 +224,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           type: "boolean",
           default: false,
           describe:
-            "Deploy even when the content is unchanged, or replace an existing --deploy-id's content",
+            "Deploy even when the content is unchanged, and replace an existing --deploy-id's content without asking",
         })
         .option("deploy-id", {
           type: "string",
@@ -380,18 +380,24 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       );
     }
     if (target.conflict?.reason === "content") {
-      throw new UserError(
-        `Deploy ${customId} already exists for ${state.name} with different content.`,
-        "Rolling back to that ID would serve these new files instead of the originals. Pick another ID, or pass --force to replace it.",
+      // Rolling back to the ID would serve the new files instead of the originals, so replacing is opt-in.
+      requireConfirmable(output, {
+        force: args.force,
+        message: `Deploy ${customId} already exists for ${state.name} with different content; replacing it needs a confirmation prompt.`,
+        hint: "Pick another ID, or re-run with --force to replace it non-interactively.",
+      });
+      const proceed = await confirm(
+        `Deploy ${customId} already exists for ${state.name} with different content. Replace it?`,
+        { force: args.force },
       );
+      if (!proceed) {
+        logger.log("Cancelled.");
+        return;
+      }
     }
 
     const { deployId, skipUpload } = target;
     const alreadyLive = state.current === deployId;
-    // Re-uploading onto an existing ID (--force, or a rebuilt artifact under the same git sha)
-    // leaves any file the new build dropped behind in the prefix, still reachable via the router.
-    const replacing =
-      !skipUpload && state.deploys.some((d) => d.id === deployId);
 
     // The production URL prefers the custom domain; only fetch the system host when there is none.
     const systemHost = state.domain
@@ -430,7 +436,28 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
 
     if (!skipUpload) {
-      // The deploy record. A re-deployed ID keeps its slot but gets fresh metadata; the purge on promote drops the old bytes from cache.
+      // Unless these exact bytes are already recorded under the ID, the upload starts from an empty prefix: emptying first is what keeps a replaced deploy free of files the new content dropped, and also clears half-written leftovers from an interrupted earlier run.
+      const existing = state.deploys.find((d) => d.id === deployId);
+      if (existing && existing.contentHash !== identity.contentHash) {
+        // Drop the record before deleting its files, so no record ever vouches for a prefix mid-rewrite (a concurrent publish re-reads state and refuses an ID without one), and a crashed replacement re-runs as a fresh upload.
+        state.deploys = state.deploys.filter((d) => d.id !== deployId);
+        etag = await writeRemoteState(connection, state, etag, {
+          removedIds: [deployId],
+        });
+      }
+      if (existing?.contentHash !== identity.contentHash) {
+        await deleteDeployFiles(connection, deployId);
+      }
+
+      await withSpinner(`Uploading ${files.length} files...`, (spin) =>
+        uploadDeploy(connection, deployId, files, {
+          onFileUploaded: (done, total) => {
+            spin.text = `Uploading ${done}/${total} files (${formatBytes(totalBytes)} total)...`;
+          },
+        }),
+      );
+
+      // Record the deploy. A re-deployed ID keeps its slot but gets fresh metadata; the purge on promote drops the old bytes from cache.
       const record: DeployRecord = {
         id: deployId,
         createdAt: new Date().toISOString(),
@@ -441,49 +468,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         files: files.length,
         bytes: totalBytes,
       };
-
-      // Claim the ID in state before touching any object, and finalize only once every file landed: an interrupted or raced write leaves a record that says the prefix can't be trusted, never one vouching for bytes that aren't all there. The claim write also surfaces a concurrent deploy of the same ID (via `claimedId`) before this one starts scribbling over its files.
-      state.deploys = [
-        { ...record, pending: true },
-        ...state.deploys.filter((d) => d.id !== deployId),
-      ];
-      etag = await writeRemoteState(connection, state, etag, {
-        claimedId: deployId,
-      });
-
-      try {
-        await withSpinner(`Uploading ${files.length} files...`, (spin) =>
-          uploadDeploy(connection, deployId, files, {
-            onFileUploaded: (done, total) => {
-              spin.text = `Uploading ${done}/${total} files (${formatBytes(totalBytes)} total)...`;
-            },
-          }),
-        );
-
-        if (replacing) {
-          const orphans = await withSpinner("Removing replaced files...", () =>
-            pruneDeployOrphans(connection, deployId, files),
-          );
-          if (orphans.length > 0 && output !== "json") {
-            logger.dim(
-              `Removed ${orphans.length} file(s) the new build no longer includes.`,
-            );
-          }
-        }
-      } catch (err) {
-        logger.warn(
-          `Deploy ${deployId} is marked incomplete; re-run the deploy to finish it.`,
-        );
-        throw err;
-      }
-
       state.deploys = [
         record,
         ...state.deploys.filter((d) => d.id !== deployId),
       ];
-      etag = await writeRemoteState(connection, state, etag, {
-        claimedId: deployId,
-      });
+      etag = await writeRemoteState(connection, state, etag);
     }
 
     await withSpinner("Publishing to production...", async () => {
@@ -496,7 +485,6 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       markCurrent(state, deployId);
       etag = await writeRemoteState(connection, state, etag, {
         promotedTo: deployId,
-        claimedId: deployId,
       });
     });
 

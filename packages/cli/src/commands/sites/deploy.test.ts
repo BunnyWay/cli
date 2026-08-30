@@ -107,15 +107,18 @@ test("a custom id is used exactly as given and never aliases onto another deploy
   ).toEqual({ deployId: "Release-42", skipUpload: true });
 });
 
+// The handler resolves a content conflict by asking (--force answers yes), so it is reported regardless of force.
 test("reusing a custom id for different content conflicts instead of overwriting", () => {
   const existing = deploy("r42", "hash1", "custom");
-  const target = resolveDeployTarget({
-    deploys: [existing],
-    identity: identity("r42", "hash2", "custom"),
-    customId: "r42",
-    force: false,
-  });
-  expect(target.conflict).toEqual({ record: existing, reason: "content" });
+  for (const force of [false, true]) {
+    const target = resolveDeployTarget({
+      deploys: [existing],
+      identity: identity("r42", "hash2", "custom"),
+      customId: "r42",
+      force,
+    });
+    expect(target.conflict).toEqual({ record: existing, reason: "content" });
+  }
 });
 
 // Two deploys whose storage paths differ only by case are indistinguishable to anything that folds case,
@@ -135,28 +138,6 @@ test("an id differing only in case is refused, with or without --force", () => {
   expect(resolveDeployTarget({ ...args, force: true }).conflict).toEqual(
     conflict,
   );
-});
-
-test("--force clears the conflict and re-uploads under the same id", () => {
-  const target = resolveDeployTarget({
-    deploys: [deploy("r42", "hash1", "custom")],
-    identity: identity("r42", "hash2", "custom"),
-    customId: "r42",
-    force: true,
-  });
-  expect(target).toEqual({ deployId: "r42", skipUpload: false });
-});
-
-// An interrupted upload leaves a pending record; its prefix may hold only part of these bytes, so re-upload rather than no-op onto it.
-test("a pending record never satisfies the no-op check", () => {
-  expect(
-    resolveDeployTarget({
-      deploys: [{ ...deploy("r42", "hash1", "custom"), pending: true }],
-      identity: identity("r42", "hash1", "custom"),
-      customId: "r42",
-      force: false,
-    }),
-  ).toEqual({ deployId: "r42", skipUpload: false });
 });
 
 // Replacing the deploy production serves (or the rollback target) rewrites its prefix while the router reads it, so it is never forceable — custom ID or not.

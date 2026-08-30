@@ -98,14 +98,6 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
           : "Run `bunny sites deployments list` to see available deploys.",
       );
     }
-    // A pending record's upload never finished, so its files may be missing or mixed with an earlier deploy's.
-    if (deploy.pending) {
-      throw new UserError(
-        `Deploy ${targetId} never finished uploading and can't be published.`,
-        "Re-run `bunny sites deploy` for that content to complete it, or remove it with `bunny sites deployments delete`.",
-      );
-    }
-
     if (state.current === targetId) {
       if (output === "json") {
         logger.log(
@@ -141,7 +133,7 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
     }
 
     await withSpinner("Publishing...", async () => {
-      // Revalidate on fresh state right before promoting: the confirmation window is long enough for a concurrent deploy to have claimed this ID and started rewriting its files.
+      // Revalidate on fresh state right before promoting: the confirmation window is long enough for a concurrent replace to have dropped this deploy's record and started rewriting its files.
       const fresh = await readRemoteState(connection);
       if (!fresh) {
         throw new UserError(
@@ -150,10 +142,9 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
         );
       }
       const { state: latest, etag: latestEtag } = fresh;
-      const record = latest.deploys.find((d) => d.id === targetId);
-      if (!record || record.pending) {
+      if (!latest.deploys.some((d) => d.id === targetId)) {
         throw new UserError(
-          `Deploy ${targetId} ${record ? "is being rewritten by a concurrent deploy" : `is gone from ${latest.name}`} and can't be published.`,
+          `Deploy ${targetId} is gone from ${latest.name} (a concurrent replace or delete?) and can't be published.`,
           "Run `bunny sites deployments list` and retry.",
         );
       }
