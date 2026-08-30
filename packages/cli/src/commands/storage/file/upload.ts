@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises";
 import { basename } from "node:path";
 import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
@@ -5,7 +6,7 @@ import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
+import { isInteractive, prompts, spinner } from "../../../core/ui.ts";
 import { connectStorageZone, uploadFile } from "../files-api.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
 
@@ -17,11 +18,44 @@ interface UploadArgs {
   checksum?: boolean;
 }
 
+/**
+ * The remote path to upload to, or undefined when the prompt was cancelled.
+ *
+ * A blank answer means the zone root, so cancelling has to be distinguished from it:
+ * treating both as "no destination" would upload to the root on Ctrl-C.
+ */
+export async function uploadDestination(
+  file: string,
+  to: string | undefined,
+  interactive: boolean,
+): Promise<string | undefined> {
+  let destination = to;
+  if (destination === undefined && interactive) {
+    const { value } = await prompts({
+      type: "text",
+      name: "value",
+      message: "Upload to (blank for the zone root):",
+      initial: "",
+    });
+    if (value === undefined) return undefined;
+    destination = value as string;
+  }
+
+  // A bare path uses the file as-is; a trailing slash means "into this directory".
+  return !destination || destination.endsWith("/")
+    ? `${destination ?? ""}${basename(file)}`
+    : destination;
+}
+
 export const storageFileUploadCommand = defineCommand<UploadArgs>({
   command: "upload <file>",
   describe: "Upload a local file to a storage zone.",
   examples: [
     ["$0 storage files upload ./photo.png", "Upload to the linked zone's root"],
+    [
+      "$0 storage files upload ./photo.png --to images/photo.png",
+      "Upload under a different name",
+    ],
     [
       "$0 storage files upload ./photo.png --to images/",
       "Upload into a directory",
@@ -47,7 +81,7 @@ export const storageFileUploadCommand = defineCommand<UploadArgs>({
       .option("to", {
         type: "string",
         describe:
-          "Remote path; a trailing slash uploads into that directory under the file's name",
+          "Remote path; a trailing slash uploads into that directory under the file's name (prompts if omitted)",
       })
       .option("content-type", {
         type: "string",
@@ -72,12 +106,18 @@ export const storageFileUploadCommand = defineCommand<UploadArgs>({
   }) => {
     const source = Bun.file(file);
     if (!(await source.exists())) {
+      // Bun.file reports a directory as missing, which reads as the wrong problem.
+      const isDirectory = await stat(file)
+        .then((entry) => entry.isDirectory())
+        .catch(() => false);
+      if (isDirectory) {
+        throw new UserError(
+          `${file} is a directory, and upload takes a single file.`,
+          "Upload each file in turn, or use `bunny sites deploy` to publish a built directory.",
+        );
+      }
       throw new UserError(`File not found: ${file}`);
     }
-
-    // A bare path uses the file as-is; a trailing slash means "into this directory".
-    const remotePath =
-      !to || to.endsWith("/") ? `${to ?? ""}${basename(file)}` : to;
 
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
@@ -87,6 +127,12 @@ export const storageFileUploadCommand = defineCommand<UploadArgs>({
       offerLink: true,
     });
     const connection = connectStorageZone(zone);
+
+    const remotePath = await uploadDestination(file, to, isInteractive(output));
+    if (remotePath === undefined) {
+      logger.log("Cancelled.");
+      return;
+    }
 
     const spin = spinner(`Uploading ${remotePath}...`);
     spin.start();

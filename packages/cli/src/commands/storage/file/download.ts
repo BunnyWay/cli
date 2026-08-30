@@ -4,21 +4,24 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
+import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
+import { isInteractive, spinner } from "../../../core/ui.ts";
 import { connectStorageZone, downloadFile } from "../files-api.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
+import { promptStoragePath } from "./pick.ts";
 
 interface DownloadArgs {
-  path: string;
+  path?: string;
   zone?: string;
   out?: string;
 }
 
 export const storageFileDownloadCommand = defineCommand<DownloadArgs>({
-  command: "download <path>",
+  command: "download [path]",
   describe: "Download a file from a storage zone.",
   examples: [
+    ["$0 storage files download", "Browse the zone and pick a file"],
     [
       "$0 storage files download images/photo.png",
       "Download from the linked zone to the working directory",
@@ -37,8 +40,7 @@ export const storageFileDownloadCommand = defineCommand<DownloadArgs>({
     yargs
       .positional("path", {
         type: "string",
-        describe: "Path to the file within the zone",
-        demandOption: true,
+        describe: "Path to the file within the zone (prompts if omitted)",
       })
       .option("zone", {
         alias: "z",
@@ -51,7 +53,7 @@ export const storageFileDownloadCommand = defineCommand<DownloadArgs>({
       }),
 
   handler: async ({
-    path,
+    path: pathArg,
     zone: ref,
     out,
     profile,
@@ -67,6 +69,24 @@ export const storageFileDownloadCommand = defineCommand<DownloadArgs>({
       offerLink: true,
     });
     const connection = connectStorageZone(zone);
+
+    const path =
+      pathArg ??
+      (isInteractive(output)
+        ? await promptStoragePath(connection, {
+            message: "Pick a file to download",
+          })
+        : undefined);
+    if (!path) {
+      if (pathArg === undefined && !isInteractive(output))
+        throw new UserError(
+          "No file given.",
+          "Pass a path, or run interactively to browse the zone.",
+        );
+      logger.log("Cancelled.");
+      return;
+    }
+
     const dest = out ?? basename(path);
 
     const spin = spinner(`Downloading ${path}...`);
