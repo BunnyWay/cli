@@ -1,6 +1,6 @@
 # Static Sites Commands
 
-All site commands live under `bunny sites`. A site is one storage zone (files) + one pull zone (CDN) + one middleware router script, provisioned together by `sites create`. Deploys are immutable directories; promoting or rolling back flips a router env var and purges the cache; no files move, so it's instant.
+All site commands live under `bunny sites`. A site is one storage zone (files) + one pull zone (CDN) with edge rules routing requests to the published deploy, provisioned together by `sites create`. Deploys are immutable directories; promoting or rolling back retargets an edge rule and purges the cache; no files move, so it's instant.
 
 Most commands accept an optional site (a trailing `[site]` positional, or the `--site` flag on commands whose positionals are taken, like `deploy`). When omitted, the site resolves in this order:
 
@@ -9,7 +9,7 @@ Most commands accept an optional site (a trailing `[site]` positional, or the `-
 3. `sites.name` in `bunny.jsonc`
 4. Interactive prompt (suppressed in `--output json` mode, and on destructive commands run with `--force`; pass a site or link the directory in CI)
 
-Commands that can link the directory (`deploy`, `show`, `deployments list/publish`, `upgrade-router`, `ci init`) take `--link`/`--no-link`: the picker prompts unless the flag decided it, and an explicit `--link` also links a site resolved from a ref or from `bunny.jsonc`, including under `--output json`. The other site commands never write the manifest and don't take the flag.
+Commands that can link the directory (`deploy`, `show`, `deployments list/publish`, `ci init`) take `--link`/`--no-link`: the picker prompts unless the flag decided it, and an explicit `--link` also links a site resolved from a ref or from `bunny.jsonc`, including under `--output json`. The other site commands never write the manifest and don't take the flag.
 
 ## Typical workflows
 
@@ -36,7 +36,7 @@ bunny sites domains add example.com --wait # production vanity hostname + SSL
 This is the rule that shapes every other command here:
 
 - Every `deploy` becomes the live site. There is no separate preview URL and no unpublished deploy.
-- Deploys stay immutable under their own ID, so `deployments publish <id>` rolls back to any earlier one by flipping the router's pointer; no files move and nothing is re-uploaded.
+- Deploys stay immutable under their own ID, so `deployments publish <id>` rolls back to any earlier one by retargeting the edge rule; no files move and nothing is re-uploaded.
 - Custom domains are vanity hostnames on the site's pull zone; without one the site serves at `https://sites-<name>-<suffix>.b-cdn.net`.
 
 Content is root-served, so client-side routers (TanStack Router, React Router, Vue Router in history mode) and root-absolute assets work as-is. Deploys are not individually addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served. To review a change before it goes live, build and serve it locally, or deploy it to a separate site.
@@ -149,7 +149,6 @@ bunny sites open                            # open the live URL in the browser (
 bunny sites ssl --no-force-ssl              # toggle Force HTTPS on the site's b-cdn.net system host
 bunny sites link my-site                    # .bunny/site.json
 bunny sites unlink
-bunny sites upgrade-router                  # republish the router with the CLI's current source
 bunny sites delete my-site                  # typed-name confirmation; --keep-storage keeps files
 ```
 
