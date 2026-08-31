@@ -20,6 +20,7 @@ import {
   deleteDeployFiles,
   fetchSystemHostname,
   promoteDeploy,
+  readRemoteState,
   requireRulesSite,
   writeRemoteState,
 } from "./api.ts";
@@ -38,6 +39,7 @@ import {
   type RemoteSiteState,
 } from "./constants.ts";
 import { type DeployIdentity, resolveDeployIdentity } from "./deploy-id.ts";
+import { deleteBlocker } from "./deployments/delete.ts";
 import { setupSiteDomain } from "./domains/index.ts";
 import {
   type SiteSelectorArgs,
@@ -324,7 +326,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
 
     const customId = args["deploy-id"]?.trim();
-    if (customId) {
+    // An explicitly supplied empty ID (e.g. --deploy-id "$UNSET_VAR" in CI) must error, not silently fall back to the derived ID.
+    if (customId !== undefined) {
       const problem = deployIdError(customId);
       if (problem) {
         throw new UserError(
@@ -419,6 +422,21 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       // Unless these exact bytes are already recorded under the ID, the upload starts from an empty prefix: emptying first is what keeps a replaced deploy free of files the new content dropped, and also clears half-written leftovers from an interrupted earlier run.
       const existing = state.deploys.find((d) => d.id === deployId);
       if (existing && existing.contentHash !== identity.contentHash) {
+        // Revalidate on fresh state right before anything destructive: the confirmation window is long enough for a concurrent publish to have made this ID live.
+        const fresh = await readRemoteState(connection);
+        if (!fresh) {
+          throw new UserError(
+            "Couldn't re-read the site state.",
+            "Retry the deploy; nothing was replaced.",
+          );
+        }
+        const blocker = deleteBlocker(fresh.state, deployId);
+        if (blocker) {
+          throw new UserError(
+            `Deploy ${deployId} became ${blocker} for ${state.name} while this deploy was being prepared.`,
+            "Publish another deploy first and re-run, or deploy under a new --deploy-id.",
+          );
+        }
         // Drop the record before deleting its files, so no record ever vouches for a prefix mid-rewrite (a concurrent publish re-reads state and refuses an ID without one), and a crashed replacement re-runs as a fresh upload.
         state.deploys = state.deploys.filter((d) => d.id !== deployId);
         etag = await writeRemoteState(connection, state, etag, {
