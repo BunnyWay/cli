@@ -9,8 +9,15 @@ import { errorMessage, UserError } from "../../core/errors.ts";
 import { formatBytes } from "../../core/format.ts";
 import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
-import { confirm, isInteractive, prompts, withSpinner } from "../../core/ui.ts";
 import {
+  confirm,
+  isInteractive,
+  prompts,
+  requireConfirmable,
+  withSpinner,
+} from "../../core/ui.ts";
+import {
+  deleteDeployFiles,
   fetchSystemHostname,
   promoteDeploy,
   requireRulesSite,
@@ -25,10 +32,12 @@ import {
 import { loadSiteConfig } from "./config.ts";
 import {
   type DeployRecord,
+  deployIdError,
+  findDeploy,
   markCurrent,
   type RemoteSiteState,
 } from "./constants.ts";
-import { resolveDeployIdentity } from "./deploy-id.ts";
+import { type DeployIdentity, resolveDeployIdentity } from "./deploy-id.ts";
 import { setupSiteDomain } from "./domains/index.ts";
 import {
   type SiteSelectorArgs,
@@ -45,10 +54,106 @@ interface DeployArgs extends SiteSelectorArgs {
   env?: string[];
   "env-file"?: string;
   force?: boolean;
+  "deploy-id"?: string;
+}
+
+export interface DeployTarget {
+  /** The ID this deploy will live under in storage. */
+  deployId: string;
+  /** True when these exact bytes are already uploaded under `deployId`. */
+  skipUpload: boolean;
+  /**
+   * An existing deploy that blocks this one.
+   *
+   * `content`: the same ID already holds different bytes; the handler asks
+   * before replacing them (--force answers yes).
+   * `case`: an ID differing only in case exists. Never replaceable, because two
+   * deploys whose paths differ only by case are indistinguishable to anything
+   * that folds case, and the loser's files would back the winner's rollback.
+   * `live`/`rollback`: the ID holds different bytes AND is the production
+   * deploy or the rollback target. Never replaceable, because a replacement
+   * empties and rewrites the very prefix being served (or rolled back to).
+   */
+  conflict?: {
+    record: DeployRecord;
+    reason: "content" | "case" | "live" | "rollback";
+  };
+}
+
+/**
+ * Decide which ID this deploy lands under and whether the upload can be skipped.
+ *
+ * Change detection keys on content, not the display ID, so a rebuilt `dist/` at
+ * the same git sha is never wrongly skipped. An explicit ID is an assertion
+ * about identity, so it never aliases onto an earlier deploy that merely shares
+ * content: a catalog release keeps its own ID even when the bytes are identical
+ * to the last one. Reusing an ID for different bytes rewrites what a rollback
+ * to it would serve, so that is reported as a conflict rather than done quietly.
+ */
+export function resolveDeployTarget(opts: {
+  deploys: DeployRecord[];
+  identity: DeployIdentity;
+  customId?: string;
+  force: boolean;
+  /** The production deploy and the rollback target; their content is never replaced in place. */
+  current?: string;
+  previous?: string;
+}): DeployTarget {
+  const { deploys, identity, customId, force, current, previous } = opts;
+
+  const alreadyUploaded = force
+    ? undefined
+    : deploys.find((d) =>
+        customId
+          ? d.id === customId && d.contentHash === identity.contentHash
+          : d.contentHash === identity.contentHash,
+      );
+  // A skipped deploy reuses the already-uploaded deploy's id; that's where its files live.
+  const deployId = alreadyUploaded?.id ?? identity.id;
+  const skipUpload = alreadyUploaded !== undefined;
+
+  if (customId && !skipUpload) {
+    const { caseVariant } = findDeploy(deploys, customId);
+    if (caseVariant) {
+      return {
+        deployId,
+        skipUpload,
+        conflict: { record: caseVariant, reason: "case" },
+      };
+    }
+  }
+
+  if (!skipUpload) {
+    const existing = deploys.find((d) => d.id === deployId);
+    if (existing && existing.contentHash !== identity.contentHash) {
+      // Replacing the deploy production serves (or would roll back to) rewrites the prefix the edge is pulling from, so it is refused outright, before the confirmable content conflict (which would otherwise send the caller down a dead end). A same-bytes re-upload stays fine: every write is byte-identical.
+      if (deployId === current || deployId === previous) {
+        return {
+          deployId,
+          skipUpload,
+          conflict: {
+            record: existing,
+            reason: deployId === current ? "live" : "rollback",
+          },
+        };
+      }
+      if (customId) {
+        return {
+          deployId,
+          skipUpload,
+          conflict: { record: existing, reason: "content" },
+        };
+      }
+    }
+  }
+  return { deployId, skipUpload };
 }
 
 const DOMAIN_HINT =
   "  Add a custom production domain: bunny sites domains add <domain>";
+
+const DEPLOY_ID_HINT =
+  "IDs become storage paths, so they take letters, digits, and -, _ or . (e.g. 20260827-1433-r42).";
 
 // A site's live URL: the custom domain when it has one, else its b-cdn.net host. Always https (b-cdn.net hosts carry bunny's certificate).
 export function productionUrl(
@@ -82,6 +187,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       "Explicit build command",
     ],
     ["$0 sites deploy ./dist --site my-site", "Target a specific site"],
+    [
+      "$0 sites deploy ./catalog --deploy-id 20260827-1433-r42",
+      "Identify the deploy with your own release ID",
+    ],
   ],
 
   builder: (yargs) =>
@@ -110,7 +219,13 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         .option("force", {
           type: "boolean",
           default: false,
-          describe: "Deploy even when the content is unchanged",
+          describe:
+            "Deploy even when the content is unchanged, and replace an existing --deploy-id's content without asking",
+        })
+        .option("deploy-id", {
+          type: "string",
+          describe:
+            "Identify this deploy yourself (e.g. a release or catalog ID) instead of using the git sha or content hash; used exactly as given",
         }),
     ),
 
@@ -208,15 +323,64 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
     const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
 
-    const identity = await resolveDeployIdentity(dir, files);
+    const customId = args["deploy-id"]?.trim();
+    if (customId) {
+      const problem = deployIdError(customId);
+      if (problem) {
+        throw new UserError(
+          `Deploy ID "${customId}" ${problem}.`,
+          DEPLOY_ID_HINT,
+        );
+      }
+    }
 
-    // The no-op check keys on content, not the display id, so a rebuilt `dist/` at the same git sha isn't wrongly skipped.
-    const alreadyUploaded = args.force
-      ? undefined
-      : state.deploys.find((d) => d.contentHash === identity.contentHash);
-    const skipUpload = alreadyUploaded !== undefined;
-    // A skipped deploy reuses the already-uploaded deploy's id; that's where its files live.
-    const deployId = alreadyUploaded?.id ?? identity.id;
+    const identity = await resolveDeployIdentity(dir, files, customId);
+    const target = resolveDeployTarget({
+      deploys: state.deploys,
+      identity,
+      customId,
+      force: args.force ?? false,
+      current: state.current,
+      previous: state.previous,
+    });
+
+    if (
+      target.conflict?.reason === "live" ||
+      target.conflict?.reason === "rollback"
+    ) {
+      const role =
+        target.conflict.reason === "live"
+          ? "the live production deploy"
+          : "the rollback target";
+      throw new UserError(
+        `Deploy ${target.deployId} is ${role} for ${state.name}, and this content differs from what it holds.`,
+        "Replacing it in place would rewrite files while they are being served. Deploy under a new --deploy-id, or publish another deploy first and re-run.",
+      );
+    }
+    if (target.conflict?.reason === "case") {
+      throw new UserError(
+        `Deploy ${target.conflict.record.id} already exists for ${state.name}, differing from "${customId}" only in case.`,
+        `Reuse that exact ID to redeploy it, or pick one that isn't a case variant.`,
+      );
+    }
+    if (target.conflict?.reason === "content") {
+      // Rolling back to the ID would serve the new files instead of the originals, so replacing is opt-in.
+      requireConfirmable(output, {
+        force: args.force,
+        message: `Deploy ${customId} already exists for ${state.name} with different content; replacing it needs a confirmation prompt.`,
+        hint: "Pick another ID, or re-run with --force to replace it non-interactively.",
+      });
+      const proceed = await confirm(
+        `Deploy ${customId} already exists for ${state.name} with different content. Replace it?`,
+        { force: args.force },
+      );
+      if (!proceed) {
+        logger.log("Cancelled.");
+        return;
+      }
+    }
+
+    const { deployId, skipUpload } = target;
     const alreadyLive = state.current === deployId;
 
     // The production URL prefers the custom domain; only fetch the system host when there is none.
@@ -252,6 +416,19 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
 
     if (!skipUpload) {
+      // Unless these exact bytes are already recorded under the ID, the upload starts from an empty prefix: emptying first is what keeps a replaced deploy free of files the new content dropped, and also clears half-written leftovers from an interrupted earlier run.
+      const existing = state.deploys.find((d) => d.id === deployId);
+      if (existing && existing.contentHash !== identity.contentHash) {
+        // Drop the record before deleting its files, so no record ever vouches for a prefix mid-rewrite (a concurrent publish re-reads state and refuses an ID without one), and a crashed replacement re-runs as a fresh upload.
+        state.deploys = state.deploys.filter((d) => d.id !== deployId);
+        etag = await writeRemoteState(connection, state, etag, {
+          removedIds: [deployId],
+        });
+      }
+      if (existing?.contentHash !== identity.contentHash) {
+        await deleteDeployFiles(connection, deployId);
+      }
+
       await withSpinner(`Uploading ${files.length} files...`, (spin) =>
         uploadDeploy(connection, deployId, files, {
           onFileUploaded: (done, total) => {
@@ -260,7 +437,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         }),
       );
 
-      // Record the deploy. A re-deployed ID keeps its slot but gets fresh metadata; the promote below purges the zone, so its old bytes can't be served.
+      // Record the deploy. A re-deployed ID keeps its slot but gets fresh metadata; the purge on promote drops the old bytes from cache.
       const record: DeployRecord = {
         id: deployId,
         createdAt: new Date().toISOString(),

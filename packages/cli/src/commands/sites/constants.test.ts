@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
+import type { DeployRecord } from "./constants.ts";
 import {
+  deployIdError,
   deployPrefix,
+  findDeploy,
   isValidDeployId,
   isValidSiteName,
   parseRemoteState,
@@ -54,11 +57,12 @@ test("deploy path helper", () => {
   expect(deployPrefix("a1b2c3d4")).toBe("deploys/a1b2c3d4");
 });
 
-test("isValidDeployId accepts git shas and content hashes", () => {
+test("isValidDeployId accepts git shas, content hashes and caller-supplied IDs", () => {
   expect(isValidDeployId("a1b2c3d4")).toBe(true);
   expect(isValidDeployId("0f9e8d7c6b5a4321")).toBe(true);
+  // Case is part of a caller-supplied ID, not something to normalize away.
+  expect(isValidDeployId("HAS-CAPS")).toBe(true);
   expect(isValidDeployId("ab")).toBe(false); // too short
-  expect(isValidDeployId("HAS-CAPS")).toBe(false);
   expect(isValidDeployId("has/slash")).toBe(false);
   expect(isValidDeployId("")).toBe(false);
 });
@@ -87,4 +91,60 @@ test("suffixed resource names round-trip through the site pattern", () => {
   expect(siteResourcePattern("other").test(zoneName)).toBe(false);
 });
 
-// Cleanup and site discovery key on the name shape, and the router parses the same shape from the hostname, so the round-trip must be exact and everything else rejected.
+// Cleanup and site discovery key on the name shape, so the round-trip must be exact and everything else rejected.
+
+test("deployIdError accepts shas, hashes, and release-style IDs, case intact", () => {
+  for (const id of [
+    "a1b2c3d4",
+    "0f1e2d3c4b5a",
+    "20260827-1433-r42",
+    "catalog_v3",
+    "2026.08.27-r42",
+    "v1.2.3",
+    "Release-42",
+    "a".repeat(64),
+  ]) {
+    expect(deployIdError(id)).toBeNull();
+  }
+});
+
+// The ID is interpolated into a storage path and the rewrite rule's origin URL, so anything
+// that could escape the deploy prefix or leave an empty/hidden segment has to be rejected.
+test("deployIdError rejects path escapes and edge separators", () => {
+  for (const id of [
+    "../etc/passwd",
+    "a/../b",
+    "foo..bar",
+    "a/b",
+    "a\\b",
+    "a b",
+    "a?b",
+    "a%2fb",
+    "-abc",
+    "abc.",
+    "_abc",
+  ]) {
+    expect(deployIdError(id)).not.toBeNull();
+  }
+  expect(deployIdError("abc")).toBe("must be 4 to 64 characters");
+  expect(deployIdError("a".repeat(65))).toBe("must be 4 to 64 characters");
+});
+
+test("findDeploy matches exactly and surfaces a case variant for 'did you mean'", () => {
+  const deploys: DeployRecord[] = [
+    {
+      id: "Release-42",
+      createdAt: "2026-08-27T00:00:00.000Z",
+      source: "custom",
+      contentHash: "hash1",
+      files: 1,
+      bytes: 10,
+    },
+  ];
+
+  expect(findDeploy(deploys, "Release-42")).toEqual({ deploy: deploys[0] });
+  expect(findDeploy(deploys, "release-42")).toEqual({
+    caseVariant: deploys[0],
+  });
+  expect(findDeploy(deploys, "r99")).toEqual({ caseVariant: undefined });
+});

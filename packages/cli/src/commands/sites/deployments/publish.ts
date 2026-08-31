@@ -5,8 +5,13 @@ import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, requireConfirmable, withSpinner } from "../../../core/ui.ts";
-import { promoteDeploy, requireRulesSite, writeRemoteState } from "../api.ts";
-import { markCurrent } from "../constants.ts";
+import {
+  promoteDeploy,
+  readRemoteState,
+  requireRulesSite,
+  writeRemoteState,
+} from "../api.ts";
+import { findDeploy, markCurrent } from "../constants.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -62,7 +67,8 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       output,
       force: args.force,
     });
-    const { state, connection, etag } = site;
+    // No etag kept from this read: the destructive phase re-reads state and writes with the fresh one.
+    const { state, connection } = site;
     requireRulesSite(state);
 
     let targetId = args.id;
@@ -85,14 +91,15 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       );
     }
 
-    const deploy = state.deploys.find((d) => d.id === targetId);
+    const { deploy, caseVariant } = findDeploy(state.deploys, targetId);
     if (!deploy) {
       throw new UserError(
         `Deploy ${targetId} not found for site ${state.name}.`,
-        "Run `bunny sites deployments list` to see available deploys.",
+        caseVariant
+          ? `Did you mean ${caseVariant.id}? Deploy IDs are case-sensitive.`
+          : "Run `bunny sites deployments list` to see available deploys.",
       );
     }
-
     if (state.current === targetId) {
       if (output === "json") {
         logger.log(
@@ -128,9 +135,24 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
     }
 
     await withSpinner("Publishing...", async () => {
-      await promoteDeploy({ coreClient, state, deployId: targetId });
-      markCurrent(state, targetId);
-      await writeRemoteState(connection, state, etag, {
+      // Revalidate on fresh state right before promoting: the confirmation window is long enough for a concurrent replace to have dropped this deploy's record and started rewriting its files.
+      const fresh = await readRemoteState(connection);
+      if (!fresh) {
+        throw new UserError(
+          "Couldn't re-read the site state.",
+          "Retry the publish; nothing was changed.",
+        );
+      }
+      const { state: latest, etag: latestEtag } = fresh;
+      if (!latest.deploys.some((d) => d.id === targetId)) {
+        throw new UserError(
+          `Deploy ${targetId} is gone from ${latest.name} (a concurrent replace or delete?) and can't be published.`,
+          "Run `bunny sites deployments list` and retry.",
+        );
+      }
+      await promoteDeploy({ coreClient, state: latest, deployId: targetId });
+      markCurrent(latest, targetId);
+      await writeRemoteState(connection, latest, latestEtag, {
         promotedTo: targetId,
       });
     });

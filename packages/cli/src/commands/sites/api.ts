@@ -561,7 +561,7 @@ export async function createSite(
     logger.warn(`Couldn't force HTTPS on ${systemHost}: ${errorMessage(err)}`);
   }
 
-  // 4. Remote state; from here on the zone identifies as a site. This is the first storage write on purpose: a fresh zone can briefly refuse writes, so it must not race zone creation.
+  // 4. Remote state; from here on the zone identifies as a site.
   step("Writing site state...");
   const connection = siteFiles.connect(storageZone);
   const state: RemoteSiteState = {
@@ -571,7 +571,16 @@ export async function createSite(
     pullZoneId: pullZone.Id,
     deploys: [],
   };
-  await writeRemoteState(connection, state);
+  // A fresh zone's credentials propagate asynchronously and refuse writes for the first seconds; retry briefly instead of failing the create.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await writeRemoteState(connection, state);
+      break;
+    } catch (err) {
+      if (attempt >= 5 || !/unauthorized/i.test(errorMessage(err))) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
 
   return {
     state,
@@ -760,5 +769,10 @@ export async function deleteDeployFiles(
   connection: StorageZone,
   deployId: string,
 ): Promise<void> {
-  await siteFiles.remove(connection, `${deployPrefix(deployId)}/`);
+  try {
+    await siteFiles.remove(connection, `${deployPrefix(deployId)}/`);
+  } catch (err) {
+    // An absent prefix is already the goal (a fresh ID, or a re-run after a partial delete).
+    if (!isNotFoundError(err)) throw err;
+  }
 }

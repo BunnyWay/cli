@@ -43,7 +43,12 @@ Content is root-served, so client-side routers (TanStack Router, React Router, V
 
 ## Deploy IDs
 
-- The deploy ID is the **git short-sha** when the working tree is clean, otherwise an 8-char **content hash**. Re-deploying identical content is a no-op (`--force` overrides).
+- The deploy ID is the **git short-sha** when the working tree is clean, otherwise a 12-char **content hash**. Re-deploying identical content is a no-op (`--force` overrides).
+- `--deploy-id <id>` sets the ID yourself, so a deploy can carry the same identifier as whatever produced it (a release tag, a catalog build, a timestamped artifact) and `deployments list` needs no cross-referencing. The ID is used **exactly as given**, case included: it exists to match your identifier, and it never appears in a client-facing URL (the edge rule builds the origin path from it server-side). IDs become storage paths, so they take letters, digits and `-`, `_` or `.`, 4 to 64 characters, starting and ending alphanumeric: `20260827-1433-r42`, `Catalog_V3`, `v1.2.3`.
+  - Deploy IDs are therefore **case-sensitive**. `publish`/`delete` match exactly and suggest a case variant when one exists, and deploying an ID that differs from an existing one only in case is refused (not even with `--force`), since two storage paths differing only by case are indistinguishable to anything that folds case.
+  - An explicit ID is an assertion about identity, so it is never aliased onto an earlier deploy that happens to share content: each release keeps its own ID and rollback target even when the bytes are unchanged.
+  - Reusing an ID for **different** content asks before replacing, because rolling back to that ID would then serve the new files instead of the originals (`--force` skips the prompt for CI). A replacement clears the old files first, so nothing stale survives. The **live deploy and the rollback target are never replaceable in place** (not even with `--force`): that would empty and rewrite the files being served. Deploy under a new ID, or publish another deploy first.
+  - The git sha is still recorded alongside a custom ID when the deploy came from a repo, so provenance is not lost; `deployments list` shows it as `custom (git abc12345)`.
 - Dotfiles and `node_modules` are never uploaded.
 
 ---

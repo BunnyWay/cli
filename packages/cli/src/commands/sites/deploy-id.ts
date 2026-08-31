@@ -9,7 +9,7 @@ export interface HashedFile {
 
 export interface DeployIdentity {
   id: string;
-  source: "git" | "content";
+  source: "git" | "content" | "custom";
   gitSha?: string;
   dirty?: boolean;
   // Hash of the deployed bytes; the no-op check keys on this (not `id`), so a rebuilt `dist/` at the same git sha isn't wrongly skipped.
@@ -40,13 +40,33 @@ export async function gitIdentity(
   };
 }
 
-// Resolve the deploy identity: display `id` is the git short-sha on a clean tree, else the content hash; `contentHash` always hashes what ships and drives the no-op check.
+/**
+ * Resolve the deploy identity.
+ *
+ * `customId` wins when given, so a release can carry the same ID as whatever
+ * produced it. Otherwise the display `id` is the git short-sha on a clean tree
+ * and the content hash elsewhere. `contentHash` always hashes what ships and
+ * drives the no-op check, so an explicit ID never disturbs change detection;
+ * the git sha is still recorded when there is one, for provenance.
+ */
 export async function resolveDeployIdentity(
   cwd: string,
   files: HashedFile[],
+  customId?: string,
 ): Promise<DeployIdentity> {
   const contentHash = contentHashId(files);
   const gitInfo = await gitIdentity(cwd);
+
+  if (customId) {
+    return {
+      id: customId,
+      source: "custom",
+      gitSha: gitInfo?.sha,
+      dirty: gitInfo?.dirty,
+      contentHash,
+    };
+  }
+
   if (gitInfo && !gitInfo.dirty) {
     return { id: gitInfo.sha, source: "git", gitSha: gitInfo.sha, contentHash };
   }

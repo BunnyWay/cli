@@ -8,6 +8,7 @@ import {
   formatTable,
 } from "../../../core/format.ts";
 import { logger } from "../../../core/logger.ts";
+import type { DeployRecord } from "../constants.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -16,6 +17,15 @@ import {
 } from "../interactive.ts";
 
 type ListArgs = SiteSelectorArgs;
+
+// How a deploy got its ID, for the Source column. A custom ID still shows the git sha when one was recorded, since that's the only provenance it carries.
+function deploySource(d: DeployRecord): string {
+  if (d.source === "git") return `git ${d.gitSha ?? d.id}`;
+  if (d.source === "custom") {
+    return d.gitSha ? `custom (git ${d.gitSha})` : "custom";
+  }
+  return `content${d.dirty ? " (dirty tree)" : ""}`;
+}
 
 export const sitesDeploymentsListCommand = defineCommand<ListArgs>({
   command: "list [site]",
@@ -76,9 +86,7 @@ export const sitesDeploymentsListCommand = defineCommand<ListArgs>({
               ? "○ Previous"
               : "○",
           formatDateTime(d.createdAt),
-          d.source === "git"
-            ? `git ${d.gitSha ?? d.id}`
-            : `content${d.dirty ? " (dirty tree)" : ""}`,
+          deploySource(d),
           String(d.files),
           formatBytes(d.bytes),
         ]),
