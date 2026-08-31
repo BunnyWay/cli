@@ -22,9 +22,9 @@ const validState: RemoteSiteState = {
 
 test("parseRemoteState round-trips a valid state", () => {
   expect(parseRemoteState(JSON.stringify(validState))).toEqual(validState);
-  // Router-era (version 1) states still parse, keyed by their scriptId.
+  // The router-era version 1 format was never released, so it no longer parses.
   const routerEra = { ...validState, version: 1, scriptId: 3 };
-  expect(parseRemoteState(JSON.stringify(routerEra))).toEqual(routerEra);
+  expect(parseRemoteState(JSON.stringify(routerEra))).toBeNull();
 });
 
 test("parseRemoteState rejects garbage", () => {

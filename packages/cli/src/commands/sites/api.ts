@@ -1,4 +1,3 @@
-import type { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { mapWithConcurrency } from "../../core/concurrency.ts";
 import {
@@ -55,7 +54,6 @@ import {
   suffixedResourceName,
 } from "./constants.ts";
 
-export type ComputeClient = ReturnType<typeof createComputeClient>;
 type PullZone = components["schemas"]["PullZoneModel"];
 
 // Storage-file IO seam; tests swap these for an in-memory store (bun's `mock.module` leaks across files, this doesn't).
@@ -605,15 +603,6 @@ export async function fetchSystemHostname(
   }
 }
 
-// Router-era sites (state version 1) predate the edge-rule architecture; there is no in-place migration.
-export function requireRulesSite(state: RemoteSiteState): void {
-  if (state.scriptId == null) return;
-  throw new UserError(
-    `Site "${state.name}" was created with the retired router architecture.`,
-    `Delete it (\`bunny sites delete ${state.name}\`) and create it again to deploy with this CLI. The site keeps serving its current deploy until then.`,
-  );
-}
-
 const PROBE_TIMEOUT_MS = 4000;
 const PROPAGATION_DEADLINE_MS = 20_000;
 const PROPAGATION_INTERVAL_MS = 1500;
@@ -698,22 +687,21 @@ export async function promoteDeploy(opts: {
 }
 
 export interface TeardownResult {
-  resource: "pull zone" | "router script" | "storage zone";
+  resource: "pull zone" | "storage zone";
   id: number;
   deleted: boolean;
   error?: string;
 }
 
-// Tear down a site's resources; the pull zone references the script and storage zone so it goes first, and each step is best-effort so a partial delete can be re-run.
+// Tear down a site's resources; the pull zone references the storage zone so it goes first, and each step is best-effort so a partial delete can be re-run.
 export async function deleteSiteResources(opts: {
   coreClient: CoreClient;
-  computeClient: ComputeClient;
   state: RemoteSiteState;
   keepStorage?: boolean;
   /** The storage connection; needed to tombstone the site marker with --keep-storage. */
   connection?: StorageZone;
 }): Promise<TeardownResult[]> {
-  const { coreClient, computeClient, state } = opts;
+  const { coreClient, state } = opts;
   const results: TeardownResult[] = [];
 
   const attempt = async (
@@ -734,17 +722,8 @@ export async function deleteSiteResources(opts: {
       params: { path: { id: state.pullZoneId } },
     }),
   );
-  // Router-era sites (state version 1) still carry a script to clean up.
-  const scriptId = state.scriptId;
-  if (scriptId != null) {
-    await attempt("router script", scriptId, () =>
-      computeClient.DELETE("/compute/script/{id}", {
-        params: { path: { id: scriptId } },
-      }),
-    );
-  }
   if (opts.keepStorage) {
-    // The zone survives, so remove its site marker, else list/link/show rediscover a "site" whose pull zone and router are gone. But only once everything else deleted: the marker is what makes a re-run able to find and retry the failures.
+    // The zone survives, so remove its site marker, else list/link/show rediscover a "site" whose pull zone is gone. But only once everything else deleted: the marker is what makes a re-run able to find and retry the failures.
     if (opts.connection && results.every((r) => r.deleted)) {
       try {
         await siteFiles.remove(opts.connection, REMOTE_STATE_PATH);

@@ -7,7 +7,7 @@ export const REMOTE_STATE_PATH = "_bunny/site.json";
 // Deploys live at `deploys/{id}/...` inside the storage zone.
 export const DEPLOYS_DIR = "deploys";
 
-// Version 2 dropped the router script; version-1 states (router-era) still parse so delete/list keep working on them.
+// State format version; the router-era version 1 was never released, so only this exact version parses.
 export const STATE_VERSION = 2;
 
 export const DEFAULT_KEEP_DEPLOYS = 5;
@@ -37,8 +37,6 @@ export interface RemoteSiteState {
   name: string;
   storageZoneId: number;
   pullZoneId: number;
-  /** Router-era (version 1) sites only; presence marks a site the retired script architecture serves. */
-  scriptId?: number;
   /** Custom production domain, when one has been attached. */
   domain?: string;
   current?: string;
@@ -181,15 +179,13 @@ export function parseRemoteState(raw: string): RemoteSiteState | null {
   if (!data || typeof data !== "object") return null;
   const s = data as Record<string, unknown>;
   if (
-    typeof s.version !== "number" ||
-    // A future format is rejected rather than misread; older CLIs lacked this bound, which is why version 2 couldn't rely on it.
-    s.version > STATE_VERSION ||
+    // Any other version is rejected rather than misread; the router-era version 1 was never released.
+    s.version !== STATE_VERSION ||
     typeof s.name !== "string" ||
     // Reject an illegal name: it would flow unquoted into storage paths and generated CI YAML.
     !isValidSiteName(s.name) ||
     typeof s.storageZoneId !== "number" ||
     typeof s.pullZoneId !== "number" ||
-    (s.scriptId !== undefined && typeof s.scriptId !== "number") ||
     !Array.isArray(s.deploys)
   ) {
     return null;

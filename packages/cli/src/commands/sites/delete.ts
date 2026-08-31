@@ -1,7 +1,4 @@
-import {
-  createComputeClient,
-  createCoreClient,
-} from "@bunny.net/openapi-client";
+import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -26,7 +23,7 @@ interface DeleteArgs extends SiteSelectorArgs {
   "keep-storage"?: boolean;
 }
 
-// Delete a site: its pull zone and (unless --keep-storage) the storage zone with every deploy; router-era sites also lose their script; requires typing the name to confirm unless --force.
+// Delete a site: its pull zone and (unless --keep-storage) the storage zone with every deploy; requires typing the name to confirm unless --force.
 export const sitesDeleteCommand = defineCommand<DeleteArgs>({
   command: "delete [site]",
   describe: "Delete a site and its resources.",
@@ -58,7 +55,6 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const options = clientOptions(config, verbose);
     const coreClient = createCoreClient(options);
-    const computeClient = createComputeClient(options);
 
     const { site } = await selectSite(coreClient, {
       site: args.site,
@@ -89,7 +85,6 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     const results = await withSpinner("Deleting site resources...", () =>
       deleteSiteResources({
         coreClient,
-        computeClient,
         state,
         keepStorage: args["keep-storage"],
         connection: site.connection,

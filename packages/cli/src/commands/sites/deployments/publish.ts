@@ -5,12 +5,7 @@ import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, requireConfirmable, withSpinner } from "../../../core/ui.ts";
-import {
-  promoteDeploy,
-  readRemoteState,
-  requireRulesSite,
-  writeRemoteState,
-} from "../api.ts";
+import { promoteDeploy, readRemoteState, writeRemoteState } from "../api.ts";
 import { findDeploy, markCurrent } from "../constants.ts";
 import {
   type SiteSelectorArgs,
@@ -69,7 +64,6 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
     });
     // No etag kept from this read: the destructive phase re-reads state and writes with the fresh one.
     const { state, connection } = site;
-    requireRulesSite(state);
 
     let targetId = args.id;
     if (args.previous) {

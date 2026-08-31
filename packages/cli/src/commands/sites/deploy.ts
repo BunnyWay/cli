@@ -21,7 +21,6 @@ import {
   fetchSystemHostname,
   promoteDeploy,
   readRemoteState,
-  requireRulesSite,
   writeRemoteState,
 } from "./api.ts";
 import {
@@ -268,7 +267,6 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       },
     });
     const { state, connection } = site;
-    requireRulesSite(state);
 
     // The site's first-ever deploy is the one moment we offer a custom domain; declining self-limits, since the list is never empty again.
     const firstDeploy = state.deploys.length === 0;

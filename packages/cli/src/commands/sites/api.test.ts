@@ -3,14 +3,12 @@ import type { EdgeRule } from "../../core/edge-rules.ts";
 import { ApiError } from "../../core/errors.ts";
 import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
 import {
-  type ComputeClient,
   createSite,
   deleteSiteResources,
   fetchSites,
   promoteDeploy,
   promoteVerification,
   readRemoteState,
-  requireRulesSite,
   siteContextFromZone,
   siteFiles,
   writeRemoteState,
@@ -237,53 +235,6 @@ function fakeCoreClient(opts: {
   } as unknown as CoreClient;
 }
 
-function fakeComputeClient(opts: {
-  calls: Call[];
-  scripts?: Array<{ Id: number; Name: string }>;
-}): ComputeClient {
-  const scripts = opts.scripts ?? [];
-  let nextScriptId = 20;
-  return {
-    GET: async (path: string) => {
-      opts.calls.push({ method: "GET", path });
-      if (path === "/compute/script") return { data: { Items: scripts } };
-      throw new Error(`unexpected GET ${path}`);
-    },
-    POST: async (path: string, options?: { body?: unknown }) => {
-      opts.calls.push({ method: "POST", path, body: options?.body });
-      if (path === "/compute/script") {
-        const script = {
-          Id: nextScriptId++,
-          Name: (options?.body as { Name: string }).Name,
-        };
-        scripts.push(script);
-        return { data: script };
-      }
-      return { data: {} };
-    },
-    PUT: async (
-      path: string,
-      options?: { params?: unknown; body?: unknown },
-    ) => {
-      opts.calls.push({
-        method: "PUT",
-        path,
-        params: options?.params as Record<string, unknown>,
-        body: options?.body,
-      });
-      return { data: {} };
-    },
-    DELETE: async (path: string, options?: { params?: unknown }) => {
-      opts.calls.push({
-        method: "DELETE",
-        path,
-        params: options?.params as Record<string, unknown>,
-      });
-      return { data: undefined };
-    },
-  } as unknown as ComputeClient;
-}
-
 // ---- remote state round-trip ----
 
 test("writeRemoteState/readRemoteState round-trip with a stable etag", async () => {
@@ -500,14 +451,13 @@ test("createSite provisions storage zone → pull zone → edge rules → state"
     ForceSSL: true,
   });
 
-  // Remote state marks the zone as a site; no script in the rules era.
+  // Remote state marks the zone as a site.
   const written = await readRemoteState(fakeConnection());
   expect(written?.state).toMatchObject({
     name: "my-site",
     storageZoneId: 10,
     pullZoneId: 30,
   });
-  expect(written?.state.scriptId).toBeUndefined();
 });
 
 test("createSite re-run after a crash reuses the rules and their secret", async () => {
@@ -834,9 +784,9 @@ test("fetchSites keeps only storage pull zones whose state names them", async ()
   expect(sites[0]?.systemHostname).toBe("my-site.b-cdn.net");
 });
 
-// A pull zone can share a site's storage origin without being the site's own zone; only the state's pullZoneId decides. Router-era state (scriptId present) is still discovered for list/show/delete.
+// A pull zone can share a site's storage origin without being the site's own zone; only the state's pullZoneId decides.
 test("fetchSites ignores another pull zone pointed at the site's storage zone", async () => {
-  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState({ scriptId: 20 })));
+  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
   const coreClient = fakeCoreClient({
     calls: [],
     storageZones: [ZONE],
@@ -860,13 +810,6 @@ test("fetchSites ignores another pull zone pointed at the site's storage zone", 
   expect(sites[0]?.state.pullZoneId).toBe(30);
 });
 
-test("requireRulesSite rejects router-era sites", () => {
-  expect(() => requireRulesSite(fakeState({ scriptId: 20 }))).toThrow(
-    "retired router architecture",
-  );
-  expect(() => requireRulesSite(fakeState())).not.toThrow();
-});
-
 test("siteContextFromZone is null for a zone without site state", async () => {
   expect(await siteContextFromZone(ZONE)).toBeNull();
 });
@@ -877,11 +820,9 @@ test("deleteSiteResources removes the site marker when keeping storage", async (
   store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
   store.set("deploys/aaa/index.html", "<h1>hi</h1>");
   const coreClient = fakeCoreClient({ calls: [] });
-  const computeClient = fakeComputeClient({ calls: [] });
 
   const results = await deleteSiteResources({
     coreClient,
-    computeClient,
     state: fakeState(),
     keepStorage: true,
     connection: fakeConnection(),
@@ -895,30 +836,19 @@ test("deleteSiteResources removes the site marker when keeping storage", async (
   expect(store.has("deploys/aaa/index.html")).toBe(true);
 });
 
-test("deleteSiteResources deletes the pull zone and storage zone, plus a router-era script", async () => {
+test("deleteSiteResources deletes the pull zone and storage zone", async () => {
   const coreCalls: Call[] = [];
-  const computeCalls: Call[] = [];
   const coreClient = fakeCoreClient({ calls: coreCalls });
-  const computeClient = fakeComputeClient({ calls: computeCalls });
 
   const results = await deleteSiteResources({
     coreClient,
-    computeClient,
     state: fakeState(),
   });
-  expect(computeCalls).toHaveLength(0);
   expect(results.filter((r) => r.deleted)).toHaveLength(2);
-
-  const routerEra = await deleteSiteResources({
-    coreClient,
-    computeClient,
-    state: fakeState({ scriptId: 20 }),
-  });
-  const deletedScriptIds = computeCalls
-    .filter((c) => c.method === "DELETE" && c.path === "/compute/script/{id}")
-    .map((c) => (c.params as { path: { id: number } }).path.id);
-  expect(deletedScriptIds).toEqual([20]);
-  expect(routerEra.filter((r) => r.deleted)).toHaveLength(3);
+  const deletedPaths = coreCalls
+    .filter((c) => c.method === "DELETE")
+    .map((c) => c.path);
+  expect(deletedPaths).toEqual(["/pullzone/{id}", "/storagezone/{id}"]);
 });
 
 // Regression: the live API returns GET /pullzone as a paginated envelope
