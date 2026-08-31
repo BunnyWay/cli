@@ -126,12 +126,12 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       .option(ARG_TOKEN, {
         type: "boolean",
         describe:
-          "Generate a full-access auth token (default in interactive mode). Use --no-token to skip.",
+          "Generate a full-access auth token (skips prompt). Use --no-token to skip without prompting.",
       })
       .option(ARG_SAVE_ENV, {
         type: "boolean",
         describe:
-          "Save BUNNY_DATABASE_URL and BUNNY_DATABASE_AUTH_TOKEN to .env (skips prompt). No effect when no token is generated.",
+          "Save BUNNY_DATABASE_URL and BUNNY_DATABASE_AUTH_TOKEN to .env (skips prompt). No effect without --token.",
       }),
 
   handler: async (args) => {
@@ -380,9 +380,19 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       }
     }
 
-    // Generate an auth token (interactive default; --no-token opts out)
+    // Offer to create an auth token
     const tokenArg = args[ARG_TOKEN];
-    const shouldCreateToken = tokenArg ?? isInteractive;
+    let shouldCreateToken: boolean;
+    if (tokenArg !== undefined) {
+      shouldCreateToken = tokenArg;
+    } else if (isInteractive) {
+      shouldCreateToken = await confirm("Create an auth token?", {
+        force: false,
+        optional: true,
+      });
+    } else {
+      shouldCreateToken = false;
+    }
 
     let token: string | null = null;
     let savedToEnv = false;
