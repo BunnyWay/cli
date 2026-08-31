@@ -291,13 +291,6 @@ function isNameTaken(err: unknown): boolean {
   );
 }
 
-const NO_DEPLOYS_PAGE = `<!doctype html>
-<title>No deploys yet</title>
-<body style="font-family:system-ui,sans-serif;text-align:center;padding-top:4rem">
-<h1>Nothing here yet 🐇</h1>
-<p>Run <code>bunny sites deploy</code> to publish this site.</p>
-`;
-
 // Edge caches everything (purged on publish); browsers revalidate everything (max-age=0) except what the assets rule overrides.
 const SITE_CACHE_SETTINGS = {
   CacheControlMaxAgeOverride: 2592000,
@@ -568,16 +561,9 @@ export async function createSite(
     logger.warn(`Couldn't force HTTPS on ${systemHost}: ${errorMessage(err)}`);
   }
 
-  // 4. The no-deploys page behind the initial rewrite target, then remote state; a fresh storage zone can briefly refuse writes, so the first upload sits late in the create rather than racing zone readiness.
-  step("Uploading placeholder...");
-  const connection = siteFiles.connect(storageZone);
-  await siteFiles.upload(
-    connection,
-    `${deployPrefix(PLACEHOLDER_DEPLOY)}/index.html`,
-    textStream(NO_DEPLOYS_PAGE),
-  );
-
+  // 4. Remote state; from here on the zone identifies as a site. This is the first storage write on purpose: a fresh zone can briefly refuse writes, so it must not race zone creation.
   step("Writing site state...");
+  const connection = siteFiles.connect(storageZone);
   const state: RemoteSiteState = {
     version: STATE_VERSION,
     name,

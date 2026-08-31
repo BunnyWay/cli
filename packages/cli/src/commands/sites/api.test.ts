@@ -456,9 +456,6 @@ test("createSite provisions storage zone → pull zone → edge rules → state"
   expect(zoneName).toMatch(/^sites-my-site-[a-z0-9]{6}$/);
   expect(result.systemHostname).toBe(`${zoneName}.b-cdn.net`);
 
-  // The no-deploys page backs the initial rewrite target.
-  expect(store.has(`deploys/${PLACEHOLDER_DEPLOY}/index.html`)).toBe(true);
-
   // Exactly one pull zone (production) is created, plus the cache settings update.
   const pzCreates = coreCalls.filter(
     (c) => c.method === "POST" && c.path === "/pullzone",

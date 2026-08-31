@@ -73,7 +73,7 @@ export function pruneVictims(
     .filter((d) => d.id !== current && d.id !== previous);
 }
 
-// The underscore keeps it outside the deploy-id alphabet, so it can never collide with a real deploy.
+// The rewrite rule's initial target; nothing is uploaded there, so an undeployed site serves storage 404s. The underscore keeps it outside the deploy-id alphabet (IDs must start alphanumeric).
 export const PLACEHOLDER_DEPLOY = "_placeholder";
 
 export const HOP_HEADER = "X-Bunny-Site-Hop";
