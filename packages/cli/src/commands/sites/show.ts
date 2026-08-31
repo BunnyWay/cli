@@ -72,7 +72,6 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
           { key: "Site", value: state.name },
           { key: "Storage zone", value: String(state.storageZoneId) },
           { key: "Pull zone", value: String(state.pullZoneId) },
-          { key: "Router script", value: String(state.scriptId) },
           { key: "Domain", value: state.domain ?? "-" },
           { key: "Current deploy", value: state.current ?? "-" },
           {

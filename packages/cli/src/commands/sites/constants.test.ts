@@ -10,16 +10,18 @@ import {
 } from "./constants.ts";
 
 const validState: RemoteSiteState = {
-  version: 1,
+  version: 2,
   name: "my-site",
   storageZoneId: 1,
   pullZoneId: 2,
-  scriptId: 3,
   deploys: [],
 };
 
 test("parseRemoteState round-trips a valid state", () => {
   expect(parseRemoteState(JSON.stringify(validState))).toEqual(validState);
+  // Router-era (version 1) states still parse, keyed by their scriptId.
+  const routerEra = { ...validState, version: 1, scriptId: 3 };
+  expect(parseRemoteState(JSON.stringify(routerEra))).toEqual(routerEra);
 });
 
 test("parseRemoteState rejects garbage", () => {
@@ -34,6 +36,10 @@ test("parseRemoteState rejects garbage", () => {
   // Deploys must be an array
   expect(
     parseRemoteState(JSON.stringify({ ...validState, deploys: {} })),
+  ).toBeNull();
+  // A future format is rejected rather than misread
+  expect(
+    parseRemoteState(JSON.stringify({ ...validState, version: 3 })),
   ).toBeNull();
   // A tampered name that isn't a legal zone name is rejected outright, so it
   // can't reach storage paths or generated CI YAML.

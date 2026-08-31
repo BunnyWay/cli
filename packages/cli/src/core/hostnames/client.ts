@@ -120,21 +120,17 @@ export function liveHostnames(hostnames: Hostname[]): {
 // PullZoneOriginType: 2 = StorageZone.
 const ORIGIN_TYPE_STORAGE_ZONE = 2;
 
-/** Create a pull zone served from a storage zone, with delivery enabled in every geo region. Pass `middlewareScriptId` to attach a router in the same call: a zone is publicly reachable the moment it exists, so attaching afterwards leaves a window where it serves the raw storage origin. */
+/** Create a pull zone served from a storage zone, with delivery enabled in every geo region. */
 export async function createPullZone(
   client: CoreClient,
   name: string,
   storageZoneId: number,
-  opts?: { middlewareScriptId?: number },
 ): Promise<components["schemas"]["PullZoneModel"]> {
   const { data } = await client.POST("/pullzone", {
     body: {
       Name: name,
       StorageZoneId: storageZoneId,
       OriginType: ORIGIN_TYPE_STORAGE_ZONE,
-      ...(opts?.middlewareScriptId != null
-        ? { MiddlewareScriptId: opts.middlewareScriptId }
-        : {}),
       EnableGeoZoneUS: true,
       EnableGeoZoneEU: true,
       EnableGeoZoneASIA: true,

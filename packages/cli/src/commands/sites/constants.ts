@@ -1,16 +1,14 @@
 // `.bunny/site.json` is written by `bunny sites link`/`create` and resolved by sites commands.
 export const SITES_MANIFEST = "site.json";
 
-// Site state path; everything under `_bunny/` is router-blocked (403) so state is never served.
+// Site state path; everything under `_bunny/` is blocked by an edge rule so state is never served.
 export const REMOTE_STATE_PATH = "_bunny/site.json";
 
 // Deploys live at `deploys/{id}/...` inside the storage zone.
 export const DEPLOYS_DIR = "deploys";
 
-// Router env var selecting the production deploy; updating it is the promote/rollback lever (no republish).
-export const CURRENT_DEPLOY_VAR = "CURRENT_DEPLOY";
-
-export const STATE_VERSION = 1;
+// Version 2 dropped the router script; version-1 states (router-era) still parse so delete/list keep working on them.
+export const STATE_VERSION = 2;
 
 export const DEFAULT_KEEP_DEPLOYS = 5;
 
@@ -32,17 +30,16 @@ export interface DeployRecord {
   bytes: number;
 }
 
-// Source of truth (at `_bunny/site.json`) for a site's resource triple and deploys; `.bunny/site.json` is just a local pointer to it.
+// Source of truth (at `_bunny/site.json`) for a site's resource pair and deploys; `.bunny/site.json` is just a local pointer to it.
 export interface RemoteSiteState {
   version: number;
   name: string;
   storageZoneId: number;
   pullZoneId: number;
-  scriptId: number;
+  /** Router-era (version 1) sites only; presence marks a site the retired script architecture serves. */
+  scriptId?: number;
   /** Custom production domain, when one has been attached. */
   domain?: string;
-  /** The router source generation last published to the script; deploy republishes when it lags ROUTER_VERSION. */
-  routerVersion?: number;
   current?: string;
   previous?: string;
   deploys: DeployRecord[];
@@ -76,12 +73,34 @@ export function pruneVictims(
     .filter((d) => d.id !== current && d.id !== previous);
 }
 
-/** Router script name for a site; namespaced so `sites create` can find it on re-run. */
-export function routerScriptName(siteName: string): string {
-  return `${siteName}-router`;
+// The underscore keeps it outside the deploy-id alphabet, so it can never collide with a real deploy.
+export const PLACEHOLDER_DEPLOY = "_placeholder";
+
+export const HOP_HEADER = "X-Bunny-Site-Hop";
+export const DEPLOY_HEADER = "X-Bunny-Deploy";
+
+// Edge rules are identified by these descriptions; upserts key on them, so treat them as frozen.
+export const REWRITE_RULE_DESC = "bunny sites: serve the published deploy";
+export const GATE_RULE_DESC = "bunny sites: block direct deploy access";
+export const STATE_RULE_DESC = "bunny sites: block site state access";
+export const ASSETS_RULE_DESC = "bunny sites: browser-cache static assets";
+
+// Browser-cache TTL for static assets (1 day); HTML stays at the zone-level max-age=0 so new deploys show immediately.
+export const ASSET_BROWSER_TTL_SECONDS = 86400;
+
+// The API caps a condition at 5 patterns, so extensions ship as one rule per group; anything uncovered just revalidates against the edge cache.
+export const ASSET_EXTENSION_GROUPS = [
+  ["css", "js", "mjs", "woff2", "svg"],
+  ["png", "jpg", "jpeg", "webp", "ico"],
+];
+
+/** Per-site secret authenticating the rewrite rule's internal hop to the deploy files. */
+export function randomHopSecret(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// Deploy IDs are git short-shas or content hashes (lowercase hex-ish); the router regex and storage paths rely on this.
+// Deploy IDs are git short-shas or content hashes (lowercase hex-ish); the edge rules and storage paths rely on this.
 const DEPLOY_ID_RE = /^[a-z0-9]{4,40}$/;
 
 export function isValidDeployId(id: string): boolean {
@@ -135,12 +154,14 @@ export function parseRemoteState(raw: string): RemoteSiteState | null {
   const s = data as Record<string, unknown>;
   if (
     typeof s.version !== "number" ||
+    // A future format is rejected rather than misread; older CLIs lacked this bound, which is why version 2 couldn't rely on it.
+    s.version > STATE_VERSION ||
     typeof s.name !== "string" ||
     // Reject an illegal name: it would flow unquoted into storage paths and generated CI YAML.
     !isValidSiteName(s.name) ||
     typeof s.storageZoneId !== "number" ||
     typeof s.pullZoneId !== "number" ||
-    typeof s.scriptId !== "number" ||
+    (s.scriptId !== undefined && typeof s.scriptId !== "number") ||
     !Array.isArray(s.deploys)
   ) {
     return null;

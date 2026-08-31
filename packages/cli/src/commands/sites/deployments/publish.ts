@@ -1,14 +1,11 @@
-import {
-  createComputeClient,
-  createCoreClient,
-} from "@bunny.net/openapi-client";
+import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
 import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import { confirm, requireConfirmable, withSpinner } from "../../../core/ui.ts";
-import { promoteDeploy, writeRemoteState } from "../api.ts";
+import { promoteDeploy, requireRulesSite, writeRemoteState } from "../api.ts";
 import { markCurrent } from "../constants.ts";
 import {
   type SiteSelectorArgs,
@@ -23,7 +20,7 @@ interface PublishArgs extends SiteSelectorArgs {
   force?: boolean;
 }
 
-// Publish (promote) a past deploy as production: flips the router's env var and purges the cache, no files move (instant rollback).
+// Publish (promote) a past deploy as production: retargets the rewrite rule and purges the cache, no files move (instant rollback).
 export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
   command: "publish [id]",
   aliases: ["promote"],
@@ -58,7 +55,6 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const options = clientOptions(config, verbose);
     const coreClient = createCoreClient(options);
-    const computeClient = createComputeClient(options);
 
     const { site, offerLink } = await selectSite(coreClient, {
       site: args.site,
@@ -67,6 +63,7 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       force: args.force,
     });
     const { state, connection, etag } = site;
+    requireRulesSite(state);
 
     let targetId = args.id;
     if (args.previous) {
@@ -131,12 +128,7 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
     }
 
     await withSpinner("Publishing...", async () => {
-      await promoteDeploy({
-        computeClient,
-        coreClient,
-        state,
-        deployId: targetId,
-      });
+      await promoteDeploy({ coreClient, state, deployId: targetId });
       markCurrent(state, targetId);
       await writeRemoteState(connection, state, etag, {
         promotedTo: targetId,

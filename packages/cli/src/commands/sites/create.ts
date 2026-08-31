@@ -1,7 +1,4 @@
-import {
-  createComputeClient,
-  createCoreClient,
-} from "@bunny.net/openapi-client";
+import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -65,7 +62,7 @@ async function attachDomainToCreatedSite(opts: {
   }
 }
 
-// Create a static site: a storage zone (files), a pull zone (CDN), and a middleware router script mapping hosts to deploy dirs; state lives at `_bunny/site.json` in the storage zone.
+// Create a static site: a storage zone (files) and a pull zone (CDN) whose edge rules serve the published deploy dir; state lives at `_bunny/site.json` in the storage zone.
 export const sitesCreateCommand = defineCommand<CreateArgs>({
   command: "create [name]",
   describe: "Create a new static site.",
@@ -139,11 +136,9 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const options = clientOptions(config, verbose);
     const coreClient = createCoreClient(options);
-    const computeClient = createComputeClient(options);
 
     const result = await createSiteWithProgress({
       coreClient,
-      computeClient,
       name,
       region: args.region,
       tier: args.tier,
@@ -175,7 +170,6 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
             name,
             storageZoneId: result.state.storageZoneId,
             pullZoneId: result.state.pullZoneId,
-            scriptId: result.state.scriptId,
             hostname: result.systemHostname ?? null,
             tier: zoneTierChoice(result.storageZone),
             domain: domain ?? null,
@@ -201,7 +195,6 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
             value: zoneTierLabel(result.storageZone, "long"),
           },
           { key: "Pull zone", value: String(result.state.pullZoneId) },
-          { key: "Router script", value: String(result.state.scriptId) },
           ...(result.systemHostname
             ? [{ key: "URL", value: `https://${result.systemHostname}` }]
             : []),

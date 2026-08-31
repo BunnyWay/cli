@@ -908,9 +908,9 @@ bunny scripts docs
 
 > **Experimental**: hidden from `--help` and the landing page while it stabilizes.
 
-Host static sites on bunny.net. Each site is three resources provisioned and wired together for you: a **storage zone** holding the files, a **pull zone** serving them over the CDN, and a **middleware router** (an Edge Script) that maps incoming requests to the deploy that should answer them. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
+Host static sites on bunny.net. Each site is two resources provisioned and wired together for you: a **storage zone** holding the files and a **pull zone** serving them over the CDN, with edge rules that route requests to the deploy that should answer them. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
 
-Deploys are immutable: every `sites deploy` uploads to its own `deploys/<id>/` directory and then goes live. Publishing flips the router's `CURRENT_DEPLOY` variable and purges the cache, so going live and rolling back to any earlier deploy are instant and move no files. Deploy IDs are the git short SHA when the working tree is clean and a content hash otherwise, which makes redeploying identical content a no-op.
+Deploys are immutable: every `sites deploy` uploads to its own `deploys/<id>/` directory and then goes live. Publishing retargets the pull zone's rewrite rule and purges the cache, so going live and rolling back to any earlier deploy are instant and move no files. HTML is served with `max-age=0` so browsers pick up new deploys immediately, while static assets get a one-day browser cache. Deploy IDs are the git short SHA when the working tree is clean and a content hash otherwise, which makes redeploying identical content a no-op.
 
 Commands take the site as an optional positional (`[site]`), except `deploy`, `ci init`, and `deployments publish`, which use `--site`. Either accepts the site name or its storage zone ID. When omitted, the site resolves from the directory's linked site (`.bunny/site.json`, written by `sites link` or by `create`/`deploy`), then `sites.name` in `bunny.jsonc`, then an interactive picker that offers to link. Non-interactive runs (`--output json`, no TTY, or `--force` on a destructive command) error instead of prompting.
 
@@ -953,13 +953,12 @@ bunny sites ci init                                   # GitHub Actions: push to 
 bunny sites ci init --framework astro
 bunny sites link my-site
 bunny sites unlink
-bunny sites upgrade-router                            # republish the router with this CLI's version (deploy also does this automatically)
 bunny sites delete my-site --keep-storage             # typed-name confirmation; keeps the deploy files
 ```
 
 Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) and a deploy needs no arguments: `bunny sites deploy --build`. `sites ci init` reads the same block, so the generated workflow builds and deploys exactly what the local command does; without it, the framework is detected from `package.json` deps, `Gemfile`, or a `hugo`/`python`/`zola` config file, with the lockfile picking the package manager. `sites create` offers to scaffold the workflow on GitHub repos.
 
-Every deploy publishes: the files land in an immutable `deploys/<id>/` directory and the router is pointed at it, so `deployments publish` rolls back to any earlier deploy by moving that pointer, with no files moving and nothing re-uploaded. Content is root-served, so client-side routing and absolute asset paths work as-is. Site state lives at `_bunny/site.json` inside the storage zone (the router blocks it with a 403); `.bunny/site.json` is only a local pointer, so a fresh clone can `sites link` and pick up where the last machine left off.
+Every deploy publishes: the files land in an immutable `deploys/<id>/` directory and the rewrite rule is pointed at it, so `deployments publish` rolls back to any earlier deploy by moving that pointer, with no files moving and nothing re-uploaded. Content is root-served, so client-side routing and absolute asset paths work as-is. Direct `/deploys/<id>/` URLs are blocked at the edge. Site state lives at `_bunny/site.json` inside the storage zone (also blocked at the edge); `.bunny/site.json` is only a local pointer, so a fresh clone can `sites link` and pick up where the last machine left off.
 
 | Flag                                   | Commands                                                   | Description                                                                                        |
 | -------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -974,7 +973,7 @@ Every deploy publishes: the files land in an immutable `deploys/<id>/` directory
 | `--framework`                          | `ci init`                                                  | Framework preset for the workflow's build steps (default: detected)                                |
 | `--print`                              | `open`                                                     | Print the URL instead of opening a browser                                                         |
 | `--link`                               | `create`, `deploy`, `show`, `ci init`, `deployments`       | Link the directory to the site; `--no-link` never links                                            |
-| `--keep-storage`                       | `delete`                                                   | Delete the pull zone and router but keep the storage zone and its deploy files                     |
+| `--keep-storage`                       | `delete`                                                   | Delete the pull zone but keep the storage zone and its deploy files                                |
 | `--force`, `-f`                        | `deployments publish`, `prune`, `domains remove`, `delete` | Skip the confirmation prompts                                                                      |
 
 ### `bunny sandbox`

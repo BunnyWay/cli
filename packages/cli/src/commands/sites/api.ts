@@ -1,6 +1,14 @@
 import type { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { mapWithConcurrency } from "../../core/concurrency.ts";
+import {
+  type EdgeRule,
+  EdgeRuleAction,
+  EdgeRuleMatch,
+  EdgeRuleTriggerType,
+  fetchEdgeRules,
+  upsertEdgeRule,
+} from "../../core/edge-rules.ts";
 import { ApiError, errorMessage, UserError } from "../../core/errors.ts";
 import {
   createPullZone,
@@ -8,8 +16,6 @@ import {
   systemHostname,
 } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
-import { fetchScripts } from "../scripts/api.ts";
-import { SCRIPT_TYPE_MIDDLEWARE } from "../scripts/constants.ts";
 import {
   type CoreClient,
   fetchStorageZone,
@@ -29,17 +35,25 @@ import {
   uploadFile,
 } from "../storage/files-api.ts";
 import {
-  CURRENT_DEPLOY_VAR,
+  ASSET_BROWSER_TTL_SECONDS,
+  ASSET_EXTENSION_GROUPS,
+  ASSETS_RULE_DESC,
+  DEPLOY_HEADER,
+  DEPLOYS_DIR,
   deployPrefix,
+  GATE_RULE_DESC,
+  HOP_HEADER,
+  PLACEHOLDER_DEPLOY,
   parseRemoteState,
   REMOTE_STATE_PATH,
+  REWRITE_RULE_DESC,
   type RemoteSiteState,
-  routerScriptName,
+  randomHopSecret,
+  STATE_RULE_DESC,
   STATE_VERSION,
   siteResourcePattern,
   suffixedResourceName,
 } from "./constants.ts";
-import { ROUTER_VERSION, routerSource } from "./router/source.ts";
 
 export type ComputeClient = ReturnType<typeof createComputeClient>;
 type PullZone = components["schemas"]["PullZoneModel"];
@@ -208,10 +222,10 @@ async function fetchPullZones(
   }
 }
 
-// Discover sites: a pull zone listing narrows to storage+middleware candidates, and only those get the per-zone `_bunny/site.json` read. A candidate is only a site when the state names it as the site's own pull zone, so another zone pointed at the same storage origin is never mistaken for one.
+// Discover sites: every storage-backed pull zone gets the per-zone `_bunny/site.json` read (concurrency-capped). A candidate is only a site when the state names it as the site's own pull zone, so another zone pointed at the same storage origin is never mistaken for one.
 export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
   const candidates = (await fetchPullZones(client)).filter(
-    (pz: PullZone) => pz.MiddlewareScriptId != null && pz.StorageZoneId != null,
+    (pz: PullZone) => pz.StorageZoneId != null,
   );
 
   const summaries = await mapWithConcurrency(
@@ -277,9 +291,137 @@ function isNameTaken(err: unknown): boolean {
   );
 }
 
+const NO_DEPLOYS_PAGE = `<!doctype html>
+<title>No deploys yet</title>
+<body style="font-family:system-ui,sans-serif;text-align:center;padding-top:4rem">
+<h1>Nothing here yet 🐇</h1>
+<p>Run <code>bunny sites deploy</code> to publish this site.</p>
+`;
+
+// Edge caches everything (purged on publish); browsers revalidate everything (max-age=0) except what the assets rule overrides.
+const SITE_CACHE_SETTINGS = {
+  CacheControlMaxAgeOverride: 2592000,
+  CacheControlPublicMaxAgeOverride: 0,
+};
+
+// The four rules that serve a site; bodies are always rebuilt in full from these so a hand-edited rule heals on the next upsert.
+function siteRules(
+  systemHost: string,
+  secret: string,
+  deployId: string,
+): Array<EdgeRule & { Description: string }> {
+  const deploysPattern = `*/${DEPLOYS_DIR}/*`;
+  return [
+    {
+      Description: REWRITE_RULE_DESC,
+      Enabled: true,
+      ActionType: EdgeRuleAction.OriginUrl,
+      // The origin is the zone's own hostname: the request re-enters the CDN, where the gate rule admits it by the hop header.
+      ActionParameter1: `https://${systemHost}/${deployPrefix(deployId)}%{Url.Path}`,
+      ExtraActions: [
+        {
+          ActionType: EdgeRuleAction.SetRequestHeader,
+          ActionParameter1: HOP_HEADER,
+          ActionParameter2: secret,
+        },
+        {
+          ActionType: EdgeRuleAction.SetResponseHeader,
+          ActionParameter1: DEPLOY_HEADER,
+          ActionParameter2: deployId,
+        },
+      ],
+      TriggerMatchingType: EdgeRuleMatch.Any,
+      Triggers: [
+        {
+          Type: EdgeRuleTriggerType.Url,
+          PatternMatches: [deploysPattern],
+          PatternMatchingType: EdgeRuleMatch.None,
+        },
+      ],
+    },
+    {
+      Description: GATE_RULE_DESC,
+      Enabled: true,
+      ActionType: EdgeRuleAction.BlockRequest,
+      TriggerMatchingType: EdgeRuleMatch.All,
+      Triggers: [
+        {
+          Type: EdgeRuleTriggerType.Url,
+          PatternMatches: [deploysPattern],
+          PatternMatchingType: EdgeRuleMatch.Any,
+        },
+        {
+          Type: EdgeRuleTriggerType.RequestHeader,
+          Parameter1: HOP_HEADER,
+          PatternMatches: [secret],
+          PatternMatchingType: EdgeRuleMatch.None,
+        },
+      ],
+    },
+    {
+      Description: STATE_RULE_DESC,
+      Enabled: true,
+      ActionType: EdgeRuleAction.BlockRequest,
+      TriggerMatchingType: EdgeRuleMatch.Any,
+      Triggers: [
+        {
+          Type: EdgeRuleTriggerType.Url,
+          PatternMatches: ["*/_bunny/*"],
+          PatternMatchingType: EdgeRuleMatch.Any,
+        },
+      ],
+    },
+    ...ASSET_EXTENSION_GROUPS.map((extensions, i) => ({
+      Description: `${ASSETS_RULE_DESC} (${i + 1})`,
+      Enabled: true,
+      ActionType: EdgeRuleAction.OverrideBrowserCacheTime,
+      ActionParameter1: String(ASSET_BROWSER_TTL_SECONDS),
+      TriggerMatchingType: EdgeRuleMatch.Any,
+      Triggers: [
+        {
+          Type: EdgeRuleTriggerType.UrlExtension,
+          PatternMatches: [...extensions],
+          PatternMatchingType: EdgeRuleMatch.Any,
+        },
+      ],
+    })),
+  ];
+}
+
+// The secret lives only in the rules; recover it so re-runs and promotes never mint a second one (a mismatched gate would block the hop).
+function recoverHopSecret(rules: EdgeRule[]): string | undefined {
+  const rewrite = rules.find((r) => r.Description === REWRITE_RULE_DESC);
+  const fromRewrite = rewrite?.ExtraActions?.find(
+    (a) =>
+      a.ActionType === EdgeRuleAction.SetRequestHeader &&
+      a.ActionParameter1 === HOP_HEADER,
+  )?.ActionParameter2;
+  if (fromRewrite) return fromRewrite;
+  const gate = rules.find((r) => r.Description === GATE_RULE_DESC);
+  return gate?.Triggers?.find(
+    (t) =>
+      t.Type === EdgeRuleTriggerType.RequestHeader &&
+      t.Parameter1 === HOP_HEADER,
+  )?.PatternMatches?.[0];
+}
+
+// Converge the pull zone's rules on `deployId`; create and promote both funnel through here, so a missing or stale rule heals on any run.
+export async function ensureSiteRules(opts: {
+  coreClient: CoreClient;
+  pullZoneId: number;
+  systemHost: string;
+  deployId: string;
+}): Promise<void> {
+  const { coreClient, pullZoneId, systemHost, deployId } = opts;
+  const existing = await fetchEdgeRules(coreClient, pullZoneId);
+  const secret = recoverHopSecret(existing) ?? randomHopSecret();
+  for (const rule of siteRules(systemHost, secret, deployId)) {
+    await upsertEdgeRule(coreClient, pullZoneId, rule, existing);
+  }
+}
+
 export interface CreateSiteOptions {
   coreClient: CoreClient;
-  computeClient: ComputeClient;
   name: string;
   /** Explicitly requested region; a fresh zone falls back to DE, and a resumed zone must already be in it. */
   region?: string;
@@ -292,16 +434,16 @@ export interface CreateSiteResult {
   state: RemoteSiteState;
   storageZone: StorageZoneModel;
   systemHostname?: string;
-  reused: { storageZone: boolean; script: boolean; pullZone: boolean };
+  reused: { storageZone: boolean; pullZone: boolean };
 }
 
-// Provision a site (storage zone -> router script -> pull zone + router -> state); each step looks up by name first so a half-finished create re-runs cleanly, and a zone already carrying state is never re-provisioned.
+// Provision a site (storage zone -> placeholder -> pull zone -> cache settings + edge rules -> state); each step looks up by name first so a half-finished create re-runs cleanly, and a zone already carrying state is never re-provisioned.
 export async function createSite(
   opts: CreateSiteOptions,
 ): Promise<CreateSiteResult> {
-  const { coreClient, computeClient, name, region, tier } = opts;
+  const { coreClient, name, region, tier } = opts;
   const step = opts.onStep ?? (() => {});
-  const reused = { storageZone: false, script: false, pullZone: false };
+  const reused = { storageZone: false, pullZone: false };
 
   // 1. Storage zone; the site's identity.
   // A stateless name-pattern match is a half-finished create to resume; one carrying this site's state already is the site.
@@ -367,47 +509,10 @@ export async function createSite(
     throw new UserError(`Storage zone "${name}" has no ID.`);
   }
 
-  // 2. Router script (middleware); code/publish/env-var are idempotent, so they always run and a resumed create converges.
-  // Named after the zone so a resume finds it.
-  step("Creating router script...");
-  const resourceName = storageZone.Name ?? name;
-  const scriptName = routerScriptName(resourceName);
-  let scriptId = (await fetchScripts(computeClient)).find(
-    (s) => s.Name === scriptName,
-  )?.Id;
-  if (scriptId != null) {
-    reused.script = true;
-  } else {
-    const { data: script } = await computeClient.POST("/compute/script", {
-      body: {
-        Name: scriptName,
-        ScriptType: SCRIPT_TYPE_MIDDLEWARE,
-        CreateLinkedPullZone: false,
-      },
-    });
-    if (script?.Id == null) {
-      throw new UserError(`Failed to create router script "${scriptName}".`);
-    }
-    scriptId = script.Id;
-  }
-
-  step("Publishing router...");
-  await computeClient.POST("/compute/script/{id}/code", {
-    params: { path: { id: scriptId } },
-    body: { Code: routerSource },
-  });
-  await computeClient.POST("/compute/script/{id}/publish", {
-    params: { path: { id: scriptId, uuid: null } },
-    body: {},
-  });
-  await computeClient.PUT("/compute/script/{id}/variables", {
-    params: { path: { id: scriptId } },
-    body: { Name: CURRENT_DEPLOY_VAR, DefaultValue: "" },
-  });
-
-  // 3. Pull zone with the storage origin, router attached.
-  // Namd like the storage zone; a fresh suffix on collision keeps the create moving(nothing keys on the names matching).
+  // 2. Pull zone with the storage origin.
+  // Named like the storage zone; a fresh suffix on collision keeps the create moving (nothing keys on the names matching).
   step("Creating pull zone...");
+  const resourceName = storageZone.Name ?? name;
   let pullZone = await findSitePullZone(coreClient, name, storageZoneId);
   if (pullZone) {
     reused.pullZone = true;
@@ -415,14 +520,10 @@ export async function createSite(
     let pullZoneName = resourceName;
     for (let attempt = 0; !pullZone && attempt < 3; attempt++) {
       try {
-        // Router attached at creation time: an unrouted zone is already public and would serve the raw storage origin.
         pullZone = await createPullZone(
           coreClient,
           pullZoneName,
           storageZoneId,
-          {
-            middlewareScriptId: scriptId,
-          },
         );
       } catch (err) {
         if (!isNameTaken(err)) throw err;
@@ -439,35 +540,51 @@ export async function createSite(
   if (pullZone.Id == null) {
     throw new UserError(`Pull zone "${name}" has no ID.`);
   }
+
+  // 3. Cache settings + edge rules, immediately after the zone exists: an unruled zone serves the raw storage origin.
+  step("Configuring edge rules...");
+  const systemHost = systemHostname(pullZone.Hostnames);
+  if (!systemHost) {
+    throw new UserError(
+      `Pull zone "${resourceName}" has no system hostname.`,
+      "Re-run the command to finish provisioning.",
+    );
+  }
   await coreClient.POST("/pullzone/{id}", {
     params: { path: { id: pullZone.Id } },
-    body: { MiddlewareScriptId: scriptId },
+    body: SITE_CACHE_SETTINGS,
+  });
+  await ensureSiteRules({
+    coreClient,
+    pullZoneId: pullZone.Id,
+    systemHost,
+    deployId: PLACEHOLDER_DEPLOY,
   });
 
   // Force HTTPS on the <name>.b-cdn.net system host (already on bunny's wildcard cert, so this just redirects HTTP); best-effort.
-  const systemHost = systemHostname(pullZone.Hostnames);
-  if (systemHost) {
-    try {
-      await setForceSsl(coreClient, pullZone.Id, systemHost, true);
-    } catch (err) {
-      logger.warn(
-        `Couldn't force HTTPS on ${systemHost}: ${errorMessage(err)}`,
-      );
-    }
+  try {
+    await setForceSsl(coreClient, pullZone.Id, systemHost, true);
+  } catch (err) {
+    logger.warn(`Couldn't force HTTPS on ${systemHost}: ${errorMessage(err)}`);
   }
 
-  // 4. Remote state; from here on the zone identifies as a site.
+  // 4. The no-deploys page behind the initial rewrite target, then remote state; a fresh storage zone can briefly refuse writes, so the first upload sits late in the create rather than racing zone readiness.
+  step("Uploading placeholder...");
+  const connection = siteFiles.connect(storageZone);
+  await siteFiles.upload(
+    connection,
+    `${deployPrefix(PLACEHOLDER_DEPLOY)}/index.html`,
+    textStream(NO_DEPLOYS_PAGE),
+  );
+
   step("Writing site state...");
   const state: RemoteSiteState = {
     version: STATE_VERSION,
     name,
     storageZoneId,
     pullZoneId: pullZone.Id,
-    scriptId,
-    routerVersion: ROUTER_VERSION,
     deploys: [],
   };
-  const connection = siteFiles.connect(storageZone);
   await writeRemoteState(connection, state);
 
   return {
@@ -493,95 +610,95 @@ export async function fetchSystemHostname(
   }
 }
 
-// Republish the site's router when its recorded source generation lags the CLI's. Mutates state.routerVersion; the caller's next state write persists it, and a missed write just re-runs this next time.
-export async function ensureRouterCurrent(opts: {
-  computeClient: ComputeClient;
-  state: RemoteSiteState;
-}): Promise<boolean> {
-  const { computeClient, state } = opts;
-  // Only upgrade: a site touched by a newer CLI must not be downgraded to this binary's older source (e.g. a pinned CI action racing a newer local CLI).
-  if ((state.routerVersion ?? 0) >= ROUTER_VERSION) return false;
-  await computeClient.POST("/compute/script/{id}/code", {
-    params: { path: { id: state.scriptId } },
-    body: { Code: routerSource },
-  });
-  await computeClient.POST("/compute/script/{id}/publish", {
-    params: { path: { id: state.scriptId, uuid: null } },
-    body: {},
-  });
-  state.routerVersion = ROUTER_VERSION;
-  return true;
+// Router-era sites (state version 1) predate the edge-rule architecture; there is no in-place migration.
+export function requireRulesSite(state: RemoteSiteState): void {
+  if (state.scriptId == null) return;
+  throw new UserError(
+    `Site "${state.name}" was created with the retired router architecture.`,
+    `Delete it (\`bunny sites delete ${state.name}\`) and create it again to deploy with this CLI. The site keeps serving its current deploy until then.`,
+  );
 }
 
 const PROBE_TIMEOUT_MS = 4000;
 const PROPAGATION_DEADLINE_MS = 20_000;
 const PROPAGATION_INTERVAL_MS = 1500;
-const SETTLE_FLOOR_MS = 2500;
+// Config syncs bundle in ~5s buckets, so the floor must outlast one bucket or the final purge can race a lagging node.
+const SETTLE_FLOOR_MS = 7500;
 
 export const promoteVerification = {
-  /** Probe the live site through the CDN; resolves to the HTTP status code. */
-  probe: async (url: string): Promise<number> => {
+  /** Probe the live site through the CDN; resolves to the status and the serving deploy id. */
+  probe: async (
+    url: string,
+  ): Promise<{ status: number; deploy: string | null }> => {
     const res = await fetch(url, {
       cache: "no-store",
       redirect: "manual",
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
-    return res.status;
+    return {
+      status: res.status,
+      deploy: res.headers.get(DEPLOY_HEADER),
+    };
   },
   wait: (ms: number): Promise<void> =>
     new Promise((resolve) => setTimeout(resolve, ms)),
 };
 
-// Wait until the edge serves a real deploy: the router's "no deploys yet" 404 means CURRENT_DEPLOY is unset/unpropagated, so any non-404 means it landed; best-effort (skip probing when the host can't be resolved).
+// Wait until the edge serves the promoted deploy, identified by the rewrite rule's response header.
 async function waitForEdgePropagation(
-  coreClient: CoreClient,
-  state: RemoteSiteState,
+  host: string,
   deployId: string,
 ): Promise<void> {
-  const host = await fetchSystemHostname(coreClient, state.pullZoneId);
   const start = Date.now();
-  if (host) {
-    const deadline = start + PROPAGATION_DEADLINE_MS;
-    let attempt = 0;
-    while (Date.now() < deadline) {
-      try {
-        // A unique query per attempt keeps each probe out of the CDN cache so a stale placeholder can't mask a propagated deploy.
-        const status = await promoteVerification.probe(
-          `https://${host}/?__bunny_promote=${deployId}-${attempt++}`,
-        );
-        if (status !== 404) break;
-      } catch {
-        // Edge briefly unreachable (DNS/warmup); keep trying until the deadline.
-      }
-      await promoteVerification.wait(PROPAGATION_INTERVAL_MS);
+  const deadline = start + PROPAGATION_DEADLINE_MS;
+  let attempt = 0;
+  while (Date.now() < deadline) {
+    try {
+      // A unique query per attempt keeps each probe out of the CDN cache so a stale entry can't mask a propagated rule.
+      const { deploy } = await promoteVerification.probe(
+        `https://${host}/?__bunny_promote=${deployId}-${attempt++}`,
+      );
+      if (deploy === deployId) break;
+    } catch {
+      // Edge briefly unreachable (DNS/warmup); keep trying until the deadline.
     }
+    await promoteVerification.wait(PROPAGATION_INTERVAL_MS);
   }
-  // Let the env var reach every node before the follow-up purge, so re-promotes don't re-cache the outgoing deploy's assets.
+  // Let the rule reach every node before the follow-up purge, so re-promotes don't re-cache the outgoing deploy's files.
   const elapsed = Date.now() - start;
   if (elapsed < SETTLE_FLOOR_MS) {
     await promoteVerification.wait(SETTLE_FLOOR_MS - elapsed);
   }
 }
 
-// Point production at a deploy: set CURRENT_DEPLOY (no republish) and purge. Since the env var propagates async, we purge, wait for the edge to serve it, then purge again so nothing stale survives.
+// Point production at a deploy: retarget the rewrite rule and purge. The rule propagates async, so purge, wait for the edge to serve it, then purge again so nothing stale survives (the header can confirm on a cached response, which is why the second purge is load-bearing).
 export async function promoteDeploy(opts: {
-  computeClient: ComputeClient;
   coreClient: CoreClient;
   state: RemoteSiteState;
   deployId: string;
 }): Promise<void> {
+  const { coreClient, state, deployId } = opts;
   const purge = () =>
-    opts.coreClient.POST("/pullzone/{id}/purgeCache", {
-      params: { path: { id: opts.state.pullZoneId } },
+    coreClient.POST("/pullzone/{id}/purgeCache", {
+      params: { path: { id: state.pullZoneId } },
       body: {},
     });
 
-  await opts.computeClient.PUT("/compute/script/{id}/variables", {
-    params: { path: { id: opts.state.scriptId } },
-    body: { Name: CURRENT_DEPLOY_VAR, DefaultValue: opts.deployId },
+  const host = await fetchSystemHostname(coreClient, state.pullZoneId);
+  if (!host) {
+    throw new UserError(
+      "Couldn't resolve the site's hostname to publish.",
+      "Re-run the command; the pull zone may still be provisioning.",
+    );
+  }
+  await ensureSiteRules({
+    coreClient,
+    pullZoneId: state.pullZoneId,
+    systemHost: host,
+    deployId,
   });
   await purge();
-  await waitForEdgePropagation(opts.coreClient, opts.state, opts.deployId);
+  await waitForEdgePropagation(host, deployId);
   await purge();
 }
 
@@ -622,11 +739,15 @@ export async function deleteSiteResources(opts: {
       params: { path: { id: state.pullZoneId } },
     }),
   );
-  await attempt("router script", state.scriptId, () =>
-    computeClient.DELETE("/compute/script/{id}", {
-      params: { path: { id: state.scriptId } },
-    }),
-  );
+  // Router-era sites (state version 1) still carry a script to clean up.
+  const scriptId = state.scriptId;
+  if (scriptId != null) {
+    await attempt("router script", scriptId, () =>
+      computeClient.DELETE("/compute/script/{id}", {
+        params: { path: { id: scriptId } },
+      }),
+    );
+  }
   if (opts.keepStorage) {
     // The zone survives, so remove its site marker, else list/link/show rediscover a "site" whose pull zone and router are gone. But only once everything else deleted: the marker is what makes a re-run able to find and retry the failures.
     if (opts.connection && results.every((r) => r.deleted)) {

@@ -1,9 +1,6 @@
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import {
-  createComputeClient,
-  createCoreClient,
-} from "@bunny.net/openapi-client";
+import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../config/index.ts";
 import { clientOptions } from "../../core/client-options.ts";
 import { defineCommand } from "../../core/define-command.ts";
@@ -14,9 +11,9 @@ import { normalizeHostname } from "../../core/hostnames/index.ts";
 import { logger } from "../../core/logger.ts";
 import { confirm, isInteractive, prompts, withSpinner } from "../../core/ui.ts";
 import {
-  ensureRouterCurrent,
   fetchSystemHostname,
   promoteDeploy,
+  requireRulesSite,
   writeRemoteState,
 } from "./api.ts";
 import {
@@ -142,7 +139,6 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const options = clientOptions(config, verbose);
     const coreClient = createCoreClient(options);
-    const computeClient = createComputeClient(options);
 
     // No `force` here: deploy's --force only redeploys unchanged content, so the picker stays.
     const { site, offerLink } = await selectSite(coreClient, {
@@ -151,27 +147,16 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       output,
       offerCreate: async () => {
         const name = await promptSiteName(undefined, true);
-        return createLinkedSite({ coreClient, computeClient, name });
+        return createLinkedSite({ coreClient, name });
       },
     });
     const { state, connection } = site;
+    requireRulesSite(state);
 
     // The site's first-ever deploy is the one moment we offer a custom domain; declining self-limits, since the list is never empty again.
     const firstDeploy = state.deploys.length === 0;
 
     let etag = site.etag;
-
-    // Republish an outdated router before deploying, so this deploy is served by the current source (state.routerVersion persists with this deploy's writes, including no-op runs, so it doesn't republish every time). A failure isn't fatal: the old router still resolves CURRENT_DEPLOY.
-    let routerUpgraded = false;
-    try {
-      routerUpgraded = await ensureRouterCurrent({ computeClient, state });
-      if (routerUpgraded && output !== "json") {
-        logger.info("Republished the site's router.");
-      }
-    } catch (err) {
-      logger.warn(`Couldn't update the site's router: ${errorMessage(err)}`);
-      logger.dim("  Retry with `bunny sites upgrade-router`.");
-    }
 
     let autoDir: string | undefined;
     if (requestedBuild) {
@@ -240,11 +225,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       : await fetchSystemHostname(coreClient, state.pullZoneId);
     const production = productionUrl(state, systemHost);
 
-    // Nothing to upload and it's already live: still persist a router upgrade so re-runs converge.
     if (skipUpload && alreadyLive) {
-      if (routerUpgraded) {
-        etag = await writeRemoteState(connection, state, etag);
-      }
       if (output === "json") {
         logger.log(
           JSON.stringify(
@@ -298,12 +279,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
 
     await withSpinner("Publishing to production...", async () => {
-      await promoteDeploy({
-        computeClient,
-        coreClient,
-        state,
-        deployId,
-      });
+      await promoteDeploy({ coreClient, state, deployId });
       markCurrent(state, deployId);
       etag = await writeRemoteState(connection, state, etag, {
         promotedTo: deployId,

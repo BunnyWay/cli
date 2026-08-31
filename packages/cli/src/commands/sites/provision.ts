@@ -9,7 +9,6 @@ import {
   type ZoneTierChoice,
 } from "../storage/constants.ts";
 import {
-  type ComputeClient,
   type CreateSiteResult,
   createSite,
   type SiteContext,
@@ -84,7 +83,6 @@ export function resolveSiteRegion(
 /** Run {@link createSite} under a spinner whose text tracks each provisioning step. */
 export async function createSiteWithProgress(opts: {
   coreClient: CoreClient;
-  computeClient: ComputeClient;
   name: string;
   region?: string;
   tier?: ZoneTierChoice;
@@ -93,7 +91,6 @@ export async function createSiteWithProgress(opts: {
   return withSpinner(`Creating site "${opts.name}"...`, (spin) =>
     createSite({
       coreClient: opts.coreClient,
-      computeClient: opts.computeClient,
       name: opts.name,
       region,
       tier: opts.tier,
@@ -106,7 +103,6 @@ export async function createSiteWithProgress(opts: {
 
 export async function createLinkedSite(opts: {
   coreClient: CoreClient;
-  computeClient: ComputeClient;
   name: string;
   region?: string;
   tier?: ZoneTierChoice;

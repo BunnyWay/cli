@@ -11,7 +11,6 @@ import { sitesOpenCommand } from "./open.ts";
 import { sitesShowCommand } from "./show.ts";
 import { sitesSslCommand } from "./ssl.ts";
 import { sitesUnlinkCommand } from "./unlink.ts";
-import { sitesUpgradeRouterCommand } from "./upgrade-router.ts";
 
 export const sitesNamespace = defineNamespace("sites", false, [
   sitesCreateCommand,
@@ -25,6 +24,5 @@ export const sitesNamespace = defineNamespace("sites", false, [
   sitesCiNamespace,
   sitesLinkCommand,
   sitesUnlinkCommand,
-  sitesUpgradeRouterCommand,
   sitesDeleteCommand,
 ]);

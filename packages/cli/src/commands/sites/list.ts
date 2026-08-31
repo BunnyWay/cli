@@ -31,7 +31,6 @@ export const sitesListCommand = defineCommand({
             name: s.state.name,
             storageZoneId: s.state.storageZoneId,
             pullZoneId: s.state.pullZoneId,
-            scriptId: s.state.scriptId,
             domain: s.state.domain ?? null,
             hostname: s.systemHostname ?? null,
             current: s.state.current ?? null,

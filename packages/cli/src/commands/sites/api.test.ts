@@ -1,25 +1,29 @@
 import { afterAll, beforeEach, expect, test } from "bun:test";
+import type { EdgeRule } from "../../core/edge-rules.ts";
 import { ApiError } from "../../core/errors.ts";
 import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
 import {
   type ComputeClient,
   createSite,
   deleteSiteResources,
-  ensureRouterCurrent,
   fetchSites,
   promoteDeploy,
   promoteVerification,
   readRemoteState,
+  requireRulesSite,
   siteContextFromZone,
   siteFiles,
   writeRemoteState,
 } from "./api.ts";
 import {
+  GATE_RULE_DESC,
+  HOP_HEADER,
+  PLACEHOLDER_DEPLOY,
   REMOTE_STATE_PATH,
+  REWRITE_RULE_DESC,
   type RemoteSiteState,
   STATE_VERSION,
 } from "./constants.ts";
-import { ROUTER_VERSION } from "./router/source.ts";
 
 // ---- in-memory storage-file store (replaces the storage SDK) ----
 
@@ -31,7 +35,12 @@ beforeEach(() => {
   store.clear();
   // Promote probes the CDN and sleeps between attempts; keep tests offline and fast.
   promoteVerification.wait = async () => {};
-  promoteVerification.probe = async () => 200;
+  promoteVerification.probe = async (url) => ({
+    status: 200,
+    deploy:
+      new URL(url).searchParams.get("__bunny_promote")?.replace(/-\d+$/, "") ??
+      null,
+  });
   siteFiles.connect = (zone) =>
     ({ zoneName: zone.Name }) as unknown as ReturnType<
       typeof siteFiles.connect
@@ -87,7 +96,6 @@ function fakeState(overrides?: Partial<RemoteSiteState>): RemoteSiteState {
     name: "my-site",
     storageZoneId: 10,
     pullZoneId: 30,
-    scriptId: 20,
     deploys: [],
     ...overrides,
   };
@@ -113,7 +121,9 @@ function fakeCoreClient(opts: {
 }): CoreClient {
   const zones = opts.storageZones ?? [];
   const pullZones = opts.pullZones ?? [];
+  const edgeRules = new Map<number, EdgeRule[]>();
   let nextPullZoneId = 30;
+  let nextGuid = 1;
   return {
     GET: async (
       path: string,
@@ -128,11 +138,17 @@ function fakeCoreClient(opts: {
         return { data: zone };
       }
       if (path === "/pullzone/{id}") {
-        const pz = pullZones.find((p) => p.Id === options?.params?.path?.id);
+        const id = options?.params?.path?.id as number;
+        const pz = pullZones.find((p) => p.Id === id);
         return {
-          data: pz ?? {
-            Id: options?.params?.path?.id,
-            Hostnames: [{ IsSystemHostname: true, Value: "my-site.b-cdn.net" }],
+          data: {
+            ...(pz ?? {
+              Id: id,
+              Hostnames: [
+                { IsSystemHostname: true, Value: "my-site.b-cdn.net" },
+              ],
+            }),
+            EdgeRules: edgeRules.get(id) ?? [],
           },
         };
       }
@@ -181,16 +197,31 @@ function fakeCoreClient(opts: {
         return { data: zone };
       }
       if (path === "/pullzone") {
-        const name = (options?.body as { Name: string }).Name;
+        const body = options?.body as { Name: string; StorageZoneId?: number };
+        const name = body.Name;
         const pz = {
           Id: nextPullZoneId++,
           Name: name,
+          StorageZoneId: body.StorageZoneId,
           Hostnames: [{ IsSystemHostname: true, Value: `${name}.b-cdn.net` }],
         };
         pullZones.push(pz);
         return { data: pz };
       }
       if (path === "/pullzone/{id}") return { data: {} };
+      if (path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate") {
+        const id = (options?.params as { path: { pullZoneId: number } }).path
+          .pullZoneId;
+        const rule = options?.body as EdgeRule;
+        const rules = edgeRules.get(id) ?? [];
+        const existing = rule.Guid
+          ? rules.findIndex((r) => r.Guid === rule.Guid)
+          : -1;
+        if (existing >= 0) rules[existing] = rule;
+        else rules.push({ ...rule, Guid: `guid-${nextGuid++}` });
+        edgeRules.set(id, rules);
+        return { data: undefined };
+      }
       if (path === "/pullzone/{id}/setForceSSL") return { data: undefined };
       if (path === "/pullzone/{id}/purgeCache") return { data: undefined };
       throw new Error(`unexpected POST ${path}`);
@@ -405,24 +436,17 @@ test("writeRemoteState does not resurrect intentionally removed deploys on a pru
 
 // ---- provisioning ----
 
-test("createSite provisions storage zone → router → pull zone → state", async () => {
+test("createSite provisions storage zone → pull zone → edge rules → state", async () => {
   const coreCalls: Call[] = [];
-  const computeCalls: Call[] = [];
   const coreClient = fakeCoreClient({ calls: coreCalls });
-  const computeClient = fakeComputeClient({ calls: computeCalls });
 
   const result = await createSite({
     coreClient,
-    computeClient,
     name: "my-site",
     region: "DE",
   });
 
-  expect(result.reused).toEqual({
-    storageZone: false,
-    script: false,
-    pullZone: false,
-  });
+  expect(result.reused).toEqual({ storageZone: false, pullZone: false });
 
   // Zone names are globally unique, so both carry a shared random suffix.
   const zoneCreate = coreCalls.find(
@@ -432,21 +456,10 @@ test("createSite provisions storage zone → router → pull zone → state", as
   expect(zoneName).toMatch(/^sites-my-site-[a-z0-9]{6}$/);
   expect(result.systemHostname).toBe(`${zoneName}.b-cdn.net`);
 
-  // The router script is uploaded, published, and gets CURRENT_DEPLOY="".
-  const computePaths = computeCalls.map((c) => `${c.method} ${c.path}`);
-  expect(computePaths).toContain("POST /compute/script");
-  expect(computePaths).toContain("POST /compute/script/{id}/code");
-  expect(computePaths).toContain("POST /compute/script/{id}/publish");
-  const scriptCreate = computeCalls.find(
-    (c) => c.path === "/compute/script" && c.method === "POST",
-  );
-  expect(scriptCreate?.body).toMatchObject({ Name: `${zoneName}-router` });
-  const envSet = computeCalls.find(
-    (c) => c.path === "/compute/script/{id}/variables",
-  );
-  expect(envSet?.body).toEqual({ Name: "CURRENT_DEPLOY", DefaultValue: "" });
+  // The no-deploys page backs the initial rewrite target.
+  expect(store.has(`deploys/${PLACEHOLDER_DEPLOY}/index.html`)).toBe(true);
 
-  // Exactly one pull zone (production) is created; the router is attached.
+  // Exactly one pull zone (production) is created, plus the cache settings update.
   const pzCreates = coreCalls.filter(
     (c) => c.method === "POST" && c.path === "/pullzone",
   );
@@ -455,10 +468,31 @@ test("createSite provisions storage zone → router → pull zone → state", as
     Name: zoneName,
     StorageZoneId: 10,
   });
-  const attach = coreCalls.find(
+  const settings = coreCalls.find(
     (c) => c.method === "POST" && c.path === "/pullzone/{id}",
   );
-  expect(attach?.body).toEqual({ MiddlewareScriptId: 20 });
+  expect(settings?.body).toEqual({
+    CacheControlMaxAgeOverride: 2592000,
+    CacheControlPublicMaxAgeOverride: 0,
+  });
+
+  // All five rules land, the rewrite targets the placeholder, and the gate carries the rewrite's hop secret.
+  const rules = coreCalls
+    .filter((c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate")
+    .map((c) => c.body as EdgeRule);
+  expect(rules).toHaveLength(5);
+  const rewrite = rules.find((r) => r.Description === REWRITE_RULE_DESC);
+  expect(rewrite?.ActionParameter1).toBe(
+    `https://${zoneName}.b-cdn.net/deploys/${PLACEHOLDER_DEPLOY}%{Url.Path}`,
+  );
+  const secret = rewrite?.ExtraActions?.find(
+    (a) => a.ActionParameter1 === HOP_HEADER,
+  )?.ActionParameter2;
+  expect(secret).toMatch(/^[0-9a-f]{32}$/);
+  const gate = rules.find((r) => r.Description === GATE_RULE_DESC);
+  expect(
+    gate?.Triggers?.find((t) => t.Parameter1 === HOP_HEADER)?.PatternMatches,
+  ).toEqual([secret as string]);
 
   // The system host redirects HTTP → HTTPS out of the box.
   const forceSsl = coreCalls.find(
@@ -469,24 +503,47 @@ test("createSite provisions storage zone → router → pull zone → state", as
     ForceSSL: true,
   });
 
-  // Exactly one middleware script (the router) is created.
-  expect(computePaths.filter((p) => p === "POST /compute/script")).toHaveLength(
-    1,
-  );
-
-  // Remote state marks the zone as a site.
+  // Remote state marks the zone as a site; no script in the rules era.
   const written = await readRemoteState(fakeConnection());
   expect(written?.state).toMatchObject({
     name: "my-site",
     storageZoneId: 10,
     pullZoneId: 30,
-    scriptId: 20,
   });
+  expect(written?.state.scriptId).toBeUndefined();
+});
+
+test("createSite re-run after a crash reuses the rules and their secret", async () => {
+  const coreCalls: Call[] = [];
+  const coreClient = fakeCoreClient({ calls: coreCalls });
+
+  await createSite({ coreClient, name: "my-site", region: "DE" });
+  const secretOf = (rules: EdgeRule[]) =>
+    rules
+      .find((r) => r.Description === REWRITE_RULE_DESC)
+      ?.ExtraActions?.find((a) => a.ActionParameter1 === HOP_HEADER)
+      ?.ActionParameter2;
+  const firstSecret = secretOf(
+    coreCalls
+      .filter((c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate")
+      .map((c) => c.body as EdgeRule),
+  );
+
+  // Crash before the state write: the resume must upsert the same rules, not duplicate them or mint a new secret.
+  store.clear();
+  coreCalls.length = 0;
+  await createSite({ coreClient, name: "my-site", region: "DE" });
+
+  const upserts = coreCalls
+    .filter((c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate")
+    .map((c) => c.body as EdgeRule);
+  expect(upserts).toHaveLength(5);
+  expect(upserts.every((r) => r.Guid)).toBe(true);
+  expect(secretOf(upserts)).toBe(firstSecret as string);
 });
 
 test("createSite re-run reuses existing resources and converges", async () => {
   const coreCalls: Call[] = [];
-  const computeCalls: Call[] = [];
   // Everything already exists; but no remote state (a half-finished create).
   const coreClient = fakeCoreClient({
     calls: coreCalls,
@@ -496,79 +553,60 @@ test("createSite re-run reuses existing resources and converges", async () => {
         Id: 30,
         Name: "sites-my-site-abc123",
         StorageZoneId: 10,
-        Hostnames: [],
+        Hostnames: [
+          { IsSystemHostname: true, Value: "sites-my-site-abc123.b-cdn.net" },
+        ],
       },
     ],
-  });
-  const computeClient = fakeComputeClient({
-    calls: computeCalls,
-    scripts: [{ Id: 20, Name: "sites-my-site-abc123-router" }],
   });
 
   const result = await createSite({
     coreClient,
-    computeClient,
     name: "my-site",
     region: "DE",
   });
 
-  expect(result.reused).toEqual({
-    storageZone: true,
-    script: true,
-    pullZone: true,
-  });
+  expect(result.reused).toEqual({ storageZone: true, pullZone: true });
   // Nothing new was created…
   expect(
     coreCalls.filter((c) => c.method === "POST" && c.path === "/storagezone"),
   ).toHaveLength(0);
-  expect(
-    computeCalls.filter(
-      (c) => c.method === "POST" && c.path === "/compute/script",
-    ),
-  ).toHaveLength(0);
-  // …but the router republish and attach still ran (idempotent convergence).
-  expect(computeCalls.map((c) => c.path)).toContain(
-    "/compute/script/{id}/code",
-  );
+  // …but the settings and rules still converge on the existing zone.
   expect(coreCalls.map((c) => `${c.method} ${c.path}`)).toContain(
     "POST /pullzone/{id}",
   );
+  expect(
+    coreCalls.filter(
+      (c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate",
+    ),
+  ).toHaveLength(5);
   expect(await readRemoteState(fakeConnection())).not.toBeNull();
 });
 
 test("createSite resumes a half-created suffixed site", async () => {
-  const coreCalls: Call[] = [];
-  const computeCalls: Call[] = [];
   const suffixed = { ...ZONE, Name: "sites-my-site-abc123" };
   const coreClient = fakeCoreClient({
-    calls: coreCalls,
+    calls: [],
     storageZones: [suffixed],
     pullZones: [
       {
         Id: 30,
         Name: "sites-my-site-abc123",
         StorageZoneId: 10,
-        Hostnames: [],
+        Hostnames: [
+          { IsSystemHostname: true, Value: "sites-my-site-abc123.b-cdn.net" },
+        ],
       },
     ],
-  });
-  const computeClient = fakeComputeClient({
-    calls: computeCalls,
-    scripts: [{ Id: 20, Name: "sites-my-site-abc123-router" }],
   });
 
   const result = await createSite({
     coreClient,
-    computeClient,
     name: "my-site",
     region: "DE",
   });
 
-  expect(result.reused).toEqual({
-    storageZone: true,
-    script: true,
-    pullZone: true,
-  });
+  expect(result.reused).toEqual({ storageZone: true, pullZone: true });
   // The site keeps its clean display name; only the zones carry the suffix.
   expect(result.state.name).toBe("my-site");
 });
@@ -576,33 +614,20 @@ test("createSite resumes a half-created suffixed site", async () => {
 test("createSite refuses to resume a half-created zone on another tier", async () => {
   const suffixed = { ...ZONE, Name: "sites-my-site-abc123" };
   const coreClient = fakeCoreClient({ calls: [], storageZones: [suffixed] });
-  const computeClient = fakeComputeClient({ calls: [] });
 
   // The zone is HDD, so an --tier ssd resume would silently finish on the wrong tier.
   await expect(
-    createSite({
-      coreClient,
-      computeClient,
-      name: "my-site",
-      region: "DE",
-      tier: "ssd",
-    }),
+    createSite({ coreClient, name: "my-site", region: "DE", tier: "ssd" }),
   ).rejects.toThrow("but `--tier ssd` was requested");
 });
 
 test("createSite refuses to resume a half-created zone in another region", async () => {
   const suffixed = { ...ZONE, Name: "sites-my-site-abc123", Region: "LA" };
   const coreClient = fakeCoreClient({ calls: [], storageZones: [suffixed] });
-  const computeClient = fakeComputeClient({ calls: [] });
 
   // The zone lives in LA, so an explicit --region de resume would silently keep the files there.
   await expect(
-    createSite({
-      coreClient,
-      computeClient,
-      name: "my-site",
-      region: "DE",
-    }),
+    createSite({ coreClient, name: "my-site", region: "DE" }),
   ).rejects.toThrow("but `--region DE` was requested");
 });
 
@@ -616,20 +641,14 @@ test("createSite resumes a half-created zone in another region when none was req
         Id: 30,
         Name: "sites-my-site-abc123",
         StorageZoneId: 10,
-        Hostnames: [],
+        Hostnames: [
+          { IsSystemHostname: true, Value: "sites-my-site-abc123.b-cdn.net" },
+        ],
       },
     ],
   });
-  const computeClient = fakeComputeClient({
-    calls: [],
-    scripts: [{ Id: 20, Name: "sites-my-site-abc123-router" }],
-  });
 
-  const result = await createSite({
-    coreClient,
-    computeClient,
-    name: "my-site",
-  });
+  const result = await createSite({ coreClient, name: "my-site" });
 
   expect(result.reused.storageZone).toBe(true);
 });
@@ -644,18 +663,15 @@ test("createSite resumes a half-created zone when the tier matches", async () =>
         Id: 30,
         Name: "sites-my-site-abc123",
         StorageZoneId: 10,
-        Hostnames: [],
+        Hostnames: [
+          { IsSystemHostname: true, Value: "sites-my-site-abc123.b-cdn.net" },
+        ],
       },
     ],
-  });
-  const computeClient = fakeComputeClient({
-    calls: [],
-    scripts: [{ Id: 20, Name: "sites-my-site-abc123-router" }],
   });
 
   const result = await createSite({
     coreClient,
-    computeClient,
     name: "my-site",
     region: "DE",
     tier: "hdd",
@@ -668,10 +684,9 @@ test("createSite refuses to re-provision an existing suffixed site", async () =>
   store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
   const suffixed = { ...ZONE, Name: "sites-my-site-abc123" };
   const coreClient = fakeCoreClient({ calls: [], storageZones: [suffixed] });
-  const computeClient = fakeComputeClient({ calls: [] });
 
   await expect(
-    createSite({ coreClient, computeClient, name: "my-site", region: "DE" }),
+    createSite({ coreClient, name: "my-site", region: "DE" }),
   ).rejects.toThrow('Site "my-site" already exists.');
 });
 
@@ -689,10 +704,8 @@ test("createSite gives up after every storage zone suffix collides", async () =>
       ),
     },
   });
-  const computeClient = fakeComputeClient({ calls: [] });
-
   await expect(
-    createSite({ coreClient, computeClient, name: "my-site", region: "DE" }),
+    createSite({ coreClient, name: "my-site", region: "DE" }),
   ).rejects.toThrow(
     'Couldn\'t find an available storage zone name for "my-site".',
   );
@@ -715,11 +728,9 @@ test("createSite retries the pull zone with a fresh suffix when the name is take
       times: 1,
     },
   });
-  const computeClient = fakeComputeClient({ calls: [] });
 
   const result = await createSite({
     coreClient,
-    computeClient,
     name: "my-site",
     region: "DE",
   });
@@ -740,10 +751,8 @@ test("createSite gives up after every pull zone suffix collides", async () => {
       error: new ApiError("The name is already taken.", 400),
     },
   });
-  const computeClient = fakeComputeClient({ calls: [] });
-
   await expect(
-    createSite({ coreClient, computeClient, name: "my-site", region: "DE" }),
+    createSite({ coreClient, name: "my-site", region: "DE" }),
   ).rejects.toThrow(
     'Couldn\'t find an available pull zone name for "my-site".',
   );
@@ -751,63 +760,58 @@ test("createSite gives up after every pull zone suffix collides", async () => {
 
 // ---- promote ----
 
-test("promoteDeploy sets CURRENT_DEPLOY and purges the pull zone cache", async () => {
+test("promoteDeploy retargets the rewrite rule, probes the edge, and purges twice", async () => {
   const coreCalls: Call[] = [];
-  const computeCalls: Call[] = [];
   const coreClient = fakeCoreClient({ calls: coreCalls });
-  const computeClient = fakeComputeClient({ calls: computeCalls });
+
+  // The edge serves the outgoing deploy until the rule propagates.
+  const serving = ["old", "old", "a1b2c3d4"];
+  const probed: string[] = [];
+  promoteVerification.probe = async (url) => {
+    probed.push(url);
+    return { status: 200, deploy: serving.shift() ?? "a1b2c3d4" };
+  };
 
   await promoteDeploy({
-    computeClient,
     coreClient,
     state: fakeState(),
     deployId: "a1b2c3d4",
   });
 
-  const envSet = computeCalls.find((c) => c.method === "PUT");
-  expect(envSet?.body).toEqual({
-    Name: "CURRENT_DEPLOY",
-    DefaultValue: "a1b2c3d4",
-  });
-  // Purged twice: once immediately, once after the edge picks up the new deploy.
+  const upserts = coreCalls
+    .filter((c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate")
+    .map((c) => c.body as EdgeRule);
+  const rewrite = upserts.find((r) => r.Description === REWRITE_RULE_DESC);
+  expect(rewrite?.ActionParameter1).toBe(
+    "https://my-site.b-cdn.net/deploys/a1b2c3d4%{Url.Path}",
+  );
+
+  // Kept probing until the edge reported the new deploy, then purged a second time.
+  expect(probed.length).toBe(3);
+  expect(probed[0]).toContain("my-site.b-cdn.net");
   const purges = coreCalls.filter(
     (c) => c.path === "/pullzone/{id}/purgeCache",
   );
   expect(purges).toHaveLength(2);
   expect(purges[0]?.params).toEqual({ path: { id: 30 } });
-});
 
-test("promoteDeploy waits for the edge to serve a deploy before the final purge", async () => {
-  const coreCalls: Call[] = [];
-  const coreClient = fakeCoreClient({ calls: coreCalls });
-  const computeClient = fakeComputeClient({ calls: [] });
-
-  // The edge returns the 404 placeholder until CURRENT_DEPLOY propagates.
-  const statuses = [404, 404, 200];
-  const probed: string[] = [];
-  promoteVerification.probe = async (url) => {
-    probed.push(url);
-    return statuses.shift() ?? 200;
-  };
-
-  await promoteDeploy({
-    computeClient,
-    coreClient,
-    state: fakeState(),
-    deployId: "a1b2c3d4",
-  });
-
-  // Kept probing past the placeholder, then purged a second time.
-  expect(probed.length).toBe(3);
-  expect(probed[0]).toContain("my-site.b-cdn.net");
-  expect(
-    coreCalls.filter((c) => c.path === "/pullzone/{id}/purgeCache"),
-  ).toHaveLength(2);
+  // A follow-up promote reuses the hop secret the first one minted.
+  const secretOf = (r?: EdgeRule) =>
+    r?.ExtraActions?.find((a) => a.ActionParameter1 === HOP_HEADER)
+      ?.ActionParameter2;
+  coreCalls.length = 0;
+  promoteVerification.probe = async () => ({ status: 200, deploy: "e5f6" });
+  await promoteDeploy({ coreClient, state: fakeState(), deployId: "e5f6" });
+  const again = coreCalls
+    .filter((c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate")
+    .map((c) => c.body as EdgeRule)
+    .find((r) => r.Description === REWRITE_RULE_DESC);
+  expect(secretOf(again)).toBe(secretOf(rewrite) as string);
 });
 
 // ---- discovery ----
 
-test("fetchSites keeps only middleware+storage pull zones with matching state", async () => {
+test("fetchSites keeps only storage pull zones whose state names them", async () => {
   store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
   const coreClient = fakeCoreClient({
     calls: [],
@@ -817,14 +821,13 @@ test("fetchSites keeps only middleware+storage pull zones with matching state", 
       {
         Id: 30,
         Name: "my-site",
-        MiddlewareScriptId: 20,
         StorageZoneId: 10,
         Hostnames: [{ IsSystemHostname: true, Value: "my-site.b-cdn.net" }],
       },
-      // Plain storage pull zone; no middleware, never fetched.
-      { Id: 31, Name: "not-a-site", StorageZoneId: 10 },
-      // Middleware pull zone whose state points elsewhere.
-      { Id: 32, Name: "other", MiddlewareScriptId: 9, StorageZoneId: 10 },
+      // A storage pull zone whose state points elsewhere.
+      { Id: 32, Name: "other", StorageZoneId: 10 },
+      // No storage origin: never a candidate.
+      { Id: 33, Name: "url-origin" },
     ],
   });
 
@@ -834,9 +837,9 @@ test("fetchSites keeps only middleware+storage pull zones with matching state", 
   expect(sites[0]?.systemHostname).toBe("my-site.b-cdn.net");
 });
 
-// A pull zone can share a site's storage origin and router without being the site's own zone; only the state's pullZoneId decides.
+// A pull zone can share a site's storage origin without being the site's own zone; only the state's pullZoneId decides. Router-era state (scriptId present) is still discovered for list/show/delete.
 test("fetchSites ignores another pull zone pointed at the site's storage zone", async () => {
-  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
+  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState({ scriptId: 20 })));
   const coreClient = fakeCoreClient({
     calls: [],
     storageZones: [ZONE],
@@ -844,14 +847,12 @@ test("fetchSites ignores another pull zone pointed at the site's storage zone", 
       {
         Id: 30,
         Name: "my-site",
-        MiddlewareScriptId: 20,
         StorageZoneId: 10,
         Hostnames: [{ IsSystemHostname: true, Value: "my-site.b-cdn.net" }],
       },
       {
         Id: 77,
         Name: "some-other-zone",
-        MiddlewareScriptId: 20,
         StorageZoneId: 10,
       },
     ],
@@ -862,27 +863,11 @@ test("fetchSites ignores another pull zone pointed at the site's storage zone", 
   expect(sites[0]?.state.pullZoneId).toBe(30);
 });
 
-test("ensureRouterCurrent republishes an outdated router and stamps the version", async () => {
-  const calls: Call[] = [];
-  const computeClient = fakeComputeClient({ calls });
-  const state = fakeState();
-
-  expect(await ensureRouterCurrent({ computeClient, state })).toBe(true);
-  expect(state.routerVersion).toBe(ROUTER_VERSION);
-  expect(calls.map((c) => c.path)).toEqual([
-    "/compute/script/{id}/code",
-    "/compute/script/{id}/publish",
-  ]);
-
-  // Already current: no calls at all.
-  const noCalls: Call[] = [];
-  expect(
-    await ensureRouterCurrent({
-      computeClient: fakeComputeClient({ calls: noCalls }),
-      state,
-    }),
-  ).toBe(false);
-  expect(noCalls).toHaveLength(0);
+test("requireRulesSite rejects router-era sites", () => {
+  expect(() => requireRulesSite(fakeState({ scriptId: 20 }))).toThrow(
+    "retired router architecture",
+  );
+  expect(() => requireRulesSite(fakeState())).not.toThrow();
 });
 
 test("siteContextFromZone is null for a zone without site state", async () => {
@@ -913,7 +898,7 @@ test("deleteSiteResources removes the site marker when keeping storage", async (
   expect(store.has("deploys/aaa/index.html")).toBe(true);
 });
 
-test("deleteSiteResources deletes the pull zone, router, and storage zone", async () => {
+test("deleteSiteResources deletes the pull zone and storage zone, plus a router-era script", async () => {
   const coreCalls: Call[] = [];
   const computeCalls: Call[] = [];
   const coreClient = fakeCoreClient({ calls: coreCalls });
@@ -924,17 +909,19 @@ test("deleteSiteResources deletes the pull zone, router, and storage zone", asyn
     computeClient,
     state: fakeState(),
   });
+  expect(computeCalls).toHaveLength(0);
+  expect(results.filter((r) => r.deleted)).toHaveLength(2);
 
-  const deletedPullZoneIds = coreCalls
-    .filter((c) => c.method === "DELETE" && c.path === "/pullzone/{id}")
-    .map((c) => (c.params as { path: { id: number } }).path.id);
-  expect(deletedPullZoneIds).toEqual([30]);
+  const routerEra = await deleteSiteResources({
+    coreClient,
+    computeClient,
+    state: fakeState({ scriptId: 20 }),
+  });
   const deletedScriptIds = computeCalls
     .filter((c) => c.method === "DELETE" && c.path === "/compute/script/{id}")
     .map((c) => (c.params as { path: { id: number } }).path.id);
   expect(deletedScriptIds).toEqual([20]);
-  // Pull zone + router script + storage zone.
-  expect(results.filter((r) => r.deleted)).toHaveLength(3);
+  expect(routerEra.filter((r) => r.deleted)).toHaveLength(3);
 });
 
 // Regression: the live API returns GET /pullzone as a paginated envelope
@@ -943,11 +930,9 @@ test("deleteSiteResources deletes the pull zone, router, and storage zone", asyn
 
 test("createSite handles the paginated /pullzone envelope", async () => {
   const coreClient = fakeCoreClient({ calls: [], pullZoneEnvelope: true });
-  const computeClient = fakeComputeClient({ calls: [] });
 
   const result = await createSite({
     coreClient,
-    computeClient,
     name: "my-site",
     region: "DE",
   });
@@ -962,11 +947,10 @@ test("fetchSites pages through the /pullzone envelope", async () => {
     calls: [],
     storageZones: [ZONE],
     pullZones: [
-      { Id: 31, Name: "not-a-site", StorageZoneId: 10 },
+      { Id: 31, Name: "not-a-site" },
       {
         Id: 30,
         Name: "my-site",
-        MiddlewareScriptId: 20,
         StorageZoneId: 10,
         Hostnames: [{ IsSystemHostname: true, Value: "my-site.b-cdn.net" }],
       },

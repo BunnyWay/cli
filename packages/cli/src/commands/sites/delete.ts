@@ -26,7 +26,7 @@ interface DeleteArgs extends SiteSelectorArgs {
   "keep-storage"?: boolean;
 }
 
-// Delete a site: its pull zone, router script, and (unless --keep-storage) the storage zone with every deploy; requires typing the name to confirm unless --force.
+// Delete a site: its pull zone and (unless --keep-storage) the storage zone with every deploy; router-era sites also lose their script; requires typing the name to confirm unless --force.
 export const sitesDeleteCommand = defineCommand<DeleteArgs>({
   command: "delete [site]",
   describe: "Delete a site and its resources.",
@@ -50,7 +50,7 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
       .option("keep-storage", {
         type: "boolean",
         default: false,
-        describe: "Delete the pull zone and router but keep the storage zone",
+        describe: "Delete the pull zone but keep the storage zone",
       }),
 
   handler: async (args) => {
@@ -69,8 +69,8 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     const { state } = site;
 
     const what = args["keep-storage"]
-      ? "its pull zone and router"
-      : "its pull zone, router, and ALL deploy files";
+      ? "its pull zone"
+      : "its pull zone and ALL deploy files";
     requireConfirmable(output, {
       force,
       message: `Deleting "${state.name}" needs a confirmation prompt.`,

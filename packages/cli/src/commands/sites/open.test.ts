@@ -9,7 +9,6 @@ function state(overrides?: Partial<RemoteSiteState>): RemoteSiteState {
     name: "my-site",
     storageZoneId: 10,
     pullZoneId: 30,
-    scriptId: 20,
     deploys: [],
     ...overrides,
   };
