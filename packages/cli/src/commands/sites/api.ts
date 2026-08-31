@@ -412,7 +412,7 @@ export async function createSite(
   }
   await coreClient.POST("/pullzone/{id}", {
     params: { path: { id: pullZone.Id } },
-    body: { MiddlewareScriptId: scriptId },
+    body: { MiddlewareScriptId: scriptId, ...SITE_CACHE_SETTINGS },
   });
 
   // Force HTTPS on the <name>.b-cdn.net system host (already on bunny's wildcard cert, so this just redirects HTTP); best-effort.
@@ -464,12 +464,18 @@ export async function fetchSystemHostname(
   }
 }
 
+export const SITE_CACHE_SETTINGS = {
+  CacheControlMaxAgeOverride: -1,
+  CacheControlPublicMaxAgeOverride: -1,
+};
+
 // Republish the site's router when its recorded source generation lags the CLI's. Mutates state.routerVersion; the caller's next state write persists it, and a missed write just re-runs this next time.
 export async function ensureRouterCurrent(opts: {
   computeClient: ComputeClient;
+  coreClient: CoreClient;
   state: RemoteSiteState;
 }): Promise<boolean> {
-  const { computeClient, state } = opts;
+  const { computeClient, coreClient, state } = opts;
   // Only upgrade: a site touched by a newer CLI must not be downgraded to this binary's older source (e.g. a pinned CI action racing a newer local CLI).
   if ((state.routerVersion ?? 0) >= ROUTER_VERSION) return false;
   await computeClient.POST("/compute/script/{id}/code", {
@@ -479,6 +485,10 @@ export async function ensureRouterCurrent(opts: {
   await computeClient.POST("/compute/script/{id}/publish", {
     params: { path: { id: state.scriptId, uuid: null } },
     body: {},
+  });
+  await coreClient.POST("/pullzone/{id}", {
+    params: { path: { id: state.pullZoneId } },
+    body: SITE_CACHE_SETTINGS,
   });
   state.routerVersion = ROUTER_VERSION;
   return true;

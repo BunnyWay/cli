@@ -45,6 +45,10 @@ test("routerSource wires up the deploy routing", () => {
   expect(src).toContain("headers.delete(RETRY_HEADER);");
   // Internal state is never served.
   expect(src).toContain('path.startsWith("/_bunny/")');
+  expect(src).toContain('pathname.endsWith(".html")');
+  expect(src).toContain(
+    'headers.set("Cache-Control", "no-cache, must-revalidate");',
+  );
 });
 
 // The raw URL at the edge is an internal origin address; the retry target must be rebuilt on the client host so the probe re-enters the CDN and this router.

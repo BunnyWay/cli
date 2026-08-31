@@ -8,7 +8,7 @@ import { defineCommand } from "../../core/define-command.ts";
 import { errorMessage } from "../../core/errors.ts";
 import { logger } from "../../core/logger.ts";
 import { withSpinner } from "../../core/ui.ts";
-import { writeRemoteState } from "./api.ts";
+import { SITE_CACHE_SETTINGS, writeRemoteState } from "./api.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -52,6 +52,10 @@ export const sitesUpgradeRouterCommand = defineCommand<UpgradeArgs>({
       await computeClient.POST("/compute/script/{id}/publish", {
         params: { path: { id: state.scriptId, uuid: null } },
         body: {},
+      });
+      await coreClient.POST("/pullzone/{id}", {
+        params: { path: { id: state.pullZoneId } },
+        body: SITE_CACHE_SETTINGS,
       });
     });
 

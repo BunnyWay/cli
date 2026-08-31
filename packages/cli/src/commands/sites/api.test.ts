@@ -456,7 +456,11 @@ test("createSite provisions storage zone → router → pull zone → state", as
   const attach = coreCalls.find(
     (c) => c.method === "POST" && c.path === "/pullzone/{id}",
   );
-  expect(attach?.body).toEqual({ MiddlewareScriptId: 20 });
+  expect(attach?.body).toEqual({
+    MiddlewareScriptId: 20,
+    CacheControlMaxAgeOverride: -1,
+    CacheControlPublicMaxAgeOverride: -1,
+  });
 
   // The system host redirects HTTP → HTTPS out of the box.
   const forceSsl = coreCalls.find(
@@ -771,21 +775,31 @@ test("fetchSites ignores another pull zone pointed at the site's storage zone", 
 
 test("ensureRouterCurrent republishes an outdated router and stamps the version", async () => {
   const calls: Call[] = [];
+  const coreCalls: Call[] = [];
   const computeClient = fakeComputeClient({ calls });
+  const coreClient = fakeCoreClient({ calls: coreCalls });
   const state = fakeState();
 
-  expect(await ensureRouterCurrent({ computeClient, state })).toBe(true);
+  expect(await ensureRouterCurrent({ computeClient, coreClient, state })).toBe(
+    true,
+  );
   expect(state.routerVersion).toBe(ROUTER_VERSION);
   expect(calls.map((c) => c.path)).toEqual([
     "/compute/script/{id}/code",
     "/compute/script/{id}/publish",
   ]);
+  expect(coreCalls.map((c) => c.path)).toEqual(["/pullzone/{id}"]);
+  expect(coreCalls[0]?.body).toEqual({
+    CacheControlMaxAgeOverride: -1,
+    CacheControlPublicMaxAgeOverride: -1,
+  });
 
   // Already current: no calls at all.
   const noCalls: Call[] = [];
   expect(
     await ensureRouterCurrent({
       computeClient: fakeComputeClient({ calls: noCalls }),
+      coreClient: fakeCoreClient({ calls: noCalls }),
       state,
     }),
   ).toBe(false);
