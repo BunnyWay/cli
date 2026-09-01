@@ -10,7 +10,7 @@ const SHELL_HINTS: Record<string, string> = {
 
 /** The one-line completion tip for the given `$SHELL` value; `undefined` when the shell is unknown. */
 export function completionHint(shell: string): string | undefined {
-  return SHELL_HINTS[basename(shell)]
+  return SHELL_HINTS[basename(shell)];
 }
 
 /** Passive one-line completion hint shown after `bunny login`; suppressed under `--output json` and for unknown shells. */
