@@ -1,5 +1,7 @@
 # @bunny.net/database-shell-linux-arm64
 
+## 0.2.6
+
 ## 0.2.5
 
 ## 0.2.4

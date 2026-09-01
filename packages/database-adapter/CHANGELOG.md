@@ -1,5 +1,13 @@
 # @bunny.net/database-adapter
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [[`207ab25`](https://github.com/BunnyWay/cli/commit/207ab25a4e533dfdfd04ecd196a1d83813912604), [`1da83cb`](https://github.com/BunnyWay/cli/commit/1da83cbb2d834dfaf7f6b746f9333fcc2848ba0d), [`dca7b35`](https://github.com/BunnyWay/cli/commit/dca7b3532ff9c4ae319aa59060f9cae3efe5f213), [`63f1037`](https://github.com/BunnyWay/cli/commit/63f103760fd2154cab3da11d5b5480ae6fe32c26)]:
+  - @bunny.net/database-client@0.0.2
+  - @bunny.net/database-rest@0.1.2
+
 ## 0.1.3
 
 ### Patch Changes
