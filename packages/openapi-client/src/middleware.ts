@@ -52,6 +52,11 @@ const extractors: Array<
   // ApiErrorData (Core / Compute)
   (b) =>
     b?.Message ? { message: b.Message, field: b.Field ?? undefined } : null,
+
+  // StatusModel (Stream): { success, message, statusCode } — lowercase, so the
+  // Core extractor above misses it and the message would be lost.
+  (b) =>
+    typeof b?.message === "string" && b.message ? { message: b.message } : null,
 ];
 
 /**
@@ -87,11 +92,24 @@ export function authMiddleware(options: ClientOptions): Middleware {
       if (debug) {
         debug(`→ ${request.method} ${request.url}`);
         if (request.body) {
-          const cloned = request.clone();
-          try {
-            const body = await cloned.json();
-            debug(`→ Body: ${JSON.stringify(body, null, 2)}`);
-          } catch {}
+          const contentType = request.headers.get("content-type") ?? "";
+          if (looksLikeJson(contentType)) {
+            const cloned = request.clone();
+            try {
+              const body = await cloned.json();
+              debug(`→ Body: ${JSON.stringify(body, null, 2)}`);
+            } catch {}
+          } else {
+            // Never read a non-JSON request body: a binary upload (e.g. a video
+            // sent as application/octet-stream) would be buffered into memory in
+            // full just to be logged. Describe it from the headers instead.
+            const length = request.headers.get("content-length");
+            debug(
+              `→ Body (${contentType || "no content-type"}): ${
+                length ? `${length} bytes, not logged` : "not logged"
+              }`,
+            );
+          }
         }
       }
 

@@ -8,6 +8,29 @@ function runRequest(options: ClientOptions, request: Request) {
   return mw.onRequest!({ request } as never) as Promise<Request>;
 }
 
+/**
+ * A request that records every attempt to clone or consume its body, so a test
+ * can prove the middleware left a large binary upload untouched.
+ */
+function spyRequest(url: string, init: RequestInit) {
+  const request = new Request(url, init);
+  const reads: string[] = [];
+  const spied = ["clone", "json", "text", "arrayBuffer", "blob"] as const;
+  for (const name of spied) {
+    const original = Request.prototype[name] as (
+      this: Request,
+      ...args: unknown[]
+    ) => unknown;
+    Object.defineProperty(request, name, {
+      value: (...args: unknown[]) => {
+        reads.push(name);
+        return original.apply(request, args);
+      },
+    });
+  }
+  return { request, reads };
+}
+
 function runResponse(
   options: ClientOptions,
   response: Response,
@@ -44,6 +67,54 @@ describe("authMiddleware onRequest", () => {
       new Request("https://api.bunny.net/region", { method: "GET" }),
     );
     expect(logs).toContain("→ GET https://api.bunny.net/region");
+  });
+
+  test("dumps a JSON request body", async () => {
+    const logs: string[] = [];
+    const { request, reads } = spyRequest(
+      "https://api.bunny.net/videolibrary",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ Name: "my-library" }),
+      },
+    );
+
+    await runRequest(
+      { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+      request,
+    );
+
+    expect(logs.join("\n")).toContain('"Name": "my-library"');
+    // The dump reads a clone, never the request that is about to be sent.
+    expect(reads).toEqual(["clone"]);
+  });
+
+  // Reading an octet-stream body would buffer the whole upload (a video, say)
+  // into memory just to log it, so it is described from its headers instead.
+  test("never reads a non-JSON request body", async () => {
+    const logs: string[] = [];
+    const { request, reads } = spyRequest(
+      "https://video.bunnycdn.com/library/1/videos/abc",
+      {
+        method: "PUT",
+        headers: {
+          "content-type": "application/octet-stream",
+          "content-length": "12",
+        },
+        body: new Blob(["binary-bytes"]),
+      },
+    );
+
+    await runRequest(
+      { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+      request,
+    );
+
+    expect(reads).toEqual([]);
+    expect(logs).toContain(
+      "→ Body (application/octet-stream): 12 bytes, not logged",
+    );
   });
 
   test("does not log when onDebug is set but verbose is false", async () => {
@@ -99,6 +170,34 @@ describe("authMiddleware onResponse", () => {
       runResponse({ apiKey: "k" }, jsonResponse({ title: "Conflict" }, 409)),
     )) as ApiError;
     expect(error.message).toBe("Conflict");
+  });
+
+  // Stream answers with StatusModel, whose message field is lowercase; without
+  // its own extractor the message is dropped for a generic HTTP failure.
+  test("normalizes the Stream StatusModel (lowercase message)", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        jsonResponse(
+          { success: false, message: "URL validation failed", statusCode: 400 },
+          400,
+        ),
+      ),
+    )) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(400);
+    expect(error.message).toBe("URL validation failed");
+  });
+
+  // The Core format wins when both shapes are somehow present.
+  test("prefers the Core Message over a lowercase message", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        jsonResponse({ Message: "Core wins.", message: "stream" }, 400),
+      ),
+    )) as ApiError;
+    expect(error.message).toBe("Core wins.");
   });
 
   test("uses a friendly status message for an empty error body", async () => {
