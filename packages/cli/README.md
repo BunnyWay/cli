@@ -1264,11 +1264,13 @@ The method is case-insensitive (`get` and `GET` both work). Paths are relative t
 
 ### `bunny completion`
 
-Generate a shell completion script. Add the output to your shell profile to enable tab completion.
+Generate a shell completion script. Source it from your shell profile rather than appending the script itself, so it always matches the installed CLI:
 
 ```bash
-bunny completion >> ~/.zshrc
+echo 'source <(bunny completion)' >> ~/.zshrc # zsh; use ~/.bashrc for bash
 ```
+
+After `bunny login` succeeds, it prints the exact line for your shell.
 
 ## Global Options
 
