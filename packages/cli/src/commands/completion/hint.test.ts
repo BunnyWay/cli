@@ -14,11 +14,9 @@ describe("completionHint", () => {
     );
   });
 
-  test("falls back to the bash form for other or missing shells", () => {
-    for (const shell of ["/usr/bin/shelby", undefined, ""]) {
-      expect(completionHint(shell)).toBe(
-        "Tip: enable shell completions by adding `source <(bunny completion)` to ~/.bashrc.",
-      );
+  test("returns undefined for other or missing shells", () => {
+    for (const shell of ["/usr/bin/nu", undefined, ""]) {
+      expect(completionHint(shell)).toBeUndefined();
     }
   });
 });

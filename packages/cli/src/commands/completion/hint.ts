@@ -11,13 +11,12 @@ const SHELL_HINTS: Record<string, string> = {
   fish: "Tip: enable fish completions with: `mkdir -p ~/.config/fish/completions && bunny completion > ~/.config/fish/completions/bunny.fish`.",
 };
 
-/** The one-line completion tip for the given `$SHELL` value. */
-export function completionHint(shell: string | undefined): string {
-  // Unknown shells get the bash form, the most portable.
-  return SHELL_HINTS[basename(shell || "")] ?? SHELL_HINTS.bash!;
+/** The one-line completion tip for the given `$SHELL` value; `undefined` when the shell is unknown. */
+export function completionHint(shell: string | undefined): string | undefined {
+  return shell ? SHELL_HINTS[basename(shell)] : undefined;
 }
 
-/** Passive one-line completion hint shown after `bunny login`; suppressed under `--output json`. */
+/** Passive one-line completion hint shown after `bunny login`; suppressed under `--output json` and for unknown shells. */
 export function hintShellCompletion(
   output?: string,
   shell: string | undefined = process.env.SHELL,
@@ -28,5 +27,6 @@ export function hintShellCompletion(
   // Once https://github.com/yargs/yargs/pull/2569 is merged, remove this check.
   if (shell?.includes("fish")) return;
 
-  logger.dim(completionHint(shell));
+  const hint = completionHint(shell);
+  if (hint) logger.dim(hint);
 }
