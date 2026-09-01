@@ -1,12 +1,9 @@
 import { basename } from "node:path";
 import { logger } from "../../core/logger.ts";
 
-/** The rc-file line that wires completions into zsh/bash. */
-const PROCESS_SUB_LINE = "source <(bunny completion)";
-
 const SHELL_HINTS: Record<string, string> = {
-  zsh: `Tip: enable shell completions by adding \`${PROCESS_SUB_LINE}\` to ~/.zshrc.`,
-  bash: `Tip: enable shell completions by adding \`${PROCESS_SUB_LINE}\` to ~/.bashrc.`,
+  zsh: "Tip: enable shell completions with: `bunny completion >> ~/.zshrc`.",
+  bash: "Tip: enable shell completions with: `bunny completion >> ~/.bashrc`.",
   // Fish lazy-loads completion files from this directory. Alternative would be: appending it to ~/.config/fish/config.fish.
   fish: "Tip: enable fish completions with: `mkdir -p ~/.config/fish/completions && bunny completion > ~/.config/fish/completions/bunny.fish`.",
 };

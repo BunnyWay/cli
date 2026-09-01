@@ -1264,10 +1264,16 @@ The method is case-insensitive (`get` and `GET` both work). Paths are relative t
 
 ### `bunny completion`
 
-Generate a shell completion script. Source it from your shell profile rather than appending the script itself, so it always matches the installed CLI:
+Generate a shell completion script. Add the output to your shell profile to enable tab completion:
 
 ```bash
-echo 'source <(bunny completion)' >> ~/.zshrc # zsh; use ~/.bashrc for bash
+bunny completion >> ~/.zshrc # zsh; use ~/.bashrc for bash
+```
+
+Fish loads completion files from its own directory:
+
+```bash
+mkdir -p ~/.config/fish/completions && bunny completion > ~/.config/fish/completions/bunny.fish
 ```
 
 After `bunny login` succeeds, it prints the exact line for your shell.
