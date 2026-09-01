@@ -18,6 +18,7 @@ import {
   readPassword,
   spinner,
 } from "../../core/ui.ts";
+import { hintShellCompletion } from "../completion/hint.ts";
 import { offerGlobalSkillInstall } from "../skills/offer.ts";
 
 const DASHBOARD_URL =
@@ -307,5 +308,6 @@ export const authLoginCommand = defineCommand<{
     }
 
     await offerGlobalSkillInstall(output, installSkill);
+    hintShellCompletion(output);
   },
 });
