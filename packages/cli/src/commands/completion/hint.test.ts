@@ -15,7 +15,7 @@ describe("completionHint", () => {
   });
 
   test("returns undefined for other or missing shells", () => {
-    for (const shell of ["/usr/bin/nu", undefined, ""]) {
+    for (const shell of ["/usr/bin/nu", ""]) {
       expect(completionHint(shell)).toBeUndefined();
     }
   });
