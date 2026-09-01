@@ -1,5 +1,11 @@
 # @bunny.net/config
 
+## 0.1.6
+
+### Patch Changes
+
+- [#198](https://github.com/BunnyWay/cli/pull/198) [`2c98438`](https://github.com/BunnyWay/cli/commit/2c984387baa082d13dbf6d2a67a19cc594756ecb) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Keep existing container env vars on `apps deploy` and `apps push` when bunny.jsonc has no env block
+
 ## 0.1.5
 
 ### Patch Changes

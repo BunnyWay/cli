@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/database-shell-linux-x64",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Bunny Database shell binary for Linux x64",
   "os": [
     "linux"

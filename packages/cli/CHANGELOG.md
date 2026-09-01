@@ -1,5 +1,17 @@
 # @bunny.net/cli
 
+## 0.16.0
+
+### Minor Changes
+
+- [#200](https://github.com/BunnyWay/cli/pull/200) [`6ede231`](https://github.com/BunnyWay/cli/commit/6ede231cf2d720e51a90840c40d62c7d84157f07) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Sites are now served by pull zone edge rules instead of a router Edge Script (HTML revalidates in browsers on every view, deploy dirs are blocked at the edge), and `sites deploy --deploy-id` lets a deploy carry your own release identifier
+
+### Patch Changes
+
+- [#198](https://github.com/BunnyWay/cli/pull/198) [`2c98438`](https://github.com/BunnyWay/cli/commit/2c984387baa082d13dbf6d2a67a19cc594756ecb) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Keep existing container env vars on `apps deploy` and `apps push` when bunny.jsonc has no env block
+
+- [#196](https://github.com/BunnyWay/cli/pull/196) [`7e93515`](https://github.com/BunnyWay/cli/commit/7e9351586caa6bfc59b0b01d66126c7905604858) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add `bunny sites create --tier hdd|ssd` to pick the storage tier
+
 ## 0.15.1
 
 ### Patch Changes
