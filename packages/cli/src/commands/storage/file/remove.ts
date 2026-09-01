@@ -2,31 +2,27 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "../../../config/index.ts";
 import { clientOptions } from "../../../core/client-options.ts";
 import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
 import { logger } from "../../../core/logger.ts";
 import {
   confirm,
   confirmTyped,
-  isInteractive,
   requireConfirmable,
   spinner,
 } from "../../../core/ui.ts";
 import { connectStorageZone, deleteFile, isZoneRoot } from "../files-api.ts";
 import { resolveStorageZoneInteractive } from "../interactive.ts";
-import { promptStoragePath } from "./pick.ts";
 
 interface RemoveArgs {
-  path?: string;
+  path: string;
   zone?: string;
   force?: boolean;
 }
 
 export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
-  command: "remove [path]",
+  command: "remove <path>",
   aliases: ["rm"],
   describe: "Delete a file or directory from a storage zone.",
   examples: [
-    ["$0 storage files remove", "Browse the zone and pick what to delete"],
     ["$0 storage files remove images/photo.png", "Delete a file"],
     [
       "$0 storage files remove images/ --force",
@@ -43,8 +39,8 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
     yargs
       .positional("path", {
         type: "string",
-        describe:
-          "Path to the file or directory within the zone (prompts if omitted)",
+        describe: "Path to the file or directory within the zone",
+        demandOption: true,
       })
       .option("zone", {
         alias: "z",
@@ -59,7 +55,7 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
       }),
 
   handler: async ({
-    path: pathArg,
+    path,
     zone: ref,
     force,
     profile,
@@ -76,25 +72,6 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
       force,
     });
     const connection = connectStorageZone(zone);
-
-    // The picker never offers the zone root, so emptying a zone stays an explicit `remove /`.
-    const path =
-      pathArg ??
-      (isInteractive(output) && !force
-        ? await promptStoragePath(connection, {
-            message: "Pick a file or directory to delete",
-            allowDirectories: true,
-          })
-        : undefined);
-    if (!path) {
-      if (pathArg === undefined && !(isInteractive(output) && !force))
-        throw new UserError(
-          "No path given.",
-          "Pass a path, or run interactively to browse the zone.",
-        );
-      logger.log("Cancelled.");
-      return;
-    }
 
     // A trailing slash deletes a directory and everything under it, recursively.
     const isDirectory = path.endsWith("/");
