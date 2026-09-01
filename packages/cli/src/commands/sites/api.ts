@@ -41,13 +41,11 @@ import {
   DEPLOYS_DIR,
   deployPrefix,
   GATE_RULE_DESC,
-  HOP_HEADER,
   PLACEHOLDER_DEPLOY,
   parseRemoteState,
   REMOTE_STATE_PATH,
   REWRITE_RULE_DESC,
   type RemoteSiteState,
-  randomHopSecret,
   STATE_RULE_DESC,
   STATE_VERSION,
   siteResourcePattern,
@@ -297,8 +295,7 @@ const SITE_CACHE_SETTINGS = {
 
 // The four rules that serve a site; bodies are always rebuilt in full from these so a hand-edited rule heals on the next upsert.
 function siteRules(
-  systemHost: string,
-  secret: string,
+  storageZone: { Id: number; Name: string },
   deployId: string,
 ): Array<EdgeRule & { Description: string }> {
   const deploysPattern = `*/${DEPLOYS_DIR}/*`;
@@ -306,15 +303,11 @@ function siteRules(
     {
       Description: REWRITE_RULE_DESC,
       Enabled: true,
-      ActionType: EdgeRuleAction.OriginUrl,
-      // The origin is the zone's own hostname: the request re-enters the CDN, where the gate rule admits it by the hop header.
-      ActionParameter1: `https://${systemHost}/${deployPrefix(deployId)}%{Url.Path}`,
+      ActionType: EdgeRuleAction.OriginStorage,
+      ActionParameter1: String(storageZone.Id),
+      ActionParameter2: storageZone.Name,
+      ActionParameter3: `/${deployPrefix(deployId)}/`,
       ExtraActions: [
-        {
-          ActionType: EdgeRuleAction.SetRequestHeader,
-          ActionParameter1: HOP_HEADER,
-          ActionParameter2: secret,
-        },
         {
           ActionType: EdgeRuleAction.SetResponseHeader,
           ActionParameter1: DEPLOY_HEADER,
@@ -334,18 +327,12 @@ function siteRules(
       Description: GATE_RULE_DESC,
       Enabled: true,
       ActionType: EdgeRuleAction.BlockRequest,
-      TriggerMatchingType: EdgeRuleMatch.All,
+      TriggerMatchingType: EdgeRuleMatch.Any,
       Triggers: [
         {
           Type: EdgeRuleTriggerType.Url,
           PatternMatches: [deploysPattern],
           PatternMatchingType: EdgeRuleMatch.Any,
-        },
-        {
-          Type: EdgeRuleTriggerType.RequestHeader,
-          Parameter1: HOP_HEADER,
-          PatternMatches: [secret],
-          PatternMatchingType: EdgeRuleMatch.None,
         },
       ],
     },
@@ -379,34 +366,23 @@ function siteRules(
   ];
 }
 
-// The secret lives only in the rules; recover it so re-runs and promotes never mint a second one (a mismatched gate would block the hop).
-function recoverHopSecret(rules: EdgeRule[]): string | undefined {
-  const rewrite = rules.find((r) => r.Description === REWRITE_RULE_DESC);
-  const fromRewrite = rewrite?.ExtraActions?.find(
-    (a) =>
-      a.ActionType === EdgeRuleAction.SetRequestHeader &&
-      a.ActionParameter1 === HOP_HEADER,
-  )?.ActionParameter2;
-  if (fromRewrite) return fromRewrite;
-  const gate = rules.find((r) => r.Description === GATE_RULE_DESC);
-  return gate?.Triggers?.find(
-    (t) =>
-      t.Type === EdgeRuleTriggerType.RequestHeader &&
-      t.Parameter1 === HOP_HEADER,
-  )?.PatternMatches?.[0];
-}
-
 // Converge the pull zone's rules on `deployId`; create and promote both funnel through here, so a missing or stale rule heals on any run.
 export async function ensureSiteRules(opts: {
   coreClient: CoreClient;
   pullZoneId: number;
-  systemHost: string;
+  storageZone: StorageZoneModel;
   deployId: string;
 }): Promise<void> {
-  const { coreClient, pullZoneId, systemHost, deployId } = opts;
+  const { coreClient, pullZoneId, storageZone, deployId } = opts;
+  const { Id: storageZoneId, Name: storageZoneName } = storageZone;
+  if (storageZoneId == null || !storageZoneName) {
+    throw new UserError("The site's storage zone is missing its ID or name.");
+  }
   const existing = await fetchEdgeRules(coreClient, pullZoneId);
-  const secret = recoverHopSecret(existing) ?? randomHopSecret();
-  for (const rule of siteRules(systemHost, secret, deployId)) {
+  for (const rule of siteRules(
+    { Id: storageZoneId, Name: storageZoneName },
+    deployId,
+  )) {
     await upsertEdgeRule(coreClient, pullZoneId, rule, existing);
   }
 }
@@ -548,7 +524,7 @@ export async function createSite(
   await ensureSiteRules({
     coreClient,
     pullZoneId: pullZone.Id,
-    systemHost,
+    storageZone,
     deployId: PLACEHOLDER_DEPLOY,
   });
 
@@ -668,7 +644,10 @@ export async function promoteDeploy(opts: {
       body: {},
     });
 
-  const host = await fetchSystemHostname(coreClient, state.pullZoneId);
+  const [host, storageZone] = await Promise.all([
+    fetchSystemHostname(coreClient, state.pullZoneId),
+    fetchStorageZone(coreClient, state.storageZoneId),
+  ]);
   if (!host) {
     throw new UserError(
       "Couldn't resolve the site's hostname to publish.",
@@ -678,7 +657,7 @@ export async function promoteDeploy(opts: {
   await ensureSiteRules({
     coreClient,
     pullZoneId: state.pullZoneId,
-    systemHost: host,
+    storageZone,
     deployId,
   });
   await purge();

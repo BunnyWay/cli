@@ -75,7 +75,6 @@ export function pruneVictims(
 // The rewrite rule's initial target; nothing is uploaded there, so an undeployed site serves storage 404s. The underscore keeps it outside the deploy-id alphabet (IDs must start alphanumeric).
 export const PLACEHOLDER_DEPLOY = "_placeholder";
 
-export const HOP_HEADER = "X-Bunny-Site-Hop";
 export const DEPLOY_HEADER = "X-Bunny-Deploy";
 
 // Edge rules are identified by these descriptions; upserts key on them, so treat them as frozen.
@@ -92,12 +91,6 @@ export const ASSET_EXTENSION_GROUPS = [
   ["css", "js", "mjs", "woff2", "svg"],
   ["png", "jpg", "jpeg", "webp", "ico"],
 ];
-
-/** Per-site secret authenticating the rewrite rule's internal hop to the deploy files. */
-export function randomHopSecret(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
 
 // A deploy ID becomes a storage path and the rewrite rule's origin target, so its charset is a boundary, not a style choice: alphanumerics plus `-`, `_` and `.`, bounded by an alphanumeric (which also keeps the `_placeholder` sentinel unreachable), and never a traversal sequence. Case is preserved rather than folded: a caller-supplied ID exists to match whatever produced the deploy, and the ID never reaches a client-facing URL (the rule builds the origin path itself), so nothing downstream needs it normalized.
 const DEPLOY_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{2,62}[A-Za-z0-9]$/;

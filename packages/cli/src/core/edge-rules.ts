@@ -15,6 +15,7 @@ export const EdgeRuleAction = {
   SetResponseHeader: 5,
   SetRequestHeader: 6,
   OverrideBrowserCacheTime: 16,
+  OriginStorage: 17,
 } as const;
 
 export const EdgeRuleTriggerType = {

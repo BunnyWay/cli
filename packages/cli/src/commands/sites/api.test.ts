@@ -15,7 +15,6 @@ import {
 } from "./api.ts";
 import {
   GATE_RULE_DESC,
-  HOP_HEADER,
   PLACEHOLDER_DEPLOY,
   REMOTE_STATE_PATH,
   REWRITE_RULE_DESC,
@@ -424,23 +423,22 @@ test("createSite provisions storage zone → pull zone → edge rules → state"
     CacheControlPublicMaxAgeOverride: 0,
   });
 
-  // All five rules land, the rewrite targets the placeholder, and the gate carries the rewrite's hop secret.
   const rules = coreCalls
     .filter((c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate")
     .map((c) => c.body as EdgeRule);
   expect(rules).toHaveLength(5);
   const rewrite = rules.find((r) => r.Description === REWRITE_RULE_DESC);
-  expect(rewrite?.ActionParameter1).toBe(
-    `https://${zoneName}.b-cdn.net/deploys/${PLACEHOLDER_DEPLOY}%{Url.Path}`,
-  );
-  const secret = rewrite?.ExtraActions?.find(
-    (a) => a.ActionParameter1 === HOP_HEADER,
-  )?.ActionParameter2;
-  expect(secret).toMatch(/^[0-9a-f]{32}$/);
+  expect(rewrite).toMatchObject({
+    ActionType: 17,
+    ActionParameter1: "10",
+    ActionParameter2: zoneName,
+    ActionParameter3: `/deploys/${PLACEHOLDER_DEPLOY}/`,
+  });
+  expect(rewrite?.ExtraActions?.some((a) => a.ActionType === 6)).toBe(false);
   const gate = rules.find((r) => r.Description === GATE_RULE_DESC);
-  expect(
-    gate?.Triggers?.find((t) => t.Parameter1 === HOP_HEADER)?.PatternMatches,
-  ).toEqual([secret as string]);
+  expect(gate?.TriggerMatchingType).toBe(0);
+  expect(gate?.Triggers).toHaveLength(1);
+  expect(gate?.Triggers?.[0]?.PatternMatches).toEqual(["*/deploys/*"]);
 
   // The system host redirects HTTP → HTTPS out of the box.
   const forceSsl = coreCalls.find(
@@ -460,23 +458,28 @@ test("createSite provisions storage zone → pull zone → edge rules → state"
   });
 });
 
-test("createSite re-run after a crash reuses the rules and their secret", async () => {
+test("createSite re-run after a crash upserts the same native Storage rules", async () => {
   const coreCalls: Call[] = [];
   const coreClient = fakeCoreClient({ calls: coreCalls });
 
   await createSite({ coreClient, name: "my-site", region: "DE" });
-  const secretOf = (rules: EdgeRule[]) =>
-    rules
-      .find((r) => r.Description === REWRITE_RULE_DESC)
-      ?.ExtraActions?.find((a) => a.ActionParameter1 === HOP_HEADER)
-      ?.ActionParameter2;
-  const firstSecret = secretOf(
+  const originOf = (rules: EdgeRule[]) => {
+    const rule = rules.find((r) => r.Description === REWRITE_RULE_DESC);
+    return [
+      rule?.ActionType,
+      rule?.ActionParameter1,
+      rule?.ActionParameter2,
+      rule?.ActionParameter3,
+    ];
+  };
+  const firstOrigin = originOf(
     coreCalls
       .filter((c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate")
       .map((c) => c.body as EdgeRule),
   );
 
-  // Crash before the state write: the resume must upsert the same rules, not duplicate them or mint a new secret.
+  // Crash before the state write: the resume must upsert the same rules rather
+  // than duplicate them or replace the native Storage origin with a URL hop.
   store.clear();
   coreCalls.length = 0;
   await createSite({ coreClient, name: "my-site", region: "DE" });
@@ -486,7 +489,7 @@ test("createSite re-run after a crash reuses the rules and their secret", async 
     .map((c) => c.body as EdgeRule);
   expect(upserts).toHaveLength(5);
   expect(upserts.every((r) => r.Guid)).toBe(true);
-  expect(secretOf(upserts)).toBe(firstSecret as string);
+  expect(originOf(upserts)).toEqual(firstOrigin);
 });
 
 test("createSite re-run reuses existing resources and converges", async () => {
@@ -709,7 +712,7 @@ test("createSite gives up after every pull zone suffix collides", async () => {
 
 test("promoteDeploy retargets the rewrite rule, probes the edge, and purges twice", async () => {
   const coreCalls: Call[] = [];
-  const coreClient = fakeCoreClient({ calls: coreCalls });
+  const coreClient = fakeCoreClient({ calls: coreCalls, storageZones: [ZONE] });
 
   // The edge serves the outgoing deploy until the rule propagates.
   const serving = ["old", "old", "a1b2c3d4"];
@@ -729,9 +732,13 @@ test("promoteDeploy retargets the rewrite rule, probes the edge, and purges twic
     .filter((c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate")
     .map((c) => c.body as EdgeRule);
   const rewrite = upserts.find((r) => r.Description === REWRITE_RULE_DESC);
-  expect(rewrite?.ActionParameter1).toBe(
-    "https://my-site.b-cdn.net/deploys/a1b2c3d4%{Url.Path}",
-  );
+  expect(rewrite).toMatchObject({
+    ActionType: 17,
+    ActionParameter1: "10",
+    ActionParameter2: "my-site",
+    ActionParameter3: "/deploys/a1b2c3d4/",
+  });
+  expect(rewrite?.ExtraActions?.some((a) => a.ActionType === 6)).toBe(false);
 
   // Kept probing until the edge reported the new deploy, then purged a second time.
   expect(probed.length).toBe(3);
@@ -742,10 +749,7 @@ test("promoteDeploy retargets the rewrite rule, probes the edge, and purges twic
   expect(purges).toHaveLength(2);
   expect(purges[0]?.params).toEqual({ path: { id: 30 } });
 
-  // A follow-up promote reuses the hop secret the first one minted.
-  const secretOf = (r?: EdgeRule) =>
-    r?.ExtraActions?.find((a) => a.ActionParameter1 === HOP_HEADER)
-      ?.ActionParameter2;
+  // A follow-up promote keeps the native zone and changes only its path prefix.
   coreCalls.length = 0;
   promoteVerification.probe = async () => ({ status: 200, deploy: "e5f6" });
   await promoteDeploy({ coreClient, state: fakeState(), deployId: "e5f6" });
@@ -753,7 +757,12 @@ test("promoteDeploy retargets the rewrite rule, probes the edge, and purges twic
     .filter((c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate")
     .map((c) => c.body as EdgeRule)
     .find((r) => r.Description === REWRITE_RULE_DESC);
-  expect(secretOf(again)).toBe(secretOf(rewrite) as string);
+  expect(again).toMatchObject({
+    ActionType: 17,
+    ActionParameter1: "10",
+    ActionParameter2: "my-site",
+    ActionParameter3: "/deploys/e5f6/",
+  });
 });
 
 // ---- discovery ----

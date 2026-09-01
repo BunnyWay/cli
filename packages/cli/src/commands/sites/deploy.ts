@@ -391,6 +391,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const production = productionUrl(state, systemHost);
 
     if (skipUpload && alreadyLive) {
+      await withSpinner("Checking routing...", () =>
+        promoteDeploy({ coreClient, state, deployId }),
+      );
       if (output === "json") {
         logger.log(
           JSON.stringify(
