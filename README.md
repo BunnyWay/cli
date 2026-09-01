@@ -83,6 +83,18 @@ bun ny sites domains add example.com        # attach a custom production domain
 bun ny sites ssl --no-force-ssl             # stop forcing HTTPS on the site's b-cdn.net system host
 bun ny sites open                           # open the site's live URL in the browser
 bun ny sites ci init                        # add a GitHub Actions workflow (push to main goes live)
+bun ny stream library list                # list Stream video libraries (videos, storage, traffic, replication regions)
+bun ny stream library create my-library   # create a video library (omit the name to be prompted)
+bun ny stream library create my-library --replication-regions NY,SG   # replicate the library's storage to New York and Singapore
+bun ny stream library show my-library     # show one library (accepts a name or ID; omit it to use the linked library, or to pick interactively when nothing is linked). API keys are never printed here, in any output format
+bun ny stream library credentials my-library --show-secret   # deliberately retrieve a library's Stream API key (--read-only for the read-only key; masked without --show-secret)
+bun ny stream library delete my-library   # delete a library and all of its videos (--force skips the confirmation, and is required non-interactively)
+bun ny stream upload ./video.mp4          # upload a video to the linked library (--title sets the title; it defaults to the file name)
+bun ny stream upload ./video.mp4 --lib 12345   # upload to a specific library by ID
+bun ny stream upload https://example.com/video.mp4 --lib 12345   # let bunny.net fetch the video server side (--header "Name: value" for an origin that needs auth)
+bun ny stream videos list                 # list the videos in the linked library (ID, title, status, size, length, views, upload date)
+bun ny stream videos show 1a2b3c4d-...    # show one video by GUID, including its Direct Play URL (also update and delete; new videos come from stream upload)
+bun ny stream link my-library             # link the directory to a library so upload can omit it (bun ny stream unlink removes the link)
 ```
 
 Every deploy is published as the live site. Deploys are immutable under their own ID, so `bun ny sites deployments publish` rolls back to any earlier one without re-uploading. Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) so a deploy needs no flags: `bun ny sites deploy --build`. `bun ny sites ci init` writes the same `build` and `dir` into the generated workflow. See [`examples/sites/`](examples/sites/) for ready-to-copy configs (Vite, Astro, Next.js static export, Hugo, plain HTML, and a combined app + site file).

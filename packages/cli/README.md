@@ -978,6 +978,63 @@ Every deploy publishes: the files land in an immutable `deploys/<id>/` directory
 | `--keep-storage`                       | `delete`                                                   | Delete the pull zone but keep the storage zone and its deploy files                                |
 | `--force`, `-f`                        | `deployments publish`, `prune`, `domains remove`, `delete` | Skip the confirmation prompts                                                                      |
 
+### `bunny stream`
+
+> **Experimental**: hidden from `--help` and the landing page while it stabilizes.
+
+Manage bunny.net Stream video libraries with **`bunny stream library`** (aliases `libraries`, `lib`), and upload videos into them with **`bunny stream upload`**. Library management uses the account API key on the core API; each library also carries its own Stream API key for the video-level API, which the CLI never prints unless you ask for it with `credentials`. Uploads and video commands use that per-library key, resolved automatically from the library, so there is nothing extra to configure.
+
+The videos inside a library are managed with **`bunny stream videos`** (alias `video`): `list`, `show`, `update`, and `delete`, each taking the video's GUID and resolving the library the same way `upload` does. There is deliberately no `videos create`: `bunny stream upload` is how a video is added.
+
+`library` commands take the library as an optional positional (name or numeric ID); `upload` and the `videos` commands take it as the `--lib`/`--library` flag (their positional is the local file path or the video GUID). When the library is omitted it resolves from the directory's linked library (`bunny stream link`, stored in `.bunny/stream.json`), then an interactive picker, which offers to link the directory to the picked library (destructive commands never offer it). Non-interactive runs (`--output json`, no TTY) error with a hint instead of prompting: pass a library or link the directory. A `videos` command with no GUID behaves the same way, offering a picker interactively and erroring otherwise.
+
+```bash
+bunny stream library list                          # ID, name, videos, storage, traffic, replication regions
+bunny stream library create my-library             # interactive: prompts for the name when omitted
+bunny stream library create my-library --replication-regions NY,SG   # replicate the underlying storage (create-time only)
+bunny stream library show my-library               # details; API keys are never printed here, in any output format
+bunny stream library credentials my-library        # library ID + API key, masked by default
+bunny stream library credentials my-library --show-secret --read-only   # reveal the read-only key
+bunny stream library delete my-library             # confirms with the video count; --force skips it
+
+# Upload a video (creates the video, streams the file, then reports its encoding status)
+bunny stream upload ./video.mp4                    # linked library
+bunny stream upload ./video.mp4 --lib 12345        # a specific library
+bunny stream upload ./video.mp4 --title "Launch demo"   # defaults to the file name
+
+# Or hand bunny.net a URL and let it fetch the video server side
+bunny stream upload https://example.com/video.mp4 --lib 12345
+bunny stream upload https://example.com/video.mp4 --header "Authorization: Bearer abc"
+
+# Videos within a library (GUIDs come from `videos list`)
+bunny stream videos list                           # ID, title, status, size, length, views, upload date
+bunny stream videos list --lib 12345 --search launch   # a specific library, filtered by title
+bunny stream videos show 1a2b3c4d-...              # details, including the Direct Play URL
+bunny stream videos update 1a2b3c4d-... --title "Launch demo"   # prompts for the title when omitted
+bunny stream videos delete 1a2b3c4d-...            # confirms first; --force skips it
+
+# Link the working directory to a library so commands can omit it
+bunny stream link my-library
+bunny stream unlink
+```
+
+Deleting a library deletes all of its videos. `--force` is required for non-interactive deletes and unlinks; without it, a run that cannot prompt exits with an error instead of hanging.
+
+A local upload happens in two steps: the video entry is created first, then the file's bytes are sent to it. If the byte upload fails, the CLI checks the video's status: an entry that never received bytes is deleted so a retry does not leave orphans behind, while anything that may already hold the upload (including a status the CLI could not read) is kept, with a warning naming its GUID, since a lost response does not mean the bytes were rejected. Encoding continues on bunny.net after the command returns, so the reported status is usually `Uploaded` or `Processing` rather than `Finished`.
+
+Passing an `http://` or `https://` URL instead of a path switches to bunny.net's server-side fetch: the origin is downloaded by bunny.net, not by the CLI, so nothing is transferred through your machine and the command returns as soon as the fetch is queued. Use `--header` (repeatable, `"Name: value"`) for an origin that needs authentication; it applies to URL uploads only. That endpoint answers with a status rather than a video, so a URL upload reports no video ID or Direct Play URL: the video appears in `bunny stream videos list` once it has been fetched and encoded, titled after the remote file name unless `--title` says otherwise.
+
+| Flag                    | Commands                            | Description                                                                         |
+| ----------------------- | ----------------------------------- | ----------------------------------------------------------------------------------- |
+| `--replication-regions` | `create`                            | Storage replication region codes, comma-separated or repeated; fixed after creation |
+| `--read-only`           | `credentials`                       | Show the read-only API key instead of the read-write one                            |
+| `--show-secret`         | `credentials`                       | Reveal the API key (masked by default in both table and JSON output)                |
+| `--lib`, `--library`    | `upload`, all `videos` commands     | Video library ID (defaults to the linked library)                                   |
+| `--search`              | `videos list`                       | Only list videos matching this search term                                          |
+| `--title`               | `upload`, `videos update`           | Video title; defaults to the file name on `upload`, prompts on `update`             |
+| `--header`              | `upload` (URL only)                 | Header to send with a URL fetch as `"Name: value"`; repeatable                      |
+| `--force`, `-f`         | `delete`, `videos delete`, `unlink` | Skip the confirmation prompt (required when there is no TTY to answer it)           |
+
 ### `bunny sandbox`
 
 Manage on-demand cloud sandbox environments backed by Bunny Magic Containers. Each sandbox is a fully isolated Ubuntu container with Node.js, Bun, Python (plus `uv`), the bunny CLI, and Claude Code pre-installed, alongside the tooling agents reach for: `git`, `gh`, `ripgrep`, `fd`, `jq`, `tmux`, `sqlite3`, `tree`, and `fzf`. A 10 GB persistent volume is mounted at `/workplace`, your default working directory.
