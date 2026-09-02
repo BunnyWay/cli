@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/database-shell-darwin-x64",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Bunny Database shell binary for macOS x64",
   "os": [
     "darwin"

@@ -1,5 +1,11 @@
 # @bunny.net/database-client
 
+## 0.0.3
+
+### Patch Changes
+
+- [#206](https://github.com/BunnyWay/cli/pull/206) [`d6b68a7`](https://github.com/BunnyWay/cli/commit/d6b68a7d0f058d035171f10e0398428f5b6410da) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Harden `@bunny.net/database-client`: `batch()` takes a `mode`, guards its ROLLBACK, rejects transaction statements, and reports the failing statement as `error.batchIndex`; invalid `timeout` values and malformed responses become `DatabaseError`, transport errors keep their `cause`, integer-valued doubles past 2^53 bind as REAL, and `db.sql` carries a row type. Migrations apply with `BEGIN IMMEDIATE`.
+
 ## 0.0.2
 
 ### Patch Changes
