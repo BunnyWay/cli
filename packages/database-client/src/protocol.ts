@@ -89,7 +89,7 @@ export function encodeValue(value: unknown): WireValue {
   if (value === undefined) {
     throw new DatabaseError(
       "cannot bind undefined; pass null to store SQL NULL",
-      "ARGUMENT_INVALID",
+      { code: "ARGUMENT_INVALID" },
     );
   }
   if (typeof value === "boolean") {
@@ -99,28 +99,21 @@ export function encodeValue(value: unknown): WireValue {
     if (value > INT64_MAX || value < INT64_MIN) {
       throw new DatabaseError(
         `cannot bind bigint ${value}; outside SQLite's 64-bit integer range`,
-        "ARGUMENT_INVALID",
+        { code: "ARGUMENT_INVALID" },
       );
     }
     return { type: "integer", value: value.toString() };
   }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
-      throw new DatabaseError(
-        `cannot bind non-finite number: ${value}`,
-        "ARGUMENT_INVALID",
-      );
+      throw new DatabaseError(`cannot bind non-finite number: ${value}`, {
+        code: "ARGUMENT_INVALID",
+      });
     }
-    if (Number.isInteger(value)) {
-      if (!Number.isSafeInteger(value)) {
-        throw new DatabaseError(
-          `cannot bind unsafe integer ${value}; numbers past 2^53 have already lost precision, pass a bigint instead`,
-          "ARGUMENT_INVALID",
-        );
-      }
-      return { type: "integer", value: value.toString() };
-    }
-    return { type: "float", value };
+    // Past 2^53 every double is integral, so send it as the REAL it is rather than guessing at a lost integer.
+    return Number.isSafeInteger(value)
+      ? { type: "integer", value: value.toString() }
+      : { type: "float", value };
   }
   if (typeof value === "string") return { type: "text", value };
   if (value instanceof Uint8Array)
@@ -131,12 +124,12 @@ export function encodeValue(value: unknown): WireValue {
   if (value instanceof Date) {
     throw new DatabaseError(
       "cannot bind a Date; pass date.toISOString() or date.getTime() instead",
-      "ARGUMENT_INVALID",
+      { code: "ARGUMENT_INVALID" },
     );
   }
   throw new DatabaseError(
     `cannot bind value of type ${typeof value}; expected null, boolean, number, bigint, string, or Uint8Array`,
-    "ARGUMENT_INVALID",
+    { code: "ARGUMENT_INVALID" },
   );
 }
 
@@ -174,7 +167,7 @@ export function normalizeUrl(url: string): string {
   if (!match) {
     throw new DatabaseError(
       `invalid database URL "${url}"; expected a libsql:// or https:// URL`,
-      "URL_INVALID",
+      { code: "URL_INVALID" },
     );
   }
   const scheme = (match[1] as string).toLowerCase();
@@ -182,7 +175,7 @@ export function normalizeUrl(url: string): string {
   if (!mapped) {
     throw new DatabaseError(
       `unsupported URL scheme "${scheme}:"; expected libsql:, https:, or http:`,
-      "URL_SCHEME_NOT_SUPPORTED",
+      { code: "URL_SCHEME_NOT_SUPPORTED" },
     );
   }
 
@@ -190,18 +183,20 @@ export function normalizeUrl(url: string): string {
   try {
     parsed = new URL(`${mapped}://${url.slice(match[0].length)}`);
   } catch {
-    throw new DatabaseError(`invalid database URL "${url}"`, "URL_INVALID");
+    throw new DatabaseError(`invalid database URL "${url}"`, {
+      code: "URL_INVALID",
+    });
   }
   if (parsed.username || parsed.password) {
     throw new DatabaseError(
       "database URL must not contain credentials; pass authToken instead",
-      "URL_INVALID",
+      { code: "URL_INVALID" },
     );
   }
   if (parsed.searchParams.has("authToken")) {
     throw new DatabaseError(
       "database URL must not carry an authToken query parameter; pass authToken instead",
-      "URL_INVALID",
+      { code: "URL_INVALID" },
     );
   }
   if (scheme === "libsql" && parsed.searchParams.get("tls") === "0") {
@@ -242,6 +237,13 @@ function requestSignal(
 
 /** Build a stateless transport: every call is one self-contained POST to /v2/pipeline. */
 export function createTransport(config: TransportConfig): Transport {
+  const { timeout } = config;
+  if (timeout !== undefined && !(Number.isFinite(timeout) && timeout > 0)) {
+    throw new DatabaseError(
+      `timeout must be a positive number of milliseconds, got ${timeout}`,
+      { code: "ARGUMENT_INVALID" },
+    );
+  }
   // v2 is the widest-supported pipeline path and every request we send is v2-capable.
   const endpoint = `${normalizeUrl(config.url)}/v2/pipeline`;
   const doFetch = config.fetch ?? fetch;
@@ -267,7 +269,7 @@ export function createTransport(config: TransportConfig): Transport {
             baton: null,
             requests: [...requests, { type: "close" }],
           }),
-          signal: requestSignal(signal, config.timeout),
+          signal: requestSignal(signal, timeout),
         });
       } catch (error) {
         throw DatabaseError.fromTransport(error);
@@ -278,11 +280,17 @@ export function createTransport(config: TransportConfig): Transport {
         throw DatabaseError.fromHttp(response.status, body);
       }
 
-      let payload: WireResponse;
+      let payload: Partial<WireResponse> | null;
       try {
-        payload = (await response.json()) as WireResponse;
+        payload = (await response.json()) as Partial<WireResponse> | null;
       } catch (error) {
         throw DatabaseError.fromTransport(error);
+      }
+      if (!Array.isArray(payload?.results)) {
+        throw new DatabaseError(
+          "database returned a response without results",
+          { code: "PROTOCOL" },
+        );
       }
       return payload.results;
     },

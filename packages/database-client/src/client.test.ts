@@ -469,6 +469,19 @@ describe("sql template", () => {
     expect(() => db.sql`SELECT ${{ a: 1 }}`).toThrow(/cannot bind value/);
   });
 
+  test("carries a row type like prepare does", async () => {
+    interface Note {
+      id: number;
+    }
+    const fake = fakeFetch([okExecute(["id"], [[1]])]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const note = await db.sql<Note>`SELECT id FROM notes`.first();
+    const id: number | undefined = note?.id;
+
+    expect(id).toBe(1);
+  });
+
   test("executes like any other statement", async () => {
     const fake = fakeFetch([okExecute(["id"], [[7]])]);
     const db = connect({ url: URL_, fetch: fake.fetch });
@@ -740,6 +753,37 @@ describe("errors", () => {
     expect(error.message).toContain(ENV_DATABASE_AUTH_TOKEN);
   });
 
+  test("a 200 without a results array is a protocol error, not a TypeError", async () => {
+    const error = await failure(responds(JSON.stringify({ ok: true })));
+
+    expect(error).toBeInstanceOf(DatabaseError);
+    expect(error.code).toBe("PROTOCOL");
+  });
+
+  test("transport errors keep the underlying error as cause", async () => {
+    const thrown = new TypeError("fetch failed");
+    const error = await failure((async () => {
+      throw thrown;
+    }) as unknown as typeof fetch);
+
+    expect(error.cause).toBe(thrown);
+  });
+
+  test("an error body that is JSON but not an object falls back to the status", async () => {
+    const error = await failure(responds("null", { status: 500 }));
+
+    expect(error.message).toBe("database request failed with HTTP 500");
+    expect(error.status).toBe(500);
+  });
+
+  test("a timeout that is not a positive number is rejected up front", () => {
+    for (const timeout of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => connect({ url: URL_, timeout })).toThrow(
+        /timeout must be a positive number/,
+      );
+    }
+  });
+
   test("a non-JSON error body still yields a usable message", async () => {
     const error = await failure(responds("upstream is down", { status: 502 }));
 
@@ -805,6 +849,16 @@ describe("connect", () => {
         );
       },
     );
+  });
+
+  test("an empty url falls back to the environment like a missing one", async () => {
+    const fake = fakeFetch([okExecute(["a"], [])]);
+    await withEnv({ [ENV_DATABASE_URL]: URL_ }, async () => {
+      await connect({ url: "", fetch: fake.fetch }).exec("SELECT 1");
+      expect((fake.captures[0] as Capture).url).toBe(
+        "https://db.lite.bunnydb.net/v2/pipeline",
+      );
+    });
   });
 
   test("names the environment variable when there is no url at all", async () => {

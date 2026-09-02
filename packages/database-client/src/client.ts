@@ -31,7 +31,7 @@ export interface RawResult extends Omit<Result<never>, "rows"> {
 }
 
 export interface Config extends TransportConfig {
-  /** Abort signal applied to every request unless a per-call signal is given. */
+  /** Abort signal applied to every request this connection makes. */
   signal?: AbortSignal;
 }
 
@@ -86,6 +86,7 @@ function toResult<T>(wire: WireStmtResult): Result<T> {
 export class Statement<T = Row> {
   readonly #internals: StatementInternals;
 
+  /** @internal Statements come from `Database.prepare()` and `Database.sql`. */
   constructor(internals: StatementInternals) {
     this.#internals = internals;
   }
@@ -96,7 +97,7 @@ export class Statement<T = Row> {
     if (named && values.length > 1) {
       throw new DatabaseError(
         "cannot mix positional and named parameters; pass a list of values or a single object",
-        "ARGUMENT_INVALID",
+        { code: "ARGUMENT_INVALID" },
       );
     }
     if (named) {
@@ -133,7 +134,7 @@ export class Statement<T = Row> {
     if (!Object.hasOwn(row, column)) {
       throw new DatabaseError(
         `column "${column}" is not in the result; got ${result.columns.join(", ")}`,
-        "COLUMN_NOT_FOUND",
+        { code: "COLUMN_NOT_FOUND" },
       );
     }
     return row[column] as SqlValue;
@@ -185,7 +186,8 @@ export class Database {
   readonly #signal?: AbortSignal;
 
   constructor(config: Config) {
-    if (!config.url) throw new DatabaseError("url is required", "URL_INVALID");
+    if (!config.url)
+      throw new DatabaseError("url is required", { code: "URL_INVALID" });
     this.#transport = createTransport(config);
     this.#signal = config.signal;
   }
@@ -201,10 +203,13 @@ export class Database {
     });
   }
 
-  /** Build a statement from a template literal, binding every interpolated value positionally. */
-  sql(strings: TemplateStringsArray, ...values: unknown[]): Statement {
+  /** Build a statement from a template literal, binding every interpolated value positionally. Pass `T` to type its rows. */
+  sql<T = Row>(
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ): Statement<T> {
     // Binding here rather than through bind() keeps an interpolated object a rejected value instead of named parameters.
-    return new Statement({
+    return new Statement<T>({
       sql: strings.join("?"),
       args: values.map(encodeValue),
       namedArgs: [],
@@ -300,11 +305,11 @@ export class Database {
  * wherever the CLI or Edge Scripting has already put them in the environment.
  */
 export function connect(config: Partial<Config> = {}): Database {
-  const url = config.url ?? readEnv(ENV_DATABASE_URL);
+  const url = config.url || readEnv(ENV_DATABASE_URL);
   if (!url) {
     throw new DatabaseError(
       `no database URL: pass { url } or set ${ENV_DATABASE_URL}`,
-      "URL_MISSING",
+      { code: "URL_MISSING" },
     );
   }
   return new Database({
