@@ -15,7 +15,7 @@ bun add @bunny.net/database-client
 
 ## Quick start
 
-`connect()` reads `BUNNY_DATABASE_URL` and `BUNNY_DATABASE_AUTH_TOKEN` from the environment, which is what `bunny db link` and Edge Scripting already set:
+`connect()` reads `BUNNY_DATABASE_URL` and `BUNNY_DATABASE_AUTH_TOKEN` from the environment, which is what `bunny db create --token --save-env` writes and what Edge Scripting already sets:
 
 ```ts
 import { connect } from "@bunny.net/database-client";

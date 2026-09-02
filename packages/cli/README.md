@@ -546,7 +546,7 @@ bunny storage zones credentials my-zone --connection ftp --show-secret   # FTP h
 bunny storage zones credentials my-zone --connection s3 --read-only      # use the read-only password as the secret
 bunny storage zones credentials my-zone --format sdk   # @bunny.net/storage-sdk snippet (HTTP API)
 bunny storage zones credentials my-zone --format rclone >> ~/.config/rclone/rclone.conf
-eval "$(bunny storage zones credentials my-zone --format env)"   # AWS-compatible env vars
+set -a; eval "$(bunny storage zones credentials my-zone --format env)"; set +a   # AWS-compatible env vars, exported
 bunny storage zones credentials my-zone --connection http --save-env     # write the variables to .env
 
 # Files: list, upload, download, delete (paths are relative to the zone root)
@@ -570,7 +570,7 @@ bunny storage docs
 
 A trailing slash on a `files` path denotes a directory: `files list images/` lists that directory, and `files remove images/` deletes it and its contents recursively. Edge Storage file operations are powered by the [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage).
 
-bunny.net's S3-compatible API is in preview and is opt-in per zone at creation (`zones add --s3`); it cannot be enabled on an existing zone. When a zone has it, `bunny storage zones show` surfaces its S3 endpoint, and `bunny storage zones credentials --connection s3` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table and JSON output mask the secret by default; pass `--show-secret` to reveal it (`--format` always emits it in full, since it's meant to be consumed by tools, and under `--output json` the config rides along in a `config` field). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
+bunny.net's S3-compatible API is in preview and is opt-in per zone at creation (`zones add --s3`); it cannot be enabled on an existing zone. When a zone has it, `bunny storage zones show` surfaces its S3 endpoint, and `bunny storage zones credentials --connection s3` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table and JSON output mask the secret by default; pass `--show-secret` to reveal it (the S3 tool formats always emit it in full, since they're meant to be consumed by tools, and under `--output json` the config rides along in a `config` field). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
 
 The same command also serves the two protocols every zone has: `--connection http` (the base URL and `AccessKey` header, plus a `--format sdk` snippet for [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage)) and `--connection ftp` (host, username, password). `--format` implies its protocol, so a conflicting `--connection` is an error. `--save-env` writes the protocol's variables (`BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, `BUNNY_STORAGE_REGION`, or the `AWS_*` quad for S3) into whichever `.env` already holds one of them.
 

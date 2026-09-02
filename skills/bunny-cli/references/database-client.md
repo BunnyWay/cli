@@ -26,7 +26,7 @@ import { connect } from "@bunny.net/database-client";
 const db = connect();
 ```
 
-`connect()` reads `BUNNY_DATABASE_URL` and `BUNNY_DATABASE_AUTH_TOKEN` from the environment, which is what `bunny db link` and `bunny db create --save-env` already write and what Edge Scripting injects. Pass them explicitly when you need to:
+`connect()` reads `BUNNY_DATABASE_URL` and `BUNNY_DATABASE_AUTH_TOKEN` from the environment, which is what `bunny db create --token --save-env` writes and what Edge Scripting injects. Both flags are needed: `--save-env` has nothing to write without a token. For a database that already exists, `bunny db tokens create` prints one to put in the environment yourself. `bunny db link` does not help here, since it writes only `.bunny/database.json` for the CLI's own resolution. Pass them explicitly when you need to:
 
 ```ts
 const db = connect({

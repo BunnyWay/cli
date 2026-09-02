@@ -29,7 +29,7 @@ bunny storage files upload ./dist/app.js --to assets/ --content-type application
 bunny storage files list assets/
 
 # Hand credentials to another tool
-eval "$(bunny storage zones credentials my-zone --format env)"
+set -a; eval "$(bunny storage zones credentials my-zone --format env)"; set +a
 bunny storage zones credentials my-zone --format rclone >> ~/.config/rclone/rclone.conf
 ```
 
@@ -124,7 +124,7 @@ bunny storage zones credentials my-zone --connection ftp --show-secret
 bunny storage zones credentials my-zone --connection s3 --read-only
 bunny storage zones credentials my-zone --format sdk                   # storage SDK snippet
 bunny storage zones credentials my-zone --format rclone >> ~/.config/rclone/rclone.conf
-eval "$(bunny storage zones credentials my-zone --format env)"
+set -a; eval "$(bunny storage zones credentials my-zone --format env)"; set +a
 bunny storage zones credentials my-zone --connection http --save-env
 ```
 
@@ -146,7 +146,7 @@ A zone has one password, shaped per protocol:
 | `--show-secret` | Reveal the masked secret in table and JSON output                                         |
 | `--save-env`    | Write the protocol's variables into whichever `.env` already holds one of them            |
 
-`--format` implies its protocol, so a conflicting `--connection` is an error. `--format` always emits the secret in full, since the output is meant to be piped into a tool; under `--output json` the config rides along in a `config` field. `--save-env` writes `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, and `BUNNY_STORAGE_REGION`, or the `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_ENDPOINT_URL` / `AWS_REGION` quad for S3.
+`--format` implies its protocol, so a conflicting `--connection` is an error. The four S3 tool formats (`rclone`, `aws`, `s3cmd`, `env`) emit the secret in full, since the output is meant to be piped into a tool; under `--output json` the config rides along in a `config` field. `--format sdk` is the exception: it emits a snippet that reads `process.env.BUNNY_STORAGE_ZONE` and `process.env.BUNNY_STORAGE_PASSWORD`, so it carries no credentials and needs those variables populated separately (`--connection http --save-env`). `--save-env` writes `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, and `BUNNY_STORAGE_REGION`, or the `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_ENDPOINT_URL` / `AWS_REGION` quad for S3.
 
 The S3 access key and secret are just the zone's existing name and password, so there is nothing extra to rotate beyond the zone's own credentials.
 
