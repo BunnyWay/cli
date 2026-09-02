@@ -184,14 +184,16 @@ The batch is the transaction, so a statement of your own that starts with `BEGIN
 ```ts
 await db.batch(
   [
-    db.prepare("ALTER TABLE users RENAME TO users_old"),
-    db.prepare("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL)"),
-    db.prepare("INSERT INTO users SELECT id, email FROM users_old"),
-    db.prepare("DROP TABLE users_old"),
+    db.prepare("CREATE TABLE users_new (id INTEGER PRIMARY KEY, email TEXT NOT NULL)"),
+    db.prepare("INSERT INTO users_new SELECT id, email FROM users"),
+    db.prepare("DROP TABLE users"),
+    db.prepare("ALTER TABLE users_new RENAME TO users"),
   ],
-  { foreignKeys: false },
+  { foreignKeys: false, mode: "immediate" },
 );
 ```
+
+Keep that order: build the replacement under a temporary name, drop the original, then rename. Renaming the original out of the way first looks equivalent but is not, because with foreign keys off SQLite rewrites every `REFERENCES users` in other tables to follow the rename, and they end up pointing at a table you are about to drop.
 
 ### `db.exec(sql)`
 
