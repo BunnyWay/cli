@@ -81,7 +81,7 @@ function withTTY<T>(isTTY: boolean, fn: () => T): T {
   process.stdin.isTTY = isTTY;
   process.stdout.isTTY = isTTY;
   try {
-    return fn();
+    return await fn();
   } finally {
     process.stdin.isTTY = stdin;
     process.stdout.isTTY = stdout;
