@@ -2,6 +2,7 @@ import { ENV_DATABASE_AUTH_TOKEN, ENV_DATABASE_URL, readEnv } from "./env.ts";
 import { DatabaseError } from "./errors.ts";
 import {
   createTransport,
+  decodeInteger,
   decodeValue,
   encodeValue,
   type SqlValue,
@@ -26,19 +27,46 @@ export interface Result<T = Row> {
 }
 
 /** Same as `Result`, with rows as positional arrays so duplicate column names survive. */
-export interface RawResult extends Omit<Result<never>, "rows"> {
-  rows: SqlValue[][];
-}
+export type RawResult = Result<SqlValue[]>;
 
 export interface Config extends TransportConfig {
-  /** Abort signal applied to every request unless a per-call signal is given. */
+  /** Abort signal applied to every request this connection makes. */
   signal?: AbortSignal;
 }
+
+/** How the batch transaction takes its lock. `immediate` reserves the write lock up front so a batch that reads then writes cannot lose to another writer. */
+export type BatchMode = "deferred" | "immediate" | "exclusive";
 
 /** Options for `batch()` and `batchRaw()`. */
 export interface BatchOptions {
   /** Enforce foreign key constraints. Pass `false` for schema changes that rebuild tables. */
   foreignKeys?: boolean;
+  /** Transaction locking mode. Defaults to `deferred`, SQLite's own default. */
+  mode?: BatchMode;
+}
+
+const TRANSACTION_KEYWORDS = new Set(["BEGIN", "COMMIT", "END", "ROLLBACK"]);
+
+/** First keyword of a statement, skipping leading whitespace, semicolons, and comments. A plain scan, since a regex here is quadratic on nested comment openers. */
+function firstKeyword(sql: string): string | undefined {
+  let i = 0;
+  while (i < sql.length) {
+    const ch = sql[i] as string;
+    if (ch === ";" || /\s/.test(ch)) {
+      i++;
+    } else if (sql.startsWith("--", i)) {
+      const end = sql.indexOf("\n", i);
+      if (end === -1) return undefined;
+      i = end + 1;
+    } else if (sql.startsWith("/*", i)) {
+      const end = sql.indexOf("*/", i + 2);
+      if (end === -1) return undefined;
+      i = end + 2;
+    } else {
+      break;
+    }
+  }
+  return /^[A-Za-z]+/.exec(sql.slice(i))?.[0].toUpperCase();
 }
 
 interface StatementInternals {
@@ -64,28 +92,32 @@ function toRawResult(wire: WireStmtResult): RawResult {
     lastInsertRowid:
       wire.last_insert_rowid === null
         ? null
-        : (decodeValue({ type: "integer", value: wire.last_insert_rowid }) as
-            | number
-            | bigint),
+        : decodeInteger(wire.last_insert_rowid),
   };
+}
+
+/** Zip one positional row with its column names. Null prototype so a column named __proto__ (or constructor, toString, ...) is a plain own property. */
+function toRow(columns: string[], values: SqlValue[]): Row {
+  const row: Row = Object.create(null);
+  columns.forEach((name, i) => {
+    row[name] = values[i] as SqlValue;
+  });
+  return row;
 }
 
 function toResult<T>(wire: WireStmtResult): Result<T> {
   const raw = toRawResult(wire);
-  const rows = raw.rows.map((row) => {
-    // Null prototype so a column named __proto__ (or constructor, toString, ...) is a plain own property.
-    const out: Row = Object.create(null);
-    for (let i = 0; i < raw.columns.length; i++)
-      out[raw.columns[i] as string] = row[i] as SqlValue;
-    return out as T;
-  });
-  return { ...raw, rows } as Result<T>;
+  return {
+    ...raw,
+    rows: raw.rows.map((values) => toRow(raw.columns, values) as T),
+  };
 }
 
 /** A SQL statement plus its bound arguments. Immutable and reusable. `T` is the row shape its executors return. */
 export class Statement<T = Row> {
   readonly #internals: StatementInternals;
 
+  /** Not for direct use: statements come from `Database.prepare()` and `Database.sql`. */
   constructor(internals: StatementInternals) {
     this.#internals = internals;
   }
@@ -96,24 +128,19 @@ export class Statement<T = Row> {
     if (named && values.length > 1) {
       throw new DatabaseError(
         "cannot mix positional and named parameters; pass a list of values or a single object",
-        "ARGUMENT_INVALID",
+        { code: "ARGUMENT_INVALID" },
       );
-    }
-    if (named) {
-      return new Statement<T>({
-        ...this.#internals,
-        args: [],
-        // The server resolves a bare name against :name, @name, and $name, so the sigil is optional.
-        namedArgs: Object.entries(named).map(([name, value]) => ({
-          name,
-          value: encodeValue(value),
-        })),
-      });
     }
     return new Statement<T>({
       ...this.#internals,
-      args: values.map(encodeValue),
-      namedArgs: [],
+      args: named ? [] : values.map(encodeValue),
+      // The server resolves a bare name against :name, @name, and $name, so the sigil is optional.
+      namedArgs: named
+        ? Object.entries(named).map(([name, value]) => ({
+            name,
+            value: encodeValue(value),
+          }))
+        : [],
     });
   }
 
@@ -133,7 +160,7 @@ export class Statement<T = Row> {
     if (!Object.hasOwn(row, column)) {
       throw new DatabaseError(
         `column "${column}" is not in the result; got ${result.columns.join(", ")}`,
-        "COLUMN_NOT_FOUND",
+        { code: "COLUMN_NOT_FOUND" },
       );
     }
     return row[column] as SqlValue;
@@ -185,32 +212,34 @@ export class Database {
   readonly #signal?: AbortSignal;
 
   constructor(config: Config) {
-    if (!config.url) throw new DatabaseError("url is required", "URL_INVALID");
+    if (!config.url)
+      throw new DatabaseError("url is required", { code: "URL_INVALID" });
     this.#transport = createTransport(config);
     this.#signal = config.signal;
   }
 
-  /** Create a statement from SQL. Bind arguments with `.bind()`. Pass `T` to type every row it returns. */
-  prepare<T = Row>(sql: string): Statement<T> {
+  #statement<T>(sql: string, args: WireValue[]): Statement<T> {
     return new Statement<T>({
       sql,
-      args: [],
+      args,
       namedArgs: [],
       transport: this.#transport,
       signal: this.#signal,
     });
   }
 
-  /** Build a statement from a template literal, binding every interpolated value positionally. */
-  sql(strings: TemplateStringsArray, ...values: unknown[]): Statement {
+  /** Create a statement from SQL. Bind arguments with `.bind()`. Pass `T` to type every row it returns. */
+  prepare<T = Row>(sql: string): Statement<T> {
+    return this.#statement<T>(sql, []);
+  }
+
+  /** Build a statement from a template literal, binding every interpolated value positionally. Pass `T` to type its rows. */
+  sql<T = Row>(
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ): Statement<T> {
     // Binding here rather than through bind() keeps an interpolated object a rejected value instead of named parameters.
-    return new Statement({
-      sql: strings.join("?"),
-      args: values.map(encodeValue),
-      namedArgs: [],
-      transport: this.#transport,
-      signal: this.#signal,
-    });
+    return this.#statement<T>(strings.join("?"), values.map(encodeValue));
   }
 
   /** Run every statement in one transaction. All succeed or none are applied. */
@@ -237,32 +266,46 @@ export class Database {
   ): Promise<WireStmtResult[]> {
     if (statements.length === 0) return [];
 
+    // A caller's own BEGIN or COMMIT would break the transaction the batch wraps around it.
+    statements.forEach((statement, index) => {
+      const keyword = firstKeyword(statement.wire.sql);
+      if (keyword && TRANSACTION_KEYWORDS.has(keyword)) {
+        throw new DatabaseError(
+          `statement ${index} starts with ${keyword}; batch() already runs its statements in one transaction`,
+          { code: "ARGUMENT_INVALID", batchIndex: index },
+        );
+      }
+    });
+
     const control = (sql: string, condition?: unknown) => ({
       stmt: { sql, args: [], named_args: [], want_rows: false },
       ...(condition ? { condition } : {}),
     });
+    const ok = (step: number) => ({ type: "ok", step });
 
     // SQLite ignores `PRAGMA foreign_keys` inside a transaction, so the pragmas
     // bracket BEGIN/COMMIT instead of sitting within them.
     const unchecked = options.foreignKeys === false;
     const prelude = unchecked ? [control("PRAGMA foreign_keys=off")] : [];
     const begin = prelude.length;
+    const first = begin + 1;
     const last = begin + statements.length;
+    const commit = last + 1;
 
-    // BEGIN is already DEFERRED in SQLite, so naming the mode would change nothing.
     const steps = [
       ...prelude,
-      control("BEGIN"),
+      control(`BEGIN ${(options.mode ?? "deferred").toUpperCase()}`),
       ...statements.map((statement, index) => ({
         stmt: statement.wire,
-        condition: { type: "ok", step: begin + index },
+        condition: ok(begin + index),
       })),
-      control("COMMIT", { type: "ok", step: last }),
+      control("COMMIT", ok(last)),
+      // Only roll back a transaction this batch opened, and only when it did not commit.
       control("ROLLBACK", {
-        type: "not",
-        cond: { type: "ok", step: last + 1 },
+        type: "and",
+        conds: [ok(begin), { type: "not", cond: ok(commit) }],
       }),
-      // Matches @libsql/client, which hardcodes `on` too; harmless here because the stream closes in this same request.
+      // Hardcoded `on` is harmless here because the stream closes in this same request.
       ...(unchecked ? [control("PRAGMA foreign_keys=on")] : []),
     ];
 
@@ -272,11 +315,18 @@ export class Database {
     );
     const batch = unwrap<WireBatchResult>(results[0]);
 
-    const failure = batch.step_errors.find((error) => error !== null);
-    if (failure) throw DatabaseError.fromWire(failure);
+    // Steps fail in order (the chain stops at the first error), so the first error is the cause.
+    const failed = batch.step_errors.findIndex((error) => error != null);
+    if (failed !== -1) {
+      const index = failed - first;
+      throw DatabaseError.fromWire(
+        batch.step_errors[failed] ?? undefined,
+        index >= 0 && index < statements.length ? index : undefined,
+      );
+    }
 
     return statements.map((_, index) => {
-      const step = batch.step_results[begin + 1 + index];
+      const step = batch.step_results[first + index];
       if (!step) throw new DatabaseError("batch step returned no result");
       return step;
     });
@@ -300,11 +350,11 @@ export class Database {
  * wherever the CLI or Edge Scripting has already put them in the environment.
  */
 export function connect(config: Partial<Config> = {}): Database {
-  const url = config.url ?? readEnv(ENV_DATABASE_URL);
+  const url = config.url || readEnv(ENV_DATABASE_URL);
   if (!url) {
     throw new DatabaseError(
       `no database URL: pass { url } or set ${ENV_DATABASE_URL}`,
-      "URL_MISSING",
+      { code: "URL_MISSING" },
     );
   }
   return new Database({

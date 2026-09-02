@@ -60,6 +60,17 @@ check(
   big,
 );
 
+// 5b. a double past 2^53 is bound as REAL and comes back unchanged
+const real = await db
+  .prepare("SELECT ? AS r, typeof(?) AS t")
+  .bind(1e21, 1e21)
+  .first();
+check(
+  "large double binds as REAL",
+  real?.r === 1e21 && real?.t === "real",
+  real,
+);
+
 // 6. blob round trip
 const blob = await db
   .prepare("SELECT ? AS b")
@@ -114,6 +125,24 @@ try {
   check("batch rolls back on failure", survived.length === 0, {
     code,
     message: (error as Error).message,
+  });
+}
+
+// 9b. the failing statement's position and the server's row counts come back
+try {
+  await db.batch(
+    [
+      db.prepare("CREATE TABLE __probe5 (id INTEGER PRIMARY KEY)"),
+      db.prepare("INSERT INTO __probe5 (id) VALUES (1)"),
+      db.prepare("INSERT INTO __probe5 (id) VALUES (1)"),
+    ],
+    { mode: "immediate" },
+  );
+  check("batchIndex", false);
+} catch (error) {
+  const e = error as DatabaseError;
+  check("batch error names the failing statement", e.batchIndex === 2, {
+    batchIndex: e.batchIndex,
   });
 }
 

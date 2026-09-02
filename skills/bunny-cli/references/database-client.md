@@ -85,7 +85,8 @@ These throw rather than converting quietly:
 
 - `undefined` — so a mistyped property (`bind(user.nmae)`) surfaces instead of writing NULL. Pass `null` for NULL.
 - `Date` — the error suggests `.toISOString()` or `.getTime()`, since guessing would change what lands in the column.
-- Integer `number`s past 2^53 — JavaScript already lost the precision. Pass a `bigint` (within SQLite's signed 64-bit range).
+
+Integer `number`s are sent as INTEGER up to 2^53 and as REAL past it, where every double is already a whole number. Pass a `bigint` for an exact integer that large (within SQLite's signed 64-bit range).
 
 ### Executing
 
@@ -121,7 +122,7 @@ const [inserted, count] = await db.batch([
 ]);
 ```
 
-If any statement fails, the transaction rolls back and `batch()` throws that statement's error. `batchRaw()` is the same with positional rows.
+If any statement fails, the transaction rolls back and `batch()` throws that statement's error with `error.batchIndex` set. `batchRaw()` is the same with positional rows. Statements starting with `BEGIN`, `COMMIT`, `END`, or `ROLLBACK` are rejected: the batch is the transaction. Pass `{ mode: "immediate" }` for write batches so the lock is taken up front instead of at the first write.
 
 `{ foreignKeys: false }` brackets the transaction with `PRAGMA foreign_keys=off` and `=on`. Schema changes need it: SQLite's table rebuild procedure and several `ALTER TABLE` forms require enforcement genuinely off, not just deferred to commit. `bunny db migrations apply` runs this way.
 
@@ -160,7 +161,7 @@ try {
 | `code`    | SQLite code (`SQLITE_CONSTRAINT`), or a client code (`UNAUTHORIZED`, `URL_MISSING`) |
 | `status`  | HTTP status, when the failure came from the transport rather than from SQL          |
 
-Client codes for pre-SQL failures: `NETWORK` (DNS, TLS, connection refused, or a non-JSON response), `TIMEOUT` (the `timeout` deadline elapsed), `ABORTED` (the `signal` was aborted).
+Client codes for pre-SQL failures: `NETWORK` (DNS, TLS, connection refused, or a non-JSON response), `TIMEOUT` (the `timeout` deadline elapsed), `ABORTED` (the `signal` was aborted), `PROTOCOL` (a 200 whose body is not a pipeline response). `error.cause` holds the runtime's original error.
 
 A `DatabaseError` carries the server's message and SQLite code, so returning one straight to a caller can leak schema details. Log it and return something generic.
 

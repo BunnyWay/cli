@@ -34,7 +34,7 @@ const db = connect({
 });
 ```
 
-Runnable examples for Edge Scripting, Bun, Node, and Hono live in [`packages/database-client/examples`](https://github.com/BunnyWay/cli/tree/main/packages/database-client/examples).
+Runnable examples for Edge Scripting, Bun, Node, Hono, Next.js, Astro, and SvelteKit live in [`packages/database-client/examples`](https://github.com/BunnyWay/cli/tree/main/packages/database-client/examples).
 
 ## API
 
@@ -42,14 +42,14 @@ Runnable examples for Edge Scripting, Bun, Node, and Hono live in [`packages/dat
 
 Returns a `Database`. Every option is optional.
 
-| Option      | Type                     | Default                     | Description                                           |
-| ----------- | ------------------------ | --------------------------- | ----------------------------------------------------- |
-| `url`       | `string`                 | `BUNNY_DATABASE_URL`        | `libsql://`, `https://`, or `http://` connection URL. |
-| `authToken` | `string`                 | `BUNNY_DATABASE_AUTH_TOKEN` | Sent as `Authorization: Bearer <token>`.              |
-| `fetch`     | `typeof fetch`           | global `fetch`              | Override for testing, tracing, or a custom agent.     |
-| `headers`   | `Record<string, string>` | none                        | Extra headers on every request.                       |
-| `signal`    | `AbortSignal`            | none                        | Applied to every request.                             |
-| `timeout`   | `number`                 | none                        | Milliseconds before a single request is aborted.      |
+| Option      | Type                     | Default                     | Description                                                                           |
+| ----------- | ------------------------ | --------------------------- | ------------------------------------------------------------------------------------- |
+| `url`       | `string`                 | `BUNNY_DATABASE_URL`        | `libsql://`, `https://`, or `http://` connection URL.                                 |
+| `authToken` | `string`                 | `BUNNY_DATABASE_AUTH_TOKEN` | Sent as `Authorization: Bearer <token>`.                                              |
+| `fetch`     | `typeof fetch`           | global `fetch`              | Override for testing, tracing, or a custom agent.                                     |
+| `headers`   | `Record<string, string>` | none                        | Extra headers on every request.                                                       |
+| `signal`    | `AbortSignal`            | none                        | Applied to every request.                                                             |
+| `timeout`   | `number`                 | none                        | Milliseconds before a single request is aborted. A positive integer up to 2147483647. |
 
 The client rewrites a `libsql://` URL to `https://`. It rejects credentials in the URL, both `user:pass@` and an `authToken` query parameter, so pass `authToken` instead. Dropping a token silently would leave you debugging an unexplained 401.
 
@@ -82,6 +82,8 @@ Each `${...}` becomes a `?` placeholder and its value is bound, never spliced in
 
 Values follow the same rules as `bind()`, with one difference: an interpolated object throws instead of being read as named parameters, since inside a template it is far more likely to be a mistake.
 
+Pass a row type the same way as `prepare()`, as ``db.sql<User>`...` ``.
+
 Only values can be parameterized, which is a SQLite limit rather than a client one. Build the statement with `prepare()` when a table or column name has to vary.
 
 ### `statement.bind(...values)`
@@ -109,7 +111,7 @@ Names may carry the sigil or leave it off, so `{ id: 1 }` and `{ ":id": 1 }` bot
 
 Anything else throws instead of being quietly converted, because SQLite has nowhere to put it. `Date` gets its own message suggesting `.toISOString()` or `.getTime()`, since guessing which one you meant would change what ends up in the column.
 
-Integer `number`s past 2^53 also throw: JavaScript has already lost the precision by the time the client sees the value, so storing it would quietly write the wrong number. Pass a `bigint` for values that large. Bigints must fit SQLite's signed 64-bit range.
+Integer `number`s are sent as INTEGER while they fit exactly, up to 2^53. Past that every double is a whole number, so the client sends it as REAL, which stores the value as is. Pass a `bigint` when you need an exact integer that large. Bigints must fit SQLite's signed 64-bit range.
 
 ### Executing
 
@@ -165,7 +167,11 @@ const [inserted, count] = await db.batch([
 ]);
 ```
 
-You get one `Result` per statement you passed, in order. `batchRaw()` is the same but with positional rows. If any statement fails the transaction rolls back and `batch()` throws that statement's error.
+You get one `Result` per statement you passed, in order. `batchRaw()` is the same but with positional rows. If any statement fails the transaction rolls back and `batch()` throws that statement's error, with `error.batchIndex` set to the position of the statement that failed.
+
+The batch is the transaction, so a statement of your own that starts with `BEGIN`, `COMMIT`, `END`, or `ROLLBACK` is rejected before anything is sent. Savepoints are fine.
+
+`{ mode: "immediate" }` opens the transaction with `BEGIN IMMEDIATE`, which takes the write lock up front. SQLite's default, `deferred`, takes it at the first write instead, so a batch that reads and then writes can fail with `SQLITE_BUSY` if another writer got in between. Use `immediate` for batches you know will write. `exclusive` is also accepted.
 
 `batch()` infers each result's row type from its statement, so a `prepare<User>(...)` statement comes back as `Result<User>` even next to untyped ones. See [Types](#types).
 
@@ -174,14 +180,16 @@ You get one `Result` per statement you passed, in order. `batchRaw()` is the sam
 ```ts
 await db.batch(
   [
-    db.prepare("ALTER TABLE users RENAME TO users_old"),
-    db.prepare("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL)"),
-    db.prepare("INSERT INTO users SELECT id, email FROM users_old"),
-    db.prepare("DROP TABLE users_old"),
+    db.prepare("CREATE TABLE users_new (id INTEGER PRIMARY KEY, email TEXT NOT NULL)"),
+    db.prepare("INSERT INTO users_new SELECT id, email FROM users"),
+    db.prepare("DROP TABLE users"),
+    db.prepare("ALTER TABLE users_new RENAME TO users"),
   ],
-  { foreignKeys: false },
+  { foreignKeys: false, mode: "immediate" },
 );
 ```
+
+Keep that order: build the replacement under a temporary name, drop the original, then rename. Renaming the original out of the way first looks equivalent but is not, because with foreign keys off SQLite rewrites every `REFERENCES users` in other tables to follow the rename, and they end up pointing at a table you are about to drop.
 
 ### `db.exec(sql)`
 
@@ -212,19 +220,23 @@ try {
 }
 ```
 
-| Property  | Description                                                                          |
-| --------- | ------------------------------------------------------------------------------------ |
-| `message` | The server's message, or a description of the local validation failure.              |
-| `code`    | SQLite code (`SQLITE_CONSTRAINT`), or a client code (`UNAUTHORIZED`, `URL_MISSING`). |
-| `status`  | HTTP status, when the failure came from the transport rather than from SQL.          |
+| Property     | Description                                                                          |
+| ------------ | ------------------------------------------------------------------------------------ |
+| `message`    | The server's message, or a description of the local validation failure.              |
+| `code`       | SQLite code (`SQLITE_CONSTRAINT`), or a client code (`UNAUTHORIZED`, `URL_MISSING`). |
+| `status`     | HTTP status, when the failure came from the transport rather than from SQL.          |
+| `batchIndex` | Position of the failing statement, when one of your statements in `batch()` failed.  |
 
 Failures that happen before any SQL runs are wrapped too, so a single `catch (error) { if (error instanceof DatabaseError) ... }` covers the whole surface rather than letting a `TypeError` through:
 
-| `code`    | Cause                                                        |
-| --------- | ------------------------------------------------------------ |
-| `NETWORK` | DNS, TLS, connection refused, or a response that isn't JSON. |
-| `TIMEOUT` | The `timeout` deadline elapsed.                              |
-| `ABORTED` | The `signal` you passed was aborted.                         |
+| `code`     | Cause                                                                |
+| ---------- | -------------------------------------------------------------------- |
+| `NETWORK`  | DNS, TLS, connection refused, or a response that isn't JSON.         |
+| `TIMEOUT`  | The `timeout` deadline elapsed.                                      |
+| `ABORTED`  | The `signal` you passed was aborted.                                 |
+| `PROTOCOL` | The server answered 200 with a body that is not a pipeline response. |
+
+For these three, `error.cause` holds the runtime's original error.
 
 ## Types
 

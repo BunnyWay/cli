@@ -84,43 +84,36 @@ function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
+const invalid = (message: string) =>
+  new DatabaseError(message, { code: "ARGUMENT_INVALID" });
+
+// Node's timers take a signed 32-bit integer; a larger value silently fires after 1ms and a fraction throws.
+const MAX_TIMEOUT = 2_147_483_647;
+
 export function encodeValue(value: unknown): WireValue {
   if (value === null) return { type: "null" };
   if (value === undefined) {
-    throw new DatabaseError(
-      "cannot bind undefined; pass null to store SQL NULL",
-      "ARGUMENT_INVALID",
-    );
+    throw invalid("cannot bind undefined; pass null to store SQL NULL");
   }
   if (typeof value === "boolean") {
     return { type: "integer", value: value ? "1" : "0" };
   }
   if (typeof value === "bigint") {
     if (value > INT64_MAX || value < INT64_MIN) {
-      throw new DatabaseError(
+      throw invalid(
         `cannot bind bigint ${value}; outside SQLite's 64-bit integer range`,
-        "ARGUMENT_INVALID",
       );
     }
     return { type: "integer", value: value.toString() };
   }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
-      throw new DatabaseError(
-        `cannot bind non-finite number: ${value}`,
-        "ARGUMENT_INVALID",
-      );
+      throw invalid(`cannot bind non-finite number: ${value}`);
     }
-    if (Number.isInteger(value)) {
-      if (!Number.isSafeInteger(value)) {
-        throw new DatabaseError(
-          `cannot bind unsafe integer ${value}; numbers past 2^53 have already lost precision, pass a bigint instead`,
-          "ARGUMENT_INVALID",
-        );
-      }
-      return { type: "integer", value: value.toString() };
-    }
-    return { type: "float", value };
+    // Past 2^53 every double is integral, so send it as the REAL it is rather than guessing at a lost integer.
+    return Number.isSafeInteger(value)
+      ? { type: "integer", value: value.toString() }
+      : { type: "float", value };
   }
   if (typeof value === "string") return { type: "text", value };
   if (value instanceof Uint8Array)
@@ -129,15 +122,19 @@ export function encodeValue(value: unknown): WireValue {
     return { type: "blob", base64: bytesToBase64(new Uint8Array(value)) };
   }
   if (value instanceof Date) {
-    throw new DatabaseError(
+    throw invalid(
       "cannot bind a Date; pass date.toISOString() or date.getTime() instead",
-      "ARGUMENT_INVALID",
     );
   }
-  throw new DatabaseError(
+  throw invalid(
     `cannot bind value of type ${typeof value}; expected null, boolean, number, bigint, string, or Uint8Array`,
-    "ARGUMENT_INVALID",
   );
+}
+
+/** Widen to bigint only where a number would lose precision. */
+export function decodeInteger(value: string): number | bigint {
+  const big = BigInt(value);
+  return big > MAX_SAFE || big < MIN_SAFE ? big : Number(big);
 }
 
 export function decodeValue(value: WireValue): SqlValue {
@@ -150,10 +147,8 @@ export function decodeValue(value: WireValue): SqlValue {
       return value.value;
     case "blob":
       return base64ToBytes(value.base64);
-    case "integer": {
-      const big = BigInt(value.value);
-      return big > MAX_SAFE || big < MIN_SAFE ? big : Number(big);
-    }
+    case "integer":
+      return decodeInteger(value.value);
     default:
       throw new DatabaseError(
         `unsupported value type from server: ${(value as { type: string }).type}`,
@@ -169,12 +164,14 @@ const SCHEME_MAP: Record<string, string> = {
   http: "http",
 };
 
+const invalidUrl = (message: string) =>
+  new DatabaseError(message, { code: "URL_INVALID" });
+
 export function normalizeUrl(url: string): string {
   const match = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//.exec(url);
   if (!match) {
-    throw new DatabaseError(
+    throw invalidUrl(
       `invalid database URL "${url}"; expected a libsql:// or https:// URL`,
-      "URL_INVALID",
     );
   }
   const scheme = (match[1] as string).toLowerCase();
@@ -182,7 +179,7 @@ export function normalizeUrl(url: string): string {
   if (!mapped) {
     throw new DatabaseError(
       `unsupported URL scheme "${scheme}:"; expected libsql:, https:, or http:`,
-      "URL_SCHEME_NOT_SUPPORTED",
+      { code: "URL_SCHEME_NOT_SUPPORTED" },
     );
   }
 
@@ -190,18 +187,16 @@ export function normalizeUrl(url: string): string {
   try {
     parsed = new URL(`${mapped}://${url.slice(match[0].length)}`);
   } catch {
-    throw new DatabaseError(`invalid database URL "${url}"`, "URL_INVALID");
+    throw invalidUrl(`invalid database URL "${url}"`);
   }
   if (parsed.username || parsed.password) {
-    throw new DatabaseError(
+    throw invalidUrl(
       "database URL must not contain credentials; pass authToken instead",
-      "URL_INVALID",
     );
   }
   if (parsed.searchParams.has("authToken")) {
-    throw new DatabaseError(
+    throw invalidUrl(
       "database URL must not carry an authToken query parameter; pass authToken instead",
-      "URL_INVALID",
     );
   }
   if (scheme === "libsql" && parsed.searchParams.get("tls") === "0") {
@@ -242,18 +237,29 @@ function requestSignal(
 
 /** Build a stateless transport: every call is one self-contained POST to /v2/pipeline. */
 export function createTransport(config: TransportConfig): Transport {
+  const { timeout } = config;
+  if (
+    timeout !== undefined &&
+    !(Number.isInteger(timeout) && timeout > 0 && timeout <= MAX_TIMEOUT)
+  ) {
+    throw invalid(
+      `timeout must be a positive integer of milliseconds no larger than ${MAX_TIMEOUT}, got ${timeout}`,
+    );
+  }
   // v2 is the widest-supported pipeline path and every request we send is v2-capable.
   const endpoint = `${normalizeUrl(config.url)}/v2/pipeline`;
   const doFetch = config.fetch ?? fetch;
+  // Lowercased so a caller's User-Agent replaces the default instead of sending both.
   const headers: Record<string, string> = {
     "content-type": "application/json",
     "user-agent": USER_AGENT,
+    ...Object.fromEntries(
+      Object.entries(config.headers ?? {}).map(([name, value]) => [
+        name.toLowerCase(),
+        value,
+      ]),
+    ),
   };
-
-  for (const [name, value] of Object.entries(config.headers ?? {})) {
-    headers[name.toLowerCase()] = value;
-  }
-
   if (config.authToken) headers.authorization = `Bearer ${config.authToken}`;
 
   return {
@@ -267,7 +273,7 @@ export function createTransport(config: TransportConfig): Transport {
             baton: null,
             requests: [...requests, { type: "close" }],
           }),
-          signal: requestSignal(signal, config.timeout),
+          signal: requestSignal(signal, timeout),
         });
       } catch (error) {
         throw DatabaseError.fromTransport(error);
@@ -278,11 +284,17 @@ export function createTransport(config: TransportConfig): Transport {
         throw DatabaseError.fromHttp(response.status, body);
       }
 
-      let payload: WireResponse;
+      let payload: Partial<WireResponse> | null;
       try {
-        payload = (await response.json()) as WireResponse;
+        payload = (await response.json()) as Partial<WireResponse> | null;
       } catch (error) {
         throw DatabaseError.fromTransport(error);
+      }
+      if (!Array.isArray(payload?.results)) {
+        throw new DatabaseError(
+          "database returned a response without results",
+          { code: "PROTOCOL" },
+        );
       }
       return payload.results;
     },
