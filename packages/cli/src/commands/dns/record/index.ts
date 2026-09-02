@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { dnsAddCommand } from "./add.ts";
 import { dnsExportCommand } from "./export.ts";
 import { dnsImportCommand } from "./import.ts";

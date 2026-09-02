@@ -1,7 +1,7 @@
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { loadManifest } from "../../../core/manifest.ts";
-import { prompts, spinner } from "../../../core/ui.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest } from "@/core/manifest.ts";
+import { prompts, spinner } from "@/core/ui.ts";
 import {
   type ComputeClient,
   createDnsScript,

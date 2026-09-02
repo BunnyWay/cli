@@ -3,14 +3,8 @@ import {
   createCoreClient,
 } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { isInteractive, prompts, spinner } from "../../../core/ui.ts";
-import type { CoreClient, DnsZoneModel } from "../api.ts";
-import { resolveZoneInteractive } from "../interactive.ts";
+import type { CoreClient, DnsZoneModel } from "@/commands/dns/api.ts";
+import { resolveZoneInteractive } from "@/commands/dns/interactive.ts";
 import {
   CAA_TAGS,
   type DnsRecordTypes,
@@ -19,9 +13,15 @@ import {
   RECORD_TYPES,
   recordName,
   recordTypeLabel,
-} from "../record-types.ts";
-import type { AnswerKind } from "../scripts/constants.ts";
-import { pickOrCreateDnsScript } from "../scripts/interactive.ts";
+} from "@/commands/dns/record-types.ts";
+import type { AnswerKind } from "@/commands/dns/scripts/constants.ts";
+import { pickOrCreateDnsScript } from "@/commands/dns/scripts/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { isInteractive, prompts, spinner } from "@/core/ui.ts";
 import { pickAndApplyPreset } from "./preset.ts";
 
 type AddDnsRecordModel = components["schemas"]["AddDnsRecordModel"];

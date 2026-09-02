@@ -16,6 +16,8 @@
 
     // Resolve the compiled-library packages from source in-repo (no prebuild); npm consumers use their package exports. See AGENTS.md "Publishing".
     "paths": {
+      // CLI-internal absolute imports. Only the CLI: packages published via tsc emit paths unrewritten.
+      "@/*": ["./packages/cli/src/*"],
       "@bunny.net/database-client": ["./packages/database-client/src/index.ts"],
       "@bunny.net/openapi-client": ["./packages/openapi-client/src/index.ts"],
       "@bunny.net/openapi-client/generated/*": [

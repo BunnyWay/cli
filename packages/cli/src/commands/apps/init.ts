@@ -1,10 +1,10 @@
 import { resolve } from "node:path";
 import { createMcClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
 import { configExists } from "./config.ts";
 import { normalizeRegistryFlag } from "./docker.ts";
 import { runWalkthrough } from "./walkthrough.ts";

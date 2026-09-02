@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, expect, test } from "bun:test";
-import type { CoreClient } from "../../../core/hostnames/index.ts";
-import { type SiteContext, siteFiles } from "../api.ts";
-import { STATE_VERSION } from "../constants.ts";
+import { type SiteContext, siteFiles } from "@/commands/sites/api.ts";
+import { STATE_VERSION } from "@/commands/sites/constants.ts";
+import type { CoreClient } from "@/core/hostnames/index.ts";
 import { setupSiteDomain } from "./index.ts";
 
 // In-memory storage-file store so recordSiteDomain's state write is observable.

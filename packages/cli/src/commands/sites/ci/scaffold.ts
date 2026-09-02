@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
-import { UserError } from "../../../core/errors.ts";
-import { runGit } from "../../../core/git.ts";
-import { logger } from "../../../core/logger.ts";
-import { confirm, prompts } from "../../../core/ui.ts";
+import { UserError } from "@/core/errors.ts";
+import { runGit } from "@/core/git.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, prompts } from "@/core/ui.ts";
 import {
   detectFramework,
   detectPackageManager,

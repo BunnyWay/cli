@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { scriptsEnvListCommand } from "./list.ts";
 import { scriptsEnvPullCommand } from "./pull.ts";
 import { scriptsEnvRemoveCommand } from "./remove.ts";

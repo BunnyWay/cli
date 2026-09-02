@@ -1,5 +1,5 @@
 import * as BunnyStorage from "@bunny.net/storage-sdk";
-import { UserError } from "../../core/errors.ts";
+import { UserError } from "@/core/errors.ts";
 import type { StorageZoneModel } from "./api.ts";
 
 // The SDK types its upload stream as node:stream/web; borrow that exact type so casts stay in sync.

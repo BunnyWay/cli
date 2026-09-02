@@ -1,5 +1,5 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import type { ResolvedConfig } from "../config/index.ts";
+import type { ResolvedConfig } from "@/config/index.ts";
 import { clientOptions } from "./client-options.ts";
 import { UserError } from "./errors.ts";
 

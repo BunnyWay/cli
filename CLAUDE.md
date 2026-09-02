@@ -46,6 +46,7 @@ This is a Bun workspace monorepo with five packages:
 - Import `prompts` from `packages/cli/src/core/ui.ts`, never from the `prompts` package directly: the wrapper refuses to prompt when stdin is not an interactive terminal (the raw library spins at 100% CPU on a closed stdin). Piped prompt answers are deliberately unsupported; flags and `--force` are the automation contract. `prompts.inject()` in tests still works.
 - `confirm()` is a gate by default: if stdin closes before an answer it throws, so the command exits non-zero. Pass `optional: true` only for offer-style prompts (link this directory? save to .env?) where declining is a normal outcome and the command should continue.
 - Throw `UserError` for expected errors.
+- Import CLI-internal modules with the `@/` alias (`@/core/logger.ts`), not `../` chains. Same-directory `./` imports stay relative. CLI only: the published packages build with `tsc`, which does not rewrite `paths`.
 - Import API clients from `@bunny.net/openapi-client`, not relative paths. Import generated types from the per-API entrypoints (`@bunny.net/openapi-client/<spec>`, e.g. `@bunny.net/openapi-client/core`); the older `generated/<spec>.d.ts` paths remain supported.
 - Use `clientOptions(config, verbose)` from `packages/cli/src/core/client-options.ts` when creating API clients in command handlers.
 - Database commands use v2 API endpoints (`/v2/databases/...`).

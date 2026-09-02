@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { sitesCiInitCommand } from "./init.ts";
 
 export const sitesCiNamespace = defineNamespace(

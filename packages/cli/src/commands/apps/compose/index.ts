@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
-import { UserError } from "../../../core/errors.ts";
+import { UserError } from "@/core/errors.ts";
 import { ComposeFileSchema } from "./schema.ts";
 
 export { findComposeFile } from "./find.ts";

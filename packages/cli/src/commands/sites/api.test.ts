@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, expect, test } from "bun:test";
-import type { EdgeRule } from "../../core/edge-rules.ts";
-import { ApiError } from "../../core/errors.ts";
-import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
+import type { CoreClient, StorageZoneModel } from "@/commands/storage/api.ts";
+import type { EdgeRule } from "@/core/edge-rules.ts";
+import { ApiError } from "@/core/errors.ts";
 import {
   createSite,
   deleteSiteResources,

@@ -1,4 +1,4 @@
-import { VERSION } from "../../core/version.ts";
+import { VERSION } from "@/core/version.ts";
 
 /** Identify CLI database traffic as `bunny-cli/<version> (<command>)`. */
 export function databaseUserAgent(command: string): string {

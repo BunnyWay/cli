@@ -1,5 +1,5 @@
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
 import {
   detectFramework,
   detectPackageManager,

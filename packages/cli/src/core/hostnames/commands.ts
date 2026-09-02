@@ -1,11 +1,16 @@
 import type { Argv, CommandModule } from "yargs";
-import { defineCommand } from "../define-command.ts";
-import { defineNamespace } from "../define-namespace.ts";
-import { UserError } from "../errors.ts";
-import { formatTable } from "../format.ts";
-import { logger } from "../logger.ts";
-import type { GlobalArgs } from "../types.ts";
-import { confirm, isInteractive, requireConfirmable, spinner } from "../ui.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
+import { UserError } from "@/core/errors.ts";
+import { formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import type { GlobalArgs } from "@/core/types.ts";
+import {
+  confirm,
+  isInteractive,
+  requireConfirmable,
+  spinner,
+} from "@/core/ui.ts";
 import {
   addHostname,
   type CoreClient,

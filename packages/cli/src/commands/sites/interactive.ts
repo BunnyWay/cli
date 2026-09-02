@@ -1,14 +1,14 @@
 import type { Argv } from "yargs";
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
-import { loadManifest, saveManifest } from "../../core/manifest.ts";
-import type { OutputFormat } from "../../core/types.ts";
-import { confirm, isInteractive, prompts, withSpinner } from "../../core/ui.ts";
 import {
   type CoreClient,
   fetchStorageZone,
   resolveStorageZone,
-} from "../storage/api.ts";
+} from "@/commands/storage/api.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, saveManifest } from "@/core/manifest.ts";
+import type { OutputFormat } from "@/core/types.ts";
+import { confirm, isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 import { fetchSites, type SiteContext, siteContextFromZone } from "./api.ts";
 import { loadSiteConfig } from "./config.ts";
 import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";

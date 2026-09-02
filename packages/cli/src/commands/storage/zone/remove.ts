@@ -1,12 +1,15 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { logger } from "../../../core/logger.ts";
-import { loadManifest, removeManifest } from "../../../core/manifest.ts";
-import { confirm, prompts, spinner } from "../../../core/ui.ts";
-import { STORAGE_MANIFEST, type StorageZoneManifest } from "../constants.ts";
-import { resolveStorageZoneInteractive } from "../interactive.ts";
+import {
+  STORAGE_MANIFEST,
+  type StorageZoneManifest,
+} from "@/commands/storage/constants.ts";
+import { resolveStorageZoneInteractive } from "@/commands/storage/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, removeManifest } from "@/core/manifest.ts";
+import { confirm, prompts, spinner } from "@/core/ui.ts";
 
 interface ZoneRemoveArgs {
   zone?: string;

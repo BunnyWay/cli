@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { dbCreateCommand } from "./create.ts";
 import { dbDeleteCommand } from "./delete.ts";
 import { dbDocsCommand } from "./docs.ts";

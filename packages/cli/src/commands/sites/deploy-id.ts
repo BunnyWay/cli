@@ -1,4 +1,4 @@
-import { runGit } from "../../core/git.ts";
+import { runGit } from "@/core/git.ts";
 
 export interface HashedFile {
   /** Posix-style path relative to the deploy root. */

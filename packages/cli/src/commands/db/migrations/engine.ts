@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { splitStatements } from "@bunny.net/database-shell";
-import { errorMessage, UserError } from "../../../core/errors.ts";
+import { errorMessage, UserError } from "@/core/errors.ts";
 import {
   DEFAULT_MIGRATIONS_DIR,
   DEFAULT_MIGRATIONS_PATTERN,

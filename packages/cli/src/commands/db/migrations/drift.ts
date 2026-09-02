@@ -1,5 +1,5 @@
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
 import type { MigrationStatus } from "./engine.ts";
 
 const UNSAFE_STATES: ReadonlySet<MigrationStatus["state"]> = new Set([

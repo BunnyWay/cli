@@ -2,7 +2,7 @@ import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { sandboxKnownHostsPath } from "@bunny.net/sandbox/known-hosts";
-import type { SandboxRecord } from "../../config/schema.ts";
+import type { SandboxRecord } from "@/config/schema.ts";
 
 export const WORKPLACE = "/workplace";
 

@@ -1,5 +1,5 @@
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
-import { prompts } from "../../core/ui.ts";
+import { prompts } from "@/core/ui.ts";
 import type { ContainerConfig } from "./config.ts";
 
 type EndpointRequest = components["schemas"]["EndpointRequest"];

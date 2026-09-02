@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { sandboxUrlAddCommand } from "./add.ts";
 import { sandboxUrlDeleteCommand } from "./delete.ts";
 import { sandboxUrlListCommand } from "./list.ts";

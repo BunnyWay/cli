@@ -1,6 +1,6 @@
-import { UserError } from "../errors.ts";
-import { logger } from "../logger.ts";
-import { confirm, spinner, withSpinner } from "../ui.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, spinner, withSpinner } from "@/core/ui.ts";
 import {
   type BunnyDnsMatch,
   findBunnyDnsZone,

@@ -1,6 +1,6 @@
 import type { createDbClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
-import { UserError } from "../../core/errors.ts";
+import { UserError } from "@/core/errors.ts";
 import { DB_PAGE_SIZE, TOKEN_TTL_MINUTES } from "./constants.ts";
 
 type DbClient = ReturnType<typeof createDbClient>;

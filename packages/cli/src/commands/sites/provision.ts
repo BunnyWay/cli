@@ -1,13 +1,13 @@
 import { basename } from "node:path";
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
-import { saveManifest } from "../../core/manifest.ts";
-import { prompts, withSpinner } from "../../core/ui.ts";
-import type { CoreClient } from "../storage/api.ts";
+import type { CoreClient } from "@/commands/storage/api.ts";
 import {
   SSD_PRIMARY_REGION,
   type ZoneTierChoice,
-} from "../storage/constants.ts";
+} from "@/commands/storage/constants.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { saveManifest } from "@/core/manifest.ts";
+import { prompts, withSpinner } from "@/core/ui.ts";
 import {
   type CreateSiteResult,
   createSite,

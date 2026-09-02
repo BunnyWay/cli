@@ -1,3 +1,4 @@
+import type { ProjectSkill } from "@/core/agent-skill.ts";
 import apiMd from "../../../../../skills/bunny-cli/references/api.md" with {
   type: "text",
 };
@@ -28,7 +29,6 @@ import storageMd from "../../../../../skills/bunny-cli/references/storage.md" wi
 import skillMd from "../../../../../skills/bunny-cli/SKILL.md" with {
   type: "text",
 };
-import type { ProjectSkill } from "../../core/agent-skill.ts";
 
 const AGENTS_SECTION = `## bunny.net CLI
 

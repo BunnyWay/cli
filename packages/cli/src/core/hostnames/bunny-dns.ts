@@ -1,9 +1,12 @@
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { checkDelegation, expectedNameservers } from "../dns-nameservers.ts";
-import { RECORD_TYPES, recordTypeLabel } from "../dns-record-types.ts";
-import { UserError } from "../errors.ts";
-import { logger } from "../logger.ts";
-import { confirm, spinner } from "../ui.ts";
+import {
+  checkDelegation,
+  expectedNameservers,
+} from "@/core/dns-nameservers.ts";
+import { RECORD_TYPES, recordTypeLabel } from "@/core/dns-record-types.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, spinner } from "@/core/ui.ts";
 import type { CoreClient } from "./client.ts";
 
 type DnsZoneModel = components["schemas"]["DnsZoneModel"];

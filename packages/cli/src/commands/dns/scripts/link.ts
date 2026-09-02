@@ -1,11 +1,11 @@
 import { createComputeClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { loadManifest, saveManifest } from "../../../core/manifest.ts";
-import { prompts, spinner } from "../../../core/ui.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, saveManifest } from "@/core/manifest.ts";
+import { prompts, spinner } from "@/core/ui.ts";
 import { fetchDnsScript, fetchDnsScripts } from "./api.ts";
 import {
   DEFAULT_ENTRY,

@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
-import { RECORD_TYPES } from "../../../core/dns-record-types.ts";
-import type { DnsDiscoveredRecord } from "../api.ts";
+import type { DnsDiscoveredRecord } from "@/commands/dns/api.ts";
+import { RECORD_TYPES } from "@/core/dns-record-types.ts";
 
 let discovered: DnsDiscoveredRecord[] = [];
 mock.module("../api.ts", () => ({

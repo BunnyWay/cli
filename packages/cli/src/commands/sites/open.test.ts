@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { Hostname } from "../../core/hostnames/index.ts";
+import type { Hostname } from "@/core/hostnames/index.ts";
 import { type RemoteSiteState, STATE_VERSION } from "./constants.ts";
 import { siteLiveUrl } from "./open.ts";
 

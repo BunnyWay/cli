@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { appsRegionsListCommand } from "./list.ts";
 import { appsRegionsShowCommand } from "./show.ts";
 

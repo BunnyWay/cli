@@ -1,9 +1,9 @@
 import { createDbClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { UserError } from "../../core/errors.ts";
-import { spinner } from "../../core/ui.ts";
-import { readEnvValue } from "../../utils/env-file.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { UserError } from "@/core/errors.ts";
+import { spinner } from "@/core/ui.ts";
+import { readEnvValue } from "@/utils/env-file.ts";
 import { generateToken, tokenExpiryFromNow } from "./api.ts";
 import { ENV_DATABASE_AUTH_TOKEN, ENV_DATABASE_URL } from "./constants.ts";
 import { resolveDbId } from "./resolve-db.ts";

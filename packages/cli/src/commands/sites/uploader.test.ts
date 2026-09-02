@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { StorageZone } from "../storage/files-api.ts";
+import type { StorageZone } from "@/commands/storage/files-api.ts";
 import { siteFiles } from "./api.ts";
 import {
   collectFiles,

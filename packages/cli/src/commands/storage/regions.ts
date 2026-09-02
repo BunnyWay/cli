@@ -1,6 +1,6 @@
-import { defineCommand } from "../../core/define-command.ts";
-import { formatTable } from "../../core/format.ts";
-import { logger } from "../../core/logger.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
 import {
   mainRegionChoices,
   regionTierNote,

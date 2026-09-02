@@ -1,10 +1,4 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { isInteractive } from "../../../core/ui.ts";
 import {
   CLIENT_FORMATS,
   type ClientFormat,
@@ -17,9 +11,15 @@ import {
   promptClient,
   promptConnectionType,
   storageConnection,
-} from "../connection.ts";
-import { resolveStorageZoneInteractive } from "../interactive.ts";
-import { isS3Enabled } from "../s3.ts";
+} from "@/commands/storage/connection.ts";
+import { resolveStorageZoneInteractive } from "@/commands/storage/interactive.ts";
+import { isS3Enabled } from "@/commands/storage/s3.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { isInteractive } from "@/core/ui.ts";
 
 interface CredentialsArgs {
   zone?: string;

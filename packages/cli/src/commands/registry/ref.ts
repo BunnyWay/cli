@@ -1,8 +1,5 @@
-import {
-  qualifyRepository,
-  stripNamespace,
-} from "../../core/bunny-registry.ts";
-import { imageHostname } from "../../core/docker.ts";
+import { qualifyRepository, stripNamespace } from "@/core/bunny-registry.ts";
+import { imageHostname } from "@/core/docker.ts";
 
 export interface ParsedImageRef {
   /** Repository path with any host and tag stripped (e.g. `org/app`). */
