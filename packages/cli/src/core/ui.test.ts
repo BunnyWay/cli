@@ -74,14 +74,39 @@ test("no runtime imports of the prompts library outside ui.ts", async () => {
 
 const OPTS = { message: "Needs a prompt.", hint: "Re-run with --force." };
 
-// `bun test` runs without a TTY, so every call here takes the unattended path.
+// Pin both TTY flags: read ambiently these tests pass under CI's pipes and fail in a developer's terminal.
+function withTTY<T>(isTTY: boolean, fn: () => T): T {
+  const stdin = process.stdin.isTTY;
+  const stdout = process.stdout.isTTY;
+  process.stdin.isTTY = isTTY;
+  process.stdout.isTTY = isTTY;
+  try {
+    return fn();
+  } finally {
+    process.stdin.isTTY = stdin;
+    process.stdout.isTTY = stdout;
+  }
+}
+
 test("requireConfirmable throws when there's no TTY to answer the prompt", () => {
-  expect(() => requireConfirmable("text", OPTS)).toThrow("Needs a prompt.");
-  expect(() => requireConfirmable("json", OPTS)).toThrow("Needs a prompt.");
+  withTTY(false, () => {
+    expect(() => requireConfirmable("text", OPTS)).toThrow("Needs a prompt.");
+    expect(() => requireConfirmable("json", OPTS)).toThrow("Needs a prompt.");
+  });
+});
+
+// `--output json` is unattended even on a terminal: the prompt would corrupt the JSON on stdout.
+test("requireConfirmable throws for --output json even with a TTY", () => {
+  withTTY(true, () => {
+    expect(() => requireConfirmable("json", OPTS)).toThrow("Needs a prompt.");
+    expect(() => requireConfirmable("text", OPTS)).not.toThrow();
+  });
 });
 
 test("requireConfirmable passes with --force", () => {
-  expect(() =>
-    requireConfirmable("json", { ...OPTS, force: true }),
-  ).not.toThrow();
+  withTTY(false, () => {
+    expect(() =>
+      requireConfirmable("json", { ...OPTS, force: true }),
+    ).not.toThrow();
+  });
 });
