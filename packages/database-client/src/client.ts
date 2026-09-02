@@ -47,10 +47,26 @@ export interface BatchOptions {
 
 const TRANSACTION_KEYWORDS = new Set(["BEGIN", "COMMIT", "END", "ROLLBACK"]);
 
-/** First keyword of a statement, skipping leading whitespace, semicolons, and comments. */
+/** First keyword of a statement, skipping leading whitespace, semicolons, and comments. A plain scan, since a regex here is quadratic on nested comment openers. */
 function firstKeyword(sql: string): string | undefined {
-  const stripped = sql.replace(/^(\s|;|--[^\n]*\n?|\/\*[\s\S]*?\*\/)+/, "");
-  return /^[A-Za-z]+/.exec(stripped)?.[0].toUpperCase();
+  let i = 0;
+  while (i < sql.length) {
+    const ch = sql[i] as string;
+    if (ch === ";" || /\s/.test(ch)) {
+      i++;
+    } else if (sql.startsWith("--", i)) {
+      const end = sql.indexOf("\n", i);
+      if (end === -1) return undefined;
+      i = end + 1;
+    } else if (sql.startsWith("/*", i)) {
+      const end = sql.indexOf("*/", i + 2);
+      if (end === -1) return undefined;
+      i = end + 2;
+    } else {
+      break;
+    }
+  }
+  return /^[A-Za-z]+/.exec(sql.slice(i))?.[0].toUpperCase();
 }
 
 interface StatementInternals {
@@ -101,7 +117,7 @@ function toResult<T>(wire: WireStmtResult): Result<T> {
 export class Statement<T = Row> {
   readonly #internals: StatementInternals;
 
-  /** @internal Statements come from `Database.prepare()` and `Database.sql`. */
+  /** Not for direct use: statements come from `Database.prepare()` and `Database.sql`. */
   constructor(internals: StatementInternals) {
     this.#internals = internals;
   }

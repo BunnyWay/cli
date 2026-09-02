@@ -87,6 +87,9 @@ function base64ToBytes(base64: string): Uint8Array {
 const invalid = (message: string) =>
   new DatabaseError(message, { code: "ARGUMENT_INVALID" });
 
+// Node's timers take a signed 32-bit integer; a larger value silently fires after 1ms and a fraction throws.
+const MAX_TIMEOUT = 2_147_483_647;
+
 export function encodeValue(value: unknown): WireValue {
   if (value === null) return { type: "null" };
   if (value === undefined) {
@@ -235,9 +238,12 @@ function requestSignal(
 /** Build a stateless transport: every call is one self-contained POST to /v2/pipeline. */
 export function createTransport(config: TransportConfig): Transport {
   const { timeout } = config;
-  if (timeout !== undefined && !(Number.isFinite(timeout) && timeout > 0)) {
+  if (
+    timeout !== undefined &&
+    !(Number.isInteger(timeout) && timeout > 0 && timeout <= MAX_TIMEOUT)
+  ) {
     throw invalid(
-      `timeout must be a positive number of milliseconds, got ${timeout}`,
+      `timeout must be a positive integer of milliseconds no larger than ${MAX_TIMEOUT}, got ${timeout}`,
     );
   }
   // v2 is the widest-supported pipeline path and every request we send is v2-capable.

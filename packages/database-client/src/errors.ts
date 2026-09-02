@@ -25,7 +25,21 @@ export class DatabaseError extends Error {
   /** Zero-based position of the statement that failed inside `batch()`, when one of the caller's statements did. */
   readonly batchIndex?: number;
 
-  constructor(message: string, options: DatabaseErrorOptions = {}) {
+  /** The runtime's original error for `NETWORK`, `TIMEOUT`, and `ABORTED` failures. Declared here so it is visible without the ES2022 lib. */
+  declare readonly cause?: unknown;
+
+  constructor(message: string, options?: DatabaseErrorOptions);
+  /** @deprecated Pass `{ code, status }` instead. Kept so callers of 0.0.x keep compiling. */
+  constructor(message: string, code?: string, status?: number);
+  constructor(
+    message: string,
+    codeOrOptions?: string | DatabaseErrorOptions,
+    status?: number,
+  ) {
+    const options =
+      typeof codeOrOptions === "string"
+        ? { code: codeOrOptions, status }
+        : (codeOrOptions ?? {});
     super(
       message,
       options.cause === undefined ? undefined : { cause: options.cause },

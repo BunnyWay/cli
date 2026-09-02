@@ -828,6 +828,27 @@ describe("errors", () => {
     expect(error.code).toBe("PROTOCOL");
   });
 
+  test("the positional constructor still works for callers of 0.0.x", () => {
+    const error = new DatabaseError("boom", "SQLITE_BUSY", 503);
+
+    expect(error.code).toBe("SQLITE_BUSY");
+    expect(error.status).toBe(503);
+    expect(error.cause).toBeUndefined();
+  });
+
+  test("a comment-heavy statement is scanned without blowing up", async () => {
+    const fake = fakeFetch([]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+    const sql = `${" /*".repeat(5000)} COMMIT`;
+
+    const error = (await db
+      .batch([db.prepare(sql)])
+      .catch((e) => e)) as DatabaseError;
+
+    // Unterminated comment: no keyword found, so it is sent as-is rather than rejected.
+    expect(error.code).not.toBe("ARGUMENT_INVALID");
+  });
+
   test("transport errors keep the underlying error as cause", async () => {
     const thrown = new TypeError("fetch failed");
     const error = await failure((async () => {
@@ -845,9 +866,17 @@ describe("errors", () => {
   });
 
   test("a timeout that is not a positive number is rejected up front", () => {
-    for (const timeout of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    // Node throws on fractions and silently clamps anything past 2^31-1 to 1ms.
+    for (const timeout of [
+      0,
+      -1,
+      1.5,
+      2 ** 31,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+    ]) {
       expect(() => connect({ url: URL_, timeout })).toThrow(
-        /timeout must be a positive number/,
+        /timeout must be a positive integer/,
       );
     }
   });
