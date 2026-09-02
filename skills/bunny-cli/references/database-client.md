@@ -46,7 +46,7 @@ const db = connect({
 
 A `libsql://` URL is rewritten to `https://`. Credentials in the URL are rejected, both `user:pass@` and an `authToken` query parameter, because URLs end up in logs and referrers; pass `authToken` instead.
 
-Without `timeout` a request waits as long as the runtime allows, so on an edge function a hung fetch can burn the whole invocation. Set one. `timeout` and `signal` compose: whichever fires first aborts.
+Without `timeout` a request waits as long as the runtime allows, so on an edge function a hung fetch can burn the whole invocation. Set one. `timeout` and `signal` compose: whichever fires first aborts. Combining them uses `AbortSignal.any`, which is why the Node floor is 18.17 rather than 18.0.
 
 `connect()` opens no socket and does no I/O, so building the client at module scope is fine, with nothing to warm up or tear down per request.
 

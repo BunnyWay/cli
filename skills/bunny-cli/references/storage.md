@@ -21,7 +21,7 @@ Non-interactive runs (`--output json`, no TTY, or `--force`) error instead of pr
 
 ```bash
 # New zone, served on the web, credentials in .env
-bunny storage zones add my-zone --region DE --domain cdn.example.com \
+bunny storage zones add my-zone --region DE --s3 --domain cdn.example.com \
   --connection s3 --save-env --link
 
 # Push a build up and check it landed
@@ -55,7 +55,7 @@ bunny storage zones add my-zone --region NY --replication LA,SG
 bunny storage zones add my-zone --region DE --pull-zone              # also serve it on the web
 bunny storage zones add my-zone --region DE --domain cdn.example.com # pull zone + custom domain
 bunny storage zones add my-zone --tier ssd --s3                      # Edge tier with S3 access
-bunny storage zones add my-zone --region DE --connection s3 --save-env
+bunny storage zones add my-zone --region DE --s3 --connection s3 --save-env
 ```
 
 ### Flags
@@ -232,4 +232,5 @@ Opens the Edge Storage docs in a browser. Like other browser helpers, it has no 
 - **Adding a replication region "to try it"**: replicas cannot be removed. There is no API for it, so the only undo is deleting the zone.
 - **Putting a custom domain on the storage zone**: domains live on the pull zone. Use `bunny storage zones domains`, and create a pull zone first (`zones add --pull-zone`) if the zone has none.
 - **Setting per-file cache headers**: `files upload` takes `--content-type` and `--checksum` only. Cache behavior is a pull zone concern.
+- **Expecting `--connection s3` to enable S3**: it only picks which credentials to print. Without `--s3`, `zones add` creates a zone with S3 off and warns that the credentials will not work, and S3 cannot be turned on afterwards.
 - **Relying on the interactive picker in CI**: `--output json`, a closed stdin, and `--force` all suppress it. Pass `--zone`/`[zone]`, or link the directory.

@@ -527,7 +527,7 @@ bunny storage zones add my-zone --region NY --replication LA,SG
 bunny storage zones add my-zone --region DE --pull-zone   # also create a pull zone to serve it on the web
 bunny storage zones add my-zone --region DE --domain cdn.example.com   # pull zone + custom domain
 bunny storage zones add my-zone --tier ssd --s3        # Edge (SSD) tier (always DE) with S3-compatible access
-bunny storage zones add my-zone --region DE --connection s3 --save-env   # print S3 credentials and write them to .env
+bunny storage zones add my-zone --region DE --s3 --connection s3 --save-env   # print S3 credentials and write them to .env
 bunny storage zones show my-zone
 bunny storage zones update my-zone                     # interactive: edit settings, pre-filled with current values
 bunny storage zones update my-zone --custom-404-path /404.html
