@@ -85,7 +85,8 @@ These throw rather than converting quietly:
 
 - `undefined` — so a mistyped property (`bind(user.nmae)`) surfaces instead of writing NULL. Pass `null` for NULL.
 - `Date` — the error suggests `.toISOString()` or `.getTime()`, since guessing would change what lands in the column.
-- Integer `number`s past 2^53 — JavaScript already lost the precision. Pass a `bigint` (within SQLite's signed 64-bit range).
+
+Integer `number`s are sent as INTEGER up to 2^53 and as REAL past it, where every double is already a whole number. Pass a `bigint` for an exact integer that large (within SQLite's signed 64-bit range).
 
 ### Executing
 

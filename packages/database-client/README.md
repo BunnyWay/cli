@@ -34,7 +34,7 @@ const db = connect({
 });
 ```
 
-Runnable examples for Edge Scripting, Bun, Node, and Hono live in [`packages/database-client/examples`](https://github.com/BunnyWay/cli/tree/main/packages/database-client/examples).
+Runnable examples for Edge Scripting, Bun, Node, Hono, Next.js, Astro, and SvelteKit live in [`packages/database-client/examples`](https://github.com/BunnyWay/cli/tree/main/packages/database-client/examples).
 
 ## API
 
@@ -82,6 +82,8 @@ Each `${...}` becomes a `?` placeholder and its value is bound, never spliced in
 
 Values follow the same rules as `bind()`, with one difference: an interpolated object throws instead of being read as named parameters, since inside a template it is far more likely to be a mistake.
 
+Pass a row type the same way as `prepare()`, as ``db.sql<User>`...` ``.
+
 Only values can be parameterized, which is a SQLite limit rather than a client one. Build the statement with `prepare()` when a table or column name has to vary.
 
 ### `statement.bind(...values)`
@@ -109,7 +111,7 @@ Names may carry the sigil or leave it off, so `{ id: 1 }` and `{ ":id": 1 }` bot
 
 Anything else throws instead of being quietly converted, because SQLite has nowhere to put it. `Date` gets its own message suggesting `.toISOString()` or `.getTime()`, since guessing which one you meant would change what ends up in the column.
 
-Integer `number`s past 2^53 also throw: JavaScript has already lost the precision by the time the client sees the value, so storing it would quietly write the wrong number. Pass a `bigint` for values that large. Bigints must fit SQLite's signed 64-bit range.
+Integer `number`s are sent as INTEGER while they fit exactly, up to 2^53. Past that every double is a whole number, so the client sends it as REAL, which stores the value as is. Pass a `bigint` when you need an exact integer that large. Bigints must fit SQLite's signed 64-bit range.
 
 ### Executing
 
@@ -225,6 +227,8 @@ Failures that happen before any SQL runs are wrapped too, so a single `catch (er
 | `NETWORK` | DNS, TLS, connection refused, or a response that isn't JSON. |
 | `TIMEOUT` | The `timeout` deadline elapsed.                              |
 | `ABORTED` | The `signal` you passed was aborted.                         |
+
+For these three, `error.cause` holds the runtime's original error.
 
 ## Types
 
