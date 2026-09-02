@@ -37,9 +37,9 @@ export class DatabaseError extends Error {
     status?: number,
   ) {
     const options =
-      typeof codeOrOptions === "string"
-        ? { code: codeOrOptions, status }
-        : (codeOrOptions ?? {});
+      typeof codeOrOptions === "object"
+        ? codeOrOptions
+        : { code: codeOrOptions, status };
     super(
       message,
       options.cause === undefined ? undefined : { cause: options.cause },

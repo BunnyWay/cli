@@ -834,6 +834,10 @@ describe("errors", () => {
     expect(error.code).toBe("SQLITE_BUSY");
     expect(error.status).toBe(503);
     expect(error.cause).toBeUndefined();
+
+    const statusOnly = new DatabaseError("boom", undefined, 502);
+    expect(statusOnly.code).toBeUndefined();
+    expect(statusOnly.status).toBe(502);
   });
 
   test("a comment-heavy statement is scanned without blowing up", async () => {
