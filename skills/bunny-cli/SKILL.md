@@ -50,7 +50,7 @@ bunny sandbox create my-sandbox -e ANTHROPIC_API_KEY=sk-ant-...
 bunny sandbox exec my-sandbox -- bun install
 bunny sandbox url add my-sandbox 3000
 
-# manage Edge Storage (experimental: hidden from --help)
+# manage Edge Storage
 bunny storage zones add my-zone --region DE --pull-zone
 bunny storage files upload ./photo.png --to images/
 bunny storage zones credentials my-zone --connection s3

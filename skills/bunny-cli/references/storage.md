@@ -1,7 +1,5 @@
 # Edge Storage Commands
 
-> The `bunny storage` namespace is experimental: it works, but it's hidden from `bunny --help` while it stabilizes. Command and flag names may still change.
-
 All storage commands live under `bunny storage`, split into two resource groups:
 
 - **`bunny storage zones`** (alias `zone`, hidden `bucket`/`buckets`) manages the zone itself with the account API key.

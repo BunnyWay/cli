@@ -510,8 +510,6 @@ Positional value ordering for `record add` follows the record type: `A`/`AAAA`/`
 
 ### `bunny storage`
 
-> **Experimental**: hidden from `--help` and the landing page while it stabilizes.
-
 Manage Edge Storage through two resource groups: **`bunny storage zones`** (the zone itself: create, list, inspect, update, delete; alias `zone`, plus hidden `bucket`/`buckets`) and **`bunny storage files`** (the files within a zone; alias `file`). Zone management uses the account API key; file operations use the zone's own password and a region-specific host, both resolved automatically from the zone. `zones` commands take the zone as an optional `[zone]` positional; `files` commands take it as the `--zone`/`-z` flag (their positional is the file path). Either accepts the zone name or its numeric ID. When the zone is omitted it resolves from the directory's linked zone (`bunny storage link`, stored in `.bunny/storage.json`), then an interactive picker, which offers to link the directory to the picked zone (except on destructive commands). Non-interactive runs (`--output json`, no TTY, or `--force`) error instead of prompting; pass a zone or link the directory.
 
 A storage zone only holds files; a **pull zone** is what serves them on the web. `zones add` offers to create one (origin set to the new storage zone) and then to add a custom domain, or pass `--pull-zone`/`--domain` to do it non-interactively. Custom domains live on the pull zone and are managed with `bunny storage zones domains`.
