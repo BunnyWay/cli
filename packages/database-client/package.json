@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/database-client",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Dependency-free SQL client for Bunny Database. Runs anywhere fetch does: Bunny Edge Scripting, Bun, Node, and Deno.",
   "license": "MIT",
   "repository": {
