@@ -40,6 +40,8 @@ function makeResultSet(
     rows: rows as any,
     rowsAffected,
     lastInsertRowid: null,
+    rowsRead: 0,
+    rowsWritten: 0,
   };
 }
 

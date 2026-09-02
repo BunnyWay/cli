@@ -97,7 +97,7 @@ await stmt.all(); // rows as objects
 await stmt.first(); // first row, or null
 await stmt.first("name"); // one column of the first row, or null
 await stmt.raw(); // rows as positional arrays
-await stmt.run(); // { rows, columns, rowsAffected, lastInsertRowid }
+await stmt.run(); // { rows, columns, rowsAffected, lastInsertRowid, rowsRead, rowsWritten }
 await stmt.runRaw(); // same metadata, positional rows
 ```
 
@@ -122,7 +122,7 @@ const [inserted, count] = await db.batch([
 ]);
 ```
 
-If any statement fails, the transaction rolls back and `batch()` throws that statement's error. `batchRaw()` is the same with positional rows.
+If any statement fails, the transaction rolls back and `batch()` throws that statement's error with `error.batchIndex` set. `batchRaw()` is the same with positional rows. Statements starting with `BEGIN`, `COMMIT`, `END`, or `ROLLBACK` are rejected: the batch is the transaction. Pass `{ mode: "immediate" }` for write batches so the lock is taken up front instead of at the first write. `rowsRead` and `rowsWritten` on every result are the server's quota counts.
 
 `{ foreignKeys: false }` brackets the transaction with `PRAGMA foreign_keys=off` and `=on`. Schema changes need it: SQLite's table rebuild procedure and several `ALTER TABLE` forms require enforcement genuinely off, not just deferred to commit. `bunny db migrations apply` runs this way.
 

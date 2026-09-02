@@ -3,6 +3,7 @@ import { ENV_DATABASE_AUTH_TOKEN } from "./env.ts";
 export interface DatabaseErrorOptions {
   code?: string;
   status?: number;
+  batchIndex?: number;
   cause?: unknown;
 }
 
@@ -21,6 +22,9 @@ export class DatabaseError extends Error {
   /** HTTP status when the failure came from the transport rather than SQL. */
   readonly status?: number;
 
+  /** Zero-based position of the statement that failed inside `batch()`, when one of the caller's statements did. */
+  readonly batchIndex?: number;
+
   constructor(message: string, options: DatabaseErrorOptions = {}) {
     super(
       message,
@@ -28,13 +32,16 @@ export class DatabaseError extends Error {
     );
     this.code = options.code;
     this.status = options.status;
+    this.batchIndex = options.batchIndex;
   }
 
   static fromWire(
     error: { message: string; code?: string | null } | undefined,
+    batchIndex?: number,
   ): DatabaseError {
     return new DatabaseError(error?.message ?? "unknown database error", {
       code: error?.code ?? undefined,
+      batchIndex,
     });
   }
 

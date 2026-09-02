@@ -23,7 +23,7 @@ export function connectForMigrations(opts: {
         statements.map(({ sql, args }) =>
           db.prepare(sql).bind(...(args ?? [])),
         ),
-        { foreignKeys: false },
+        { foreignKeys: false, mode: "immediate" },
       );
     },
   };

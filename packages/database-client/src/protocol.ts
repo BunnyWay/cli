@@ -19,6 +19,8 @@ export interface WireStmtResult {
   rows: WireValue[][];
   affected_row_count: number;
   last_insert_rowid: string | null;
+  rows_read?: number;
+  rows_written?: number;
 }
 
 export interface WireBatchResult {

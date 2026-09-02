@@ -1,4 +1,5 @@
 export {
+  type BatchMode,
   type BatchOptions,
   type BatchResults,
   type Config,

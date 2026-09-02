@@ -128,6 +128,35 @@ try {
   });
 }
 
+// 9b. the failing statement's position and the server's row counts come back
+try {
+  await db.batch(
+    [
+      db.prepare("CREATE TABLE __probe5 (id INTEGER PRIMARY KEY)"),
+      db.prepare("INSERT INTO __probe5 (id) VALUES (1)"),
+      db.prepare("INSERT INTO __probe5 (id) VALUES (1)"),
+    ],
+    { mode: "immediate" },
+  );
+  check("batchIndex", false);
+} catch (error) {
+  const e = error as DatabaseError;
+  check("batch error names the failing statement", e.batchIndex === 2, {
+    batchIndex: e.batchIndex,
+  });
+}
+const counted = await db.batch([
+  db.prepare("CREATE TABLE __probe6 (id INTEGER PRIMARY KEY, v TEXT)"),
+  db.prepare("INSERT INTO __probe6 (v) VALUES ('a'), ('b'), ('c')"),
+  db.prepare("SELECT v FROM __probe6"),
+  db.prepare("DROP TABLE __probe6"),
+]);
+check(
+  "results carry rowsRead and rowsWritten",
+  counted[1]?.rowsWritten === 3 && counted[2]?.rowsRead === 3,
+  { written: counted[1]?.rowsWritten, read: counted[2]?.rowsRead },
+);
+
 // 10. exec runs a multi-statement script
 await db.exec(
   "CREATE TABLE __probe3 (id INTEGER); INSERT INTO __probe3 VALUES (1),(2); DROP TABLE __probe3;",

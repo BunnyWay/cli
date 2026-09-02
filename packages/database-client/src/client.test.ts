@@ -310,6 +310,8 @@ describe("statement", () => {
       columns: ["id"],
       rowsAffected: 1,
       lastInsertRowid: 9,
+      rowsRead: 0,
+      rowsWritten: 0,
     });
   });
 
@@ -526,7 +528,7 @@ describe("batch", () => {
     const steps =
       (fake.captures[0] as Capture).body.requests[0]?.batch?.steps ?? [];
     expect(steps.map((s) => s.stmt.sql)).toEqual([
-      "BEGIN",
+      "BEGIN DEFERRED",
       "INSERT INTO t VALUES (1)",
       "INSERT INTO t VALUES (2)",
       "COMMIT",
@@ -534,10 +536,75 @@ describe("batch", () => {
     ]);
     expect(steps[1]?.condition).toEqual({ type: "ok", step: 0 });
     expect(steps[3]?.condition).toEqual({ type: "ok", step: 2 });
+    // Guarded on BEGIN so a failed BEGIN never rolls back a transaction the batch did not open.
     expect(steps[4]?.condition).toEqual({
-      type: "not",
-      cond: { type: "ok", step: 3 },
+      type: "and",
+      conds: [
+        { type: "ok", step: 0 },
+        { type: "not", cond: { type: "ok", step: 3 } },
+      ],
     });
+  });
+
+  test("mode picks the BEGIN variant", async () => {
+    const fake = fakeFetch([okBatch(1)]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    await db.batch([db.prepare("INSERT INTO t VALUES (1)")], {
+      mode: "immediate",
+    });
+
+    const steps =
+      (fake.captures[0] as Capture).body.requests[0]?.batch?.steps ?? [];
+    expect(steps[0]?.stmt.sql).toBe("BEGIN IMMEDIATE");
+  });
+
+  test("rejects a caller statement that would break the transaction", async () => {
+    const fake = fakeFetch([]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    for (const sql of [
+      "COMMIT",
+      "  begin immediate",
+      "-- note\nROLLBACK",
+      "/* c */ END",
+    ]) {
+      const error = (await db
+        .batch([db.prepare("SELECT 1"), db.prepare(sql)])
+        .catch((e) => e)) as DatabaseError;
+      expect(error.code).toBe("ARGUMENT_INVALID");
+      expect(error.batchIndex).toBe(1);
+    }
+    expect(fake.captures).toHaveLength(0);
+  });
+
+  test("results carry the server's read and write counts", async () => {
+    const step = {
+      cols: [],
+      rows: [],
+      affected_row_count: 1,
+      last_insert_rowid: null,
+      rows_read: 3,
+      rows_written: 1,
+    };
+    const fake = fakeFetch([
+      {
+        type: "ok",
+        response: {
+          type: "batch",
+          result: {
+            step_results: [step, step, step, null],
+            step_errors: [null, null, null, null],
+          },
+        },
+      },
+    ]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const [result] = await db.batch([db.prepare("UPDATE t SET a = 1")]);
+
+    expect(result.rowsRead).toBe(3);
+    expect(result.rowsWritten).toBe(1);
   });
 
   test("returns one result per caller statement, not per wire step", async () => {
@@ -570,7 +637,7 @@ describe("batch", () => {
       (fake.captures[0] as Capture).body.requests[0]?.batch?.steps ?? [];
     expect(steps.map((s) => s.stmt.sql)).toEqual([
       "PRAGMA foreign_keys=off",
-      "BEGIN",
+      "BEGIN DEFERRED",
       "ALTER TABLE parent RENAME TO parent_old",
       "DROP TABLE parent_old",
       "COMMIT",
@@ -581,8 +648,11 @@ describe("batch", () => {
     expect(steps[3]?.condition).toEqual({ type: "ok", step: 2 });
     expect(steps[4]?.condition).toEqual({ type: "ok", step: 3 });
     expect(steps[5]?.condition).toEqual({
-      type: "not",
-      cond: { type: "ok", step: 4 },
+      type: "and",
+      conds: [
+        { type: "ok", step: 1 },
+        { type: "not", cond: { type: "ok", step: 4 } },
+      ],
     });
   });
 
@@ -665,6 +735,35 @@ describe("batch", () => {
 
     expect(error).toBeInstanceOf(DatabaseError);
     expect(error.code).toBe("SQLITE_CONSTRAINT");
+    expect(error.batchIndex).toBe(0);
+  });
+
+  test("a failed BEGIN or COMMIT carries no statement index", async () => {
+    const fake = fakeFetch([
+      {
+        type: "ok",
+        response: {
+          type: "batch",
+          result: {
+            step_results: [null, null, null, null],
+            step_errors: [
+              { message: "database is locked", code: "SQLITE_BUSY" },
+              null,
+              null,
+              null,
+            ],
+          },
+        },
+      },
+    ]);
+    const db = connect({ url: URL_, fetch: fake.fetch });
+
+    const error = (await db
+      .batch([db.prepare("INSERT INTO t VALUES (1)")])
+      .catch((e) => e)) as DatabaseError;
+
+    expect(error.code).toBe("SQLITE_BUSY");
+    expect(error.batchIndex).toBeUndefined();
   });
 });
 

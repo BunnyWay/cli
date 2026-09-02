@@ -24,6 +24,10 @@ export interface Result<T = Row> {
   columns: string[];
   rowsAffected: number;
   lastInsertRowid: number | bigint | null;
+  /** Rows the server scanned to answer, which is what read quota counts. */
+  rowsRead: number;
+  /** Rows the server wrote, which is what write quota counts. */
+  rowsWritten: number;
 }
 
 /** Same as `Result`, with rows as positional arrays so duplicate column names survive. */
@@ -34,10 +38,23 @@ export interface Config extends TransportConfig {
   signal?: AbortSignal;
 }
 
+/** How the batch transaction takes its lock. `immediate` reserves the write lock up front so a batch that reads then writes cannot lose to another writer. */
+export type BatchMode = "deferred" | "immediate" | "exclusive";
+
 /** Options for `batch()` and `batchRaw()`. */
 export interface BatchOptions {
   /** Enforce foreign key constraints. Pass `false` for schema changes that rebuild tables. */
   foreignKeys?: boolean;
+  /** Transaction locking mode. Defaults to `deferred`, SQLite's own default. */
+  mode?: BatchMode;
+}
+
+const TRANSACTION_KEYWORDS = new Set(["BEGIN", "COMMIT", "END", "ROLLBACK"]);
+
+/** First keyword of a statement, skipping leading whitespace, semicolons, and comments. */
+function firstKeyword(sql: string): string | undefined {
+  const stripped = sql.replace(/^(\s|;|--[^\n]*\n?|\/\*[\s\S]*?\*\/)+/, "");
+  return /^[A-Za-z]+/.exec(stripped)?.[0].toUpperCase();
 }
 
 interface StatementInternals {
@@ -64,6 +81,8 @@ function toRawResult(wire: WireStmtResult): RawResult {
       wire.last_insert_rowid === null
         ? null
         : decodeInteger(wire.last_insert_rowid),
+    rowsRead: wire.rows_read ?? 0,
+    rowsWritten: wire.rows_written ?? 0,
   };
 }
 
@@ -237,32 +256,46 @@ export class Database {
   ): Promise<WireStmtResult[]> {
     if (statements.length === 0) return [];
 
+    // A caller's own BEGIN or COMMIT would break the transaction the batch wraps around it.
+    statements.forEach((statement, index) => {
+      const keyword = firstKeyword(statement.wire.sql);
+      if (keyword && TRANSACTION_KEYWORDS.has(keyword)) {
+        throw new DatabaseError(
+          `statement ${index} starts with ${keyword}; batch() already runs its statements in one transaction`,
+          { code: "ARGUMENT_INVALID", batchIndex: index },
+        );
+      }
+    });
+
     const control = (sql: string, condition?: unknown) => ({
       stmt: { sql, args: [], named_args: [], want_rows: false },
       ...(condition ? { condition } : {}),
     });
+    const ok = (step: number) => ({ type: "ok", step });
 
     // SQLite ignores `PRAGMA foreign_keys` inside a transaction, so the pragmas
     // bracket BEGIN/COMMIT instead of sitting within them.
     const unchecked = options.foreignKeys === false;
     const prelude = unchecked ? [control("PRAGMA foreign_keys=off")] : [];
     const begin = prelude.length;
+    const first = begin + 1;
     const last = begin + statements.length;
+    const commit = last + 1;
 
-    // BEGIN is already DEFERRED in SQLite, so naming the mode would change nothing.
     const steps = [
       ...prelude,
-      control("BEGIN"),
+      control(`BEGIN ${(options.mode ?? "deferred").toUpperCase()}`),
       ...statements.map((statement, index) => ({
         stmt: statement.wire,
-        condition: { type: "ok", step: begin + index },
+        condition: ok(begin + index),
       })),
-      control("COMMIT", { type: "ok", step: last }),
+      control("COMMIT", ok(last)),
+      // Only roll back a transaction this batch opened, and only when it did not commit.
       control("ROLLBACK", {
-        type: "not",
-        cond: { type: "ok", step: last + 1 },
+        type: "and",
+        conds: [ok(begin), { type: "not", cond: ok(commit) }],
       }),
-      // Matches @libsql/client, which hardcodes `on` too; harmless here because the stream closes in this same request.
+      // Hardcoded `on` is harmless here because the stream closes in this same request.
       ...(unchecked ? [control("PRAGMA foreign_keys=on")] : []),
     ];
 
@@ -272,11 +305,18 @@ export class Database {
     );
     const batch = unwrap<WireBatchResult>(results[0]);
 
-    const failure = batch.step_errors.find((error) => error !== null);
-    if (failure) throw DatabaseError.fromWire(failure);
+    // Steps fail in order (the chain stops at the first error), so the first error is the cause.
+    const failed = batch.step_errors.findIndex((error) => error != null);
+    if (failed !== -1) {
+      const index = failed - first;
+      throw DatabaseError.fromWire(
+        batch.step_errors[failed] ?? undefined,
+        index >= 0 && index < statements.length ? index : undefined,
+      );
+    }
 
     return statements.map((_, index) => {
-      const step = batch.step_results[begin + 1 + index];
+      const step = batch.step_results[first + index];
       if (!step) throw new DatabaseError("batch step returned no result");
       return step;
     });
