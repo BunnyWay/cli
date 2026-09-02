@@ -42,14 +42,14 @@ Runnable examples for Edge Scripting, Bun, Node, Hono, Next.js, Astro, and Svelt
 
 Returns a `Database`. Every option is optional.
 
-| Option      | Type                     | Default                     | Description                                           |
-| ----------- | ------------------------ | --------------------------- | ----------------------------------------------------- |
-| `url`       | `string`                 | `BUNNY_DATABASE_URL`        | `libsql://`, `https://`, or `http://` connection URL. |
-| `authToken` | `string`                 | `BUNNY_DATABASE_AUTH_TOKEN` | Sent as `Authorization: Bearer <token>`.              |
-| `fetch`     | `typeof fetch`           | global `fetch`              | Override for testing, tracing, or a custom agent.     |
-| `headers`   | `Record<string, string>` | none                        | Extra headers on every request.                       |
-| `signal`    | `AbortSignal`            | none                        | Applied to every request.                             |
-| `timeout`   | `number`                 | none                        | Milliseconds before a single request is aborted.      |
+| Option      | Type                     | Default                     | Description                                                        |
+| ----------- | ------------------------ | --------------------------- | ------------------------------------------------------------------ |
+| `url`       | `string`                 | `BUNNY_DATABASE_URL`        | `libsql://`, `https://`, or `http://` connection URL.              |
+| `authToken` | `string`                 | `BUNNY_DATABASE_AUTH_TOKEN` | Sent as `Authorization: Bearer <token>`.                           |
+| `fetch`     | `typeof fetch`           | global `fetch`              | Override for testing, tracing, or a custom agent.                  |
+| `headers`   | `Record<string, string>` | none                        | Extra headers on every request.                                    |
+| `signal`    | `AbortSignal`            | none                        | Applied to every request.                                          |
+| `timeout`   | `number`                 | none                        | Milliseconds before a single request is aborted. Must be positive. |
 
 The client rewrites a `libsql://` URL to `https://`. It rejects credentials in the URL, both `user:pass@` and an `authToken` query parameter, so pass `authToken` instead. Dropping a token silently would leave you debugging an unexplained 401.
 
@@ -222,11 +222,12 @@ try {
 
 Failures that happen before any SQL runs are wrapped too, so a single `catch (error) { if (error instanceof DatabaseError) ... }` covers the whole surface rather than letting a `TypeError` through:
 
-| `code`    | Cause                                                        |
-| --------- | ------------------------------------------------------------ |
-| `NETWORK` | DNS, TLS, connection refused, or a response that isn't JSON. |
-| `TIMEOUT` | The `timeout` deadline elapsed.                              |
-| `ABORTED` | The `signal` you passed was aborted.                         |
+| `code`     | Cause                                                                |
+| ---------- | -------------------------------------------------------------------- |
+| `NETWORK`  | DNS, TLS, connection refused, or a response that isn't JSON.         |
+| `TIMEOUT`  | The `timeout` deadline elapsed.                                      |
+| `ABORTED`  | The `signal` you passed was aborted.                                 |
+| `PROTOCOL` | The server answered 200 with a body that is not a pipeline response. |
 
 For these three, `error.cause` holds the runtime's original error.
 

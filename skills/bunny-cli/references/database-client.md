@@ -161,7 +161,7 @@ try {
 | `code`    | SQLite code (`SQLITE_CONSTRAINT`), or a client code (`UNAUTHORIZED`, `URL_MISSING`) |
 | `status`  | HTTP status, when the failure came from the transport rather than from SQL          |
 
-Client codes for pre-SQL failures: `NETWORK` (DNS, TLS, connection refused, or a non-JSON response), `TIMEOUT` (the `timeout` deadline elapsed), `ABORTED` (the `signal` was aborted).
+Client codes for pre-SQL failures: `NETWORK` (DNS, TLS, connection refused, or a non-JSON response), `TIMEOUT` (the `timeout` deadline elapsed), `ABORTED` (the `signal` was aborted), `PROTOCOL` (a 200 whose body is not a pipeline response). `error.cause` holds the runtime's original error.
 
 A `DatabaseError` carries the server's message and SQLite code, so returning one straight to a caller can leak schema details. Log it and return something generic.
 

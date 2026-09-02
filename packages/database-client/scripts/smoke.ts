@@ -60,6 +60,17 @@ check(
   big,
 );
 
+// 5b. a double past 2^53 is bound as REAL and comes back unchanged
+const real = await db
+  .prepare("SELECT ? AS r, typeof(?) AS t")
+  .bind(1e21, 1e21)
+  .first();
+check(
+  "large double binds as REAL",
+  real?.r === 1e21 && real?.t === "real",
+  real,
+);
+
 // 6. blob round trip
 const blob = await db
   .prepare("SELECT ? AS b")

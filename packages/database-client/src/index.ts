@@ -10,5 +10,5 @@ export {
   Statement,
 } from "./client.ts";
 export { ENV_DATABASE_AUTH_TOKEN, ENV_DATABASE_URL } from "./env.ts";
-export { DatabaseError } from "./errors.ts";
+export { DatabaseError, type DatabaseErrorOptions } from "./errors.ts";
 export type { SqlValue } from "./protocol.ts";
