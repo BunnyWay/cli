@@ -144,18 +144,14 @@ const result = await db
 //   columns: ["id"],
 //   rowsAffected: 1,
 //   lastInsertRowid: 3,
-//   rowsRead: 0,
-//   rowsWritten: 1,
 // }
 ```
-
-`rowsRead` and `rowsWritten` are the server's own counts of rows scanned and rows written, which is what your read and write quota is measured in. A `SELECT` that touches a whole table shows up here even when it returns one row, so they are the numbers to watch when a query costs more than it should.
 
 `runRaw()` returns the same metadata with rows as positional arrays. Reach for it when a result may contain two columns of the same name, since object rows keep only the last one:
 
 ```ts
 const result = await db.prepare("SELECT a.id, b.id FROM a JOIN b").runRaw();
-// { rows: [[1, 99]], columns: ["id", "id"], rowsAffected: 0, lastInsertRowid: null, rowsRead: 1, rowsWritten: 0 }
+// { rows: [[1, 99]], columns: ["id", "id"], rowsAffected: 0, lastInsertRowid: null }
 ```
 
 Statements do nothing until one of these is called, so `prepare()` and `bind()` are safe to pass around.

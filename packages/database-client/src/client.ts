@@ -24,10 +24,6 @@ export interface Result<T = Row> {
   columns: string[];
   rowsAffected: number;
   lastInsertRowid: number | bigint | null;
-  /** Rows the server scanned to answer, which is what read quota counts. */
-  rowsRead: number;
-  /** Rows the server wrote, which is what write quota counts. */
-  rowsWritten: number;
 }
 
 /** Same as `Result`, with rows as positional arrays so duplicate column names survive. */
@@ -81,8 +77,6 @@ function toRawResult(wire: WireStmtResult): RawResult {
       wire.last_insert_rowid === null
         ? null
         : decodeInteger(wire.last_insert_rowid),
-    rowsRead: wire.rows_read ?? 0,
-    rowsWritten: wire.rows_written ?? 0,
   };
 }
 

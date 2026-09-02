@@ -310,8 +310,6 @@ describe("statement", () => {
       columns: ["id"],
       rowsAffected: 1,
       lastInsertRowid: 9,
-      rowsRead: 0,
-      rowsWritten: 0,
     });
   });
 
@@ -576,35 +574,6 @@ describe("batch", () => {
       expect(error.batchIndex).toBe(1);
     }
     expect(fake.captures).toHaveLength(0);
-  });
-
-  test("results carry the server's read and write counts", async () => {
-    const step = {
-      cols: [],
-      rows: [],
-      affected_row_count: 1,
-      last_insert_rowid: null,
-      rows_read: 3,
-      rows_written: 1,
-    };
-    const fake = fakeFetch([
-      {
-        type: "ok",
-        response: {
-          type: "batch",
-          result: {
-            step_results: [step, step, step, null],
-            step_errors: [null, null, null, null],
-          },
-        },
-      },
-    ]);
-    const db = connect({ url: URL_, fetch: fake.fetch });
-
-    const [result] = await db.batch([db.prepare("UPDATE t SET a = 1")]);
-
-    expect(result.rowsRead).toBe(3);
-    expect(result.rowsWritten).toBe(1);
   });
 
   test("returns one result per caller statement, not per wire step", async () => {
