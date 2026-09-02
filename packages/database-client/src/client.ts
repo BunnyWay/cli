@@ -2,6 +2,7 @@ import { ENV_DATABASE_AUTH_TOKEN, ENV_DATABASE_URL, readEnv } from "./env.ts";
 import { DatabaseError } from "./errors.ts";
 import {
   createTransport,
+  decodeInteger,
   decodeValue,
   encodeValue,
   type SqlValue,
@@ -26,9 +27,7 @@ export interface Result<T = Row> {
 }
 
 /** Same as `Result`, with rows as positional arrays so duplicate column names survive. */
-export interface RawResult extends Omit<Result<never>, "rows"> {
-  rows: SqlValue[][];
-}
+export type RawResult = Result<SqlValue[]>;
 
 export interface Config extends TransportConfig {
   /** Abort signal applied to every request this connection makes. */
@@ -64,22 +63,25 @@ function toRawResult(wire: WireStmtResult): RawResult {
     lastInsertRowid:
       wire.last_insert_rowid === null
         ? null
-        : (decodeValue({ type: "integer", value: wire.last_insert_rowid }) as
-            | number
-            | bigint),
+        : decodeInteger(wire.last_insert_rowid),
   };
+}
+
+/** Zip one positional row with its column names. Null prototype so a column named __proto__ (or constructor, toString, ...) is a plain own property. */
+function toRow(columns: string[], values: SqlValue[]): Row {
+  const row: Row = Object.create(null);
+  columns.forEach((name, i) => {
+    row[name] = values[i] as SqlValue;
+  });
+  return row;
 }
 
 function toResult<T>(wire: WireStmtResult): Result<T> {
   const raw = toRawResult(wire);
-  const rows = raw.rows.map((row) => {
-    // Null prototype so a column named __proto__ (or constructor, toString, ...) is a plain own property.
-    const out: Row = Object.create(null);
-    for (let i = 0; i < raw.columns.length; i++)
-      out[raw.columns[i] as string] = row[i] as SqlValue;
-    return out as T;
-  });
-  return { ...raw, rows } as Result<T>;
+  return {
+    ...raw,
+    rows: raw.rows.map((values) => toRow(raw.columns, values) as T),
+  };
 }
 
 /** A SQL statement plus its bound arguments. Immutable and reusable. `T` is the row shape its executors return. */
@@ -100,21 +102,16 @@ export class Statement<T = Row> {
         { code: "ARGUMENT_INVALID" },
       );
     }
-    if (named) {
-      return new Statement<T>({
-        ...this.#internals,
-        args: [],
-        // The server resolves a bare name against :name, @name, and $name, so the sigil is optional.
-        namedArgs: Object.entries(named).map(([name, value]) => ({
-          name,
-          value: encodeValue(value),
-        })),
-      });
-    }
     return new Statement<T>({
       ...this.#internals,
-      args: values.map(encodeValue),
-      namedArgs: [],
+      args: named ? [] : values.map(encodeValue),
+      // The server resolves a bare name against :name, @name, and $name, so the sigil is optional.
+      namedArgs: named
+        ? Object.entries(named).map(([name, value]) => ({
+            name,
+            value: encodeValue(value),
+          }))
+        : [],
     });
   }
 
@@ -192,15 +189,19 @@ export class Database {
     this.#signal = config.signal;
   }
 
-  /** Create a statement from SQL. Bind arguments with `.bind()`. Pass `T` to type every row it returns. */
-  prepare<T = Row>(sql: string): Statement<T> {
+  #statement<T>(sql: string, args: WireValue[]): Statement<T> {
     return new Statement<T>({
       sql,
-      args: [],
+      args,
       namedArgs: [],
       transport: this.#transport,
       signal: this.#signal,
     });
+  }
+
+  /** Create a statement from SQL. Bind arguments with `.bind()`. Pass `T` to type every row it returns. */
+  prepare<T = Row>(sql: string): Statement<T> {
+    return this.#statement<T>(sql, []);
   }
 
   /** Build a statement from a template literal, binding every interpolated value positionally. Pass `T` to type its rows. */
@@ -209,13 +210,7 @@ export class Database {
     ...values: unknown[]
   ): Statement<T> {
     // Binding here rather than through bind() keeps an interpolated object a rejected value instead of named parameters.
-    return new Statement<T>({
-      sql: strings.join("?"),
-      args: values.map(encodeValue),
-      namedArgs: [],
-      transport: this.#transport,
-      signal: this.#signal,
-    });
+    return this.#statement<T>(strings.join("?"), values.map(encodeValue));
   }
 
   /** Run every statement in one transaction. All succeed or none are applied. */

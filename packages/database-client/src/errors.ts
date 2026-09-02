@@ -6,6 +6,12 @@ export interface DatabaseErrorOptions {
   cause?: unknown;
 }
 
+/** Fetch rejections that mean the request never completed, keyed by the error name each runtime uses. */
+const TRANSPORT_FAILURES: Record<string, { message: string; code: string }> = {
+  TimeoutError: { message: "database request timed out", code: "TIMEOUT" },
+  AbortError: { message: "database request was aborted", code: "ABORTED" },
+};
+
 export class DatabaseError extends Error {
   override readonly name = "DatabaseError";
 
@@ -39,18 +45,9 @@ export class DatabaseError extends Error {
       name?: string;
       message?: string;
     };
-    if (name === "TimeoutError") {
-      return new DatabaseError("database request timed out", {
-        code: "TIMEOUT",
-        cause,
-      });
-    }
-    if (name === "AbortError") {
-      return new DatabaseError("database request was aborted", {
-        code: "ABORTED",
-        cause,
-      });
-    }
+    const known = name === undefined ? undefined : TRANSPORT_FAILURES[name];
+    if (known)
+      return new DatabaseError(known.message, { code: known.code, cause });
     return new DatabaseError(
       `could not reach the database${message ? `: ${message}` : ""}`,
       { code: "NETWORK", cause },
