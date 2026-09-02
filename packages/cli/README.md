@@ -139,7 +139,7 @@ Most `db` commands accept an optional `<database-id>` positional argument. When 
 3. `BUNNY_DATABASE_URL` in a `.env` file (walked up from the current directory) matched against your database list
 4. Interactive selection prompt
 
-For `db shell`, the CLI also reads `BUNNY_DATABASE_AUTH_TOKEN` from `.env` to skip token generation. Both variables can be set by `db quickstart`.
+For `db shell`, the CLI also reads `BUNNY_DATABASE_AUTH_TOKEN` from `.env` to skip token generation. `db quickstart` prints both variables ready to paste; `db create --token --save-env` writes them for you.
 
 #### `bunny db create`
 
@@ -280,8 +280,10 @@ Generate a quickstart guide for connecting to a database.
 
 ```bash
 bunny db quickstart
-bunny db quickstart <database-id> --lang bun
+bunny db quickstart <database-id> --lang typescript
 ```
+
+Languages: `typescript`, `go`, `rust`, `dotnet`. Prints the `.env` values, the install command, and a ready-to-use snippet; the TypeScript one uses [`@bunny.net/database-client`](../database-client).
 
 #### `bunny db shell`
 
