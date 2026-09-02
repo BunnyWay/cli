@@ -75,36 +75,50 @@ test("no runtime imports of the prompts library outside ui.ts", async () => {
 const OPTS = { message: "Needs a prompt.", hint: "Re-run with --force." };
 
 // Pin both TTY flags: read ambiently these tests pass under CI's pipes and fail in a developer's terminal.
-function withTTY<T>(isTTY: boolean, fn: () => T): T {
-  const stdin = process.stdin.isTTY;
-  const stdout = process.stdout.isTTY;
+// Always await the call: `return await` keeps the restore behind an async fn's completion instead of running an event loop turn early.
+async function withTTY<T>(
+  isTTY: boolean,
+  fn: () => T | Promise<T>,
+): Promise<T> {
+  const originalStdinTTY = process.stdin.isTTY;
+  const originalStdoutTTY = process.stdout.isTTY;
   process.stdin.isTTY = isTTY;
   process.stdout.isTTY = isTTY;
   try {
     return await fn();
   } finally {
-    process.stdin.isTTY = stdin;
-    process.stdout.isTTY = stdout;
+    process.stdin.isTTY = originalStdinTTY;
+    process.stdout.isTTY = originalStdoutTTY;
   }
 }
 
-test("requireConfirmable throws when there's no TTY to answer the prompt", () => {
-  withTTY(false, () => {
+test("withTTY keeps the flags pinned across an await point", async () => {
+  const seen: (boolean | undefined)[] = [];
+  await withTTY(true, async () => {
+    seen.push(process.stdin.isTTY);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    seen.push(process.stdin.isTTY);
+  });
+  expect(seen).toEqual([true, true]);
+});
+
+test("requireConfirmable throws when there's no TTY to answer the prompt", async () => {
+  await withTTY(false, () => {
     expect(() => requireConfirmable("text", OPTS)).toThrow("Needs a prompt.");
     expect(() => requireConfirmable("json", OPTS)).toThrow("Needs a prompt.");
   });
 });
 
 // `--output json` is unattended even on a terminal: the prompt would corrupt the JSON on stdout.
-test("requireConfirmable throws for --output json even with a TTY", () => {
-  withTTY(true, () => {
+test("requireConfirmable throws for --output json even with a TTY", async () => {
+  await withTTY(true, () => {
     expect(() => requireConfirmable("json", OPTS)).toThrow("Needs a prompt.");
     expect(() => requireConfirmable("text", OPTS)).not.toThrow();
   });
 });
 
-test("requireConfirmable passes with --force", () => {
-  withTTY(false, () => {
+test("requireConfirmable passes with --force", async () => {
+  await withTTY(false, () => {
     expect(() =>
       requireConfirmable("json", { ...OPTS, force: true }),
     ).not.toThrow();
