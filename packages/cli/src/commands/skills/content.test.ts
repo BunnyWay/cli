@@ -26,6 +26,18 @@ describe("BUNNY_CLI_SKILL", () => {
     expect(BUNNY_CLI_SKILL.agentsSection.split("\n").length).toBeLessThan(20);
   });
 
+  test("documents the storage namespace and the database client", () => {
+    const storage = BUNNY_CLI_SKILL.files["references/storage.md"] as string;
+    expect(storage).toContain("bunny storage zones add");
+    expect(storage).toContain("bunny storage files upload");
+
+    const client = BUNNY_CLI_SKILL.files[
+      "references/database-client.md"
+    ] as string;
+    expect(client).toContain("@bunny.net/database-client");
+    expect(client).toContain("Critical: server-side only");
+  });
+
   test("does not reference experimental namespaces hidden from help", () => {
     const texts = [
       BUNNY_CLI_SKILL.agentsSection,
@@ -35,7 +47,6 @@ describe("BUNNY_CLI_SKILL", () => {
       "bunny apps",
       "bunny registries",
       "bunny registry",
-      "bunny storage",
     ]) {
       for (const text of texts) expect(text).not.toContain(namespace);
     }

@@ -285,7 +285,7 @@ The CLI must be fully usable by agents, scripts, and pipelines.
 - **Symlink escapes are refused**, so a checkout cannot plant links that make the installer overwrite unrelated files. Symlinks resolving inside the project are followed.
 - **`SKILL.md` is a completion sentinel**: boundary-checked, removed first and written last per root, and the installed check requires every global root. Partial installs and failed refreshes therefore re-offer.
 - **Single source of truth**: `commands/skills/content.ts` embeds `skills/bunny-cli/**` at bundle time via Bun text imports, so the installed skill is always the shipped one. `content.test.ts` fails if `SKILL.md` routes to a reference that is not embedded.
-- **Experimental namespaces stay out** of the skill and the AGENTS.md section (`apps`, `registries`, `storage`); add them back when they graduate to the visible command list in `cli.ts`. `sites` is the exception: hidden from help but documented, since agents deploy with it.
+- **Experimental namespaces stay out** of the skill and the AGENTS.md section (`apps`, `registries`); add them back when they graduate to the visible command list in `cli.ts`. `sites` is the exception: hidden from help but documented, since agents deploy with it.
 - **Onboarding nudges**: `bunny login` makes a one-time interactive offer (`--install-skill` / `--no-install-skill` decide it without prompting). Users who authenticate another way get a one-time passive stderr hint instead. Both share one marker file in the XDG cache dir, so users see at most one. The marker is written on a decline or a successful install only, so an interrupted prompt re-offers.
 
 ---

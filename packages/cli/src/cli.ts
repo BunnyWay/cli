@@ -31,6 +31,7 @@ const commands: CommandModule[] = [
   dnsNamespace,
   scriptsNamespace,
   sandboxNamespace,
+  storageNamespace,
   configNamespace,
   skillsNamespace,
   docsCommand,
@@ -44,7 +45,6 @@ const experimentalCommands: CommandModule[] = [
   registriesNamespace,
   registryNamespace,
   sitesNamespace,
-  storageNamespace,
 ];
 
 let instance = yargs(hideBin(process.argv))
