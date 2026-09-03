@@ -1,6 +1,6 @@
 import * as BunnyStorage from "@bunny.net/storage-sdk";
-import { UserError } from "../../core/errors.ts";
-import { confirm } from "../../core/ui.ts";
+import { UserError } from "@/core/errors.ts";
+import { confirm } from "@/core/ui.ts";
 import type { StorageZoneModel } from "./api.ts";
 
 export interface StorageRegion {

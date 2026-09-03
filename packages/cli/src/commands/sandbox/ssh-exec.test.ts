@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { sandboxKnownHostsPath } from "@bunny.net/sandbox/known-hosts";
-import type { SandboxRecord } from "../../config/schema.ts";
+import type { SandboxRecord } from "@/config/schema.ts";
 import { sshArgs } from "./ssh-exec.ts";
 
 const record: SandboxRecord = {

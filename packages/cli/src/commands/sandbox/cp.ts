@@ -1,5 +1,5 @@
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
 
 /** Anything outside this set changes meaning once the hint is pasted back into a shell. */
 const SHELL_SAFE = /^[\w@%+=:,./-]+$/;

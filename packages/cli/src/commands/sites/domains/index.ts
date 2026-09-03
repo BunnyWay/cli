@@ -1,7 +1,9 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { errorMessage } from "../../../core/errors.ts";
+import { type SiteContext, writeRemoteState } from "@/commands/sites/api.ts";
+import { selectSite } from "@/commands/sites/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { errorMessage } from "@/core/errors.ts";
 import {
   addHostname,
   type CoreClient,
@@ -9,11 +11,9 @@ import {
   fetchPullZoneHostnames,
   type ResolvedPullZone,
   setupHostname,
-} from "../../../core/hostnames/index.ts";
-import { logger } from "../../../core/logger.ts";
-import type { GlobalArgs } from "../../../core/types.ts";
-import { type SiteContext, writeRemoteState } from "../api.ts";
-import { selectSite } from "../interactive.ts";
+} from "@/core/hostnames/index.ts";
+import { logger } from "@/core/logger.ts";
+import type { GlobalArgs } from "@/core/types.ts";
 
 // The hooks run in the same invocation as `resolve`, so the resolved site is cached here (a CLI process handles exactly one command).
 let resolvedSite: SiteContext | null = null;

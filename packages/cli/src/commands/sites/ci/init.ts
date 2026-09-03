@@ -1,16 +1,16 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { logger } from "../../../core/logger.ts";
-import { isInteractive } from "../../../core/ui.ts";
-import { loadSiteConfig } from "../config.ts";
+import { loadSiteConfig } from "@/commands/sites/config.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
   siteLinkOption,
   siteOptionBuilder,
-} from "../interactive.ts";
+} from "@/commands/sites/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { isInteractive } from "@/core/ui.ts";
 import { FRAMEWORK_PRESETS } from "./frameworks.ts";
 import {
   gitTopLevel,

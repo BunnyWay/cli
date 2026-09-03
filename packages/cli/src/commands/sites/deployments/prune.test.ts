@@ -3,7 +3,7 @@ import {
   DEFAULT_KEEP_DEPLOYS,
   type DeployRecord,
   pruneVictims,
-} from "../constants.ts";
+} from "@/commands/sites/constants.ts";
 import { resolveKeepCount } from "./prune.ts";
 
 function deploy(id: string, createdAt: string): DeployRecord {

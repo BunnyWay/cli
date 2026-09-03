@@ -1,5 +1,5 @@
 import { connect } from "@bunny.net/database-client";
-import { databaseUserAgent } from "../constants.ts";
+import { databaseUserAgent } from "@/commands/db/constants.ts";
 import type { MigrationClient } from "./engine.ts";
 
 /** Connect to a database and adapt it to the engine's surface, applying migrations with foreign keys off. */

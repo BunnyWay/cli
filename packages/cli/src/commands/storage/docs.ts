@@ -1,7 +1,7 @@
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
-import { openBrowser } from "../../core/ui.ts";
-import { DOCS_BASE_URL } from "../docs.ts";
+import { DOCS_BASE_URL } from "@/commands/docs.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { openBrowser } from "@/core/ui.ts";
 
 const COMMAND = "docs";
 const DESCRIPTION = "Open storage documentation in the browser.";

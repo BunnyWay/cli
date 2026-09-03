@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { scriptsDeploymentsListCommand } from "./list.ts";
 import { scriptsDeploymentsPublishCommand } from "./publish.ts";
 

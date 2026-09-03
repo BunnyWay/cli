@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { authLoginCommand } from "./login.ts";
 import { authLogoutCommand } from "./logout.ts";
 

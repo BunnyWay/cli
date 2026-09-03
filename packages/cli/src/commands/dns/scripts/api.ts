@@ -1,6 +1,6 @@
 import type { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
-import { UserError } from "../../../core/errors.ts";
+import { UserError } from "@/core/errors.ts";
 import { SCRIPT_TYPE_DNS } from "./constants.ts";
 
 export type ComputeClient = ReturnType<typeof createComputeClient>;

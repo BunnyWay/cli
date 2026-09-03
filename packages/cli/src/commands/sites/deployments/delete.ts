@@ -1,25 +1,25 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { confirm, requireConfirmable, withSpinner } from "../../../core/ui.ts";
 import {
   deleteDeployFiles,
   readRemoteState,
   writeRemoteState,
-} from "../api.ts";
+} from "@/commands/sites/api.ts";
 import {
   findDeploy,
   isValidDeployId,
   type RemoteSiteState,
-} from "../constants.ts";
+} from "@/commands/sites/constants.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
   siteOptionBuilder,
-} from "../interactive.ts";
+} from "@/commands/sites/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
 
 interface DeleteArgs extends SiteSelectorArgs {
   id?: string;

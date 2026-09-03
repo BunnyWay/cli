@@ -8,8 +8,8 @@ import type {
   VolumeConfig,
 } from "@bunny.net/config";
 import { CURRENT_VERSION } from "@bunny.net/config";
-import { UserError } from "../../../core/errors.ts";
-import { parseDotenv } from "../env/parse.ts";
+import { parseDotenv } from "@/commands/apps/env/parse.ts";
+import { UserError } from "@/core/errors.ts";
 import { parsePortMapping } from "./ports.ts";
 import type { ComposeFile, ComposeService } from "./schema.ts";
 

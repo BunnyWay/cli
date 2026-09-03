@@ -1,22 +1,22 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { isInteractive, prompts, spinner } from "../../../core/ui.ts";
 import {
   resolveRecordInteractive,
   resolveZoneInteractive,
-} from "../interactive.ts";
+} from "@/commands/dns/interactive.ts";
 import {
   CAA_TAGS,
   type DnsRecordModel,
   parseRecordType,
   RECORD_TYPES,
   recordName,
-} from "../record-types.ts";
+} from "@/commands/dns/record-types.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { isInteractive, prompts, spinner } from "@/core/ui.ts";
 
 type UpdateDnsRecordModel = components["schemas"]["UpdateDnsRecordModel"];
 

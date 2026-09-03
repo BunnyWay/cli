@@ -1,12 +1,12 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { formatKeyValue } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { toSafeStorageZone } from "../api.ts";
-import { resolveStorageZoneInteractive } from "../interactive.ts";
-import { isS3Enabled } from "../s3.ts";
+import { toSafeStorageZone } from "@/commands/storage/api.ts";
+import { resolveStorageZoneInteractive } from "@/commands/storage/interactive.ts";
+import { isS3Enabled } from "@/commands/storage/s3.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatKeyValue } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
 import { zoneDetailRows } from "./details.ts";
 
 interface ShowArgs {

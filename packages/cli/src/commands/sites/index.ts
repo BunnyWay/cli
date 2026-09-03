@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { sitesCiNamespace } from "./ci/index.ts";
 import { sitesCreateCommand } from "./create.ts";
 import { sitesDeleteCommand } from "./delete.ts";

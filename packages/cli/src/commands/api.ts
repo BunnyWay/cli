@@ -1,8 +1,8 @@
-import { resolveConfig } from "../config/index.ts";
-import { defineCommand } from "../core/define-command.ts";
-import { UserError } from "../core/errors.ts";
-import { logger } from "../core/logger.ts";
-import { VERSION } from "../core/version.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { VERSION } from "@/core/version.ts";
 
 const BASE_URL = "https://api.bunny.net";
 

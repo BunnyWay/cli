@@ -1,5 +1,5 @@
 import type { CommandModule } from "yargs";
-import { defineNamespace } from "../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { dnsZoneAddCommand } from "./add.ts";
 import { dnsZoneDnssecNamespace } from "./dnssec/index.ts";
 import { dnsZoneLinkCommand } from "./link.ts";

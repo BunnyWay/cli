@@ -1,15 +1,15 @@
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
-import { normalizeHostname } from "../../core/hostnames/index.ts";
-import { logger } from "../../core/logger.ts";
-import { saveManifestAt } from "../../core/manifest.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { normalizeHostname } from "@/core/hostnames/index.ts";
+import { logger } from "@/core/logger.ts";
+import { saveManifestAt } from "@/core/manifest.ts";
 import {
   detectFromLockfile,
   pickPackageManager,
-} from "../../core/package-manager.ts";
-import { confirm, prompts, spinner } from "../../core/ui.ts";
+} from "@/core/package-manager.ts";
+import { confirm, prompts, spinner } from "@/core/ui.ts";
 import { promptOpenInBrowser } from "./api.ts";
 import {
   type EdgeScriptTypes,

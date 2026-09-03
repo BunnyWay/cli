@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { dnsScriptsAttachCommand } from "./attach.ts";
 import { dnsScriptsCreateCommand } from "./create.ts";
 import { dnsScriptsDeployCommand } from "./deploy.ts";

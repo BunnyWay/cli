@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { sandboxCpMovedCommand } from "./cp.ts";
 import { sandboxCreateCommand } from "./create.ts";
 import { sandboxDeleteCommand } from "./delete.ts";

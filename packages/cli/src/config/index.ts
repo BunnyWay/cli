@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { logger } from "../core/logger.ts";
+import { logger } from "@/core/logger.ts";
 import { findConfigFile, getConfigWritePath } from "./paths.ts";
 import {
   type ConfigFile,

@@ -5,7 +5,7 @@ import {
   DnsRecordScanStatus,
 } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { UserError } from "../../core/errors.ts";
+import { UserError } from "@/core/errors.ts";
 
 export type CoreClient = ReturnType<typeof createCoreClient>;
 export type DnsZoneModel = components["schemas"]["DnsZoneModel"];

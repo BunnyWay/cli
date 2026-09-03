@@ -1,14 +1,14 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { loadConfigFile } from "../../config/index.ts";
+import { loadConfigFile } from "@/config/index.ts";
 import {
   installGlobalSkill,
   isGlobalSkillInstalled,
   isProjectSkillInstalled,
-} from "../../core/agent-skill.ts";
-import { logger } from "../../core/logger.ts";
-import { confirmOrCancel, isInteractive } from "../../core/ui.ts";
-import { CACHE_DIR } from "../../core/update-check.ts";
+} from "@/core/agent-skill.ts";
+import { logger } from "@/core/logger.ts";
+import { confirmOrCancel, isInteractive } from "@/core/ui.ts";
+import { CACHE_DIR } from "@/core/update-check.ts";
 import { BUNNY_CLI_SKILL } from "./content.ts";
 
 // Losing the cache dir only means one repeat offer.

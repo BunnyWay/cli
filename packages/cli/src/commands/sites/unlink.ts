@@ -1,6 +1,6 @@
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
-import { loadManifest, removeManifest } from "../../core/manifest.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, removeManifest } from "@/core/manifest.ts";
 import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 
 export const sitesUnlinkCommand = defineCommand({

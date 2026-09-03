@@ -1,6 +1,24 @@
 import type { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { mapWithConcurrency } from "../../core/concurrency.ts";
+import {
+  type CoreClient,
+  fetchStorageZone,
+  type StorageZoneModel,
+} from "@/commands/storage/api.ts";
+import {
+  type ZoneTierChoice,
+  zoneTierChoice,
+  zoneTierLabel,
+  zoneTierValue,
+} from "@/commands/storage/constants.ts";
+import {
+  connectStorageZone,
+  deleteFile,
+  downloadFile,
+  type StorageZone,
+  uploadFile,
+} from "@/commands/storage/files-api.ts";
+import { mapWithConcurrency } from "@/core/concurrency.ts";
 import {
   type EdgeRule,
   EdgeRuleAction,
@@ -8,32 +26,14 @@ import {
   EdgeRuleTriggerType,
   fetchEdgeRules,
   upsertEdgeRule,
-} from "../../core/edge-rules.ts";
-import { ApiError, errorMessage, UserError } from "../../core/errors.ts";
+} from "@/core/edge-rules.ts";
+import { ApiError, errorMessage, UserError } from "@/core/errors.ts";
 import {
   createPullZone,
   setForceSsl,
   systemHostname,
-} from "../../core/hostnames/index.ts";
-import { logger } from "../../core/logger.ts";
-import {
-  type CoreClient,
-  fetchStorageZone,
-  type StorageZoneModel,
-} from "../storage/api.ts";
-import {
-  type ZoneTierChoice,
-  zoneTierChoice,
-  zoneTierLabel,
-  zoneTierValue,
-} from "../storage/constants.ts";
-import {
-  connectStorageZone,
-  deleteFile,
-  downloadFile,
-  type StorageZone,
-  uploadFile,
-} from "../storage/files-api.ts";
+} from "@/core/hostnames/index.ts";
+import { logger } from "@/core/logger.ts";
 import {
   ASSET_BROWSER_TTL_SECONDS,
   ASSET_EXTENSION_GROUPS,

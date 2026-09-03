@@ -1,7 +1,7 @@
 import type { Argv } from "yargs";
 
 // The env parsing lives in core/env.ts; re-exported here so sandbox keeps its import path.
-export { collectEnv, parseDotenv, splitPair } from "../../core/env.ts";
+export { collectEnv, parseDotenv, splitPair } from "@/core/env.ts";
 
 /** Add the shared `--env`/`--env-file` options to a command builder.
  *  Pass `{ shortAlias: false }` on commands that forward arbitrary argv so that

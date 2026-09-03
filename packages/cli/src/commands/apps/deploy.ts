@@ -2,20 +2,20 @@ import { existsSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import type { RegistryMap } from "@bunny.net/config";
 import { createMcClient } from "@bunny.net/openapi-client";
-import { type ResolvedConfig, resolveConfig } from "../../config/index.ts";
+import { type ResolvedConfig, resolveConfig } from "@/config/index.ts";
 import {
   fetchRegistryNamespace,
   REGISTRY_USERNAME,
-} from "../../core/bunny-registry.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { bunny } from "../../core/colors.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
-import { formatTable } from "../../core/format.ts";
-import { logger } from "../../core/logger.ts";
-import { loadManifest, saveManifest } from "../../core/manifest.ts";
-import type { OutputFormat } from "../../core/types.ts";
-import { spinner } from "../../core/ui.ts";
+} from "@/core/bunny-registry.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { bunny } from "@/core/colors.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, saveManifest } from "@/core/manifest.ts";
+import type { OutputFormat } from "@/core/types.ts";
+import { spinner } from "@/core/ui.ts";
 import {
   type BunnyAppConfig,
   type ContainerConfig,

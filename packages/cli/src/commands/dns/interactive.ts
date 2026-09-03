@@ -1,8 +1,8 @@
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
-import { loadManifest, saveManifest } from "../../core/manifest.ts";
-import type { OutputFormat } from "../../core/types.ts";
-import { confirm, isInteractive, prompts, spinner } from "../../core/ui.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, saveManifest } from "@/core/manifest.ts";
+import type { OutputFormat } from "@/core/types.ts";
+import { confirm, isInteractive, prompts, spinner } from "@/core/ui.ts";
 import {
   type CoreClient,
   type DnsRecordModel,

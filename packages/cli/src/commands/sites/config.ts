@@ -1,6 +1,6 @@
 import { type SiteConfig, SiteConfigSchema } from "@bunny.net/config";
-import { readBunnyConfig } from "../../core/bunny-config.ts";
-import { UserError } from "../../core/errors.ts";
+import { readBunnyConfig } from "@/core/bunny-config.ts";
+import { UserError } from "@/core/errors.ts";
 
 export interface LoadedSiteConfig {
   config: SiteConfig;

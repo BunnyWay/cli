@@ -1,8 +1,8 @@
 import {
   basicAuthHeader,
   type RegistryEndpoint,
-} from "../../core/bunny-registry.ts";
-import { UserError } from "../../core/errors.ts";
+} from "@/core/bunny-registry.ts";
+import { UserError } from "@/core/errors.ts";
 
 export {
   fetchRegistryNamespace,
@@ -12,7 +12,7 @@ export {
   type RegistryEndpoint,
   resolveRegistryEndpoint,
   stripNamespace,
-} from "../../core/bunny-registry.ts";
+} from "@/core/bunny-registry.ts";
 
 /**
  * Perform an authenticated request against an OCI distribution path

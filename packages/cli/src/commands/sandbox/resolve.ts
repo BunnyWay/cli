@@ -1,7 +1,7 @@
 import { Sandbox } from "@bunny.net/sandbox";
-import { getSandbox, resolveConfig } from "../../config/index.ts";
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
+import { getSandbox, resolveConfig } from "@/config/index.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
 
 /** A `sandbox:path` reference to a file or directory inside a sandbox. */
 export interface RemoteRef {

@@ -1,13 +1,13 @@
 import { basename, resolve } from "node:path";
 import { createComputeClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { formatKeyValue } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { loadManifest, saveManifest } from "../../../core/manifest.ts";
-import { confirm, isInteractive, prompts, spinner } from "../../../core/ui.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { formatKeyValue } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, saveManifest } from "@/core/manifest.ts";
+import { confirm, isInteractive, prompts, spinner } from "@/core/ui.ts";
 import { createDnsScript } from "./api.ts";
 import {
   DNS_SCRIPT_MANIFEST,
