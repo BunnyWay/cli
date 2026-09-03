@@ -1032,6 +1032,25 @@ test("migrateSite aborts rather than clobber state that changed mid-migration", 
   expect((await classifySiteZone(ZONE)).kind).toBe("legacy");
 });
 
+test("migrateSite refuses a pull zone that isn't the site's origin", async () => {
+  const { opts, deletes } = migrateFixture(
+    legacyPullZone({ StorageZoneId: 999 }),
+  );
+
+  await expect(migrateSite(opts)).rejects.toThrow(
+    "isn't the origin for storage zone",
+  );
+  expect(deletes).toHaveLength(0);
+  expect((await classifySiteZone(ZONE)).kind).toBe("legacy");
+  const pullZone = (
+    await opts.coreClient.GET("/pullzone/{id}", {
+      params: { path: { id: 30 } },
+    })
+  ).data;
+  expect(pullZone?.MiddlewareScriptId).toBe(77);
+  expect(pullZone?.EdgeRules ?? []).toHaveLength(0);
+});
+
 test("migrateSite deletes the live script, never the one stale state recorded", async () => {
   // State names 77, but the zone is actually serving 99.
   const attached = migrateFixture(legacyPullZone({ MiddlewareScriptId: 99 }));

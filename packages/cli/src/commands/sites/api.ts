@@ -746,6 +746,21 @@ async function guardLegacyState(
   );
 }
 
+async function assertPullZoneOwnedBy(
+  coreClient: CoreClient,
+  pullZoneId: number,
+  storageZone: StorageZoneModel,
+): Promise<void> {
+  const { data } = await coreClient.GET("/pullzone/{id}", {
+    params: { path: { id: pullZoneId } },
+  });
+  if (data?.StorageZoneId === storageZone.Id) return;
+  throw new UserError(
+    `Pull zone ${pullZoneId} isn't the origin for storage zone "${storageZone.Name}".`,
+    "The site's state file names a pull zone that has been deleted or repointed; fix it in the dashboard before migrating.",
+  );
+}
+
 export interface MigrateResult {
   state: RemoteSiteState;
   detachedScriptId: number | null;
@@ -764,6 +779,9 @@ export async function migrateSite(opts: {
   const step = opts.onStep ?? (() => {});
   const state = migrateLegacyState(legacy);
   const deployId = state.current ?? PLACEHOLDER_DEPLOY;
+
+  step("Checking pull zone...");
+  await assertPullZoneOwnedBy(coreClient, state.pullZoneId, storageZone);
 
   step("Detaching the router script...");
   const detachedScriptId = await detachMiddlewareScript(
