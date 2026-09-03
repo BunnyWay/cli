@@ -98,13 +98,12 @@ describe("encodeValue", () => {
     expect(() => encodeValue(undefined)).toThrow(/cannot bind undefined/);
   });
 
-  test("rejects integer numbers past 2^53 instead of silently rounding them", () => {
-    expect(() => encodeValue(Number.MAX_SAFE_INTEGER + 2)).toThrow(
-      /pass a bigint/,
-    );
-    expect(() => encodeValue(Number.MIN_SAFE_INTEGER - 2)).toThrow(
-      /pass a bigint/,
-    );
+  test("sends integer-valued doubles past 2^53 as floats rather than rejecting them", () => {
+    expect(encodeValue(1e21)).toEqual({ type: "float", value: 1e21 });
+    expect(encodeValue(Number.MIN_SAFE_INTEGER - 2)).toEqual({
+      type: "float",
+      value: Number.MIN_SAFE_INTEGER - 2,
+    });
     expect(encodeValue(Number.MAX_SAFE_INTEGER)).toEqual({
       type: "integer",
       value: "9007199254740991",

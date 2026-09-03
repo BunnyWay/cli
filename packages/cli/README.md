@@ -139,7 +139,7 @@ Most `db` commands accept an optional `<database-id>` positional argument. When 
 3. `BUNNY_DATABASE_URL` in a `.env` file (walked up from the current directory) matched against your database list
 4. Interactive selection prompt
 
-For `db shell`, the CLI also reads `BUNNY_DATABASE_AUTH_TOKEN` from `.env` to skip token generation. Both variables can be set by `db quickstart`.
+For `db shell`, the CLI also reads `BUNNY_DATABASE_AUTH_TOKEN` from `.env` to skip token generation. `db quickstart` prints both variables ready to paste; `db create --token --save-env` writes them for you.
 
 #### `bunny db create`
 
@@ -280,8 +280,10 @@ Generate a quickstart guide for connecting to a database.
 
 ```bash
 bunny db quickstart
-bunny db quickstart <database-id> --lang bun
+bunny db quickstart <database-id> --lang typescript
 ```
+
+Languages: `typescript`, `go`, `rust`, `dotnet`. Prints the `.env` values, the install command, and a ready-to-use snippet; the TypeScript one uses [`@bunny.net/database-client`](../database-client).
 
 #### `bunny db shell`
 
@@ -510,8 +512,6 @@ Positional value ordering for `record add` follows the record type: `A`/`AAAA`/`
 
 ### `bunny storage`
 
-> **Experimental**: hidden from `--help` and the landing page while it stabilizes.
-
 Manage Edge Storage through two resource groups: **`bunny storage zones`** (the zone itself: create, list, inspect, update, delete; alias `zone`, plus hidden `bucket`/`buckets`) and **`bunny storage files`** (the files within a zone; alias `file`). Zone management uses the account API key; file operations use the zone's own password and a region-specific host, both resolved automatically from the zone. `zones` commands take the zone as an optional `[zone]` positional; `files` commands take it as the `--zone`/`-z` flag (their positional is the file path). Either accepts the zone name or its numeric ID. When the zone is omitted it resolves from the directory's linked zone (`bunny storage link`, stored in `.bunny/storage.json`), then an interactive picker, which offers to link the directory to the picked zone (except on destructive commands). Non-interactive runs (`--output json`, no TTY, or `--force`) error instead of prompting; pass a zone or link the directory.
 
 A storage zone only holds files; a **pull zone** is what serves them on the web. `zones add` offers to create one (origin set to the new storage zone) and then to add a custom domain, or pass `--pull-zone`/`--domain` to do it non-interactively. Custom domains live on the pull zone and are managed with `bunny storage zones domains`.
@@ -529,7 +529,7 @@ bunny storage zones add my-zone --region NY --replication LA,SG
 bunny storage zones add my-zone --region DE --pull-zone   # also create a pull zone to serve it on the web
 bunny storage zones add my-zone --region DE --domain cdn.example.com   # pull zone + custom domain
 bunny storage zones add my-zone --tier ssd --s3        # Edge (SSD) tier (always DE) with S3-compatible access
-bunny storage zones add my-zone --region DE --connection s3 --save-env   # print S3 credentials and write them to .env
+bunny storage zones add my-zone --region DE --s3 --connection s3 --save-env   # print S3 credentials and write them to .env
 bunny storage zones show my-zone
 bunny storage zones update my-zone                     # interactive: edit settings, pre-filled with current values
 bunny storage zones update my-zone --custom-404-path /404.html
@@ -548,7 +548,7 @@ bunny storage zones credentials my-zone --connection ftp --show-secret   # FTP h
 bunny storage zones credentials my-zone --connection s3 --read-only      # use the read-only password as the secret
 bunny storage zones credentials my-zone --format sdk   # @bunny.net/storage-sdk snippet (HTTP API)
 bunny storage zones credentials my-zone --format rclone >> ~/.config/rclone/rclone.conf
-eval "$(bunny storage zones credentials my-zone --format env)"   # AWS-compatible env vars
+set -a; eval "$(bunny storage zones credentials my-zone --format env)"; set +a   # AWS-compatible env vars, exported
 bunny storage zones credentials my-zone --connection http --save-env     # write the variables to .env
 
 # Files: list, upload, download, delete (paths are relative to the zone root)
@@ -572,7 +572,7 @@ bunny storage docs
 
 A trailing slash on a `files` path denotes a directory: `files list images/` lists that directory, and `files remove images/` deletes it and its contents recursively. Edge Storage file operations are powered by the [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage).
 
-bunny.net's S3-compatible API is in preview and is opt-in per zone at creation (`zones add --s3`); it cannot be enabled on an existing zone. When a zone has it, `bunny storage zones show` surfaces its S3 endpoint, and `bunny storage zones credentials --connection s3` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table and JSON output mask the secret by default; pass `--show-secret` to reveal it (`--format` always emits it in full, since it's meant to be consumed by tools, and under `--output json` the config rides along in a `config` field). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
+bunny.net's S3-compatible API is in preview and is opt-in per zone at creation (`zones add --s3`); it cannot be enabled on an existing zone. When a zone has it, `bunny storage zones show` surfaces its S3 endpoint, and `bunny storage zones credentials --connection s3` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table and JSON output mask the secret by default; pass `--show-secret` to reveal it (the S3 tool formats always emit it in full, since they're meant to be consumed by tools, and under `--output json` the config rides along in a `config` field). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
 
 The same command also serves the two protocols every zone has: `--connection http` (the base URL and `AccessKey` header, plus a `--format sdk` snippet for [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage)) and `--connection ftp` (host, username, password). `--format` implies its protocol, so a conflicting `--connection` is an error. `--save-env` writes the protocol's variables (`BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, `BUNNY_STORAGE_REGION`, or the `AWS_*` quad for S3) into whichever `.env` already holds one of them.
 

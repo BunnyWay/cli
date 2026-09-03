@@ -1,5 +1,13 @@
 # @bunny.net/cli
 
+## 0.16.1
+
+### Patch Changes
+
+- [#206](https://github.com/BunnyWay/cli/pull/206) [`d6b68a7`](https://github.com/BunnyWay/cli/commit/d6b68a7d0f058d035171f10e0398428f5b6410da) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Harden `@bunny.net/database-client`: `batch()` takes a `mode`, guards its ROLLBACK, rejects transaction statements, and reports the failing statement as `error.batchIndex`; invalid `timeout` values and malformed responses become `DatabaseError`, transport errors keep their `cause`, integer-valued doubles past 2^53 bind as REAL, and `db.sql` carries a row type. Migrations apply with `BEGIN IMMEDIATE`.
+
+- [#204](https://github.com/BunnyWay/cli/pull/204) [`a00a867`](https://github.com/BunnyWay/cli/commit/a00a867b210a72730338d719aa8c83a5bb644ae7) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny skills install` now ships references for Bunny Storage (`bunny storage` zones, files, connection credentials, custom domains) and for querying a database from application code with `@bunny.net/database-client`.
+
 ## 0.16.0
 
 ### Minor Changes
