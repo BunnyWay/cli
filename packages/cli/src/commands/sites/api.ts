@@ -1,3 +1,4 @@
+import type { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { mapWithConcurrency } from "../../core/concurrency.ts";
 import {
@@ -41,7 +42,10 @@ import {
   DEPLOYS_DIR,
   deployPrefix,
   GATE_RULE_DESC,
+  type LegacySiteState,
+  migrateLegacyState,
   PLACEHOLDER_DEPLOY,
+  parseLegacyState,
   parseRemoteState,
   REMOTE_STATE_PATH,
   REWRITE_RULE_DESC,
@@ -52,6 +56,7 @@ import {
   suffixedResourceName,
 } from "./constants.ts";
 
+export type ComputeClient = ReturnType<typeof createComputeClient>;
 type PullZone = components["schemas"]["PullZoneModel"];
 
 // Storage-file IO seam; tests swap these for an in-memory store (bun's `mock.module` leaks across files, this doesn't).
@@ -71,11 +76,13 @@ export interface SiteContext {
   connection: StorageZone;
 }
 
-export interface SiteSummary {
-  state: RemoteSiteState;
+export interface SiteSummaryOf<S> {
+  state: S;
   storageZone: StorageZoneModel;
   systemHostname?: string;
 }
+
+export type SiteSummary = SiteSummaryOf<RemoteSiteState>;
 
 export function sha256Hex(text: string): string {
   const hasher = new Bun.CryptoHasher("sha256");
@@ -103,6 +110,12 @@ async function downloadText(
 
 function textStream(text: string): ReadableStream<Uint8Array> {
   return new Blob([text]).stream();
+}
+
+/** Read `_bunny/site.json` unparsed, so a caller can try more than one state format against it.
+ * Returns null when the file isn't there. */
+export function readRawState(connection: StorageZone): Promise<string | null> {
+  return downloadText(connection, REMOTE_STATE_PATH);
 }
 
 /** Read `_bunny/site.json`. Returns null when the zone isn't a site. */
@@ -167,6 +180,27 @@ export async function writeRemoteState(
   return sha256Hex(raw);
 }
 
+/** What a zone's `_bunny/site.json` turned out to be.
+ * The three cases want three different answers, so the migrate path reads the file
+ *  once and tries both formats rather than asking "is this a site?". */
+export type ZoneState =
+  | { kind: "legacy"; state: LegacySiteState }
+  | { kind: "current"; state: RemoteSiteState }
+  | { kind: "none" };
+
+/** Classify a storage zone by the state format it carries. */
+export async function classifySiteZone(
+  zone: StorageZoneModel,
+): Promise<ZoneState> {
+  const raw = await readRawState(siteFiles.connect(zone));
+  if (raw === null) return { kind: "none" };
+  const legacy = parseLegacyState(raw);
+  if (legacy) return { kind: "legacy", state: legacy };
+  const current = parseRemoteState(raw);
+  if (current) return { kind: "current", state: current };
+  return { kind: "none" };
+}
+
 export async function siteContextFromZone(
   zone: StorageZoneModel,
 ): Promise<SiteContext | null> {
@@ -218,8 +252,10 @@ async function fetchPullZones(
   }
 }
 
-// Discover sites: every storage-backed pull zone gets the per-zone `_bunny/site.json` read (concurrency-capped). A candidate is only a site when the state names it as the site's own pull zone, so another zone pointed at the same storage origin is never mistaken for one.
-export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
+async function scanSites<S extends { name: string; pullZoneId: number }>(
+  client: CoreClient,
+  parse: (raw: string) => S | null,
+): Promise<Array<SiteSummaryOf<S>>> {
   const candidates = (await fetchPullZones(client)).filter(
     (pz: PullZone) => pz.StorageZoneId != null,
   );
@@ -227,13 +263,14 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
   const summaries = await mapWithConcurrency(
     candidates,
     8,
-    async (pz: PullZone): Promise<SiteSummary | null> => {
+    async (pz: PullZone): Promise<SiteSummaryOf<S> | null> => {
       try {
         const zone = await fetchStorageZone(client, pz.StorageZoneId as number);
-        const context = await siteContextFromZone(zone);
-        if (!context || context.state.pullZoneId !== pz.Id) return null;
+        const raw = await readRawState(siteFiles.connect(zone));
+        const state = raw === null ? null : parse(raw);
+        if (!state || state.pullZoneId !== pz.Id) return null;
         return {
-          state: context.state,
+          state,
           storageZone: zone,
           systemHostname: systemHostname(pz.Hostnames),
         };
@@ -244,8 +281,19 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
   );
 
   return summaries
-    .filter((s): s is SiteSummary => s !== null)
+    .filter((s): s is SiteSummaryOf<S> => s !== null)
     .sort((a, b) => a.state.name.localeCompare(b.state.name));
+}
+
+export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
+  return scanSites(client, parseRemoteState);
+}
+
+/** Router-era sites, which {@link fetchSites} can't see because their state no longer parses; `sites migrate` discovers them with this. */
+export async function fetchLegacySites(
+  client: CoreClient,
+): Promise<Array<SiteSummaryOf<LegacySiteState>>> {
+  return scanSites(client, parseLegacyState);
 }
 
 // Account storage zones whose name is `sites-{name}-{suffix}`, re-fetched by ID because search results may omit the zone password.
@@ -292,6 +340,52 @@ const SITE_CACHE_SETTINGS = {
   CacheControlMaxAgeOverride: 2592000,
   CacheControlPublicMaxAgeOverride: 0,
 };
+
+/** Apply the site cache policy to a pull zone. Unlike the edge rules this isn't reapplied on every publish, so a zone provisioned before it existed needs {@link migrateSite} to set it. */
+export async function applySiteCacheSettings(
+  coreClient: CoreClient,
+  pullZoneId: number,
+): Promise<void> {
+  await coreClient.POST("/pullzone/{id}", {
+    params: { path: { id: pullZoneId } },
+    body: SITE_CACHE_SETTINGS,
+  });
+}
+
+// `0` is the API's "no middleware script" sentinel on update. `null` is accepted and silently ignored, and `-1` (which the API itself reports for an unlinked `EdgeScriptId`) is rejected as a missing script, so neither can be used to clear the field.
+const NO_MIDDLEWARE_SCRIPT = 0;
+
+// Detach the pull zone's middleware script, returning the script that was attached (null when there was none, so a resumed migration is a no-op). The clear is verified rather than assumed: a silently ignored detach would leave the router rewriting into `*/deploys/*`, which the gate rule blocks, and the site would serve 403s.
+export async function detachMiddlewareScript(
+  coreClient: CoreClient,
+  pullZoneId: number,
+): Promise<number | null> {
+  const attached = await fetchMiddlewareScriptId(coreClient, pullZoneId);
+  if (attached == null) return null;
+  await coreClient.POST("/pullzone/{id}", {
+    params: { path: { id: pullZoneId } },
+    body: { MiddlewareScriptId: NO_MIDDLEWARE_SCRIPT },
+  });
+  if ((await fetchMiddlewareScriptId(coreClient, pullZoneId)) != null) {
+    throw new UserError(
+      `Couldn't detach edge script ${attached} from pull zone ${pullZoneId}.`,
+      "Remove the linked edge script from the pull zone in the dashboard, then re-run this command.",
+    );
+  }
+  return attached;
+}
+
+async function fetchMiddlewareScriptId(
+  coreClient: CoreClient,
+  pullZoneId: number,
+): Promise<number | null> {
+  const { data } = await coreClient.GET("/pullzone/{id}", {
+    params: { path: { id: pullZoneId } },
+  });
+  const id = data?.MiddlewareScriptId;
+  // A detached zone reports the field as absent, but treat the sentinel as unset too rather than trust one shape.
+  return id == null || id === NO_MIDDLEWARE_SCRIPT ? null : id;
+}
 
 // The four rules that serve a site; bodies are always rebuilt in full from these so a hand-edited rule heals on the next upsert.
 function siteRules(
@@ -517,10 +611,7 @@ export async function createSite(
       "Re-run the command to finish provisioning.",
     );
   }
-  await coreClient.POST("/pullzone/{id}", {
-    params: { path: { id: pullZone.Id } },
-    body: SITE_CACHE_SETTINGS,
-  });
+  await applySiteCacheSettings(coreClient, pullZone.Id);
   await ensureSiteRules({
     coreClient,
     pullZoneId: pullZone.Id,
@@ -663,6 +754,70 @@ export async function promoteDeploy(opts: {
   await purge();
   await waitForEdgePropagation(host, deployId);
   await purge();
+}
+
+export interface MigrateResult {
+  state: RemoteSiteState;
+  /** The edge script detached from the pull zone, or null when it already was. */
+  detachedScriptId: number | null;
+  /** The deploy the rewrite rule now targets; the placeholder when the site never published one. */
+  deployId: string;
+  scriptDeleted: boolean;
+  /** Why the script survived, when deleting it failed; the migration itself still succeeded. */
+  scriptError?: string;
+}
+export async function migrateSite(opts: {
+  coreClient: CoreClient;
+  computeClient: ComputeClient;
+  legacy: LegacySiteState;
+  storageZone: StorageZoneModel;
+  connection: StorageZone;
+  keepScript?: boolean;
+  onStep?: (message: string) => void;
+}): Promise<MigrateResult> {
+  const { coreClient, computeClient, legacy, storageZone, connection } = opts;
+  const step = opts.onStep ?? (() => {});
+  const state = migrateLegacyState(legacy);
+  const deployId = state.current ?? PLACEHOLDER_DEPLOY;
+
+  step("Detaching the router script...");
+  const detachedScriptId = await detachMiddlewareScript(
+    coreClient,
+    state.pullZoneId,
+  );
+
+  step("Applying edge rules...");
+  await ensureSiteRules({
+    coreClient,
+    pullZoneId: state.pullZoneId,
+    storageZone,
+    deployId,
+  });
+  await applySiteCacheSettings(coreClient, state.pullZoneId);
+
+  step("Writing site state...");
+  await writeRemoteState(connection, state);
+
+  if (state.current) {
+    step("Publishing the current deploy...");
+    await promoteDeploy({ coreClient, state, deployId: state.current });
+  }
+
+  let scriptDeleted = false;
+  let scriptError: string | undefined;
+  if (!opts.keepScript) {
+    step("Deleting the router script...");
+    try {
+      await computeClient.DELETE("/compute/script/{id}", {
+        params: { path: { id: legacy.scriptId } },
+      });
+      scriptDeleted = true;
+    } catch (err) {
+      scriptError = errorMessage(err);
+    }
+  }
+
+  return { state, detachedScriptId, deployId, scriptDeleted, scriptError };
 }
 
 export interface TeardownResult {

@@ -7,8 +7,11 @@ export const REMOTE_STATE_PATH = "_bunny/site.json";
 // Deploys live at `deploys/{id}/...` inside the storage zone.
 export const DEPLOYS_DIR = "deploys";
 
-// State format version; the router-era version 1 was never released, so only this exact version parses.
+// State format version; only this exact version parses, and `sites migrate` rewrites the router-era version 1 into it.
 export const STATE_VERSION = 2;
+
+// The router-era format, still on disk for sites created before edge rules replaced the router script.
+export const LEGACY_STATE_VERSION = 1;
 
 export const DEFAULT_KEEP_DEPLOYS = 5;
 
@@ -38,6 +41,22 @@ export interface RemoteSiteState {
   storageZoneId: number;
   pullZoneId: number;
   /** Custom production domain, when one has been attached. */
+  domain?: string;
+  current?: string;
+  previous?: string;
+  deploys: DeployRecord[];
+}
+
+/** Router-era (version 1) state; the current format minus the script fields, which is all the migration has to drop. */
+export interface LegacySiteState {
+  version: number;
+  name: string;
+  storageZoneId: number;
+  pullZoneId: number;
+  /** The router script serving the site; version 1's defining field. */
+  scriptId: number;
+  /** The router source generation last published to the script. */
+  routerVersion?: number;
   domain?: string;
   current?: string;
   previous?: string;
@@ -161,8 +180,8 @@ export function siteResourcePattern(siteName: string): RegExp {
   );
 }
 
-// Parse and shape-check remote state; returns null (not a crash) for anything that isn't a state file this CLI understands.
-export function parseRemoteState(raw: string): RemoteSiteState | null {
+// A state file's top-level object, or null (not a crash) when it isn't one.
+function stateObject(raw: string): Record<string, unknown> | null {
   let data: unknown;
   try {
     data = JSON.parse(raw);
@@ -170,18 +189,45 @@ export function parseRemoteState(raw: string): RemoteSiteState | null {
     return null;
   }
   if (!data || typeof data !== "object") return null;
-  const s = data as Record<string, unknown>;
-  if (
-    // Any other version is rejected rather than misread; the router-era version 1 was never released.
-    s.version !== STATE_VERSION ||
-    typeof s.name !== "string" ||
+  return data as Record<string, unknown>;
+}
+
+// The fields both formats carry; each parser adds its own version and script checks.
+function hasCommonShape(s: Record<string, unknown>): boolean {
+  return (
+    typeof s.name === "string" &&
     // Reject an illegal name: it would flow unquoted into storage paths and generated CI YAML.
-    !isValidSiteName(s.name) ||
-    typeof s.storageZoneId !== "number" ||
-    typeof s.pullZoneId !== "number" ||
-    !Array.isArray(s.deploys)
+    isValidSiteName(s.name) &&
+    typeof s.storageZoneId === "number" &&
+    typeof s.pullZoneId === "number" &&
+    Array.isArray(s.deploys)
+  );
+}
+
+// Parse and shape-check remote state; returns null for anything that isn't a state file this CLI serves, the router-era format included.
+export function parseRemoteState(raw: string): RemoteSiteState | null {
+  const s = stateObject(raw);
+  // Any other version is rejected rather than misread; version 1 goes through `sites migrate` first.
+  if (!s || s.version !== STATE_VERSION || !hasCommonShape(s)) return null;
+  return s as unknown as RemoteSiteState;
+}
+
+// Parse router-era state; returns null for every other format, so a caller can tell "needs migrating" from "not a site".
+export function parseLegacyState(raw: string): LegacySiteState | null {
+  const s = stateObject(raw);
+  if (
+    !s ||
+    s.version !== LEGACY_STATE_VERSION ||
+    typeof s.scriptId !== "number" ||
+    !hasCommonShape(s)
   ) {
     return null;
   }
-  return s as unknown as RemoteSiteState;
+  return s as unknown as LegacySiteState;
+}
+
+/** The current-format equivalent of a router-era state; everything but the script fields carries over untouched. */
+export function migrateLegacyState(legacy: LegacySiteState): RemoteSiteState {
+  const { scriptId, routerVersion, ...rest } = legacy;
+  return { ...rest, version: STATE_VERSION };
 }

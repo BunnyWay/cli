@@ -6,6 +6,9 @@ import {
   findDeploy,
   isValidDeployId,
   isValidSiteName,
+  type LegacySiteState,
+  migrateLegacyState,
+  parseLegacyState,
   parseRemoteState,
   type RemoteSiteState,
   siteResourcePattern,
@@ -20,11 +23,79 @@ const validState: RemoteSiteState = {
   deploys: [],
 };
 
+const validLegacyState: LegacySiteState = {
+  version: 1,
+  name: "my-site",
+  storageZoneId: 1,
+  pullZoneId: 2,
+  scriptId: 3,
+  routerVersion: 5,
+  deploys: [],
+};
+
 test("parseRemoteState round-trips a valid state", () => {
   expect(parseRemoteState(JSON.stringify(validState))).toEqual(validState);
-  // The router-era version 1 format was never released, so it no longer parses.
-  const routerEra = { ...validState, version: 1, scriptId: 3 };
-  expect(parseRemoteState(JSON.stringify(routerEra))).toBeNull();
+  // Router-era state is `sites migrate`'s job, not something the serving path reads.
+  expect(parseRemoteState(JSON.stringify(validLegacyState))).toBeNull();
+});
+
+test("parseLegacyState reads router-era state and nothing else", () => {
+  expect(parseLegacyState(JSON.stringify(validLegacyState))).toEqual(
+    validLegacyState,
+  );
+  // The two parsers never both claim a file, so a caller can tell "needs migrating" from "already migrated".
+  expect(parseLegacyState(JSON.stringify(validState))).toBeNull();
+  expect(parseLegacyState("not json")).toBeNull();
+  expect(parseLegacyState("{}")).toBeNull();
+  // Version 1 without a script isn't router-era state.
+  expect(
+    parseLegacyState(
+      JSON.stringify({ ...validLegacyState, scriptId: undefined }),
+    ),
+  ).toBeNull();
+  // The shared shape checks apply to both formats.
+  expect(
+    parseLegacyState(JSON.stringify({ ...validLegacyState, deploys: {} })),
+  ).toBeNull();
+  expect(
+    parseLegacyState(
+      JSON.stringify({
+        ...validLegacyState,
+        name: "evil\n      run: rm -rf /",
+      }),
+    ),
+  ).toBeNull();
+});
+
+test("migrateLegacyState drops the script fields and keeps everything else", () => {
+  const deploy: DeployRecord = {
+    id: "abc123",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    source: "git",
+    contentHash: "hash",
+    files: 2,
+    bytes: 20,
+  };
+  const migrated = migrateLegacyState({
+    ...validLegacyState,
+    domain: "example.com",
+    current: "abc123",
+    previous: "old999",
+    deploys: [deploy],
+  });
+
+  expect(migrated).toEqual({
+    version: 2,
+    name: "my-site",
+    storageZoneId: 1,
+    pullZoneId: 2,
+    domain: "example.com",
+    current: "abc123",
+    previous: "old999",
+    deploys: [deploy],
+  });
+  // The result is what the serving path reads back, so it has to parse.
+  expect(parseRemoteState(JSON.stringify(migrated))).toEqual(migrated);
 });
 
 test("parseRemoteState rejects garbage", () => {
