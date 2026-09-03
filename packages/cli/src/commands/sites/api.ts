@@ -761,9 +761,14 @@ async function assertPullZoneOwnedBy(
   );
 }
 
+function routerScriptName(storageZone: StorageZoneModel): string {
+  return `${storageZone.Name}-router`;
+}
+
 export interface MigrateResult {
   state: RemoteSiteState;
   detachedScriptId: number | null;
+  deletedScriptId: number | null;
   scriptError?: string;
 }
 export async function migrateSite(opts: {
@@ -809,19 +814,25 @@ export async function migrateSite(opts: {
   await writeRemoteState(connection, state);
 
   let scriptError: string | undefined;
-  // Only ever delete the script this run detached from the zone. A `legacy.scriptId` that state has gone stale on could name an unrelated script, and the delete is permanent.
+  let deletedScriptId: number | null = null;
   if (detachedScriptId != null) {
     step("Deleting the router script...");
     try {
-      await computeClient.DELETE("/compute/script/{id}", {
+      const { data: script } = await computeClient.GET("/compute/script/{id}", {
         params: { path: { id: detachedScriptId } },
       });
+      if (script?.Name === routerScriptName(storageZone)) {
+        await computeClient.DELETE("/compute/script/{id}", {
+          params: { path: { id: detachedScriptId } },
+        });
+        deletedScriptId = detachedScriptId;
+      }
     } catch (err) {
       scriptError = errorMessage(err);
     }
   }
 
-  return { state, detachedScriptId, scriptError };
+  return { state, detachedScriptId, deletedScriptId, scriptError };
 }
 
 export interface TeardownResult {

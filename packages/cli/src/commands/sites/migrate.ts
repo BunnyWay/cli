@@ -127,6 +127,13 @@ export const sitesMigrateCommand = defineCommand<MigrateArgs>({
       logger.warn(
         `Couldn't delete edge script ${result.detachedScriptId}: ${result.scriptError}`,
       );
+    } else if (
+      result.detachedScriptId != null &&
+      result.deletedScriptId === null
+    ) {
+      logger.warn(
+        `Detached edge script ${result.detachedScriptId}, but left it in place: it isn't this site's router. Remove it with \`bunny scripts delete ${result.detachedScriptId}\` if nothing else uses it.`,
+      );
     }
     if (result.state.current) {
       const systemHost = result.state.domain

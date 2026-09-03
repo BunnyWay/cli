@@ -125,8 +125,15 @@ function seedLegacy(legacy: LegacySiteState): string {
   return sha256Hex(raw);
 }
 
-function fakeComputeClient(calls: Call[], opts?: { deleteError?: Error }) {
+function fakeComputeClient(
+  calls: Call[],
+  opts?: { deleteError?: Error; scriptName?: string },
+) {
   return {
+    // Not recorded: `calls` is the delete log the migration tests assert on.
+    GET: async () => ({
+      data: { Name: opts?.scriptName ?? `${ZONE.Name}-router` },
+    }),
     DELETE: async (path: string, options?: { params?: unknown }) => {
       calls.push({
         method: "DELETE",
@@ -966,7 +973,10 @@ function legacyPullZone(
   };
 }
 
-function migrateFixture(pullZone?: Record<string, unknown>) {
+function migrateFixture(
+  pullZone?: Record<string, unknown>,
+  scriptName?: string,
+) {
   const legacy = fakeLegacyState({ current: "abc123", previous: "old999" });
   const raw = JSON.stringify(legacy);
   store.set(REMOTE_STATE_PATH, raw);
@@ -979,7 +989,7 @@ function migrateFixture(pullZone?: Record<string, unknown>) {
         storageZones: [ZONE],
         pullZones: [pullZone ?? legacyPullZone()],
       }),
-      computeClient: fakeComputeClient(deletes),
+      computeClient: fakeComputeClient(deletes, { scriptName }),
       legacy,
       expectedEtag: sha256Hex(raw),
       storageZone: ZONE,
@@ -1049,6 +1059,16 @@ test("migrateSite refuses a pull zone that isn't the site's origin", async () =>
   ).data;
   expect(pullZone?.MiddlewareScriptId).toBe(77);
   expect(pullZone?.EdgeRules ?? []).toHaveLength(0);
+});
+
+test("migrateSite leaves a script that isn't the site's router attached-but-alive", async () => {
+  const { opts, deletes } = migrateFixture(undefined, "my-own-middleware");
+
+  const result = await migrateSite(opts);
+
+  expect(result.detachedScriptId).toBe(77);
+  expect(result.deletedScriptId).toBeNull();
+  expect(deletes).toHaveLength(0);
 });
 
 test("migrateSite deletes the live script, never the one stale state recorded", async () => {
