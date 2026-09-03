@@ -1,8 +1,8 @@
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
-import { loadManifest, removeManifest } from "../../core/manifest.ts";
-import { confirm, isInteractive } from "../../core/ui.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, removeManifest } from "@/core/manifest.ts";
+import { confirm, isInteractive } from "@/core/ui.ts";
 import { STORAGE_MANIFEST, type StorageZoneManifest } from "./constants.ts";
 
 interface UnlinkArgs {

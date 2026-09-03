@@ -1,20 +1,24 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import {
+  type CoreClient,
+  type DnsZoneModel,
+  fetchZone,
+} from "@/commands/dns/api.ts";
+import { addRecordInteractive } from "@/commands/dns/record/add.ts";
+import { importZoneFile } from "@/commands/dns/record/import.ts";
+import { discoverImportableRecords } from "@/commands/dns/record/scan-records.ts";
+import { reviewAndApply, writeRecords } from "@/commands/dns/record/write.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
 import {
   checkDelegation,
   expectedNameservers,
-} from "../../../core/dns-nameservers.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { detectRegistrar } from "../../../core/registrar.ts";
-import { isInteractive, prompts, spinner } from "../../../core/ui.ts";
-import { type CoreClient, type DnsZoneModel, fetchZone } from "../api.ts";
-import { addRecordInteractive } from "../record/add.ts";
-import { importZoneFile } from "../record/import.ts";
-import { discoverImportableRecords } from "../record/scan-records.ts";
-import { reviewAndApply, writeRecords } from "../record/write.ts";
+} from "@/core/dns-nameservers.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { detectRegistrar } from "@/core/registrar.ts";
+import { isInteractive, prompts, spinner } from "@/core/ui.ts";
 
 interface ZoneAddArgs {
   domain?: string;

@@ -1,16 +1,16 @@
 import { createDbClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { prompts, spinner } from "../../../core/ui.ts";
-import { fetchDatabaseWithRegions, regionNameMap } from "../api.ts";
-import { ARG_DATABASE_ID } from "../constants.ts";
-import { groupedRegionChoices } from "../region-choices.ts";
-import { resolveDbId } from "../resolve-db.ts";
+import { fetchDatabaseWithRegions, regionNameMap } from "@/commands/db/api.ts";
+import { ARG_DATABASE_ID } from "@/commands/db/constants.ts";
+import { groupedRegionChoices } from "@/commands/db/region-choices.ts";
+import { resolveDbId } from "@/commands/db/resolve-db.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { prompts, spinner } from "@/core/ui.ts";
 
 type PossibleRegion = components["schemas"]["PossibleRegion"];
 

@@ -1,10 +1,10 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../config/index.ts";
-import { clientOptions } from "../core/client-options.ts";
-import { defineCommand } from "../core/define-command.ts";
-import { UserError } from "../core/errors.ts";
-import { logger } from "../core/logger.ts";
-import { spinner } from "../core/ui.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 const COMMAND = "whoami";
 const DESCRIPTION = "Show the currently authenticated account.";

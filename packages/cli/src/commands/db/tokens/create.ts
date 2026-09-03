@@ -1,19 +1,19 @@
 import { createDbClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { formatKeyValue } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
-import { readEnvValue, writeEnvValue } from "../../../utils/env-file.ts";
-import { generateToken } from "../api.ts";
+import { generateToken } from "@/commands/db/api.ts";
 import {
   ARG_DATABASE_ID,
   ENV_DATABASE_AUTH_TOKEN,
   ENV_DATABASE_URL,
-} from "../constants.ts";
-import { resolveDbId } from "../resolve-db.ts";
+} from "@/commands/db/constants.ts";
+import { resolveDbId } from "@/commands/db/resolve-db.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { formatKeyValue } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, spinner } from "@/core/ui.ts";
+import { readEnvValue, writeEnvValue } from "@/utils/env-file.ts";
 
 const COMMAND = `create [${ARG_DATABASE_ID}]`;
 const DESCRIPTION = "Generate an auth token for a database.";

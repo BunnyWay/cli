@@ -1,9 +1,6 @@
-import {
-  installGlobalSkill,
-  installProjectSkill,
-} from "../../core/agent-skill.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
+import { installGlobalSkill, installProjectSkill } from "@/core/agent-skill.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
 import { BUNNY_CLI_SKILL } from "./content.ts";
 
 const COMMAND = "install";

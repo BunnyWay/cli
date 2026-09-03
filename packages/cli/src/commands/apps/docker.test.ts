@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { useTempDir } from "../../test-utils/temp-dir.ts";
+import { useTempDir } from "@/test-utils/temp-dir.ts";
 import {
   assignContainerNamesToDockerfiles,
   BUNNY_REGISTRY_ID,

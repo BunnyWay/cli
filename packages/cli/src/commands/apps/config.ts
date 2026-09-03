@@ -7,11 +7,11 @@ import {
   configExists,
   configPath,
   readBunnyConfig,
-} from "../../core/bunny-config.ts";
-import { UserError } from "../../core/errors.ts";
-import { syncJsonc } from "../../core/jsonc.ts";
-import { logger } from "../../core/logger.ts";
-import { loadManifest } from "../../core/manifest.ts";
+} from "@/core/bunny-config.ts";
+import { UserError } from "@/core/errors.ts";
+import { syncJsonc } from "@/core/jsonc.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest } from "@/core/manifest.ts";
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 
 type Application = components["schemas"]["Application"];

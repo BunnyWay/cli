@@ -1,14 +1,14 @@
-import { resolveConfig } from "../../config/index.ts";
-import { defineCommand } from "../../core/define-command.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { defineCommand } from "@/core/define-command.ts";
 import {
   dockerLogin,
   ensureDockerAvailable,
   pushImage,
   tagImage,
-} from "../../core/docker.ts";
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+} from "@/core/docker.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 import {
   fetchRegistryNamespace,
   REGISTRY_USERNAME,

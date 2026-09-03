@@ -1,14 +1,17 @@
 import { stat } from "node:fs/promises";
 import { basename } from "node:path";
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { isInteractive, prompts, spinner } from "../../../core/ui.ts";
-import { connectStorageZone, uploadFile } from "../files-api.ts";
-import { resolveStorageZoneInteractive } from "../interactive.ts";
+import {
+  connectStorageZone,
+  uploadFile,
+} from "@/commands/storage/files-api.ts";
+import { resolveStorageZoneInteractive } from "@/commands/storage/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { isInteractive, prompts, spinner } from "@/core/ui.ts";
 
 interface UploadArgs {
   file: string;

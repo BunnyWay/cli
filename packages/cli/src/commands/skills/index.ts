@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { skillsInstallCommand } from "./install.ts";
 import { skillsRemoveCommand } from "./remove.ts";
 

@@ -1,14 +1,14 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../../config/index.ts";
-import { clientOptions } from "../../../../core/client-options.ts";
-import { UserError } from "../../../../core/errors.ts";
+import type { StorageZoneModel } from "@/commands/storage/api.ts";
+import { resolveStorageZoneInteractive } from "@/commands/storage/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { UserError } from "@/core/errors.ts";
 import {
   createHostnamesCommands,
   type ResolvedPullZone,
-} from "../../../../core/hostnames/index.ts";
-import type { OutputFormat } from "../../../../core/types.ts";
-import type { StorageZoneModel } from "../../api.ts";
-import { resolveStorageZoneInteractive } from "../../interactive.ts";
+} from "@/core/hostnames/index.ts";
+import type { OutputFormat } from "@/core/types.ts";
 
 // Pick the storage zone's linked pull zone; require --pull-zone when several exist.
 function resolvePullZoneId(zone: StorageZoneModel, flag?: number): number {

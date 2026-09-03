@@ -1,20 +1,20 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { errorMessage } from "../../core/errors.ts";
-import { formatKeyValue } from "../../core/format.ts";
-import { normalizeHostname } from "../../core/hostnames/index.ts";
-import { logger } from "../../core/logger.ts";
-import { saveManifest } from "../../core/manifest.ts";
-import { confirm, isInteractive, prompts } from "../../core/ui.ts";
-import type { CoreClient, StorageZoneModel } from "../storage/api.ts";
+import type { CoreClient, StorageZoneModel } from "@/commands/storage/api.ts";
 import {
   ZONE_TIER_CHOICES,
   type ZoneTierChoice,
   zoneTierChoice,
   zoneTierLabel,
-} from "../storage/constants.ts";
+} from "@/commands/storage/constants.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { errorMessage } from "@/core/errors.ts";
+import { formatKeyValue } from "@/core/format.ts";
+import { normalizeHostname } from "@/core/hostnames/index.ts";
+import { logger } from "@/core/logger.ts";
+import { saveManifest } from "@/core/manifest.ts";
+import { confirm, isInteractive, prompts } from "@/core/ui.ts";
 import { siteContextFromZone } from "./api.ts";
 import {
   gitTopLevel,

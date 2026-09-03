@@ -1,10 +1,13 @@
 import { relative } from "node:path";
-import { defineCommand } from "../../../core/define-command.ts";
-import { errorMessage, UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { confirm, isInteractive, spinner } from "../../../core/ui.ts";
-import { ARG_DATABASE_ID, TOKEN_TTL_MINUTES } from "../constants.ts";
-import { databaseTarget, resolveCredentials } from "../credentials.ts";
+import { ARG_DATABASE_ID, TOKEN_TTL_MINUTES } from "@/commands/db/constants.ts";
+import {
+  databaseTarget,
+  resolveCredentials,
+} from "@/commands/db/credentials.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { errorMessage, UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, isInteractive, spinner } from "@/core/ui.ts";
 import { connectForMigrations } from "./client.ts";
 import {
   ARG_DIR,

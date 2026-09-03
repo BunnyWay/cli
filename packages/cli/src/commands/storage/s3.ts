@@ -1,4 +1,4 @@
-import { UserError } from "../../core/errors.ts";
+import { UserError } from "@/core/errors.ts";
 import type { StorageZoneModel } from "./api.ts";
 
 export interface S3Credentials {

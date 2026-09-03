@@ -1,7 +1,7 @@
-import { formatBytes, formatDateTime } from "../../../core/format.ts";
-import type { StorageZoneModel } from "../api.ts";
-import { zoneTierLabel } from "../constants.ts";
-import { isS3Enabled, s3Endpoint } from "../s3.ts";
+import type { StorageZoneModel } from "@/commands/storage/api.ts";
+import { zoneTierLabel } from "@/commands/storage/constants.ts";
+import { isS3Enabled, s3Endpoint } from "@/commands/storage/s3.ts";
+import { formatBytes, formatDateTime } from "@/core/format.ts";
 
 export function zoneDetailRows(
   zone: StorageZoneModel,

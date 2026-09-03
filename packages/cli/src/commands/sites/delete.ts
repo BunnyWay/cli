@@ -1,15 +1,15 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
-import { loadManifest, removeManifest } from "../../core/manifest.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, removeManifest } from "@/core/manifest.ts";
 import {
   confirm,
   confirmTyped,
   requireConfirmable,
   withSpinner,
-} from "../../core/ui.ts";
+} from "@/core/ui.ts";
 import { deleteSiteResources } from "./api.ts";
 import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 import {

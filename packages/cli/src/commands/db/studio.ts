@@ -1,6 +1,6 @@
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
-import { confirm } from "../../core/ui.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm } from "@/core/ui.ts";
 import {
   ARG_DATABASE_ID,
   databaseUserAgent,

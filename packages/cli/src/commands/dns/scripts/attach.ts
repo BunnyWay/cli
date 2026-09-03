@@ -3,20 +3,20 @@ import {
   createCoreClient,
 } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { confirm, isInteractive, prompts, spinner } from "../../../core/ui.ts";
-import { resolveZoneInteractive } from "../interactive.ts";
+import { resolveZoneInteractive } from "@/commands/dns/interactive.ts";
 import {
   type DnsRecordModel,
   formatRecordValue,
   RECORD_TYPES,
   recordName,
   recordTypeLabel,
-} from "../record-types.ts";
+} from "@/commands/dns/record-types.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, isInteractive, prompts, spinner } from "@/core/ui.ts";
 import { fetchDnsScript } from "./api.ts";
 import { resolveDnsScriptId } from "./interactive.ts";
 

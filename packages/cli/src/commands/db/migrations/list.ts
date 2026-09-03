@@ -1,9 +1,12 @@
 import { relative } from "node:path";
-import { defineCommand } from "../../../core/define-command.ts";
-import { formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { ARG_DATABASE_ID } from "../constants.ts";
-import { databaseTarget, resolveCredentials } from "../credentials.ts";
+import { ARG_DATABASE_ID } from "@/commands/db/constants.ts";
+import {
+  databaseTarget,
+  resolveCredentials,
+} from "@/commands/db/credentials.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
 import { connectForMigrations } from "./client.ts";
 import {
   ARG_DIR,

@@ -1,16 +1,16 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { formatBytes, formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
 import {
   connectStorageZone,
   listFiles,
   type StorageFile,
-} from "../files-api.ts";
-import { resolveStorageZoneInteractive } from "../interactive.ts";
+} from "@/commands/storage/files-api.ts";
+import { resolveStorageZoneInteractive } from "@/commands/storage/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatBytes, formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 interface ListArgs {
   path?: string;

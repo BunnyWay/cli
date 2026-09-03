@@ -1,14 +1,14 @@
 import { createDbClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
-import { formatKeyValue } from "../../core/format.ts";
-import { logger } from "../../core/logger.ts";
-import { loadManifest, saveManifest } from "../../core/manifest.ts";
-import { confirm, prompts, spinner } from "../../core/ui.ts";
-import { readEnvValue, writeEnvValue } from "../../utils/env-file.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { formatKeyValue } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, saveManifest } from "@/core/manifest.ts";
+import { confirm, prompts, spinner } from "@/core/ui.ts";
+import { readEnvValue, writeEnvValue } from "@/utils/env-file.ts";
 import { fetchRegionConfig, generateToken } from "./api.ts";
 import {
   DATABASE_MANIFEST,

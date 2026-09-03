@@ -1,5 +1,5 @@
 import type { CommandModule } from "yargs";
-import { defineNamespace } from "../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { storageZoneAddCommand } from "./add.ts";
 import { storageZoneCredentialsCommand } from "./credentials.ts";
 import { storageZoneHostnamesCommands } from "./hostnames/index.ts";

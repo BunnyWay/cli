@@ -1,11 +1,11 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { logger } from "../../../core/logger.ts";
-import { saveManifest } from "../../../core/manifest.ts";
-import { DNS_MANIFEST } from "../constants.ts";
-import { resolveZoneInteractive } from "../interactive.ts";
+import { DNS_MANIFEST } from "@/commands/dns/constants.ts";
+import { resolveZoneInteractive } from "@/commands/dns/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { saveManifest } from "@/core/manifest.ts";
 
 interface LinkArgs {
   domain?: string;

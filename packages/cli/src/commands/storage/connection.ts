@@ -1,10 +1,10 @@
-import { UserError } from "../../core/errors.ts";
-import { formatKeyValue, maskSecret } from "../../core/format.ts";
-import { logger } from "../../core/logger.ts";
-import type { OutputFormat } from "../../core/types.ts";
-import { confirm, prompts } from "../../core/ui.ts";
-import { readEnvValue, writeEnvValue } from "../../utils/env-file.ts";
-import { DOCS_BASE_URL } from "../docs.ts";
+import { DOCS_BASE_URL } from "@/commands/docs.ts";
+import { UserError } from "@/core/errors.ts";
+import { formatKeyValue, maskSecret } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import type { OutputFormat } from "@/core/types.ts";
+import { confirm, prompts } from "@/core/ui.ts";
+import { readEnvValue, writeEnvValue } from "@/utils/env-file.ts";
 import type { StorageZoneModel } from "./api.ts";
 import { sdkRegionKey } from "./constants.ts";
 import {

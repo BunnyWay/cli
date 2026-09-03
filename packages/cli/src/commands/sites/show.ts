@@ -1,19 +1,15 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import {
-  formatDateTime,
-  formatKeyValue,
-  formatTable,
-} from "../../core/format.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatDateTime, formatKeyValue, formatTable } from "@/core/format.ts";
 import {
   fetchPullZoneHostnames,
   hostnameUrl,
   toSafeHostname,
-} from "../../core/hostnames/index.ts";
-import { logger } from "../../core/logger.ts";
-import { withSpinner } from "../../core/ui.ts";
+} from "@/core/hostnames/index.ts";
+import { logger } from "@/core/logger.ts";
+import { withSpinner } from "@/core/ui.ts";
 import {
   type SiteSelectorArgs,
   selectSite,

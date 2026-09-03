@@ -1,15 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { createCoreClient } from "@bunny.net/openapi-client";
-import {
-  profileExists,
-  resolveConfig,
-  setProfile,
-} from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
-import { detectHeadless } from "../../core/headless.ts";
-import { logger } from "../../core/logger.ts";
+import { hintShellCompletion } from "@/commands/completion/hint.ts";
+import { offerGlobalSkillInstall } from "@/commands/skills/offer.ts";
+import { profileExists, resolveConfig, setProfile } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { detectHeadless } from "@/core/headless.ts";
+import { logger } from "@/core/logger.ts";
 import {
   confirm,
   isInteractive,
@@ -17,9 +15,7 @@ import {
   prompts,
   readPassword,
   spinner,
-} from "../../core/ui.ts";
-import { hintShellCompletion } from "../completion/hint.ts";
-import { offerGlobalSkillInstall } from "../skills/offer.ts";
+} from "@/core/ui.ts";
 
 const DASHBOARD_URL =
   process.env.BUNNYNET_DASHBOARD_URL ?? "https://dash.bunny.net";

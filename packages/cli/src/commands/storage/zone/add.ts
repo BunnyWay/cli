@@ -1,25 +1,10 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { formatKeyValue } from "../../../core/format.ts";
-import {
-  addHostname,
-  createPullZone,
-  normalizeHostname,
-  setupHostname,
-  systemHostname,
-} from "../../../core/hostnames/index.ts";
-import { logger } from "../../../core/logger.ts";
-import { loadManifest } from "../../../core/manifest.ts";
-import { confirm, isInteractive, prompts, spinner } from "../../../core/ui.ts";
 import {
   type CoreClient,
   fetchStorageZone,
   type StorageZoneModel,
   toSafeStorageZone,
-} from "../api.ts";
+} from "@/commands/storage/api.ts";
 import {
   CLIENT_FORMATS,
   type ClientFormat,
@@ -34,7 +19,7 @@ import {
   promptConnectionType,
   type StorageConnection,
   storageConnection,
-} from "../connection.ts";
+} from "@/commands/storage/connection.ts";
 import {
   confirmAddedReplicationRegions,
   mainRegionChoices,
@@ -46,9 +31,24 @@ import {
   ZONE_TIER_CHOICES,
   type ZoneTierChoice,
   zoneTierValue,
-} from "../constants.ts";
-import { writeStorageManifest } from "../interactive.ts";
-import { isS3Enabled } from "../s3.ts";
+} from "@/commands/storage/constants.ts";
+import { writeStorageManifest } from "@/commands/storage/interactive.ts";
+import { isS3Enabled } from "@/commands/storage/s3.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { formatKeyValue } from "@/core/format.ts";
+import {
+  addHostname,
+  createPullZone,
+  normalizeHostname,
+  setupHostname,
+  systemHostname,
+} from "@/core/hostnames/index.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest } from "@/core/manifest.ts";
+import { confirm, isInteractive, prompts, spinner } from "@/core/ui.ts";
 import { zoneDetailRows } from "./details.ts";
 
 async function zoneWithPassword(

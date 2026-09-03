@@ -1,12 +1,12 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { resolveConfig } from "../../../../config/index.ts";
-import { clientOptions } from "../../../../core/client-options.ts";
-import { defineCommand } from "../../../../core/define-command.ts";
-import { UserError } from "../../../../core/errors.ts";
-import { logger } from "../../../../core/logger.ts";
-import { spinner } from "../../../../core/ui.ts";
-import { resolveZoneInteractive } from "../../interactive.ts";
+import { resolveZoneInteractive } from "@/commands/dns/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 type LogAnonymizationType = components["schemas"]["LogAnonymizationType"];
 type LoggingUpdate = Pick<

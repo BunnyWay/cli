@@ -1,17 +1,17 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { formatBytes, formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
 import {
   fetchStorageZones,
   type StorageZoneModel,
   toSafeStorageZone,
-} from "../api.ts";
-import { zoneTierLabel } from "../constants.ts";
-import { isS3Enabled } from "../s3.ts";
+} from "@/commands/storage/api.ts";
+import { zoneTierLabel } from "@/commands/storage/constants.ts";
+import { isS3Enabled } from "@/commands/storage/s3.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatBytes, formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 export const storageZoneListCommand = defineCommand({
   command: "list",

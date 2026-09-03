@@ -1,16 +1,20 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { logger } from "../../../core/logger.ts";
+import {
+  connectStorageZone,
+  deleteFile,
+  isZoneRoot,
+} from "@/commands/storage/files-api.ts";
+import { resolveStorageZoneInteractive } from "@/commands/storage/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
 import {
   confirm,
   confirmTyped,
   requireConfirmable,
   spinner,
-} from "../../../core/ui.ts";
-import { connectStorageZone, deleteFile, isZoneRoot } from "../files-api.ts";
-import { resolveStorageZoneInteractive } from "../interactive.ts";
+} from "@/core/ui.ts";
 
 interface RemoveArgs {
   path: string;

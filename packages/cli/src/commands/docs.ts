@@ -1,6 +1,6 @@
-import { defineCommand } from "../core/define-command.ts";
-import { logger } from "../core/logger.ts";
-import { openBrowser } from "../core/ui.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { openBrowser } from "@/core/ui.ts";
 
 export const DOCS_BASE_URL = "https://bunny.net/docs";
 

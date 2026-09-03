@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { storageDocsCommand } from "./docs.ts";
 import { storageFileNamespace } from "./file/index.ts";
 import { storageLinkCommand } from "./link.ts";

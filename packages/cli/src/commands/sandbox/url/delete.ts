@@ -1,10 +1,10 @@
 import { createMcClient } from "@bunny.net/openapi-client";
-import { getSandbox, resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
+import { getSandbox, resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, spinner } from "@/core/ui.ts";
 
 interface DeleteArgs {
   name: string;

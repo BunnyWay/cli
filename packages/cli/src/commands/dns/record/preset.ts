@@ -1,13 +1,13 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { prompts } from "../../../core/ui.ts";
-import type { CoreClient, DnsZoneModel } from "../api.ts";
-import { resolveZoneInteractive } from "../interactive.ts";
+import type { CoreClient, DnsZoneModel } from "@/commands/dns/api.ts";
+import { resolveZoneInteractive } from "@/commands/dns/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { prompts } from "@/core/ui.ts";
 import { type DnsPreset, findPreset, PRESETS } from "./presets.ts";
 import { reviewAndApply } from "./write.ts";
 

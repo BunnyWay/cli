@@ -2,10 +2,10 @@ import {
   AGENTS_FILE,
   removeGlobalSkill,
   removeProjectSkill,
-} from "../../core/agent-skill.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
-import { confirm, requireConfirmable } from "../../core/ui.ts";
+} from "@/core/agent-skill.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, requireConfirmable } from "@/core/ui.ts";
 import { BUNNY_CLI_SKILL } from "./content.ts";
 
 const COMMAND = "remove";

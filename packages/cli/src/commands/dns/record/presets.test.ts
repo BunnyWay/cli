@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { RECORD_TYPES } from "../../../core/dns-record-types.ts";
+import { RECORD_TYPES } from "@/core/dns-record-types.ts";
 import { findPreset, PRESETS } from "./presets.ts";
 
 const build = (

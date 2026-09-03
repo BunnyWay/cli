@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import type { BunnyAppConfig } from "../config.ts";
+import type { BunnyAppConfig } from "@/commands/apps/config.ts";
 import { parseDotenv } from "./parse.ts";
 
 /**

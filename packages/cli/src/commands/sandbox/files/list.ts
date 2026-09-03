@@ -1,10 +1,14 @@
 import { SandboxError, type SandboxFileEntry } from "@bunny.net/sandbox";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { formatBytes, formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
-import { connectSandbox, parseRemoteRef, type RemoteRef } from "../resolve.ts";
+import {
+  connectSandbox,
+  parseRemoteRef,
+  type RemoteRef,
+} from "@/commands/sandbox/resolve.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { formatBytes, formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 interface ListArgs {
   target: string;

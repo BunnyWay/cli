@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import prompts from "prompts";
-import type { DelegationStatus } from "../dns-nameservers.ts";
+import type { DelegationStatus } from "@/core/dns-nameservers.ts";
 
 // Delegation is a live NS lookup; stub it so tests stay hermetic and drive the outcome.
 let delegationStatus: DelegationStatus = "bunny";

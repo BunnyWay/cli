@@ -1,21 +1,21 @@
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { collectEnv } from "../../core/env.ts";
-import { errorMessage, UserError } from "../../core/errors.ts";
-import { formatBytes } from "../../core/format.ts";
-import { normalizeHostname } from "../../core/hostnames/index.ts";
-import { logger } from "../../core/logger.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { collectEnv } from "@/core/env.ts";
+import { errorMessage, UserError } from "@/core/errors.ts";
+import { formatBytes } from "@/core/format.ts";
+import { normalizeHostname } from "@/core/hostnames/index.ts";
+import { logger } from "@/core/logger.ts";
 import {
   confirm,
   isInteractive,
   prompts,
   requireConfirmable,
   withSpinner,
-} from "../../core/ui.ts";
+} from "@/core/ui.ts";
 import {
   deleteDeployFiles,
   fetchSystemHostname,

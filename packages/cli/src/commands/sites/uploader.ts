@@ -1,8 +1,8 @@
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { mapWithConcurrency } from "../../core/concurrency.ts";
-import { UserError } from "../../core/errors.ts";
-import type { StorageZone } from "../storage/files-api.ts";
+import type { StorageZone } from "@/commands/storage/files-api.ts";
+import { mapWithConcurrency } from "@/core/concurrency.ts";
+import { UserError } from "@/core/errors.ts";
 import { siteFiles } from "./api.ts";
 import { deployPrefix } from "./constants.ts";
 

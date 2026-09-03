@@ -1,11 +1,11 @@
 import { createDbClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
-import { loadManifest, removeManifest } from "../../core/manifest.ts";
-import { confirm, confirmTyped, spinner } from "../../core/ui.ts";
-import { readEnvValue, removeEnvValue } from "../../utils/env-file.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, removeManifest } from "@/core/manifest.ts";
+import { confirm, confirmTyped, spinner } from "@/core/ui.ts";
+import { readEnvValue, removeEnvValue } from "@/utils/env-file.ts";
 import { fetchDatabase } from "./api.ts";
 import {
   ARG_DATABASE_ID,
