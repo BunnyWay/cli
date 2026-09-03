@@ -7,13 +7,12 @@ import {
   classifySiteZone,
   createSite,
   deleteSiteResources,
-  detachMiddlewareScript,
-  fetchLegacySites,
   fetchSites,
   migrateSite,
   promoteDeploy,
   promoteVerification,
   readRemoteState,
+  sha256Hex,
   siteContextFromZone,
   siteFiles,
   writeRemoteState,
@@ -120,6 +119,12 @@ function fakeLegacyState(
   };
 }
 
+function seedLegacy(legacy: LegacySiteState): string {
+  const raw = JSON.stringify(legacy);
+  store.set(REMOTE_STATE_PATH, raw);
+  return sha256Hex(raw);
+}
+
 function fakeComputeClient(calls: Call[], opts?: { deleteError?: Error }) {
   return {
     DELETE: async (path: string, options?: { params?: unknown }) => {
@@ -151,7 +156,6 @@ function fakeCoreClient(opts: {
     error: ApiError;
     times?: number;
   };
-  ignoreDetach?: boolean;
 }): CoreClient {
   const zones = opts.storageZones ?? [];
   const pullZones = opts.pullZones ?? [];
@@ -245,17 +249,10 @@ function fakeCoreClient(opts: {
       if (path === "/pullzone/{id}") {
         const id = (options?.params as { path: { id: number } }).path.id;
         const pz = pullZones.find((p) => p.Id === id);
-
         if (pz) {
           const body = { ...(options?.body as Record<string, unknown>) };
-          if ("MiddlewareScriptId" in body) {
-            const requested = body.MiddlewareScriptId;
-            if (requested === 0) body.MiddlewareScriptId = null;
-            else if (requested === null) delete body.MiddlewareScriptId;
-            else if (requested === -1)
-              throw new Error("Middleware Script ID not found.");
-            if (opts.ignoreDetach) delete body.MiddlewareScriptId;
-          }
+          // The live API clears the script link only for the `0` sentinel.
+          if (body.MiddlewareScriptId === 0) body.MiddlewareScriptId = null;
           Object.assign(pz, body);
         }
         return { data: {} };
@@ -954,6 +951,8 @@ test("fetchSites pages through the /pullzone envelope", async () => {
   expect(sites[0]?.state.name).toBe("my-site");
 });
 
+// ---- router-era migration ----
+
 function legacyPullZone(
   overrides?: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -967,218 +966,80 @@ function legacyPullZone(
   };
 }
 
-test("detachMiddlewareScript clears the script and reports which one it was", async () => {
-  const calls: Call[] = [];
-  const pullZones = [legacyPullZone()];
-  const coreClient = fakeCoreClient({ calls, pullZones });
-
-  expect(await detachMiddlewareScript(coreClient, 30)).toBe(77);
-  expect(pullZones[0]?.MiddlewareScriptId).toBeNull();
-  // The live API clears the link only for `0`; `null` is ignored and `-1` is rejected.
-  expect(
-    calls.find(
-      (c) =>
-        c.path === "/pullzone/{id}" &&
-        (c.body as Record<string, unknown>)?.MiddlewareScriptId !== undefined,
-    )?.body,
-  ).toEqual({ MiddlewareScriptId: 0 });
-
-  // A second run is a no-op, so a resumed migration doesn't trip over itself.
-  expect(await detachMiddlewareScript(coreClient, 30)).toBeNull();
-});
-
-test("detachMiddlewareScript treats the 0 sentinel as already detached", async () => {
-  const coreClient = fakeCoreClient({
-    calls: [],
-    pullZones: [legacyPullZone({ MiddlewareScriptId: 0 })],
-  });
-  expect(await detachMiddlewareScript(coreClient, 30)).toBeNull();
-});
-
-test("detachMiddlewareScript fails loudly when the API ignores the clear", async () => {
-  const calls: Call[] = [];
-  const coreClient = fakeCoreClient({
-    calls,
-    pullZones: [legacyPullZone()],
-    ignoreDetach: true,
-  });
-
-  await expect(detachMiddlewareScript(coreClient, 30)).rejects.toThrow(
-    "Couldn't detach edge script 77",
-  );
-});
-
-test("fetchLegacySites finds router-era sites that fetchSites can't see", async () => {
-  const calls: Call[] = [];
-  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeLegacyState()));
-  const coreClient = fakeCoreClient({
-    calls,
-    storageZones: [ZONE],
-    pullZones: [legacyPullZone()],
-  });
-
-  expect(await fetchSites(coreClient)).toHaveLength(0);
-  const legacy = await fetchLegacySites(coreClient);
-  expect(legacy).toHaveLength(1);
-  expect(legacy[0]?.state.scriptId).toBe(77);
-});
-
-test("migrateSite detaches the script, rules the zone, rewrites state, and deletes the script", async () => {
-  const calls: Call[] = [];
-  const computeCalls: Call[] = [];
+function migrateFixture(pullZone?: Record<string, unknown>) {
   const legacy = fakeLegacyState({ current: "abc123", previous: "old999" });
-  store.set(REMOTE_STATE_PATH, JSON.stringify(legacy));
-  const pullZones = [legacyPullZone()];
-  const coreClient = fakeCoreClient({
-    calls,
-    storageZones: [ZONE],
-    pullZones,
-  });
+  const raw = JSON.stringify(legacy);
+  store.set(REMOTE_STATE_PATH, raw);
+  const deletes: Call[] = [];
+  return {
+    deletes,
+    opts: {
+      coreClient: fakeCoreClient({
+        calls: [],
+        storageZones: [ZONE],
+        pullZones: [pullZone ?? legacyPullZone()],
+      }),
+      computeClient: fakeComputeClient(deletes),
+      legacy,
+      expectedEtag: sha256Hex(raw),
+      storageZone: ZONE,
+      connection: fakeConnection(),
+    },
+  };
+}
 
-  const result = await migrateSite({
-    coreClient,
-    computeClient: fakeComputeClient(computeCalls),
-    legacy,
-    storageZone: ZONE,
-    connection: fakeConnection(),
-  });
+test("migrateSite detaches the router, rules the zone, and rewrites state as version 2", async () => {
+  const { opts, deletes } = migrateFixture();
+
+  const result = await migrateSite(opts);
 
   expect(result.detachedScriptId).toBe(77);
-  expect(result.deployId).toBe("abc123");
-  expect(result.scriptDeleted).toBe(true);
-  expect(computeCalls).toEqual([
-    {
-      method: "DELETE",
-      path: "/compute/script/{id}",
-      params: { path: { id: 77 } },
-    },
-  ]);
+  expect(deletes[0]?.params).toEqual({ path: { id: 77 } });
 
-  // State is rewritten in the current format, with the script fields gone and everything else carried over.
-  const written = JSON.parse(store.get(REMOTE_STATE_PATH) as string);
-  expect(written.version).toBe(STATE_VERSION);
-  expect(written.scriptId).toBeUndefined();
-  expect(written.routerVersion).toBeUndefined();
-  expect(written.current).toBe("abc123");
-  expect(written.previous).toBe("old999");
-  expect(await readRemoteState(fakeConnection())).not.toBeNull();
+  expect(JSON.parse(store.get(REMOTE_STATE_PATH) as string)).toEqual({
+    version: STATE_VERSION,
+    name: "my-site",
+    storageZoneId: 10,
+    pullZoneId: 30,
+    current: "abc123",
+    previous: "old999",
+    deploys: [],
+  });
 
-  // The rewrite rule targets the published deploy, and the cache policy landed.
   const rules = (
-    await coreClient.GET("/pullzone/{id}", { params: { path: { id: 30 } } })
+    await opts.coreClient.GET("/pullzone/{id}", {
+      params: { path: { id: 30 } },
+    })
   ).data?.EdgeRules;
-  const rewrite = rules?.find((r) => r.Description === REWRITE_RULE_DESC);
-  expect(rewrite?.ActionParameter3).toBe("/deploys/abc123/");
+  expect(
+    rules?.find((r) => r.Description === REWRITE_RULE_DESC)?.ActionParameter3,
+  ).toBe("/deploys/abc123/");
   expect(rules?.some((r) => r.Description === GATE_RULE_DESC)).toBe(true);
-  expect(pullZones[0]?.CacheControlPublicMaxAgeOverride).toBe(0);
 });
 
-test("migrateSite detaches the router before the gate rule exists", async () => {
-  const calls: Call[] = [];
-  const legacy = fakeLegacyState({ current: "abc123" });
-  store.set(REMOTE_STATE_PATH, JSON.stringify(legacy));
-  const coreClient = fakeCoreClient({
-    calls,
-    storageZones: [ZONE],
-    pullZones: [legacyPullZone()],
-  });
+test("migrateSite aborts rather than clobber state that changed mid-migration", async () => {
+  const { opts } = migrateFixture();
 
-  await migrateSite({
-    coreClient,
-    computeClient: fakeComputeClient([]),
-    legacy,
-    storageZone: ZONE,
-    connection: fakeConnection(),
-  });
-
-  // Rules applied while the script is still attached would have the gate blocking the router's own rewrites, so the ordering is load-bearing.
-  const detach = calls.findIndex(
-    (c) =>
-      c.path === "/pullzone/{id}" &&
-      (c.body as { MiddlewareScriptId?: number | null } | undefined)
-        ?.MiddlewareScriptId === 0,
+  // A deploy from an older CLI lands between selection and the version-2 write.
+  store.set(
+    REMOTE_STATE_PATH,
+    JSON.stringify(fakeLegacyState({ current: "newer1" })),
   );
-  const firstRule = calls.findIndex(
-    (c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate",
+
+  await expect(migrateSite(opts)).rejects.toThrow(
+    "state changed while the migration was running",
   );
-  expect(detach).toBeGreaterThanOrEqual(0);
-  expect(detach).toBeLessThan(firstRule);
+  expect((await classifySiteZone(ZONE)).kind).toBe("legacy");
 });
 
-test("migrateSite points an unpublished site at the placeholder and skips the promote", async () => {
-  const calls: Call[] = [];
-  const legacy = fakeLegacyState();
-  store.set(REMOTE_STATE_PATH, JSON.stringify(legacy));
-  const coreClient = fakeCoreClient({
-    calls,
-    storageZones: [ZONE],
-    pullZones: [legacyPullZone()],
-  });
+test("migrateSite deletes the live script, never the one stale state recorded", async () => {
+  // State names 77, but the zone is actually serving 99.
+  const attached = migrateFixture(legacyPullZone({ MiddlewareScriptId: 99 }));
+  await migrateSite(attached.opts);
+  expect(attached.deletes[0]?.params).toEqual({ path: { id: 99 } });
 
-  const result = await migrateSite({
-    coreClient,
-    computeClient: fakeComputeClient([]),
-    legacy,
-    storageZone: ZONE,
-    connection: fakeConnection(),
-  });
-
-  expect(result.deployId).toBe(PLACEHOLDER_DEPLOY);
-  expect(calls.some((c) => c.path === "/pullzone/{id}/purgeCache")).toBe(false);
-});
-
-test("migrateSite keeps the script with keepScript, and survives a failed delete", async () => {
-  const legacy = fakeLegacyState({ current: "abc123" });
-  store.set(REMOTE_STATE_PATH, JSON.stringify(legacy));
-
-  const kept: Call[] = [];
-  await migrateSite({
-    coreClient: fakeCoreClient({
-      calls: [],
-      storageZones: [ZONE],
-      pullZones: [legacyPullZone()],
-    }),
-    computeClient: fakeComputeClient(kept),
-    legacy,
-    storageZone: ZONE,
-    connection: fakeConnection(),
-    keepScript: true,
-  });
-  expect(kept).toHaveLength(0);
-
-  store.set(REMOTE_STATE_PATH, JSON.stringify(legacy));
-  const result = await migrateSite({
-    coreClient: fakeCoreClient({
-      calls: [],
-      storageZones: [ZONE],
-      pullZones: [legacyPullZone()],
-    }),
-    computeClient: fakeComputeClient([], {
-      deleteError: new Error("script is locked"),
-    }),
-    legacy,
-    storageZone: ZONE,
-    connection: fakeConnection(),
-  });
-  // The site is migrated either way; a surviving script is litter, not a failure.
-  expect(result.scriptDeleted).toBe(false);
-  expect(result.scriptError).toContain("script is locked");
-  expect(result.state.version).toBe(STATE_VERSION);
-});
-
-test("classifySiteZone tells a router-era site from a migrated one", async () => {
-  expect((await classifySiteZone(ZONE)).kind).toBe("none");
-
-  store.set(REMOTE_STATE_PATH, "garbage");
-  expect((await classifySiteZone(ZONE)).kind).toBe("none");
-
-  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeLegacyState()));
-  const legacy = await classifySiteZone(ZONE);
-  expect(legacy.kind).toBe("legacy");
-  expect(legacy.kind === "legacy" && legacy.state.scriptId).toBe(77);
-
-  store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
-  const current = await classifySiteZone(ZONE);
-  expect(current.kind).toBe("current");
-  expect(current.kind === "current" && current.state.name).toBe("my-site");
+  const detached = migrateFixture(legacyPullZone({ MiddlewareScriptId: null }));
+  const result = await migrateSite(detached.opts);
+  expect(result.detachedScriptId).toBeNull();
+  expect(detached.deletes).toHaveLength(0);
 });

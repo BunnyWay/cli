@@ -7,10 +7,9 @@ export const REMOTE_STATE_PATH = "_bunny/site.json";
 // Deploys live at `deploys/{id}/...` inside the storage zone.
 export const DEPLOYS_DIR = "deploys";
 
-// State format version; only this exact version parses, and `sites migrate` rewrites the router-era version 1 into it.
+// State format version; only this exact version parses, so `sites migrate` rewrites version 1 into it.
 export const STATE_VERSION = 2;
 
-// The router-era format, still on disk for sites created before edge rules replaced the router script.
 export const LEGACY_STATE_VERSION = 1;
 
 export const DEFAULT_KEEP_DEPLOYS = 5;
@@ -47,15 +46,13 @@ export interface RemoteSiteState {
   deploys: DeployRecord[];
 }
 
-/** Router-era (version 1) state; the current format minus the script fields, which is all the migration has to drop. */
+/** Router-era (version 1) state; the current format plus the script fields, which is all the migration has to drop. */
 export interface LegacySiteState {
   version: number;
   name: string;
   storageZoneId: number;
   pullZoneId: number;
-  /** The router script serving the site; version 1's defining field. */
   scriptId: number;
-  /** The router source generation last published to the script. */
   routerVersion?: number;
   domain?: string;
   current?: string;
@@ -180,7 +177,6 @@ export function siteResourcePattern(siteName: string): RegExp {
   );
 }
 
-// A state file's top-level object, or null (not a crash) when it isn't one.
 function stateObject(raw: string): Record<string, unknown> | null {
   let data: unknown;
   try {
@@ -192,7 +188,6 @@ function stateObject(raw: string): Record<string, unknown> | null {
   return data as Record<string, unknown>;
 }
 
-// The fields both formats carry; each parser adds its own version and script checks.
 function hasCommonShape(s: Record<string, unknown>): boolean {
   return (
     typeof s.name === "string" &&
@@ -204,7 +199,7 @@ function hasCommonShape(s: Record<string, unknown>): boolean {
   );
 }
 
-// Parse and shape-check remote state; returns null for anything that isn't a state file this CLI serves, the router-era format included.
+// Parse and shape-check remote state; returns null (not a crash) for anything that isn't a state file this CLI understands.
 export function parseRemoteState(raw: string): RemoteSiteState | null {
   const s = stateObject(raw);
   // Any other version is rejected rather than misread; version 1 goes through `sites migrate` first.
@@ -212,7 +207,7 @@ export function parseRemoteState(raw: string): RemoteSiteState | null {
   return s as unknown as RemoteSiteState;
 }
 
-// Parse router-era state; returns null for every other format, so a caller can tell "needs migrating" from "not a site".
+// Returns null for every other format, including the current one, so a caller can tell "needs migrating" from "not a site".
 export function parseLegacyState(raw: string): LegacySiteState | null {
   const s = stateObject(raw);
   if (
@@ -226,7 +221,6 @@ export function parseLegacyState(raw: string): LegacySiteState | null {
   return s as unknown as LegacySiteState;
 }
 
-/** The current-format equivalent of a router-era state; everything but the script fields carries over untouched. */
 export function migrateLegacyState(legacy: LegacySiteState): RemoteSiteState {
   const { scriptId, routerVersion, ...rest } = legacy;
   return { ...rest, version: STATE_VERSION };
