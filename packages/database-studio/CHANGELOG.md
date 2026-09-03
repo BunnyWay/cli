@@ -1,5 +1,14 @@
 # @bunny.net/database-studio
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [[`d6b68a7`](https://github.com/BunnyWay/cli/commit/d6b68a7d0f058d035171f10e0398428f5b6410da)]:
+  - @bunny.net/database-client@0.0.3
+  - @bunny.net/database-adapter@0.1.5
+  - @bunny.net/database-rest@0.1.2
+
 ## 0.2.2
 
 ### Patch Changes

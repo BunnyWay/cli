@@ -1,5 +1,7 @@
 # @bunny.net/database-shell-darwin-arm64
 
+## 0.2.7
+
 ## 0.2.6
 
 ## 0.2.5

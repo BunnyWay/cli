@@ -9,12 +9,16 @@ import {
   storageZoneNamespace,
 } from "./zone/index.ts";
 
-export const storageNamespace = defineNamespace("storage", false, [
-  storageZoneNamespace,
-  storageFileNamespace,
-  storageLinkCommand,
-  storageUnlinkCommand,
-  storageRegionsCommand,
-  storageDocsCommand,
-  ...storageZoneHiddenAliases,
-]);
+export const storageNamespace = defineNamespace(
+  "storage",
+  "Manage Storage zones and files.",
+  [
+    storageZoneNamespace,
+    storageFileNamespace,
+    storageLinkCommand,
+    storageUnlinkCommand,
+    storageRegionsCommand,
+    storageDocsCommand,
+    ...storageZoneHiddenAliases,
+  ],
+);
