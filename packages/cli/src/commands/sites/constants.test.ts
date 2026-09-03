@@ -6,6 +6,9 @@ import {
   findDeploy,
   isValidDeployId,
   isValidSiteName,
+  type LegacySiteState,
+  migrateLegacyState,
+  parseLegacyState,
   parseRemoteState,
   type RemoteSiteState,
   siteResourcePattern,
@@ -20,11 +23,44 @@ const validState: RemoteSiteState = {
   deploys: [],
 };
 
+const validLegacyState: LegacySiteState = {
+  version: 1,
+  name: "my-site",
+  storageZoneId: 1,
+  pullZoneId: 2,
+  scriptId: 3,
+  routerVersion: 5,
+  deploys: [],
+};
+
 test("parseRemoteState round-trips a valid state", () => {
   expect(parseRemoteState(JSON.stringify(validState))).toEqual(validState);
-  // The router-era version 1 format was never released, so it no longer parses.
-  const routerEra = { ...validState, version: 1, scriptId: 3 };
-  expect(parseRemoteState(JSON.stringify(routerEra))).toBeNull();
+  expect(parseRemoteState(JSON.stringify(validLegacyState))).toBeNull();
+});
+
+test("parseLegacyState reads router-era state, and migrating it drops the script fields", () => {
+  expect(parseLegacyState(JSON.stringify(validLegacyState))).toEqual(
+    validLegacyState,
+  );
+  // The parsers never both claim a file, so a caller can tell "needs migrating" from "already migrated".
+  expect(parseLegacyState(JSON.stringify(validState))).toBeNull();
+  expect(parseLegacyState("{}")).toBeNull();
+
+  const migrated = migrateLegacyState({
+    ...validLegacyState,
+    domain: "example.com",
+    current: "abc123",
+  });
+  expect(migrated).toEqual({
+    version: 2,
+    name: "my-site",
+    storageZoneId: 1,
+    pullZoneId: 2,
+    domain: "example.com",
+    current: "abc123",
+    deploys: [],
+  });
+  expect(parseRemoteState(JSON.stringify(migrated))).toEqual(migrated);
 });
 
 test("parseRemoteState rejects garbage", () => {

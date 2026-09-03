@@ -13,6 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .tool-versions
       - run: bun install
       - run: bun run openapi:generate
       - run: bun run lint:ci

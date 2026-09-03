@@ -1,3 +1,4 @@
+import type { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import {
   type CoreClient,
@@ -41,7 +42,10 @@ import {
   DEPLOYS_DIR,
   deployPrefix,
   GATE_RULE_DESC,
+  type LegacySiteState,
+  migrateLegacyState,
   PLACEHOLDER_DEPLOY,
+  parseLegacyState,
   parseRemoteState,
   REMOTE_STATE_PATH,
   REWRITE_RULE_DESC,
@@ -52,6 +56,7 @@ import {
   suffixedResourceName,
 } from "./constants.ts";
 
+export type ComputeClient = ReturnType<typeof createComputeClient>;
 type PullZone = components["schemas"]["PullZoneModel"];
 
 // Storage-file IO seam; tests swap these for an in-memory store (bun's `mock.module` leaks across files, this doesn't).
@@ -103,6 +108,10 @@ async function downloadText(
 
 function textStream(text: string): ReadableStream<Uint8Array> {
   return new Blob([text]).stream();
+}
+
+function readRawState(connection: StorageZone): Promise<string | null> {
+  return downloadText(connection, REMOTE_STATE_PATH);
 }
 
 /** Read `_bunny/site.json`. Returns null when the zone isn't a site. */
@@ -165,6 +174,23 @@ export async function writeRemoteState(
     sha256Checksum: sha256Hex(raw).toUpperCase(),
   });
   return sha256Hex(raw);
+}
+
+export type ZoneState =
+  | { kind: "legacy"; state: LegacySiteState; etag: string }
+  | { kind: "current"; state: RemoteSiteState }
+  | { kind: "none" };
+
+export async function classifySiteZone(
+  zone: StorageZoneModel,
+): Promise<ZoneState> {
+  const raw = await readRawState(siteFiles.connect(zone));
+  if (raw === null) return { kind: "none" };
+  const legacy = parseLegacyState(raw);
+  if (legacy) return { kind: "legacy", state: legacy, etag: sha256Hex(raw) };
+  const current = parseRemoteState(raw);
+  if (current) return { kind: "current", state: current };
+  return { kind: "none" };
 }
 
 export async function siteContextFromZone(
@@ -292,6 +318,51 @@ const SITE_CACHE_SETTINGS = {
   CacheControlMaxAgeOverride: 2592000,
   CacheControlPublicMaxAgeOverride: 0,
 };
+
+// Not reapplied on publish like the edge rules are, so a zone provisioned before it existed needs `migrateSite` to set it.
+export async function applySiteCacheSettings(
+  coreClient: CoreClient,
+  pullZoneId: number,
+): Promise<void> {
+  await coreClient.POST("/pullzone/{id}", {
+    params: { path: { id: pullZoneId } },
+    body: SITE_CACHE_SETTINGS,
+  });
+}
+
+// The API's "no middleware script" sentinel on update. `null` is accepted and silently ignored, and `-1` is rejected as a missing script, so neither clears the field.
+const NO_MIDDLEWARE_SCRIPT = 0;
+
+// Verified rather than assumed: an ignored detach would leave the router rewriting into `*/deploys/*`, which the gate rule blocks, so the site would serve 403s.
+export async function detachMiddlewareScript(
+  coreClient: CoreClient,
+  pullZoneId: number,
+): Promise<number | null> {
+  const attached = await fetchMiddlewareScriptId(coreClient, pullZoneId);
+  if (attached == null) return null;
+  await coreClient.POST("/pullzone/{id}", {
+    params: { path: { id: pullZoneId } },
+    body: { MiddlewareScriptId: NO_MIDDLEWARE_SCRIPT },
+  });
+  if ((await fetchMiddlewareScriptId(coreClient, pullZoneId)) != null) {
+    throw new UserError(
+      `Couldn't detach edge script ${attached} from pull zone ${pullZoneId}.`,
+      "Remove the linked edge script from the pull zone in the dashboard, then re-run this command.",
+    );
+  }
+  return attached;
+}
+
+async function fetchMiddlewareScriptId(
+  coreClient: CoreClient,
+  pullZoneId: number,
+): Promise<number | null> {
+  const { data } = await coreClient.GET("/pullzone/{id}", {
+    params: { path: { id: pullZoneId } },
+  });
+  const id = data?.MiddlewareScriptId;
+  return id == null || id === NO_MIDDLEWARE_SCRIPT ? null : id;
+}
 
 // The four rules that serve a site; bodies are always rebuilt in full from these so a hand-edited rule heals on the next upsert.
 function siteRules(
@@ -517,10 +588,7 @@ export async function createSite(
       "Re-run the command to finish provisioning.",
     );
   }
-  await coreClient.POST("/pullzone/{id}", {
-    params: { path: { id: pullZone.Id } },
-    body: SITE_CACHE_SETTINGS,
-  });
+  await applySiteCacheSettings(coreClient, pullZone.Id);
   await ensureSiteRules({
     coreClient,
     pullZoneId: pullZone.Id,
@@ -663,6 +731,108 @@ export async function promoteDeploy(opts: {
   await purge();
   await waitForEdgePropagation(host, deployId);
   await purge();
+}
+
+// Refuse to replace version-1 state that changed since it was read. `writeRemoteState`'s own conflict merge can't cover this: it reconciles against the current format, and the file being replaced is the older one, so it would abort as unparseable rather than merge.
+async function guardLegacyState(
+  connection: StorageZone,
+  expectedEtag: string,
+): Promise<void> {
+  const current = await readRawState(connection);
+  if (current !== null && sha256Hex(current) === expectedEtag) return;
+  throw new UserError(
+    "The site's state changed while the migration was running.",
+    "A deploy from an older CLI may have landed. Re-run `bunny sites migrate` to pick it up.",
+  );
+}
+
+async function assertPullZoneOwnedBy(
+  coreClient: CoreClient,
+  pullZoneId: number,
+  storageZone: StorageZoneModel,
+): Promise<void> {
+  const { data } = await coreClient.GET("/pullzone/{id}", {
+    params: { path: { id: pullZoneId } },
+  });
+  if (data?.StorageZoneId === storageZone.Id) return;
+  throw new UserError(
+    `Pull zone ${pullZoneId} isn't the origin for storage zone "${storageZone.Name}".`,
+    "The site's state file names a pull zone that has been deleted or repointed; fix it in the dashboard before migrating.",
+  );
+}
+
+function routerScriptName(storageZone: StorageZoneModel): string {
+  return `${storageZone.Name}-router`;
+}
+
+export interface MigrateResult {
+  state: RemoteSiteState;
+  detachedScriptId: number | null;
+  deletedScriptId: number | null;
+  scriptError?: string;
+}
+export async function migrateSite(opts: {
+  coreClient: CoreClient;
+  computeClient: ComputeClient;
+  legacy: LegacySiteState;
+  expectedEtag: string;
+  storageZone: StorageZoneModel;
+  connection: StorageZone;
+  onStep?: (message: string) => void;
+}): Promise<MigrateResult> {
+  const { coreClient, computeClient, legacy, storageZone, connection } = opts;
+  const step = opts.onStep ?? (() => {});
+  const state = migrateLegacyState(legacy);
+  const deployId = state.current ?? PLACEHOLDER_DEPLOY;
+
+  step("Checking pull zone...");
+  await assertPullZoneOwnedBy(coreClient, state.pullZoneId, storageZone);
+
+  step("Detaching the router script...");
+  const detachedScriptId = await detachMiddlewareScript(
+    coreClient,
+    state.pullZoneId,
+  );
+
+  step("Applying edge rules...");
+  await ensureSiteRules({
+    coreClient,
+    pullZoneId: state.pullZoneId,
+    storageZone,
+    deployId,
+  });
+  await applySiteCacheSettings(coreClient, state.pullZoneId);
+
+  if (state.current) {
+    step("Publishing the current deploy...");
+    await promoteDeploy({ coreClient, state, deployId: state.current });
+  }
+
+  // Committed only once every fallible remote step is done: while the file still reads as version 1, a failed run above is fully resumable.
+  step("Writing site state...");
+  await guardLegacyState(connection, opts.expectedEtag);
+  await writeRemoteState(connection, state);
+
+  let scriptError: string | undefined;
+  let deletedScriptId: number | null = null;
+  if (detachedScriptId != null) {
+    step("Deleting the router script...");
+    try {
+      const { data: script } = await computeClient.GET("/compute/script/{id}", {
+        params: { path: { id: detachedScriptId } },
+      });
+      if (script?.Name === routerScriptName(storageZone)) {
+        await computeClient.DELETE("/compute/script/{id}", {
+          params: { path: { id: detachedScriptId } },
+        });
+        deletedScriptId = detachedScriptId;
+      }
+    } catch (err) {
+      scriptError = errorMessage(err);
+    }
+  }
+
+  return { state, detachedScriptId, deletedScriptId, scriptError };
 }
 
 export interface TeardownResult {
