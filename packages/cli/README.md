@@ -380,6 +380,92 @@ bunny db studio --url libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.ne
 | `--token`   | Auth token (skips token generation)             |
 | `--no-open` | Don't automatically open the browser            |
 
+#### `bunny db migrations create`
+
+Create an empty, numbered migration file. The filename is the migration's identity, so the numeric prefix decides the order `apply` runs them in.
+
+```bash
+# Creates migrations/0001_add_users_table.sql
+bunny db migrations create add_users_table
+
+# Names are slugified, so quoting works
+bunny db migrations create "add users table"
+
+# Custom directory
+bunny db migrations create add_index --dir db/migrations
+```
+
+| Flag    | Description                                  |
+| ------- | -------------------------------------------- |
+| `--dir` | Migrations directory (default: `migrations`) |
+
+Aliased as `bunny db migrations new`. Creation never auto-detects an ORM output directory: writing a hand-authored file there would bypass the ORM's own journal.
+
+The new file holds only a comment, so add SQL before applying it; `apply` rejects a migration with no statements.
+
+#### `bunny db migrations list`
+
+Show which migrations have been applied. Read-only: it never creates the tracking table.
+
+```bash
+bunny db migrations list
+bunny db migrations list <database-id>
+bunny db migrations list --output json
+```
+
+| Flag        | Description                                          |
+| ----------- | ---------------------------------------------------- |
+| `--dir`     | Migrations directory (default: `migrations`)         |
+| `--pattern` | Migration glob relative to `--dir` (default `*.sql`) |
+| `--url`     | Database URL (skips API lookup)                      |
+| `--token`   | Auth token (skips token generation)                  |
+
+Aliased as `ls` and `status`. Each migration is reported in one of five states:
+
+| State          | Meaning                                                |
+| -------------- | ------------------------------------------------------ |
+| `Applied`      | On disk and recorded, checksums match                  |
+| `Pending`      | On disk, not yet applied                               |
+| `Modified`     | Recorded, but the file changed since it was applied    |
+| `Missing`      | Recorded, but the file is no longer on disk            |
+| `Out of order` | Pending, but sorts before an already-applied migration |
+
+#### `bunny db migrations apply`
+
+Apply every pending migration, in filename order. Each file runs as one atomic batch together with its tracking row, so a migration either lands and is recorded or neither happens. Foreign keys are deferred for the batch, so table rebuilds work. The run stops at the first failure and leaves the remaining migrations pending.
+
+```bash
+# Apply all pending migrations
+bunny db migrations apply
+
+# Show what would run, without writing
+bunny db migrations apply --dry-run
+
+# Apply drizzle-kit output
+bunny db migrations apply --dir drizzle
+
+# Nested ORM layouts
+bunny db migrations apply --dir drizzle --pattern "*/migration.sql"
+```
+
+| Flag            | Description                                               |
+| --------------- | --------------------------------------------------------- |
+| `--dir`         | Migrations directory (default: `migrations`)              |
+| `--pattern`     | Migration glob relative to `--dir` (default `*.sql`)      |
+| `--url`         | Database URL (skips API lookup)                           |
+| `--token`       | Auth token (skips token generation)                       |
+| `--dry-run`     | List the migrations that would run, without applying them |
+| `-f, --force`   | Skip confirmation prompts                                 |
+| `--allow-drift` | Apply despite modified, missing, or out-of-order history  |
+
+`--dry-run` and a declined confirmation leave the database untouched, including the tracking table. When the history has drifted, `apply` refuses and applies nothing unless `--allow-drift` is passed. The confirmation prompt is skipped automatically when stdin is not an interactive terminal, so CI runs don't hang.
+
+Applied migrations are recorded in a `__bunny_migrations` table. The `__` prefix keeps it out of studio and REST introspection.
+
+When `migrations/` doesn't exist and no `--dir` is given, `drizzle/` is used if present, so `drizzle-kit generate` output works without configuration.
+
+Every migration file is parsed before the first database write, so a malformed later file cannot leave a run half-complete.
+
 #### `bunny db tokens create`
 
 Generate an auth token for a database. The database ID can be provided as a positional argument or auto-detected from `BUNNY_DATABASE_URL` in a `.env` file.
