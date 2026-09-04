@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/cli",
-  "version": "0.16.1",
+  "version": "0.16.2",
   "type": "module",
   "module": "src/index.ts",
   "bin": {
@@ -29,11 +29,11 @@
     "@bunny.net/database-client": "workspace:*"
   },
   "optionalDependencies": {
-    "@bunny.net/cli-linux-x64": "0.16.1",
-    "@bunny.net/cli-linux-arm64": "0.16.1",
-    "@bunny.net/cli-darwin-x64": "0.16.1",
-    "@bunny.net/cli-darwin-arm64": "0.16.1",
-    "@bunny.net/cli-windows-x64": "0.16.1"
+    "@bunny.net/cli-linux-x64": "0.16.2",
+    "@bunny.net/cli-linux-arm64": "0.16.2",
+    "@bunny.net/cli-darwin-x64": "0.16.2",
+    "@bunny.net/cli-darwin-arm64": "0.16.2",
+    "@bunny.net/cli-windows-x64": "0.16.2"
   },
   "publishConfig": {
     "access": "public"
