@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.16.2
+
+### Patch Changes
+
+- [#209](https://github.com/BunnyWay/cli/pull/209) [`ffc2fb3`](https://github.com/BunnyWay/cli/commit/ffc2fb364a2963c9782e377d62e78725fe503834) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites migrate` moves a site created with the earlier Edge Script router onto the edge-rule architecture in place, keeping its domain, certificate, and deploy history.
+
 ## 0.16.1
 
 ### Patch Changes
