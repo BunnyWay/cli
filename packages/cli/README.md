@@ -1350,11 +1350,19 @@ The method is case-insensitive (`get` and `GET` both work). Paths are relative t
 
 ### `bunny completion`
 
-Generate a shell completion script. Add the output to your shell profile to enable tab completion.
+Generate a shell completion script. Add the output to your shell profile to enable tab completion:
 
 ```bash
-bunny completion >> ~/.zshrc
+bunny completion >> ~/.zshrc # zsh; use ~/.bashrc for bash
 ```
+
+Fish loads completion files from its own directory:
+
+```bash
+mkdir -p ~/.config/fish/completions && bunny completion > ~/.config/fish/completions/bunny.fish
+```
+
+After `bunny login` succeeds, it prints the exact line for your shell.
 
 ## Global Options
 
