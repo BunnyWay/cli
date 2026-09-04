@@ -1,12 +1,15 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { logger } from "../../../core/logger.ts";
-import { loadManifest, removeManifest } from "../../../core/manifest.ts";
-import { confirm, requireConfirmable, spinner } from "../../../core/ui.ts";
-import { STREAM_MANIFEST, type StreamLibraryManifest } from "../constants.ts";
-import { resolveLibraryInteractive } from "../interactive.ts";
+import {
+  STREAM_MANIFEST,
+  type StreamLibraryManifest,
+} from "@/commands/stream/constants.ts";
+import { resolveLibraryInteractive } from "@/commands/stream/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, removeManifest } from "@/core/manifest.ts";
+import { confirm, requireConfirmable, spinner } from "@/core/ui.ts";
 
 interface LibraryDeleteArgs {
   library?: string;

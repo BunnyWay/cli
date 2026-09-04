@@ -1,15 +1,18 @@
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
-import { loadManifest, removeManifest } from "../../core/manifest.ts";
-import { confirm, isInteractive } from "../../core/ui.ts";
-import { STREAM_MANIFEST, type StreamLibraryManifest } from "./constants.ts";
+import {
+  STREAM_MANIFEST,
+  type StreamLibraryManifest,
+} from "@/commands/stream/constants.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, removeManifest } from "@/core/manifest.ts";
+import { confirm, isInteractive } from "@/core/ui.ts";
 
 interface UnlinkArgs {
   force?: boolean;
 }
 
-export const streamUnlinkCommand = defineCommand<UnlinkArgs>({
+export const streamLibraryUnlinkCommand = defineCommand<UnlinkArgs>({
   command: "unlink",
   describe: `Remove .bunny/${STREAM_MANIFEST}, unlinking this directory from its video library.`,
 

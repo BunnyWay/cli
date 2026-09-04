@@ -1,11 +1,13 @@
 import type { createCoreClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { UserError } from "../../core/errors.ts";
+import { UserError } from "@/core/errors.ts";
 
 export type CoreClient = ReturnType<typeof createCoreClient>;
 export type VideoLibraryModel = components["schemas"]["VideoLibraryModel"];
 export type VideoLibraryCreateModel =
   components["schemas"]["VideoLibraryCreateModel"];
+export type VideoLibraryUpdateModel =
+  components["schemas"]["VideoLibraryUpdateModel"];
 
 export type SafeVideoLibrary = Omit<
   VideoLibraryModel,

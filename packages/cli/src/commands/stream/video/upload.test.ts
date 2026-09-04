@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   isEmptyVideoShell,
-  isUploadUrl,
-  parseFetchHeaders,
+  TUS_THRESHOLD_BYTES,
   uploadFileSize,
+  uploadStrategy,
   videoTitle,
 } from "./upload.ts";
 
@@ -50,50 +50,6 @@ test("isEmptyVideoShell keeps a video that may hold bytes", () => {
   expect(isEmptyVideoShell(99)).toBe(false);
 });
 
-test("isUploadUrl recognizes http and https sources", () => {
-  expect(isUploadUrl("https://example.com/video.mp4")).toBe(true);
-  expect(isUploadUrl("http://example.com/video.mp4")).toBe(true);
-  expect(isUploadUrl("  https://example.com/video.mp4  ")).toBe(true);
-  expect(isUploadUrl("HTTPS://example.com/video.mp4")).toBe(true);
-});
-
-// Anything that is not an http(s) URL stays on the local-file path, including
-// paths and schemes the Stream fetch endpoint could not use anyway.
-test("isUploadUrl treats local paths and other schemes as files", () => {
-  expect(isUploadUrl("./video.mp4")).toBe(false);
-  expect(isUploadUrl("/abs/video.mp4")).toBe(false);
-  expect(isUploadUrl("video.mp4")).toBe(false);
-  expect(isUploadUrl("ftp://example.com/video.mp4")).toBe(false);
-  expect(isUploadUrl("https-video.mp4")).toBe(false);
-});
-
-test("parseFetchHeaders builds the header map, trimming around the colon", () => {
-  expect(
-    parseFetchHeaders(["Authorization: Bearer abc", "X-Tenant:acme"]),
-  ).toEqual({
-    Authorization: "Bearer abc",
-    "X-Tenant": "acme",
-  });
-});
-
-test("parseFetchHeaders keeps colons inside the value", () => {
-  expect(parseFetchHeaders(["Referer: https://example.com/a"])).toEqual({
-    Referer: "https://example.com/a",
-  });
-});
-
-test("parseFetchHeaders returns undefined when no headers were passed", () => {
-  expect(parseFetchHeaders(undefined)).toBeUndefined();
-  expect(parseFetchHeaders([])).toBeUndefined();
-});
-
-test("parseFetchHeaders rejects a header with no name", () => {
-  expect(() => parseFetchHeaders(["Authorization Bearer abc"])).toThrow(
-    /Invalid --header/,
-  );
-  expect(() => parseFetchHeaders([": value"])).toThrow(/Invalid --header/);
-});
-
 test("uploadFileSize returns the byte size of a regular file", async () => {
   const file = join(dir, "clip.mp4");
   await Bun.write(file, "video-bytes");
@@ -121,4 +77,20 @@ test("uploadFileSize follows a symlink to a file", async () => {
   const link = join(dir, "link.mp4");
   await symlink(file, link);
   expect(await uploadFileSize(link)).toBe("video-bytes".length);
+});
+
+// The 2 GiB switch, checked arithmetically so no test needs a huge file.
+test("uploadStrategy keeps a single PUT up to and including 2 GiB", () => {
+  expect(TUS_THRESHOLD_BYTES).toBe(2 * 1024 ** 3);
+  expect(uploadStrategy(0)).toBe("put");
+  expect(uploadStrategy(1)).toBe("put");
+  expect(uploadStrategy(500 * 1024 ** 2)).toBe("put");
+  expect(uploadStrategy(TUS_THRESHOLD_BYTES - 1)).toBe("put");
+  expect(uploadStrategy(TUS_THRESHOLD_BYTES)).toBe("put");
+});
+
+test("uploadStrategy switches to resumable above 2 GiB", () => {
+  expect(uploadStrategy(TUS_THRESHOLD_BYTES + 1)).toBe("tus");
+  expect(uploadStrategy(5 * 1024 ** 3)).toBe("tus");
+  expect(uploadStrategy(80 * 1024 ** 3)).toBe("tus");
 });

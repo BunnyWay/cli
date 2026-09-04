@@ -1,8 +1,8 @@
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
-import { loadManifest, saveManifest } from "../../core/manifest.ts";
-import type { OutputFormat } from "../../core/types.ts";
-import { confirm, isInteractive, prompts, spinner } from "../../core/ui.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, saveManifest } from "@/core/manifest.ts";
+import type { OutputFormat } from "@/core/types.ts";
+import { confirm, isInteractive, prompts, spinner } from "@/core/ui.ts";
 import {
   type CoreClient,
   fetchLibraries,
@@ -61,7 +61,7 @@ export async function resolveLibraryInteractive(
     }
   }
 
-  // A library linked via `bunny stream link` stands in for an explicit ref, even unattended.
+  // A library linked via `bunny stream library link` stands in for an explicit ref, even unattended.
   if (!opts.ignoreManifest) {
     const manifest = loadManifest<StreamLibraryManifest>(STREAM_MANIFEST);
     if (manifest.id) {
@@ -79,7 +79,7 @@ export async function resolveLibraryInteractive(
   if (opts.force || !isInteractive(opts.output)) {
     throw new UserError(
       "A library is required.",
-      "Pass a library name or ID, use --lib where applicable, or link one with `bunny stream link`.",
+      "Pass a library name or ID, use --lib where applicable, or link one with `bunny stream library link`.",
     );
   }
 

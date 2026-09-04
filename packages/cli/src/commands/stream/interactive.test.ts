@@ -118,6 +118,8 @@ test("the missing-library error points at linking", async () => {
     });
     throw new Error("expected a UserError");
   } catch (err) {
-    expect((err as { hint?: string }).hint).toContain("bunny stream link");
+    expect((err as { hint?: string }).hint).toContain(
+      "bunny stream library link",
+    );
   }
 });

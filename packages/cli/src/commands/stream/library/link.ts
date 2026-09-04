@@ -1,23 +1,23 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
 import {
   resolveLibraryInteractive,
   writeStreamManifest,
-} from "./interactive.ts";
+} from "@/commands/stream/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
 
 interface LinkArgs {
   library?: string;
 }
 
-export const streamLinkCommand = defineCommand<LinkArgs>({
+export const streamLibraryLinkCommand = defineCommand<LinkArgs>({
   command: "link [library]",
   describe: "Link the current directory to a Stream video library.",
   examples: [
-    ["$0 stream link", "Interactive selection"],
-    ["$0 stream link my-library", "Direct link by name or ID"],
+    ["$0 stream library link", "Interactive selection"],
+    ["$0 stream library link my-library", "Direct link by name or ID"],
   ],
 
   builder: (yargs) =>

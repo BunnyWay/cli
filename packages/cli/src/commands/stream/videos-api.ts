@@ -1,8 +1,11 @@
 import { createStreamClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/stream.d.ts";
-import type { ResolvedConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { errorMessage, UserError } from "../../core/errors.ts";
+import type {
+  components,
+  paths,
+} from "@bunny.net/openapi-client/generated/stream.d.ts";
+import type { ResolvedConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { errorMessage, UserError } from "@/core/errors.ts";
 import type { VideoLibraryModel } from "./api.ts";
 
 export type StreamClient = ReturnType<typeof createStreamClient>;
@@ -10,6 +13,19 @@ export type VideoModel = components["schemas"]["VideoModel"];
 export type UpdateVideoModel = components["schemas"]["UpdateVideoModel"];
 export type FetchVideoRequest = components["schemas"]["FetchVideoRequest"];
 export type StatusModel = components["schemas"]["StatusModel"];
+export type TranscribeSettings = components["schemas"]["TranscribeSettings"];
+export type SmartGenerateModel = components["schemas"]["SmartGenerateModel"];
+export type VideoResolutionsInfoModel =
+  components["schemas"]["VideoResolutionsInfoModel"];
+export type VideoStatisticsModel =
+  components["schemas"]["VideoStatisticsModel"];
+export type VideoHeatmapModel = components["schemas"]["VideoHeatmapModel"];
+export type VideoPlayDataModel = components["schemas"]["VideoPlayDataModel"];
+
+/** Every query param the resolutions/cleanup endpoint accepts. */
+export type CleanupResolutionsQuery = NonNullable<
+  paths["/library/{libraryId}/videos/{videoId}/resolutions/cleanup"]["post"]["parameters"]["query"]
+>;
 
 // The listing endpoint's documented default; it has no documented maximum, so
 // asking for more risks a clamp or a 400. Draining below tolerates either.
@@ -64,23 +80,34 @@ export function directPlayUrl(libraryId: number, videoId: string): string {
  * library's own key, so the account key and the core API base URL from the
  * CLI config are both dropped here.
  */
-export function connectStreamLibrary(
-  library: VideoLibraryModel,
-  opts: { config: ResolvedConfig; verbose?: boolean },
-): StreamClient {
+/**
+ * The library's own Stream API key.
+ *
+ * Shared by the client factory and the resumable upload signer so both report a
+ * missing key the same way.
+ */
+export function libraryApiKey(library: VideoLibraryModel): string {
   if (!library.ApiKey) {
     throw new UserError(
       `No API key available for video library ${library.Name ?? library.Id}.`,
       "Video operations need the library's own Stream API key; check that the account key can read it.",
     );
   }
+  return library.ApiKey;
+}
+
+export function connectStreamLibrary(
+  library: VideoLibraryModel,
+  opts: { config: ResolvedConfig; verbose?: boolean },
+): StreamClient {
+  const apiKey = libraryApiKey(library);
 
   // baseUrl is the core API host: leaving it in would point the Stream client at api.bunny.net.
   const { baseUrl: _core, ...options } = clientOptions(
     opts.config,
     opts.verbose,
   );
-  return createStreamClient({ ...options, apiKey: library.ApiKey });
+  return createStreamClient({ ...options, apiKey });
 }
 
 /** Create the video entry that the file bytes are then uploaded into. */
@@ -88,10 +115,15 @@ export async function createVideo(
   client: StreamClient,
   libraryId: number,
   title: string,
+  opts: { collectionId?: string; thumbnailTime?: number } = {},
 ): Promise<VideoModel> {
   const { data } = await client.POST("/library/{libraryId}/videos", {
     params: { path: { libraryId } },
-    body: { title },
+    body: {
+      title,
+      collectionId: opts.collectionId,
+      thumbnailTime: opts.thumbnailTime,
+    },
   });
   if (!data?.guid) {
     throw new UserError(
@@ -104,15 +136,17 @@ export async function createVideo(
 /**
  * Fetch every video in a library, draining the paginated listing.
  *
- * This endpoint reports `totalItems` but no "has more" flag, so paging stops
- * once the caller holds everything the server counted. An empty page also
- * stops it, so a stale or wrong `totalItems` can't spin forever, and a server
- * that clamps `itemsPerPage` below the request is handled the same way.
+ * There is no "has more" flag, so the page contents drive the loop: a full page
+ * means there may be more, and a short or empty one is the end. `totalItems` is
+ * only an upper bound when the API sends it, which keeps a listing that fits
+ * exactly to a single request. Page fullness is measured against the size the
+ * response reports, so a server that clamps `itemsPerPage` still drains fully,
+ * and an omitted or under-reported total no longer truncates the result.
  */
 export async function fetchVideos(
   client: StreamClient,
   libraryId: number,
-  opts: { search?: string } = {},
+  opts: { search?: string; collection?: string } = {},
 ): Promise<VideoModel[]> {
   const videos: VideoModel[] = [];
   let page = 1;
@@ -124,13 +158,20 @@ export async function fetchVideos(
           page,
           itemsPerPage: VIDEOS_PER_PAGE,
           search: opts.search,
+          collection: opts.collection,
         },
       },
     });
     const items = data?.items ?? [];
     videos.push(...items);
-    if (items.length === 0) break;
-    if (videos.length >= (data?.totalItems ?? videos.length)) break;
+
+    // A reported total is authoritative as a ceiling.
+    const total = data?.totalItems;
+    if (total !== undefined && videos.length >= total) break;
+
+    // Otherwise only a full page implies another one exists.
+    const pageSize = data?.itemsPerPage ?? VIDEOS_PER_PAGE;
+    if (items.length < pageSize) break;
     page++;
   }
   return videos;
@@ -206,9 +247,11 @@ export async function queueVideoFetch(
   client: StreamClient,
   libraryId: number,
   body: FetchVideoRequest,
+  // collectionId and thumbnailTime are query params on this endpoint, not body fields.
+  query: { collectionId?: string; thumbnailTime?: number } = {},
 ): Promise<StatusModel> {
   const { data } = await client.POST("/library/{libraryId}/videos/fetch", {
-    params: { path: { libraryId } },
+    params: { path: { libraryId }, query },
     body,
   });
 
@@ -243,4 +286,192 @@ export async function deleteVideo(
   await client.DELETE("/library/{libraryId}/videos/{videoId}", {
     params: { path: { libraryId, videoId } },
   });
+}
+
+/** Re-encode a video with the library's current settings. Returns the video. */
+export async function reencodeVideo(
+  client: StreamClient,
+  libraryId: number,
+  videoId: string,
+): Promise<VideoModel> {
+  const { data } = await client.POST(
+    "/library/{libraryId}/videos/{videoId}/reencode",
+    { params: { path: { libraryId, videoId } } },
+  );
+  if (!data?.guid) {
+    throw new UserError(`Re-encoding video ${videoId} was not accepted.`);
+  }
+  return data;
+}
+
+/**
+ * Queue transcription for a video.
+ *
+ * `force` is a query param that re-runs and overrides the library defaults; the
+ * settings themselves travel in the body.
+ */
+export async function transcribeVideo(
+  client: StreamClient,
+  libraryId: number,
+  videoId: string,
+  settings: TranscribeSettings,
+  opts: { force?: boolean } = {},
+): Promise<StatusModel> {
+  const { data } = await client.POST(
+    "/library/{libraryId}/videos/{videoId}/transcribe",
+    {
+      params: { path: { libraryId, videoId }, query: { force: opts.force } },
+      body: settings,
+    },
+  );
+  if (data && data.success === false) {
+    throw new UserError(
+      `Transcribing was not accepted: ${data.message ?? "the request was rejected"}`,
+    );
+  }
+  return data ?? {};
+}
+
+/** Queue smart generation (title, description, chapters, moments) for a video. */
+export async function smartGenerateVideo(
+  client: StreamClient,
+  libraryId: number,
+  videoId: string,
+  body: SmartGenerateModel,
+): Promise<StatusModel> {
+  const { data } = await client.POST(
+    "/library/{libraryId}/videos/{videoId}/smart",
+    { params: { path: { libraryId, videoId } }, body },
+  );
+  if (data && data.success === false) {
+    throw new UserError(
+      `Smart generation was not accepted: ${data.message ?? "the request was rejected"}`,
+    );
+  }
+  return data ?? {};
+}
+
+/**
+ * Set a video's thumbnail.
+ *
+ * The endpoint takes the image either as a `thumbnailUrl` query param or as a
+ * raw octet-stream body; it has no "pick a frame at time T" parameter (that
+ * lives on video create and fetch as thumbnailTime).
+ */
+export async function setVideoThumbnail(
+  client: StreamClient,
+  libraryId: number,
+  videoId: string,
+  source: { url: string } | { file: string },
+): Promise<StatusModel> {
+  const query = "url" in source ? { thumbnailUrl: source.url } : {};
+  const body = "file" in source ? Bun.file(source.file) : undefined;
+
+  const { data } = await client.POST(
+    "/library/{libraryId}/videos/{videoId}/thumbnail",
+    {
+      params: { path: { libraryId, videoId }, query },
+      ...(body
+        ? {
+            headers: { "Content-Type": "application/octet-stream" },
+            bodySerializer: (value: unknown) => value,
+            body: body as unknown as string,
+          }
+        : {}),
+    },
+  );
+
+  if (data && data.success === false) {
+    throw new UserError(
+      `Setting the thumbnail failed: ${data.message ?? "the request was rejected"}`,
+    );
+  }
+  return data ?? {};
+}
+
+/** A video's resolution inventory: what is configured, encoded, and stored. */
+export async function fetchVideoResolutions(
+  client: StreamClient,
+  libraryId: number,
+  videoId: string,
+): Promise<VideoResolutionsInfoModel> {
+  const { data } = await client.GET(
+    "/library/{libraryId}/videos/{videoId}/resolutions",
+    { params: { path: { libraryId, videoId } } },
+  );
+  if (!data?.data) {
+    throw new UserError(`No resolution information for video ${videoId}.`);
+  }
+  return data.data;
+}
+
+/** Delete encoded renditions of a video. Every field maps to a query param. */
+export async function cleanupVideoResolutions(
+  client: StreamClient,
+  libraryId: number,
+  videoId: string,
+  query: CleanupResolutionsQuery,
+): Promise<StatusModel> {
+  const { data } = await client.POST(
+    "/library/{libraryId}/videos/{videoId}/resolutions/cleanup",
+    { params: { path: { libraryId, videoId }, query } },
+  );
+  if (data && data.success === false) {
+    throw new UserError(
+      `Cleanup failed: ${data.message ?? "the request was rejected"}`,
+    );
+  }
+  return data ?? {};
+}
+
+/**
+ * View statistics, optionally narrowed to one video.
+ *
+ * This is a library-level endpoint that takes an optional `videoGuid` filter;
+ * there is no per-video statistics path.
+ */
+export async function fetchVideoStatistics(
+  client: StreamClient,
+  libraryId: number,
+  query: {
+    videoGuid?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    hourly?: boolean;
+  } = {},
+): Promise<VideoStatisticsModel> {
+  const { data } = await client.GET("/library/{libraryId}/statistics", {
+    params: { path: { libraryId }, query },
+  });
+  if (!data) throw new UserError("No statistics returned for this library.");
+  return data;
+}
+
+/** A video's watch heatmap: segment index to relative intensity (0-100). */
+export async function fetchVideoHeatmap(
+  client: StreamClient,
+  libraryId: number,
+  videoId: string,
+): Promise<VideoHeatmapModel> {
+  const { data } = await client.GET(
+    "/library/{libraryId}/videos/{videoId}/heatmap",
+    { params: { path: { libraryId, videoId } } },
+  );
+  if (!data) throw new UserError(`No heatmap available for video ${videoId}.`);
+  return data;
+}
+
+/** A video's playback data: player URLs, captions, and DRM settings. */
+export async function fetchVideoPlayData(
+  client: StreamClient,
+  libraryId: number,
+  videoId: string,
+): Promise<VideoPlayDataModel> {
+  const { data } = await client.GET(
+    "/library/{libraryId}/videos/{videoId}/play",
+    { params: { path: { libraryId, videoId } } },
+  );
+  if (!data)
+    throw new UserError(`No play data available for video ${videoId}.`);
+  return data;
 }

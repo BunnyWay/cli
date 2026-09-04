@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { StreamClient, VideoModel } from "../videos-api.ts";
-import { resolveVideoInteractive } from "./interactive.ts";
+import { resolveVideoInteractive } from "./context.ts";
+import type { StreamClient, VideoModel } from "./videos-api.ts";
 
 const VIDEO = {
   videoLibraryId: 4321,
@@ -85,7 +85,20 @@ test("the missing-video error points at the listing command", async () => {
     throw new Error("expected a UserError");
   } catch (err) {
     expect((err as { hint?: string }).hint).toContain(
-      "bunny stream videos list",
+      "bunny stream video list",
     );
   }
+});
+
+// --force on a paid or destructive command must not open a picker: the commands
+// pass it into both resolutions, and the video resolver refuses to prompt.
+test("force refuses to pick a video even with an explicit output format", async () => {
+  const paths: string[] = [];
+  await expect(
+    resolveVideoInteractive(fakeStreamClient(paths), 4321, undefined, {
+      output: "text",
+      force: true,
+    }),
+  ).rejects.toThrow("A video is required.");
+  expect(paths).toEqual([]);
 });

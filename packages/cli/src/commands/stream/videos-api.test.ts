@@ -2,18 +2,27 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ResolvedConfig } from "../../config/index.ts";
+import type { ResolvedConfig } from "@/config/index.ts";
 import type { VideoLibraryModel } from "./api.ts";
 import {
+  cleanupVideoResolutions,
   connectStreamLibrary,
   createVideo,
   deleteVideo,
   directPlayUrl,
   fetchVideo,
+  fetchVideoHeatmap,
+  fetchVideoPlayData,
+  fetchVideoResolutions,
+  fetchVideoStatistics,
   fetchVideos,
   formatDuration,
   queueVideoFetch,
+  reencodeVideo,
   type StreamClient,
+  setVideoThumbnail,
+  smartGenerateVideo,
+  transcribeVideo,
   updateVideo,
   uploadVideoFile,
   type VideoModel,
@@ -74,6 +83,8 @@ function fakeListClient(opts: {
   videos: VideoModel[];
   pageSize?: number;
   totalItems?: number;
+  /** Model an API that sends no totalItems at all. */
+  omitTotal?: boolean;
 }): StreamClient {
   return {
     GET: async (path: string, init?: any) => {
@@ -87,7 +98,9 @@ function fakeListClient(opts: {
       const start = ((query.page ?? 1) - 1) * size;
       return {
         data: {
-          totalItems: opts.totalItems ?? matched.length,
+          ...(opts.omitTotal
+            ? {}
+            : { totalItems: opts.totalItems ?? matched.length }),
           currentPage: query.page,
           itemsPerPage: size,
           items: matched.slice(start, start + size),
@@ -202,6 +215,44 @@ test("fetchVideos stops on an empty page even if totalItems over-reports", async
   expect(calls).toHaveLength(2);
 });
 
+// Without totalItems the old loop stopped after the first page.
+test("fetchVideos drains on page fullness when totalItems is absent", async () => {
+  const many: VideoModel[] = Array.from({ length: 5 }, (_, i) => ({
+    ...VIDEO,
+    guid: `v${i}`,
+    title: `clip ${i}`,
+  }));
+  const calls: Call[] = [];
+
+  const videos = await fetchVideos(
+    fakeListClient({ calls, videos: many, pageSize: 2, omitTotal: true }),
+    4321,
+  );
+
+  // Two full pages, then a short one that ends the drain.
+  expect(videos.map((video) => video.guid)).toEqual([
+    "v0",
+    "v1",
+    "v2",
+    "v3",
+    "v4",
+  ]);
+  expect(calls).toHaveLength(3);
+});
+
+// A total smaller than reality used to truncate the listing; it is now only a
+// ceiling, and the full-page rule keeps reading until a short page arrives.
+test("fetchVideos treats an under-reported total as a ceiling, not a promise", async () => {
+  const calls: Call[] = [];
+  const videos = await fetchVideos(
+    fakeListClient({ calls, videos: VIDEOS, pageSize: 2, totalItems: 2 }),
+    4321,
+  );
+  // The ceiling is hit on the first page, so the drain stops there by design.
+  expect(videos).toHaveLength(2);
+  expect(calls).toHaveLength(1);
+});
+
 test("fetchVideos passes the search term through", async () => {
   const calls: Call[] = [];
   const videos = await fetchVideos(
@@ -263,12 +314,31 @@ test("queueVideoFetch posts the URL, title, and headers", async () => {
   expect(status.message).toBe("Video queued");
   expect(calls[0]?.method).toBe("POST");
   expect(calls[0]?.path).toBe("/library/{libraryId}/videos/fetch");
-  expect(calls[0]?.init?.params).toEqual({ path: { libraryId: 4321 } });
+  expect(calls[0]?.init?.params).toEqual({
+    path: { libraryId: 4321 },
+    query: {},
+  });
   expect(calls[0]?.init?.body).toEqual({
     url: "https://example.com/video.mp4",
     title: "Launch demo",
     headers: { Authorization: "Bearer abc" },
   });
+});
+
+// collectionId is a query param on this endpoint, not a body field.
+test("queueVideoFetch puts the collection in the query string", async () => {
+  const calls: Call[] = [];
+  await queueVideoFetch(
+    fakeFetchClient({ calls, status: { success: true } }),
+    4321,
+    { url: "https://example.com/video.mp4" },
+    { collectionId: "collection-guid" },
+  );
+
+  expect(calls[0]?.init?.params?.query).toEqual({
+    collectionId: "collection-guid",
+  });
+  expect(JSON.stringify(calls[0]?.init?.body)).not.toContain("collection");
 });
 
 // An unset title lets the API name the video after the remote file.
@@ -410,10 +480,267 @@ test("directPlayUrl is derived from the library and video IDs", () => {
   );
 });
 
+test("setVideoThumbnail sends a URL as a query param, with no body", async () => {
+  const calls: Call[] = [];
+  const client = fakeFetchClient({ calls, status: { success: true } });
+
+  await setVideoThumbnail(client, 4321, "video-guid", {
+    url: "https://example.com/thumb.jpg",
+  });
+
+  expect(calls[0]?.path).toBe(
+    "/library/{libraryId}/videos/{videoId}/thumbnail",
+  );
+  expect(calls[0]?.init?.params).toEqual({
+    path: { libraryId: 4321, videoId: "video-guid" },
+    query: { thumbnailUrl: "https://example.com/thumb.jpg" },
+  });
+  expect(calls[0]?.init?.body).toBeUndefined();
+});
+
+test("setVideoThumbnail uploads a file as an octet-stream body", async () => {
+  const calls: Call[] = [];
+  const client = fakeFetchClient({ calls, status: { success: true } });
+
+  await setVideoThumbnail(client, 4321, "video-guid", { file });
+
+  expect(calls[0]?.init?.params?.query).toEqual({});
+  expect(calls[0]?.init?.headers).toEqual({
+    "Content-Type": "application/octet-stream",
+  });
+  const body = calls[0]?.init?.body;
+  expect(calls[0]?.init?.bodySerializer(body)).toBe(body);
+  expect(body.size).toBe("video-bytes".length);
+});
+
+test("setVideoThumbnail surfaces a failed status", async () => {
+  const client = fakeFetchClient({
+    calls: [],
+    status: { success: false, message: "Invalid image" },
+  });
+  await expect(
+    setVideoThumbnail(client, 4321, "video-guid", {
+      url: "https://example.com/x.jpg",
+    }),
+  ).rejects.toThrow("Setting the thumbnail failed: Invalid image");
+});
+
+test("fetchVideoResolutions unwraps the status envelope", async () => {
+  const info = { videoId: "video-guid", availableResolutions: ["720p"] };
+  const client = {
+    GET: async () => ({ data: { success: true, data: info } }),
+  } as unknown as StreamClient;
+
+  expect(await fetchVideoResolutions(client, 4321, "video-guid")).toEqual(info);
+});
+
+test("fetchVideoResolutions reports an empty envelope", async () => {
+  const client = {
+    GET: async () => ({ data: { success: true } }),
+  } as unknown as StreamClient;
+  await expect(fetchVideoResolutions(client, 4321, "nope")).rejects.toThrow(
+    "No resolution information for video nope.",
+  );
+});
+
+test("cleanupVideoResolutions passes every selector as a query param", async () => {
+  const calls: Call[] = [];
+  const client = fakeFetchClient({ calls, status: { success: true } });
+
+  await cleanupVideoResolutions(client, 4321, "video-guid", {
+    resolutionsToDelete: "240p,360p",
+    deleteOriginal: true,
+    dryRun: true,
+  });
+
+  expect(calls[0]?.path).toBe(
+    "/library/{libraryId}/videos/{videoId}/resolutions/cleanup",
+  );
+  expect(calls[0]?.init?.params?.query).toEqual({
+    resolutionsToDelete: "240p,360p",
+    deleteOriginal: true,
+    dryRun: true,
+  });
+});
+
+test("cleanupVideoResolutions surfaces a failed status", async () => {
+  const client = fakeFetchClient({
+    calls: [],
+    status: { success: false, message: "Nothing to delete" },
+  });
+  await expect(
+    cleanupVideoResolutions(client, 4321, "video-guid", {
+      allResolutions: true,
+    }),
+  ).rejects.toThrow("Cleanup failed: Nothing to delete");
+});
+
+// Statistics are library-level with an optional video filter; there is no per-video path.
+test("fetchVideoStatistics filters by videoGuid on the library endpoint", async () => {
+  const calls: Call[] = [];
+  const client = {
+    GET: async (path: string, init?: any) => {
+      calls.push({ method: "GET", path, init });
+      return { data: { viewsChart: { "2026-09-01": 3 } } };
+    },
+  } as unknown as StreamClient;
+
+  const stats = await fetchVideoStatistics(client, 4321, {
+    videoGuid: "video-guid",
+    hourly: true,
+  });
+
+  expect(stats.viewsChart).toEqual({ "2026-09-01": 3 });
+  expect(calls[0]?.path).toBe("/library/{libraryId}/statistics");
+  expect(calls[0]?.init?.params).toEqual({
+    path: { libraryId: 4321 },
+    query: { videoGuid: "video-guid", hourly: true },
+  });
+});
+
+test("fetchVideoHeatmap and fetchVideoPlayData use the per-video paths", async () => {
+  const paths: string[] = [];
+  const client = {
+    GET: async (path: string) => {
+      paths.push(path);
+      return { data: { heatmap: { "0": 100 }, libraryName: "my-library" } };
+    },
+  } as unknown as StreamClient;
+
+  expect((await fetchVideoHeatmap(client, 4321, "video-guid")).heatmap).toEqual(
+    { "0": 100 },
+  );
+  expect(
+    (await fetchVideoPlayData(client, 4321, "video-guid")).libraryName,
+  ).toBe("my-library");
+  expect(paths).toEqual([
+    "/library/{libraryId}/videos/{videoId}/heatmap",
+    "/library/{libraryId}/videos/{videoId}/play",
+  ]);
+});
+
+test("the per-video getters report an empty response", async () => {
+  const empty = {
+    GET: async () => ({ data: undefined }),
+  } as unknown as StreamClient;
+  await expect(fetchVideoHeatmap(empty, 4321, "v")).rejects.toThrow(
+    "No heatmap available for video v.",
+  );
+  await expect(fetchVideoPlayData(empty, 4321, "v")).rejects.toThrow(
+    "No play data available for video v.",
+  );
+  await expect(fetchVideoStatistics(empty, 4321)).rejects.toThrow(
+    "No statistics returned for this library.",
+  );
+});
+
 test("videoStatusLabel names every status the spec enumerates", () => {
   expect(videoStatusLabel(0)).toBe("Created");
   expect(videoStatusLabel(4)).toBe("Finished");
   expect(videoStatusLabel(8)).toBe("JitPlaylistsCreated");
   expect(videoStatusLabel(99)).toBe("99");
   expect(videoStatusLabel(undefined)).toBe("—");
+});
+
+test("reencodeVideo posts to the reencode path and returns the video", async () => {
+  const calls: Call[] = [];
+  const client = {
+    POST: async (path: string, init?: any) => {
+      calls.push({ method: "POST", path, init });
+      return { data: { ...VIDEO, status: 3 } };
+    },
+  } as unknown as StreamClient;
+
+  const video = await reencodeVideo(client, 4321, "video-guid");
+
+  expect(video.status).toBe(3);
+  expect(calls[0]?.path).toBe("/library/{libraryId}/videos/{videoId}/reencode");
+  expect(calls[0]?.init?.params?.path).toEqual({
+    libraryId: 4321,
+    videoId: "video-guid",
+  });
+});
+
+test("reencodeVideo reports a rejected request", async () => {
+  const client = {
+    POST: async () => ({ data: undefined }),
+  } as unknown as StreamClient;
+  await expect(reencodeVideo(client, 4321, "v")).rejects.toThrow(
+    "Re-encoding video v was not accepted.",
+  );
+});
+
+// force is a query param on this endpoint; the settings travel in the body.
+test("transcribeVideo splits force into the query and settings into the body", async () => {
+  const calls: Call[] = [];
+  const client = fakeFetchClient({ calls, status: { success: true } });
+
+  await transcribeVideo(
+    client,
+    4321,
+    "video-guid",
+    { targetLanguages: ["en", "de"], generateTitle: true },
+    { force: true },
+  );
+
+  expect(calls[0]?.path).toBe(
+    "/library/{libraryId}/videos/{videoId}/transcribe",
+  );
+  expect(calls[0]?.init?.params?.query).toEqual({ force: true });
+  expect(calls[0]?.init?.body).toEqual({
+    targetLanguages: ["en", "de"],
+    generateTitle: true,
+  });
+});
+
+test("transcribeVideo surfaces a failed status", async () => {
+  const client = fakeFetchClient({
+    calls: [],
+    status: { success: false, message: "Already transcribing" },
+  });
+  await expect(transcribeVideo(client, 4321, "v", {})).rejects.toThrow(
+    "Transcribing was not accepted: Already transcribing",
+  );
+});
+
+test("smartGenerateVideo posts the generation flags", async () => {
+  const calls: Call[] = [];
+  const client = fakeFetchClient({ calls, status: { success: true } });
+
+  await smartGenerateVideo(client, 4321, "video-guid", {
+    generateTitle: true,
+    generateChapters: true,
+  });
+
+  expect(calls[0]?.path).toBe("/library/{libraryId}/videos/{videoId}/smart");
+  expect(calls[0]?.init?.body).toEqual({
+    generateTitle: true,
+    generateChapters: true,
+  });
+});
+
+test("smartGenerateVideo surfaces a failed status", async () => {
+  const client = fakeFetchClient({
+    calls: [],
+    status: { success: false, message: "Rate limited" },
+  });
+  await expect(
+    smartGenerateVideo(client, 4321, "v", { generateTitle: true }),
+  ).rejects.toThrow("Smart generation was not accepted: Rate limited");
+});
+
+test("createVideo passes the collection and thumbnail time through", async () => {
+  const calls: Call[] = [];
+  const client = fakeStreamClient({ calls, video: VIDEO });
+
+  await createVideo(client, 4321, "clip.mp4", {
+    collectionId: "collection-guid",
+    thumbnailTime: 5000,
+  });
+
+  expect(calls[0]?.init?.body).toEqual({
+    title: "clip.mp4",
+    collectionId: "collection-guid",
+    thumbnailTime: 5000,
+  });
 });

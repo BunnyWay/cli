@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { ApiError } from "./errors.ts";
-import { authMiddleware, type ClientOptions } from "./middleware.ts";
+import {
+  authMiddleware,
+  type ClientOptions,
+  redactSecrets,
+} from "./middleware.ts";
 import { captureError, jsonResponse } from "./test-helpers.ts";
 
 function runRequest(options: ClientOptions, request: Request) {
@@ -279,4 +283,120 @@ describe("authMiddleware onResponse", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect(error.message).toContain("non-JSON");
   });
+});
+
+describe("redactSecrets", () => {
+  test("redacts the keys a video library answers with", () => {
+    expect(
+      redactSecrets({
+        Id: 1,
+        Name: "my-library",
+        ApiKey: "rw-secret",
+        ReadOnlyApiKey: "ro-secret",
+        ApiAccessKey: "rw-secret",
+        VideoCount: 3,
+      }),
+    ).toEqual({
+      Id: 1,
+      Name: "my-library",
+      ApiKey: "[redacted]",
+      ReadOnlyApiKey: "[redacted]",
+      ApiAccessKey: "[redacted]",
+      VideoCount: 3,
+    });
+  });
+
+  test("redacts a nested headers.Authorization in a request body", () => {
+    expect(
+      redactSecrets({
+        url: "https://example.com/video.mp4",
+        title: "clip",
+        headers: {
+          Authorization: "Bearer abc",
+          Referer: "https://example.com",
+        },
+      }),
+    ).toEqual({
+      url: "https://example.com/video.mp4",
+      title: "clip",
+      headers: {
+        Authorization: "[redacted]",
+        Referer: "https://example.com",
+      },
+    });
+  });
+
+  test("redacts passwords, tokens, and secrets at any depth", () => {
+    expect(
+      redactSecrets({
+        zone: { Name: "z", Password: "p", ReadOnlyPassword: "r" },
+        auth: [{ authToken: "t" }, { AccessKey: "k" }],
+        clientSecret: "cs",
+      }),
+    ).toEqual({
+      zone: {
+        Name: "z",
+        Password: "[redacted]",
+        ReadOnlyPassword: "[redacted]",
+      },
+      auth: [{ authToken: "[redacted]" }, { AccessKey: "[redacted]" }],
+      clientSecret: "[redacted]",
+    });
+  });
+
+  test("leaves non-secret fields and non-string values alone", () => {
+    const body = {
+      Id: 7,
+      Name: "keeper",
+      Monkey: "not a secret",
+      keyCount: 3,
+      nested: { EnabledResolutions: "720p,1080p", flag: true },
+      list: [1, 2, 3],
+      nothing: null,
+    };
+    expect(redactSecrets(body)).toEqual({
+      ...body,
+      // `keyCount` matches the pattern but is not a string, so it survives.
+      keyCount: 3,
+      // `Monkey` ends in "key", so it is redacted: a false positive is the safe direction.
+      Monkey: "[redacted]",
+    });
+  });
+
+  test("passes through primitives untouched", () => {
+    expect(redactSecrets("plain")).toBe("plain");
+    expect(redactSecrets(42)).toBe(42);
+    expect(redactSecrets(null)).toBe(null);
+  });
+});
+
+test("verbose response body dumps are redacted", async () => {
+  const logs: string[] = [];
+  await runResponse(
+    { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+    jsonResponse({ Id: 1, Name: "my-library", ApiKey: "rw-secret" }, 200),
+  );
+  const dump = logs.join("\n");
+  expect(dump).toContain("my-library");
+  expect(dump).not.toContain("rw-secret");
+  expect(dump).toContain("[redacted]");
+});
+
+test("verbose request body dumps are redacted", async () => {
+  const logs: string[] = [];
+  await runRequest(
+    { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+    new Request("https://video.bunnycdn.com/library/1/videos/fetch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        url: "https://example.com/v.mp4",
+        headers: { Authorization: "Bearer origin-secret" },
+      }),
+    }),
+  );
+  const dump = logs.join("\n");
+  expect(dump).toContain("https://example.com/v.mp4");
+  expect(dump).not.toContain("origin-secret");
+  expect(dump).toContain("[redacted]");
 });

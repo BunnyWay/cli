@@ -1,11 +1,11 @@
-import { defineCommand } from "../../../core/define-command.ts";
-import { logger } from "../../../core/logger.ts";
-import { confirm, requireConfirmable, withSpinner } from "../../../core/ui.ts";
-import { deleteVideo } from "../videos-api.ts";
 import {
   resolveVideoInteractive,
   streamLibraryContext,
-} from "./interactive.ts";
+} from "@/commands/stream/context.ts";
+import { deleteVideo } from "@/commands/stream/videos-api.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
 
 interface VideoDeleteArgs {
   video?: string;
@@ -18,9 +18,9 @@ export const streamVideoDeleteCommand = defineCommand<VideoDeleteArgs>({
   aliases: ["rm", "remove"],
   describe: "Delete a video from a Stream video library.",
   examples: [
-    ["$0 stream videos delete 1a2b3c4d-...", "Delete a video by GUID"],
-    ["$0 stream videos delete 1a2b3c4d-... --force", "Skip confirmation"],
-    ["$0 stream videos delete", "Pick a video interactively"],
+    ["$0 stream video delete 1a2b3c4d-...", "Delete a video by GUID"],
+    ["$0 stream video delete 1a2b3c4d-... --force", "Skip confirmation"],
+    ["$0 stream video delete", "Pick a video interactively"],
   ],
 
   builder: (yargs) =>

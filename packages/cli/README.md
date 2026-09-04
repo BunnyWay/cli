@@ -982,58 +982,142 @@ Every deploy publishes: the files land in an immutable `deploys/<id>/` directory
 
 > **Experimental**: hidden from `--help` and the landing page while it stabilizes.
 
-Manage bunny.net Stream video libraries with **`bunny stream library`** (aliases `libraries`, `lib`), and upload videos into them with **`bunny stream upload`**. Library management uses the account API key on the core API; each library also carries its own Stream API key for the video-level API, which the CLI never prints unless you ask for it with `credentials`. Uploads and video commands use that per-library key, resolved automatically from the library, so there is nothing extra to configure.
+Manage bunny.net Stream through four resource groups: **`bunny stream library`** (the library itself: create, list, inspect, update, delete; aliases `libraries`, `lib`), **`bunny stream video`** (the videos inside one library; alias `videos`), **`bunny stream collection`** (groups of videos within a library; alias `collections`), and **`bunny stream caption`** (caption files on one video; alias `captions`). Three paid operations live alongside them: **`bunny stream encode`**, **`bunny stream transcribe`**, and **`bunny stream smart`**. Library management uses the account API key on the core API; each library also carries its own Stream API key for the video-level API, which the CLI never prints unless you ask for it with `credentials`. Video commands use that per-library key, resolved automatically from the library, so there is nothing extra to configure.
 
-The videos inside a library are managed with **`bunny stream videos`** (alias `video`): `list`, `show`, `update`, and `delete`, each taking the video's GUID and resolving the library the same way `upload` does. There is deliberately no `videos create`: `bunny stream upload` is how a video is added.
+`library` commands take the library as an optional positional (name or numeric ID); every other stream command takes it as the `--lib`/`--library` flag, since their positional is the video GUID, the collection ID, or a local file path. When the library is omitted it resolves from the directory's linked library (`bunny stream library link`, stored in `.bunny/stream.json`), then an interactive picker, which offers to link the directory to the picked library (destructive commands never offer it). Non-interactive runs (`--output json`, no TTY, or `--force`) error with a hint instead of prompting: pass a library or link the directory. A `video` or `collection` command with no ID behaves the same way, offering a picker interactively and erroring otherwise. `caption` is the exception: both of its commands take the video GUID as a required positional, because a language argument follows it.
 
-`library` commands take the library as an optional positional (name or numeric ID); `upload` and the `videos` commands take it as the `--lib`/`--library` flag (their positional is the local file path or the video GUID). When the library is omitted it resolves from the directory's linked library (`bunny stream link`, stored in `.bunny/stream.json`), then an interactive picker, which offers to link the directory to the picked library (destructive commands never offer it). Non-interactive runs (`--output json`, no TTY) error with a hint instead of prompting: pass a library or link the directory. A `videos` command with no GUID behaves the same way, offering a picker interactively and erroring otherwise.
+There is deliberately no `video create`: a video is added either by uploading a local file with `video upload`, or by handing bunny.net a URL to download with `video fetch`.
 
 ```bash
+# Libraries
 bunny stream library list                          # ID, name, videos, storage, traffic, replication regions
 bunny stream library create my-library             # interactive: prompts for the name when omitted
+bunny stream library create --name my-library      # the name also takes a flag
 bunny stream library create my-library --replication-regions NY,SG   # replicate the underlying storage (create-time only)
+bunny stream library create my-library --encoding-tier premium --codecs x264,vp9   # premium encoding with extra codecs
 bunny stream library show my-library               # details; API keys are never printed here, in any output format
+bunny stream library update my-library             # interactive: edit name, resolutions, transcribing
+bunny stream library update my-library --resolutions 720p,1080p      # set just the enabled resolutions
+bunny stream library update my-library --transcribing --transcribing-languages en,de
 bunny stream library credentials my-library        # library ID + API key, masked by default
 bunny stream library credentials my-library --show-secret --read-only   # reveal the read-only key
 bunny stream library delete my-library             # confirms with the video count; --force skips it
 
-# Upload a video (creates the video, streams the file, then reports its encoding status)
-bunny stream upload ./video.mp4                    # linked library
-bunny stream upload ./video.mp4 --lib 12345        # a specific library
-bunny stream upload ./video.mp4 --title "Launch demo"   # defaults to the file name
+# Link the working directory to a library so video commands can omit it
+bunny stream library link my-library
+bunny stream library unlink
 
-# Or hand bunny.net a URL and let it fetch the video server side
-bunny stream upload https://example.com/video.mp4 --lib 12345
-bunny stream upload https://example.com/video.mp4 --header "Authorization: Bearer abc"
+# Adding videos: upload a local file, or let bunny.net fetch a URL
+bunny stream video upload ./video.mp4              # linked library
+bunny stream video upload ./video.mp4 --lib 12345 --title "Launch demo"
+bunny stream video upload ./video.mp4 --collection 8a7b6c5d-...      # straight into a collection
+bunny stream video fetch https://example.com/video.mp4 --lib 12345
+bunny stream video fetch https://example.com/video.mp4 --header "Authorization: Bearer abc"
 
-# Videos within a library (GUIDs come from `videos list`)
-bunny stream videos list                           # ID, title, status, size, length, views, upload date
-bunny stream videos list --lib 12345 --search launch   # a specific library, filtered by title
-bunny stream videos show 1a2b3c4d-...              # details, including the Direct Play URL
-bunny stream videos update 1a2b3c4d-... --title "Launch demo"   # prompts for the title when omitted
-bunny stream videos delete 1a2b3c4d-...            # confirms first; --force skips it
+# Videos within a library (GUIDs come from `video list`)
+bunny stream video list                            # ID, title, status, size, length, views, upload date
+bunny stream video list --lib 12345 --search launch   # a specific library, filtered by title
+bunny stream video list --collection 8a7b6c5d-...  # only one collection
+bunny stream video show 1a2b3c4d-...               # details, including the caption languages and the Direct Play URL
+bunny stream video update 1a2b3c4d-... --title "Launch demo"   # prompts for the title when omitted
+bunny stream video update 1a2b3c4d-... --chapters '[{"title":"Intro","start":0,"end":30}]'
+bunny stream video thumbnail 1a2b3c4d-... --file ./thumb.jpg   # or --url for bunny.net to download it
+bunny stream video resolutions 1a2b3c4d-...        # what is configured, encoded, and stored
+bunny stream video cleanup 1a2b3c4d-... --non-configured --dry-run   # preview a rendition cleanup
+bunny stream video stats 1a2b3c4d-...              # views and watch time (--heatmap, --play-data)
+bunny stream video delete 1a2b3c4d-...             # confirms first; --force skips it
 
-# Link the working directory to a library so commands can omit it
-bunny stream link my-library
-bunny stream unlink
+# Collections group a library's videos
+bunny stream collection list                       # ID, name, videos, size
+bunny stream collection create --name Tutorials    # the name also takes a positional
+bunny stream collection show 8a7b6c5d-...
+bunny stream collection rename 8a7b6c5d-... --name Guides
+bunny stream collection delete 8a7b6c5d-...        # the videos are kept, they just leave the collection
+
+# Caption files on one video (manual captions, not the paid transcription)
+bunny stream caption add 1a2b3c4d-... en --file ./captions.vtt --label "English"
+bunny stream caption delete 1a2b3c4d-... en        # confirms first; --force skips it
+
+# Paid operations
+bunny stream encode enable --codecs x264,vp9       # switch the library to premium encoding
+bunny stream encode reencode 1a2b3c4d-...          # re-encode one video with the current settings
+bunny stream transcribe 1a2b3c4d-... --languages en,de   # $0.10 per language-minute
+bunny stream smart 1a2b3c4d-... --title --chapters # generates from the transcript
 ```
 
-Deleting a library deletes all of its videos. `--force` is required for non-interactive deletes and unlinks; without it, a run that cannot prompt exits with an error instead of hanging.
+Deleting a library deletes all of its videos, and deleting the linked library also removes the stale `.bunny/stream.json`. `--force` is required for non-interactive deletes, cleanups, and unlinks; without it, a run that cannot prompt exits with an error instead of hanging. On destructive and paid commands `--force` also disables the pickers, so it can never act on something you did not name.
+
+`library create` and `library update` share the encoding and transcribing flags, and `update` sends only the fields you pass, leaving every other setting untouched. With no flags at all, `update` opens a small interactive editor (name, enabled resolutions, transcribing) prefilled with the library's current values; unattended runs need at least one flag.
 
 A local upload happens in two steps: the video entry is created first, then the file's bytes are sent to it. If the byte upload fails, the CLI checks the video's status: an entry that never received bytes is deleted so a retry does not leave orphans behind, while anything that may already hold the upload (including a status the CLI could not read) is kept, with a warning naming its GUID, since a lost response does not mean the bytes were rejected. Encoding continues on bunny.net after the command returns, so the reported status is usually `Uploaded` or `Processing` rather than `Finished`.
 
-Passing an `http://` or `https://` URL instead of a path switches to bunny.net's server-side fetch: the origin is downloaded by bunny.net, not by the CLI, so nothing is transferred through your machine and the command returns as soon as the fetch is queued. Use `--header` (repeatable, `"Name: value"`) for an origin that needs authentication; it applies to URL uploads only. That endpoint answers with a status rather than a video, so a URL upload reports no video ID or Direct Play URL: the video appears in `bunny stream videos list` once it has been fetched and encoded, titled after the remote file name unless `--title` says otherwise.
+Files over 2 GB switch to resumable uploads (TUS) automatically, with no extra flag: the file goes up in 64 MiB chunks, and a chunk that fails is retried from the offset the server reports it actually holds, so a blip in the middle of a large upload does not restart the whole transfer. The spinner reports progress as it goes. Resume state lives only in the running command, so a cancelled upload starts over on the next run. Every other flag behaves identically on both paths.
 
-| Flag                    | Commands                            | Description                                                                         |
-| ----------------------- | ----------------------------------- | ----------------------------------------------------------------------------------- |
-| `--replication-regions` | `create`                            | Storage replication region codes, comma-separated or repeated; fixed after creation |
-| `--read-only`           | `credentials`                       | Show the read-only API key instead of the read-write one                            |
-| `--show-secret`         | `credentials`                       | Reveal the API key (masked by default in both table and JSON output)                |
-| `--lib`, `--library`    | `upload`, all `videos` commands     | Video library ID (defaults to the linked library)                                   |
-| `--search`              | `videos list`                       | Only list videos matching this search term                                          |
-| `--title`               | `upload`, `videos update`           | Video title; defaults to the file name on `upload`, prompts on `update`             |
-| `--header`              | `upload` (URL only)                 | Header to send with a URL fetch as `"Name: value"`; repeatable                      |
-| `--force`, `-f`         | `delete`, `videos delete`, `unlink` | Skip the confirmation prompt (required when there is no TTY to answer it)           |
+`video fetch` uses bunny.net's server-side fetch instead: the origin is downloaded by bunny.net, not by the CLI, so nothing is transferred through your machine and the command returns as soon as the fetch is queued. Use `--header` (repeatable, `"Name: value"`) for an origin that needs authentication. That endpoint answers with a status rather than a video, so `fetch` reports no video ID or Direct Play URL: the video appears in `bunny stream video list` once it has been fetched and encoded, titled after the remote file name unless `--title` says otherwise.
+
+`video cleanup` deletes encoded renditions, MP4 fallbacks, or the stored original, and needs at least one selector so it can never look like a no-op success. Start with `--dry-run`, which asks the API to report what would go without deleting anything and skips the confirmation.
+
+A collection is just a label on a video: creating one is free, deleting one keeps every video it held, and a video moves in or out with `video update --collection <id>` (an empty value clears it). `video upload` and `video fetch` can drop a video straight into a collection at ingest, and both also accept `--thumbnail-time <ms>` to pick the main thumbnail from a frame while the video is being ingested. `video thumbnail` replaces the image afterwards, from a URL or a local file.
+
+`caption add` reads a local `.vtt` or `.srt`, sends it inline, and reports what the API's validator says: a rejected file lists what is wrong, and an accepted file with non-breaking issues prints them as warnings. These are captions you wrote yourself, unrelated to the paid transcription below.
+
+Three commands cost money and say so before they run. `stream encode enable` switches a library to the premium encoding tier, billed per output codec per minute of encoded video, and `stream encode reencode` regenerates every output for one video at the same rate. `stream transcribe` is billed at $0.10 per language-minute of audio. `stream smart` generates a title, description, chapters, or moments from the transcript, and needs at least one of those flags; when the video has no captions yet it also has to transcribe the audio first, so it warns about that cost and asks for confirmation (`--force` accepts it non-interactively, and a video that already has captions is never gated). Note that `--force` on `stream transcribe` is the API's own force flag, which re-runs and overrides the library defaults, rather than a confirmation skip: that command has no confirmation to skip.
+
+Every command that operates inside a library accepts `--lib <library-id>` (alias `--library`) and falls back to the linked directory, so none of the tables below repeat it.
+
+Library flags (`bunny stream library ...`):
+
+| Flag                                                                                                      | Commands                     | Description                                                                                |
+| --------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------ |
+| `--name`                                                                                                  | `create`, `update`           | Library name; on `create` it is interchangeable with the positional                        |
+| `--replication-regions`                                                                                   | `create`                     | Storage replication region codes, comma-separated or repeated; fixed after creation        |
+| `--encoding-tier` (`free` \| `premium`)                                                                   | `create`, `update`           | Encoding tier; premium adds JIT encoding and extra codecs                                  |
+| `--jit` / `--no-jit`                                                                                      | `create`, `update`           | Just-in-time encoding                                                                      |
+| `--codecs`                                                                                                | `create`, `update`           | Output codecs, comma-separated: `x264`, `vp9`, `hevc`, `av1` (all but `x264` need premium) |
+| `--resolutions`                                                                                           | `create`, `update`           | Enabled resolutions, comma-separated: `240p` through `2160p`                               |
+| `--transcribing` / `--no-transcribing`                                                                    | `create`, `update`           | Automatic audio transcribing (billed per use)                                              |
+| `--transcribing-languages`                                                                                | `create`, `update`           | Caption languages to transcribe to, comma-separated (e.g. `en,de`)                         |
+| `--transcribing-title`, `--transcribing-description`, `--transcribing-chapters`, `--transcribing-moments` | `create`, `update`           | Generate each field from the transcript                                                    |
+| `--read-only`, `--show-secret`                                                                            | `credentials`                | Use the read-only key; reveal the key (masked by default)                                  |
+| `--force`, `-f`                                                                                           | `update`, `unlink`, `delete` | Skip the prompts (required when there is no TTY to answer them)                            |
+
+Video flags (`bunny stream video ...`):
+
+| Flag                                                                                                       | Commands                            | Description                                                                           |
+| ---------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------- |
+| `--title`                                                                                                  | `upload`, `fetch`, `update`         | Video title; defaults to the file name (or the remote file name), prompts on `update` |
+| `--collection`                                                                                             | `upload`, `fetch`, `list`, `update` | Collection ID to put the video in, or to filter the listing by                        |
+| `--thumbnail-time`                                                                                         | `upload`, `fetch`                   | Video time in milliseconds to grab the main thumbnail from at ingest                  |
+| `--header`                                                                                                 | `fetch`                             | Header to send with the fetch as `"Name: value"`; repeatable                          |
+| `--search`                                                                                                 | `list`                              | Only list videos matching this search term                                            |
+| `--chapters`, `--moments`                                                                                  | `update`                            | Replace the chapter or moment list with a JSON array                                  |
+| `--url`, `--file`                                                                                          | `thumbnail`                         | Thumbnail image to download or upload; exactly one is required                        |
+| `--resolutions`, `--non-configured`, `--all`, `--original`, `--mp4`, `--outputs` (`hls` \| `mp4` \| `all`) | `cleanup`                           | What to delete; at least one selector is required                                     |
+| `--dry-run`                                                                                                | `cleanup`                           | Report what would be deleted without deleting anything                                |
+| `--heatmap`, `--play-data`                                                                                 | `stats`                             | Show the watch heatmap or the playback data instead of the statistics                 |
+| `--from`, `--to`, `--hourly`                                                                               | `stats`                             | Statistics range (UTC) and bucket size                                                |
+| `--force`, `-f`                                                                                            | `delete`, `cleanup`                 | Skip the prompts (required when there is no TTY to answer them)                       |
+
+Collection and caption flags:
+
+| Flag                | Commands                                 | Description                                                                  |
+| ------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| `--name`            | `collection create`, `collection rename` | Collection name; on `create` it is interchangeable with the positional       |
+| `--search`          | `collection list`                        | Only list collections matching this search term                              |
+| `--file`, `--label` | `caption add`                            | Caption file to upload (`.vtt` or `.srt`), and the label shown in the player |
+| `--force`, `-f`     | `collection delete`, `caption delete`    | Skip the prompts (required when there is no TTY to answer them)              |
+
+Paid command flags:
+
+| Flag                                                                                      | Commands        | Description                                                                   |
+| ----------------------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------- |
+| `--jit`, `--codecs`, `--resolutions`                                                      | `encode enable` | Applied in the same request that switches the library to premium              |
+| `--languages`, `--source-language`                                                        | `transcribe`    | Target languages (comma-separated) and the language spoken in the video       |
+| `--generate-title`, `--generate-description`, `--generate-chapters`, `--generate-moments` | `transcribe`    | Also generate each field from the new transcript                              |
+| `--title`, `--description`, `--chapters`, `--moments`                                     | `smart`         | What to generate; at least one is required                                    |
+| `--source-language`                                                                       | `smart`         | Language spoken in the video, as an ISO 639-1 code                            |
+| `--force`, `-f`                                                                           | `transcribe`    | The API's force flag: re-run and override the library's transcribing defaults |
+| `--force`, `-f`                                                                           | `smart`         | Skip the transcription-cost confirmation                                      |
 
 ### `bunny sandbox`
 
