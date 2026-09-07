@@ -101,7 +101,7 @@ bun ny stream video cleanup 1a2b3c4d-... --non-configured --dry-run   # preview 
 bun ny stream collection list             # list a library's collections (create/show/rename/delete too; videos join one with --collection, and deleting a collection deletes the videos inside it)
 bun ny stream caption add 1a2b3c4d-... en --file ./captions.vtt   # upload your own caption file for one language
 bun ny stream transcribe 1a2b3c4d-... --languages en,de   # paid: transcribe the audio into captions ($0.10 per language-minute)
-bun ny stream smart 1a2b3c4d-... --title --chapters   # paid: generate a title and chapters from the transcript (asks first if the video has no captions yet)
+bun ny stream smart 1a2b3c4d-... --title --chapters   # paid: generate a title and chapters from an existing transcript (transcribe the video first if it has no captions)
 ```
 
 Every deploy is published as the live site. Deploys are immutable under their own ID, so `bun ny sites deployments publish` rolls back to any earlier one without re-uploading. Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) so a deploy needs no flags: `bun ny sites deploy --build`. `bun ny sites ci init` writes the same `build` and `dir` into the generated workflow. See [`examples/sites/`](examples/sites/) for ready-to-copy configs (Vite, Astro, Next.js static export, Hugo, plain HTML, and a combined app + site file).

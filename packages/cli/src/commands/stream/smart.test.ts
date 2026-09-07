@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { needsTranscription, smartGenerateBody } from "./smart.ts";
+import type { UserError } from "@/core/errors.ts";
+import {
+  hasNoCaptions,
+  requireTranscript,
+  smartGenerateBody,
+} from "./smart.ts";
 import type { VideoModel } from "./videos-api.ts";
 
 const VIDEO = {
@@ -38,30 +43,45 @@ test("smartGenerateBody requires at least one generation flag", () => {
   );
 });
 
-// The billing guard: smart generation reads a transcript, so a video without
-// captions gets transcribed first, which is metered.
-test("needsTranscription is true when the video has no captions", () => {
-  expect(needsTranscription(VIDEO)).toBe(true);
-  expect(needsTranscription({ ...VIDEO, captions: [] })).toBe(true);
-  expect(needsTranscription({ ...VIDEO, captions: null })).toBe(true);
+// Smart generation reads an existing transcript and never makes one, so a
+// missing captions list is a hard precondition.
+test("hasNoCaptions covers every empty shape the API returns", () => {
+  expect(hasNoCaptions(VIDEO)).toBe(true);
+  expect(hasNoCaptions({ ...VIDEO, captions: [] })).toBe(true);
+  expect(hasNoCaptions({ ...VIDEO, captions: null })).toBe(true);
+  expect(hasNoCaptions({ ...VIDEO, captions: undefined })).toBe(true);
 });
 
-test("needsTranscription is false once captions exist", () => {
+test("hasNoCaptions is false once captions exist", () => {
   expect(
-    needsTranscription({
+    hasNoCaptions({
       ...VIDEO,
       captions: [{ srclang: "en", label: "English" }],
     }),
   ).toBe(false);
 });
 
-// The billing gate needs a real answer, so an unattended run must be told to
-// pass --force rather than silently accepting the charge.
-test("the gate is only skipped for a video that already has captions", () => {
-  const withCaptions = {
-    ...VIDEO,
-    captions: [{ srclang: "en", label: "English" }],
-  };
-  expect(needsTranscription(withCaptions)).toBe(false);
-  expect(needsTranscription({ ...VIDEO, captions: undefined })).toBe(true);
+// The API rejects a captionless video outright, so the CLI stops first and
+// points at the command that produces the transcript.
+test("requireTranscript refuses a captionless video and names transcribe", () => {
+  expect(() => requireTranscript(VIDEO)).toThrow(
+    "clip.mp4 has no captions, and smart generation needs a transcript.",
+  );
+
+  let hint: string | undefined;
+  try {
+    requireTranscript(VIDEO);
+  } catch (error) {
+    hint = (error as UserError).hint;
+  }
+  expect(hint).toContain("bunny stream transcribe video-guid");
+});
+
+test("requireTranscript passes a video that already has captions", () => {
+  expect(() =>
+    requireTranscript({
+      ...VIDEO,
+      captions: [{ srclang: "en", label: "English" }],
+    }),
+  ).not.toThrow();
 });

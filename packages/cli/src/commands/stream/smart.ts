@@ -1,7 +1,7 @@
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
+import { withSpinner } from "@/core/ui.ts";
 import { resolveVideoInteractive, streamLibraryContext } from "./context.ts";
 import {
   type SmartGenerateModel,
@@ -19,9 +19,6 @@ interface SmartArgs {
   sourceLanguage?: string;
   force?: boolean;
 }
-
-const TRANSCRIPTION_NOTE =
-  "No captions found on this video, so smart generation will also transcribe the audio at $0.10 per language-minute.";
 
 /**
  * The generation request, requiring at least one thing to generate.
@@ -49,14 +46,28 @@ export function smartGenerateBody(args: SmartArgs): SmartGenerateModel {
 }
 
 /**
- * Whether smart generation on this video will also pay for a transcription.
+ * Whether the video has nothing for smart generation to read.
  *
- * Smart generation reads the transcript, so a video with no captions gets
- * transcribed first, which is billed. That turns a cheap call into a metered one
- * and is worth a confirmation.
+ * Smart generation needs a transcript and never makes one: the API rejects the
+ * request outright when the video has no captions, even on a library with
+ * transcribing enabled. So this is a hard precondition, not a billing gate.
  */
-export function needsTranscription(video: VideoModel): boolean {
+export function hasNoCaptions(video: VideoModel): boolean {
   return (video.captions ?? []).length === 0;
+}
+
+/**
+ * Refuse a video the API would refuse anyway, and name the way out.
+ *
+ * Sending the request would only come back as "Video has no captions", so the
+ * transcribe pointer is more useful than the round trip.
+ */
+export function requireTranscript(video: VideoModel): void {
+  if (!hasNoCaptions(video)) return;
+  throw new UserError(
+    `${video.title} has no captions, and smart generation needs a transcript.`,
+    `Transcribe it first: bunny stream transcribe ${video.guid} (or add captions with "bunny stream caption add").`,
+  );
 }
 
 export const streamSmartCommand = defineCommand<SmartArgs>({
@@ -74,7 +85,7 @@ export const streamSmartCommand = defineCommand<SmartArgs>({
     ],
     [
       "$0 stream smart 1a2b3c4d-... --title --force",
-      "Skip the transcription-cost confirmation",
+      "Never fall back to a picker; the library and video must be named",
     ],
   ],
 
@@ -101,15 +112,16 @@ export const streamSmartCommand = defineCommand<SmartArgs>({
         alias: "f",
         type: "boolean",
         default: false,
-        describe: "Skip the confirmation when a transcription is needed",
+        describe:
+          "Disable the library and video pickers, so the run only ever acts on what you named",
       }),
 
   handler: async (args) => {
     const { video: ref, lib, force, profile, output, verbose, apiKey } = args;
     const body = smartGenerateBody(args);
 
-    // --force accepts a metered charge, so it must not also pick targets: both
-    // resolutions error instead of prompting, like the delete commands.
+    // --force is picker-only here: both resolutions error instead of prompting,
+    // like the delete commands, so a paid run never targets a guessed video.
     const { client, libraryId } = await streamLibraryContext({
       lib,
       profile,
@@ -125,23 +137,7 @@ export const streamSmartCommand = defineCommand<SmartArgs>({
       force,
     });
 
-    // Only gate when the call would add a transcription charge on top.
-    if (needsTranscription(video)) {
-      logger.warn(TRANSCRIPTION_NOTE);
-      requireConfirmable(output, {
-        force,
-        message: "Transcribing this video needs a confirmation prompt.",
-        hint: "Re-run with --force to accept the transcription cost non-interactively.",
-      });
-      const confirmed = await confirm(
-        `Generate from ${video.title}, transcribing its audio first?`,
-        { force },
-      );
-      if (!confirmed) {
-        logger.log("Cancelled.");
-        return;
-      }
-    }
+    requireTranscript(video);
 
     const status = await withSpinner("Queueing smart generation...", () =>
       smartGenerateVideo(client, libraryId, video.guid, body),

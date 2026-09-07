@@ -1042,7 +1042,7 @@ bunny stream caption delete 1a2b3c4d-... en        # confirms first; --force ski
 bunny stream encode enable --codecs x264,vp9       # switch the library to premium encoding
 bunny stream encode reencode 1a2b3c4d-...          # re-encode one video with the current settings
 bunny stream transcribe 1a2b3c4d-... --languages en,de   # $0.10 per language-minute
-bunny stream smart 1a2b3c4d-... --title --chapters # generates from the transcript
+bunny stream smart 1a2b3c4d-... --title --chapters # needs an existing transcript or captions
 ```
 
 Deleting a library deletes all of its videos, and deleting the linked library also removes the stale `.bunny/stream.json`. `--force` is required for non-interactive deletes, cleanups, and unlinks; without it, a run that cannot prompt exits with an error instead of hanging. On destructive and paid commands `--force` also disables the pickers, so it can never act on something you did not name.
@@ -1061,7 +1061,7 @@ A video moves in or out of a collection with `video update --collection <id>` (a
 
 `caption add` reads a local `.vtt` or `.srt`, sends it inline, and reports what the API's validator says: a rejected file lists what is wrong, and an accepted file with non-breaking issues prints them as warnings. These are captions you wrote yourself, unrelated to the paid transcription below.
 
-Three commands cost money and say so before they run. `stream encode enable` switches a library to the premium encoding tier, billed per output codec per minute of encoded video, and `stream encode reencode` regenerates every output for one video at the same rate. `stream transcribe` is billed at $0.10 per language-minute of audio. `stream smart` generates a title, description, chapters, or moments from the transcript, and needs at least one of those flags; when the video has no captions yet it also has to transcribe the audio first, so it warns about that cost and asks for confirmation (`--force` accepts it non-interactively, and a video that already has captions is never gated). Note that `--force` on `stream transcribe` is the API's own force flag, which re-runs and overrides the library defaults, rather than a confirmation skip: that command has no confirmation to skip.
+Three commands cost money and say so before they run. `stream encode enable` switches a library to the premium encoding tier, billed per output codec per minute of encoded video, and `stream encode reencode` regenerates every output for one video at the same rate. `stream transcribe` is billed at $0.10 per language-minute of audio. `stream smart` generates a title, description, chapters, or moments from the transcript, and needs at least one of those flags. It reads an existing transcript and never makes one: a video with no captions is refused before the request goes out, with a pointer to `stream transcribe` (or `stream caption add`, if you have the captions already). Note that `--force` on `stream transcribe` is the API's own force flag, which re-runs and overrides the library defaults, rather than a confirmation skip; on `stream smart` it only disables the pickers. Neither command has a confirmation to skip.
 
 Every command that operates inside a library accepts `--lib <library-id>` (alias `--library`) and falls back to the linked directory, so none of the tables below repeat it.
 
@@ -1117,7 +1117,7 @@ Paid command flags:
 | `--title`, `--description`, `--chapters`, `--moments`                                     | `smart`         | What to generate; at least one is required                                    |
 | `--source-language`                                                                       | `smart`         | Language spoken in the video, as an ISO 639-1 code                            |
 | `--force`, `-f`                                                                           | `transcribe`    | The API's force flag: re-run and override the library's transcribing defaults |
-| `--force`, `-f`                                                                           | `smart`         | Skip the transcription-cost confirmation                                      |
+| `--force`, `-f`                                                                           | `smart`         | Disable the library and video pickers, so nothing is guessed                  |
 
 ### `bunny sandbox`
 
