@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { ConfigError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { findConfigFile, getConfigWritePath } from "./paths.ts";
 import {
@@ -15,6 +16,8 @@ export interface ResolvedConfig {
   profile: string;
 }
 
+let warnedAboutApiKeyEnv = false;
+
 export function resolveConfig(
   profile: string,
   apiKeyOverride?: string,
@@ -22,6 +25,15 @@ export function resolveConfig(
 ): ResolvedConfig {
   const envApiUrl = process.env.BUNNYNET_API_URL || undefined;
   const isVerbose = verbose ?? false;
+
+  if (
+    process.env.BUNNY_API_KEY &&
+    !process.env.BUNNYNET_API_KEY &&
+    !warnedAboutApiKeyEnv
+  ) {
+    logger.warn("BUNNY_API_KEY is ignored. Use BUNNYNET_API_KEY instead.");
+    warnedAboutApiKeyEnv = true;
+  }
 
   if (apiKeyOverride) {
     logger.debug("API key loaded from --api-key flag", isVerbose);
@@ -57,7 +69,10 @@ export function resolveConfig(
     return { apiKey: "", apiUrl: envApiUrl, profile };
   }
 
-  throw new Error(`Profile "${profile}" not found`);
+  throw new ConfigError(
+    `Profile "${profile}" not found.`,
+    "Run `bunny config profile list` to see available profiles.",
+  );
 }
 
 export function loadConfigFile(): ConfigFile | null {
@@ -91,7 +106,12 @@ export function setProfile(profile: string, apiKey: string): void {
 
 export function deleteProfile(profile: string): void {
   const existing = loadConfigFile();
-  if (!existing) throw new Error("No config file found");
+  if (!existing?.profiles[profile]) {
+    throw new ConfigError(
+      `Profile "${profile}" not found.`,
+      "Run `bunny config profile list` to see available profiles.",
+    );
+  }
 
   delete existing.profiles[profile];
   saveConfigFile(existing);

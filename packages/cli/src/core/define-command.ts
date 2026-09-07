@@ -1,4 +1,5 @@
 import type { Argv, CommandModule } from "yargs";
+import { authenticationHint, UserError } from "./errors.ts";
 import { logger } from "./logger.ts";
 import type { GlobalArgs } from "./types.ts";
 
@@ -53,7 +54,31 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
         y = y.example(cmd, desc) as any;
       }
     }
-    return y;
+    return y.check((argv) => {
+      for (const [key, value] of Object.entries(argv)) {
+        const values = Array.isArray(value) ? value : [value];
+        if (
+          values.some(
+            (item) => typeof item === "number" && !Number.isFinite(item),
+          )
+        ) {
+          const positional = def.command.matchAll(/[<[]([^>\]]+)[>\]]/g);
+          const isPositional = [...positional].some((match) =>
+            match[1]
+              ?.replace(/\.\.\.$/, "")
+              .split("|")
+              .includes(key),
+          );
+          const label = isPositional
+            ? key
+            : `${key.length === 1 ? "-" : "--"}${key}`;
+          throw new UserError(
+            `Invalid value for ${label}: expected a finite number.`,
+          );
+        }
+      }
+      return true;
+    }, false);
   };
 
   return {
@@ -70,6 +95,11 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
       } catch (err: any) {
         const isUser = err?.isUserError;
         const isApi = err?.name === "ApiError";
+
+        if (isApi && err.status === 401) {
+          err.message = "Unauthorized. The API key was rejected.";
+          err.hint = authenticationHint(args);
+        }
 
         if (args.output === "json") {
           const payload: Record<string, unknown> = {
@@ -91,6 +121,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
           for (const ve of err.validationErrors) {
             logger.dim(`  ${ve.field ?? "unknown"}: ${ve.message}`);
           }
+          if (err.hint) logger.dim(err.hint);
           process.exit(1);
         }
 

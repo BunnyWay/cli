@@ -21,6 +21,7 @@ import { storageNamespace } from "./commands/storage/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { bunny } from "./core/colors.ts";
 import { logger } from "./core/logger.ts";
+import { parseErrorHint } from "./core/parse-error.ts";
 import { VERSION } from "./core/version.ts";
 
 const commands: CommandModule[] = [
@@ -161,15 +162,28 @@ export const cli = instance
   .completion("completion", "Generate shell completion script")
   .recommendCommands()
   .strict()
-  .fail((msg, err, yargs) => {
-    if (err) {
-      logger.error(err.message);
-    } else if (msg) {
-      logger.error(msg);
-      console.log();
-      yargs.showHelp();
+  .fail((msg, err) => {
+    const message = err?.message || msg || "Invalid arguments.";
+    const commandNames = commands.flatMap((cmd) => {
+      const names = Array.isArray(cmd.command)
+        ? cmd.command
+        : [cmd.command ?? ""];
+      const aliases =
+        typeof cmd.aliases === "string" ? [cmd.aliases] : (cmd.aliases ?? []);
+      return [...names, ...aliases].map((name) => name.split(" ")[0] ?? name);
+    });
+    const hint = parseErrorHint(instance, message, commandNames);
+    if (instance.parsed && instance.parsed.argv.output === "json") {
+      logger.log(JSON.stringify({ error: message, hint }));
+    } else {
+      logger.error(message);
+      logger.dim(hint);
     }
     process.exit(1);
   })
   .help()
+  .group(
+    ["version", "profile", "verbose", "output", "api-key", "help"],
+    "Global options:",
+  )
   .wrap(Math.min(120, process.stdout.columns ?? 80));

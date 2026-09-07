@@ -1,6 +1,6 @@
 import type { createDbClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
-import { UserError } from "@/core/errors.ts";
+import { ApiError, UserError } from "@/core/errors.ts";
 import { DB_PAGE_SIZE, TOKEN_TTL_MINUTES } from "./constants.ts";
 
 type DbClient = ReturnType<typeof createDbClient>;
@@ -17,11 +17,23 @@ export async function fetchDatabase(
   client: DbClient,
   id: string,
 ): Promise<Database> {
-  const { data } = await client.GET("/v2/databases/{db_id}", {
-    params: { path: { db_id: id } },
-  });
-  if (!data?.db) throw new UserError(`Database ${id} not found.`);
-  return data.db;
+  const notFound = () =>
+    new UserError(
+      `No database found for ${id}.`,
+      "Run `bunny db list` to see available databases.",
+    );
+  try {
+    const { data } = await client.GET("/v2/databases/{db_id}", {
+      params: { path: { db_id: id } },
+    });
+    if (!data?.db) throw notFound();
+    return data.db;
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 400 || err.status === 404)) {
+      throw notFound();
+    }
+    throw err;
+  }
 }
 
 /** Fetch every database in the account, paginating until exhausted. */

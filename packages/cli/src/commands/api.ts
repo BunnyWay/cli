@@ -1,6 +1,6 @@
 import { resolveConfig } from "@/config/index.ts";
 import { defineCommand } from "@/core/define-command.ts";
-import { UserError } from "@/core/errors.ts";
+import { ApiError, UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { VERSION } from "@/core/version.ts";
 
@@ -153,6 +153,10 @@ export const apiCommand = defineCommand<ApiArgs>({
       logger.debug(`← ${res.status} ${res.statusText}`, true);
     }
 
+    if (res.status === 401) {
+      throw new ApiError("Unauthorized.", 401);
+    }
+
     const text = await res.text();
 
     // Try to parse and pretty-print JSON
@@ -162,10 +166,16 @@ export const apiCommand = defineCommand<ApiArgs>({
     } catch {
       // Not JSON — output raw
       if (!res.ok) {
-        throw new UserError(
-          `${res.status} ${res.statusText}`,
-          text || undefined,
+        const preview = text.replace(/\s+/g, " ").trim();
+        const error = new ApiError(
+          `${res.status} ${res.statusText}`.trim(),
+          res.status,
         );
+        error.hint =
+          preview.length > 200
+            ? `${preview.slice(0, 200)}…`
+            : preview || undefined;
+        throw error;
       }
       if (text) await writeStdout(`${text}\n`);
       return;
