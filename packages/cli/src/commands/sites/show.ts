@@ -74,6 +74,15 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
             key: "Deployed",
             value: current ? formatDateTime(current.createdAt) : "-",
           },
+          {
+            key: "Not found",
+            value:
+              current?.notFound === "spa"
+                ? "index.html (client-side routing)"
+                : current?.notFound === "404"
+                  ? "404.html"
+                  : "storage 404 page",
+          },
           { key: "Previous deploy", value: state.previous ?? "-" },
           { key: "Deploys", value: String(state.deploys.length) },
         ],

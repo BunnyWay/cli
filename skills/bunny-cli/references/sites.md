@@ -39,7 +39,7 @@ This is the rule that shapes every other command here:
 - Deploys stay immutable under their own ID, so `deployments publish <id>` rolls back to any earlier one by retargeting the edge rule; no files move and nothing is re-uploaded.
 - Custom domains are vanity hostnames on the site's pull zone; without one the site serves at `https://sites-<name>-<suffix>.b-cdn.net`.
 
-Content is root-served, so client-side routers (TanStack Router, React Router, Vue Router in history mode) and root-absolute assets work as-is. Deploys are not individually addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served. To review a change before it goes live, build and serve it locally, or deploy it to a separate site.
+Content is root-served, so root-absolute assets work as-is. Single-page apps get `index.html` for extensionless misses when the detected framework is client-routed (Vite, CRA, React Router, Angular, Vue CLI, Ember, Preact) and the output has no root `404.html`; `sites.spa` in `bunny.jsonc` or `--spa`/`--no-spa` on the deploy decides explicitly, and otherwise a root `404.html` is the not-found page. The mode is recorded per deploy and follows rollbacks. Deploys are not individually addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served. To review a change before it goes live, build and serve it locally, or deploy it to a separate site.
 
 ## Deploy IDs
 

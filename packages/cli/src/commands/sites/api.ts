@@ -44,6 +44,7 @@ import {
   GATE_RULE_DESC,
   type LegacySiteState,
   migrateLegacyState,
+  notFoundSettings,
   PLACEHOLDER_DEPLOY,
   parseLegacyState,
   parseRemoteState,
@@ -699,6 +700,24 @@ async function waitForEdgePropagation(
   }
 }
 
+async function ensureNotFoundSettings(
+  coreClient: CoreClient,
+  storageZone: StorageZoneModel,
+  state: RemoteSiteState,
+  deployId: string,
+): Promise<void> {
+  const record = state.deploys.find((d) => d.id === deployId);
+  const desired = notFoundSettings(deployId, record?.notFound);
+  const unchanged =
+    (storageZone.Custom404FilePath ?? "") === desired.Custom404FilePath &&
+    (storageZone.Rewrite404To200 ?? false) === desired.Rewrite404To200;
+  if (unchanged) return;
+  await coreClient.POST("/storagezone/{id}", {
+    params: { path: { id: state.storageZoneId } },
+    body: desired,
+  });
+}
+
 // Point production at a deploy: retarget the rewrite rule and purge. The rule propagates async, so purge, wait for the edge to serve it, then purge again so nothing stale survives (the header can confirm on a cached response, which is why the second purge is load-bearing).
 export async function promoteDeploy(opts: {
   coreClient: CoreClient;
@@ -728,6 +747,7 @@ export async function promoteDeploy(opts: {
     storageZone,
     deployId,
   });
+  await ensureNotFoundSettings(coreClient, storageZone, state, deployId);
   await purge();
   await waitForEdgePropagation(host, deployId);
   await purge();

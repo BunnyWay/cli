@@ -2,9 +2,11 @@ import { expect, test } from "bun:test";
 import { resolve } from "node:path";
 import type { DeployRecord, RemoteSiteState } from "./constants.ts";
 import {
+  looksLikeSpa,
   productionUrl,
   resolveDeployDir,
   resolveDeployTarget,
+  resolveNotFoundMode,
 } from "./deploy.ts";
 import type { DeployIdentity } from "./deploy-id.ts";
 
@@ -192,4 +194,20 @@ test("a brand new custom id on an empty site just uploads", () => {
       force: false,
     }),
   ).toEqual({ deployId: "20260827-1433-r42", skipUpload: false });
+});
+
+test("not-found mode: sites.spa wins, detection needs a root index.html, 404.html is the fallback", () => {
+  expect(resolveNotFoundMode(["index.html"], { configured: true })).toBe("spa");
+  expect(() =>
+    resolveNotFoundMode(["docs/index.html"], { configured: true }),
+  ).toThrow(/no index.html/);
+  expect(resolveNotFoundMode(["index.html"], { detected: true })).toBe("spa");
+  expect(
+    resolveNotFoundMode(["index.html", "404.html"], { detected: true }),
+  ).toBe("404");
+  expect(resolveNotFoundMode(["index.html", "404.html"], {})).toBe("404");
+  expect(looksLikeSpa(["index.html", "assets/app.js"])).toBe(true);
+  expect(looksLikeSpa(["index.html", "about/index.html", "app.js"])).toBe(
+    false,
+  );
 });

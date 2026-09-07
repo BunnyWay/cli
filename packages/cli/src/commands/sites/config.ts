@@ -1,6 +1,16 @@
-import { type SiteConfig, SiteConfigSchema } from "@bunny.net/config";
-import { readBunnyConfig } from "@/core/bunny-config.ts";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  CURRENT_VERSION,
+  type SiteConfig,
+  SiteConfigSchema,
+} from "@bunny.net/config";
+import {
+  configPath,
+  readBunnyConfig,
+  SCHEMA_REF,
+} from "@/core/bunny-config.ts";
 import { UserError } from "@/core/errors.ts";
+import { syncJsonc } from "@/core/jsonc.ts";
 
 export interface LoadedSiteConfig {
   config: SiteConfig;
@@ -26,4 +36,32 @@ export function loadSiteConfig(): LoadedSiteConfig | null {
     );
   }
   return { config: parsed.data, root: found.root };
+}
+
+/** Merge `patch` into the `sites` block of the nearest `bunny.jsonc` (or a fresh one in cwd); surgical, so comments survive. */
+export function saveSiteConfig(
+  patch: Partial<SiteConfig>,
+  explicitPath?: string,
+): string {
+  const path = explicitPath ?? configPath();
+  if (!existsSync(path)) {
+    const fresh = {
+      $schema: SCHEMA_REF,
+      version: CURRENT_VERSION,
+      sites: patch,
+    };
+    writeFileSync(path, `${JSON.stringify(fresh, null, 2)}\n`);
+    return path;
+  }
+  const text = readFileSync(path, "utf-8");
+  const existing = (readBunnyConfig(path)?.data ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const sites = (existing.sites ?? {}) as Record<string, unknown>;
+  writeFileSync(
+    path,
+    syncJsonc(text, { ...existing, sites: { ...sites, ...patch } }),
+  );
+  return path;
 }
