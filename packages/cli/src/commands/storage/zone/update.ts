@@ -49,9 +49,9 @@ function settingsFromFlags(
 ): StorageZoneSettingsModel {
   const primaryCode = zone.Region ?? undefined;
   const settings: StorageZoneSettingsModel = {};
-  // An empty value clears the custom 404, matching the prompt's blank-for-none behavior.
+  // The API ignores null; only an empty string clears the custom 404.
   if (args.custom404Path !== undefined)
-    settings.Custom404FilePath = args.custom404Path || null;
+    settings.Custom404FilePath = args.custom404Path;
   if (args.rewrite404To200 !== undefined)
     settings.Rewrite404To200 = args.rewrite404To200;
   if (args.replication !== undefined)
@@ -116,7 +116,7 @@ async function promptSettings(
   // Omit ReplicationZones when nothing new was picked so the PATCH body leaves replication untouched.
   const newReplicas: string[] = answers.replication ?? [];
   return {
-    Custom404FilePath: answers.custom404Path || null,
+    Custom404FilePath: answers.custom404Path ?? "",
     Rewrite404To200: answers.rewrite404To200,
     ReplicationZones: newReplicas.length
       ? [...existing, ...newReplicas]

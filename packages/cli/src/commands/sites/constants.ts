@@ -20,9 +20,13 @@ export interface SiteManifest {
   name?: string;
 }
 
+/** `spa` serves index.html as a 200 for extensionless misses; `404` serves the deploy's 404.html; absent is the storage 404 page. */
+export type NotFoundMode = "spa" | "404";
+
 export interface DeployRecord {
   id: string;
   createdAt: string;
+  notFound?: NotFoundMode;
   /** How the ID was chosen; "custom" means the caller supplied it with --deploy-id. */
   source: "git" | "content" | "custom";
   gitSha?: string;
@@ -63,6 +67,26 @@ export interface LegacySiteState {
 /** Storage-zone path prefix for a deploy, without a trailing slash. */
 export function deployPrefix(deployId: string): string {
   return `${DEPLOYS_DIR}/${deployId}`;
+}
+
+// Zone-wide, so these retarget with the rewrite rule on every publish; the API ignores null, only an empty path clears it.
+export function notFoundSettings(
+  deployId: string,
+  mode: NotFoundMode | undefined,
+): { Custom404FilePath: string; Rewrite404To200: boolean } {
+  if (mode === "spa") {
+    return {
+      Custom404FilePath: `/${deployPrefix(deployId)}/index.html`,
+      Rewrite404To200: true,
+    };
+  }
+  if (mode === "404") {
+    return {
+      Custom404FilePath: `/${deployPrefix(deployId)}/404.html`,
+      Rewrite404To200: false,
+    };
+  }
+  return { Custom404FilePath: "", Rewrite404To200: false };
 }
 
 /** Point production at `deployId`, remembering the outgoing deploy as previous. */
@@ -106,6 +130,8 @@ export const ASSET_BROWSER_TTL_SECONDS = 86400;
 export const ASSET_EXTENSION_GROUPS = [
   ["css", "js", "mjs", "woff2", "svg"],
   ["png", "jpg", "jpeg", "webp", "ico"],
+  // Runtimes and models are the largest files a site ships, and fonts the most repeated.
+  ["wasm", "onnx", "woff", "ttf", "otf"],
 ];
 
 // A deploy ID becomes a storage path and the rewrite rule's origin target, so its charset is a boundary, not a style choice: alphanumerics plus `-`, `_` and `.`, bounded by an alphanumeric (which also keeps the `_placeholder` sentinel unreachable), and never a traversal sequence. Case is preserved rather than folded: a caller-supplied ID exists to match whatever produced the deploy, and the ID never reaches a client-facing URL (the rule builds the origin path itself), so nothing downstream needs it normalized.
