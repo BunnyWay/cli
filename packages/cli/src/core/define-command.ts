@@ -1,4 +1,5 @@
 import type { Argv, CommandModule } from "yargs";
+import { authenticationHint, UserError } from "./errors.ts";
 import { logger } from "./logger.ts";
 import type { GlobalArgs } from "./types.ts";
 
@@ -23,9 +24,6 @@ interface CommandDef<A = Record<string, never>> {
   postRun?: (args: A & GlobalArgs) => Promise<void>;
 }
 
-/** Option names of the command that matched, so the root fail handler can suggest a near miss. */
-export const knownOptionKeys = new Set<string>();
-
 /** Root-level options inherited by every command. */
 export const GLOBAL_OPTION_KEYS = [
   "profile",
@@ -36,11 +34,16 @@ export const GLOBAL_OPTION_KEYS = [
   "version",
 ];
 
+// Positional names declared in a command string such as `add [domain] [values..]`.
+function positionalNames(command: string): string[] {
+  return [...command.matchAll(/[<[]([^>\]]+)[>\]]/g)].flatMap((m) =>
+    (m[1] ?? "").replace(/\.\.$/, "").split("|"),
+  );
+}
+
 // Own flags are grouped first so they lead the help text; the inherited globals follow under their own heading.
 export function groupHelpOptions(y: Argv, command = ""): void {
-  const positionals = [...command.matchAll(/[<[]([^>\]]+)[>\]]/g)].flatMap(
-    (m) => (m[1] ?? "").replace(/\.\.$/, "").split("|"),
-  );
+  const positionals = positionalNames(command);
   const own = Object.keys(optionsOf(y).key).filter(
     (k) =>
       k.length > 1 &&
@@ -53,8 +56,6 @@ export function groupHelpOptions(y: Argv, command = ""): void {
 }
 
 const UNAUTHORIZED_MESSAGE = "Unauthorized. Your API key was rejected.";
-const UNAUTHORIZED_HINT =
-  'Run "bunny login" to authenticate, or check the key passed with --api-key or BUNNYNET_API_KEY.';
 
 // Runtime accessor that @types/yargs leaves out.
 function optionsOf(y: Argv): {
@@ -67,12 +68,20 @@ function optionsOf(y: Argv): {
 }
 
 // yargs turns a non-numeric value for a number option into NaN instead of failing, so reject it here.
-function rejectNaN(y: Argv, argv: Record<string, unknown>): true {
+function rejectNaN(
+  y: Argv,
+  command: string,
+  argv: Record<string, unknown>,
+): true {
+  const positionals = positionalNames(command);
   for (const key of optionsOf(y).number) {
     const value = argv[key];
     const values = Array.isArray(value) ? value : [value];
-    if (values.some((v) => typeof v === "number" && Number.isNaN(v))) {
-      throw new Error(`Invalid value for ${key}: expected a number.`);
+    if (values.some((v) => typeof v === "number" && !Number.isFinite(v))) {
+      const label = positionals.includes(key)
+        ? key
+        : `${key.length === 1 ? "-" : "--"}${key}`;
+      throw new UserError(`Invalid value for ${label}: expected a number.`);
     }
   }
   return true;
@@ -108,9 +117,11 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
         y = y.example(cmd, desc) as any;
       }
     }
-    for (const key of Object.keys(optionsOf(y).key)) knownOptionKeys.add(key);
     groupHelpOptions(y, def.command);
-    return y.check((argv) => rejectNaN(y, argv as Record<string, unknown>));
+    return y.check(
+      (argv) => rejectNaN(y, def.command, argv as Record<string, unknown>),
+      false,
+    );
   };
 
   return {
@@ -131,7 +142,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
         const message = isUnauthorized
           ? UNAUTHORIZED_MESSAGE
           : (err?.message ?? "An unexpected error occurred.");
-        const hint = isUnauthorized ? UNAUTHORIZED_HINT : err?.hint;
+        const hint = isUnauthorized ? authenticationHint(args) : err?.hint;
 
         if (args.output === "json") {
           const payload: Record<string, unknown> = { error: message };
@@ -151,6 +162,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
           for (const ve of err.validationErrors) {
             logger.dim(`  ${ve.field ?? "unknown"}: ${ve.message}`);
           }
+          if (hint) logger.dim(hint);
           process.exit(1);
         }
 

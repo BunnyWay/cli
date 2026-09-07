@@ -18,7 +18,11 @@ function run(...args: string[]) {
       stdin: "ignore",
     },
   );
-  return { code: proc.exitCode, stderr: proc.stderr.toString() };
+  return {
+    code: proc.exitCode,
+    stdout: proc.stdout.toString(),
+    stderr: proc.stderr.toString(),
+  };
 }
 
 describe("small mistakes", () => {
@@ -30,9 +34,11 @@ describe("small mistakes", () => {
     expect(stderr).not.toContain("Commands:");
   });
 
-  test("flag typo suggests the flag", () => {
+  test("flag typo suggests the flag, as JSON when asked", () => {
     const { stderr } = run("whoami", "--profle", "x");
     expect(stderr).toContain("Did you mean --profile?");
+    const { stdout } = run("whoami", "--profle", "x", "-o", "json");
+    expect(JSON.parse(stdout).hint).toContain("Did you mean --profile?");
   });
 
   test("non-numeric id is rejected instead of becoming NaN", () => {

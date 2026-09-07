@@ -20,7 +20,7 @@ import { skillsNamespace } from "./commands/skills/index.ts";
 import { storageNamespace } from "./commands/storage/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { bunny } from "./core/colors.ts";
-import { GLOBAL_OPTION_KEYS, knownOptionKeys } from "./core/define-command.ts";
+import { GLOBAL_OPTION_KEYS } from "./core/define-command.ts";
 import { defineNamespace } from "./core/define-namespace.ts";
 import { logger } from "./core/logger.ts";
 import { suggest } from "./core/suggest.ts";
@@ -57,56 +57,34 @@ const topLevelNames = [...commands, ...experimentalCommands].flatMap((cmd) => {
   return [...names.map((n) => n.split(" ")[0]), ...(cmd.aliases ?? [])];
 });
 
-const rawArgs = hideBin(process.argv);
-// Leading command words: global flags are stepped over, and collection stops at the first unknown flag since its arity is unknown.
-function leadingPositionals(args: string[]): string[] {
-  const valueFlags = ["-p", "--profile", "-o", "--output", "--api-key"];
-  const boolFlags = ["-v", "--verbose", "--help", "--version", "-V"];
-  const out: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i] ?? "";
-    if (!arg.startsWith("-")) {
-      out.push(arg);
-    } else if (valueFlags.includes(arg)) {
-      i++;
-    } else if (!boolFlags.includes(arg) && !arg.includes("=")) {
-      break;
-    }
-  }
-  return out;
+// Runtime accessors that @types/yargs leaves out.
+interface ParserInternals {
+  parsed?: { argv: Record<string, unknown> & { _: unknown[] } };
+  getOptions(): { key: Record<string, unknown> };
+  getInternalMethods(): { getContext(): { commands: string[] } };
 }
 
-const positionals = leadingPositionals(rawArgs);
-
 // yargs skips its own top-level recommendation when a `$0` default command exists, so cover commands and flags here.
-function didYouMean(msg: string): string | undefined {
+function didYouMean(msg: string, parser: ParserInternals): string | undefined {
+  const argv = parser.parsed?.argv;
   const unknown =
     msg.match(/^Unknown arguments?: (.+)$/)?.[1]?.split(", ") ?? [];
+  if (!argv || unknown.length === 0) return undefined;
+  const commandDepth = parser.getInternalMethods().getContext().commands.length;
   for (const token of unknown) {
-    if (
-      rawArgs.some((a) => a === `--${token}` || a.startsWith(`--${token}=`))
-    ) {
-      const flags = [...knownOptionKeys, ...GLOBAL_OPTION_KEYS].filter(
+    if (commandDepth === 0 && token === String(argv._[0] ?? "")) {
+      const match = suggest(token, topLevelNames);
+      return match && `Did you mean ${match}?`;
+    }
+    if (token in argv && token !== "_") {
+      const flags = Object.keys(parser.getOptions().key).filter(
         (k) => k.length > 1 && !/[A-Z]/.test(k),
       );
       const match = suggest(token, flags);
       return match && `Did you mean --${match}?`;
     }
-    if (token === positionals[0]) {
-      const match = suggest(token, topLevelNames);
-      return match && `Did you mean ${match}?`;
-    }
   }
   return undefined;
-}
-
-// Command path for the help pointer: the positionals typed, minus whatever yargs rejected.
-function helpPath(msg: string): string {
-  const unknown =
-    msg.match(/^Unknown arguments?: (.+)$/)?.[1]?.split(", ") ?? [];
-  let path = positionals.filter((p) => !unknown.includes(p));
-  if (msg.startsWith("Did you mean")) path = path.slice(0, -1);
-  return ["bunny", ...path, "--help"].join(" ");
 }
 
 let instance = yargs(hideBin(process.argv))
@@ -146,16 +124,12 @@ for (const cmd of [...commands, ...experimentalCommands]) {
   instance = instance.command(cmd);
 }
 
-// Grouping at the root is inherited by every subcommand and would print ahead of their own flags, so only do it for root help.
-if (positionals.length === 0) {
-  instance = instance.group(GLOBAL_OPTION_KEYS, "Global Options:");
-}
-
 export const cli = instance
   .command(
     "$0",
     false as never,
-    () => {},
+    // Grouping here reaches root help only; done on the root instance it would print ahead of every subcommand's own flags.
+    (y) => y.group(GLOBAL_OPTION_KEYS, "Global Options:"),
     () => {
       const art = `
                   @@@@
@@ -229,14 +203,23 @@ export const cli = instance
   .recommendCommands()
   .strict()
   .fail((msg, err) => {
-    if (err) {
-      logger.error(err.message);
-      process.exit(1);
+    const parser = instance as unknown as ParserInternals;
+    const message = err?.message || msg || "Invalid arguments.";
+    const path = parser.getInternalMethods().getContext().commands;
+    const suggestion = err ? undefined : didYouMean(message, parser);
+    const usage = `Run \`${["bunny", ...path, "--help"].join(" ")}\` for usage.`;
+    if (parser.parsed?.argv.output === "json") {
+      const hint = [suggestion, usage].filter(Boolean).join(" ");
+      // Wait for the write to flush: exiting first can truncate piped JSON.
+      process.stdout.write(
+        `${JSON.stringify({ error: message, hint })}\n`,
+        () => process.exit(1),
+      );
+      return;
     }
-    logger.error(msg);
-    const hint = didYouMean(msg);
-    if (hint) logger.dim(hint);
-    logger.dim(`Run \`${helpPath(msg)}\` for usage.`);
+    logger.error(message);
+    if (suggestion) logger.dim(suggestion);
+    logger.dim(usage);
     process.exit(1);
   })
   .help()

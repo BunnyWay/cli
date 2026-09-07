@@ -129,6 +129,8 @@ bunny config profile delete staging
 bunny config profile delete staging --force
 ```
 
+Deleting a profile removes its stored API key and asks for confirmation first. Pass `--force` in scripts or with `--output json`. A missing profile is an error.
+
 ### `bunny db`
 
 Manage databases.

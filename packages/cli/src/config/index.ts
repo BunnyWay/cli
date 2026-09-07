@@ -16,6 +16,8 @@ export interface ResolvedConfig {
   profile: string;
 }
 
+let warnedAboutEnvTypo = false;
+
 export function resolveConfig(
   profile: string,
   apiKeyOverride?: string,
@@ -44,7 +46,8 @@ export function resolveConfig(
     };
   }
 
-  if (process.env.BUNNY_API_KEY) {
+  if (process.env.BUNNY_API_KEY && !warnedAboutEnvTypo) {
+    warnedAboutEnvTypo = true;
     logger.warn(
       "BUNNY_API_KEY is set, but the CLI reads BUNNYNET_API_KEY. Rename the variable to use that key.",
     );
@@ -101,7 +104,12 @@ export function setProfile(profile: string, apiKey: string): void {
 
 export function deleteProfile(profile: string): void {
   const existing = loadConfigFile();
-  if (!existing) throw new Error("No config file found");
+  if (!existing?.profiles[profile]) {
+    throw new UserError(
+      `Profile "${profile}" not found.`,
+      'Run "bunny config profile list" to see your profiles.',
+    );
+  }
 
   delete existing.profiles[profile];
   saveConfigFile(existing);

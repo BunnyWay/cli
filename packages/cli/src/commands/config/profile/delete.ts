@@ -2,7 +2,7 @@ import { deleteProfile, profileExists } from "@/config/index.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { confirm } from "@/core/ui.ts";
+import { confirm, requireConfirmable } from "@/core/ui.ts";
 
 interface DeleteArgs {
   name: string;
@@ -36,7 +36,12 @@ export const profileDeleteCommand = defineCommand<DeleteArgs>({
     }
   },
 
-  handler: async ({ name, force }) => {
+  handler: async ({ name, force, output }) => {
+    requireConfirmable(output, {
+      force,
+      message: `Deleting profile "${name}" requires confirmation.`,
+      hint: "Re-run with --force to delete without a prompt.",
+    });
     const ok = await confirm(
       `Delete profile "${name}" and its stored API key?`,
       { force },
@@ -47,6 +52,10 @@ export const profileDeleteCommand = defineCommand<DeleteArgs>({
     }
 
     deleteProfile(name);
+    if (output === "json") {
+      logger.log(JSON.stringify({ profile: name, deleted: true }));
+      return;
+    }
     logger.success(`Profile "${name}" deleted.`);
   },
 });
