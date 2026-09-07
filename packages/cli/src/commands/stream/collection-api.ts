@@ -112,7 +112,12 @@ export async function renameCollection(
   }
 }
 
-/** Delete a collection. The videos in it survive; they just lose the collection. */
+/**
+ * Delete a collection.
+ *
+ * The API cascade-deletes the videos inside it, so this is not a label removal:
+ * move a video out first (clear its collection) to keep it.
+ */
 export async function deleteCollection(
   client: StreamClient,
   libraryId: number,

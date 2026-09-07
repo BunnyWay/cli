@@ -98,7 +98,7 @@ bun ny stream video show 1a2b3c4d-...     # show one video by GUID, including it
 bun ny stream video thumbnail 1a2b3c4d-... --file ./thumb.jpg   # set a thumbnail (--url has bunny.net download one instead)
 bun ny stream video stats 1a2b3c4d-...    # views and watch time for one video (--heatmap, --play-data for the other views)
 bun ny stream video cleanup 1a2b3c4d-... --non-configured --dry-run   # preview deleting renditions the library no longer configures
-bun ny stream collection list             # list a library's collections (create/show/rename/delete too; videos join one with --collection)
+bun ny stream collection list             # list a library's collections (create/show/rename/delete too; videos join one with --collection, and deleting a collection deletes the videos inside it)
 bun ny stream caption add 1a2b3c4d-... en --file ./captions.vtt   # upload your own caption file for one language
 bun ny stream transcribe 1a2b3c4d-... --languages en,de   # paid: transcribe the audio into captions ($0.10 per language-minute)
 bun ny stream smart 1a2b3c4d-... --title --chapters   # paid: generate a title and chapters from the transcript (asks first if the video has no captions yet)

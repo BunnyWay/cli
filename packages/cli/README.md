@@ -1032,7 +1032,7 @@ bunny stream collection list                       # ID, name, videos, size
 bunny stream collection create --name Tutorials    # the name also takes a positional
 bunny stream collection show 8a7b6c5d-...
 bunny stream collection rename 8a7b6c5d-... --name Guides
-bunny stream collection delete 8a7b6c5d-...        # the videos are kept, they just leave the collection
+bunny stream collection delete 8a7b6c5d-...        # deletes the videos inside it too; confirms first
 
 # Caption files on one video (manual captions, not the paid transcription)
 bunny stream caption add 1a2b3c4d-... en --file ./captions.vtt --label "English"
@@ -1057,7 +1057,7 @@ Files over 2 GB switch to resumable uploads (TUS) automatically, with no extra f
 
 `video cleanup` deletes encoded renditions, MP4 fallbacks, or the stored original, and needs at least one selector so it can never look like a no-op success. Start with `--dry-run`, which asks the API to report what would go without deleting anything and skips the confirmation.
 
-A collection is just a label on a video: creating one is free, deleting one keeps every video it held, and a video moves in or out with `video update --collection <id>` (an empty value clears it). `video upload` and `video fetch` can drop a video straight into a collection at ingest, and both also accept `--thumbnail-time <ms>` to pick the main thumbnail from a frame while the video is being ingested. `video thumbnail` replaces the image afterwards, from a URL or a local file.
+A video moves in or out of a collection with `video update --collection <id>` (an empty value clears it). Creating a collection is free, but deleting one is not just removing a label: the API deletes every video inside it as well, so the confirmation prompt names the count that is about to go. Move the videos you want to keep out of the collection first (`video update --collection ""` clears it), then delete it. `video upload` and `video fetch` can drop a video straight into a collection at ingest, and both also accept `--thumbnail-time <ms>` to pick the main thumbnail from a frame while the video is being ingested. `video thumbnail` replaces the image afterwards, from a URL or a local file.
 
 `caption add` reads a local `.vtt` or `.srt`, sends it inline, and reports what the API's validator says: a rejected file lists what is wrong, and an accepted file with non-breaking issues prints them as warnings. These are captions you wrote yourself, unrelated to the paid transcription below.
 

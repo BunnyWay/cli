@@ -11,13 +11,29 @@ interface CollectionDeleteArgs {
   force?: boolean;
 }
 
+/**
+ * The confirmation question for a collection deletion.
+ *
+ * The API cascade-deletes a collection's videos, so the prompt names the count
+ * that is about to go with it rather than implying the videos survive.
+ */
+export function collectionDeleteQuestion(
+  name: string | null | undefined,
+  videoCount: number | undefined,
+): string {
+  return `Delete collection ${name} and the ${videoCount ?? 0} video(s) inside it? This cannot be undone.`;
+}
+
 export const streamCollectionDeleteCommand =
   defineCommand<CollectionDeleteArgs>({
     command: "delete [collection]",
     aliases: ["rm", "remove"],
-    describe: "Delete a collection, keeping its videos.",
+    describe: "Delete a collection and the videos inside it.",
     examples: [
-      ["$0 stream collection delete 8a7b6c5d-...", "Delete a collection"],
+      [
+        "$0 stream collection delete 8a7b6c5d-...",
+        "Delete a collection and its videos",
+      ],
       ["$0 stream collection delete 8a7b6c5d-... --force", "Skip confirmation"],
       ["$0 stream collection delete", "Pick a collection interactively"],
     ],
@@ -63,13 +79,15 @@ export const streamCollectionDeleteCommand =
         { output, force },
       );
 
+      const videoCount = collection.videoCount ?? 0;
+
       requireConfirmable(output, {
         force,
-        message: `Deleting "${collection.name}" needs a confirmation prompt.`,
+        message: `Deleting "${collection.name}" and the ${videoCount} video(s) inside it needs a confirmation prompt.`,
         hint: "Re-run with --force to delete non-interactively.",
       });
       const confirmed = await confirm(
-        `Delete collection ${collection.name}? Its ${collection.videoCount ?? 0} video(s) are kept and simply leave the collection.`,
+        collectionDeleteQuestion(collection.name, collection.videoCount),
         { force },
       );
       if (!confirmed) {
@@ -88,7 +106,7 @@ export const streamCollectionDeleteCommand =
               id: collection.guid,
               name: collection.name,
               removed: true,
-              videosKept: collection.videoCount ?? 0,
+              videosDeleted: videoCount,
             },
             null,
             2,
@@ -98,6 +116,8 @@ export const streamCollectionDeleteCommand =
       }
 
       logger.success(`Deleted collection ${collection.name}.`);
-      logger.dim("Its videos were kept.");
+      if (videoCount > 0) {
+        logger.dim(`The ${videoCount} video(s) inside it were deleted too.`);
+      }
     },
   });
