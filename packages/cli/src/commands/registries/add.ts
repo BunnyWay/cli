@@ -1,113 +1,73 @@
-import { createMcClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "@/config/index.ts";
-import { clientOptions } from "@/core/client-options.ts";
-import { defineCommand } from "@/core/define-command.ts";
+import { registriesCreate } from "@bunny.net/tools/registries";
+import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { prompts, spinner } from "@/core/ui.ts";
+import { prompts } from "@/core/ui.ts";
 
-const COMMAND = "add";
-const DESCRIPTION = "Add a container registry.";
+const REGISTRY_TYPES = ["dockerHub", "gitHub"] as const;
 
-interface AddArgs {
-  name?: string;
-  server?: string;
-  username?: string;
-  password?: string;
+// Flag first, prompt second, error last: the prompt wrapper already refuses when stdin is not a terminal.
+async function promptFor(
+  flag: string | undefined,
+  message: string,
+  label: string,
+  type: "text" | "password" = "text",
+): Promise<string> {
+  let value = flag;
+  if (!value) {
+    ({ value } = await prompts({ type, name: "value", message }));
+  }
+  if (!value) throw new UserError(`${label} is required.`);
+  return value;
 }
 
-export const registryAddCommand = defineCommand<AddArgs>({
-  command: COMMAND,
-  describe: DESCRIPTION,
+export const registryAddCommand = defineToolCommand({
+  tool: registriesCreate,
+  command: "add",
+  describe: "Add a container registry.",
+  examples: [
+    [
+      "$0 registries add --name 'ghcr.io (notrab)' --server ghcr.io --username notrab --password $TOKEN",
+      "Add a GitHub container registry; the type is derived from the server",
+    ],
+    ["$0 registries add", "Prompt for each value"],
+  ],
 
   builder: (yargs) =>
     yargs
-      .option("name", {
-        type: "string",
-        describe: "Display name",
-      })
+      .option("name", { type: "string", describe: "Display name" })
       .option("server", {
         type: "string",
-        describe: "Registry server (e.g. ghcr.io)",
+        describe: "Registry server (e.g. ghcr.io); used to derive --type",
       })
-      .option("username", {
+      .option("type", {
         type: "string",
-        describe: "Registry username",
+        choices: REGISTRY_TYPES,
+        describe: "Registry type (required for ghcr.io and docker.io)",
       })
+      .option("username", { type: "string", describe: "Registry username" })
       .option("password", {
         type: "string",
         describe: "Registry password or token",
       }),
 
-  handler: async ({
-    name: rawName,
-    server: _server,
-    username: rawUsername,
-    password: rawPassword,
-    profile,
-    output,
-    verbose,
-    apiKey,
-  }) => {
-    let displayName = rawName;
-    if (!displayName) {
-      const { value } = await prompts({
-        type: "text",
-        name: "value",
-        message: "Display name:",
-      });
-      displayName = value;
-    }
-    if (!displayName) throw new UserError("Display name is required.");
+  progress: "Adding registry...",
 
-    let username = rawUsername;
-    if (!username) {
-      const { value } = await prompts({
-        type: "text",
-        name: "value",
-        message: "Username:",
-      });
-      username = value;
-    }
-    if (!username) throw new UserError("Username is required.");
+  prepare: async (args) => {
+    const name = await promptFor(args.name, "Display name:", "Display name");
+    const username = await promptFor(args.username, "Username:", "Username");
+    const password = await promptFor(
+      args.password,
+      "Password/Token:",
+      "Password",
+      "password",
+    );
+    return {
+      input: { name, username, password, type: args.type, server: args.server },
+    };
+  },
 
-    let password = rawPassword;
-    if (!password) {
-      const { value } = await prompts({
-        type: "password",
-        name: "value",
-        message: "Password/Token:",
-      });
-      password = value;
-    }
-    if (!password) throw new UserError("Password is required.");
-
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createMcClient(clientOptions(config, verbose));
-
-    const spin = spinner("Adding registry...");
-    spin.start();
-
-    const { data: result } = await client.POST("/registries", {
-      body: {
-        displayName,
-        passwordCredentials: { userName: username, password },
-      },
-    });
-
-    spin.stop();
-
-    if (output === "json") {
-      logger.log(JSON.stringify(result, null, 2));
-      return;
-    }
-
-    if (result?.status === "saved") {
-      logger.success(`Registry "${displayName}" added (ID: ${result.id}).`);
-    } else {
-      logger.error(
-        `Failed to add registry: ${result?.error ?? "unknown error"}`,
-      );
-    }
+  render: (registry) => {
+    logger.success(`Registry "${registry.name}" added (ID: ${registry.id}).`);
   },
 });

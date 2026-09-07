@@ -43,6 +43,7 @@ jobs:
       database-shell-version: ${{ steps.check-database-shell.outputs.version }}
       openapi-client-version: ${{ steps.check-openapi-client.outputs.version }}
       sandbox-version: ${{ steps.check-sandbox.outputs.version }}
+      tools-version: ${{ steps.check-tools.outputs.version }}
       scriptable-dns-types-version: ${{ steps.check-scriptable-dns-types.outputs.version }}
     steps:
       - uses: actions/checkout@v5
@@ -62,6 +63,17 @@ jobs:
         run: |
           VERSION=$(node -p "require('./packages/sandbox/package.json').version")
           PUBLISHED=$(npm view @bunny.net/sandbox version 2>/dev/null || echo "0.0.0")
+          if [ "$VERSION" != "$PUBLISHED" ]; then
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "New version detected: $VERSION (published: $PUBLISHED)"
+          else
+            echo "No version change: $VERSION"
+          fi
+      - name: Check tools version
+        id: check-tools
+        run: |
+          VERSION=$(node -p "require('./packages/tools/package.json').version")
+          PUBLISHED=$(npm view @bunny.net/tools version 2>/dev/null || echo "0.0.0")
           if [ "$VERSION" != "$PUBLISHED" ]; then
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "New version detected: $VERSION (published: $PUBLISHED)"
@@ -533,6 +545,38 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           if [ -n "$(npm view "@bunny.net/sandbox@$VERSION" version 2>/dev/null)" ]; then
             echo "Skipping @bunny.net/sandbox@$VERSION (already published)"
+          else
+            bun publish --access public
+          fi
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-tools:
+    name: Publish tools
+    runs-on: ubuntu-latest
+    needs: version
+    if: needs.version.outputs.tools-version
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .tool-versions
+      - run: bun install
+
+      # The tools build type-checks against openapi-client's package exports (dist/), so build it first.
+      - name: Build openapi-client
+        run: bun run --filter @bunny.net/openapi-client build
+
+      - name: Build package
+        run: bun run --filter @bunny.net/tools build
+
+      # bun publish (not npm) rewrites the workspace:* dependency on @bunny.net/openapi-client to a real version.
+      - name: Publish @bunny.net/tools
+        run: |
+          cd packages/tools
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -n "$(npm view "@bunny.net/tools@$VERSION" version 2>/dev/null)" ]; then
+            echo "Skipping @bunny.net/tools@$VERSION (already published)"
           else
             bun publish --access public
           fi

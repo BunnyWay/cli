@@ -1,27 +1,27 @@
-import { createMcClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "@/config/index.ts";
-import { clientOptions } from "@/core/client-options.ts";
-import { defineCommand } from "@/core/define-command.ts";
+import { fetchRegistry, registriesUpdate } from "@bunny.net/tools/registries";
+import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { isInteractive, prompts, spinner } from "@/core/ui.ts";
+import { isInteractive, prompts } from "@/core/ui.ts";
 
-const COMMAND = "update <registry-id>";
-const DESCRIPTION = "Update a container registry.";
+const REGISTRY_TYPES = ["dockerHub", "gitHub"] as const;
 
-interface UpdateArgs {
-  "registry-id": number;
-  name?: string;
-  username?: string;
-  password?: string;
+async function promptText(
+  message: string,
+  type: "text" | "password" = "text",
+  initial?: string,
+): Promise<string | undefined> {
+  const { value } = await prompts({ type, name: "value", message, initial });
+  return value;
 }
 
-export const registryUpdateCommand = defineCommand<UpdateArgs>({
-  command: COMMAND,
-  describe: DESCRIPTION,
+export const registryUpdateCommand = defineToolCommand({
+  tool: registriesUpdate,
+  command: "update <registry-id>",
+  describe: "Update a container registry.",
   examples: [
     [
-      "$0 registries update 123 --username notrab --password $(gh auth token)",
+      "$0 registries update 123 --username notrab --password $TOKEN",
       "Rotate the credentials on registry 123",
     ],
     ["$0 registries update 123 --name 'ghcr.io (notrab)'", "Rename only"],
@@ -38,6 +38,11 @@ export const registryUpdateCommand = defineCommand<UpdateArgs>({
         type: "string",
         describe: "New display name (omit to keep current)",
       })
+      .option("type", {
+        type: "string",
+        choices: REGISTRY_TYPES,
+        describe: "Registry type (required for ghcr.io and docker.io)",
+      })
       .option("username", {
         type: "string",
         describe:
@@ -49,88 +54,50 @@ export const registryUpdateCommand = defineCommand<UpdateArgs>({
           "New registry password/token. Requires --username (or you'll be prompted).",
       }),
 
-  handler: async ({
-    "registry-id": registryId,
-    name: nameFlag,
-    username: usernameFlag,
-    password: passwordFlag,
-    profile,
-    output,
-    verbose,
-    apiKey,
-  }) => {
+  progress: "Updating registry...",
+
+  prepare: async (args, ctx) => {
+    const registryId = args["registry-id"];
     const flagsProvided = Boolean(
-      nameFlag || usernameFlag !== undefined || passwordFlag !== undefined,
+      args.name ||
+        args.type ||
+        args.username !== undefined ||
+        args.password !== undefined,
     );
     // Without flags this command is a pure interactive editor; unattended it would keep every value and report a no-op update as success.
-    if (!flagsProvided && !isInteractive(output)) {
+    if (!flagsProvided && !isInteractive(args.output)) {
       throw new UserError(
         "No changes requested.",
         "Pass --name, or --username and --password, or run in a terminal to edit interactively.",
       );
     }
 
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createMcClient(clientOptions(config, verbose));
+    let name = args.name;
+    let username = args.username;
+    let password = args.password;
 
-    const fetchSpin = spinner("Fetching registry...");
-    fetchSpin.start();
-    const { data: existing } = await client.GET("/registries/{registryId}", {
-      params: { path: { registryId } },
-    });
-    fetchSpin.stop();
-
-    if (!existing) {
-      throw new UserError(`Registry ${registryId} not found.`);
-    }
-
-    // Resolve display name: flag → keep existing → prompt.
-    let displayName = nameFlag ?? existing.displayName ?? "";
-    if (!flagsProvided) {
-      const { value } = await prompts({
-        type: "text",
-        name: "value",
-        message: "Display name:",
-        initial: displayName,
-      });
-      if (value !== undefined) displayName = value;
-    }
-    if (!displayName) {
-      throw new UserError("Display name is required.");
-    }
-
-    // Resolve credentials. Either both flags (rotate creds) or neither
-    // (keep existing). In interactive mode, ask explicitly.
-    let userName: string | undefined;
-    let password: string | undefined;
-
-    if (usernameFlag !== undefined || passwordFlag !== undefined) {
-      userName = usernameFlag;
-      if (userName === undefined) {
-        const { value } = await prompts({
-          type: "text",
-          name: "value",
-          message: "Username:",
-        });
-        userName = value;
-      }
-      if (!userName) {
+    if (args.username !== undefined || args.password !== undefined) {
+      username ??= await promptText("Username:");
+      if (!username) {
         throw new UserError("Username is required when rotating credentials.");
       }
-
-      password = passwordFlag;
-      if (password === undefined) {
-        const { value } = await prompts({
-          type: "password",
-          name: "value",
-          message: "Password/Token:",
-        });
-        password = value;
-      }
+      password ??= await promptText("Password/Token:", "password");
       if (!password) {
         throw new UserError("Password is required when rotating credentials.");
       }
-    } else if (!flagsProvided) {
+    }
+
+    if (!flagsProvided) {
+      // Only the interactive editor needs the current record, for prompt defaults.
+      const existing = await fetchRegistry(ctx.clients.mc, registryId);
+
+      name = await promptText(
+        "Display name:",
+        "text",
+        existing.displayName ?? "",
+      );
+      if (!name) throw new UserError("Display name is required.");
+
       const { value: rotate } = await prompts({
         type: "confirm",
         name: "value",
@@ -138,51 +105,29 @@ export const registryUpdateCommand = defineCommand<UpdateArgs>({
         initial: false,
       });
       if (rotate) {
-        const { value: u } = await prompts({
-          type: "text",
-          name: "value",
-          message: "Username:",
-          initial: existing.userName ?? undefined,
-        });
-        userName = u;
-        if (!userName) throw new UserError("Username is required.");
-
-        const { value: p } = await prompts({
-          type: "password",
-          name: "value",
-          message: "Password/Token:",
-        });
-        password = p;
+        username = await promptText(
+          "Username:",
+          "text",
+          existing.userName ?? undefined,
+        );
+        if (!username) throw new UserError("Username is required.");
+        password = await promptText("Password/Token:", "password");
         if (!password) throw new UserError("Password is required.");
       }
     }
 
-    const updateSpin = spinner("Updating registry...");
-    updateSpin.start();
-
-    const { data: result } = await client.PUT("/registries/{registryId}", {
-      params: { path: { registryId } },
-      body: {
-        displayName,
-        ...(userName && password
-          ? { passwordCredentials: { userName, password } }
-          : {}),
+    return {
+      input: {
+        registry: registryId,
+        name,
+        username,
+        password,
+        type: args.type,
       },
-    });
+    };
+  },
 
-    updateSpin.stop();
-
-    if (output === "json") {
-      logger.log(JSON.stringify(result, null, 2));
-      return;
-    }
-
-    if (result?.status === "saved") {
-      logger.success(`Registry "${displayName}" updated.`);
-    } else {
-      throw new UserError(
-        `Failed to update registry: ${result?.error ?? result?.status ?? "unknown error"}`,
-      );
-    }
+  render: (registry) => {
+    logger.success(`Registry "${registry.name}" updated.`);
   },
 });
