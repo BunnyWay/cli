@@ -225,6 +225,15 @@
         },
         "spa": {
           "type": "boolean"
+        },
+        "functions": {
+          "type": "object",
+          "properties": {
+            "dir": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

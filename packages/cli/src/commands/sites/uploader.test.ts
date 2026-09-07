@@ -47,6 +47,14 @@ test("collectFiles walks recursively, skipping excluded entries, sorted", () => 
   expect(files[1]?.size).toBeGreaterThan(0);
 });
 
+test("collectFiles leaves out an excluded tree such as functions/", () => {
+  const dir = tree();
+  mkdirSync(join(dir, "functions", "hello"), { recursive: true });
+  Bun.write(join(dir, "functions", "hello", "index.ts"), "export default 1");
+  const files = collectFiles(dir, { exclude: [join(dir, "functions")] });
+  expect(files.map((f) => f.path)).toEqual(["assets/app.js", "index.html"]);
+});
+
 test("collectFiles keeps .well-known content", () => {
   const dir = mkdtempSync(join(tmpdir(), "bunny-sites-wk-"));
   Bun.write(join(dir, "index.html"), "<h1>hi</h1>");

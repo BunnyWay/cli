@@ -67,12 +67,18 @@ export const RegionsConfigSchema = z.union([
   }),
 ]);
 
-// Static-site config (`bunny sites`), all optional: `name` links the directory to a site, `dir` is the deploy root, `build` is the command `sites deploy --build` runs, `spa` serves index.html for client-side routes (default: detected from the framework).
+// Functions deployed alongside a site: `dir` holds one folder or file per function (default `functions`).
+export const SiteFunctionsConfigSchema = z.object({
+  dir: z.string().optional(),
+});
+
+// Static-site config (`bunny sites`), all optional: `name` links the directory to a site, `dir` is the deploy root, `build` is the command `sites deploy --build` runs, `spa` serves index.html for client-side routes (default: detected from the framework), `functions` configures the functions directory.
 export const SiteConfigSchema = z.object({
   name: z.string().optional(),
   dir: z.string().optional(),
   build: z.string().optional(),
   spa: z.boolean().optional(),
+  functions: SiteFunctionsConfigSchema.optional(),
 });
 
 // The `app` block: Magic Containers deploy intent.
@@ -101,6 +107,7 @@ export type BunnyConfig = z.infer<typeof BunnyConfigSchema>;
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type BunnyAppConfig = z.infer<typeof BunnyAppConfigSchema>;
 export type SiteConfig = z.infer<typeof SiteConfigSchema>;
+export type SiteFunctionsConfig = z.infer<typeof SiteFunctionsConfigSchema>;
 export type ContainerConfig = z.infer<typeof ContainerConfigSchema>;
 export type EndpointConfig = z.infer<typeof EndpointConfigSchema>;
 export type VolumeConfig = z.infer<typeof VolumeConfigSchema>;

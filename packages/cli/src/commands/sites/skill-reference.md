@@ -159,6 +159,26 @@ bunny sites unlink
 bunny sites delete my-site                  # typed-name confirmation; --keep-storage keeps files
 ```
 
+## Functions
+
+A `functions/` directory next to `bunny.jsonc` (override: `sites.functions.dir`) deploys with the site on every `sites deploy`. Each entry is its own Edge Script on its own URL, which the frontend calls cross-origin:
+
+```
+functions/
+  hello.ts            -> BUNNY_FUNCTION_HELLO_URL   (https://sites-<site>-hello-<suffix>.b-cdn.net)
+  create-share/index.ts -> BUNNY_FUNCTION_CREATE_SHARE_URL
+```
+
+- A function exports a default `(request: Request) => Response | Promise<Response>` handler, or a `{ fetch }` object. The CLI bundles it (plus its imports) into one Edge Script; no SDK import is needed. Names are `[a-z0-9-]`, one entry per name (`hello.ts` and `hello/` together are rejected), and `sites-<site>-<name>` must fit in 100 characters.
+- A folder with a `package.json` build script is built with the detected package manager instead, and its `dist/index.{js,ts,mjs}` is uploaded as-is (the shape of the official Edge Script templates).
+- Each function is a standalone Edge Script `sites-<site>-<name>` with its own linked pull zone. Nothing is routed through the site's pull zone, and the functions directory never ships as static files.
+- Function scripts are created before the build; their code is published after the deploy is validated, right before the site uploads. Every URL is passed to `--build` as `BUNNY_FUNCTION_<NAME>_URL`, plus a copy with the detected framework's public prefix (`VITE_`, `NEXT_PUBLIC_`, `PUBLIC_`, ...), so `import.meta.env.VITE_BUNNY_FUNCTION_HELLO_URL` works. Builds outside the CLI take the URLs from `sites deploy --output json` (`functions[].url`, `functions[].env`) or `sites show`.
+- The bundled entry answers CORS preflight and allows any origin; a handler that sets `Access-Control-Allow-Origin` itself wins. Folder functions with their own build handle CORS themselves.
+- Unchanged code (by hash) skips its upload unless `--force`. State lives in `_bunny/site.json` under `functions`; folder functions also get `.bunny/script.json` so `bunny scripts env|stats|deployments` work from inside the folder.
+- `sites show` lists functions with their URLs; `sites delete` deletes their scripts and linked zones. Removing a folder does not remove the function; deploy warns and the script stays until deleted.
+
+---
+
 ## `bunny.jsonc` integration
 
 An optional `sites` block configures the deploy defaults (validated on its own, so a sites-only file works without an `app` block):

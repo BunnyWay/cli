@@ -26,6 +26,43 @@ export interface EnvEntry {
   secret: boolean;
 }
 
+type AddEdgeScript = components["schemas"]["AddEdgeScriptModel"];
+
+/** Create an Edge Script, throwing a UserError when the API returns nothing usable. */
+export async function createScriptResource(
+  client: ComputeClient,
+  body: AddEdgeScript,
+): Promise<EdgeScript & { Id: number }> {
+  const { data } = await client.POST("/compute/script", { body });
+  if (!data || data.Id == null) {
+    throw new UserError("Failed to create Edge Script.");
+  }
+  return { ...data, Id: data.Id };
+}
+
+/** Upload a script's code as a new (unpublished) deployment. */
+export async function uploadScriptCode(
+  client: ComputeClient,
+  id: number,
+  code: string,
+): Promise<void> {
+  await client.POST("/compute/script/{id}/code", {
+    params: { path: { id } },
+    body: { Code: code },
+  });
+}
+
+/** Publish the latest uploaded code as the live release. */
+export async function publishScript(
+  client: ComputeClient,
+  id: number,
+): Promise<void> {
+  await client.POST("/compute/script/{id}/publish", {
+    params: { path: { id, uuid: null } },
+    body: {},
+  });
+}
+
 /** Fetch a single script by ID, throwing a UserError if it doesn't exist. */
 export async function fetchScript(
   client: ComputeClient,

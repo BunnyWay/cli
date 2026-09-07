@@ -11,7 +11,13 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { resolveManifestId } from "@/core/manifest.ts";
 import { spinner } from "@/core/ui.ts";
-import { fetchScript, fetchScriptHostnames, logLiveHostnames } from "./api.ts";
+import {
+  fetchScript,
+  fetchScriptHostnames,
+  logLiveHostnames,
+  publishScript,
+  uploadScriptCode,
+} from "./api.ts";
 import { SCRIPT_MANIFEST } from "./constants.ts";
 
 const COMMAND = "deploy <file> [id]";
@@ -102,10 +108,7 @@ export const scriptsDeployCommand = defineCommand<DeployArgs>({
     const spin = spinner("Uploading code...");
     spin.start();
 
-    await client.POST("/compute/script/{id}/code", {
-      params: { path: { id } },
-      body: { Code: code },
-    });
+    await uploadScriptCode(client, id, code);
 
     spin.stop();
     logger.success("Code uploaded.");
@@ -116,10 +119,7 @@ export const scriptsDeployCommand = defineCommand<DeployArgs>({
       const pubSpin = spinner("Publishing...");
       pubSpin.start();
 
-      await client.POST("/compute/script/{id}/publish", {
-        params: { path: { id, uuid: null } },
-        body: {},
-      });
+      await publishScript(client, id);
 
       pubSpin.stop();
       logger.success("Deployment published.");
