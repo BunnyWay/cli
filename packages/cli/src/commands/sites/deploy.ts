@@ -57,6 +57,7 @@ interface DeployArgs extends SiteSelectorArgs {
   env?: string[];
   "env-file"?: string;
   force?: boolean;
+  spa?: boolean;
   "deploy-id"?: string;
 }
 
@@ -260,6 +261,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           type: "string",
           describe:
             "Identify this deploy yourself (e.g. a release or catalog ID) instead of using the git sha or content hash; used exactly as given",
+        })
+        .option("spa", {
+          type: "boolean",
+          describe:
+            "Serve index.html for client-side routes (--no-spa serves the 404 page instead); overrides sites.spa and framework detection, and skips the prompt",
         }),
     ),
 
@@ -358,7 +364,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
     const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
 
-    let configuredSpa = siteConfig?.config.spa;
+    let configuredSpa = args.spa ?? siteConfig?.config.spa;
     const detectedPreset = configuredSpa === undefined ? preset : undefined;
     // Saved so it is asked once; an undetected toolchain would otherwise 404 on refresh.
     const paths = files.map((f) => f.path);
