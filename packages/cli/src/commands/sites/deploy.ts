@@ -74,8 +74,11 @@ export function resolveNotFoundMode(
     }
     return "spa";
   }
-  if (opts.configured === undefined && opts.detected && hasIndex) return "spa";
-  return paths.includes("404.html") ? "404" : undefined;
+  // A built 404.html is a deliberate not-found page, so it beats the framework heuristic; `sites.spa: true` still forces the fallback.
+  const has404 = paths.includes("404.html");
+  if (opts.configured === undefined && opts.detected && hasIndex && !has404)
+    return "spa";
+  return has404 ? "404" : undefined;
 }
 
 // Static generators emit an HTML file per page, so a lone root index.html with scripts is the client-routed signature.

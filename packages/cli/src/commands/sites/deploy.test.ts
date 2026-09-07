@@ -201,9 +201,10 @@ test("not-found mode: sites.spa wins, detection needs a root index.html, 404.htm
   expect(() =>
     resolveNotFoundMode(["docs/index.html"], { configured: true }),
   ).toThrow(/no index.html/);
+  expect(resolveNotFoundMode(["index.html"], { detected: true })).toBe("spa");
   expect(
     resolveNotFoundMode(["index.html", "404.html"], { detected: true }),
-  ).toBe("spa");
+  ).toBe("404");
   expect(resolveNotFoundMode(["index.html", "404.html"], {})).toBe("404");
   expect(looksLikeSpa(["index.html", "assets/app.js"])).toBe(true);
   expect(looksLikeSpa(["index.html", "about/index.html", "app.js"])).toBe(
