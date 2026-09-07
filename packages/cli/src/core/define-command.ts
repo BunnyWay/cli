@@ -23,6 +23,61 @@ interface CommandDef<A = Record<string, never>> {
   postRun?: (args: A & GlobalArgs) => Promise<void>;
 }
 
+/** Option names of the command that matched, so the root fail handler can suggest a near miss. */
+export const knownOptionKeys = new Set<string>();
+
+/** Root-level options inherited by every command. */
+export const GLOBAL_OPTION_KEYS = [
+  "profile",
+  "output",
+  "api-key",
+  "verbose",
+  "help",
+  "version",
+];
+
+// Own flags are grouped first so they lead the help text; the inherited globals follow under their own heading.
+export function groupHelpOptions(y: Argv, command = ""): void {
+  const positionals = [...command.matchAll(/[<[]([^>\]]+)[>\]]/g)].flatMap(
+    (m) => (m[1] ?? "").replace(/\.\.$/, "").split("|"),
+  );
+  const own = Object.keys(optionsOf(y).key).filter(
+    (k) =>
+      k.length > 1 &&
+      !/[A-Z]/.test(k) &&
+      !GLOBAL_OPTION_KEYS.includes(k) &&
+      !positionals.includes(k),
+  );
+  if (own.length > 0) y.group(own, "Options:");
+  y.group(GLOBAL_OPTION_KEYS, "Global Options:");
+}
+
+const UNAUTHORIZED_MESSAGE = "Unauthorized. Your API key was rejected.";
+const UNAUTHORIZED_HINT =
+  'Run "bunny login" to authenticate, or check the key passed with --api-key or BUNNYNET_API_KEY.';
+
+// Runtime accessor that @types/yargs leaves out.
+function optionsOf(y: Argv): {
+  key: Record<string, unknown>;
+  number: string[];
+} {
+  return (
+    y as unknown as { getOptions(): ReturnType<typeof optionsOf> }
+  ).getOptions();
+}
+
+// yargs turns a non-numeric value for a number option into NaN instead of failing, so reject it here.
+function rejectNaN(y: Argv, argv: Record<string, unknown>): true {
+  for (const key of optionsOf(y).number) {
+    const value = argv[key];
+    const values = Array.isArray(value) ? value : [value];
+    if (values.some((v) => typeof v === "number" && Number.isNaN(v))) {
+      throw new Error(`Invalid value for ${key}: expected a number.`);
+    }
+  }
+  return true;
+}
+
 /**
  * Command factory for leaf commands. Wraps the handler with consistent
  * error handling and lifecycle hooks (`preRun` → `handler` → `postRun`).
@@ -53,7 +108,9 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
         y = y.example(cmd, desc) as any;
       }
     }
-    return y;
+    for (const key of Object.keys(optionsOf(y).key)) knownOptionKeys.add(key);
+    groupHelpOptions(y, def.command);
+    return y.check((argv) => rejectNaN(y, argv as Record<string, unknown>));
   };
 
   return {
@@ -70,12 +127,15 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
       } catch (err: any) {
         const isUser = err?.isUserError;
         const isApi = err?.name === "ApiError";
+        const isUnauthorized = isApi && err.status === 401;
+        const message = isUnauthorized
+          ? UNAUTHORIZED_MESSAGE
+          : (err?.message ?? "An unexpected error occurred.");
+        const hint = isUnauthorized ? UNAUTHORIZED_HINT : err?.hint;
 
         if (args.output === "json") {
-          const payload: Record<string, unknown> = {
-            error: err?.message ?? "An unexpected error occurred.",
-          };
-          if (isUser && err.hint) payload.hint = err.hint;
+          const payload: Record<string, unknown> = { error: message };
+          if (isUser && hint) payload.hint = hint;
           if (isApi) {
             payload.status = err.status;
             if (err.field) payload.field = err.field;
@@ -87,7 +147,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
         }
 
         if (isApi && err.validationErrors?.length) {
-          logger.error(err.message);
+          logger.error(message);
           for (const ve of err.validationErrors) {
             logger.dim(`  ${ve.field ?? "unknown"}: ${ve.message}`);
           }
@@ -95,8 +155,8 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
         }
 
         if (isUser) {
-          logger.error(err.message);
-          if (err.hint) logger.dim(err.hint);
+          logger.error(message);
+          if (hint) logger.dim(hint);
           process.exit(1);
         }
 

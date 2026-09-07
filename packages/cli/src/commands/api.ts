@@ -11,6 +11,16 @@ const DESCRIPTION = "Make a raw API request to bunny.net.";
 
 const VALID_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
+// A non-JSON error body is usually an HTML error page, so keep the hint to one readable line.
+function previewBody(text: string): string | undefined {
+  if (!text) return undefined;
+  if (/<!doctype html|<html[\s>]/i.test(text)) {
+    return "The API returned an HTML page instead of JSON. Check the path.";
+  }
+  const line = text.replace(/\s+/g, " ").trim();
+  return line.length > 300 ? `${line.slice(0, 300)}...` : line;
+}
+
 interface ApiArgs {
   method: string;
   path?: string;
@@ -164,7 +174,7 @@ export const apiCommand = defineCommand<ApiArgs>({
       if (!res.ok) {
         throw new UserError(
           `${res.status} ${res.statusText}`,
-          text || undefined,
+          previewBody(text),
         );
       }
       if (text) await writeStdout(`${text}\n`);

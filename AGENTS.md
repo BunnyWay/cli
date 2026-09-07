@@ -126,7 +126,9 @@ Registered on the root yargs instance with `global: true`, available on every ha
 | `--output`  | `-o`  | `string`  | `"text"`    | Output format: `text`, `json`, `table`, `csv`, `markdown` |
 | `--api-key` |       | `string`  |             | API key; takes priority over profile and environment      |
 
-Root instance also sets: a branded landing page as the `$0` default command, `recommendCommands()`, `strict()`, `.version()`, `.help()`, and `.completion()`.
+Root instance also sets: a branded landing page as the `$0` default command, `recommendCommands()`, `strict()`, `.version()`, `.help()`, and `.completion()`. Global options sit in their own "Global Options:" help group so command flags read first.
+
+The `.fail()` handler prints the error, a "Did you mean" suggestion when a top-level command or flag is a near miss (`core/suggest.ts`; yargs' own recommendation only fires below the root because of the `$0` default command), and a one-line pointer to `--help` instead of dumping the full help text.
 
 ---
 
@@ -187,6 +189,8 @@ The bunny.net APIs return two different error shapes. `authMiddleware()` in `pac
 - An empty body gets a sensible default message per status code.
 
 Under `--output json` the error payload carries all available context (`error`, `status`, `field`, `validationErrors`).
+
+`defineCommand()` also normalizes every 401 to one message with a `bunny login` hint, and rejects `NaN` on any `type: "number"` option or positional before the handler runs, so a typo like `--ttl abc` never reaches the API.
 
 | Exit code | Meaning                                           |
 | --------- | ------------------------------------------------- |

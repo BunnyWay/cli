@@ -1,6 +1,6 @@
 import type { createDbClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/database.d.ts";
-import { UserError } from "@/core/errors.ts";
+import { ApiError, UserError } from "@/core/errors.ts";
 import { DB_PAGE_SIZE, TOKEN_TTL_MINUTES } from "./constants.ts";
 
 type DbClient = ReturnType<typeof createDbClient>;
@@ -17,10 +17,22 @@ export async function fetchDatabase(
   client: DbClient,
   id: string,
 ): Promise<Database> {
-  const { data } = await client.GET("/v2/databases/{db_id}", {
-    params: { path: { db_id: id } },
-  });
-  if (!data?.db) throw new UserError(`Database ${id} not found.`);
+  const notFound = new UserError(
+    `No database found for "${id}".`,
+    'Run "bunny db list" to see your databases.',
+  );
+  let data: { db?: Database } | undefined;
+  try {
+    ({ data } = await client.GET("/v2/databases/{db_id}", {
+      params: { path: { db_id: id } },
+    }));
+  } catch (err) {
+    // The API answers 400 for a malformed ID and 404 for an unknown one; both mean "not yours".
+    if (err instanceof ApiError && (err.status === 400 || err.status === 404))
+      throw notFound;
+    throw err;
+  }
+  if (!data?.db) throw notFound;
   return data.db;
 }
 

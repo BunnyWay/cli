@@ -1,18 +1,5 @@
 export { ApiError, UserError } from "@bunny.net/openapi-client";
 
-import { UserError } from "@bunny.net/openapi-client";
-
-/**
- * Configuration-related error. Extends {@link UserError} with a hint
- * pointing the user to `bunny config show`.
- */
-export class ConfigError extends UserError {
-  constructor(message: string) {
-    super(message, "Run `bunny config show` to check your configuration.");
-    this.name = "ConfigError";
-  }
-}
-
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }

@@ -20,7 +20,10 @@ import { skillsNamespace } from "./commands/skills/index.ts";
 import { storageNamespace } from "./commands/storage/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { bunny } from "./core/colors.ts";
+import { GLOBAL_OPTION_KEYS, knownOptionKeys } from "./core/define-command.ts";
+import { defineNamespace } from "./core/define-namespace.ts";
 import { logger } from "./core/logger.ts";
+import { suggest } from "./core/suggest.ts";
 import { VERSION } from "./core/version.ts";
 
 const commands: CommandModule[] = [
@@ -45,7 +48,66 @@ const experimentalCommands: CommandModule[] = [
   registriesNamespace,
   registryNamespace,
   sitesNamespace,
+  // Hidden mount for the muscle-memory form `bunny auth login`.
+  defineNamespace("auth", false, [authLoginCommand, authLogoutCommand]),
 ];
+
+const topLevelNames = [...commands, ...experimentalCommands].flatMap((cmd) => {
+  const names = Array.isArray(cmd.command) ? cmd.command : [cmd.command ?? ""];
+  return [...names.map((n) => n.split(" ")[0]), ...(cmd.aliases ?? [])];
+});
+
+const rawArgs = hideBin(process.argv);
+// Leading command words: global flags are stepped over, and collection stops at the first unknown flag since its arity is unknown.
+function leadingPositionals(args: string[]): string[] {
+  const valueFlags = ["-p", "--profile", "-o", "--output", "--api-key"];
+  const boolFlags = ["-v", "--verbose", "--help", "--version", "-V"];
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? "";
+    if (!arg.startsWith("-")) {
+      out.push(arg);
+    } else if (valueFlags.includes(arg)) {
+      i++;
+    } else if (!boolFlags.includes(arg) && !arg.includes("=")) {
+      break;
+    }
+  }
+  return out;
+}
+
+const positionals = leadingPositionals(rawArgs);
+
+// yargs skips its own top-level recommendation when a `$0` default command exists, so cover commands and flags here.
+function didYouMean(msg: string): string | undefined {
+  const unknown =
+    msg.match(/^Unknown arguments?: (.+)$/)?.[1]?.split(", ") ?? [];
+  for (const token of unknown) {
+    if (
+      rawArgs.some((a) => a === `--${token}` || a.startsWith(`--${token}=`))
+    ) {
+      const flags = [...knownOptionKeys, ...GLOBAL_OPTION_KEYS].filter(
+        (k) => k.length > 1 && !/[A-Z]/.test(k),
+      );
+      const match = suggest(token, flags);
+      return match && `Did you mean --${match}?`;
+    }
+    if (token === positionals[0]) {
+      const match = suggest(token, topLevelNames);
+      return match && `Did you mean ${match}?`;
+    }
+  }
+  return undefined;
+}
+
+// Command path for the help pointer: the positionals typed, minus whatever yargs rejected.
+function helpPath(msg: string): string {
+  const unknown =
+    msg.match(/^Unknown arguments?: (.+)$/)?.[1]?.split(", ") ?? [];
+  let path = positionals.filter((p) => !unknown.includes(p));
+  if (msg.startsWith("Did you mean")) path = path.slice(0, -1);
+  return ["bunny", ...path, "--help"].join(" ");
+}
 
 let instance = yargs(hideBin(process.argv))
   .scriptName("bunny")
@@ -82,6 +144,11 @@ let instance = yargs(hideBin(process.argv))
 
 for (const cmd of [...commands, ...experimentalCommands]) {
   instance = instance.command(cmd);
+}
+
+// Grouping at the root is inherited by every subcommand and would print ahead of their own flags, so only do it for root help.
+if (positionals.length === 0) {
+  instance = instance.group(GLOBAL_OPTION_KEYS, "Global Options:");
 }
 
 export const cli = instance
@@ -161,14 +228,15 @@ export const cli = instance
   .completion("completion", "Generate shell completion script")
   .recommendCommands()
   .strict()
-  .fail((msg, err, yargs) => {
+  .fail((msg, err) => {
     if (err) {
       logger.error(err.message);
-    } else if (msg) {
-      logger.error(msg);
-      console.log();
-      yargs.showHelp();
+      process.exit(1);
     }
+    logger.error(msg);
+    const hint = didYouMean(msg);
+    if (hint) logger.dim(hint);
+    logger.dim(`Run \`${helpPath(msg)}\` for usage.`);
     process.exit(1);
   })
   .help()

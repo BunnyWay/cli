@@ -126,6 +126,7 @@ bunny config show --output json
 bunny config profile create staging
 bunny config profile create staging --api-key bny_xxxxxxxxxxxx
 bunny config profile delete staging
+bunny config profile delete staging --force
 ```
 
 ### `bunny db`
