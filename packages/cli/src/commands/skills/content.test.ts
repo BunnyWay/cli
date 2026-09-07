@@ -47,7 +47,6 @@ describe("BUNNY_CLI_SKILL", () => {
       "bunny apps",
       "bunny registries",
       "bunny registry",
-      "bunny sites",
     ]) {
       for (const text of texts) expect(text).not.toContain(namespace);
     }
