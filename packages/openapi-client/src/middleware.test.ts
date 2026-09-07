@@ -1,11 +1,38 @@
 import { describe, expect, test } from "bun:test";
 import { ApiError } from "./errors.ts";
-import { authMiddleware, type ClientOptions } from "./middleware.ts";
+import {
+  authMiddleware,
+  type ClientOptions,
+  redactSecrets,
+} from "./middleware.ts";
 import { captureError, jsonResponse } from "./test-helpers.ts";
 
 function runRequest(options: ClientOptions, request: Request) {
   const mw = authMiddleware(options);
   return mw.onRequest!({ request } as never) as Promise<Request>;
+}
+
+/**
+ * A request that records every attempt to clone or consume its body, so a test
+ * can prove the middleware left a large binary upload untouched.
+ */
+function spyRequest(url: string, init: RequestInit) {
+  const request = new Request(url, init);
+  const reads: string[] = [];
+  const spied = ["clone", "json", "text", "arrayBuffer", "blob"] as const;
+  for (const name of spied) {
+    const original = Request.prototype[name] as (
+      this: Request,
+      ...args: unknown[]
+    ) => unknown;
+    Object.defineProperty(request, name, {
+      value: (...args: unknown[]) => {
+        reads.push(name);
+        return original.apply(request, args);
+      },
+    });
+  }
+  return { request, reads };
 }
 
 function runResponse(
@@ -44,6 +71,54 @@ describe("authMiddleware onRequest", () => {
       new Request("https://api.bunny.net/region", { method: "GET" }),
     );
     expect(logs).toContain("→ GET https://api.bunny.net/region");
+  });
+
+  test("dumps a JSON request body", async () => {
+    const logs: string[] = [];
+    const { request, reads } = spyRequest(
+      "https://api.bunny.net/videolibrary",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ Name: "my-library" }),
+      },
+    );
+
+    await runRequest(
+      { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+      request,
+    );
+
+    expect(logs.join("\n")).toContain('"Name": "my-library"');
+    // The dump reads a clone, never the request that is about to be sent.
+    expect(reads).toEqual(["clone"]);
+  });
+
+  // Reading an octet-stream body would buffer the whole upload (a video, say)
+  // into memory just to log it, so it is described from its headers instead.
+  test("never reads a non-JSON request body", async () => {
+    const logs: string[] = [];
+    const { request, reads } = spyRequest(
+      "https://video.bunnycdn.com/library/1/videos/abc",
+      {
+        method: "PUT",
+        headers: {
+          "content-type": "application/octet-stream",
+          "content-length": "12",
+        },
+        body: new Blob(["binary-bytes"]),
+      },
+    );
+
+    await runRequest(
+      { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+      request,
+    );
+
+    expect(reads).toEqual([]);
+    expect(logs).toContain(
+      "→ Body (application/octet-stream): 12 bytes, not logged",
+    );
   });
 
   test("does not log when onDebug is set but verbose is false", async () => {
@@ -99,6 +174,34 @@ describe("authMiddleware onResponse", () => {
       runResponse({ apiKey: "k" }, jsonResponse({ title: "Conflict" }, 409)),
     )) as ApiError;
     expect(error.message).toBe("Conflict");
+  });
+
+  // Stream answers with StatusModel, whose message field is lowercase; without
+  // its own extractor the message is dropped for a generic HTTP failure.
+  test("normalizes the Stream StatusModel (lowercase message)", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        jsonResponse(
+          { success: false, message: "URL validation failed", statusCode: 400 },
+          400,
+        ),
+      ),
+    )) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(400);
+    expect(error.message).toBe("URL validation failed");
+  });
+
+  // The Core format wins when both shapes are somehow present.
+  test("prefers the Core Message over a lowercase message", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        jsonResponse({ Message: "Core wins.", message: "stream" }, 400),
+      ),
+    )) as ApiError;
+    expect(error.message).toBe("Core wins.");
   });
 
   test("uses a friendly status message for an empty error body", async () => {
@@ -180,4 +283,120 @@ describe("authMiddleware onResponse", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect(error.message).toContain("non-JSON");
   });
+});
+
+describe("redactSecrets", () => {
+  test("redacts the keys a video library answers with", () => {
+    expect(
+      redactSecrets({
+        Id: 1,
+        Name: "my-library",
+        ApiKey: "rw-secret",
+        ReadOnlyApiKey: "ro-secret",
+        ApiAccessKey: "rw-secret",
+        VideoCount: 3,
+      }),
+    ).toEqual({
+      Id: 1,
+      Name: "my-library",
+      ApiKey: "[redacted]",
+      ReadOnlyApiKey: "[redacted]",
+      ApiAccessKey: "[redacted]",
+      VideoCount: 3,
+    });
+  });
+
+  test("redacts a nested headers.Authorization in a request body", () => {
+    expect(
+      redactSecrets({
+        url: "https://example.com/video.mp4",
+        title: "clip",
+        headers: {
+          Authorization: "Bearer abc",
+          Referer: "https://example.com",
+        },
+      }),
+    ).toEqual({
+      url: "https://example.com/video.mp4",
+      title: "clip",
+      headers: {
+        Authorization: "[redacted]",
+        Referer: "https://example.com",
+      },
+    });
+  });
+
+  test("redacts passwords, tokens, and secrets at any depth", () => {
+    expect(
+      redactSecrets({
+        zone: { Name: "z", Password: "p", ReadOnlyPassword: "r" },
+        auth: [{ authToken: "t" }, { AccessKey: "k" }],
+        clientSecret: "cs",
+      }),
+    ).toEqual({
+      zone: {
+        Name: "z",
+        Password: "[redacted]",
+        ReadOnlyPassword: "[redacted]",
+      },
+      auth: [{ authToken: "[redacted]" }, { AccessKey: "[redacted]" }],
+      clientSecret: "[redacted]",
+    });
+  });
+
+  test("leaves non-secret fields and non-string values alone", () => {
+    const body = {
+      Id: 7,
+      Name: "keeper",
+      Monkey: "not a secret",
+      keyCount: 3,
+      nested: { EnabledResolutions: "720p,1080p", flag: true },
+      list: [1, 2, 3],
+      nothing: null,
+    };
+    expect(redactSecrets(body)).toEqual({
+      ...body,
+      // `keyCount` matches the pattern but is not a string, so it survives.
+      keyCount: 3,
+      // `Monkey` ends in "key", so it is redacted: a false positive is the safe direction.
+      Monkey: "[redacted]",
+    });
+  });
+
+  test("passes through primitives untouched", () => {
+    expect(redactSecrets("plain")).toBe("plain");
+    expect(redactSecrets(42)).toBe(42);
+    expect(redactSecrets(null)).toBe(null);
+  });
+});
+
+test("verbose response body dumps are redacted", async () => {
+  const logs: string[] = [];
+  await runResponse(
+    { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+    jsonResponse({ Id: 1, Name: "my-library", ApiKey: "rw-secret" }, 200),
+  );
+  const dump = logs.join("\n");
+  expect(dump).toContain("my-library");
+  expect(dump).not.toContain("rw-secret");
+  expect(dump).toContain("[redacted]");
+});
+
+test("verbose request body dumps are redacted", async () => {
+  const logs: string[] = [];
+  await runRequest(
+    { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+    new Request("https://video.bunnycdn.com/library/1/videos/fetch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        url: "https://example.com/v.mp4",
+        headers: { Authorization: "Bearer origin-secret" },
+      }),
+    }),
+  );
+  const dump = logs.join("\n");
+  expect(dump).toContain("https://example.com/v.mp4");
+  expect(dump).not.toContain("origin-secret");
+  expect(dump).toContain("[redacted]");
 });

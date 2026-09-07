@@ -18,6 +18,7 @@ import { scriptsNamespace } from "./commands/scripts/index.ts";
 import { sitesNamespace } from "./commands/sites/index.ts";
 import { skillsNamespace } from "./commands/skills/index.ts";
 import { storageNamespace } from "./commands/storage/index.ts";
+import { streamNamespace } from "./commands/stream/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { bunny } from "./core/colors.ts";
 import { logger } from "./core/logger.ts";
@@ -45,6 +46,7 @@ const experimentalCommands: CommandModule[] = [
   registriesNamespace,
   registryNamespace,
   sitesNamespace,
+  streamNamespace,
 ];
 
 let instance = yargs(hideBin(process.argv))
