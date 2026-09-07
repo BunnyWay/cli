@@ -1,5 +1,3 @@
-<!-- Agent reference for `bunny sites`; returns to skills/bunny-cli/references/sites.md when sites leaves experimental. -->
-
 # Static Sites Commands
 
 All site commands live under `bunny sites`. A site is one storage zone (files) + one pull zone (CDN) with edge rules routing requests to the published deploy, provisioned together by `sites create`. Deploys are immutable directories; promoting or rolling back retargets an edge rule and purges the cache; no files move, so it's instant.
