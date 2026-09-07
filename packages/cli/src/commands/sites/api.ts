@@ -154,6 +154,7 @@ export async function writeRemoteState(
         ...state.deploys,
         ...remote.deploys.filter((d) => !ours.has(d.id) && !removed.has(d.id)),
       ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      state.functions = { ...remote.functions, ...state.functions };
       if (opts?.promotedTo) {
         // Our promote wins (it set CURRENT_DEPLOY last), and the concurrent writer's production deploy becomes the rollback target.
         state.current = opts.promotedTo;
@@ -856,21 +857,22 @@ export async function migrateSite(opts: {
 }
 
 export interface TeardownResult {
-  resource: "pull zone" | "storage zone";
+  resource: "pull zone" | "storage zone" | "function";
   id: number;
   deleted: boolean;
   error?: string;
 }
 
-// Tear down a site's resources; the pull zone references the storage zone so it goes first, and each step is best-effort so a partial delete can be re-run.
+// Tear down a site's resources; functions go first (each script takes its linked pull zone with it), then the pull zone, then the storage zone it references. Each step is best-effort so a partial delete can be re-run.
 export async function deleteSiteResources(opts: {
   coreClient: CoreClient;
+  computeClient: ComputeClient;
   state: RemoteSiteState;
   keepStorage?: boolean;
   /** The storage connection; needed to tombstone the site marker with --keep-storage. */
   connection?: StorageZone;
 }): Promise<TeardownResult[]> {
-  const { coreClient, state } = opts;
+  const { coreClient, computeClient, state } = opts;
   const results: TeardownResult[] = [];
 
   const attempt = async (
@@ -886,6 +888,16 @@ export async function deleteSiteResources(opts: {
     }
   };
 
+  for (const fn of Object.values(state.functions ?? {})) {
+    await attempt("function", fn.scriptId, () =>
+      computeClient.DELETE("/compute/script/{id}", {
+        params: {
+          path: { id: fn.scriptId },
+          query: { deleteLinkedPullZones: true },
+        },
+      }),
+    );
+  }
   await attempt("pull zone", state.pullZoneId, () =>
     coreClient.DELETE("/pullzone/{id}", {
       params: { path: { id: state.pullZoneId } },

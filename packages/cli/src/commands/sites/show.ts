@@ -10,6 +10,7 @@ import {
 } from "@/core/hostnames/index.ts";
 import { logger } from "@/core/logger.ts";
 import { withSpinner } from "@/core/ui.ts";
+import { functionUrl } from "./constants.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -89,6 +90,22 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
         output,
       ),
     );
+
+    const functions = Object.entries(state.functions ?? {});
+    if (functions.length > 0) {
+      logger.log();
+      logger.log(
+        formatTable(
+          ["Function", "URL", "Script"],
+          functions.map(([name, fn]) => [
+            name,
+            functionUrl(fn.hostname),
+            String(fn.scriptId),
+          ]),
+          output,
+        ),
+      );
+    }
 
     if (hostnames.length > 0) {
       logger.log();

@@ -1,4 +1,7 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
+import {
+  createComputeClient,
+  createCoreClient,
+} from "@bunny.net/openapi-client";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
@@ -64,9 +67,13 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     });
     const { state } = site;
 
-    const what = args["keep-storage"]
+    let what = args["keep-storage"]
       ? "its pull zone"
       : "its pull zone and ALL deploy files";
+    const functionCount = Object.keys(state.functions ?? {}).length;
+    if (functionCount > 0) {
+      what += `, plus ${functionCount} function${functionCount === 1 ? "" : "s"}`;
+    }
     requireConfirmable(output, {
       force,
       message: `Deleting "${state.name}" needs a confirmation prompt.`,
@@ -85,6 +92,7 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     const results = await withSpinner("Deleting site resources...", () =>
       deleteSiteResources({
         coreClient,
+        computeClient: createComputeClient(options),
         state,
         keepStorage: args["keep-storage"],
         connection: site.connection,

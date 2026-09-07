@@ -1,5 +1,5 @@
 import { readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { StorageZone } from "@/commands/storage/files-api.ts";
 import { mapWithConcurrency } from "@/core/concurrency.ts";
 import { UserError } from "@/core/errors.ts";
@@ -29,14 +29,19 @@ export function shouldSkipEntry(name: string): boolean {
   return name.startsWith(".") || name === "node_modules";
 }
 
-/** Recursively collect the files to deploy, sorted by path for determinism. */
-export function collectFiles(dir: string): LocalFile[] {
+/** Recursively collect the files to deploy, sorted by path for determinism; `exclude` lists absolute paths to leave out, such as a functions tree inside the deploy dir. */
+export function collectFiles(
+  dir: string,
+  opts: { exclude?: string[] } = {},
+): LocalFile[] {
   const files: LocalFile[] = [];
+  const exclude = new Set((opts.exclude ?? []).map((p) => resolve(p)));
 
   const walk = (abs: string, rel: string) => {
     for (const entry of readdirSync(abs, { withFileTypes: true })) {
       if (shouldSkipEntry(entry.name)) continue;
       const entryAbs = join(abs, entry.name);
+      if (exclude.has(entryAbs)) continue;
       const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         walk(entryAbs, entryRel);
@@ -51,7 +56,7 @@ export function collectFiles(dir: string): LocalFile[] {
     }
   };
 
-  walk(dir, "");
+  walk(resolve(dir), "");
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
