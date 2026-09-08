@@ -126,7 +126,10 @@ bunny config show --output json
 bunny config profile create staging
 bunny config profile create staging --api-key bny_xxxxxxxxxxxx
 bunny config profile delete staging
+bunny config profile delete staging --force
 ```
+
+Deleting a profile removes its stored API key and asks for confirmation first. `delete` is also available as `rm`, as it is on `bunny db delete` and `bunny scripts delete`. Pass `--force` in scripts or with `--output json`. A missing profile is an error.
 
 ### `bunny db`
 
@@ -1367,7 +1370,7 @@ bunny completion >> ~/.zshrc
 | `--verbose` | `-v`  | Enable verbose output                                        | `false`   |
 | `--output`  | `-o`  | Output format: `text`, `json`, `table`, `csv`, or `markdown` | `text`    |
 | `--api-key` |       | API key (takes priority over profile and environment)        |           |
-| `--version` |       | Show version                                                 |           |
+| `--version` | `-V`  | Show version (a bare `bunny -v` works too)                   |           |
 | `--help`    |       | Show help                                                    |           |
 
 ### Output Formats

@@ -120,12 +120,6 @@ function fakeLegacyState(
   };
 }
 
-function seedLegacy(legacy: LegacySiteState): string {
-  const raw = JSON.stringify(legacy);
-  store.set(REMOTE_STATE_PATH, raw);
-  return sha256Hex(raw);
-}
-
 function fakeComputeClient(
   calls: Call[],
   opts?: { deleteError?: Error; scriptName?: string },

@@ -1,5 +1,6 @@
 import type { Argv, CommandModule } from "yargs";
 import { bunny } from "./colors.ts";
+import { groupHelpOptions } from "./define-command.ts";
 /**
  * Groups subcommands under a parent namespace. Running the namespace
  * without a subcommand shows help.
@@ -30,6 +31,7 @@ export function defineNamespace(
     builder: (yargs) => {
       yRef = yargs;
       for (const sub of subcommands) yargs.command(sub);
+      groupHelpOptions(yargs);
       return yargs;
     },
     handler: async () => {

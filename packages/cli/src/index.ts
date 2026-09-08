@@ -6,7 +6,9 @@ import { checkForUpdate, getLatestVersion } from "./core/update-check.ts";
 import { VERSION } from "./core/version.ts";
 
 const args = process.argv.slice(2);
-if (args.includes("--version") || args.includes("-V")) {
+// A bare `-v` means version by muscle memory; with a command it stays the verbose flag.
+const bareVerbose = args.length === 1 && args[0] === "-v";
+if (args.includes("--version") || args.includes("-V") || bareVerbose) {
   console.log(`${VERSION} ${process.platform}-${process.arch}`);
   const latest = await getLatestVersion();
   if (latest && latest !== VERSION) {

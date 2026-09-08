@@ -4,6 +4,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { apiCommand } from "./commands/api.ts";
 import { appsNamespace } from "./commands/apps/index.ts";
+import { authNamespace } from "./commands/auth/index.ts";
 import { authLoginCommand } from "./commands/auth/login.ts";
 import { authLogoutCommand } from "./commands/auth/logout.ts";
 import { configNamespace } from "./commands/config/index.ts";
@@ -20,7 +21,9 @@ import { skillsNamespace } from "./commands/skills/index.ts";
 import { storageNamespace } from "./commands/storage/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { bunny } from "./core/colors.ts";
+import { groupHelpOptions, optionKeys } from "./core/define-command.ts";
 import { logger } from "./core/logger.ts";
+import { suggest } from "./core/suggest.ts";
 import { VERSION } from "./core/version.ts";
 
 const commands: CommandModule[] = [
@@ -45,7 +48,39 @@ const experimentalCommands: CommandModule[] = [
   registriesNamespace,
   registryNamespace,
   sitesNamespace,
+  authNamespace,
 ];
+
+const topLevelNames = [...commands, ...experimentalCommands].flatMap((cmd) => {
+  const names = Array.isArray(cmd.command) ? cmd.command : [cmd.command ?? ""];
+  return [...names.map((n) => n.split(" ")[0]), ...(cmd.aliases ?? [])];
+});
+
+// Runtime accessors that @types/yargs leaves out.
+interface ParserInternals {
+  parsed?: { argv: Record<string, unknown> & { _: unknown[] } };
+  getInternalMethods(): { getContext(): { commands: string[] } };
+}
+
+// yargs skips its own top-level recommendation when a `$0` default command exists, so cover commands and flags here.
+function didYouMean(msg: string, parser: ParserInternals): string | undefined {
+  const argv = parser.parsed?.argv;
+  const unknown =
+    msg.match(/^Unknown arguments?: (.+)$/)?.[1]?.split(", ") ?? [];
+  if (!argv || unknown.length === 0) return undefined;
+  const commandDepth = parser.getInternalMethods().getContext().commands.length;
+  for (const token of unknown) {
+    if (commandDepth === 0 && token === String(argv._[0] ?? "")) {
+      const match = suggest(token, topLevelNames);
+      if (match) return `Did you mean ${match}?`;
+    }
+    if (token in argv && token !== "_") {
+      const match = suggest(token, optionKeys(instance));
+      if (match) return `Did you mean --${match}?`;
+    }
+  }
+  return undefined;
+}
 
 let instance = yargs(hideBin(process.argv))
   .scriptName("bunny")
@@ -88,7 +123,11 @@ export const cli = instance
   .command(
     "$0",
     false as never,
-    () => {},
+    // Grouping here reaches root help only; done on the root instance it would print ahead of every subcommand's own flags.
+    (y) => {
+      groupHelpOptions(y);
+      return y;
+    },
     () => {
       const art = `
                   @@@@
@@ -161,14 +200,30 @@ export const cli = instance
   .completion("completion", "Generate shell completion script")
   .recommendCommands()
   .strict()
-  .fail((msg, err, yargs) => {
-    if (err) {
-      logger.error(err.message);
-    } else if (msg) {
-      logger.error(msg);
-      console.log();
-      yargs.showHelp();
+  .fail((msg, err) => {
+    const parser = instance as unknown as ParserInternals;
+    const path = parser.getInternalMethods().getContext().commands;
+    let message = err?.message || msg || "Invalid arguments.";
+    let suggestion = err ? undefined : didYouMean(message, parser);
+    if (!err && message.startsWith("Did you mean ")) {
+      // yargs' own recommendation replaces the message, so restate what was rejected.
+      suggestion = message;
+      const unknown = parser.parsed?.argv._[path.length];
+      message = unknown ? `Unknown command: ${unknown}` : "Unknown command.";
     }
+    const usage = `Run \`${["bunny", ...path, "--help"].join(" ")}\` for usage.`;
+    if (parser.parsed?.argv.output === "json") {
+      const hint = [suggestion, usage].filter(Boolean).join(" ");
+      // Wait for the write to flush: exiting first can truncate piped JSON.
+      process.stdout.write(
+        `${JSON.stringify({ error: message, hint })}\n`,
+        () => process.exit(1),
+      );
+      return;
+    }
+    logger.error(message);
+    if (suggestion) logger.dim(suggestion);
+    logger.dim(usage);
     process.exit(1);
   })
   .help()
