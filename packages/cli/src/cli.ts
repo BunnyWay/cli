@@ -4,6 +4,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { apiCommand } from "./commands/api.ts";
 import { appsNamespace } from "./commands/apps/index.ts";
+import { authNamespace } from "./commands/auth/index.ts";
 import { authLoginCommand } from "./commands/auth/login.ts";
 import { authLogoutCommand } from "./commands/auth/logout.ts";
 import { configNamespace } from "./commands/config/index.ts";
@@ -21,7 +22,6 @@ import { storageNamespace } from "./commands/storage/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { bunny } from "./core/colors.ts";
 import { GLOBAL_OPTION_KEYS } from "./core/define-command.ts";
-import { defineNamespace } from "./core/define-namespace.ts";
 import { logger } from "./core/logger.ts";
 import { suggest } from "./core/suggest.ts";
 import { VERSION } from "./core/version.ts";
@@ -48,8 +48,7 @@ const experimentalCommands: CommandModule[] = [
   registriesNamespace,
   registryNamespace,
   sitesNamespace,
-  // Hidden mount for the muscle-memory form `bunny auth login`.
-  defineNamespace("auth", false, [authLoginCommand, authLogoutCommand]),
+  authNamespace,
 ];
 
 const topLevelNames = [...commands, ...experimentalCommands].flatMap((cmd) => {

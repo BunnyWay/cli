@@ -80,7 +80,7 @@ packages/cli/src/
 - **Import CLI-internal modules with `@/`, not `../`.** The root `tsconfig.json` maps `@/*` to `packages/cli/src/*`; `bun run`, `bun test`, `bun build --compile`, and `tsc` all honour it. Same-directory `./` imports stay relative, and so do the few specifiers that reach outside `src/` (the root `package.json`, the embedded `skills/` markdown). The alias is CLI-only: the published packages emit through `tsc`, which does not rewrite `paths` on emit.
 - **`core/` never imports from `commands/`.** Layering is one-way. When two domains need the same vocabulary, lift it into `core/` and re-export, do not import upward or duplicate.
 - **Keep `core/` mostly flat.** A cohesive reusable feature spanning several files may take a subdirectory (`core/hostnames/`).
-- **Error classes are split.** `UserError` and `ApiError` live in `@bunny.net/openapi-client` because the SDK needs them; `ConfigError` extends `UserError` in the CLI. `core/errors.ts` re-exports the first two.
+- **Error classes live in the SDK.** `UserError` and `ApiError` come from `@bunny.net/openapi-client` because the SDK needs them; `core/errors.ts` re-exports them and adds the CLI-only helpers (`unauthorizedError`, `errorMessage`). Throw `UserError` with a hint rather than adding subclasses.
 
 ---
 
@@ -179,8 +179,7 @@ Two deliberate exceptions:
 ## Error handling
 
 - **`UserError`**: expected failure from user input or missing config. Clean message plus optional hint. Exit 1.
-- **`ConfigError`**: extends `UserError`, auto-hints `bunny config show`.
-- **`ApiError`**: extends `UserError`. Carries `status`, optional `field`, optional `validationErrors[]`.
+- **`ApiError`**: extends `UserError`. Carries `status`, optional `field`, optional `validationErrors[]`. A 401 is rewritten by `defineCommand()` through `unauthorizedError()`, which names the credential source (flag, env, profile, or none loaded).
 
 The bunny.net APIs return two different error shapes. `authMiddleware()` in `packages/openapi-client/src/middleware.ts` normalizes both into `ApiError` in an `onResponse` handler, so command code never touches raw HTTP errors:
 
