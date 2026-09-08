@@ -146,11 +146,14 @@ For `db shell`, the CLI also reads `BUNNY_DATABASE_AUTH_TOKEN` from `.env` to sk
 
 #### `bunny db create`
 
-Create a new database. Interactively prompts for name and region selection (automatic, single region, or manual) when flags are omitted. After creation, prompts to link the directory, generate an auth token, and save credentials to `.env`.
+Create a new database. Interactively prompts for name and region selection (automatic, single region, or manual) when flags are omitted. `--mode` answers that prompt from the command line: `auto` lets bunny pick, `single` takes the closest region, and `manual` needs a terminal to pick in. After creation, prompts to link the directory, generate an auth token, and save credentials to `.env`.
 
 ```bash
 # Interactive — prompts for name and region mode
 bunny db create
+
+# Let bunny pick the regions, no prompts
+bunny db create --name mydb --mode auto
 
 # Single region
 bunny db create --name mydb --primary FR
@@ -165,6 +168,7 @@ bunny db create --name mydb --primary FR --link --token --save-env --output json
 | Flag               | Description                                                                              |
 | ------------------ | ---------------------------------------------------------------------------------------- |
 | `--name`           | Database name                                                                            |
+| `--mode`           | Region selection mode, skipping the prompt: `auto`, `single`, or `manual`                |
 | `--primary`        | Comma-separated primary region IDs (e.g. `FR` or `FR,DE`)                                |
 | `--replicas`       | Comma-separated replica region IDs (e.g. `UK,NY`)                                        |
 | `--storage-region` | Override auto-detected storage region                                                    |
@@ -564,7 +568,7 @@ bunny dns record export example.com --save           # write to ./example.com.zo
 # Zones — lifecycle
 bunny dns zone list
 bunny dns zone add example.com
-bunny dns zone add                # prompts for the domain
+bunny dns zone add                # prompts for the domain (alias: create)
 bunny dns zone show example.com
 bunny dns zone remove example.com
 
@@ -609,10 +613,12 @@ The tier (`--tier hdd|ssd`, Standard or Edge), the main region, and S3 compatibi
 
 After creating a zone, `add` offers to link the directory to it (`--link`/`--no-link`), to print connection details (`--connection http|ftp|s3`, optionally as a client config with `--format`), and to save those details to `.env` (`--save-env`). Credentials are shown in full there because they were explicitly asked for; `zones credentials` masks them by default.
 
+Saving to `.env` writes `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, and `BUNNY_STORAGE_REGION` (lowercased, so it matches the S3 endpoint and the SDK region), plus `BUNNY_STORAGE_CDN_URL` when the zone has a pull zone in front of it. An S3 connection writes the `AWS_*` equivalents instead. `zones show` reports the same CDN URL alongside the storage hostname.
+
 ```bash
 # Zones (lifecycle)
 bunny storage zones list
-bunny storage zones add                                # interactive: prompts for name and region
+bunny storage zones add                                # interactive: prompts for name and region (alias: create)
 bunny storage zones add my-zone --region DE
 bunny storage zones add my-zone --region NY --replication LA,SG
 bunny storage zones add my-zone --region DE --pull-zone   # also create a pull zone to serve it on the web
@@ -888,18 +894,21 @@ bunny scripts env list --output json
 
 ##### `bunny scripts env set`
 
-Set an environment variable or secret. Runs interactively when arguments are omitted. The variable name is uppercased.
+Set an environment variable or secret. Runs interactively when arguments are omitted. The variable name is uppercased. Whenever the value is prompted for, the command also asks whether it is a secret, defaulting to yes for names that look like credentials.
 
 ```bash
 bunny scripts env set MY_VAR value
 bunny scripts env set            # interactive
+bunny scripts env set API_KEY   # prompts for the value, and whether it is a secret
 bunny scripts env set API_KEY secret-value --secret
+bunny scripts env set --from-file .env   # same as `scripts env push .env`
 ```
 
-| Flag       | Description                             |
-| ---------- | --------------------------------------- |
-| `--secret` | Store as an encrypted secret            |
-| `--id`     | Edge Script ID (uses linked if omitted) |
+| Flag          | Description                                             |
+| ------------- | ------------------------------------------------------- |
+| `--secret`    | Store as an encrypted secret                            |
+| `--from-file` | Set every variable in a `.env` file, as `env push` does |
+| `--id`        | Edge Script ID (uses linked if omitted)                 |
 
 ##### `bunny scripts env remove`
 
@@ -923,6 +932,26 @@ bunny scripts env pull --force
 | Flag      | Description                                    |
 | --------- | ---------------------------------------------- |
 | `--force` | Overwrite an existing `.env` without prompting |
+
+##### `bunny scripts env push`
+
+Push a local `.env` file to an Edge Script. Reads the nearest `.env` unless a path is given, then asks which variables to push and which of them are secrets. The secret choice is pre-selected from the variable name (`TOKEN`, `SECRET`, `PASSWORD`, `_KEY`, and friends), so a credential is not stored as a readable variable by accident.
+
+Names already held by the opposite type are skipped rather than failing the push: the API cannot convert a variable into a secret, so remove it first.
+
+```bash
+bunny scripts env push                                # pick from the nearest .env
+bunny scripts env push .env.production --all          # push a whole file, no prompts
+bunny scripts env push --all --secrets DB_TOKEN,API_KEY
+bunny scripts env push --all --plain PUBLIC_URL
+```
+
+| Flag        | Description                                                    |
+| ----------- | -------------------------------------------------------------- |
+| `--all`     | Push every variable in the file without prompting              |
+| `--secrets` | Names to store as encrypted secrets, overriding the name guess |
+| `--plain`   | Names to store as plain variables, overriding the name guess   |
+| `--id`      | Edge Script ID (uses linked if omitted)                        |
 
 #### `bunny scripts domains`
 

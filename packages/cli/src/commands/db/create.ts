@@ -7,7 +7,7 @@ import { UserError } from "@/core/errors.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, saveManifest } from "@/core/manifest.ts";
-import { confirm, prompts, spinner } from "@/core/ui.ts";
+import { confirm, isInteractive, prompts, spinner } from "@/core/ui.ts";
 import { readEnvValue, writeEnvValue } from "@/utils/env-file.ts";
 import { fetchRegionConfig, generateToken } from "./api.ts";
 import {
@@ -41,10 +41,41 @@ function validateDbName(name: string): string | null {
   return null;
 }
 
+/** Ask how regions should be chosen; `--mode` answers this without prompting. */
+async function promptRegionMode(): Promise<RegionMode | undefined> {
+  const { value } = await prompts({
+    type: "select",
+    name: "value",
+    message: "Region selection:",
+    choices: [
+      {
+        title: "Automatic",
+        description:
+          "Regions selected based on your location and performance needs",
+        value: "auto" as const,
+      },
+      {
+        title: "Single region",
+        description: "Deploy to a single region with no replication",
+        value: "single" as const,
+      },
+      {
+        title: "Manual",
+        description: "Select primary and replication regions",
+        value: "manual" as const,
+      },
+    ],
+  });
+  return value;
+}
+
 const COMMAND = "create";
 const DESCRIPTION = "Create a new database.";
 
 const ARG_NAME = "name";
+const ARG_MODE = "mode";
+const REGION_MODES = ["auto", "single", "manual"] as const;
+type RegionMode = (typeof REGION_MODES)[number];
 const ARG_PRIMARY = "primary";
 const ARG_REPLICAS = "replicas";
 const ARG_STORAGE_REGION = "storage-region";
@@ -54,6 +85,7 @@ const ARG_SAVE_ENV = "save-env";
 
 interface CreateArgs {
   [ARG_NAME]?: string;
+  [ARG_MODE]?: RegionMode;
   [ARG_PRIMARY]?: string;
   [ARG_REPLICAS]?: string;
   [ARG_STORAGE_REGION]?: string;
@@ -95,6 +127,10 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       "Non-interactive with explicit regions",
     ],
     [
+      "$0 db create --name my-app --mode auto",
+      "Let bunny pick the regions, no prompts",
+    ],
+    [
       "$0 db create --name my-app --primary FR --output json",
       "JSON output for scripting",
     ],
@@ -105,6 +141,12 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       .option(ARG_NAME, {
         type: "string",
         describe: "Database name",
+      })
+      .option(ARG_MODE, {
+        type: "string",
+        choices: REGION_MODES,
+        describe:
+          "Region selection mode (skips the prompt): auto, single, or manual",
       })
       .option(ARG_PRIMARY, {
         type: "string",
@@ -166,6 +208,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     const availablePrimary = regionConfig.primary_regions;
     const availableReplicas = regionConfig.replica_regions;
 
+    const interactive = isInteractive(output);
     let primaryRegions: PossibleRegion[];
     let replicasRegions: PossibleRegion[];
     let storageRegion = args["storage-region"];
@@ -179,33 +222,10 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         ? (args.replicas.split(",").map((s) => s.trim()) as PossibleRegion[])
         : [];
     } else {
-      // Interactive path: ask about region mode
-      const { value: regionMode } = await prompts({
-        type: "select",
-        name: "value",
-        message: "Region selection:",
-        choices: [
-          {
-            title: "Automatic",
-            description:
-              "Regions selected based on your location and performance needs",
-            value: "automatic" as const,
-          },
-          {
-            title: "Single region",
-            description: "Deploy to a single region with no replication",
-            value: "single" as const,
-          },
-          {
-            title: "Manual",
-            description: "Select primary and replication regions",
-            value: "manual" as const,
-          },
-        ],
-      });
+      const regionMode = args[ARG_MODE] ?? (await promptRegionMode());
       if (!regionMode) throw new UserError("Region selection is required.");
 
-      if (regionMode === "automatic") {
+      if (regionMode === "auto") {
         const optSpin = spinner("Detecting optimal regions...");
         optSpin.start();
 
@@ -254,24 +274,39 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         }
         optSpin.stop();
 
-        const choices = groupedRegionChoices(
-          availablePrimary,
-          preselected ? new Set([preselected]) : undefined,
-        );
-        const { value: location } = await prompts({
-          type: "select",
-          name: "value",
-          message: "Database location:",
-          choices,
-          initial: preselected
-            ? choices.findIndex((c) => c.value === preselected)
-            : 0,
-        });
-        if (!location) throw new UserError("Location is required.");
+        let location = preselected;
+        if (interactive) {
+          const choices = groupedRegionChoices(
+            availablePrimary,
+            preselected ? new Set([preselected]) : undefined,
+          );
+          const { value: picked } = await prompts({
+            type: "select",
+            name: "value",
+            message: "Database location:",
+            choices,
+            initial: preselected
+              ? choices.findIndex((c) => c.value === preselected)
+              : 0,
+          });
+          location = picked;
+        }
+        if (!location) {
+          throw new UserError(
+            "Could not determine a region for --mode single.",
+            "Pass the region explicitly, e.g. --primary FR.",
+          );
+        }
 
         primaryRegions = [location];
         replicasRegions = [];
       } else {
+        if (!interactive) {
+          throw new UserError(
+            "--mode manual needs a terminal to pick regions in.",
+            "Pass --primary (and --replicas), or use --mode auto.",
+          );
+        }
         // Manual: multi-select primary and replicas
         const { value: selectedPrimary } = await prompts({
           type: "multiselect",
@@ -336,9 +371,10 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     createSpin.stop();
 
     const db = dbDetails?.db;
-    const isInteractive = output !== "json";
+    // Tables and hints are for humans; --output json stays machine-clean even in a terminal.
+    const textOutput = output !== "json";
 
-    if (isInteractive) {
+    if (textOutput) {
       const entries = [
         { key: "ID", value: data.db_id },
         { key: "Name", value: db?.name ?? name ?? "" },
@@ -363,7 +399,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     let shouldLink: boolean;
     if (linkArg !== undefined) {
       shouldLink = linkArg;
-    } else if (isInteractive) {
+    } else if (textOutput) {
       shouldLink = await confirm(linkPrompt, { force: false, optional: true });
     } else {
       shouldLink = false;
@@ -374,7 +410,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         id: data.db_id,
         name: db?.name ?? name,
       });
-      if (isInteractive) {
+      if (textOutput) {
         logger.success(`Linked .bunny/database.json → ${data.db_id}.`);
         logger.log();
       }
@@ -385,7 +421,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     let shouldCreateToken: boolean;
     if (tokenArg !== undefined) {
       shouldCreateToken = tokenArg;
-    } else if (isInteractive) {
+    } else if (textOutput) {
       shouldCreateToken = await confirm("Create an auth token?", {
         force: false,
         optional: true,
@@ -411,7 +447,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       token = tokenData?.token ?? null;
 
       if (token) {
-        if (isInteractive) {
+        if (textOutput) {
           const tokenEntries = [
             { key: "Token", value: token },
             { key: "Access", value: "full-access" },
@@ -430,7 +466,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         const saveEnvArg = args[ARG_SAVE_ENV];
         if (saveEnvArg !== undefined) {
           shouldWrite = saveEnvArg;
-        } else if (isInteractive) {
+        } else if (textOutput) {
           if (existingToken) {
             shouldWrite = await confirm(
               `${ENV_DATABASE_AUTH_TOKEN} already exists in ${existingToken.envPath} — overwrite?`,
@@ -452,18 +488,18 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
 
           if (db?.url && !readEnvValue(ENV_DATABASE_URL)) {
             writeEnvValue(ENV_DATABASE_URL, db.url, envPath);
-            if (isInteractive) {
+            if (textOutput) {
               logger.success(
                 `Saved ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} to .env`,
               );
             }
-          } else if (isInteractive) {
+          } else if (textOutput) {
             logger.success(`Saved ${ENV_DATABASE_AUTH_TOKEN} to .env`);
           }
           savedToEnv = true;
         }
       }
-    } else if (isInteractive) {
+    } else if (textOutput) {
       logger.dim(`  Get started:  bunny db quickstart ${data.db_id}`);
       logger.dim(`  Open shell:   bunny db shell ${data.db_id}`);
     }

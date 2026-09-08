@@ -18,6 +18,36 @@ export function findEnvFile(): string | undefined {
   }
 }
 
+export interface EnvFileEntry {
+  key: string;
+  value: string;
+}
+
+/**
+ * Parse a `.env` file into its entries, in file order.
+ * Skips comments and blank lines, tolerates `export ` prefixes, and strips
+ * one layer of matching quotes from the value.
+ */
+export function parseEnvFile(envPath: string): EnvFileEntry[] {
+  if (!existsSync(envPath)) return [];
+
+  const entries: EnvFileEntry[] = [];
+  for (const raw of readFileSync(envPath, "utf-8").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    const match = line
+      .replace(/^export\s+/, "")
+      .match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!match?.[1]) continue;
+
+    const value = (match[2] ?? "").trim();
+    const quoted = value.match(/^(["'])([\s\S]*)\1$/);
+    entries.push({ key: match[1], value: quoted ? (quoted[2] ?? "") : value });
+  }
+  return entries;
+}
+
 /**
  * Read a specific key from the nearest `.env` file.
  * Returns the value and the path to the `.env` file, or `undefined` if not found.

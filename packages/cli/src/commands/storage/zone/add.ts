@@ -90,6 +90,7 @@ interface ZoneAddArgs {
 
 export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
   command: "add [name]",
+  aliases: ["create"],
   describe: "Create a new storage zone.",
   examples: [
     [
@@ -446,7 +447,9 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       if (requestedType && created) {
         const zoneWithSecret = await zoneWithPassword(client, created);
         warnUnusableS3(zoneWithSecret, requestedType, zoneName);
-        conn = storageConnection(zoneWithSecret, requestedType);
+        conn = storageConnection(zoneWithSecret, requestedType, {
+          cdnUrl: pullZoneResult?.url,
+        });
         // A requested --format is still honoured here, as a config string beside the fields.
         connJson = connectionJson(conn, {
           client: format ? { zone: zoneWithSecret, format } : undefined,
@@ -564,7 +567,9 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     if (connectionType) {
       const zoneWithSecret = await zoneWithPassword(client, created);
       warnUnusableS3(zoneWithSecret, connectionType, zoneName);
-      const conn = storageConnection(zoneWithSecret, connectionType);
+      const conn = storageConnection(zoneWithSecret, connectionType, {
+        cdnUrl: pullZoneResult?.url,
+      });
       printConnection(zoneWithSecret, conn, { output, format: toolFormat });
 
       await offerConnectionEnv(conn, { saveEnv, interactive });

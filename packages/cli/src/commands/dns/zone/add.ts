@@ -129,6 +129,7 @@ async function offerNextSteps(opts: {
 
 export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
   command: "add [domain]",
+  aliases: ["create"],
   describe: "Create a new DNS zone.",
   examples: [
     ["$0 dns zones add example.com", "Create a zone for example.com"],
