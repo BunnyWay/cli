@@ -137,18 +137,20 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
       } catch (err: any) {
         const isUser = err?.isUserError;
         const isApi = err?.name === "ApiError";
-        const isUnauthorized = isApi && err.status === 401;
-        const unauthorized = isUnauthorized
-          ? unauthorizedError({
-              ...args,
-              hasProfile: profileExists(args.profile),
-            })
-          : undefined;
+        // bunny.net answers 403 for a key it rejects, so both statuses get the credential hint.
+        const rejected =
+          isApi && (err.status === 401 || err.status === 403)
+            ? unauthorizedError({
+                ...args,
+                hasProfile: profileExists(args.profile),
+              })
+            : undefined;
+        // A 403 also covers a valid key without permission, so keep the API's own wording there.
         const message =
-          unauthorized?.message ??
+          (err.status === 401 ? rejected?.message : undefined) ??
           err?.message ??
           "An unexpected error occurred.";
-        const hint = unauthorized?.hint ?? err?.hint;
+        const hint = rejected?.hint ?? err?.hint;
 
         if (args.output === "json") {
           const payload: Record<string, unknown> = { error: message };

@@ -14,6 +14,7 @@ function run(...args: string[]) {
         HOME: home,
         XDG_CONFIG_HOME: home,
         BUNNYNET_API_KEY: "",
+        BUNNY_API_KEY: "",
       },
       stdin: "ignore",
     },
@@ -39,6 +40,12 @@ describe("small mistakes", () => {
     expect(stderr).toContain("Did you mean --profile?");
     const { stdout } = run("whoami", "--profle", "x", "-o", "json");
     expect(JSON.parse(stdout).hint).toContain("Did you mean --profile?");
+  });
+
+  test("unknown subcommand names what was rejected", () => {
+    const { code, stderr } = run("storage", "list");
+    expect(code).toBe(1);
+    expect(stderr).toContain("Unknown command: list");
   });
 
   test("non-numeric id is rejected instead of becoming NaN", () => {

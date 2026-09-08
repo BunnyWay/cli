@@ -73,14 +73,14 @@ function didYouMean(msg: string, parser: ParserInternals): string | undefined {
   for (const token of unknown) {
     if (commandDepth === 0 && token === String(argv._[0] ?? "")) {
       const match = suggest(token, topLevelNames);
-      return match && `Did you mean ${match}?`;
+      if (match) return `Did you mean ${match}?`;
     }
     if (token in argv && token !== "_") {
       const flags = Object.keys(parser.getOptions().key).filter(
         (k) => k.length > 1 && !/[A-Z]/.test(k),
       );
       const match = suggest(token, flags);
-      return match && `Did you mean --${match}?`;
+      if (match) return `Did you mean --${match}?`;
     }
   }
   return undefined;
@@ -203,9 +203,15 @@ export const cli = instance
   .strict()
   .fail((msg, err) => {
     const parser = instance as unknown as ParserInternals;
-    const message = err?.message || msg || "Invalid arguments.";
     const path = parser.getInternalMethods().getContext().commands;
-    const suggestion = err ? undefined : didYouMean(message, parser);
+    let message = err?.message || msg || "Invalid arguments.";
+    let suggestion = err ? undefined : didYouMean(message, parser);
+    if (!err && message.startsWith("Did you mean ")) {
+      // yargs' own recommendation replaces the message, so restate what was rejected.
+      suggestion = message;
+      const unknown = parser.parsed?.argv._[path.length];
+      message = unknown ? `Unknown command: ${unknown}` : "Unknown command.";
+    }
     const usage = `Run \`${["bunny", ...path, "--help"].join(" ")}\` for usage.`;
     if (parser.parsed?.argv.output === "json") {
       const hint = [suggestion, usage].filter(Boolean).join(" ");
