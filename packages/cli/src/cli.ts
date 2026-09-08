@@ -21,7 +21,7 @@ import { skillsNamespace } from "./commands/skills/index.ts";
 import { storageNamespace } from "./commands/storage/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { bunny } from "./core/colors.ts";
-import { GLOBAL_OPTION_KEYS } from "./core/define-command.ts";
+import { groupHelpOptions, optionKeys } from "./core/define-command.ts";
 import { logger } from "./core/logger.ts";
 import { suggest } from "./core/suggest.ts";
 import { VERSION } from "./core/version.ts";
@@ -59,7 +59,6 @@ const topLevelNames = [...commands, ...experimentalCommands].flatMap((cmd) => {
 // Runtime accessors that @types/yargs leaves out.
 interface ParserInternals {
   parsed?: { argv: Record<string, unknown> & { _: unknown[] } };
-  getOptions(): { key: Record<string, unknown> };
   getInternalMethods(): { getContext(): { commands: string[] } };
 }
 
@@ -76,10 +75,7 @@ function didYouMean(msg: string, parser: ParserInternals): string | undefined {
       if (match) return `Did you mean ${match}?`;
     }
     if (token in argv && token !== "_") {
-      const flags = Object.keys(parser.getOptions().key).filter(
-        (k) => k.length > 1 && !/[A-Z]/.test(k),
-      );
-      const match = suggest(token, flags);
+      const match = suggest(token, optionKeys(instance));
       if (match) return `Did you mean --${match}?`;
     }
   }
@@ -128,7 +124,10 @@ export const cli = instance
     "$0",
     false as never,
     // Grouping here reaches root help only; done on the root instance it would print ahead of every subcommand's own flags.
-    (y) => y.group(GLOBAL_OPTION_KEYS, "Global Options:"),
+    (y) => {
+      groupHelpOptions(y);
+      return y;
+    },
     () => {
       const art = `
                   @@@@

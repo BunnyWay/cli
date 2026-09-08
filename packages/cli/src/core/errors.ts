@@ -1,9 +1,6 @@
 export { ApiError, UserError } from "@bunny.net/openapi-client";
 
-// Single quotes keep names like `$prod` literal when the command is pasted into a shell.
-function shellQuote(value: string): string {
-  return /^[\w.@-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
-}
+import { shellQuoteIfNeeded } from "./shell.ts";
 
 /** Explain a 401 by naming where the key came from (or that none was loaded), never echoing the key itself. */
 export function unauthorizedError(args: {
@@ -14,7 +11,7 @@ export function unauthorizedError(args: {
   const login =
     args.profile === "default" || !args.profile
       ? "bunny login"
-      : `bunny login --profile ${shellQuote(args.profile)}`;
+      : `bunny login --profile ${shellQuoteIfNeeded(args.profile)}`;
   const message = "Unauthorized. Your API key was rejected.";
   if (args.apiKey) {
     return {
@@ -31,7 +28,7 @@ export function unauthorizedError(args: {
   if (args.hasProfile) {
     return {
       message,
-      hint: `The key came from profile ${shellQuote(args.profile)}. Run \`${login}\` to authenticate again.`,
+      hint: `The key came from profile ${shellQuoteIfNeeded(args.profile)}. Run \`${login}\` to authenticate again.`,
     };
   }
   return { message: "Not logged in.", hint: `Run "${login}" to authenticate.` };

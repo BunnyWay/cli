@@ -42,15 +42,18 @@ function positionalNames(command: string): string[] {
   );
 }
 
+/** The long flag names a parser knows, without yargs' camelCase duplicates. */
+export function optionKeys(y: Argv): string[] {
+  return Object.keys(optionsOf(y).key).filter(
+    (k) => k.length > 1 && !/[A-Z]/.test(k),
+  );
+}
+
 // Own flags are grouped first so they lead the help text; the inherited globals follow under their own heading.
 export function groupHelpOptions(y: Argv, command = ""): void {
   const positionals = positionalNames(command);
-  const own = Object.keys(optionsOf(y).key).filter(
-    (k) =>
-      k.length > 1 &&
-      !/[A-Z]/.test(k) &&
-      !GLOBAL_OPTION_KEYS.includes(k) &&
-      !positionals.includes(k),
+  const own = optionKeys(y).filter(
+    (k) => !GLOBAL_OPTION_KEYS.includes(k) && !positionals.includes(k),
   );
   if (own.length > 0) y.group(own, "Options:");
   y.group(GLOBAL_OPTION_KEYS, "Global Options:");
@@ -165,24 +168,16 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
           process.exit(isUser ? 1 : 2);
         }
 
-        if (isApi && err.validationErrors?.length) {
-          logger.error(message);
-          for (const ve of err.validationErrors) {
+        logger.error(isUser ? message : "An unexpected error occurred.");
+        if (isUser) {
+          for (const ve of err.validationErrors ?? []) {
             logger.dim(`  ${ve.field ?? "unknown"}: ${ve.message}`);
           }
           if (hint) logger.dim(hint);
-          process.exit(1);
+        } else if (args.verbose) {
+          console.error(err);
         }
-
-        if (isUser) {
-          logger.error(message);
-          if (hint) logger.dim(hint);
-          process.exit(1);
-        }
-
-        logger.error("An unexpected error occurred.");
-        if (args.verbose) console.error(err);
-        process.exit(2);
+        process.exit(isUser ? 1 : 2);
       }
     },
   };

@@ -67,10 +67,7 @@ export function resolveConfig(
     return { apiKey: "", apiUrl: envApiUrl, profile };
   }
 
-  throw new UserError(
-    `Profile "${profile}" not found.`,
-    'Run "bunny config profile list" to see your profiles.',
-  );
+  throw profileNotFound(profile);
 }
 
 export function loadConfigFile(): ConfigFile | null {
@@ -104,12 +101,7 @@ export function setProfile(profile: string, apiKey: string): void {
 
 export function deleteProfile(profile: string): void {
   const existing = loadConfigFile();
-  if (!existing?.profiles[profile]) {
-    throw new UserError(
-      `Profile "${profile}" not found.`,
-      'Run "bunny config profile list" to see your profiles.',
-    );
-  }
+  if (!existing?.profiles[profile]) throw profileNotFound(profile);
 
   delete existing.profiles[profile];
   saveConfigFile(existing);
@@ -118,6 +110,17 @@ export function deleteProfile(profile: string): void {
 export function profileExists(profile: string): boolean {
   const file = loadConfigFile();
   return !!file?.profiles[profile];
+}
+
+export function profileNotFound(profile: string): UserError {
+  return new UserError(
+    `Profile "${profile}" not found.`,
+    'Run "bunny config profile list" to see your profiles.',
+  );
+}
+
+export function requireProfile(profile: string): void {
+  if (!profileExists(profile)) throw profileNotFound(profile);
 }
 
 export function getSandbox(name: string): SandboxRecord | null {

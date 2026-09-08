@@ -1,6 +1,5 @@
-import { deleteProfile, profileExists } from "@/config/index.ts";
+import { deleteProfile, requireProfile } from "@/config/index.ts";
 import { defineCommand } from "@/core/define-command.ts";
-import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, requireConfirmable } from "@/core/ui.ts";
 
@@ -27,14 +26,7 @@ export const profileDeleteCommand = defineCommand<DeleteArgs>({
         describe: "Skip confirmation",
       }),
 
-  preRun: async ({ name }) => {
-    if (!profileExists(name)) {
-      throw new UserError(
-        `Profile "${name}" not found.`,
-        'Run "bunny config profile list" to see your profiles.',
-      );
-    }
-  },
+  preRun: async ({ name }) => requireProfile(name),
 
   handler: async ({ name, force, output }) => {
     requireConfirmable(output, {

@@ -3,13 +3,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { sandboxKnownHostsPath } from "@bunny.net/sandbox/known-hosts";
 import type { SandboxRecord } from "@/config/schema.ts";
+import { shellQuote } from "@/core/shell.ts";
 
 export const WORKPLACE = "/workplace";
-
-/** Single-quote a value for safe use in a remote shell command. */
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
-}
 
 /**
  * Build an inline `KEY='value' ` prefix that sets env vars for the command
