@@ -570,7 +570,7 @@ bunny dns zone list
 bunny dns zone create example.com
 bunny dns zone create             # prompts for the domain (alias: add)
 bunny dns zone show example.com
-bunny dns zone remove example.com
+bunny dns zone delete example.com
 
 # Query statistics (defaults to the last 30 days; text mode draws a bar chart)
 bunny dns zone stats example.com
@@ -601,7 +601,7 @@ Positional value ordering for `record add` follows the record type: `A`/`AAAA`/`
 | `--file`, `--save`                                                                                  | `record export`                                                               | Write to a path, or to `<domain>.zone` in the current directory      |
 | `--from`, `--to`                                                                                    | `zone stats`                                                                  | Date range (defaults to the last 30 days)                            |
 | `--anonymize-ip`, `--anonymization`                                                                 | `zone logging enable`                                                         | Anonymize client IPs in logs (`onedigit` \| `drop`)                  |
-| `--force`                                                                                           | `record remove`, `zone remove`, `zone dnssec disable`, `zone logging disable` | Skip the confirmation prompt                                         |
+| `--force`                                                                                           | `record remove`, `zone delete`, `zone dnssec disable`, `zone logging disable` | Skip the confirmation prompt                                         |
 
 ### `bunny storage`
 
@@ -628,7 +628,7 @@ bunny storage zones create my-zone --region DE --s3 --connection s3 --save-env  
 bunny storage zones show my-zone
 bunny storage zones update my-zone                     # interactive: edit settings, pre-filled with current values
 bunny storage zones update my-zone --custom-404-path /404.html
-bunny storage zones remove my-zone                     # confirms twice (yes/no, then type the zone name)
+bunny storage zones delete my-zone                     # confirms twice (yes/no, then type the zone name)
 
 # Link the working directory to a zone so commands can omit it
 bunny storage link my-zone
@@ -684,7 +684,7 @@ The same command also serves the two protocols every zone has: `--connection htt
 | `--to`                                                                                      | `files upload`                           | Remote path; a trailing slash uploads into that directory                                                                          |
 | `--checksum`, `--content-type`                                                              | `files upload`                           | Send a SHA256 checksum for server-side verification; set the stored content type                                                   |
 | `--out`                                                                                     | `files download`                         | Local destination path (defaults to the file name)                                                                                 |
-| `--force`                                                                                   | `zones remove`, `files remove`, `unlink` | Skip the confirmation prompts                                                                                                      |
+| `--force`                                                                                   | `zones delete`, `files remove`, `unlink` | Skip the confirmation prompts                                                                                                      |
 
 ### `bunny scripts`
 
@@ -1290,15 +1290,15 @@ bunny sandbox url ls my-sandbox    # alias
 
 Columns: ID, Name, Type, Port, URL.
 
-##### `bunny sandbox url delete`
+##### `bunny sandbox url remove`
 
-Delete a public endpoint by name.
+Remove a public endpoint by name.
 
 ```bash
-bunny sandbox url delete my-sandbox port-3000
+bunny sandbox url remove my-sandbox port-3000
 
 # Skip confirmation
-bunny sandbox url delete my-sandbox my-api --force
+bunny sandbox url remove my-sandbox my-api --force
 bunny sandbox url rm my-sandbox my-api -f   # alias
 ```
 
@@ -1340,12 +1340,12 @@ bunny sandbox env ls my-sandbox    # alias
 
 Columns: Name, Value.
 
-##### `bunny sandbox env delete`
+##### `bunny sandbox env remove`
 
 Remove one or more persistent variables. Names that are not set are reported and skipped; if none match, the command errors and nothing is redeployed.
 
 ```bash
-bunny sandbox env delete my-sandbox NODE_ENV
+bunny sandbox env remove my-sandbox NODE_ENV
 bunny sandbox env rm my-sandbox API_URL LOG_LEVEL    # alias
 bunny sandbox env unset my-sandbox API_URL           # alias
 ```

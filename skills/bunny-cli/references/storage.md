@@ -105,11 +105,11 @@ Only the settings that aren't create-time can change here (see `--help` for the 
 
 ---
 
-## `bunny storage zones remove` — Delete a zone
+## `bunny storage zones delete` — Delete a zone
 
 ```bash
-bunny storage zones remove my-zone          # confirms twice
-bunny storage zones remove my-zone --force  # skip both confirmations
+bunny storage zones delete my-zone          # confirms twice
+bunny storage zones delete my-zone --force  # skip both confirmations
 ```
 
 Deletes the zone and everything in it. Interactively it confirms twice: yes/no, then typing the zone name.

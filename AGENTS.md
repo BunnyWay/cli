@@ -115,7 +115,11 @@ The factory wraps every handler in a try/catch that separates `UserError` (clean
 
 `add` associates something that already exists with something else, or appends to a collection: `dns record add`, `db regions add`, `apps endpoints add`, `sandbox url add`, `registries add` (registering an external registry with the account), `domains add`.
 
-The test is whether the thing exists independently of the command. A storage zone does, so it is created; a hostname on a pull zone does not, so it is added. `storage zones` and `dns zone` shipped under `add` and keep it as an alias.
+The test is whether the thing exists independently of the command. A storage zone does, so it is created; a hostname on a pull zone does not, so it is added.
+
+The destructive verbs mirror that pairing: `delete` undoes `create`, `remove` undoes `add`. So `storage zones delete` and `dns zone delete` destroy a resource, while `dns record remove`, `db regions remove`, `sandbox url remove`, and `scripts env remove` take an entry out of a collection. `storage files remove` and `skills remove` keep `remove` as the inverse of `upload` and `install`.
+
+Renamed commands keep their shipped spelling as an alias (`add` on the two `create`s, `remove`/`rm` on the two `delete`s, `delete`/`rm` on the two sandbox `remove`s), and `rm` stays available everywhere.
 
 ### `defineNamespace(command, describe, subcommands)`
 

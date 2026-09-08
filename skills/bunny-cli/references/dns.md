@@ -68,13 +68,13 @@ bunny dns zones nameservers example.com                # check delegation (alias
 
 `nameservers` does a live nameserver lookup rather than trusting the API's detection flag (which reads as detected on a brand-new zone). When the registrar already delegates to bunny it confirms; otherwise it shows the nameservers to set at your (named) registrar. `list` shows a `Nameservers` column (`Detected` / `Pending` / `Unknown`) from the same live lookup, and `--output json` overwrites each zone's `NameserversDetected` with the live value.
 
-## `bunny dns zones remove`: Delete a zone
+## `bunny dns zones delete`: Delete a zone
 
 Deletes the zone and all of its records. Confirms unless `--force`.
 
 ```bash
-bunny dns zones remove example.com
-bunny dns zones remove example.com --force
+bunny dns zones delete example.com
+bunny dns zones delete example.com --force
 ```
 
 ## `bunny dns zones stats`: Query statistics
