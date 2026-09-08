@@ -19,6 +19,7 @@ export type {
   ProbeConfig,
   RegionsConfig,
   SiteConfig,
+  SiteFunctionsConfig,
   VolumeConfig,
 } from "./schema.ts";
 export {
@@ -32,5 +33,6 @@ export {
   ProbeConfigSchema,
   RegionsConfigSchema,
   SiteConfigSchema,
+  SiteFunctionsConfigSchema,
   VolumeConfigSchema,
 } from "./schema.ts";

@@ -14,6 +14,8 @@ export interface FrameworkPreset {
   build?: string;
   /** Serves index.html for client-side routes unless `sites.spa` overrides. */
   spa?: boolean;
+  /** Prefix a build variable needs before the bundler exposes it to browser code (e.g. `VITE_`). */
+  envPrefix?: string;
 }
 
 // Static must stay last: the interactive prompt defaults to it.
@@ -23,6 +25,7 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     label: "Analog",
     dir: "dist/analog/public",
     toolchain: "js",
+    envPrefix: "VITE_",
   },
   // Angular's application builder emits dist/<project>/browser; adjust if yours differs.
   { id: "angular", label: "Angular", dir: "dist", toolchain: "js", spa: true },
@@ -31,6 +34,7 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     label: "Astro",
     dir: "dist",
     toolchain: "js",
+    envPrefix: "PUBLIC_",
   },
   {
     id: "brunch",
@@ -48,12 +52,14 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     label: "Gatsby",
     dir: "public",
     toolchain: "js",
+    envPrefix: "GATSBY_",
   },
   {
     id: "gridsome",
     label: "Gridsome",
     dir: "dist",
     toolchain: "js",
+    envPrefix: "GRIDSOME_",
   },
   {
     id: "hexo",
@@ -67,6 +73,7 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     label: "Next.js (static export)",
     dir: "out",
     toolchain: "js",
+    envPrefix: "NEXT_PUBLIC_",
   },
   {
     id: "nuxt",
@@ -74,6 +81,7 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     dir: ".output/public",
     toolchain: "js",
     build: "nuxi generate",
+    envPrefix: "NUXT_PUBLIC_",
   },
   {
     id: "preact",
@@ -81,12 +89,14 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     dir: "build",
     toolchain: "js",
     spa: true,
+    envPrefix: "PREACT_APP_",
   },
   {
     id: "qwik",
     label: "Qwik (static adapter)",
     dir: "dist",
     toolchain: "js",
+    envPrefix: "PUBLIC_",
   },
   {
     id: "react",
@@ -94,6 +104,7 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     dir: "build",
     toolchain: "js",
     spa: true,
+    envPrefix: "REACT_APP_",
   },
   {
     id: "react-router",
@@ -101,18 +112,21 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     dir: "build/client",
     toolchain: "js",
     spa: true,
+    envPrefix: "VITE_",
   },
   {
     id: "solidstart",
     label: "SolidStart (static preset)",
     dir: ".output/public",
     toolchain: "js",
+    envPrefix: "VITE_",
   },
   {
     id: "sveltekit",
     label: "SvelteKit (adapter-static)",
     dir: "build",
     toolchain: "js",
+    envPrefix: "PUBLIC_",
   },
   {
     id: "vite",
@@ -120,12 +134,14 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     dir: "dist",
     toolchain: "js",
     spa: true,
+    envPrefix: "VITE_",
   },
   {
     id: "vitepress",
     label: "VitePress",
     dir: ".vitepress/dist",
     toolchain: "js",
+    envPrefix: "VITE_",
   },
   {
     id: "vue",
@@ -133,6 +149,7 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     dir: "dist",
     toolchain: "js",
     spa: true,
+    envPrefix: "VUE_APP_",
   },
   {
     id: "jekyll",

@@ -1,6 +1,9 @@
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { createCoreClient } from "@bunny.net/openapi-client";
+import {
+  createComputeClient,
+  createCoreClient,
+} from "@bunny.net/openapi-client";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
@@ -35,6 +38,7 @@ import {
   type DeployRecord,
   deployIdError,
   findDeploy,
+  functionEnvName,
   markCurrent,
   type NotFoundMode,
   type RemoteSiteState,
@@ -42,6 +46,16 @@ import {
 import { type DeployIdentity, resolveDeployIdentity } from "./deploy-id.ts";
 import { deleteBlocker } from "./deployments/delete.ts";
 import { setupSiteDomain } from "./domains/index.ts";
+import {
+  DEFAULT_FUNCTIONS_DIR,
+  discoverFunctions,
+  type FunctionDeployResult,
+  functionBuildEnv,
+  type PreparedFunction,
+  prepareFunctions,
+  publishFunctions,
+  staleFunctions,
+} from "./functions.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -312,7 +326,42 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
     let etag = site.etag;
 
+    // Function scripts are created first so their URLs go into the build; their code is published only after the deploy is validated, so a cancelled deploy never leaves new function code live.
     const preset = await detectFramework(root);
+    const functionsDir = resolve(
+      root,
+      siteConfig?.config.functions?.dir ?? DEFAULT_FUNCTIONS_DIR,
+    );
+    const functions = await discoverFunctions(root, functionsDir);
+    const computeClient = createComputeClient(options);
+    let prepared: PreparedFunction[] = [];
+    if (functions.length > 0) {
+      if (output !== "json") {
+        logger.dim(
+          "Deploying the functions/ directory as Edge Scripts is experimental; the folder convention and variable names may change.",
+        );
+      }
+      prepared = await withSpinner("Preparing functions...", (spin) =>
+        prepareFunctions({
+          computeClient,
+          state,
+          functions,
+          onStep: (message) => {
+            spin.text = message;
+          },
+        }),
+      );
+      // New script IDs are persisted straight away, so a failure further on retries against them rather than creating duplicates.
+      if (prepared.some((p) => p.created)) {
+        etag = await writeRemoteState(connection, state, etag);
+      }
+    }
+    for (const name of staleFunctions(state, functions)) {
+      logger.warn(
+        `Function "${name}" is deployed but has no folder here; it keeps serving until its script (${state.functions?.[name]?.scriptId}) is deleted.`,
+      );
+    }
+    const functionEnv = functionBuildEnv(state, preset?.envPrefix);
 
     let autoDir: string | undefined;
     if (requestedBuild) {
@@ -321,7 +370,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       // No dir given: target the detected framework's output dir, not the repo root the build ran in.
       if (explicitDir === undefined) autoDir = requestedBuild.dir;
       const overrides = await collectEnv(args.env, args["env-file"]);
-      await runBuildCommand(requestedBuild.command, root, overrides);
+      await runBuildCommand(requestedBuild.command, root, {
+        ...functionEnv,
+        ...overrides,
+      });
     } else if (isInteractive(output)) {
       // No --build: offer to run the configured build, else a detected one.
       const configured = siteConfig?.config.build;
@@ -335,7 +387,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           ? `Run ${auto.label} (\`${auto.command}\`) before deploying?`
           : `Detected ${auto.label}. Run \`${auto.command}\` before deploying?`;
         if (await confirm(prompt, { initial: true, optional: true })) {
-          await runBuildCommand(auto.command, root, {});
+          await runBuildCommand(auto.command, root, functionEnv);
         }
       }
     }
@@ -353,8 +405,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       throw new UserError(`Directory not found: ${dir}`);
     }
 
+    // The functions tree is server-side source; it never ships as static files even when the deploy dir contains it.
     const files = await withSpinner("Hashing files...", () =>
-      hashFiles(collectFiles(dir)),
+      hashFiles(collectFiles(dir, { exclude: [functionsDir] })),
     );
     if (files.length === 0) {
       throw new UserError(
@@ -450,6 +503,44 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       }
     }
 
+    // Validation is done: publish function code now, right before the site itself, so the frontend never ships ahead of what it calls.
+    let functionResults: FunctionDeployResult[] = [];
+    if (prepared.length > 0) {
+      functionResults = await withSpinner("Deploying functions...", (spin) =>
+        publishFunctions({
+          computeClient,
+          prepared,
+          force: args.force ?? false,
+          onStep: (message) => {
+            spin.text = message;
+          },
+        }),
+      );
+      if (functionResults.some((r) => r.uploaded)) {
+        etag = await writeRemoteState(connection, state, etag);
+      }
+    }
+    const functionsJson = functionResults.map((r) => ({
+      name: r.name,
+      url: r.url,
+      env: functionEnvName(r.name),
+      scriptId: r.scriptId,
+      created: r.created,
+      uploaded: r.uploaded,
+    }));
+    const logFunctions = () => {
+      if (functionResults.length === 0) return;
+      logger.info("Functions:");
+      for (const r of functionResults) {
+        const note = r.created ? " (new)" : r.uploaded ? "" : " (unchanged)";
+        const names = [functionEnvName(r.name)];
+        if (preset?.envPrefix)
+          names.push(functionEnvName(r.name, preset.envPrefix));
+        logger.log(`  ${r.url}${note}`);
+        logger.dim(`    ${names.join(", ")}`);
+      }
+    };
+
     const { deployId, skipUpload } = target;
     const alreadyLive = state.current === deployId;
 
@@ -481,6 +572,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
               unchanged: true,
               live: true,
               production: production ?? null,
+              functions: functionsJson,
             },
             null,
             2,
@@ -492,6 +584,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         `No changes: deploy ${deployId} is already live. Use --force to redeploy.`,
       );
       if (production) logger.log(`  ${production}`);
+      logFunctions();
       // The common repeat path after declining the first-deploy domain offer still gets the hint.
       if (!state.domain) logger.dim(DOMAIN_HINT);
       return;
@@ -573,6 +666,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
             unchanged: skipUpload,
             live: true,
             production: production ?? null,
+            functions: functionsJson,
           },
           null,
           2,
@@ -590,6 +684,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
     if (production) logger.info(`Production: ${production}`);
     if (notFoundNote) logger.info(notFoundNote);
+    logFunctions();
 
     // Domainless sites: the first deploy offers a custom production domain, later ones just hint.
     if (!state.domain) {

@@ -923,6 +923,7 @@ test("deleteSiteResources removes the site marker when keeping storage", async (
 
   const results = await deleteSiteResources({
     coreClient,
+    computeClient: fakeComputeClient([]),
     state: fakeState(),
     keepStorage: true,
     connection: fakeConnection(),
@@ -942,6 +943,7 @@ test("deleteSiteResources deletes the pull zone and storage zone", async () => {
 
   const results = await deleteSiteResources({
     coreClient,
+    computeClient: fakeComputeClient([]),
     state: fakeState(),
   });
   expect(results.filter((r) => r.deleted)).toHaveLength(2);

@@ -55,6 +55,6 @@ This is a Bun workspace monorepo with five packages:
 
 ## Documentation
 
-When adding, changing, or removing commands or flags, update `packages/cli/README.md` (user-facing command docs and examples). That is the command reference.
+When adding, changing, or removing commands or flags, update `packages/cli/README.md` (user-facing command docs and examples). That is the command reference. Experimental namespaces hidden from help keep theirs inside their command folder instead (`apps/APPS.md`, `sites/SITES.md`).
 
 `AGENTS.md` documents architecture, conventions, and non-obvious decisions. Update it only when you change a _rule_, not when you add a command. It deliberately holds no command reference and no file listing: those duplicated the READMEs and the filesystem, and went stale.
