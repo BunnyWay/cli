@@ -1,0 +1,53 @@
+{
+  "name": "@bunny.net/stream-import-cloudflare",
+  "version": "0.0.0",
+  "description": "Cloudflare Stream source adapter for @bunny.net/stream-import: list videos and resolve download URLs for import into bunny.net Stream.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BunnyWay/cli.git",
+    "directory": "packages/stream-import-cloudflare"
+  },
+  "homepage": "https://github.com/BunnyWay/cli/tree/main/packages/stream-import-cloudflare#readme",
+  "bugs": "https://github.com/BunnyWay/cli/issues",
+  "keywords": [
+    "bunny",
+    "bunny.net",
+    "stream",
+    "video",
+    "migration",
+    "cloudflare"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@bunny.net/stream-import": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -25,6 +25,28 @@
       ],
       "@bunny.net/openapi-client/*": ["./packages/openapi-client/src/*"],
       "@bunny.net/sandbox": ["./packages/sandbox/src/index.ts"],
+      "@bunny.net/stream-import": ["./packages/stream-import/src/index.ts"],
+      "@bunny.net/stream-import-brightcove": [
+        "./packages/stream-import-brightcove/src/index.ts"
+      ],
+      "@bunny.net/stream-import-cloudflare": [
+        "./packages/stream-import-cloudflare/src/index.ts"
+      ],
+      "@bunny.net/stream-import-jwplayer": [
+        "./packages/stream-import-jwplayer/src/index.ts"
+      ],
+      "@bunny.net/stream-import-mux": [
+        "./packages/stream-import-mux/src/index.ts"
+      ],
+      "@bunny.net/stream-import-s3": [
+        "./packages/stream-import-s3/src/index.ts"
+      ],
+      "@bunny.net/stream-import-vimeo": [
+        "./packages/stream-import-vimeo/src/index.ts"
+      ],
+      "@bunny.net/stream-import-wistia": [
+        "./packages/stream-import-wistia/src/index.ts"
+      ],
       "@bunny.net/sandbox/known-hosts": [
         "./packages/sandbox/src/known-hosts.ts"
       ]

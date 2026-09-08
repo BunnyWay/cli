@@ -1,4 +1,5 @@
 import type { CommandModule } from "yargs";
+import { streamLibraryImportCommand } from "@/commands/stream/import.ts";
 import { defineNamespace } from "@/core/define-namespace.ts";
 import { streamLibraryCreateCommand } from "./create.ts";
 import { streamLibraryCredentialsCommand } from "./credentials.ts";
@@ -18,6 +19,7 @@ const subcommands: CommandModule[] = [
   streamLibraryLinkCommand,
   streamLibraryUnlinkCommand,
   streamLibraryDeleteCommand,
+  streamLibraryImportCommand,
 ];
 
 export const streamLibraryNamespace = defineNamespace(
