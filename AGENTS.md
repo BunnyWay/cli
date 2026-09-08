@@ -109,6 +109,14 @@ The factory wraps every handler in a try/catch that separates `UserError` (clean
 
 `hidden: true` keeps a command out of help while it still parses. Used for moved-command stubs such as `sandbox cp`, which errors and points at `sandbox files cp` (without the stub, yargs suggests an unrelated command).
 
+### Verb naming
+
+`create` makes a resource that did not exist before: `db create`, `sites create`, `sandbox create`, `scripts create`, `db tokens create`, `storage zones create`, `dns zone create`.
+
+`add` associates something that already exists with something else, or appends to a collection: `dns record add`, `db regions add`, `apps endpoints add`, `sandbox url add`, `registries add` (registering an external registry with the account), `domains add`.
+
+The test is whether the thing exists independently of the command. A storage zone does, so it is created; a hostname on a pull zone does not, so it is added. `storage zones` and `dns zone` shipped under `add` and keep it as an alias.
+
 ### `defineNamespace(command, describe, subcommands)`
 
 Groups subcommands and enforces `demandCommand(1)`, so a bare namespace shows help. Pass `false` as the second positional for a hidden alias namespace (`pz` for `pullzone`, `hostnames` for `domains`).

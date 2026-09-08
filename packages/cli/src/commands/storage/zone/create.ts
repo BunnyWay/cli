@@ -72,7 +72,7 @@ function warnUnusableS3(
   }
 }
 
-interface ZoneAddArgs {
+interface ZoneCreateArgs {
   name?: string;
   region?: string;
   tier?: ZoneTierChoice;
@@ -88,22 +88,25 @@ interface ZoneAddArgs {
   force?: boolean;
 }
 
-export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
-  command: "add [name]",
-  aliases: ["create"],
+export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
+  command: "create [name]",
+  aliases: ["add"],
   describe: "Create a new storage zone.",
   examples: [
     [
-      "$0 storage zones add",
+      "$0 storage zones create",
       "Interactive: prompts for name, tier, region, and S3",
     ],
-    ["$0 storage zones add my-zone --region DE", "Create a zone in Frankfurt"],
     [
-      "$0 storage zones add my-zone --region NY --replication LA,SG",
+      "$0 storage zones create my-zone --region DE",
+      "Create a zone in Frankfurt",
+    ],
+    [
+      "$0 storage zones create my-zone --region NY --replication LA,SG",
       "Create a zone with replication regions",
     ],
     [
-      "$0 storage zones add my-zone --tier ssd --s3",
+      "$0 storage zones create my-zone --tier ssd --s3",
       "Create an SSD zone (always DE) with S3-compatible access",
     ],
   ],

@@ -180,7 +180,7 @@ export const cli = instance
       const examples = [
         ["Create a database", "bunny db create"],
         ["Create an edge script", "bunny scripts init"],
-        ["Add a domain to manage DNS", "bunny dns zones add example.com"],
+        ["Add a domain to manage DNS", "bunny dns zones create example.com"],
         ["Create a dev sandbox", "bunny sandbox create my-sandbox"],
         // ["Deploy a static site", "bunny sites deploy"],
         // ["Deploy an app", "bunny apps deploy"],

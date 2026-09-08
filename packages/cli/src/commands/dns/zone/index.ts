@@ -1,6 +1,6 @@
 import type { CommandModule } from "yargs";
 import { defineNamespace } from "@/core/define-namespace.ts";
-import { dnsZoneAddCommand } from "./add.ts";
+import { dnsZoneCreateCommand } from "./create.ts";
 import { dnsZoneDnssecNamespace } from "./dnssec/index.ts";
 import { dnsZoneLinkCommand } from "./link.ts";
 import { dnsZoneListCommand } from "./list.ts";
@@ -13,7 +13,7 @@ import { dnsZoneUnlinkCommand } from "./unlink.ts";
 
 const subcommands: CommandModule[] = [
   dnsZoneListCommand,
-  dnsZoneAddCommand,
+  dnsZoneCreateCommand,
   dnsZoneShowCommand,
   dnsZoneRemoveCommand,
   dnsStatsCommand,

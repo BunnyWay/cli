@@ -567,8 +567,8 @@ bunny dns record export example.com --save           # write to ./example.com.zo
 
 # Zones — lifecycle
 bunny dns zone list
-bunny dns zone add example.com
-bunny dns zone add                # prompts for the domain (alias: create)
+bunny dns zone create example.com
+bunny dns zone create             # prompts for the domain (alias: add)
 bunny dns zone show example.com
 bunny dns zone remove example.com
 
@@ -607,9 +607,9 @@ Positional value ordering for `record add` follows the record type: `A`/`AAAA`/`
 
 Manage Edge Storage through two resource groups: **`bunny storage zones`** (the zone itself: create, list, inspect, update, delete; alias `zone`, plus hidden `bucket`/`buckets`) and **`bunny storage files`** (the files within a zone; alias `file`). Zone management uses the account API key; file operations use the zone's own password and a region-specific host, both resolved automatically from the zone. `zones` commands take the zone as an optional `[zone]` positional; `files` commands take it as the `--zone`/`-z` flag (their positional is the file path). Either accepts the zone name or its numeric ID. When the zone is omitted it resolves from the directory's linked zone (`bunny storage link`, stored in `.bunny/storage.json`), then an interactive picker, which offers to link the directory to the picked zone (except on destructive commands). Non-interactive runs (`--output json`, no TTY, or `--force`) error instead of prompting; pass a zone or link the directory.
 
-A storage zone only holds files; a **pull zone** is what serves them on the web. `zones add` offers to create one (origin set to the new storage zone) and then to add a custom domain, or pass `--pull-zone`/`--domain` to do it non-interactively. Custom domains live on the pull zone and are managed with `bunny storage zones domains`.
+A storage zone only holds files; a **pull zone** is what serves them on the web. `zones create` offers to create one (origin set to the new storage zone) and then to add a custom domain, or pass `--pull-zone`/`--domain` to do it non-interactively. Custom domains live on the pull zone and are managed with `bunny storage zones domains`.
 
-The tier (`--tier hdd|ssd`, Standard or Edge), the main region, and S3 compatibility (`--s3`) are all fixed at creation, so `zones add` prompts for each of them when the flag is omitted. Edge (SSD) zones are always primaried in `DE`, so `--tier ssd` rejects any other `--region` rather than letting the API rewrite it silently; replication regions are unaffected. `zones list` reports the tier and S3 support per zone, and `zones show` reports both plus the S3 endpoint when it's enabled.
+The tier (`--tier hdd|ssd`, Standard or Edge), the main region, and S3 compatibility (`--s3`) are all fixed at creation, so `zones create` prompts for each of them when the flag is omitted. Edge (SSD) zones are always primaried in `DE`, so `--tier ssd` rejects any other `--region` rather than letting the API rewrite it silently; replication regions are unaffected. `zones list` reports the tier and S3 support per zone, and `zones show` reports both plus the S3 endpoint when it's enabled.
 
 After creating a zone, `add` offers to link the directory to it (`--link`/`--no-link`), to print connection details (`--connection http|ftp|s3`, optionally as a client config with `--format`), and to save those details to `.env` (`--save-env`). Credentials are shown in full there because they were explicitly asked for; `zones credentials` masks them by default.
 
@@ -618,13 +618,13 @@ Saving to `.env` writes `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, and `BUN
 ```bash
 # Zones (lifecycle)
 bunny storage zones list
-bunny storage zones add                                # interactive: prompts for name and region (alias: create)
-bunny storage zones add my-zone --region DE
-bunny storage zones add my-zone --region NY --replication LA,SG
-bunny storage zones add my-zone --region DE --pull-zone   # also create a pull zone to serve it on the web
-bunny storage zones add my-zone --region DE --domain cdn.example.com   # pull zone + custom domain
-bunny storage zones add my-zone --tier ssd --s3        # Edge (SSD) tier (always DE) with S3-compatible access
-bunny storage zones add my-zone --region DE --s3 --connection s3 --save-env   # print S3 credentials and write them to .env
+bunny storage zones create                             # interactive: prompts for name and region (alias: add)
+bunny storage zones create my-zone --region DE
+bunny storage zones create my-zone --region NY --replication LA,SG
+bunny storage zones create my-zone --region DE --pull-zone   # also create a pull zone to serve it on the web
+bunny storage zones create my-zone --region DE --domain cdn.example.com   # pull zone + custom domain
+bunny storage zones create my-zone --tier ssd --s3        # Edge (SSD) tier (always DE) with S3-compatible access
+bunny storage zones create my-zone --region DE --s3 --connection s3 --save-env   # print S3 credentials and write them to .env
 bunny storage zones show my-zone
 bunny storage zones update my-zone                     # interactive: edit settings, pre-filled with current values
 bunny storage zones update my-zone --custom-404-path /404.html
@@ -667,16 +667,16 @@ bunny storage docs
 
 A trailing slash on a `files` path denotes a directory: `files list images/` lists that directory, and `files remove images/` deletes it and its contents recursively. Edge Storage file operations are powered by the [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage).
 
-bunny.net's S3-compatible API is in preview and is opt-in per zone at creation (`zones add --s3`); it cannot be enabled on an existing zone. When a zone has it, `bunny storage zones show` surfaces its S3 endpoint, and `bunny storage zones credentials --connection s3` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table and JSON output mask the secret by default; pass `--show-secret` to reveal it (the S3 tool formats always emit it in full, since they're meant to be consumed by tools, and under `--output json` the config rides along in a `config` field). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
+bunny.net's S3-compatible API is in preview and is opt-in per zone at creation (`zones create --s3`); it cannot be enabled on an existing zone. When a zone has it, `bunny storage zones show` surfaces its S3 endpoint, and `bunny storage zones credentials --connection s3` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table and JSON output mask the secret by default; pass `--show-secret` to reveal it (the S3 tool formats always emit it in full, since they're meant to be consumed by tools, and under `--output json` the config rides along in a `config` field). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
 
 The same command also serves the two protocols every zone has: `--connection http` (the base URL and `AccessKey` header, plus a `--format sdk` snippet for [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage)) and `--connection ftp` (host, username, password). `--format` implies its protocol, so a conflicting `--connection` is an error. `--save-env` writes the protocol's variables (`BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, `BUNNY_STORAGE_REGION`, or the `AWS_*` quad for S3) into whichever `.env` already holds one of them.
 
 | Flag                                                                                        | Commands                                 | Description                                                                                                                        |
 | ------------------------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `--region`, `--replication`                                                                 | `zones add`                              | Primary region code, plus optional replication regions (any storage region except the primary; run `storage regions` to list them) |
-| `--tier` (`hdd` \| `ssd`), `--s3`                                                           | `zones add`                              | Storage tier and S3-compatible access; both are create-time only, and `--tier ssd` forces `DE` as the main region                  |
-| `--link`, `--connection` (`http` \| `ftp` \| `s3`), `--format`, `--save-env`                | `zones add`                              | Post-create follow-ups: link the directory, print connection details (or a client config), and save them to `.env`                 |
-| `--pull-zone`, `--pull-zone-name`, `--domain`                                               | `zones add`                              | Also create a pull zone (what serves the stored files on the web) and optionally a custom domain; interactively, `add` offers both |
+| `--region`, `--replication`                                                                 | `zones create`                           | Primary region code, plus optional replication regions (any storage region except the primary; run `storage regions` to list them) |
+| `--tier` (`hdd` \| `ssd`), `--s3`                                                           | `zones create`                           | Storage tier and S3-compatible access; both are create-time only, and `--tier ssd` forces `DE` as the main region                  |
+| `--link`, `--connection` (`http` \| `ftp` \| `s3`), `--format`, `--save-env`                | `zones create`                           | Post-create follow-ups: link the directory, print connection details (or a client config), and save them to `.env`                 |
+| `--pull-zone`, `--pull-zone-name`, `--domain`                                               | `zones create`                           | Also create a pull zone (what serves the stored files on the web) and optionally a custom domain; interactively, `add` offers both |
 | `--custom-404-path`, `--rewrite-404-to-200`, `--replication`                                | `zones update`                           | Edit zone settings; replication is additive since replicas can't be removed (see `bunny storage zones update --help`)              |
 | `--connection` (`http` \| `ftp` \| `s3`), `--save-env`                                      | `zones credentials`                      | Pick the protocol to print (prompts when omitted); save its variables to `.env`                                                    |
 | `--format` (`sdk` \| `rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only`, `--show-secret` | `zones credentials`                      | Emit a client config (`sdk` for the HTTP API, the rest for S3); use the read-only password; reveal the masked secret               |

@@ -23,7 +23,7 @@ When a zone is chosen via the picker, the command offers to link the directory t
 ```bash
 # Create a zone; it prints the nameservers to set and names your registrar.
 # Once you have pointed them, check delegation has taken effect:
-bunny dns zones add example.com
+bunny dns zones create example.com
 bunny dns zones nameservers example.com
 
 # Add records, or apply a preset record set (email, verification, security)
@@ -47,10 +47,10 @@ bunny dns scripts attach example.com api --script <id>
 
 # Zones
 
-## `bunny dns zones add`: Create a zone
+## `bunny dns zones create`: Create a zone
 
 ```bash
-bunny dns zones add example.com
+bunny dns zones create example.com
 ```
 
 After creating the zone it checks the live registrar delegation:
