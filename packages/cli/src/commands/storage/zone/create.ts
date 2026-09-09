@@ -72,7 +72,7 @@ function warnUnusableS3(
   }
 }
 
-interface ZoneAddArgs {
+interface ZoneCreateArgs {
   name?: string;
   region?: string;
   tier?: ZoneTierChoice;
@@ -88,21 +88,25 @@ interface ZoneAddArgs {
   force?: boolean;
 }
 
-export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
-  command: "add [name]",
+export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
+  command: "create [name]",
+  aliases: ["add"],
   describe: "Create a new storage zone.",
   examples: [
     [
-      "$0 storage zones add",
+      "$0 storage zones create",
       "Interactive: prompts for name, tier, region, and S3",
     ],
-    ["$0 storage zones add my-zone --region DE", "Create a zone in Frankfurt"],
     [
-      "$0 storage zones add my-zone --region NY --replication LA,SG",
+      "$0 storage zones create my-zone --region DE",
+      "Create a zone in Frankfurt",
+    ],
+    [
+      "$0 storage zones create my-zone --region NY --replication LA,SG",
       "Create a zone with replication regions",
     ],
     [
-      "$0 storage zones add my-zone --tier ssd --s3",
+      "$0 storage zones create my-zone --tier ssd --s3",
       "Create an SSD zone (always DE) with S3-compatible access",
     ],
   ],
@@ -446,7 +450,9 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
       if (requestedType && created) {
         const zoneWithSecret = await zoneWithPassword(client, created);
         warnUnusableS3(zoneWithSecret, requestedType, zoneName);
-        conn = storageConnection(zoneWithSecret, requestedType);
+        conn = storageConnection(zoneWithSecret, requestedType, {
+          cdnUrl: pullZoneResult?.url,
+        });
         // A requested --format is still honoured here, as a config string beside the fields.
         connJson = connectionJson(conn, {
           client: format ? { zone: zoneWithSecret, format } : undefined,
@@ -486,7 +492,13 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     if (created) {
       logger.log();
       logger.log(
-        formatKeyValue(zoneDetailRows(created, { usage: false }), output),
+        formatKeyValue(
+          zoneDetailRows(created, {
+            usage: false,
+            cdnUrl: pullZoneResult?.url,
+          }),
+          output,
+        ),
       );
       logger.log();
     }
@@ -564,7 +576,9 @@ export const storageZoneAddCommand = defineCommand<ZoneAddArgs>({
     if (connectionType) {
       const zoneWithSecret = await zoneWithPassword(client, created);
       warnUnusableS3(zoneWithSecret, connectionType, zoneName);
-      const conn = storageConnection(zoneWithSecret, connectionType);
+      const conn = storageConnection(zoneWithSecret, connectionType, {
+        cdnUrl: pullZoneResult?.url,
+      });
       printConnection(zoneWithSecret, conn, { output, format: toolFormat });
 
       await offerConnectionEnv(conn, { saveEnv, interactive });

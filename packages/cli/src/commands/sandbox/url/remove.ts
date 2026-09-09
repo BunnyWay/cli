@@ -6,18 +6,21 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, spinner } from "@/core/ui.ts";
 
-interface DeleteArgs {
+interface RemoveArgs {
   name: string;
   "endpoint-name": string;
   force: boolean;
 }
 
-export const sandboxUrlDeleteCommand = defineCommand<DeleteArgs>({
-  command: "delete <name> <endpoint-name>",
-  aliases: ["rm"],
-  describe: "Delete a public endpoint from a sandbox.",
+export const sandboxUrlRemoveCommand = defineCommand<RemoveArgs>({
+  command: "remove <name> <endpoint-name>",
+  aliases: ["delete", "rm"],
+  describe: "Remove a public endpoint from a sandbox.",
   examples: [
-    ["$0 sandbox url delete my-sandbox port-3000", "Delete endpoint by name"],
+    [
+      "$0 sandbox url remove my-sandbox port-3000",
+      "Remove an endpoint by name",
+    ],
   ],
 
   builder: (yargs) =>

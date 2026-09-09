@@ -11,14 +11,14 @@ interface ZoneRemoveArgs {
   force?: boolean;
 }
 
-export const dnsZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
-  command: "remove [domain]",
-  aliases: ["rm"],
+export const dnsZoneDeleteCommand = defineCommand<ZoneRemoveArgs>({
+  command: "delete [domain]",
+  aliases: ["remove", "rm"],
   describe: "Delete a DNS zone and all of its records.",
   examples: [
-    ["$0 dns zones remove example.com", "Delete a zone"],
-    ["$0 dns zones remove example.com --force", "Skip confirmation"],
-    ["$0 dns zones remove", "Pick a zone interactively"],
+    ["$0 dns zones delete example.com", "Delete a zone"],
+    ["$0 dns zones delete example.com --force", "Skip confirmation"],
+    ["$0 dns zones delete", "Pick a zone interactively"],
   ],
 
   builder: (yargs) =>

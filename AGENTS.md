@@ -109,6 +109,18 @@ The factory wraps every handler in a try/catch that separates `UserError` (clean
 
 `hidden: true` keeps a command out of help while it still parses. Used for moved-command stubs such as `sandbox cp`, which errors and points at `sandbox files cp` (without the stub, yargs suggests an unrelated command).
 
+### Verb naming
+
+`create` makes a resource that did not exist before: `db create`, `sites create`, `sandbox create`, `scripts create`, `db tokens create`, `storage zones create`, `dns zone create`.
+
+`add` associates something that already exists with something else, or appends to a collection: `dns record add`, `db regions add`, `apps endpoints add`, `sandbox url add`, `registries add` (registering an external registry with the account), `domains add`.
+
+The test is whether the thing exists independently of the command. A storage zone does, so it is created; a hostname on a pull zone does not, so it is added.
+
+The destructive verbs mirror that pairing: `delete` undoes `create`, `remove` undoes `add`. So `storage zones delete` and `dns zone delete` destroy a resource, while `dns record remove`, `db regions remove`, `sandbox url remove`, and `scripts env remove` take an entry out of a collection. `storage files remove` and `skills remove` keep `remove` as the inverse of `upload` and `install`.
+
+Renamed commands keep their shipped spelling as an alias (`add` on the two `create`s, `remove`/`rm` on the two `delete`s, `delete`/`rm` on the two sandbox `remove`s), and `rm` stays available everywhere.
+
 ### `defineNamespace(command, describe, subcommands)`
 
 Groups subcommands and enforces `demandCommand(1)`, so a bare namespace shows help. Pass `false` as the second positional for a hidden alias namespace (`pz` for `pullzone`, `hostnames` for `domains`).
@@ -168,7 +180,7 @@ Mask every sensitive value (API keys, passwords, S3 secret keys, auth tokens) in
 Two deliberate exceptions:
 
 - **Tool-config output** (`--format rclone|aws|s3cmd|env`) always emits full values, because its entire purpose is to be consumed by another tool.
-- **A prompt or flag whose whole purpose is handing over credentials** counts as asking (`storage zones add --connection http|ftp|s3`). It prints in full with a "treat like a password" warning; masking there would leave the user with nothing usable.
+- **A prompt or flag whose whole purpose is handing over credentials** counts as asking (`storage zones create --connection http|ftp|s3`). It prints in full with a "treat like a password" warning; masking there would leave the user with nothing usable.
 
 `storage zones credentials` keeps masking by default because there the credential is the whole command and it may be run casually. Commands that merely happen to hold a zone (list, show, inspect) must never print one; see `toSafeStorageZone`.
 
