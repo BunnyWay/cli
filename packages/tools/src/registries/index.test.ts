@@ -153,6 +153,7 @@ test("registryTypeForServer knows the hosts that need a type", () => {
   expect(registryTypeForServer("ghcr.io")).toBe("gitHub");
   expect(registryTypeForServer("https://ghcr.io/v2")).toBe("gitHub");
   expect(registryTypeForServer("docker.io")).toBe("dockerHub");
+  expect(registryTypeForServer("ghcr.io.example.com")).toBeUndefined();
   expect(registryTypeForServer("registry.example.com")).toBeUndefined();
   expect(registryTypeForServer(undefined)).toBeUndefined();
 });

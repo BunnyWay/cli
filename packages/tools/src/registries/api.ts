@@ -49,16 +49,22 @@ export function requireSaved(
   );
 }
 
+function registryHost(server: string | undefined): string {
+  const withoutScheme = (server ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "");
+
+  const end = withoutScheme.search(/[/:]/);
+
+  return end === -1 ? withoutScheme : withoutScheme.slice(0, end);
+}
+
 // ghcr.io needs type "gitHub" (the backend 500s without it); docker.io wants "dockerHub".
 export function registryTypeForServer(
   server: string | undefined,
 ): RegistryType | undefined {
-  // `ghcr.io.example.com` is not read as ghcr.io.
-  const host = server
-    ?.trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/[/:].*$/, "");
+  const host = registryHost(server);
   if (!host) return undefined;
   if (host === "ghcr.io") return "gitHub";
   if (host === "docker.io" || host === "registry-1.docker.io") {
