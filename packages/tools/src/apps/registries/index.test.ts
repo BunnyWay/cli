@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createToolContext, type McClient } from "../context.ts";
+import { createToolContext, type McClient } from "../../context.ts";
 import { registryTypeForServer } from "./api.ts";
 import {
   registriesCreate,

@@ -115,7 +115,7 @@ The factory wraps every handler in a try/catch that separates `UserError` (clean
 
 `create` makes a resource that did not exist before: `db create`, `sites create`, `sandbox create`, `scripts create`, `db tokens create`, `storage zones create`, `dns zone create`.
 
-`add` associates something that already exists with something else, or appends to a collection: `dns record add`, `db regions add`, `apps endpoints add`, `sandbox url add`, `registries add` (registering an external registry with the account), `domains add`.
+`add` associates something that already exists with something else, or appends to a collection: `dns record add`, `db regions add`, `apps endpoints add`, `sandbox url add`, `apps registries add` (registering an external registry with the account), `domains add`.
 
 The test is whether the thing exists independently of the command. A storage zone does, so it is created; a hostname on a pull zone does not, so it is added.
 
@@ -133,13 +133,13 @@ Groups subcommands and enforces `demandCommand(1)`, so a bare namespace shows he
 
 `@bunny.net/tools` holds the work; the CLI holds the experience. One tool definition backs every surface: a yargs command today, an MCP or other tool host next, and a direct import in an agent.
 
-**Target architecture.** Every remote operation lives in a tool; a CLI command is glue: flags in, prompts and confirmations, tool invocation, rendering out. Command modules must not create API clients or call endpoints directly. `packages/cli/src/core/tools-boundary.test.ts` enforces this with an explicit `PENDING_MIGRATION` allowlist: new direct client use fails the test, and migrating a family removes its entries (the list only shrinks). Currently migrated: `registries`. Host-inherent flows stay in the CLI even at the end state: `auth login` (browser plus loopback callback), docker build/push in `apps deploy`, interactive pickers, and `.env`/`bunny.jsonc` writes.
+**Target architecture.** Every remote operation lives in a tool; a CLI command is glue: flags in, prompts and confirmations, tool invocation, rendering out. Command modules must not create API clients or call endpoints directly. `packages/cli/src/core/tools-boundary.test.ts` enforces this with an explicit `PENDING_MIGRATION` allowlist: new direct client use fails the test, and migrating a family removes its entries (the list only shrinks). Currently migrated: `apps registries`, `registry`. Host-inherent flows stay in the CLI even at the end state: `auth login` (browser plus loopback callback), docker build/push in `apps deploy`, interactive pickers, and `.env`/`bunny.jsonc` writes.
 
 ### `defineTool(def)`
 
 ```typescript
 export const registriesDelete = defineTool({
-  name: "registries.delete", // dotted, lowercase, unique; flattens to `bunny_registries_delete`
+  name: "apps.registries.delete", // dotted, lowercase, product area first; flattens to `bunny_apps_registries_delete`
   title: "Remove a container registry",
   description: "Remove a container registry. Fails when the registry is still used by an app.",
   schema: z.strictObject({ registry: registryRef }), // object schemas only; `.describe()` every field
@@ -187,7 +187,7 @@ Commands that orchestrate several tools stay on `defineCommand` and call `tool.i
 
 ### Publishing tools to another host
 
-`packages/tools/src/schema.ts` derives what a tool host needs: `inputJsonSchema()` and `outputJsonSchema()` (Zod via `z.toJSONSchema`), `describeTool()` (description plus examples and the `sensitive`/`localFiles` caveats), `flatName()` (`registries.list` to `bunny_registries_list`), and `toStructuredResult()` to wrap a result to match its output schema. Mapping `kind` onto a protocol's annotations is the host's job. The CLI is the only host in this repo today; an MCP server should live in its own package and import these helpers rather than re-deriving them.
+`packages/tools/src/schema.ts` derives what a tool host needs: `inputJsonSchema()` and `outputJsonSchema()` (Zod via `z.toJSONSchema`), `describeTool()` (description plus examples and the `sensitive`/`localFiles` caveats), `flatName()` (`apps.registries.list` to `bunny_apps_registries_list`), and `toStructuredResult()` to wrap a result to match its output schema. Mapping `kind` onto a protocol's annotations is the host's job. The CLI is the only host in this repo today; an MCP server should live in its own package and import these helpers rather than re-deriving them.
 
 ### Adding a tool
 
@@ -372,7 +372,7 @@ The CLI must be fully usable by agents, scripts, and pipelines.
 - **Symlink escapes are refused**, so a checkout cannot plant links that make the installer overwrite unrelated files. Symlinks resolving inside the project are followed.
 - **`SKILL.md` is a completion sentinel**: boundary-checked, removed first and written last per root, and the installed check requires every global root. Partial installs and failed refreshes therefore re-offer.
 - **Single source of truth**: `commands/skills/content.ts` embeds `skills/bunny-cli/**` at bundle time via Bun text imports, so the installed skill is always the shipped one. `content.test.ts` fails if `SKILL.md` routes to a reference that is not embedded.
-- **Experimental namespaces stay out** of the skill and the AGENTS.md section (`apps`, `registries`); add them back when they graduate to the visible command list in `cli.ts`. `sites` is the exception: hidden from help but documented, since agents deploy with it.
+- **Experimental namespaces stay out** of the skill and the AGENTS.md section (`apps`, `registry`); add them back when they graduate to the visible command list in `cli.ts`. `sites` is the exception: hidden from help but documented, since agents deploy with it.
 - **Onboarding nudges**: `bunny login` makes a one-time interactive offer (`--install-skill` / `--no-install-skill` decide it without prompting). Users who authenticate another way get a one-time passive stderr hint instead. Both share one marker file in the XDG cache dir, so users see at most one. The marker is written on a decline or a successful install only, so an interrupted prompt re-offers.
 
 ---

@@ -1,6 +1,6 @@
 import { ApiError, UserError } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/magic-containers";
-import type { McClient } from "../context.ts";
+import type { McClient } from "../../context.ts";
 
 export type ContainerRegistryModel = components["schemas"]["ContainerRegistry"];
 export type RegistryType = components["schemas"]["RegistryType"];

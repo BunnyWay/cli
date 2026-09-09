@@ -1,7 +1,7 @@
 import { UserError } from "@bunny.net/openapi-client";
 import { z } from "zod";
-import type { Tool } from "../define-tool.ts";
-import { defineTool } from "../define-tool.ts";
+import type { Tool } from "../../define-tool.ts";
+import { defineTool } from "../../define-tool.ts";
 import {
   fetchRegistries,
   fetchRegistry,

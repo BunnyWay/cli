@@ -28,7 +28,7 @@ const ctx = createToolContext({ clients: { mc: fakeMcClient } });
 
 ```ts
 export const registriesGet = defineTool({
-  name: "registries.get",
+  name: "apps.registries.get",
   title: "Get a container registry",
   description: "Get one container registry by ID.",
   schema: z.strictObject({
@@ -46,7 +46,7 @@ export const registriesGet = defineTool({
 - `resultSchema` declares the shape `run` resolves with. Hosts publish it as the output schema; results are not re-validated against it.
 - `sensitive` marks a result carrying credentials. `localFiles` marks a tool whose paths refer to the machine it runs on.
 
-Names are dotted and lowercase with the verb last: `registries.list`, `registries.delete`. Duplicates throw when the catalog loads.
+Names are dotted and lowercase with the verb last, product area first: `apps.registries.list`, `registry.tags`. Duplicates throw when the catalog loads.
 
 ## The catalog
 
@@ -54,8 +54,8 @@ Names are dotted and lowercase with the verb last: `registries.list`, `registrie
 import { getTool, listTools, runTool, tools } from "@bunny.net/tools";
 
 listTools({ kind: "read" }); // safe to run unattended
-listTools({ namespace: "registries" }); // one resource
-await runTool("registries.get", ctx, { registry: 1155 });
+listTools({ namespace: "apps" }); // one product area
+await runTool("apps.registries.get", ctx, { registry: 1155 });
 ```
 
 ## Publishing tools to a host
@@ -64,7 +64,7 @@ A host that exposes tools over a protocol needs a name, a description, and JSON 
 
 ```ts
 const published = tools.map((tool) => ({
-  name: flatName(tool, "bunny"), // registries.list -> bunny_registries_list
+  name: flatName(tool, "bunny"), // apps.registries.list -> bunny_apps_registries_list
   title: tool.title,
   description: describeTool(tool),
   inputSchema: inputJsonSchema(tool),
@@ -80,17 +80,17 @@ How `kind` maps onto a protocol's annotations is the host's call. `read` is the 
 
 ## Tools
 
-| Tool                    | Kind        | Notes                                     |
-| ----------------------- | ----------- | ----------------------------------------- |
-| `registries.list`       | read        | Container registries for Magic Containers |
-| `registries.get`        | read        | By registry ID                            |
-| `registries.create`     | write       | Type derived from `server` when omitted   |
-| `registries.update`     | write       | Credentials rotate together; name merges  |
-| `registries.delete`     | destructive | Fails while apps still use the registry   |
-| `registry.repositories` | read        | bunny.net OCI registry, prefix stripped   |
-| `registry.tags`         | read        | Bare repository name in, bare name back   |
+| Tool                     | Kind        | Notes                                     |
+| ------------------------ | ----------- | ----------------------------------------- |
+| `apps.registries.list`   | read        | Container registries for Magic Containers |
+| `apps.registries.get`    | read        | By registry ID                            |
+| `apps.registries.create` | write       | Type derived from `server` when omitted   |
+| `apps.registries.update` | write       | Credentials rotate together; name merges  |
+| `apps.registries.delete` | destructive | Fails while apps still use the registry   |
+| `registry.repositories`  | read        | bunny.net OCI registry, prefix stripped   |
+| `registry.tags`          | read        | Bare repository name in, bare name back   |
 
-`registries` manages the credentials bunny.net uses to pull from third-party registries. `registry` reads the bunny.net registry itself, over the OCI distribution API rather than a generated client, so it uses `ctx.clients.registry`.
+`apps.registries` manages the credentials bunny.net uses to pull images from third-party registries. `registry` reads the bunny.net registry itself, the one you push to, over the OCI distribution API rather than a generated client, so it uses `ctx.clients.registry`.
 
 ## Result shapes
 
