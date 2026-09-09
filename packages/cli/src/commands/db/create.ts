@@ -178,6 +178,20 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
+
+    if (args.primary && args[ARG_MODE]) {
+      throw new UserError(
+        "--primary names the regions, so --mode has nothing left to choose.",
+        "Drop --mode, or drop --primary and --replicas.",
+      );
+    }
+    if (!args.primary && !args[ARG_MODE] && !isInteractive(output)) {
+      throw new UserError(
+        "No regions given and nowhere to ask.",
+        "Pass --primary (and --replicas), or --mode auto to let bunny pick.",
+      );
+    }
+
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createDbClient(clientOptions(config, verbose));
 
@@ -289,11 +303,12 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
               ? choices.findIndex((c) => c.value === preselected)
               : 0,
           });
+          if (!picked) throw new UserError("Location is required.");
           location = picked;
         }
         if (!location) {
           throw new UserError(
-            "Could not determine a region for --mode single.",
+            "Could not detect a region to deploy the database to.",
             "Pass the region explicitly, e.g. --primary FR.",
           );
         }
