@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import prompts from "prompts";
+import { prompts } from "@/core/ui.ts";
 import { uploadDestination } from "./upload.ts";
 
 test("--to wins and is used verbatim, with a trailing slash meaning 'into this directory'", async () => {

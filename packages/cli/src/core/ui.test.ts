@@ -1,10 +1,9 @@
 import { expect, test } from "bun:test";
-import promptsLib from "prompts";
-import { confirm, requireConfirmable } from "./ui.ts";
+import { confirm, prompts, requireConfirmable } from "./ui.ts";
 
-// Pins the injection escape hatch: this runner has no TTY, so if the wrapper's probe of the library's injected-answers state ever breaks, this fails instead of every inject-driven test silently getting cancelled prompts.
+// Pins the injection escape hatch: this runner has no TTY, so if the wrapper's answer queue ever stops bypassing the terminal check, this fails instead of every inject-driven test silently getting cancelled prompts.
 test("prompts.inject() bypasses the terminal requirement", async () => {
-  promptsLib.inject([true]);
+  prompts.inject([true]);
   expect(await confirm("sure?")).toBe(true);
 });
 
@@ -60,14 +59,18 @@ test("piped stdin is refused instead of prompted", async () => {
   expect(offer.stdout).toContain("result:false");
 }, 10_000);
 
-// Only ui.ts may import the raw library: its EOF-safe prompts() wrapper is what keeps CI runs from spinning (type-only imports and prompts.inject in tests are fine).
-test("no runtime imports of the prompts library outside ui.ts", async () => {
+// Only ui.ts (prompts, spinners) and logger.ts (message styling) may import the library: the EOF-safe wrappers in ui.ts are what keep CI runs from hanging on a dead stdin.
+test("no imports of @clack/prompts outside ui.ts and logger.ts", async () => {
   const srcRoot = new URL("..", import.meta.url).pathname;
   const offenders: string[] = [];
   for await (const rel of new Bun.Glob("**/*.ts").scan(srcRoot)) {
-    if (rel === "core/ui.ts" || rel.endsWith(".test.ts")) continue;
+    if (
+      ["core/ui.ts", "core/logger.ts"].includes(rel) ||
+      rel.endsWith(".test.ts")
+    )
+      continue;
     const text = await Bun.file(srcRoot + rel).text();
-    if (/^import (?!type ).*from "prompts";/m.test(text)) offenders.push(rel);
+    if (/from "@clack\/prompts";/.test(text)) offenders.push(rel);
   }
   expect(offenders).toEqual([]);
 });

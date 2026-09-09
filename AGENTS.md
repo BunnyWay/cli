@@ -32,7 +32,7 @@ Platform primitives: `Bun.serve()` (auth callback server), `Bun.spawn()` (browse
 - No `dotenv`: Bun loads `.env` automatically.
 - No `execa`: use `Bun.spawn()` or `Bun.$`.
 - No `express` or `node:http`: use `Bun.serve()`.
-- No `ink` or `react`: the stack is `ora` + `prompts` + `chalk`.
+- No `ink` or `react`: the stack is `@clack/prompts` + `chalk`.
 - No `commander` or `clipanion`: we use `yargs`.
 - No `cosmiconfig`: config resolution is hand-rolled to match the Go CLI's behaviour.
 - No `@libsql/client`: `@bunny.net/database-client` is our own and everything database-related goes through it.
@@ -269,9 +269,9 @@ A 401 on verification throws `UserError` and leaves the profile untouched. Any o
 
 All of this lives in `core/ui.ts`. The rules here are load-bearing.
 
-**Always import `prompts` from `core/ui.ts`, never from the `prompts` package.** The raw library spins at 100% CPU when stdin hits EOF. The wrapper refuses non-TTY stdin up front. `ui.test.ts` carries a ratchet test that fails if any file outside `ui.ts` imports the library at runtime.
+**Always import `prompts` from `core/ui.ts`, never from `@clack/prompts`.** The raw library hangs forever when stdin hits EOF. The wrapper refuses non-TTY stdin up front. `ui.test.ts` carries a ratchet test that fails if any file other than `ui.ts` and `logger.ts` imports the library; `logger.info/success/warn/error/dim` render through clack's `log` so messages continue the prompt gutter, while `logger.log` stays plain stdout for command output. `prompts()` keeps the question-object shape (`type`, `name`, `message`, `choices` with `title`/`value`/`description`, `initial`) and renders each question through the matching clack prompt; new code may use it or the typed helpers below, and prompts and spinners render on stderr so a piped stdout only carries command output.
 
-**Piped prompt answers are deliberately unsupported.** Flags and `--force` are the automation contract. `prompts.inject()` still works in tests.
+**Piped prompt answers are deliberately unsupported.** Flags and `--force` are the automation contract. `prompts.inject()` from `core/ui.ts` queues answers in tests; an `Error` entry cancels its prompt.
 
 | Helper                                                 | Behaviour                                                                                                                                                                                                                                                                                             |
 | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -279,7 +279,7 @@ All of this lives in `core/ui.ts`. The rules here are load-bearing.
 | `confirm(message, opts?)`                              | Gate by default: if stdin closes before an answer it throws, so the command exits non-zero. Pass `optional: true` only for offer-style prompts ("link this directory?", "save to .env?") where declining is normal and the command should continue.                                                   |
 | `confirmTyped(...)`                                    | Type-the-name confirmation for destructive actions                                                                                                                                                                                                                                                    |
 | `requireConfirmable(output, { force, message, hint })` | Guard called immediately before a `confirm()` that gates a destructive action. Returns silently under `force` or when interactive; otherwise throws with `hint`. Without it an unattended run blocks forever on a prompt nobody can answer, and the prompt lands on stdout ahead of the JSON payload. |
-| `spinner(text)`                                        | `ora` spinner, auto-silenced when stdout is not a TTY                                                                                                                                                                                                                                                 |
+| `spinner(text)`                                        | clack spinner on stderr, silent unless stdout and stderr are TTYs; `stop()` clears it without leaving a line, and Ctrl-C while it runs still exits the command                                                                                                                                       |
 
 ---
 

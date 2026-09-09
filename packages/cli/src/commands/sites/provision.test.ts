@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import prompts from "prompts";
+import { prompts } from "@/core/ui.ts";
 import {
   promptSiteName,
   resolveSiteRegion,

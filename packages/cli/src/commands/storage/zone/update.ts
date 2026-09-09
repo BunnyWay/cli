@@ -1,5 +1,5 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import type promptsLib from "prompts";
+
 import type {
   StorageZoneModel,
   StorageZoneSettingsModel,
@@ -18,7 +18,12 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { isInteractive, prompts, spinner } from "@/core/ui.ts";
+import {
+  isInteractive,
+  type PromptQuestion,
+  prompts,
+  spinner,
+} from "@/core/ui.ts";
 
 interface ZoneUpdateArgs {
   zone?: string;
@@ -75,7 +80,7 @@ async function promptSettings(
     zoneScope(zone),
   ).filter((region) => !existing.includes(region.code));
 
-  const questions: promptsLib.PromptObject[] = [
+  const questions: PromptQuestion[] = [
     {
       type: "text",
       name: "custom404Path",
