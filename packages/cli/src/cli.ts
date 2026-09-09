@@ -4,6 +4,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { apiCommand } from "./commands/api.ts";
 import { appsNamespace } from "./commands/apps/index.ts";
+import { authNamespace } from "./commands/auth/index.ts";
 import { authLoginCommand } from "./commands/auth/login.ts";
 import { authLogoutCommand } from "./commands/auth/logout.ts";
 import { configNamespace } from "./commands/config/index.ts";
@@ -20,8 +21,7 @@ import { skillsNamespace } from "./commands/skills/index.ts";
 import { storageNamespace } from "./commands/storage/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { bunny } from "./core/colors.ts";
-import { GLOBAL_OPTION_KEYS } from "./core/define-command.ts";
-import { defineNamespace } from "./core/define-namespace.ts";
+import { groupHelpOptions, optionKeys } from "./core/define-command.ts";
 import { logger } from "./core/logger.ts";
 import { suggest } from "./core/suggest.ts";
 import { VERSION } from "./core/version.ts";
@@ -48,8 +48,7 @@ const experimentalCommands: CommandModule[] = [
   registriesNamespace,
   registryNamespace,
   sitesNamespace,
-  // Hidden mount for the muscle-memory form `bunny auth login`.
-  defineNamespace("auth", false, [authLoginCommand, authLogoutCommand]),
+  authNamespace,
 ];
 
 const topLevelNames = [...commands, ...experimentalCommands].flatMap((cmd) => {
@@ -60,7 +59,6 @@ const topLevelNames = [...commands, ...experimentalCommands].flatMap((cmd) => {
 // Runtime accessors that @types/yargs leaves out.
 interface ParserInternals {
   parsed?: { argv: Record<string, unknown> & { _: unknown[] } };
-  getOptions(): { key: Record<string, unknown> };
   getInternalMethods(): { getContext(): { commands: string[] } };
 }
 
@@ -74,14 +72,11 @@ function didYouMean(msg: string, parser: ParserInternals): string | undefined {
   for (const token of unknown) {
     if (commandDepth === 0 && token === String(argv._[0] ?? "")) {
       const match = suggest(token, topLevelNames);
-      return match && `Did you mean ${match}?`;
+      if (match) return `Did you mean ${match}?`;
     }
     if (token in argv && token !== "_") {
-      const flags = Object.keys(parser.getOptions().key).filter(
-        (k) => k.length > 1 && !/[A-Z]/.test(k),
-      );
-      const match = suggest(token, flags);
-      return match && `Did you mean --${match}?`;
+      const match = suggest(token, optionKeys(instance));
+      if (match) return `Did you mean --${match}?`;
     }
   }
   return undefined;
@@ -129,7 +124,10 @@ export const cli = instance
     "$0",
     false as never,
     // Grouping here reaches root help only; done on the root instance it would print ahead of every subcommand's own flags.
-    (y) => y.group(GLOBAL_OPTION_KEYS, "Global Options:"),
+    (y) => {
+      groupHelpOptions(y);
+      return y;
+    },
     () => {
       const art = `
                   @@@@
@@ -182,7 +180,7 @@ export const cli = instance
       const examples = [
         ["Create a database", "bunny db create"],
         ["Create an edge script", "bunny scripts init"],
-        ["Add a domain to manage DNS", "bunny dns zones add example.com"],
+        ["Add a domain to manage DNS", "bunny dns zones create example.com"],
         ["Create a dev sandbox", "bunny sandbox create my-sandbox"],
         // ["Deploy a static site", "bunny sites deploy"],
         // ["Deploy an app", "bunny apps deploy"],
@@ -204,9 +202,15 @@ export const cli = instance
   .strict()
   .fail((msg, err) => {
     const parser = instance as unknown as ParserInternals;
-    const message = err?.message || msg || "Invalid arguments.";
     const path = parser.getInternalMethods().getContext().commands;
-    const suggestion = err ? undefined : didYouMean(message, parser);
+    let message = err?.message || msg || "Invalid arguments.";
+    let suggestion = err ? undefined : didYouMean(message, parser);
+    if (!err && message.startsWith("Did you mean ")) {
+      // yargs' own recommendation replaces the message, so restate what was rejected.
+      suggestion = message;
+      const unknown = parser.parsed?.argv._[path.length];
+      message = unknown ? `Unknown command: ${unknown}` : "Unknown command.";
+    }
     const usage = `Run \`${["bunny", ...path, "--help"].join(" ")}\` for usage.`;
     if (parser.parsed?.argv.output === "json") {
       const hint = [suggestion, usage].filter(Boolean).join(" ");

@@ -13,19 +13,28 @@ function distance(a: string, b: string): number {
   return prev[b.length] ?? 0;
 }
 
-/** Closest candidate to `input` within a small edit distance, or undefined when nothing is near enough. */
+/** Closest candidate to `input`, or undefined when nothing is near enough. */
 export function suggest(
   input: string,
   candidates: Iterable<string>,
 ): string | undefined {
+  const needle = input.toLowerCase();
+  // A short input has few edits to spare, so scale the tolerance instead of always allowing three.
+  const tolerance = Math.min(3, Math.max(1, Math.floor(needle.length / 2)));
   let best: string | undefined;
   let bestScore = Number.POSITIVE_INFINITY;
   for (const candidate of candidates) {
-    const score = distance(input.toLowerCase(), candidate.toLowerCase());
+    const name = candidate.toLowerCase();
+    if (name === needle) continue;
+    // An abbreviation such as `sto` is a near miss that edit distance scores as far.
+    const score =
+      needle.length > 1 && name.startsWith(needle)
+        ? 0.5
+        : distance(needle, name);
     if (score < bestScore) {
       best = candidate;
       bestScore = score;
     }
   }
-  return best && bestScore > 0 && bestScore <= 3 ? best : undefined;
+  return best && bestScore <= tolerance ? best : undefined;
 }

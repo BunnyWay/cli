@@ -1,6 +1,6 @@
 ---
 name: bunny-cli
-description: Manage bunny.net resources from the command line (databases, DNS, Edge Storage, Edge Scripts, sandboxes, authentication, and raw API requests) and query a Bunny Database from application code with `@bunny.net/database-client`. Use when working with bunny.net (pullzones, DNS zones/records, databases, Edge Storage zones and files, Edge Scripts, Magic Containers, static-site hosting/deploys, cloud sandboxes), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
+description: Manage bunny.net resources from the command line (databases, DNS, Edge Storage, Edge Scripts, static sites, sandboxes, authentication, and raw API requests) and query a Bunny Database from application code with `@bunny.net/database-client`. Use when working with bunny.net (pullzones, DNS zones/records, databases, Edge Storage zones and files, Edge Scripts, Magic Containers, static-site hosting/deploys, cloud sandboxes), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
 ---
 
 # bunny.net CLI Skill
@@ -51,16 +51,22 @@ bunny sandbox exec my-sandbox -- bun install
 bunny sandbox url add my-sandbox 3000
 
 # manage Edge Storage
-bunny storage zones add my-zone --region DE --pull-zone
+bunny storage zones create my-zone --region DE --pull-zone
 bunny storage files upload ./photo.png --to images/
 bunny storage zones credentials my-zone --connection s3
 
 # manage DNS
-bunny dns zones add example.com
+bunny dns zones create example.com
 bunny dns zones nameservers example.com               # is the registrar delegated to bunny yet?
 bunny dns records add example.com api A 198.51.100.1
 bunny dns records preset google-workspace example.com # apply a preset record set
 bunny dns records list example.com
+
+# host a static site
+bunny sites create my-site                            # provision (served at sites-my-site-<suffix>.b-cdn.net)
+bunny sites deploy ./dist                             # deploy a directory and publish it as the live site
+bunny sites domains add example.com --wait            # custom production domain
+bunny sites deployments publish --previous --force    # instant rollback
 ```
 
 ## Decision Tree
@@ -72,6 +78,7 @@ Use this to route to the correct reference file:
 - **Querying a database from application code (`@bunny.net/database-client`: connect, prepare, bind, batch, types, errors)** -> `references/database-client.md`
 - **DNS (zones, delegation checks, records, presets, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
+- **Static sites (create, deploy, rollback, custom domains, GitHub Actions)** -> `references/sites.md`
 - **Edge Storage (zones, files, connection credentials, S3/FTP/HTTP, custom domains)** -> `references/storage.md`
 - **Sandboxes (create, exec, ssh, files list/cp, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
 - **Make raw API requests** -> `references/api.md`

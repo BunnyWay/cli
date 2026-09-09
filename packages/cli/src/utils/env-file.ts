@@ -1,5 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import {
+  type DotenvEntry,
+  type DotenvParse,
+  parseDotenvEntries,
+} from "@/core/env.ts";
 
 /**
  * Walk up the directory tree from cwd looking for a `.env` file.
@@ -16,6 +21,15 @@ export function findEnvFile(): string | undefined {
     if (parent === dir) return undefined;
     dir = parent;
   }
+}
+
+export type EnvFileEntry = DotenvEntry;
+export type EnvFileParse = DotenvParse;
+
+/** Parse a `.env` file with the shared dotenv parser; a missing file has no entries. */
+export function parseEnvFile(envPath: string): EnvFileParse {
+  if (!existsSync(envPath)) return { entries: [], unterminated: [] };
+  return parseDotenvEntries(readFileSync(envPath, "utf-8"));
 }
 
 /**

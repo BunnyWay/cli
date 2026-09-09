@@ -1,5 +1,6 @@
 import type { Argv, CommandModule } from "yargs";
-import { authenticationHint, UserError } from "./errors.ts";
+import { profileExists } from "@/config/index.ts";
+import { UserError, unauthorizedError } from "./errors.ts";
 import { logger } from "./logger.ts";
 import type { GlobalArgs } from "./types.ts";
 
@@ -41,21 +42,22 @@ function positionalNames(command: string): string[] {
   );
 }
 
+/** The long flag names a parser knows, without yargs' camelCase duplicates. */
+export function optionKeys(y: Argv): string[] {
+  return Object.keys(optionsOf(y).key).filter(
+    (k) => k.length > 1 && !/[A-Z]/.test(k),
+  );
+}
+
 // Own flags are grouped first so they lead the help text; the inherited globals follow under their own heading.
 export function groupHelpOptions(y: Argv, command = ""): void {
   const positionals = positionalNames(command);
-  const own = Object.keys(optionsOf(y).key).filter(
-    (k) =>
-      k.length > 1 &&
-      !/[A-Z]/.test(k) &&
-      !GLOBAL_OPTION_KEYS.includes(k) &&
-      !positionals.includes(k),
+  const own = optionKeys(y).filter(
+    (k) => !GLOBAL_OPTION_KEYS.includes(k) && !positionals.includes(k),
   );
   if (own.length > 0) y.group(own, "Options:");
   y.group(GLOBAL_OPTION_KEYS, "Global Options:");
 }
-
-const UNAUTHORIZED_MESSAGE = "Unauthorized. Your API key was rejected.";
 
 // Runtime accessor that @types/yargs leaves out.
 function optionsOf(y: Argv): {
@@ -138,11 +140,20 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
       } catch (err: any) {
         const isUser = err?.isUserError;
         const isApi = err?.name === "ApiError";
-        const isUnauthorized = isApi && err.status === 401;
-        const message = isUnauthorized
-          ? UNAUTHORIZED_MESSAGE
-          : (err?.message ?? "An unexpected error occurred.");
-        const hint = isUnauthorized ? authenticationHint(args) : err?.hint;
+        // bunny.net answers 403 for a key it rejects, so both statuses get the credential hint.
+        const rejected =
+          isApi && (err.status === 401 || err.status === 403)
+            ? unauthorizedError({
+                ...args,
+                hasProfile: profileExists(args.profile),
+              })
+            : undefined;
+        // A 403 also covers a valid key without permission, so keep the API's own wording there.
+        const message =
+          (err.status === 401 ? rejected?.message : undefined) ??
+          err?.message ??
+          "An unexpected error occurred.";
+        const hint = rejected?.hint ?? err?.hint;
 
         if (args.output === "json") {
           const payload: Record<string, unknown> = { error: message };
@@ -157,24 +168,16 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
           process.exit(isUser ? 1 : 2);
         }
 
-        if (isApi && err.validationErrors?.length) {
-          logger.error(message);
-          for (const ve of err.validationErrors) {
+        logger.error(isUser ? message : "An unexpected error occurred.");
+        if (isUser) {
+          for (const ve of err.validationErrors ?? []) {
             logger.dim(`  ${ve.field ?? "unknown"}: ${ve.message}`);
           }
           if (hint) logger.dim(hint);
-          process.exit(1);
+        } else if (args.verbose) {
+          console.error(err);
         }
-
-        if (isUser) {
-          logger.error(message);
-          if (hint) logger.dim(hint);
-          process.exit(1);
-        }
-
-        logger.error("An unexpected error occurred.");
-        if (args.verbose) console.error(err);
-        process.exit(2);
+        process.exit(isUser ? 1 : 2);
       }
     },
   };

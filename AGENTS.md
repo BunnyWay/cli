@@ -82,7 +82,7 @@ packages/cli/src/
 - **`commands/` do not create API clients.** API work goes in `@bunny.net/tools`; see "Tools layer". `core/tools-boundary.test.ts` ratchets the remaining direct uses down.
 - **`core/` never imports from `commands/`.** Layering is one-way. When two domains need the same vocabulary, lift it into `core/` and re-export, do not import upward or duplicate.
 - **Keep `core/` mostly flat.** A cohesive reusable feature spanning several files may take a subdirectory (`core/hostnames/`).
-- **Error classes are split.** `UserError` and `ApiError` live in `@bunny.net/openapi-client` because the SDK needs them; `ConfigError` extends `UserError` in the CLI. `core/errors.ts` re-exports the first two.
+- **Error classes live in the SDK.** `UserError` and `ApiError` come from `@bunny.net/openapi-client` because the SDK needs them; `core/errors.ts` re-exports them and adds the CLI-only helpers (`unauthorizedError`, `errorMessage`). Throw `UserError` with a hint rather than adding subclasses.
 
 ---
 
@@ -110,6 +110,18 @@ export const myCommand = defineCommand<{ env: string; dryRun: boolean }>({
 The factory wraps every handler in a try/catch that separates `UserError` (clean message, exit 1) from unexpected errors (stack trace when verbose, exit 2). `preRun` is for validation that should block execution; `postRun` for cleanup.
 
 `hidden: true` keeps a command out of help while it still parses. Used for moved-command stubs such as `sandbox cp`, which errors and points at `sandbox files cp` (without the stub, yargs suggests an unrelated command).
+
+### Verb naming
+
+`create` makes a resource that did not exist before: `db create`, `sites create`, `sandbox create`, `scripts create`, `db tokens create`, `storage zones create`, `dns zone create`.
+
+`add` associates something that already exists with something else, or appends to a collection: `dns record add`, `db regions add`, `apps endpoints add`, `sandbox url add`, `registries add` (registering an external registry with the account), `domains add`.
+
+The test is whether the thing exists independently of the command. A storage zone does, so it is created; a hostname on a pull zone does not, so it is added.
+
+The destructive verbs mirror that pairing: `delete` undoes `create`, `remove` undoes `add`. So `storage zones delete` and `dns zone delete` destroy a resource, while `dns record remove`, `db regions remove`, `sandbox url remove`, and `scripts env remove` take an entry out of a collection. `storage files remove` and `skills remove` keep `remove` as the inverse of `upload` and `install`.
+
+Renamed commands keep their shipped spelling as an alias (`add` on the two `create`s, `remove`/`rm` on the two `delete`s, `delete`/`rm` on the two sandbox `remove`s), and `rm` stays available everywhere.
 
 ### `defineNamespace(command, describe, subcommands)`
 
@@ -239,7 +251,7 @@ Mask every sensitive value (API keys, passwords, S3 secret keys, auth tokens) in
 Two deliberate exceptions:
 
 - **Tool-config output** (`--format rclone|aws|s3cmd|env`) always emits full values, because its entire purpose is to be consumed by another tool.
-- **A prompt or flag whose whole purpose is handing over credentials** counts as asking (`storage zones add --connection http|ftp|s3`). It prints in full with a "treat like a password" warning; masking there would leave the user with nothing usable.
+- **A prompt or flag whose whole purpose is handing over credentials** counts as asking (`storage zones create --connection http|ftp|s3`). It prints in full with a "treat like a password" warning; masking there would leave the user with nothing usable.
 
 `storage zones credentials` keeps masking by default because there the credential is the whole command and it may be run casually. Commands that merely happen to hold a zone (list, show, inspect) must never print one; see `toSafeStorageZone`.
 
@@ -250,8 +262,7 @@ Two deliberate exceptions:
 ## Error handling
 
 - **`UserError`**: expected failure from user input or missing config. Clean message plus optional hint. Exit 1.
-- **`ConfigError`**: extends `UserError`, auto-hints `bunny config show`.
-- **`ApiError`**: extends `UserError`. Carries `status`, optional `field`, optional `validationErrors[]`.
+- **`ApiError`**: extends `UserError`. Carries `status`, optional `field`, optional `validationErrors[]`. A 401 is rewritten by `defineCommand()` through `unauthorizedError()`, which names the credential source (flag, env, profile, or none loaded).
 
 The bunny.net APIs return two different error shapes. `authMiddleware()` in `packages/openapi-client/src/middleware.ts` normalizes both into `ApiError` in an `onResponse` handler, so command code never touches raw HTTP errors:
 
@@ -361,7 +372,7 @@ The CLI must be fully usable by agents, scripts, and pipelines.
 - **Symlink escapes are refused**, so a checkout cannot plant links that make the installer overwrite unrelated files. Symlinks resolving inside the project are followed.
 - **`SKILL.md` is a completion sentinel**: boundary-checked, removed first and written last per root, and the installed check requires every global root. Partial installs and failed refreshes therefore re-offer.
 - **Single source of truth**: `commands/skills/content.ts` embeds `skills/bunny-cli/**` at bundle time via Bun text imports, so the installed skill is always the shipped one. `content.test.ts` fails if `SKILL.md` routes to a reference that is not embedded.
-- **Experimental namespaces stay out** of the skill and the AGENTS.md section (`apps`, `registries`, `sites`); add them back when they graduate to the visible command list in `cli.ts`. Their agent references wait in their command folder meanwhile (`sites/skill-reference.md`).
+- **Experimental namespaces stay out** of the skill and the AGENTS.md section (`apps`, `registries`); add them back when they graduate to the visible command list in `cli.ts`. `sites` is the exception: hidden from help but documented, since agents deploy with it.
 - **Onboarding nudges**: `bunny login` makes a one-time interactive offer (`--install-skill` / `--no-install-skill` decide it without prompting). Users who authenticate another way get a one-time passive stderr hint instead. Both share one marker file in the XDG cache dir, so users see at most one. The marker is written on a decline or a successful install only, so an interrupted prompt re-offers.
 
 ---
@@ -624,7 +635,6 @@ CI runs `bun run typecheck` and `bun test` on every PR.
 | What is a package's API?            | that package's `README.md`                        |
 | Tools layer API                     | `packages/tools/README.md`                        |
 | Apps (experimental)                 | `packages/cli/src/commands/apps/APPS.md`          |
-| Sites (experimental)                | `packages/cli/src/commands/sites/SITES.md`        |
 | Repo scripts, changesets, local dev | root `README.md`                                  |
 | Which specs do we pull?             | `packages/openapi-client/scripts/update-specs.ts` |
 | What files exist?                   | `ls`, not a checked-in tree                       |

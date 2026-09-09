@@ -129,7 +129,7 @@ bunny config profile delete staging
 bunny config profile delete staging --force
 ```
 
-Deleting a profile removes its stored API key and asks for confirmation first. Pass `--force` in scripts or with `--output json`. A missing profile is an error.
+Deleting a profile removes its stored API key and asks for confirmation first. `delete` is also available as `rm`, as it is on `bunny db delete` and `bunny scripts delete`. Pass `--force` in scripts or with `--output json`. A missing profile is an error.
 
 ### `bunny db`
 
@@ -146,11 +146,14 @@ For `db shell`, the CLI also reads `BUNNY_DATABASE_AUTH_TOKEN` from `.env` to sk
 
 #### `bunny db create`
 
-Create a new database. Interactively prompts for name and region selection (automatic, single region, or manual) when flags are omitted. After creation, prompts to link the directory, generate an auth token, and save credentials to `.env`.
+Create a new database. Interactively prompts for name and region selection (automatic, single region, or manual) when flags are omitted. `--mode` answers that prompt from the command line: `auto` lets bunny pick, `single` takes the closest region, and `manual` needs a terminal to pick in. It pairs with the prompt, not with `--primary`: naming the regions yourself leaves `--mode` nothing to choose, so passing both is an error, and `--replicas` only means something next to `--primary`. After creation, prompts to link the directory, generate an auth token, and save credentials to `.env`.
 
 ```bash
 # Interactive — prompts for name and region mode
 bunny db create
+
+# Let bunny pick the regions instead of asking
+bunny db create --name mydb --mode auto
 
 # Single region
 bunny db create --name mydb --primary FR
@@ -165,6 +168,7 @@ bunny db create --name mydb --primary FR --link --token --save-env --output json
 | Flag               | Description                                                                              |
 | ------------------ | ---------------------------------------------------------------------------------------- |
 | `--name`           | Database name                                                                            |
+| `--mode`           | Region selection mode, skipping the prompt: `auto`, `single`, or `manual`                |
 | `--primary`        | Comma-separated primary region IDs (e.g. `FR` or `FR,DE`)                                |
 | `--replicas`       | Comma-separated replica region IDs (e.g. `UK,NY`)                                        |
 | `--storage-region` | Override auto-detected storage region                                                    |
@@ -568,10 +572,10 @@ bunny dns record export example.com --save           # write to ./example.com.zo
 
 # Zones — lifecycle
 bunny dns zone list
-bunny dns zone add example.com
-bunny dns zone add                # prompts for the domain
+bunny dns zone create example.com
+bunny dns zone create             # prompts for the domain (alias: add)
 bunny dns zone show example.com
-bunny dns zone remove example.com
+bunny dns zone delete example.com
 
 # Query statistics (defaults to the last 30 days; text mode draws a bar chart)
 bunny dns zone stats example.com
@@ -602,32 +606,34 @@ Positional value ordering for `record add` follows the record type: `A`/`AAAA`/`
 | `--file`, `--save`                                                                                  | `record export`                                                               | Write to a path, or to `<domain>.zone` in the current directory      |
 | `--from`, `--to`                                                                                    | `zone stats`                                                                  | Date range (defaults to the last 30 days)                            |
 | `--anonymize-ip`, `--anonymization`                                                                 | `zone logging enable`                                                         | Anonymize client IPs in logs (`onedigit` \| `drop`)                  |
-| `--force`                                                                                           | `record remove`, `zone remove`, `zone dnssec disable`, `zone logging disable` | Skip the confirmation prompt                                         |
+| `--force`                                                                                           | `record remove`, `zone delete`, `zone dnssec disable`, `zone logging disable` | Skip the confirmation prompt                                         |
 
 ### `bunny storage`
 
 Manage Edge Storage through two resource groups: **`bunny storage zones`** (the zone itself: create, list, inspect, update, delete; alias `zone`, plus hidden `bucket`/`buckets`) and **`bunny storage files`** (the files within a zone; alias `file`). Zone management uses the account API key; file operations use the zone's own password and a region-specific host, both resolved automatically from the zone. `zones` commands take the zone as an optional `[zone]` positional; `files` commands take it as the `--zone`/`-z` flag (their positional is the file path). Either accepts the zone name or its numeric ID. When the zone is omitted it resolves from the directory's linked zone (`bunny storage link`, stored in `.bunny/storage.json`), then an interactive picker, which offers to link the directory to the picked zone (except on destructive commands). Non-interactive runs (`--output json`, no TTY, or `--force`) error instead of prompting; pass a zone or link the directory.
 
-A storage zone only holds files; a **pull zone** is what serves them on the web. `zones add` offers to create one (origin set to the new storage zone) and then to add a custom domain, or pass `--pull-zone`/`--domain` to do it non-interactively. Custom domains live on the pull zone and are managed with `bunny storage zones domains`.
+A storage zone only holds files; a **pull zone** is what serves them on the web. `zones create` offers to create one (origin set to the new storage zone) and then to add a custom domain, or pass `--pull-zone`/`--domain` to do it non-interactively. Custom domains live on the pull zone and are managed with `bunny storage zones domains`.
 
-The tier (`--tier hdd|ssd`, Standard or Edge), the main region, and S3 compatibility (`--s3`) are all fixed at creation, so `zones add` prompts for each of them when the flag is omitted. Edge (SSD) zones are always primaried in `DE`, so `--tier ssd` rejects any other `--region` rather than letting the API rewrite it silently; replication regions are unaffected. `zones list` reports the tier and S3 support per zone, and `zones show` reports both plus the S3 endpoint when it's enabled.
+The tier (`--tier hdd|ssd`, Standard or Edge), the main region, and S3 compatibility (`--s3`) are all fixed at creation, so `zones create` prompts for each of them when the flag is omitted. Edge (SSD) zones are always primaried in `DE`, so `--tier ssd` rejects any other `--region` rather than letting the API rewrite it silently; replication regions are unaffected. `zones list` reports the tier and S3 support per zone, and `zones show` reports both plus the S3 endpoint when it's enabled.
 
-After creating a zone, `add` offers to link the directory to it (`--link`/`--no-link`), to print connection details (`--connection http|ftp|s3`, optionally as a client config with `--format`), and to save those details to `.env` (`--save-env`). Credentials are shown in full there because they were explicitly asked for; `zones credentials` masks them by default.
+After creating a zone, `create` offers to link the directory to it (`--link`/`--no-link`), to print connection details (`--connection http|ftp|s3`, optionally as a client config with `--format`), and to save those details to `.env` (`--save-env`). Credentials are shown in full there because they were explicitly asked for; `zones credentials` masks them by default.
+
+Saving to `.env` writes `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, and `BUNNY_STORAGE_REGION` (lowercased, so it matches the S3 endpoint and the SDK region), plus `BUNNY_STORAGE_CDN_URL` when exactly one pull zone fronts the zone (several pull zones can share a storage origin, and picking one arbitrarily would put the wrong host in `.env`). An S3 connection writes the `AWS_*` equivalents instead. `zones show` reports the same CDN URL alongside the storage hostname, listing every one when a zone has more than one.
 
 ```bash
 # Zones (lifecycle)
 bunny storage zones list
-bunny storage zones add                                # interactive: prompts for name and region
-bunny storage zones add my-zone --region DE
-bunny storage zones add my-zone --region NY --replication LA,SG
-bunny storage zones add my-zone --region DE --pull-zone   # also create a pull zone to serve it on the web
-bunny storage zones add my-zone --region DE --domain cdn.example.com   # pull zone + custom domain
-bunny storage zones add my-zone --tier ssd --s3        # Edge (SSD) tier (always DE) with S3-compatible access
-bunny storage zones add my-zone --region DE --s3 --connection s3 --save-env   # print S3 credentials and write them to .env
+bunny storage zones create                             # interactive: prompts for name and region (alias: add)
+bunny storage zones create my-zone --region DE
+bunny storage zones create my-zone --region NY --replication LA,SG
+bunny storage zones create my-zone --region DE --pull-zone   # also create a pull zone to serve it on the web
+bunny storage zones create my-zone --region DE --domain cdn.example.com   # pull zone + custom domain
+bunny storage zones create my-zone --tier ssd --s3        # Edge (SSD) tier (always DE) with S3-compatible access
+bunny storage zones create my-zone --region DE --s3 --connection s3 --save-env   # print S3 credentials and write them to .env
 bunny storage zones show my-zone
 bunny storage zones update my-zone                     # interactive: edit settings, pre-filled with current values
 bunny storage zones update my-zone --custom-404-path /404.html
-bunny storage zones remove my-zone                     # confirms twice (yes/no, then type the zone name)
+bunny storage zones delete my-zone                     # confirms twice (yes/no, then type the zone name)
 
 # Link the working directory to a zone so commands can omit it
 bunny storage link my-zone
@@ -666,24 +672,24 @@ bunny storage docs
 
 A trailing slash on a `files` path denotes a directory: `files list images/` lists that directory, and `files remove images/` deletes it and its contents recursively. Edge Storage file operations are powered by the [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage).
 
-bunny.net's S3-compatible API is in preview and is opt-in per zone at creation (`zones add --s3`); it cannot be enabled on an existing zone. When a zone has it, `bunny storage zones show` surfaces its S3 endpoint, and `bunny storage zones credentials --connection s3` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table and JSON output mask the secret by default; pass `--show-secret` to reveal it (the S3 tool formats always emit it in full, since they're meant to be consumed by tools, and under `--output json` the config rides along in a `config` field). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
+bunny.net's S3-compatible API is in preview and is opt-in per zone at creation (`zones create --s3`); it cannot be enabled on an existing zone. When a zone has it, `bunny storage zones show` surfaces its S3 endpoint, and `bunny storage zones credentials --connection s3` emits the endpoint, region, access key (the zone name), and secret (the zone password) as a table, as JSON (`--output json`), or as ready-to-use config for `rclone`, the AWS CLI, `s3cmd`, or your shell (`--format`). The table and JSON output mask the secret by default; pass `--show-secret` to reveal it (the S3 tool formats always emit it in full, since they're meant to be consumed by tools, and under `--output json` the config rides along in a `config` field). The access key and secret are the zone's existing name and password, so there's nothing new to rotate beyond the zone's own credentials.
 
 The same command also serves the two protocols every zone has: `--connection http` (the base URL and `AccessKey` header, plus a `--format sdk` snippet for [`@bunny.net/storage-sdk`](https://github.com/BunnyWay/edge-script-sdk/tree/main/libs/bunny-storage)) and `--connection ftp` (host, username, password). `--format` implies its protocol, so a conflicting `--connection` is an error. `--save-env` writes the protocol's variables (`BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, `BUNNY_STORAGE_REGION`, or the `AWS_*` quad for S3) into whichever `.env` already holds one of them.
 
-| Flag                                                                                        | Commands                                 | Description                                                                                                                        |
-| ------------------------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `--region`, `--replication`                                                                 | `zones add`                              | Primary region code, plus optional replication regions (any storage region except the primary; run `storage regions` to list them) |
-| `--tier` (`hdd` \| `ssd`), `--s3`                                                           | `zones add`                              | Storage tier and S3-compatible access; both are create-time only, and `--tier ssd` forces `DE` as the main region                  |
-| `--link`, `--connection` (`http` \| `ftp` \| `s3`), `--format`, `--save-env`                | `zones add`                              | Post-create follow-ups: link the directory, print connection details (or a client config), and save them to `.env`                 |
-| `--pull-zone`, `--pull-zone-name`, `--domain`                                               | `zones add`                              | Also create a pull zone (what serves the stored files on the web) and optionally a custom domain; interactively, `add` offers both |
-| `--custom-404-path`, `--rewrite-404-to-200`, `--replication`                                | `zones update`                           | Edit zone settings; replication is additive since replicas can't be removed (see `bunny storage zones update --help`)              |
-| `--connection` (`http` \| `ftp` \| `s3`), `--save-env`                                      | `zones credentials`                      | Pick the protocol to print (prompts when omitted); save its variables to `.env`                                                    |
-| `--format` (`sdk` \| `rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only`, `--show-secret` | `zones credentials`                      | Emit a client config (`sdk` for the HTTP API, the rest for S3); use the read-only password; reveal the masked secret               |
-| `--zone`, `-z`                                                                              | all `files` commands                     | Storage zone name or ID (defaults to the linked zone)                                                                              |
-| `--to`                                                                                      | `files upload`                           | Remote path; a trailing slash uploads into that directory                                                                          |
-| `--checksum`, `--content-type`                                                              | `files upload`                           | Send a SHA256 checksum for server-side verification; set the stored content type                                                   |
-| `--out`                                                                                     | `files download`                         | Local destination path (defaults to the file name)                                                                                 |
-| `--force`                                                                                   | `zones remove`, `files remove`, `unlink` | Skip the confirmation prompts                                                                                                      |
+| Flag                                                                                        | Commands                                 | Description                                                                                                                           |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `--region`, `--replication`                                                                 | `zones create`                           | Primary region code, plus optional replication regions (any storage region except the primary; run `storage regions` to list them)    |
+| `--tier` (`hdd` \| `ssd`), `--s3`                                                           | `zones create`                           | Storage tier and S3-compatible access; both are create-time only, and `--tier ssd` forces `DE` as the main region                     |
+| `--link`, `--connection` (`http` \| `ftp` \| `s3`), `--format`, `--save-env`                | `zones create`                           | Post-create follow-ups: link the directory, print connection details (or a client config), and save them to `.env`                    |
+| `--pull-zone`, `--pull-zone-name`, `--domain`                                               | `zones create`                           | Also create a pull zone (what serves the stored files on the web) and optionally a custom domain; interactively, `create` offers both |
+| `--custom-404-path`, `--rewrite-404-to-200`, `--replication`                                | `zones update`                           | Edit zone settings; replication is additive since replicas can't be removed (see `bunny storage zones update --help`)                 |
+| `--connection` (`http` \| `ftp` \| `s3`), `--save-env`                                      | `zones credentials`                      | Pick the protocol to print (prompts when omitted); save its variables to `.env`                                                       |
+| `--format` (`sdk` \| `rclone` \| `aws` \| `s3cmd` \| `env`), `--read-only`, `--show-secret` | `zones credentials`                      | Emit a client config (`sdk` for the HTTP API, the rest for S3); use the read-only password; reveal the masked secret                  |
+| `--zone`, `-z`                                                                              | all `files` commands                     | Storage zone name or ID (defaults to the linked zone)                                                                                 |
+| `--to`                                                                                      | `files upload`                           | Remote path; a trailing slash uploads into that directory                                                                             |
+| `--checksum`, `--content-type`                                                              | `files upload`                           | Send a SHA256 checksum for server-side verification; set the stored content type                                                      |
+| `--out`                                                                                     | `files download`                         | Local destination path (defaults to the file name)                                                                                    |
+| `--force`                                                                                   | `zones delete`, `files remove`, `unlink` | Skip the confirmation prompts                                                                                                         |
 
 ### `bunny scripts`
 
@@ -893,18 +899,21 @@ bunny scripts env list --output json
 
 ##### `bunny scripts env set`
 
-Set an environment variable or secret. Runs interactively when arguments are omitted. The variable name is uppercased.
+Set an environment variable or secret. Runs interactively when arguments are omitted. The variable name is uppercased. Whenever the value is prompted for, the command also asks whether it is a secret, defaulting to yes for names that look like credentials.
 
 ```bash
 bunny scripts env set MY_VAR value
 bunny scripts env set            # interactive
+bunny scripts env set API_KEY   # prompts for the value, and whether it is a secret
 bunny scripts env set API_KEY secret-value --secret
+bunny scripts env set --from-file .env   # same as `scripts env push .env`
 ```
 
-| Flag       | Description                             |
-| ---------- | --------------------------------------- |
-| `--secret` | Store as an encrypted secret            |
-| `--id`     | Edge Script ID (uses linked if omitted) |
+| Flag          | Description                                          |
+| ------------- | ---------------------------------------------------- |
+| `--secret`    | Store as an encrypted secret                         |
+| `--from-file` | Push a `.env` file to the script, as `env push` does |
+| `--id`        | Edge Script ID (uses linked if omitted)              |
 
 ##### `bunny scripts env remove`
 
@@ -929,6 +938,28 @@ bunny scripts env pull --force
 | --------- | ---------------------------------------------- |
 | `--force` | Overwrite an existing `.env` without prompting |
 
+##### `bunny scripts env push`
+
+Push a local `.env` file to an Edge Script. Reads the nearest `.env` unless a path is given, then asks which variables to push and which of them are secrets. Without a terminal, `--all` is required rather than assumed, so a pipeline never uploads a whole `.env` by accident. The secret choice is pre-selected from the variable name (`TOKEN`, `SECRET`, `PASSWORD`, `_KEY`, and friends), so a credential is not stored as a readable variable by accident. `--secrets` and `--plain` override that guess, and a name they don't match in the file is an error rather than a silent fall back to the guess.
+
+A quoted value may span lines, so a PEM key or a service-account blob pushes whole; an unclosed quote is an error, since the alternative is pushing a truncated credential under a success message. Inline `#` comments are stripped from unquoted values.
+
+Names already held by the opposite type are skipped rather than failing the push: the API cannot convert a variable into a secret, so remove it first. A write the API rejects is reported per variable and exits non-zero, so a half-pushed env can't pass unnoticed.
+
+```bash
+bunny scripts env push                                # pick from the nearest .env
+bunny scripts env push .env.production --all          # push a whole file, no prompts
+bunny scripts env push --all --secrets DB_TOKEN,API_KEY
+bunny scripts env push --all --plain PUBLIC_URL
+```
+
+| Flag        | Description                                                    |
+| ----------- | -------------------------------------------------------------- |
+| `--all`     | Push every variable in the file without prompting              |
+| `--secrets` | Names to store as encrypted secrets, overriding the name guess |
+| `--plain`   | Names to store as plain variables, overriding the name guess   |
+| `--id`      | Edge Script ID (uses linked if omitted)                        |
+
 #### `bunny scripts domains`
 
 Manage custom domains for an Edge Script. A script's domains live on its linked pull zone, so these commands operate on that pull zone. All subcommands default to the linked script; pass a trailing `[id]` positional (or the equivalent `--id <script-id>` flag) to target another, and `--pull-zone <id>` when a script has more than one linked pull zone. (`bunny scripts hostnames` is kept as a hidden alias.)
@@ -936,6 +967,8 @@ Manage custom domains for an Edge Script. A script's domains live on its linked 
 ##### `bunny scripts domains add`
 
 Add a custom domain. SSL is **not** requested by default — a free certificate can only be issued once your DNS points at bunny.net, so the command prints the `CNAME` record to create. When run interactively it then offers to wait while DNS propagates (checking every few seconds, up to 10 minutes) and issues the certificate automatically once the domain is live; pass `--wait` to do that without the prompt, or `--ssl` to issue a certificate immediately. HTTP is redirected to HTTPS by default (opt out with `--no-force-ssl`).
+
+If the domain is already in one of your Bunny DNS zones, it offers to add (or repoint) the DNS record for you instead, then issues the certificate straight away. If the domain's nameservers already point at bunny.net but no zone exists in your account (a deleted zone, or nameservers set at the registrar first), it offers to create the zone before adding the record. Every write is confirmed first.
 
 ```bash
 # Add a domain, get DNS instructions, and optionally wait for DNS + HTTPS
@@ -997,6 +1030,83 @@ Open the Edge Scripts documentation in your browser.
 ```bash
 bunny scripts docs
 ```
+
+### `bunny sites`
+
+> **Experimental**: hidden from `--help` and the landing page while it stabilizes.
+
+Host static sites on bunny.net. Each site is two resources provisioned and wired together for you: a **storage zone** holding the files and a **pull zone** serving them over the CDN, with edge rules that route requests to the deploy that should answer them. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
+
+Deploys are immutable: every `sites deploy` uploads to its own `deploys/<id>/` directory and then goes live. Publishing retargets the pull zone's rewrite rule and purges the cache, so going live and rolling back to any earlier deploy are instant and move no files. HTML is served with `max-age=0` so browsers pick up new deploys immediately, while static assets get a one-day browser cache. Deploy IDs are the git short SHA when the working tree is clean and a content hash otherwise, which makes redeploying identical content a no-op.
+
+Commands take the site as an optional positional (`[site]`), except `deploy`, `ci init`, and `deployments publish`, which use `--site`. Either accepts the site name or its storage zone ID. When omitted, the site resolves from the directory's linked site (`.bunny/site.json`, written by `sites link` or by `create`/`deploy`), then `sites.name` in `bunny.jsonc`, then an interactive picker that offers to link. Non-interactive runs (`--output json`, no TTY, or `--force` on a destructive command) error instead of prompting.
+
+```bash
+# Provision a site
+bunny sites create                                    # interactive: prompts for a name (directory-name suggestion)
+bunny sites create my-site                            # served at sites-my-site-<suffix>.b-cdn.net
+bunny sites create my-site --region NY                # store the files in New York (default: DE)
+bunny sites create my-site --domain example.com       # also attach a custom production domain
+
+# Deploy
+bunny sites deploy                                    # detects the framework, offers to build, then deploys
+bunny sites deploy ./dist                             # deploy a directory and publish it as the live site
+bunny sites deploy --build                            # run `sites.build` from bunny.jsonc (else the detected build), then deploy
+bunny sites deploy --build "npm run build" --env API_URL=https://api.example.com
+bunny sites deploy ./dist --site my-site --force      # target a site explicitly; redeploy unchanged content
+bunny sites deploy ./catalog --deploy-id 20260827-1433-r42   # your own release ID instead of the git sha / content hash
+
+# Deploys: list, publish (roll back), prune
+bunny sites deployments list                          # ● Live / ○ Previous markers, created, source, files, size
+bunny sites deployments publish a1b2c3d4              # promote a past deploy (alias: promote)
+bunny sites deployments publish --previous            # instant rollback
+bunny sites deployments prune --keep 10               # delete old deploys (default keeps 5; never live/previous)
+
+# Custom production domains
+bunny sites domains list
+bunny sites domains add shop.example.com              # prints the DNS record to create (or offers to set it in Bunny DNS)
+bunny sites domains add shop.example.com --wait       # add, wait for DNS, then issue SSL and force HTTPS
+bunny sites domains add shop.example.com --ssl --no-force-ssl   # issue SSL now, keep HTTP available
+bunny sites domains ssl shop.example.com
+bunny sites domains remove shop.example.com --force
+
+# Inspect, open, and force HTTPS on the b-cdn.net system host
+bunny sites list                                      # alias: ls
+bunny sites show                                      # resources, domains, SSL state, current deploy
+bunny sites open --print
+bunny sites ssl --no-force-ssl
+
+# CI, linking, maintenance
+bunny sites ci init                                   # GitHub Actions: push to main goes live
+bunny sites ci init --framework astro
+bunny sites link my-site
+bunny sites unlink
+bunny sites delete my-site --keep-storage             # typed-name confirmation; keeps the deploy files
+```
+
+**Client-side routing and 404s.** Single-page apps serve `index.html` for extensionless paths that aren't files (a refresh on `/products/42` returns the app with a 200), while missing assets still 404. This is on automatically when the detected framework is a single-page one (Vite, Create React App, React Router, Angular, Vue CLI, Ember, Preact) and the output has a root `index.html` and no `404.html` (a built not-found page wins over the framework heuristic); set `sites.spa` to `true` or `false` in `bunny.jsonc`, or pass `--spa`/`--no-spa` on the deploy, to decide yourself. When neither applies but the output looks client-routed (a single root `index.html` plus scripts), an interactive deploy asks once and saves the answer to `sites.spa`; the flags answer it in scripts. Otherwise a root `404.html` in the output (as Astro, Eleventy, Hugo, and most static generators emit) becomes the site's not-found page, served with a 404 status. The choice is recorded per deploy and follows rollbacks; `sites show` prints the live one.
+
+Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`, `spa`) and a deploy needs no arguments: `bunny sites deploy --build`. `sites ci init` reads the same block, so the generated workflow builds and deploys exactly what the local command does; without it, the framework is detected from `package.json` deps, `Gemfile`, or a `hugo`/`python`/`zola` config file, with the lockfile picking the package manager. `sites create` offers to scaffold the workflow on GitHub repos.
+
+Every deploy publishes: the files land in an immutable `deploys/<id>/` directory and the rewrite rule is pointed at it, so `deployments publish` rolls back to any earlier deploy by moving that pointer, with no files moving and nothing re-uploaded. The ID is the git short-sha when the tree is clean, a content hash otherwise, or whatever `--deploy-id` supplies (letters, digits, `-`, `_`, `.`; 4-64 chars; case-sensitive): a custom ID never aliases onto another deploy's content, and reusing one for different content asks before replacing (`--force` skips the prompt); a replacement clears the old files first, so nothing stale survives. The live deploy and the rollback target are never replaced in place; deploy those under a new ID. Content is root-served, so absolute asset paths work as-is. Direct `/deploys/<id>/` URLs are blocked at the edge. Site state lives at `_bunny/site.json` inside the storage zone (also blocked at the edge); `.bunny/site.json` is only a local pointer, so a fresh clone can `sites link` and pick up where the last machine left off.
+
+| Flag                                   | Commands                                                   | Description                                                                                                             |
+| -------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `--region`, `--domain`                 | `create`                                                   | Main storage region code (default `DE`); custom production domain to attach                                             |
+| `--site`                               | `deploy`, `ci init`, `deployments publish`                 | Site name or storage zone ID (defaults to the linked site)                                                              |
+| `--build [cmd]`, `--env`, `--env-file` | `deploy`                                                   | Build before deploying (bare flag uses the configured or detected build); build-time env overrides                      |
+| `--force`                              | `deploy`                                                   | Deploy even when the content is unchanged, and replace an existing `--deploy-id` without asking                         |
+| `--deploy-id`                          | `deploy`                                                   | Identify the deploy yourself (release tag, catalog ID); case-sensitive, used exactly as given                           |
+| `--spa`, `--no-spa`                    | `deploy`                                                   | Serve `index.html` for client-side routes, or the 404 page; beats `sites.spa` and framework detection, skips the prompt |
+| `--previous`                           | `deployments publish`                                      | Publish the previous deploy (instant rollback)                                                                          |
+| `--keep`                               | `deployments prune`                                        | Number of recent deploys to keep (default 5; live and previous are always kept)                                         |
+| `--ssl`, `--wait`, `--force-ssl`       | `domains add`                                              | Issue SSL now; wait up to 10 minutes for DNS then issue it; `--no-force-ssl` keeps HTTP working                         |
+| `--force-ssl`                          | `ssl`                                                      | Force HTTP→HTTPS on the system host; `--no-force-ssl` allows plain HTTP                                                 |
+| `--framework`                          | `ci init`                                                  | Framework preset for the workflow's build steps (default: detected)                                                     |
+| `--print`                              | `open`                                                     | Print the URL instead of opening a browser                                                                              |
+| `--link`                               | `create`, `deploy`, `show`, `ci init`, `deployments`       | Link the directory to the site; `--no-link` never links                                                                 |
+| `--keep-storage`                       | `delete`                                                   | Delete the pull zone but keep the storage zone and its deploy files                                                     |
+| `--force`, `-f`                        | `deployments publish`, `prune`, `domains remove`, `delete` | Skip the confirmation prompts                                                                                           |
 
 ### `bunny sandbox`
 
@@ -1189,15 +1299,15 @@ bunny sandbox url ls my-sandbox    # alias
 
 Columns: ID, Name, Type, Port, URL.
 
-##### `bunny sandbox url delete`
+##### `bunny sandbox url remove`
 
-Delete a public endpoint by name.
+Remove a public endpoint by name.
 
 ```bash
-bunny sandbox url delete my-sandbox port-3000
+bunny sandbox url remove my-sandbox port-3000
 
 # Skip confirmation
-bunny sandbox url delete my-sandbox my-api --force
+bunny sandbox url remove my-sandbox my-api --force
 bunny sandbox url rm my-sandbox my-api -f   # alias
 ```
 
@@ -1239,12 +1349,12 @@ bunny sandbox env ls my-sandbox    # alias
 
 Columns: Name, Value.
 
-##### `bunny sandbox env delete`
+##### `bunny sandbox env remove`
 
 Remove one or more persistent variables. Names that are not set are reported and skipped; if none match, the command errors and nothing is redeployed.
 
 ```bash
-bunny sandbox env delete my-sandbox NODE_ENV
+bunny sandbox env remove my-sandbox NODE_ENV
 bunny sandbox env rm my-sandbox API_URL LOG_LEVEL    # alias
 bunny sandbox env unset my-sandbox API_URL           # alias
 ```
@@ -1298,7 +1408,7 @@ bunny completion >> ~/.zshrc
 | `--verbose` | `-v`  | Enable verbose output                                        | `false`   |
 | `--output`  | `-o`  | Output format: `text`, `json`, `table`, `csv`, or `markdown` | `text`    |
 | `--api-key` |       | API key (takes priority over profile and environment)        |           |
-| `--version` |       | Show version                                                 |           |
+| `--version` | `-V`  | Show version (a bare `bunny -v` works too)                   |           |
 | `--help`    |       | Show help                                                    |           |
 
 ### Output Formats

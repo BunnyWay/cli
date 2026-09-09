@@ -1,6 +1,5 @@
-import { deleteProfile, profileExists } from "@/config/index.ts";
+import { deleteProfile, requireProfile } from "@/config/index.ts";
 import { defineCommand } from "@/core/define-command.ts";
-import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm } from "@/core/ui.ts";
 
@@ -15,11 +14,7 @@ export const authLogoutCommand = defineCommand<{ force: boolean }>({
       describe: "Skip confirmation",
     }),
 
-  preRun: async ({ profile }) => {
-    if (!profileExists(profile)) {
-      throw new UserError(`Profile "${profile}" not found.`);
-    }
-  },
+  preRun: async ({ profile }) => requireProfile(profile),
 
   handler: async ({ profile, force }) => {
     logger.info(`Logging out of profile "${profile}".`);

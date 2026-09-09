@@ -58,7 +58,7 @@ bun ny apps link                            # interactive: pick from existing ap
 bun ny apps link <app-id>                   # link a specific app to this directory (writes .bunny/app.json)
 bun ny apps unlink                          # remove .bunny/app.json
 bun ny sandbox create my-sandbox            # create an ephemeral dev sandbox (backed by a Magic Containers app)
-bun ny dns zones add example.com            # create a zone, then choose how to add records (scan existing / upload a BIND zone file / add manually) before registrar setup steps
+bun ny dns zones create example.com         # create a zone, then choose how to add records (scan existing / upload a BIND zone file / add manually) before registrar setup steps
 bun ny dns zones nameservers example.com    # live-check whether the registrar delegates to bunny
 bun ny dns records scan example.com         # scan for the domain's existing records and import them
 bun ny dns records preset list              # list DNS record presets (email providers, verification, security)
@@ -66,7 +66,7 @@ bun ny dns records preset google-workspace example.com   # apply a preset record
 bun ny dns records preset bluesky example.com --param did=did:plc:abc123   # apply a preset non-interactively
 bun ny storage regions                      # list every storage region, showing whether each can be a zone's main region, a replication target, or both
 bun ny storage regions --tier ssd           # scope the list to one zone shape; the available set depends on both --tier hdd|ssd and --s3
-bun ny storage zones add my-zone --tier ssd --s3   # create an Edge (SSD) zone (always Frankfurt) with S3-compatible access
+bun ny storage zones create my-zone --tier ssd --s3   # create an Edge (SSD) zone (always Frankfurt) with S3-compatible access
 bun ny storage files list                   # list files in the linked storage zone
 bun ny storage files remove /               # empty the zone; asks twice (yes/no, then type the zone name), and unattended runs need --force
 bun ny sites create my-site                 # provision a static site (storage zone + pull zone with edge rules; zones are named sites-my-site-<suffix>, served at sites-my-site-<suffix>.b-cdn.net)

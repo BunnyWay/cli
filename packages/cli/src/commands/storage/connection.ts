@@ -6,6 +6,7 @@ import type { OutputFormat } from "@/core/types.ts";
 import { confirm, prompts } from "@/core/ui.ts";
 import { readEnvValue, writeEnvValue } from "@/utils/env-file.ts";
 import type { StorageZoneModel } from "./api.ts";
+import { storageCdnUrl } from "./cdn.ts";
 import { sdkRegionKey } from "./constants.ts";
 import {
   isS3Enabled,
@@ -20,6 +21,7 @@ export type ConnectionType = (typeof CONNECTION_TYPES)[number];
 export const ENV_STORAGE_ZONE = "BUNNY_STORAGE_ZONE";
 export const ENV_STORAGE_PASSWORD = "BUNNY_STORAGE_PASSWORD";
 export const ENV_STORAGE_REGION = "BUNNY_STORAGE_REGION";
+export const ENV_STORAGE_CDN_URL = "BUNNY_STORAGE_CDN_URL";
 
 const META: Record<
   ConnectionType,
@@ -82,10 +84,12 @@ function zoneCredentials(
 export function storageConnection(
   zone: StorageZoneModel,
   type: ConnectionType,
-  opts?: { readOnly?: boolean },
+  opts?: { readOnly?: boolean; cdnUrl?: string },
 ): StorageConnection {
   const { label, docs } = META[type];
   const readOnly = opts?.readOnly ?? false;
+  // A zone fetched before its pull zone existed carries no hostname, so callers can pass one.
+  const cdnUrl = opts?.cdnUrl ?? storageCdnUrl(zone);
 
   if (type === "s3") {
     const creds = s3Credentials(zone, readOnly);
@@ -109,15 +113,18 @@ export function storageConnection(
         { key: "AWS_SECRET_ACCESS_KEY", value: creds.secretAccessKey },
         { key: "AWS_ENDPOINT_URL", value: creds.endpoint },
         { key: "AWS_REGION", value: creds.region },
+        ...(cdnUrl ? [{ key: ENV_STORAGE_CDN_URL, value: cdnUrl }] : []),
       ],
     };
   }
 
   const { name, password, host } = zoneCredentials(zone, readOnly);
+  // Lowercase to match the S3 endpoint and SDK region, which reject the API's uppercase code.
   const env = [
     { key: ENV_STORAGE_ZONE, value: name },
     { key: ENV_STORAGE_PASSWORD, value: password },
-    { key: ENV_STORAGE_REGION, value: zone.Region ?? "" },
+    { key: ENV_STORAGE_REGION, value: (zone.Region ?? "").toLowerCase() },
+    ...(cdnUrl ? [{ key: ENV_STORAGE_CDN_URL, value: cdnUrl }] : []),
   ];
 
   // The HTTP API takes the password as an AccessKey header against a per-zone base URL.

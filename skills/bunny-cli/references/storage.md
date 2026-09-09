@@ -21,7 +21,7 @@ Non-interactive runs (`--output json`, no TTY, or `--force`) error instead of pr
 
 ```bash
 # New zone, served on the web, credentials in .env
-bunny storage zones add my-zone --region DE --s3 --domain cdn.example.com \
+bunny storage zones create my-zone --region DE --s3 --domain cdn.example.com \
   --connection s3 --save-env --link
 
 # Push a build up and check it landed
@@ -46,16 +46,16 @@ Reports name, ID, main region, tier, and S3 support per zone.
 
 ---
 
-## `bunny storage zones add` — Create a storage zone
+## `bunny storage zones create` — Create a storage zone
 
 ```bash
-bunny storage zones add                                              # interactive
-bunny storage zones add my-zone --region DE
-bunny storage zones add my-zone --region NY --replication LA,SG
-bunny storage zones add my-zone --region DE --pull-zone              # also serve it on the web
-bunny storage zones add my-zone --region DE --domain cdn.example.com # pull zone + custom domain
-bunny storage zones add my-zone --tier ssd --s3                      # Edge tier with S3 access
-bunny storage zones add my-zone --region DE --s3 --connection s3 --save-env
+bunny storage zones create                                              # interactive
+bunny storage zones create my-zone --region DE
+bunny storage zones create my-zone --region NY --replication LA,SG
+bunny storage zones create my-zone --region DE --pull-zone              # also serve it on the web
+bunny storage zones create my-zone --region DE --domain cdn.example.com # pull zone + custom domain
+bunny storage zones create my-zone --tier ssd --s3                      # Edge tier with S3 access
+bunny storage zones create my-zone --region DE --s3 --connection s3 --save-env
 ```
 
 ### Flags
@@ -75,9 +75,9 @@ bunny storage zones add my-zone --region DE --s3 --connection s3 --save-env
 | `--save-env`       | Write the connection details to `.env` (needs `--connection`)                               |
 | `--force`          | Skip prompts and confirmations, using flag values only                                      |
 
-**Create-time only**: the tier, the main region, and S3 compatibility are all fixed once the zone exists, so interactive `add` prompts for each when its flag is omitted, and none of them can be changed later. Edge (SSD) zones are always primaried in `DE`, so `--tier ssd` rejects any other `--region` rather than letting the API rewrite it silently. Replication regions are unaffected.
+**Create-time only**: the tier, the main region, and S3 compatibility are all fixed once the zone exists, so interactive `create` prompts for each when its flag is omitted, and none of them can be changed later. Edge (SSD) zones are always primaried in `DE`, so `--tier ssd` rejects any other `--region` rather than letting the API rewrite it silently. Replication regions are unaffected.
 
-After creating the zone, interactive `add` offers to link the directory, print connection details, and save them to `.env`. Credentials print in full here because they were explicitly asked for; `zones credentials` masks them by default.
+After creating the zone, interactive `create` offers to link the directory, print connection details, and save them to `.env`. Credentials print in full here because they were explicitly asked for; `zones credentials` masks them by default.
 
 ---
 
@@ -105,11 +105,11 @@ Only the settings that aren't create-time can change here (see `--help` for the 
 
 ---
 
-## `bunny storage zones remove` — Delete a zone
+## `bunny storage zones delete` — Delete a zone
 
 ```bash
-bunny storage zones remove my-zone          # confirms twice
-bunny storage zones remove my-zone --force  # skip both confirmations
+bunny storage zones delete my-zone          # confirms twice
+bunny storage zones delete my-zone --force  # skip both confirmations
 ```
 
 Deletes the zone and everything in it. Interactively it confirms twice: yes/no, then typing the zone name.
@@ -188,7 +188,7 @@ bunny storage zones domains ssl cdn.example.com my-zone
 bunny storage zones domains remove cdn.example.com my-zone
 ```
 
-These act on the pull zone linked to the storage zone, since that's where hostnames live. The CLI only creates a pull zone during `zones add --pull-zone`; for a zone that has none, create one with the storage zone as its origin in the dashboard. When a zone has several pull zones, pass `--pull-zone <id>` to choose.
+These act on the pull zone linked to the storage zone, since that's where hostnames live. The CLI only creates a pull zone during `zones create --pull-zone`; for a zone that has none, create one with the storage zone as its origin in the dashboard. When a zone has several pull zones, pass `--pull-zone <id>` to choose.
 
 `add` prints the DNS record to create and can wait for propagation; `ssl` requests the certificate once DNS resolves to bunny.net. `hostnames` works as a hidden alias for `domains`.
 
@@ -230,7 +230,7 @@ Opens the Edge Storage docs in a browser. Like other browser helpers, it has no 
 
 - **Expecting to change the tier, main region, or S3 support later**: all three are create-time only. Getting them wrong means creating a new zone and copying the files.
 - **Adding a replication region "to try it"**: replicas cannot be removed. There is no API for it, so the only undo is deleting the zone.
-- **Putting a custom domain on the storage zone**: domains live on the pull zone. Use `bunny storage zones domains`, and create a pull zone first (`zones add --pull-zone`) if the zone has none.
+- **Putting a custom domain on the storage zone**: domains live on the pull zone. Use `bunny storage zones domains`, and create a pull zone first (`zones create --pull-zone`) if the zone has none.
 - **Setting per-file cache headers**: `files upload` takes `--content-type` and `--checksum` only. Cache behavior is a pull zone concern.
-- **Expecting `--connection s3` to enable S3**: it only picks which credentials to print. Without `--s3`, `zones add` creates a zone with S3 off and warns that the credentials will not work, and S3 cannot be turned on afterwards.
+- **Expecting `--connection s3` to enable S3**: it only picks which credentials to print. Without `--s3`, `zones create` creates a zone with S3 off and warns that the credentials will not work, and S3 cannot be turned on afterwards.
 - **Relying on the interactive picker in CI**: `--output json`, a closed stdin, and `--force` all suppress it. Pass `--zone`/`[zone]`, or link the directory.

@@ -20,7 +20,7 @@ import { logger } from "@/core/logger.ts";
 import { detectRegistrar } from "@/core/registrar.ts";
 import { isInteractive, prompts, spinner } from "@/core/ui.ts";
 
-interface ZoneAddArgs {
+interface ZoneCreateArgs {
   domain?: string;
   import?: boolean;
 }
@@ -127,14 +127,15 @@ async function offerNextSteps(opts: {
   }
 }
 
-export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
-  command: "add [domain]",
+export const dnsZoneCreateCommand = defineCommand<ZoneCreateArgs>({
+  command: "create [domain]",
+  aliases: ["add"],
   describe: "Create a new DNS zone.",
   examples: [
-    ["$0 dns zones add example.com", "Create a zone for example.com"],
-    ["$0 dns zones add", "Interactive: prompts for the domain"],
+    ["$0 dns zones create example.com", "Create a zone for example.com"],
+    ["$0 dns zones create", "Interactive: prompts for the domain"],
     [
-      "$0 dns zones add example.com --import",
+      "$0 dns zones create example.com --import",
       "Create the zone and import existing records without prompting",
     ],
   ],
@@ -176,7 +177,7 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
     if (!domainInput) {
       throw new UserError(
         "A domain is required.",
-        "Pass the domain: bunny dns zones add example.com",
+        "Pass the domain: bunny dns zones create example.com",
       );
     }
     const domain = domainInput;
@@ -263,7 +264,7 @@ export const dnsZoneAddCommand = defineCommand<ZoneAddArgs>({
       });
     }
 
-    // The records menu only runs with a TTY so `zones add <domain>` stays scriptable.
+    // The records menu only runs with a TTY so `zones create <domain>` stays scriptable.
     if (created?.Id != null && doImport === undefined && interactive) {
       await offerNextSteps({
         client,

@@ -1,5 +1,3 @@
-<!-- Agent reference for `bunny sites`; returns to skills/bunny-cli/references/sites.md when sites leaves experimental. -->
-
 # Static Sites Commands
 
 All site commands live under `bunny sites`. A site is one storage zone (files) + one pull zone (CDN) with edge rules routing requests to the published deploy, provisioned together by `sites create`. Deploys are immutable directories; promoting or rolling back retargets an edge rule and purges the cache; no files move, so it's instant.
@@ -131,7 +129,7 @@ bunny sites domains list
 bunny sites domains remove example.com
 ```
 
-A custom domain is the site's production URL and nothing more. The first added domain is recorded as the production URL. If the domain is on a Bunny DNS zone in the account, the CLI offers to create the record; otherwise it prints the CNAME target. The CLI verifies a certificate actually landed on the exact hostname before forcing HTTPS or reporting success, and probes the domain over TLS afterwards, so a mismatched certificate (e.g. shadowed by another zone's wildcard) warns instead of printing a broken URL. Re-running `bunny sites domains add <domain>` after a partial setup reconciles the remaining steps instead of failing on the already-attached hostname.
+A custom domain is the site's production URL and nothing more. The first added domain is recorded as the production URL. If the domain is on a Bunny DNS zone in the account, the CLI offers to create the record; if its nameservers already point at bunny.net without a zone in the account, it offers to create the zone first (shared flow in `core/hostnames/flow.ts`, so scripts and storage domains behave the same); otherwise it prints the CNAME target. The CLI verifies a certificate actually landed on the exact hostname before forcing HTTPS or reporting success, and probes the domain over TLS afterwards, so a mismatched certificate (e.g. shadowed by another zone's wildcard) warns instead of printing a broken URL. Re-running `bunny sites domains add <domain>` after a partial setup reconciles the remaining steps instead of failing on the already-attached hostname.
 
 ---
 
