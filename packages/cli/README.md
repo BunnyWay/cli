@@ -146,7 +146,7 @@ For `db shell`, the CLI also reads `BUNNY_DATABASE_AUTH_TOKEN` from `.env` to sk
 
 #### `bunny db create`
 
-Create a new database. Interactively prompts for name and region selection (automatic, single region, or manual) when flags are omitted. `--mode` answers that prompt from the command line: `auto` lets bunny pick, `single` takes the closest region, and `manual` needs a terminal to pick in. It pairs with the prompt, not with `--primary`: naming the regions yourself leaves `--mode` nothing to choose, so passing both is an error. After creation, prompts to link the directory, generate an auth token, and save credentials to `.env`.
+Create a new database. Interactively prompts for name and region selection (automatic, single region, or manual) when flags are omitted. `--mode` answers that prompt from the command line: `auto` lets bunny pick, `single` takes the closest region, and `manual` needs a terminal to pick in. It pairs with the prompt, not with `--primary`: naming the regions yourself leaves `--mode` nothing to choose, so passing both is an error, and `--replicas` only means something next to `--primary`. After creation, prompts to link the directory, generate an auth token, and save credentials to `.env`.
 
 ```bash
 # Interactive — prompts for name and region mode

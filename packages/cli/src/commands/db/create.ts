@@ -185,6 +185,12 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         "Drop --mode, or drop --primary and --replicas.",
       );
     }
+    if (args.replicas && !args.primary) {
+      throw new UserError(
+        "--replicas needs --primary to say what it replicates.",
+        "Pass --primary FR --replicas UK, or drop --replicas and let --mode pick.",
+      );
+    }
     if (!args.primary && !args[ARG_MODE] && !isInteractive(output)) {
       throw new UserError(
         "No regions given and nowhere to ask.",
