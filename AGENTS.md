@@ -180,7 +180,7 @@ Mask every sensitive value (API keys, passwords, S3 secret keys, auth tokens) in
 Two deliberate exceptions:
 
 - **Tool-config output** (`--format rclone|aws|s3cmd|env`) always emits full values, because its entire purpose is to be consumed by another tool.
-- **A prompt or flag whose whole purpose is handing over credentials** counts as asking (`storage zones add --connection http|ftp|s3`). It prints in full with a "treat like a password" warning; masking there would leave the user with nothing usable.
+- **A prompt or flag whose whole purpose is handing over credentials** counts as asking (`storage zones create --connection http|ftp|s3`). It prints in full with a "treat like a password" warning; masking there would leave the user with nothing usable.
 
 `storage zones credentials` keeps masking by default because there the credential is the whole command and it may be run casually. Commands that merely happen to hold a zone (list, show, inspect) must never print one; see `toSafeStorageZone`.
 

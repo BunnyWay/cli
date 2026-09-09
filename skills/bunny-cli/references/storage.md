@@ -75,9 +75,9 @@ bunny storage zones create my-zone --region DE --s3 --connection s3 --save-env
 | `--save-env`       | Write the connection details to `.env` (needs `--connection`)                               |
 | `--force`          | Skip prompts and confirmations, using flag values only                                      |
 
-**Create-time only**: the tier, the main region, and S3 compatibility are all fixed once the zone exists, so interactive `add` prompts for each when its flag is omitted, and none of them can be changed later. Edge (SSD) zones are always primaried in `DE`, so `--tier ssd` rejects any other `--region` rather than letting the API rewrite it silently. Replication regions are unaffected.
+**Create-time only**: the tier, the main region, and S3 compatibility are all fixed once the zone exists, so interactive `create` prompts for each when its flag is omitted, and none of them can be changed later. Edge (SSD) zones are always primaried in `DE`, so `--tier ssd` rejects any other `--region` rather than letting the API rewrite it silently. Replication regions are unaffected.
 
-After creating the zone, interactive `add` offers to link the directory, print connection details, and save them to `.env`. Credentials print in full here because they were explicitly asked for; `zones credentials` masks them by default.
+After creating the zone, interactive `create` offers to link the directory, print connection details, and save them to `.env`. Credentials print in full here because they were explicitly asked for; `zones credentials` masks them by default.
 
 ---
 

@@ -611,9 +611,9 @@ A storage zone only holds files; a **pull zone** is what serves them on the web.
 
 The tier (`--tier hdd|ssd`, Standard or Edge), the main region, and S3 compatibility (`--s3`) are all fixed at creation, so `zones create` prompts for each of them when the flag is omitted. Edge (SSD) zones are always primaried in `DE`, so `--tier ssd` rejects any other `--region` rather than letting the API rewrite it silently; replication regions are unaffected. `zones list` reports the tier and S3 support per zone, and `zones show` reports both plus the S3 endpoint when it's enabled.
 
-After creating a zone, `add` offers to link the directory to it (`--link`/`--no-link`), to print connection details (`--connection http|ftp|s3`, optionally as a client config with `--format`), and to save those details to `.env` (`--save-env`). Credentials are shown in full there because they were explicitly asked for; `zones credentials` masks them by default.
+After creating a zone, `create` offers to link the directory to it (`--link`/`--no-link`), to print connection details (`--connection http|ftp|s3`, optionally as a client config with `--format`), and to save those details to `.env` (`--save-env`). Credentials are shown in full there because they were explicitly asked for; `zones credentials` masks them by default.
 
-Saving to `.env` writes `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, and `BUNNY_STORAGE_REGION` (lowercased, so it matches the S3 endpoint and the SDK region), plus `BUNNY_STORAGE_CDN_URL` when the zone has a pull zone in front of it. An S3 connection writes the `AWS_*` equivalents instead. `zones show` reports the same CDN URL alongside the storage hostname.
+Saving to `.env` writes `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, and `BUNNY_STORAGE_REGION` (lowercased, so it matches the S3 endpoint and the SDK region), plus `BUNNY_STORAGE_CDN_URL` when exactly one pull zone fronts the zone (several pull zones can share a storage origin, and picking one arbitrarily would put the wrong host in `.env`). An S3 connection writes the `AWS_*` equivalents instead. `zones show` reports the same CDN URL alongside the storage hostname, listing every one when a zone has more than one.
 
 ```bash
 # Zones (lifecycle)
@@ -963,10 +963,10 @@ Manage custom domains for an Edge Script. A script's domains live on its linked 
 
 Add a custom domain. SSL is **not** requested by default — a free certificate can only be issued once your DNS points at bunny.net, so the command prints the `CNAME` record to create. When run interactively it then offers to wait while DNS propagates (checking every few seconds, up to 10 minutes) and issues the certificate automatically once the domain is live; pass `--wait` to do that without the prompt, or `--ssl` to issue a certificate immediately. HTTP is redirected to HTTPS by default (opt out with `--no-force-ssl`).
 
-```bash
-# Add a domain, get DNS instructions, and optionally wait for DNS + HTTPS
 If the domain is already in one of your Bunny DNS zones, it offers to add (or repoint) the DNS record for you instead, then issues the certificate straight away. If the domain's nameservers already point at bunny.net but no zone exists in your account (a deleted zone, or nameservers set at the registrar first), it offers to create the zone before adding the record. Every write is confirmed first.
 
+```bash
+# Add a domain, get DNS instructions, and optionally wait for DNS + HTTPS
 bunny scripts domains add shop.example.com
 
 # Add, wait for DNS to propagate, then enable HTTPS — no prompts
