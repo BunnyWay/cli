@@ -24,8 +24,8 @@ export function looksSecret(name: string): boolean {
 export interface PushOptions {
   file?: string;
   all?: boolean;
-  secrets?: string[];
-  plain?: string[];
+  secrets?: string | string[];
+  plain?: string | string[];
   output: OutputFormat;
 }
 
@@ -53,9 +53,10 @@ function resolveEnvPath(file?: string): string {
   return envPath;
 }
 
-function splitList(values?: string[]): Set<string> {
+function splitList(values?: string | string[]): Set<string> {
   return new Set(
-    (values ?? [])
+    [values ?? []]
+      .flat()
       .flatMap((value) => value.split(","))
       .map((value) => value.trim().toUpperCase())
       .filter(Boolean),
@@ -87,7 +88,7 @@ async function chooseEntries(
   if (opts.all) return entries;
   if (!isInteractive(opts.output)) {
     throw new UserError(
-      "No terminal to pick variables in, and --all was not given.",
+      "Nothing chose which variables to push: the picker needs a terminal, and --all was not given.",
       `Run \`bunny scripts env push ${envPath} --all\` to push every variable in the file.`,
     );
   }

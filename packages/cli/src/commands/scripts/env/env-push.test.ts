@@ -41,6 +41,16 @@ test("--secrets naming a variable the file doesn't have is an error", async () =
   ).rejects.toThrow(/STRIPE_SIG, which is not in/);
 });
 
+test("without a terminal, --all is required rather than assumed", async () => {
+  const { client, writes } = stubClient();
+  const file = writeEnv(["SECRET_KEY=x"]);
+
+  await expect(
+    pushEnvFile(client, 1, { file, output: "json" }),
+  ).rejects.toThrow(/--all was not given/);
+  expect(writes).toEqual([]);
+});
+
 test("a rejected write is recorded per variable instead of losing the report", async () => {
   const { client, writes } = stubClient("SECOND");
   const file = writeEnv(["FIRST=a", "SECOND=b", "THIRD=c"]);

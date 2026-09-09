@@ -21,8 +21,8 @@ const ARG_PLAIN = "plain";
 interface PushArgs extends ScriptSelectorArgs {
   [ARG_FILE]?: string;
   [ARG_ALL]?: boolean;
-  [ARG_SECRETS]?: string[];
-  [ARG_PLAIN]?: string[];
+  [ARG_SECRETS]?: string | string[];
+  [ARG_PLAIN]?: string | string[];
 }
 
 /**
@@ -68,14 +68,14 @@ export const scriptsEnvPushCommand = defineCommand<PushArgs>({
         describe: "Push every variable in the file without prompting",
       })
       .option(ARG_SECRETS, {
-        type: "array",
-        string: true,
-        describe: "Names to store as encrypted secrets",
+        type: "string",
+        describe:
+          "Names to store as encrypted secrets (comma-separated or repeated)",
       })
       .option(ARG_PLAIN, {
-        type: "array",
-        string: true,
-        describe: "Names to store as plain variables",
+        type: "string",
+        describe:
+          "Names to store as plain variables (comma-separated or repeated)",
       }),
 
   handler: async ({
