@@ -11,12 +11,12 @@ export {
   DeletedRegistrySchema,
   fetchRegistries,
   fetchRegistry,
+  RegistrySchema,
   registriesCreate,
   registriesDelete,
   registriesGet,
   registriesList,
   registriesUpdate,
-  RegistrySchema,
   registryTypeForServer,
   toRegistry,
 } from "./registries/index.ts";
