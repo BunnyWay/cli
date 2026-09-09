@@ -157,7 +157,7 @@ Rules that keep the surfaces honest:
 - **Input is validated before `run`.** `tool.invoke(ctx, input)` Zod-parses first and rejects with a `UserError` naming the offending field. Results are not validated against `resultSchema`; it is declarative.
 - **`kind` is declared, not inferred.** `read` touches nothing, `write` creates or updates remote state, `destructive` deletes data or cannot be undone. `defineToolCommand` refuses to run a destructive tool without a confirmation.
 - **`sensitive` marks credential-bearing results; `localFiles` marks host-local path inputs.** Masking and exclusion are the host's call; the tool always returns the real value.
-- **The package is Node-portable and published.** `node:` builtins only, relative imports (the `@/` alias is CLI-only), no `Bun.*` globals. See "Publishing libraries".
+- **The package stays Node-portable.** `node:` builtins only, relative imports (the `@/` alias is CLI-only), no `Bun.*` globals. It is an internal workspace package today, consumed as source and bundled into the CLI binary; the constraint is what keeps a future tool server able to import it.
 
 `ToolContext` (from `createToolContext`) carries credentials, lazily created memoized API clients (`ctx.clients.core`, `ctx.clients.db`, `ctx.clients.mc`), an optional `AbortSignal`, and `progress`/`debug` callbacks. Pass `clients` to inject fakes in tests. The CLI builds it with `toolContext(config, { verbose })` from `core/tool-context.ts`, which defers the "Not logged in." check to first client use.
 

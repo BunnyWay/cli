@@ -1,57 +1,20 @@
 {
   "name": "@bunny.net/tools",
   "version": "0.0.1",
-  "description": "bunny.net operations defined once: typed tools with Zod schemas, shared by the bunny.net CLI, tool servers, and agents.",
+  "description": "bunny.net operations defined once: typed tools with Zod schemas, shared by the CLI and any future tool host.",
+  "private": true,
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/BunnyWay/cli.git",
-    "directory": "packages/tools"
-  },
-  "homepage": "https://github.com/BunnyWay/cli/tree/main/packages/tools#readme",
-  "bugs": "https://github.com/BunnyWay/cli/issues",
-  "keywords": [
-    "bunny",
-    "bunny.net",
-    "tools",
-    "agent",
-    "mcp",
-    "zod"
-  ],
   "type": "module",
   "sideEffects": false,
-  "engines": {
-    "node": ">=18"
-  },
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json"
-  },
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./registries": {
-      "types": "./dist/registries/index.d.ts",
-      "import": "./dist/registries/index.js"
-    }
+    ".": "./src/index.ts",
+    "./registries": "./src/registries/index.ts"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
   "dependencies": {
     "@bunny.net/openapi-client": "workspace:*",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "typescript": "^5"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }
