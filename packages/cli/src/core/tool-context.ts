@@ -1,5 +1,6 @@
 import { createToolContext, type ToolContext } from "@bunny.net/tools";
 import type { ResolvedConfig } from "@/config/index.ts";
+import { registryUrl } from "./bunny-registry.ts";
 import { clientOptions } from "./client-options.ts";
 import { logger } from "./logger.ts";
 import { VERSION } from "./version.ts";
@@ -25,6 +26,7 @@ export function toolContext(
   return createToolContext({
     apiKey: () => clientOptions(config, opts.verbose).apiKey,
     apiUrl: config.apiUrl,
+    registryUrl: registryUrl(),
     userAgent: `bunny-cli/${VERSION}`,
     signal: opts.signal,
     onProgress: opts.onProgress,

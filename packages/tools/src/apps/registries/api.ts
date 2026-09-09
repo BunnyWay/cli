@@ -1,6 +1,6 @@
 import { ApiError, UserError } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/magic-containers";
-import type { McClient } from "../context.ts";
+import type { McClient } from "../../context.ts";
 
 export type ContainerRegistryModel = components["schemas"]["ContainerRegistry"];
 export type RegistryType = components["schemas"]["RegistryType"];
@@ -36,6 +36,18 @@ export async function fetchRegistry(
   if (!match) throw new UserError(`Registry ${registryId} not found.`);
 
   return match;
+}
+
+/** bunny.net provides some registries to every account; they are not the account's to change. */
+export function refusePlatformManaged(
+  registry: ContainerRegistryModel,
+  verb: string,
+): void {
+  if (!registry.isPlatformManaged) return;
+  throw new UserError(
+    `"${registry.displayName ?? registry.id}" is provided by bunny.net, so it cannot be ${verb}.`,
+    "It is available to every account and needs no credentials of yours.",
+  );
 }
 
 /** Turn a non-`saved` save status into the UserError every surface renders. */

@@ -1,4 +1,4 @@
-import { registriesGet, registriesUpdate } from "@bunny.net/tools/registries";
+import { registriesGet, registriesUpdate } from "@bunny.net/tools/apps";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";

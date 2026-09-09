@@ -4,7 +4,8 @@ import { registryListCommand } from "./list.ts";
 import { registryRemoveCommand } from "./remove.ts";
 import { registryUpdateCommand } from "./update.ts";
 
-export const registriesNamespace: CommandModule = {
+// Not defineNamespace: a bare `apps registries` lists rather than demanding a subcommand.
+export const appsRegistriesNamespace: CommandModule = {
   command: "registries",
   describe: false as never,
   builder: (yargs) => {

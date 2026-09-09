@@ -14,21 +14,23 @@ test("every tool has a unique dotted name, a description, an object schema, and 
 
 test("listTools filters by kind and namespace", () => {
   const destructive = listTools({ kind: "destructive" }).map((t) => t.name);
-  expect(destructive).toEqual(["registries.delete"]);
+  expect(destructive).toEqual(["apps.registries.delete"]);
   expect(listTools({ kind: "read" }).map((t) => t.name)).toContain(
-    "registries.list",
+    "apps.registries.list",
   );
+  // A dotted namespace narrows within a product area, so `apps` and `apps.registries` both filter.
   expect(
-    listTools({ namespace: "registries" }).every((t) =>
-      t.name.startsWith("registries."),
-    ),
+    listTools({ namespace: "apps" }).every((t) => t.name.startsWith("apps.")),
   ).toBe(true);
+  expect(listTools({ namespace: "apps.registries" }).length).toBe(
+    listTools({ namespace: "apps" }).length,
+  );
   expect(listTools({ namespace: "nope" })).toEqual([]);
 });
 
 test("requireTool explains itself for an unknown name", () => {
-  expect(getTool("registries.nope")).toBeUndefined();
-  expect(() => requireTool("registries.nope")).toThrow(
-    /Unknown tool "registries.nope"/,
+  expect(getTool("apps.registries.nope")).toBeUndefined();
+  expect(() => requireTool("apps.registries.nope")).toThrow(
+    /Unknown tool "apps.registries.nope"/,
   );
 });

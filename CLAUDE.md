@@ -32,7 +32,7 @@ This is a Bun workspace monorepo with six packages:
 - `packages/config/` (`@bunny.net/config`) — shared Zod schemas, types, and JSON Schema for `bunny.jsonc`
 - `packages/database-shell/` (`@bunny.net/database-shell`) — standalone SQL shell engine (REPL, formatting, masking)
 - `packages/sandbox/` (`@bunny.net/sandbox`) — standalone sandbox SDK (create, file buffering, command exec, port exposure) over Magic Containers + SSH
-- `packages/tools/` (`@bunny.net/tools`) — headless tool definitions (`defineTool`: schema, kind, run) shared by the CLI and any tool host, published to npm
+- `packages/tools/` (`@bunny.net/tools`) — headless tool definitions (`defineTool`: schema, kind, run) shared by the CLI and any tool host; internal workspace package, not published
 - `packages/cli/` (`@bunny.net/cli`) — the CLI, depends on the other five
 
 ## Project conventions
