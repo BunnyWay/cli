@@ -1,4 +1,4 @@
-import { UserError } from "@bunny.net/openapi-client";
+import { ApiError, UserError } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/magic-containers";
 import type { McClient } from "../context.ts";
 
@@ -19,12 +19,23 @@ export async function fetchRegistry(
   registryId: number,
   opts: { signal?: AbortSignal } = {},
 ): Promise<ContainerRegistryModel> {
-  const { data } = await client.GET("/registries/{registryId}", {
-    params: { path: { registryId } },
-    signal: opts.signal,
-  });
-  if (!data) throw new UserError(`Registry ${registryId} not found.`);
-  return data;
+  try {
+    const { data } = await client.GET("/registries/{registryId}", {
+      params: { path: { registryId } },
+      signal: opts.signal,
+    });
+
+    if (data) return data;
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status !== 404) throw err;
+  }
+
+  const listed = await fetchRegistries(client, opts);
+  const match = listed.find((registry) => registry.id === registryId);
+
+  if (!match) throw new UserError(`Registry ${registryId} not found.`);
+
+  return match;
 }
 
 /** Turn a non-`saved` save status into the UserError every surface renders. */
@@ -42,13 +53,15 @@ export function requireSaved(
 export function registryTypeForServer(
   server: string | undefined,
 ): RegistryType | undefined {
+  // `ghcr.io.example.com` is not read as ghcr.io.
   const host = server
     ?.trim()
     .toLowerCase()
-    .replace(/^https?:\/\//, "");
+    .replace(/^https?:\/\//, "")
+    .replace(/[/:].*$/, "");
   if (!host) return undefined;
-  if (host.startsWith("ghcr.io")) return "gitHub";
-  if (host.startsWith("docker.io") || host.startsWith("registry-1.docker.io")) {
+  if (host === "ghcr.io") return "gitHub";
+  if (host === "docker.io" || host === "registry-1.docker.io") {
     return "dockerHub";
   }
   return undefined;

@@ -4,6 +4,7 @@ import { registryTypeForServer } from "./api.ts";
 import {
   registriesCreate,
   registriesDelete,
+  registriesGet,
   registriesList,
   registriesUpdate,
 } from "./index.ts";
@@ -154,4 +155,28 @@ test("registryTypeForServer knows the hosts that need a type", () => {
   expect(registryTypeForServer("docker.io")).toBe("dockerHub");
   expect(registryTypeForServer("registry.example.com")).toBeUndefined();
   expect(registryTypeForServer(undefined)).toBeUndefined();
+});
+
+test("registries.update rejects an empty credential rotation", async () => {
+  const { mc } = fakeMc({});
+  const ctx = createToolContext({ clients: { mc } });
+
+  expect(
+    registriesUpdate.invoke(ctx, {
+      registry: 1155,
+      username: "",
+      password: "",
+    }),
+  ).rejects.toThrow(/Invalid input/);
+});
+
+test("a registry the by-ID endpoint 404s for is found in the list", async () => {
+  const { mc } = fakeMc({
+    "GET /registries": { items: [{ id: 1155, displayName: "bunny.net" }] },
+  });
+  const ctx = createToolContext({ clients: { mc } });
+
+  expect((await registriesGet.invoke(ctx, { registry: 1155 })).name).toBe(
+    "bunny.net",
+  );
 });

@@ -128,6 +128,8 @@ const COMMANDS_ROOT = join(SRC_ROOT, "commands");
 const CLIENT_FACTORY_IMPORT =
   /import\s*\{[^}]*\bcreate\w+Client\b[^}]*\}\s*from\s*"@bunny\.net\/openapi-client"/;
 const CLIENT_OPTIONS_USE = /\bclientOptions\b/;
+// Reaching through a tool context is the same offence: prepare() invokes a read tool instead.
+const TOOL_CLIENTS_USE = /\bctx\.clients\b/;
 
 function commandFiles(dir: string): string[] {
   return readdirSync(dir, { recursive: true, encoding: "utf8" })
@@ -139,7 +141,11 @@ function offenders(): Set<string> {
   const found = new Set<string>();
   for (const file of commandFiles(COMMANDS_ROOT)) {
     const src = readFileSync(file, "utf8");
-    if (CLIENT_FACTORY_IMPORT.test(src) || CLIENT_OPTIONS_USE.test(src)) {
+    if (
+      CLIENT_FACTORY_IMPORT.test(src) ||
+      CLIENT_OPTIONS_USE.test(src) ||
+      TOOL_CLIENTS_USE.test(src)
+    ) {
       found.add(relative(SRC_ROOT, file));
     }
   }

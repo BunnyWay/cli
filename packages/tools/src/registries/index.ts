@@ -134,10 +134,12 @@ export const registriesUpdate = defineTool({
       .describe("New display name. Omit to keep the current one."),
     username: z
       .string()
+      .min(1)
       .optional()
       .describe("New registry username. Requires password."),
     password: z
       .string()
+      .min(1)
       .optional()
       .describe("New registry password or token. Requires username."),
     type: registryType,

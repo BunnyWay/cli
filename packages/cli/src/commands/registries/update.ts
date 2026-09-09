@@ -1,4 +1,4 @@
-import { fetchRegistry, registriesUpdate } from "@bunny.net/tools/registries";
+import { registriesGet, registriesUpdate } from "@bunny.net/tools/registries";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
@@ -88,14 +88,11 @@ export const registryUpdateCommand = defineToolCommand({
     }
 
     if (!flagsProvided) {
-      // Only the interactive editor needs the current record, for prompt defaults.
-      const existing = await fetchRegistry(ctx.clients.mc, registryId);
+      const existing = await registriesGet.invoke(ctx, {
+        registry: registryId,
+      });
 
-      name = await promptText(
-        "Display name:",
-        "text",
-        existing.displayName ?? "",
-      );
+      name = await promptText("Display name:", "text", existing.name);
       if (!name) throw new UserError("Display name is required.");
 
       const { value: rotate } = await prompts({
@@ -108,7 +105,7 @@ export const registryUpdateCommand = defineToolCommand({
         username = await promptText(
           "Username:",
           "text",
-          existing.userName ?? undefined,
+          existing.username ?? undefined,
         );
         if (!username) throw new UserError("Username is required.");
         password = await promptText("Password/Token:", "password");

@@ -14,6 +14,18 @@ export function inputJsonSchema(tool: Tool): Record<string, unknown> {
  * `resultSchema`. Non-object results are wrapped as `{ result }`, since most
  * tool protocols require structured output to be a JSON object.
  */
+
+function wrapsResult(tool: Tool): boolean {
+  if (!tool.resultSchema) return false;
+
+  const schema = z.toJSONSchema(tool.resultSchema, {
+    target: "draft-2020-12",
+    io: "output",
+  }) as Record<string, unknown>;
+
+  return schema.type !== "object";
+}
+
 export function outputJsonSchema(
   tool: Tool,
 ): Record<string, unknown> | undefined {
@@ -22,7 +34,7 @@ export function outputJsonSchema(
     target: "draft-2020-12",
     io: "output",
   }) as Record<string, unknown>;
-  if (schema.type === "object") return schema;
+  if (!wrapsResult(tool)) return schema;
   return {
     type: "object",
     properties: { result: schema },
@@ -37,10 +49,10 @@ export function toStructuredResult(
   result: unknown,
 ): Record<string, unknown> | undefined {
   if (!tool.resultSchema) return undefined;
-  if (result !== null && typeof result === "object" && !Array.isArray(result)) {
-    return result as Record<string, unknown>;
-  }
-  return { result };
+
+  if (wrapsResult(tool)) return { result };
+
+  return result as Record<string, unknown>;
 }
 
 /** The description plus the caveats a caller needs in prose, for hosts whose tool format has no field for them. */

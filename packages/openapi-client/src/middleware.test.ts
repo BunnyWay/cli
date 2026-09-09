@@ -181,3 +181,22 @@ describe("authMiddleware onResponse", () => {
     expect(error.message).toContain("non-JSON");
   });
 });
+
+test("redacts credentials from debug bodies", async () => {
+  const logs: string[] = [];
+  await runRequest(
+    { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+    new Request("https://api.bunny.net/registries", {
+      method: "POST",
+      body: JSON.stringify({
+        displayName: "ghcr",
+        passwordCredentials: { userName: "notrab", password: "ghp_secret" },
+      }),
+    }),
+  );
+
+  const traced = logs.join("\n");
+  expect(traced).not.toContain("ghp_secret");
+  expect(traced).toContain("[redacted]");
+  expect(traced).toContain("notrab");
+});

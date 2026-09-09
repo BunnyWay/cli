@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+import { z } from "zod";
 import { requireTool, tools } from "./catalog.ts";
+import { defineTool } from "./define-tool.ts";
 import {
   describeTool,
   flatName,
@@ -41,4 +43,20 @@ test("describeTool folds examples in and flatName is unique with a prefix", () =
   const flat = tools.map((tool) => flatName(tool, "bunny"));
   expect(new Set(flat).size).toBe(tools.length);
   expect(flat).toContain("bunny_registries_list");
+});
+
+test("a union result wraps consistently, whichever branch it returns", () => {
+  const tool = defineTool({
+    name: "test.union",
+    description: "Returns either shape.",
+    schema: z.strictObject({}),
+    kind: "read",
+    resultSchema: z.union([z.object({ a: z.string() }), z.string()]),
+    run: async () => "text",
+  });
+
+  const published = outputJsonSchema(tool);
+  expect(published?.properties).toHaveProperty("result");
+  expect(toStructuredResult(tool, { a: "x" })).toEqual({ result: { a: "x" } });
+  expect(toStructuredResult(tool, "text")).toEqual({ result: "text" });
 });
