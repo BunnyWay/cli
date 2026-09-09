@@ -43,7 +43,7 @@ function expandEscapes(value: string): string {
 }
 
 function stripComment(value: string): string {
-  const comment = value.search(/\s#/);
+  const comment = value.search(/(^|\s)#/);
   return (comment >= 0 ? value.slice(0, comment) : value).trim();
 }
 
