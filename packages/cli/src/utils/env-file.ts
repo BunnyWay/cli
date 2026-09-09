@@ -1,5 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import {
+  type DotenvEntry,
+  type DotenvParse,
+  parseDotenvEntries,
+} from "@/core/env.ts";
 
 /**
  * Walk up the directory tree from cwd looking for a `.env` file.
@@ -18,90 +23,13 @@ export function findEnvFile(): string | undefined {
   }
 }
 
-export interface EnvFileEntry {
-  key: string;
-  value: string;
-}
+export type EnvFileEntry = DotenvEntry;
+export type EnvFileParse = DotenvParse;
 
-export interface EnvFileParse {
-  entries: EnvFileEntry[];
-  unterminated: string[];
-}
-
-const ESCAPES: Record<string, string> = {
-  n: "\n",
-  r: "\r",
-  t: "\t",
-  "\\": "\\",
-  '"': '"',
-};
-
-function expandEscapes(value: string): string {
-  return value.replace(/\\(.)/g, (whole, ch: string) => ESCAPES[ch] ?? whole);
-}
-
-function stripComment(value: string): string {
-  const comment = value.search(/(^|\s)#/);
-  return (comment >= 0 ? value.slice(0, comment) : value).trim();
-}
-
-function closingQuote(body: string, quote: string): number {
-  for (let i = 0; i < body.length; i++) {
-    if (quote === '"' && body[i] === "\\") {
-      i++;
-      continue;
-    }
-    if (body[i] === quote) return i;
-  }
-  return -1;
-}
-
-/**
- * Parse a `.env` file into its entries, in file order.
- * Skips comments and blank lines, tolerates `export ` prefixes, and strips
- * one layer of matching quotes. A quoted value may span lines; one that never
- * closes is reported in `unterminated` rather than truncated, and one closed
- * by a later line's quote swallows the keys between.
- */
+/** Parse a `.env` file with the shared dotenv parser; a missing file has no entries. */
 export function parseEnvFile(envPath: string): EnvFileParse {
-  const entries: EnvFileEntry[] = [];
-  const unterminated: string[] = [];
-  if (!existsSync(envPath)) return { entries, unterminated };
-
-  const lines = readFileSync(envPath, "utf-8").split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const line = (lines[i] ?? "").trim();
-    if (!line || line.startsWith("#")) continue;
-
-    const match = line
-      .replace(/^export\s+/, "")
-      .match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/);
-    const key = match?.[1];
-    if (!key) continue;
-
-    const rest = (match?.[2] ?? "").trimStart();
-    const quote = rest[0] === '"' || rest[0] === "'" ? rest[0] : undefined;
-    if (!quote) {
-      entries.push({ key, value: stripComment(rest) });
-      continue;
-    }
-
-    let body = rest.slice(1);
-    let closed = closingQuote(body, quote);
-    while (closed < 0 && i + 1 < lines.length) {
-      i++;
-      body += `\n${lines[i] ?? ""}`;
-      closed = closingQuote(body, quote);
-    }
-    if (closed < 0) {
-      unterminated.push(key);
-      continue;
-    }
-
-    const raw = body.slice(0, closed);
-    entries.push({ key, value: quote === '"' ? expandEscapes(raw) : raw });
-  }
-  return { entries, unterminated };
+  if (!existsSync(envPath)) return { entries: [], unterminated: [] };
+  return parseDotenvEntries(readFileSync(envPath, "utf-8"));
 }
 
 /**

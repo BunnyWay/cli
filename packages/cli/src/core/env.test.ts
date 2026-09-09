@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { parseDotenv, splitPair } from "./env.ts";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { collectEnv, parseDotenv, splitPair } from "./env.ts";
 
 describe("splitPair", () => {
   test("splits on the first = and validates the key", () => {
@@ -51,5 +54,13 @@ describe("parseDotenv", () => {
       ESCAPED: 'value with "quotes"',
       HASHINQUOTES: "a # b",
     });
+  });
+});
+
+describe("collectEnv", () => {
+  test("an unclosed quote in the env file is an error, not a truncated value", async () => {
+    const envFile = join(mkdtempSync(join(tmpdir(), "bunny-env-")), ".env");
+    writeFileSync(envFile, 'OK=1\nBROKEN="never closed\n');
+    await expect(collectEnv([], envFile)).rejects.toThrow("Unclosed quote in");
   });
 });
