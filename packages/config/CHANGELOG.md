@@ -1,5 +1,11 @@
 # @bunny.net/config
 
+## 0.1.7
+
+### Patch Changes
+
+- [#214](https://github.com/BunnyWay/cli/pull/214) [`df79bb9`](https://github.com/BunnyWay/cli/commit/df79bb968187fc3d0b5e3ae201b7c00ee6ae8dc9) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites deploy` serves single-page apps on refresh (`sites.spa`, detected from the framework) and uses a root `404.html` as the not-found page.
+
 ## 0.1.6
 
 ### Patch Changes
