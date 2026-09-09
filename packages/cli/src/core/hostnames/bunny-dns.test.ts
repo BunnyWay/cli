@@ -3,11 +3,19 @@ import prompts from "prompts";
 import type { DelegationStatus } from "@/core/dns-nameservers.ts";
 
 // Delegation is a live NS lookup; stub it so tests stay hermetic and drive the outcome.
-let delegationStatus: DelegationStatus = "bunny";
+let delegationStatus:
+  | DelegationStatus
+  | ((domain: string) => DelegationStatus) = "bunny";
 mock.module("../dns-nameservers.ts", () => ({
   BUNNY_NAMESERVERS: ["kiki.bunny.net", "coco.bunny.net"],
   expectedNameservers: () => ["kiki.bunny.net", "coco.bunny.net"],
-  checkDelegation: async () => ({ status: delegationStatus, resolved: [] }),
+  checkDelegation: async (domain: string) => ({
+    status:
+      typeof delegationStatus === "function"
+        ? delegationStatus(domain)
+        : delegationStatus,
+    resolved: [],
+  }),
 }));
 
 const { findBunnyDnsZone, offerBunnyDnsRecord } = await import(
@@ -201,5 +209,38 @@ describe("offerBunnyDnsThenSsl", () => {
 
     expect(putCalled).toBe(true); // the record was added
     expect(issued).toBe(false); // but no certificate / poll — short-circuited on delegation
+  });
+
+  test("offers to create the zone when the registrar already delegates to bunny", async () => {
+    delegationStatus = (domain) =>
+      domain === "example.com" ? "bunny" : "other";
+    prompts.inject([true, false]);
+    const zones: Zone[] = [];
+    const client = {
+      GET: async (path: string) => {
+        if (path === "/dnszone") {
+          return { data: { Items: zones, HasMoreItems: false } };
+        }
+        throw new Error(`unexpected GET ${path}`);
+      },
+      POST: async (path: string, opts: { body: { Domain: string } }) => {
+        if (path !== "/dnszone") throw new Error(`unexpected POST ${path}`);
+        zones.push({ Id: 42, Domain: opts.body.Domain });
+        return {};
+      },
+    } as unknown as CoreClient;
+
+    const issued = await offerBunnyDnsThenSsl({
+      coreClient: client,
+      hostname: "www.example.com",
+      pullZoneId: 12345,
+      cnameTarget: "www.b-cdn.net",
+      forceSsl: true,
+      sslHint: "bunny sites domains ssl www.example.com",
+      verbose: false,
+    });
+
+    expect(zones).toEqual([{ Id: 42, Domain: "example.com" }]);
+    expect(issued).toBeNull(); // record declined: the caller falls back to the CNAME instructions
   });
 });

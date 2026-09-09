@@ -963,6 +963,8 @@ Add a custom domain. SSL is **not** requested by default — a free certificate 
 
 ```bash
 # Add a domain, get DNS instructions, and optionally wait for DNS + HTTPS
+If the domain is already in one of your Bunny DNS zones, it offers to add (or repoint) the DNS record for you instead, then issues the certificate straight away. If the domain's nameservers already point at bunny.net but no zone exists in your account (a deleted zone, or nameservers set at the registrar first), it offers to create the zone before adding the record. Every write is confirmed first.
+
 bunny scripts domains add shop.example.com
 
 # Add, wait for DNS to propagate, then enable HTTPS — no prompts
@@ -1055,7 +1057,7 @@ bunny sites deployments prune --keep 10               # delete old deploys (defa
 
 # Custom production domains
 bunny sites domains list
-bunny sites domains add shop.example.com              # prints the DNS record to create
+bunny sites domains add shop.example.com              # prints the DNS record to create (or offers to set it in Bunny DNS)
 bunny sites domains add shop.example.com --wait       # add, wait for DNS, then issue SSL and force HTTPS
 bunny sites domains add shop.example.com --ssl --no-force-ssl   # issue SSL now, keep HTTP available
 bunny sites domains ssl shop.example.com
