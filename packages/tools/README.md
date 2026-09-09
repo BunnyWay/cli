@@ -80,13 +80,17 @@ How `kind` maps onto a protocol's annotations is the host's call. `read` is the 
 
 ## Tools
 
-| Tool                | Kind        | Notes                                     |
-| ------------------- | ----------- | ----------------------------------------- |
-| `registries.list`   | read        | Container registries for Magic Containers |
-| `registries.get`    | read        | By registry ID                            |
-| `registries.create` | write       | Type derived from `server` when omitted   |
-| `registries.update` | write       | Credentials rotate together; name merges  |
-| `registries.delete` | destructive | Fails while apps still use the registry   |
+| Tool                    | Kind        | Notes                                     |
+| ----------------------- | ----------- | ----------------------------------------- |
+| `registries.list`       | read        | Container registries for Magic Containers |
+| `registries.get`        | read        | By registry ID                            |
+| `registries.create`     | write       | Type derived from `server` when omitted   |
+| `registries.update`     | write       | Credentials rotate together; name merges  |
+| `registries.delete`     | destructive | Fails while apps still use the registry   |
+| `registry.repositories` | read        | bunny.net OCI registry, prefix stripped   |
+| `registry.tags`         | read        | Bare repository name in, bare name back   |
+
+`registries` manages the credentials bunny.net uses to pull from third-party registries. `registry` reads the bunny.net registry itself, over the OCI distribution API rather than a generated client, so it uses `ctx.clients.registry`.
 
 ## Result shapes
 

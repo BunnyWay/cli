@@ -53,6 +53,8 @@ test("registries.list normalizes the account's registries", async () => {
       name: "ghcr.io (notrab)",
       hostname: "ghcr.io",
       username: "notrab",
+      platformManaged: false,
+      public: false,
       createdAt: "2026-01-01T00:00:00Z",
       lastUpdatedAt: null,
     },
@@ -116,6 +118,7 @@ test("registries.update keeps the existing name and rejects half a credential", 
 
 test("registries.delete maps inUse and notFound to errors", async () => {
   const inUse = fakeMc({
+    "GET /registries/{registryId}": { id: 7, displayName: "ghcr" },
     "DELETE /registries/{registryId}": {
       status: "inUse",
       applications: ["my-app"],
@@ -127,6 +130,7 @@ test("registries.delete maps inUse and notFound to errors", async () => {
   );
 
   const missing = fakeMc({
+    "GET /registries/{registryId}": { id: 7, displayName: "ghcr" },
     "DELETE /registries/{registryId}": { status: "notFound" },
   });
   await expect(
@@ -139,6 +143,7 @@ test("registries.delete maps inUse and notFound to errors", async () => {
   ).rejects.toThrow(/not found/);
 
   const removed = fakeMc({
+    "GET /registries/{registryId}": { id: 7, displayName: "ghcr" },
     "DELETE /registries/{registryId}": { status: "removed" },
   });
   expect(
@@ -180,4 +185,22 @@ test("a registry the by-ID endpoint 404s for is found in the list", async () => 
   expect((await registriesGet.invoke(ctx, { registry: 1155 })).name).toBe(
     "bunny.net",
   );
+});
+
+test("a registry bunny.net provides cannot be removed or updated", async () => {
+  const { mc } = fakeMc({
+    "GET /registries/{registryId}": {
+      id: 9808,
+      displayName: "Bunny Container Registry",
+      isPlatformManaged: true,
+    },
+  });
+  const ctx = createToolContext({ clients: { mc } });
+
+  expect(registriesDelete.invoke(ctx, { registry: 9808 })).rejects.toThrow(
+    /provided by bunny\.net/,
+  );
+  expect(
+    registriesUpdate.invoke(ctx, { registry: 9808, name: "mine" }),
+  ).rejects.toThrow(/provided by bunny\.net/);
 });

@@ -1,4 +1,9 @@
 import { resolveConfig } from "@/config/index.ts";
+import {
+  fetchRegistryNamespace,
+  REGISTRY_USERNAME,
+  resolveRegistryEndpoint,
+} from "@/core/bunny-registry.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import {
   dockerLogin,
@@ -9,11 +14,6 @@ import {
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { spinner } from "@/core/ui.ts";
-import {
-  fetchRegistryNamespace,
-  REGISTRY_USERNAME,
-  resolveRegistryEndpoint,
-} from "./client.ts";
 import { buildTargetRef } from "./ref.ts";
 
 const COMMAND = "push <image>";

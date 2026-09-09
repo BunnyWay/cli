@@ -506,27 +506,13 @@ bunny db tokens invalidate <database-id>
 bunny db tokens invalidate --force
 ```
 
-### `bunny registries`
-
-Manage container registries. Running `bunny registries` without a subcommand lists all registries.
-
-```bash
-bunny registries
-bunny registries list
-bunny registries add --name "GitHub" --server ghcr.io --username myorg --password $TOKEN
-bunny registries add --name "Docker Hub" --type dockerHub --username myorg --password $TOKEN
-bunny registries update <registry-id> --name "GitHub (myorg)"
-bunny registries update <registry-id> --username myorg --password $TOKEN   # rotate credentials
-bunny registries remove <registry-id>
-```
-
-`ghcr.io` and `docker.io` need a matching registry type; `--server` derives it, or pass `--type gitHub|dockerHub` directly. Omit both for a generic registry. `--output json` returns the normalized registry (`id`, `name`, `hostname`, `username`, `createdAt`, `lastUpdatedAt`) rather than the raw API model.
-
 ### `bunny registry`
 
 > **Experimental** internal use only
 
-Push and inspect images on the bunny.net OCI registry. The endpoint defaults to `registry.bunny.net`; set the `BUNNYNET_REGISTRY_URL` environment variable to override it.
+Push and inspect images on the bunny.net OCI registry, the platform's own registry available to every account. The endpoint defaults to `registry.bunny.net`; set the `BUNNYNET_REGISTRY_URL` environment variable to override it.
+
+This is the registry you push _to_. Connecting a third-party registry that bunny.net should pull _from_ (GitHub, Docker Hub) is `bunny apps registries` instead, where this registry also appears as a `bunny.net` source.
 
 ```bash
 bunny registry push myapp:latest                      # push, deriving repository/tag from the image

@@ -5,6 +5,7 @@ import { defineTool } from "../define-tool.ts";
 import {
   fetchRegistries,
   fetchRegistry,
+  refusePlatformManaged,
   registryTypeForServer,
   requireSaved,
 } from "./api.ts";
@@ -165,6 +166,7 @@ export const registriesUpdate = defineTool({
     const existing = await fetchRegistry(ctx.clients.mc, input.registry, {
       signal: ctx.signal,
     });
+    refusePlatformManaged(existing, "updated");
 
     ctx.progress("Updating registry...");
     const { data } = await ctx.clients.mc.PUT("/registries/{registryId}", {
@@ -211,6 +213,12 @@ export const registriesDelete = defineTool({
   resultSchema: DeletedRegistrySchema,
   examples: [[{ registry: 1155 }, "Remove a registry"]],
   run: async (ctx, { registry }): Promise<DeletedRegistry> => {
+    ctx.progress("Fetching registry...");
+    refusePlatformManaged(
+      await fetchRegistry(ctx.clients.mc, registry, { signal: ctx.signal }),
+      "removed",
+    );
+
     ctx.progress("Removing registry...");
     const { data } = await ctx.clients.mc.DELETE("/registries/{registryId}", {
       params: { path: { registryId: registry } },

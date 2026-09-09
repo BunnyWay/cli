@@ -3,6 +3,15 @@ import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 
+// The account's own connections sit alongside registries bunny.net provides, which cannot be edited or removed.
+function source(registry: {
+  platformManaged: boolean;
+  public: boolean;
+}): string {
+  if (registry.platformManaged) return "bunny.net";
+  return registry.public ? "Public" : "Connected";
+}
+
 export const registryListCommand = defineToolCommand({
   tool: registriesList,
   command: "list",
@@ -23,10 +32,15 @@ export const registryListCommand = defineToolCommand({
       r.name,
       r.hostname ?? "",
       r.username ?? "",
+      source(r),
     ]);
 
     logger.log(
-      formatTable(["ID", "Name", "Hostname", "Username"], rows, output),
+      formatTable(
+        ["ID", "Name", "Hostname", "Username", "Source"],
+        rows,
+        output,
+      ),
     );
   },
 });

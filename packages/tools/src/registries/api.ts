@@ -38,6 +38,18 @@ export async function fetchRegistry(
   return match;
 }
 
+/** bunny.net provides some registries to every account; they are not the account's to change. */
+export function refusePlatformManaged(
+  registry: ContainerRegistryModel,
+  verb: string,
+): void {
+  if (!registry.isPlatformManaged) return;
+  throw new UserError(
+    `"${registry.displayName ?? registry.id}" is provided by bunny.net, so it cannot be ${verb}.`,
+    "It is available to every account and needs no credentials of yours.",
+  );
+}
+
 /** Turn a non-`saved` save status into the UserError every surface renders. */
 export function requireSaved(
   result: SaveResult | undefined,
