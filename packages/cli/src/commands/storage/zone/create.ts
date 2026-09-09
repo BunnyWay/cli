@@ -492,7 +492,13 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
     if (created) {
       logger.log();
       logger.log(
-        formatKeyValue(zoneDetailRows(created, { usage: false }), output),
+        formatKeyValue(
+          zoneDetailRows(created, {
+            usage: false,
+            cdnUrl: pullZoneResult?.url,
+          }),
+          output,
+        ),
       );
       logger.log();
     }

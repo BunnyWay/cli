@@ -1,5 +1,5 @@
 import type { StorageZoneModel } from "@/commands/storage/api.ts";
-import { storageCdnUrl } from "@/commands/storage/cdn.ts";
+import { storageCdnUrls } from "@/commands/storage/cdn.ts";
 import { zoneTierLabel } from "@/commands/storage/constants.ts";
 import { isS3Enabled, s3Endpoint } from "@/commands/storage/s3.ts";
 import { formatBytes, formatDateTime } from "@/core/format.ts";
@@ -8,7 +8,7 @@ export function zoneDetailRows(
   zone: StorageZoneModel,
   opts?: { usage?: boolean; cdnUrl?: string },
 ): { key: string; value: string }[] {
-  const cdnUrl = opts?.cdnUrl ?? storageCdnUrl(zone);
+  const cdnUrls = opts?.cdnUrl ? [opts.cdnUrl] : storageCdnUrls(zone);
   const rows = [
     { key: "ID", value: String(zone.Id ?? "") },
     { key: "Name", value: zone.Name ?? "" },
@@ -21,7 +21,12 @@ export function zoneDetailRows(
     { key: "Hostname", value: zone.StorageHostname ?? "-" },
   ];
 
-  if (cdnUrl) rows.push({ key: "CDN URL", value: cdnUrl });
+  if (cdnUrls.length > 0) {
+    rows.push({
+      key: cdnUrls.length > 1 ? "CDN URLs" : "CDN URL",
+      value: cdnUrls.join(", "),
+    });
+  }
 
   if (opts?.usage !== false) {
     rows.push(
