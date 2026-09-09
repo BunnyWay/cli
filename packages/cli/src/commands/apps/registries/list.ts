@@ -1,4 +1,4 @@
-import { registriesList } from "@bunny.net/tools/registries";
+import { registriesList } from "@bunny.net/tools/apps";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";

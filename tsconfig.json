@@ -26,9 +26,7 @@
       "@bunny.net/openapi-client/*": ["./packages/openapi-client/src/*"],
       "@bunny.net/sandbox": ["./packages/sandbox/src/index.ts"],
       "@bunny.net/tools": ["./packages/tools/src/index.ts"],
-      "@bunny.net/tools/registries": [
-        "./packages/tools/src/registries/index.ts"
-      ],
+      "@bunny.net/tools/apps": ["./packages/tools/src/apps/index.ts"],
       "@bunny.net/tools/registry": ["./packages/tools/src/registry/index.ts"],
       "@bunny.net/sandbox/known-hosts": [
         "./packages/sandbox/src/known-hosts.ts"

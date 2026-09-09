@@ -10,7 +10,7 @@ A tool is `{ name, description, schema, kind, run(ctx, input) }`. It calls the b
 
 ```ts
 import { createToolContext } from "@bunny.net/tools";
-import { registriesList } from "@bunny.net/tools/registries";
+import { registriesList } from "@bunny.net/tools/apps";
 
 const ctx = createToolContext({ apiKey: process.env.BUNNYNET_API_KEY });
 const registries = await registriesList.invoke(ctx, {});

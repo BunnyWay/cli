@@ -35,7 +35,7 @@ const registryType = z
   );
 
 export const registriesList = defineTool({
-  name: "registries.list",
+  name: "apps.registries.list",
   title: "List container registries",
   description:
     "List the container registries configured on the account, used by Magic Containers apps to pull private images.",
@@ -52,7 +52,7 @@ export const registriesList = defineTool({
 });
 
 export const registriesGet = defineTool({
-  name: "registries.get",
+  name: "apps.registries.get",
   title: "Get a container registry",
   description: "Get one container registry by ID.",
   schema: z.strictObject({ registry: registryRef }),
@@ -68,7 +68,7 @@ export const registriesGet = defineTool({
 });
 
 export const registriesCreate = defineTool({
-  name: "registries.create",
+  name: "apps.registries.create",
   title: "Add a container registry",
   description:
     "Add a container registry with pull credentials. The password is stored by bunny.net and never returned; the type must match the registry host (gitHub for ghcr.io).",
@@ -122,7 +122,7 @@ export const registriesCreate = defineTool({
 });
 
 export const registriesUpdate = defineTool({
-  name: "registries.update",
+  name: "apps.registries.update",
   title: "Update a container registry",
   description:
     "Rename a container registry and/or rotate its credentials. Fields left out keep their current value; username and password rotate together.",
@@ -204,7 +204,7 @@ export const DeletedRegistrySchema = z.object({
 export type DeletedRegistry = z.infer<typeof DeletedRegistrySchema>;
 
 export const registriesDelete = defineTool({
-  name: "registries.delete",
+  name: "apps.registries.delete",
   title: "Remove a container registry",
   description:
     "Remove a container registry. Fails when the registry is still used by an app.",

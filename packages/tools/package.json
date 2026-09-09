@@ -8,7 +8,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./registries": "./src/registries/index.ts",
+    "./apps": "./src/apps/index.ts",
     "./registry": "./src/registry/index.ts"
   },
   "dependencies": {
