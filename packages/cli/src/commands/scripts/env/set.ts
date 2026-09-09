@@ -10,8 +10,13 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { isInteractive, prompts, spinner } from "@/core/ui.ts";
-import { looksSecret, pushEnvFile, reportPush } from "./env-push.ts";
+import { prompts, withSpinner } from "@/core/ui.ts";
+import {
+  failPushIfIncomplete,
+  looksSecret,
+  pushEnvFile,
+  reportPush,
+} from "./env-push.ts";
 
 const COMMAND = "set [name] [value]";
 const DESCRIPTION = "Set an environment variable or secret for an Edge Script.";
@@ -24,7 +29,7 @@ const ARG_SECRET = "secret";
 const ARG_SECRET_DESCRIPTION = "Store as an encrypted secret";
 const ARG_FROM_FILE = "from-file";
 const ARG_FROM_FILE_DESCRIPTION =
-  "Set every variable in a .env file (same as `scripts env push`)";
+  "Push a .env file to the script, as `scripts env push` does";
 
 interface SetArgs extends ScriptSelectorArgs {
   [ARG_NAME]?: string;
@@ -64,7 +69,7 @@ export const scriptsEnvSetCommand = defineCommand<SetArgs>({
     ['$0 scripts env set API_KEY "sk-…" --secret', "Set a secret"],
     [
       "$0 scripts env set --from-file .env",
-      "Set every variable in a .env file",
+      "Push a .env file, as `scripts env push` does",
     ],
     ["$0 scripts env set", "Interactive mode"],
   ],
@@ -121,7 +126,7 @@ export const scriptsEnvSetCommand = defineCommand<SetArgs>({
       if (secret !== undefined) {
         throw new UserError(
           "--secret applies to one variable, not a whole file.",
-          "Name the encrypted ones with --secrets, e.g. --secrets DB_TOKEN,API_KEY.",
+          `Name the encrypted ones with \`bunny scripts env push ${fromFile || ".env"} --secrets DB_TOKEN,API_KEY\`.`,
         );
       }
       const results = await pushEnvFile(client, id, {
@@ -130,9 +135,11 @@ export const scriptsEnvSetCommand = defineCommand<SetArgs>({
       });
       if (output === "json") {
         logger.log(JSON.stringify(results, null, 2));
+        failPushIfIncomplete(results);
         return;
       }
       reportPush(results);
+      failPushIfIncomplete(results);
       await offerLink();
       return;
     }
@@ -148,11 +155,9 @@ export const scriptsEnvSetCommand = defineCommand<SetArgs>({
     }
     if (!name) throw new UserError("Variable name is required.");
 
-    // A prompted value has to say whether it is a secret; a value already on the
-    // command line is a plain variable unless --secret says otherwise.
     let isSecret = secret;
     if (isSecret === undefined) {
-      if (rawValue === undefined && isInteractive(output)) {
+      if (rawValue === undefined) {
         const { confirmed } = await prompts({
           type: "confirm",
           name: "confirmed",
@@ -176,49 +181,44 @@ export const scriptsEnvSetCommand = defineCommand<SetArgs>({
     }
     if (value === undefined) throw new UserError("Variable value is required.");
 
-    name = name.toUpperCase();
-
-    const spin = spinner("Checking for conflicts...");
-    spin.start();
-
-    // A name conflict is one held by the opposite type (variable vs secret).
-    const conflict = (await fetchEnvEntries(client, id)).find(
-      (e) => e.name.toUpperCase() === name && e.secret !== isSecret,
-    );
-    if (conflict) {
-      spin.stop();
-      throw new UserError(
-        isSecret
-          ? `A variable named "${name}" already exists. Remove it first to set it as a secret.`
-          : `A secret named "${name}" already exists. Remove it first to set it as a variable.`,
+    const varName = name.toUpperCase();
+    await withSpinner("Checking for conflicts...", async (spin) => {
+      // A name conflict is one held by the opposite type (variable vs secret).
+      const conflict = (await fetchEnvEntries(client, id)).find(
+        (e) => e.name.toUpperCase() === varName && e.secret !== isSecret,
       );
-    }
+      if (conflict) {
+        throw new UserError(
+          isSecret
+            ? `A variable named "${varName}" already exists. Remove it first to set it as a secret.`
+            : `A secret named "${varName}" already exists. Remove it first to set it as a variable.`,
+        );
+      }
 
-    spin.text = isSecret ? "Setting secret..." : "Setting variable...";
+      spin.text = isSecret ? "Setting secret..." : "Setting variable...";
 
-    if (isSecret) {
-      await client.PUT("/compute/script/{id}/secrets", {
-        params: { path: { id } },
-        body: { Name: name, Secret: value },
-      });
-    } else {
-      await client.PUT("/compute/script/{id}/variables", {
-        params: { path: { id } },
-        body: { Name: name, DefaultValue: value },
-      });
-    }
-
-    spin.stop();
+      if (isSecret) {
+        await client.PUT("/compute/script/{id}/secrets", {
+          params: { path: { id } },
+          body: { Name: varName, Secret: value },
+        });
+      } else {
+        await client.PUT("/compute/script/{id}/variables", {
+          params: { path: { id } },
+          body: { Name: varName, DefaultValue: value },
+        });
+      }
+    });
 
     if (output === "json") {
-      logger.log(JSON.stringify({ name, secret: isSecret }, null, 2));
+      logger.log(JSON.stringify({ name: varName, secret: isSecret }, null, 2));
       return;
     }
 
     logger.success(
       isSecret
-        ? `Secret "${name}" set successfully.`
-        : `Variable "${name}" set to "${value}".`,
+        ? `Secret "${varName}" set successfully.`
+        : `Variable "${varName}" set to "${value}".`,
     );
 
     await offerLink();

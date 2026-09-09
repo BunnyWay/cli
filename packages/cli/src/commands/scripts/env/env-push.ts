@@ -1,9 +1,10 @@
+import { existsSync } from "node:fs";
 import type { createComputeClient } from "@bunny.net/openapi-client";
 import { fetchEnvEntries } from "@/commands/scripts/api.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
-import { isInteractive, prompts, spinner } from "@/core/ui.ts";
+import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 import {
   type EnvFileEntry,
   findEnvFile,
@@ -31,7 +32,7 @@ export interface PushOptions {
 export interface PushResult {
   name: string;
   secret: boolean;
-  action: "created" | "updated" | "skipped";
+  action: "created" | "updated" | "skipped" | "failed";
   reason?: string;
 }
 
@@ -41,6 +42,12 @@ function resolveEnvPath(file?: string): string {
     throw new UserError(
       "No .env file found.",
       "Pass a path explicitly, e.g. `bunny scripts env push .env.production`.",
+    );
+  }
+  if (!existsSync(envPath)) {
+    throw new UserError(
+      `No such file: ${envPath}.`,
+      "Pass the path to an existing .env file, or omit it to use the nearest one.",
     );
   }
   return envPath;
@@ -53,6 +60,22 @@ function splitList(values?: string[]): Set<string> {
       .map((value) => value.trim().toUpperCase())
       .filter(Boolean),
   );
+}
+
+function requireNamesPresent(
+  forced: Set<string>,
+  entries: EnvFileEntry[],
+  flag: string,
+  envPath: string,
+): void {
+  const present = new Set(entries.map((entry) => entry.key.toUpperCase()));
+  const missing = [...forced].filter((name) => !present.has(name));
+  if (missing.length > 0) {
+    throw new UserError(
+      `${flag} named ${missing.join(", ")}, which ${missing.length === 1 ? "is" : "are"} not in ${envPath}.`,
+      `Available: ${entries.map((entry) => entry.key).join(", ")}`,
+    );
+  }
 }
 
 /** Which entries to push: everything with --all or no terminal, else a picker. */
@@ -80,9 +103,20 @@ async function chooseEntries(
 async function chooseSecrets(
   entries: EnvFileEntry[],
   opts: PushOptions,
+  envPath: string,
 ): Promise<Set<string>> {
   const forcedSecret = splitList(opts.secrets);
   const forcedPlain = splitList(opts.plain);
+  requireNamesPresent(forcedSecret, entries, "--secrets", envPath);
+  requireNamesPresent(forcedPlain, entries, "--plain", envPath);
+  const both = [...forcedSecret].filter((name) => forcedPlain.has(name));
+  if (both.length > 0) {
+    throw new UserError(
+      `${both.join(", ")} ${both.length === 1 ? "is" : "are"} in both --secrets and --plain.`,
+      "Name each variable in one of the two.",
+    );
+  }
+
   const guess = (key: string) =>
     forcedSecret.has(key.toUpperCase())
       ? true
@@ -120,27 +154,30 @@ export async function pushEnvFile(
   opts: PushOptions,
 ): Promise<PushResult[]> {
   const envPath = resolveEnvPath(opts.file);
-  const parsed = parseEnvFile(envPath);
-  if (parsed.length === 0) {
+  const { entries, unterminated } = parseEnvFile(envPath);
+  if (unterminated.length > 0) {
+    throw new UserError(
+      `Unclosed quote in ${envPath}: ${unterminated.join(", ")}.`,
+      "Close the quote, or the value would be pushed truncated.",
+    );
+  }
+  if (entries.length === 0) {
     throw new UserError(`No variables found in ${envPath}.`);
   }
 
   if (isInteractive(opts.output)) {
-    logger.info(`Reading ${envPath} (${parsed.length} variables).`);
+    logger.info(`Reading ${envPath} (${entries.length} variables).`);
   }
 
-  const chosen = await chooseEntries(parsed, opts);
+  const chosen = await chooseEntries(entries, opts);
   if (chosen.length === 0) return [];
 
-  const secretNames = await chooseSecrets(chosen, opts);
+  const secretNames = await chooseSecrets(chosen, opts, envPath);
 
-  const spin = spinner("Pushing variables...");
-  spin.start();
+  return withSpinner("Pushing variables...", async (spin) => {
+    const existing = await fetchEnvEntries(client, id);
+    const results: PushResult[] = [];
 
-  const existing = await fetchEnvEntries(client, id);
-  const results: PushResult[] = [];
-
-  try {
     for (const entry of chosen) {
       const name = entry.key.toUpperCase();
       const secret = secretNames.has(entry.key);
@@ -159,24 +196,31 @@ export async function pushEnvFile(
       }
 
       spin.text = `Pushing ${name}...`;
-      if (secret) {
-        await client.PUT("/compute/script/{id}/secrets", {
-          params: { path: { id } },
-          body: { Name: name, Secret: entry.value },
-        });
-      } else {
-        await client.PUT("/compute/script/{id}/variables", {
-          params: { path: { id } },
-          body: { Name: name, DefaultValue: entry.value },
+      try {
+        if (secret) {
+          await client.PUT("/compute/script/{id}/secrets", {
+            params: { path: { id } },
+            body: { Name: name, Secret: entry.value },
+          });
+        } else {
+          await client.PUT("/compute/script/{id}/variables", {
+            params: { path: { id } },
+            body: { Name: name, DefaultValue: entry.value },
+          });
+        }
+        results.push({ name, secret, action: match ? "updated" : "created" });
+      } catch (err) {
+        results.push({
+          name,
+          secret,
+          action: "failed",
+          reason: err instanceof Error ? err.message : String(err),
         });
       }
-      results.push({ name, secret, action: match ? "updated" : "created" });
     }
-  } finally {
-    spin.stop();
-  }
 
-  return results;
+    return results;
+  });
 }
 
 /** Print the per-variable outcome of a push. */
@@ -191,6 +235,10 @@ export function reportPush(results: PushResult[]): void {
       logger.warn(`Skipped ${result.name}: ${result.reason}.`);
       continue;
     }
+    if (result.action === "failed") {
+      logger.error(`Failed ${result.name}: ${result.reason}`);
+      continue;
+    }
     logger.success(
       `${result.secret ? "Secret" : "Variable"} "${result.name}" ${result.action}.`,
     );
@@ -201,5 +249,12 @@ export function reportPush(results: PushResult[]): void {
     logger.dim(
       `  Remove a conflicting name first: bunny scripts env remove ${skipped[0]?.name}`,
     );
+  }
+}
+
+// Sets the exit code instead of throwing so the printed report stays the only output.
+export function failPushIfIncomplete(results: PushResult[]): void {
+  if (results.some((result) => result.action === "failed")) {
+    process.exitCode = 1;
   }
 }

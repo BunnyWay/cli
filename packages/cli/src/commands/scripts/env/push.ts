@@ -8,7 +8,7 @@ import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
-import { pushEnvFile, reportPush } from "./env-push.ts";
+import { failPushIfIncomplete, pushEnvFile, reportPush } from "./env-push.ts";
 
 const COMMAND = "push [file]";
 const DESCRIPTION = "Push a local .env file to an Edge Script.";
@@ -109,10 +109,12 @@ export const scriptsEnvPushCommand = defineCommand<PushArgs>({
 
     if (output === "json") {
       logger.log(JSON.stringify(results, null, 2));
+      failPushIfIncomplete(results);
       return;
     }
 
     reportPush(results);
+    failPushIfIncomplete(results);
     await offerLink();
   },
 });

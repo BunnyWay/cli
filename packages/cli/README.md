@@ -904,11 +904,11 @@ bunny scripts env set API_KEY secret-value --secret
 bunny scripts env set --from-file .env   # same as `scripts env push .env`
 ```
 
-| Flag          | Description                                             |
-| ------------- | ------------------------------------------------------- |
-| `--secret`    | Store as an encrypted secret                            |
-| `--from-file` | Set every variable in a `.env` file, as `env push` does |
-| `--id`        | Edge Script ID (uses linked if omitted)                 |
+| Flag          | Description                                          |
+| ------------- | ---------------------------------------------------- |
+| `--secret`    | Store as an encrypted secret                         |
+| `--from-file` | Push a `.env` file to the script, as `env push` does |
+| `--id`        | Edge Script ID (uses linked if omitted)              |
 
 ##### `bunny scripts env remove`
 
@@ -935,9 +935,11 @@ bunny scripts env pull --force
 
 ##### `bunny scripts env push`
 
-Push a local `.env` file to an Edge Script. Reads the nearest `.env` unless a path is given, then asks which variables to push and which of them are secrets. The secret choice is pre-selected from the variable name (`TOKEN`, `SECRET`, `PASSWORD`, `_KEY`, and friends), so a credential is not stored as a readable variable by accident.
+Push a local `.env` file to an Edge Script. Reads the nearest `.env` unless a path is given, then asks which variables to push and which of them are secrets. The secret choice is pre-selected from the variable name (`TOKEN`, `SECRET`, `PASSWORD`, `_KEY`, and friends), so a credential is not stored as a readable variable by accident. `--secrets` and `--plain` override that guess, and a name they don't match in the file is an error rather than a silent fall back to the guess.
 
-Names already held by the opposite type are skipped rather than failing the push: the API cannot convert a variable into a secret, so remove it first.
+A quoted value may span lines, so a PEM key or a service-account blob pushes whole; an unclosed quote is an error, since the alternative is pushing a truncated credential under a success message. Inline `#` comments are stripped from unquoted values.
+
+Names already held by the opposite type are skipped rather than failing the push: the API cannot convert a variable into a secret, so remove it first. A write the API rejects is reported per variable and exits non-zero, so a half-pushed env can't pass unnoticed.
 
 ```bash
 bunny scripts env push                                # pick from the nearest .env
