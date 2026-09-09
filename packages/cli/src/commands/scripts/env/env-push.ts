@@ -78,12 +78,19 @@ function requireNamesPresent(
   }
 }
 
-/** Which entries to push: everything with --all or no terminal, else a picker. */
+/** Which entries to push: everything with --all, else a picker; no terminal means --all is required. */
 async function chooseEntries(
   entries: EnvFileEntry[],
   opts: PushOptions,
+  envPath: string,
 ): Promise<EnvFileEntry[]> {
-  if (opts.all || !isInteractive(opts.output)) return entries;
+  if (opts.all) return entries;
+  if (!isInteractive(opts.output)) {
+    throw new UserError(
+      "No terminal to pick variables in, and --all was not given.",
+      `Run \`bunny scripts env push ${envPath} --all\` to push every variable in the file.`,
+    );
+  }
 
   const { picked } = await prompts({
     type: "multiselect",
@@ -169,7 +176,7 @@ export async function pushEnvFile(
     logger.info(`Reading ${envPath} (${entries.length} variables).`);
   }
 
-  const chosen = await chooseEntries(entries, opts);
+  const chosen = await chooseEntries(entries, opts, envPath);
   if (chosen.length === 0) return [];
 
   const secretNames = await chooseSecrets(chosen, opts, envPath);

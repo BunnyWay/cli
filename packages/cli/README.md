@@ -935,7 +935,7 @@ bunny scripts env pull --force
 
 ##### `bunny scripts env push`
 
-Push a local `.env` file to an Edge Script. Reads the nearest `.env` unless a path is given, then asks which variables to push and which of them are secrets. The secret choice is pre-selected from the variable name (`TOKEN`, `SECRET`, `PASSWORD`, `_KEY`, and friends), so a credential is not stored as a readable variable by accident. `--secrets` and `--plain` override that guess, and a name they don't match in the file is an error rather than a silent fall back to the guess.
+Push a local `.env` file to an Edge Script. Reads the nearest `.env` unless a path is given, then asks which variables to push and which of them are secrets. Without a terminal, `--all` is required rather than assumed, so a pipeline never uploads a whole `.env` by accident. The secret choice is pre-selected from the variable name (`TOKEN`, `SECRET`, `PASSWORD`, `_KEY`, and friends), so a credential is not stored as a readable variable by accident. `--secrets` and `--plain` override that guess, and a name they don't match in the file is an error rather than a silent fall back to the guess.
 
 A quoted value may span lines, so a PEM key or a service-account blob pushes whole; an unclosed quote is an error, since the alternative is pushing a truncated credential under a success message. Inline `#` comments are stripped from unquoted values.
 
