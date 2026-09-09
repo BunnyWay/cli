@@ -128,7 +128,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     ],
     [
       "$0 db create --name my-app --mode auto",
-      "Let bunny pick the regions, no prompts",
+      "Let bunny pick the regions instead of asking",
     ],
     [
       "$0 db create --name my-app --primary FR --output json",

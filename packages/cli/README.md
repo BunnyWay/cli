@@ -152,7 +152,7 @@ Create a new database. Interactively prompts for name and region selection (auto
 # Interactive — prompts for name and region mode
 bunny db create
 
-# Let bunny pick the regions, no prompts
+# Let bunny pick the regions instead of asking
 bunny db create --name mydb --mode auto
 
 # Single region
