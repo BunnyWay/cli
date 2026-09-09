@@ -6,6 +6,7 @@ import { confirm } from "@/core/ui.ts";
 export const registryRemoveCommand = defineToolCommand({
   tool: registriesDelete,
   command: "remove <registry-id>",
+  aliases: ["rm"],
   describe: "Remove a container registry.",
   progress: "Removing registry...",
 
