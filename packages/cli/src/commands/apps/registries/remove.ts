@@ -1,4 +1,4 @@
-import { registriesDelete } from "@bunny.net/tools/registries";
+import { registriesDelete } from "@bunny.net/tools/apps";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm } from "@/core/ui.ts";

@@ -77,6 +77,6 @@ export function describeTool(tool: Tool): string {
 
 /** Flatten a dotted name for hosts that disallow dots: `registries.list` with prefix `bunny` becomes `bunny_registries_list`. */
 export function flatName(tool: Tool, prefix?: string): string {
-  const suffix = tool.name.replace(/\./g, "_");
+  const suffix = tool.name.replaceAll(".", "_");
   return prefix ? `${prefix}_${suffix}` : suffix;
 }

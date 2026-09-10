@@ -11,7 +11,7 @@ import {
 } from "./schema.ts";
 
 test("input schemas carry field descriptions and reject unknown keys", () => {
-  const schema = inputJsonSchema(requireTool("registries.get")) as {
+  const schema = inputJsonSchema(requireTool("apps.registries.get")) as {
     properties: Record<string, { description?: string }>;
     required: string[];
     additionalProperties: boolean;
@@ -22,11 +22,11 @@ test("input schemas carry field descriptions and reject unknown keys", () => {
 });
 
 test("object results pass through, array results are wrapped, and payloads match", () => {
-  const get = requireTool("registries.get");
+  const get = requireTool("apps.registries.get");
   expect(outputJsonSchema(get)?.properties).toHaveProperty("hostname");
   expect(toStructuredResult(get, { id: 1 })).toEqual({ id: 1 });
 
-  const list = requireTool("registries.list");
+  const list = requireTool("apps.registries.list");
   const wrapped = outputJsonSchema(list)?.properties as {
     result: { type: string };
   };
@@ -37,12 +37,12 @@ test("object results pass through, array results are wrapped, and payloads match
 });
 
 test("describeTool folds examples in and flatName is unique with a prefix", () => {
-  expect(describeTool(requireTool("registries.delete"))).toContain(
+  expect(describeTool(requireTool("apps.registries.delete"))).toContain(
     'Examples:\n- Remove a registry: {"registry":1155}',
   );
   const flat = tools.map((tool) => flatName(tool, "bunny"));
   expect(new Set(flat).size).toBe(tools.length);
-  expect(flat).toContain("bunny_registries_list");
+  expect(flat).toContain("bunny_apps_registries_list");
 });
 
 test("a union result wraps consistently, whichever branch it returns", () => {

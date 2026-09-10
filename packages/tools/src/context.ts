@@ -5,6 +5,10 @@ import {
   createMcClient,
   UserError,
 } from "@bunny.net/openapi-client";
+import {
+  createRegistryClient,
+  type RegistryClient,
+} from "./registry/client.ts";
 
 export type CoreClient = ReturnType<typeof createCoreClient>;
 export type DbClient = ReturnType<typeof createDbClient>;
@@ -15,6 +19,8 @@ export interface ToolClients {
   readonly core: CoreClient;
   readonly db: DbClient;
   readonly mc: McClient;
+  /** The OCI registry. Not generated from a spec, so it is hand-rolled in `registry/client.ts`. */
+  readonly registry: RegistryClient;
 }
 
 export interface ToolContextOptions {
@@ -24,6 +30,8 @@ export interface ToolContextOptions {
   apiUrl?: string;
   /** Identifies the caller in request logs, e.g. `bunny-cli/0.16.1`. */
   userAgent?: string;
+  /** Override the OCI registry endpoint. Defaults to `registry.bunny.net`. */
+  registryUrl?: string;
   signal?: AbortSignal;
   /** Coarse "what am I doing now" updates. The host renders them (spinner, log line, progress event). */
   onProgress?: (message: string) => void;
@@ -89,6 +97,14 @@ export function createToolContext(
     },
     get mc() {
       return lazy("mc", createMcClient);
+    },
+    get registry() {
+      return lazy("registry", (opts) =>
+        createRegistryClient({
+          apiKey: opts.apiKey,
+          url: options.registryUrl,
+        }),
+      );
     },
   };
 
