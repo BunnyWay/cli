@@ -70,6 +70,22 @@ const extractors: Array<
  * Command handlers never need to check `response.ok` or parse error bodies —
  * a failed request throws before it reaches handler code.
  */
+
+const SECRET_KEY = /password|secret|token|accesskey|apikey|credential/i;
+
+function redact(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redact);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [
+      key,
+      SECRET_KEY.test(key) && typeof child !== "object"
+        ? "[redacted]"
+        : redact(child),
+    ]),
+  );
+}
+
 export function authMiddleware(options: ClientOptions): Middleware {
   const {
     apiKey,
@@ -90,7 +106,7 @@ export function authMiddleware(options: ClientOptions): Middleware {
           const cloned = request.clone();
           try {
             const body = await cloned.json();
-            debug(`→ Body: ${JSON.stringify(body, null, 2)}`);
+            debug(`→ Body: ${JSON.stringify(redact(body), null, 2)}`);
           } catch {}
         }
       }
@@ -105,7 +121,7 @@ export function authMiddleware(options: ClientOptions): Middleware {
         if (looksLikeJson(contentType)) {
           try {
             const body = await cloned.json();
-            debug(`← Body: ${JSON.stringify(body, null, 2)}`);
+            debug(`← Body: ${JSON.stringify(redact(body), null, 2)}`);
           } catch {}
         } else {
           // Non-JSON body - surface the raw text (truncated) so the

@@ -3,7 +3,7 @@ import {
   parseRegistryUrl,
   qualifyRepository,
   stripNamespace,
-} from "./client.ts";
+} from "@/core/bunny-registry.ts";
 import { buildTargetRef, parseImageRef } from "./ref.ts";
 
 const NS = "1b26800c-91f5-4a75-8a8e-3de52942d9ce";

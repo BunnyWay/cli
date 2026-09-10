@@ -56,6 +56,7 @@ Bun workspace monorepo. Run `ls packages/` for the authoritative list; the platf
 | `@bunny.net/database-openapi`     | no        | OpenAPI description of the REST surface.                                               |
 | `@bunny.net/database-studio`      | no        | Local web UI served by `db studio`.                                                    |
 | `@bunny.net/config`               | no        | Zod schemas, types, and JSON Schema for `bunny.jsonc`.                                 |
+| `@bunny.net/tools`                | yes       | Typed tool definitions (Zod schema, kind, run) shared by the CLI and any tool host.    |
 
 Each package's README is the reference for its public API. Do not restate it here.
 
@@ -78,6 +79,7 @@ packages/cli/src/
 - **Namespaces are directories** with an `index.ts` calling `defineNamespace()`. Leaf commands are `.ts` files calling `defineCommand()`.
 - **Top-level commands** (`login`, `logout`, `whoami`, `open`, `docs`, `api`) register directly in `cli.ts`.
 - **Import CLI-internal modules with `@/`, not `../`.** The root `tsconfig.json` maps `@/*` to `packages/cli/src/*`; `bun run`, `bun test`, `bun build --compile`, and `tsc` all honour it. Same-directory `./` imports stay relative, and so do the few specifiers that reach outside `src/` (the root `package.json`, the embedded `skills/` markdown). The alias is CLI-only: the published packages emit through `tsc`, which does not rewrite `paths` on emit.
+- **`commands/` do not create API clients.** API work goes in `@bunny.net/tools`; see "Tools layer". `core/tools-boundary.test.ts` ratchets the remaining direct uses down.
 - **`core/` never imports from `commands/`.** Layering is one-way. When two domains need the same vocabulary, lift it into `core/` and re-export, do not import upward or duplicate.
 - **Keep `core/` mostly flat.** A cohesive reusable feature spanning several files may take a subdirectory (`core/hostnames/`).
 - **Error classes live in the SDK.** `UserError` and `ApiError` come from `@bunny.net/openapi-client` because the SDK needs them; `core/errors.ts` re-exports them and adds the CLI-only helpers (`unauthorizedError`, `errorMessage`). Throw `UserError` with a hint rather than adding subclasses.
@@ -113,7 +115,7 @@ The factory wraps every handler in a try/catch that separates `UserError` (clean
 
 `create` makes a resource that did not exist before: `db create`, `sites create`, `sandbox create`, `scripts create`, `db tokens create`, `storage zones create`, `dns zone create`.
 
-`add` associates something that already exists with something else, or appends to a collection: `dns record add`, `db regions add`, `apps endpoints add`, `sandbox url add`, `registries add` (registering an external registry with the account), `domains add`.
+`add` associates something that already exists with something else, or appends to a collection: `dns record add`, `db regions add`, `apps endpoints add`, `sandbox url add`, `apps registries add` (registering an external registry with the account), `domains add`.
 
 The test is whether the thing exists independently of the command. A storage zone does, so it is created; a hostname on a pull zone does not, so it is added.
 
@@ -124,6 +126,75 @@ Renamed commands keep their shipped spelling as an alias (`add` on the two `crea
 ### `defineNamespace(command, describe, subcommands)`
 
 Groups subcommands and enforces `demandCommand(1)`, so a bare namespace shows help. Pass `false` as the second positional for a hidden alias namespace (`pz` for `pullzone`, `hostnames` for `domains`).
+
+---
+
+## Tools layer
+
+`@bunny.net/tools` holds the work; the CLI holds the experience. One tool definition backs every surface: a yargs command today, an MCP or other tool host next, and a direct import in an agent.
+
+**Target architecture.** Every remote operation lives in a tool; a CLI command is glue: flags in, prompts and confirmations, tool invocation, rendering out. Command modules must not create API clients or call endpoints directly. `packages/cli/src/core/tools-boundary.test.ts` enforces this with an explicit `PENDING_MIGRATION` allowlist: new direct client use fails the test, and migrating a family removes its entries (the list only shrinks). Currently migrated: `apps registries`, `registry`. Host-inherent flows stay in the CLI even at the end state: `auth login` (browser plus loopback callback), docker build/push in `apps deploy`, interactive pickers, and `.env`/`bunny.jsonc` writes.
+
+### `defineTool(def)`
+
+```typescript
+export const registriesDelete = defineTool({
+  name: "apps.registries.delete", // dotted, lowercase, product area first; flattens to `bunny_apps_registries_delete`
+  title: "Remove a container registry",
+  description: "Remove a container registry. Fails when the registry is still used by an app.",
+  schema: z.strictObject({ registry: registryRef }), // object schemas only; `.describe()` every field
+  kind: "destructive", // read | write | destructive; drives CLI confirmation + host annotations
+  resultSchema: DeletedRegistrySchema, // declarative result shape; published as the output schema
+  examples: [[{ registry: 1155 }, "Remove a registry"]],
+  run: async (ctx, { registry }) => ({ id: registry, deleted: true }), // plain serializable data
+});
+```
+
+Rules that keep the surfaces honest:
+
+- **Tools never prompt and never print.** No `prompts`, no `logger`, no spinners. Progress is reported with `ctx.progress(message)` and the host decides how to show it.
+- **Tools return normalized data, not raw API models.** `toRegistry` maps the API payload to a stable camelCase shape and strips credentials. Each shape is a Zod schema with the type inferred from it; this is the contract every surface sees, and it is what `--output json` prints for converted commands.
+- **Input is validated before `run`.** `tool.invoke(ctx, input)` Zod-parses first and rejects with a `UserError` naming the offending field. Results are not validated against `resultSchema`; it is declarative.
+- **`kind` is declared, not inferred.** `read` touches nothing, `write` creates or updates remote state, `destructive` deletes data or cannot be undone. `defineToolCommand` refuses to run a destructive tool without a confirmation.
+- **`sensitive` marks credential-bearing results; `localFiles` marks host-local path inputs.** Masking and exclusion are the host's call; the tool always returns the real value.
+- **The package stays Node-portable.** `node:` builtins only, relative imports (the `@/` alias is CLI-only), no `Bun.*` globals. It is an internal workspace package today, consumed as source and bundled into the CLI binary; the constraint is what keeps a future tool server able to import it.
+
+`ToolContext` (from `createToolContext`) carries credentials, lazily created memoized API clients (`ctx.clients.core`, `ctx.clients.db`, `ctx.clients.mc`), an optional `AbortSignal`, and `progress`/`debug` callbacks. Pass `clients` to inject fakes in tests. The CLI builds it with `toolContext(config, { verbose })` from `core/tool-context.ts`, which defers the "Not logged in." check to first client use.
+
+### `defineToolCommand(def)`
+
+Wraps a tool as a yargs command. The lifecycle is `prepare -> confirm -> run (spinner) -> after -> render`:
+
+```typescript
+export const registryRemoveCommand = defineToolCommand({
+  tool: registriesDelete,
+  command: "remove <registry-id>",
+  builder: (yargs) =>
+    yargs.positional("registry-id", { type: "number" }).option("force", { type: "boolean" }),
+  progress: "Removing registry...",
+  // Prompts, pickers, manifest lookups. Return CANCELLED to stop.
+  prepare: async (args) => ({
+    input: { registry: args["registry-id"] },
+    confirm: () => confirm("Remove this registry?", { force: args.force }),
+  }),
+  render: () => logger.success("Registry removed."),
+});
+```
+
+`--output json` prints the tool result verbatim and skips `render`, so a CLI run and any other host return the same document. Destructive tools must return a `confirm()` from `prepare`; `write` tools may. Three optional hooks cover what a single `render` cannot: `emit(result, args)` takes over printing entirely (alternate emitters like `--format rclone`), `json(result, args)` reshapes before the JSON print (mask a secret), `after(result, args)` runs CLI-local follow-up such as manifest cleanup for every output format.
+
+Commands that orchestrate several tools stay on `defineCommand` and call `tool.invoke(ctx, input)` directly, building the context with `toolContext(config, { verbose })`.
+
+### Publishing tools to another host
+
+`packages/tools/src/schema.ts` derives what a tool host needs: `inputJsonSchema()` and `outputJsonSchema()` (Zod via `z.toJSONSchema`), `describeTool()` (description plus examples and the `sensitive`/`localFiles` caveats), `flatName()` (`apps.registries.list` to `bunny_apps_registries_list`), and `toStructuredResult()` to wrap a result to match its output schema. Mapping `kind` onto a protocol's annotations is the host's job. The CLI is the only host in this repo today; an MCP server should live in its own package and import these helpers rather than re-deriving them.
+
+### Adding a tool
+
+1. Define it under `packages/tools/src/<namespace>/index.ts` and add it to that namespace's exported array; `catalog.ts` picks it up and enforces unique names. A new namespace also needs a `./<namespace>` entry in the package `exports` and a matching root `tsconfig.json` path; the root entrypoint exports only the framework and catalog, and hosts import tools from `@bunny.net/tools/<namespace>`.
+2. Put shared API calls in the namespace's `api.ts` and the normalized shape in `model.ts`. If the CLI already has that helper, move it and re-export from the CLI module so existing call sites keep working.
+3. Wrap it with `defineToolCommand` in `packages/cli/src/commands/...`.
+4. When the wrap removes a command's last direct client use, delete its entry from `PENDING_MIGRATION` in `core/tools-boundary.test.ts`.
 
 ---
 
@@ -301,7 +372,7 @@ The CLI must be fully usable by agents, scripts, and pipelines.
 - **Symlink escapes are refused**, so a checkout cannot plant links that make the installer overwrite unrelated files. Symlinks resolving inside the project are followed.
 - **`SKILL.md` is a completion sentinel**: boundary-checked, removed first and written last per root, and the installed check requires every global root. Partial installs and failed refreshes therefore re-offer.
 - **Single source of truth**: `commands/skills/content.ts` embeds `skills/bunny-cli/**` at bundle time via Bun text imports, so the installed skill is always the shipped one. `content.test.ts` fails if `SKILL.md` routes to a reference that is not embedded.
-- **Experimental namespaces stay out** of the skill and the AGENTS.md section (`apps`, `registries`); add them back when they graduate to the visible command list in `cli.ts`. `sites` is the exception: hidden from help but documented, since agents deploy with it.
+- **Experimental namespaces stay out** of the skill and the AGENTS.md section (`apps`, `registry`); add them back when they graduate to the visible command list in `cli.ts`. `sites` is the exception: hidden from help but documented, since agents deploy with it.
 - **Onboarding nudges**: `bunny login` makes a one-time interactive offer (`--install-skill` / `--no-install-skill` decide it without prompting). Users who authenticate another way get a one-time passive stderr hint instead. Both share one marker file in the XDG cache dir, so users see at most one. The marker is written on a decline or a successful install only, so an interrupted prompt re-offers.
 
 ---
@@ -521,6 +592,7 @@ Per-package deviations, each with a reason:
 
 - **`openapi-client`** regenerates its gitignored types first, then runs `scripts/build.ts`, which drives the TypeScript compiler API and copies the generated `.d.ts` into `dist/generated/` (tsc never emits its own inputs). `rewriteRelativeImportExtensions` fixes specifiers in emitted **JS**; TypeScript has no declaration-emit equivalent, so an `afterDeclarations` transformer rewrites them in the emitted **`.d.ts`** on the AST.
 - **`sandbox`** depends on `openapi-client` with `workspace:*`, so its release job uses `bun publish`, which rewrites that spec to the local version in the tarball. `npm publish` would ship the unresolvable `workspace:*` verbatim. Its `tsconfig.build.json` overrides `paths` to `{}` so openapi-client resolves via `dist/` instead of source, which would otherwise violate `rootDir`; the job therefore builds openapi-client first.
+- **`tools`** follows the `sandbox` pattern exactly: `workspace:*` on `openapi-client`, `paths: {}` in `tsconfig.build.json`, openapi-client built first, `bun publish`. It also imports the per-API type entrypoint `@bunny.net/openapi-client/magic-containers`, which resolves through openapi-client's `exports` once that `dist/` exists.
 - **`database-client`** is the simplest case: zero dependencies, so `npm publish` works, and no declaration transformer. `tsconfig.build.json` sets `include: ["src"]` to keep `examples/` out of the program. Because the program is scoped to `src`, the package cannot import its own `package.json`, which is why its default `User-Agent` is versionless.
 
 Publish jobs for independently versioned packages are gated on a version bump detected via `npm view`. Only the CLI and its platform packages are in a `fixed` group.
@@ -541,7 +613,7 @@ CI runs `bun run typecheck` and `bun test` on every PR.
 ## Adding a new command
 
 1. Create a directory under `packages/cli/src/commands/` for the domain.
-2. `index.ts` with `defineNamespace()` for a group; a `.ts` file per leaf with `defineCommand()`.
+2. `index.ts` with `defineNamespace()` for a group; a `.ts` file per leaf with `defineToolCommand()` over a tool in `@bunny.net/tools` (or `defineCommand()` calling `tool.invoke()` when one command orchestrates several tools).
 3. Define flags in `builder`. Use positionals for required arguments (`command: "create <name>"`).
 4. **Add a flag equivalent for every prompt** so the command is fully scriptable.
 5. Use `preRun` for validation that should block execution.
@@ -561,6 +633,7 @@ CI runs `bun run typecheck` and `bun test` on every PR.
 | ----------------------------------- | ------------------------------------------------- |
 | What does a command do?             | `packages/cli/README.md`, or `bunny <cmd> --help` |
 | What is a package's API?            | that package's `README.md`                        |
+| Tools layer API                     | `packages/tools/README.md`                        |
 | Apps (experimental)                 | `packages/cli/src/commands/apps/APPS.md`          |
 | Repo scripts, changesets, local dev | root `README.md`                                  |
 | Which specs do we pull?             | `packages/openapi-client/scripts/update-specs.ts` |
