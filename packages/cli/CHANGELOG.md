@@ -1,5 +1,13 @@
 # @bunny.net/cli
 
+## 0.17.1
+
+### Patch Changes
+
+- [#219](https://github.com/BunnyWay/cli/pull/219) [`9c9c57a`](https://github.com/BunnyWay/cli/commit/9c9c57a5cbe6d16298adcd32ed195a309d07f2b3) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny registries add`/`update` gain `--type` and derive it from `--server` (ghcr.io and docker.io need one), `--output json` returns a normalized registry shape, and API keys and registry credentials are redacted from `--verbose` request traces
+
+- [#219](https://github.com/BunnyWay/cli/pull/219) [`9c9c57a`](https://github.com/BunnyWay/cli/commit/9c9c57a5cbe6d16298adcd32ed195a309d07f2b3) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny registries` moves under `bunny apps registries`, where those registries are used, leaving `bunny registry` unambiguously the bunny.net registry you push to; the list gains a `Source` column separating your connections from bunny.net's public pull-throughs and its own registry, which can no longer be updated or removed by mistake; `registry list` and `registry tags` move onto the tools layer and `list` returns a plain array of repository names under `--output json`
+
 ## 0.17.0
 
 ### Minor Changes
