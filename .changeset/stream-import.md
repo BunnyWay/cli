@@ -10,4 +10,4 @@
 "@bunny.net/stream-import-brightcove": minor
 ---
 
-`bunny stream import` moves a video library into Bunny Stream from Vimeo, AWS S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove, with a dry run, resumable state, and de-duplication; the engine ships as `@bunny.net/stream-import` and each source adapter as `@bunny.net/stream-import-<source>`.
+`bunny stream import` moves a video library into Bunny Stream from Vimeo, AWS S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove: it hands every video to Bunny and returns, `--wait` stays for encoding, and `bunny stream import status` shows Bunny's progress; with a dry run, resumable state, and de-duplication. The engine ships as `@bunny.net/stream-import` and each source adapter as `@bunny.net/stream-import-<source>`.

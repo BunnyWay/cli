@@ -1,5 +1,7 @@
+import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { createCoreClient } from "@bunny.net/openapi-client";
 import {
   type CredentialField,
   describeSource,
@@ -10,12 +12,84 @@ import {
   type SourceConfigValues,
   type SourcePlugin,
 } from "@bunny.net/stream-import";
+import {
+  fetchAccountId,
+  type VideoLibraryModel,
+} from "@/commands/stream/api.ts";
+import { resolveLibraryInteractive } from "@/commands/stream/interactive.ts";
+import {
+  connectStreamLibrary,
+  type StreamClient,
+} from "@/commands/stream/videos-api.ts";
+import { type ResolvedConfig, resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
 import { bunny } from "@/core/colors.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import type { OutputFormat } from "@/core/types.ts";
+import type { GlobalArgs, OutputFormat } from "@/core/types.ts";
 import { isInteractive, prompts } from "@/core/ui.ts";
 import { requireSource, SOURCES } from "./import-sources.ts";
+
+export interface ImportTarget {
+  config: ResolvedConfig;
+  library: VideoLibraryModel;
+  libraryId: number;
+  accountId: string;
+  /** Authenticated with the library's own key, ready for the engine. */
+  stream: StreamClient;
+}
+
+/** Resolve the destination library (flag, linked directory, or picker) and everything the import needs to talk to it. */
+export async function connectImportTarget(
+  args: { lib?: string } & Pick<
+    GlobalArgs,
+    "profile" | "apiKey" | "output" | "verbose"
+  >,
+): Promise<ImportTarget> {
+  const config = resolveConfig(args.profile, args.apiKey, args.verbose);
+  const coreClient = createCoreClient(clientOptions(config, args.verbose));
+  const library = await resolveLibraryInteractive(coreClient, args.lib, {
+    output: args.output,
+    offerLink: true,
+  });
+  const libraryId = library.Id as number;
+  const accountId = await fetchAccountId(coreClient);
+
+  return {
+    config,
+    library,
+    libraryId,
+    accountId,
+    stream: connectStreamLibrary(library, {
+      config,
+      verbose: args.verbose,
+    }),
+  };
+}
+
+/** The one source with a saved import for this library, when `--source` was left out. */
+export function findSavedImportSource(
+  libraryId: number,
+  accountId: string,
+): string {
+  const dir = dirname(importStatePath("x", libraryId, accountId));
+  const suffix = `-${libraryId}.json`;
+  const sources = existsSync(dir)
+    ? readdirSync(dir)
+        .filter((f) => f.endsWith(suffix))
+        .map((f) => f.slice(0, -suffix.length))
+    : [];
+
+  if (sources.length === 1 && sources[0]) return sources[0];
+  throw new UserError(
+    sources.length === 0
+      ? `No saved import for library ${libraryId}.`
+      : `Library ${libraryId} has imports from ${sources.join(", ")}.`,
+    sources.length === 0
+      ? "Start one with `bunny stream import`."
+      : "Pass --source to pick one.",
+  );
+}
 
 /** Saved import progress under the XDG state directory: one file per account, source, and library, since library IDs repeat across accounts. */
 export function importStatePath(

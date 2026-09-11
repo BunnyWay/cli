@@ -1102,7 +1102,7 @@ Stream exposes one command today: **`bunny stream import`**, which moves an exis
 
 #### `bunny stream import`
 
-Move an existing video library into Stream from **Vimeo**, **AWS S3**, **Wistia**, **Mux**, **Cloudflare Stream**, **JW Player**, or **Brightcove**. bunny.net fetches every file straight from the source over a URL, so nothing passes through your machine. The destination library is the `--lib`/`--library` flag; omitted, it resolves from the directory's linked library (`.bunny/stream.json`), then an interactive picker, which offers to link the directory to the library you pick.
+Move an existing video library into Stream from **Vimeo**, **AWS S3**, **Wistia**, **Mux**, **Cloudflare Stream**, **JW Player**, or **Brightcove**. bunny.net fetches every file straight from the source over a URL, so nothing passes through your machine: the command hands each video to Bunny, tags it, and returns as soon as they are all queued. Encoding then happens on Bunny's side; `bunny stream import status` shows how far it has got, and `--wait` keeps the command running until every video is encoded. The destination library is the `--lib`/`--library` flag; omitted, it resolves from the directory's linked library (`.bunny/stream.json`), then an interactive picker, which offers to link the directory to the library you pick.
 
 ```bash
 bunny stream import                                  # interactive: pick the library, the source, and enter credentials
@@ -1110,10 +1110,12 @@ bunny stream import --lib 12345 --source vimeo --dry-run   # show the plan: fold
 bunny stream import --lib 12345 --source vimeo       # confirms, then imports
 bunny stream import --lib 12345 --source vimeo --folder 987654   # one Vimeo project only
 bunny stream import --lib 12345 --source s3 --bucket my-videos --prefix 2024/ --force   # unattended
+bunny stream import --lib 12345 --source vimeo --wait     # stay until Bunny has encoded every video
 bunny stream import --lib 12345 --source vimeo --resume   # continue an interrupted or partly failed run
+bunny stream import status --lib 12345 --source vimeo     # what Bunny has finished, is encoding, or failed
 ```
 
-Source folders (Vimeo and Wistia projects, Brightcove folders, the first level of S3 prefixes) become collections of the same name, created when missing. Every imported video carries a per-source metaTag (`vimeoId`, `s3Source`, `wistiaId`, `muxAssetId`, `cfStreamId`, `jwPlayerId`, `brightcoveId`), and that tag is how a re-run knows what to skip, so running the import twice never duplicates a video. `--folder` is rejected for Mux, Cloudflare Stream, and JW Player, which have no folder concept.
+Source folders (Vimeo and Wistia projects, Brightcove folders, the first level of S3 prefixes) become collections of the same name, created when missing. Every imported video carries a per-source metaTag (`vimeoId`, `s3Source`, `wistiaId`, `muxAssetId`, `cfStreamId`, `jwPlayerId`, `brightcoveId`), and that tag is how a re-run knows what to skip, so running the import twice never duplicates a video. A re-run also looks at what Bunny did with each tagged video: finished ones are skipped, ones still fetching or encoding are reported and left alone, and ones Bunny failed on are imported again (the failed copy stays in the library). `--folder` is rejected for Mux, Cloudflare Stream, and JW Player, which have no folder concept.
 
 Source credentials come from environment variables, listed below. Interactively, anything missing is prompted for (secrets masked) and the command then names the variables to set to skip the prompts next time; nothing is stored. Unattended runs (`--output json`, no TTY) fail naming the missing variables instead. With `--source` omitted, the command uses the one source whose variables are all set; otherwise it prompts for a choice, or errors when unattended.
 
@@ -1129,19 +1131,22 @@ Source credentials come from environment variables, listed below. Interactively,
 
 For S3, leave both AWS keys unset to use the default AWS credential chain (instance roles, `~/.aws`); setting only one of them is an error. Point `S3_ENDPOINT` at an S3-compatible provider to import from it, in which case download URLs must be on that host. bunny.net fetches objects through pre-signed URLs, so the IAM policy needs `s3:ListBucket` and `s3:GetObject`. Only keys with a video extension are imported; `--bucket`, `--prefix`, and `--url-ttl` override the variables for one run.
 
-Progress is saved after every status change to `$XDG_STATE_HOME/bunnynet/stream-import/<account>/<source>-<library>.json` (default `~/.local/state/...`), one file per account, source, and library. A run that is interrupted, or finishes with failures, is resumed with `--resume`, which retries the failed videos, works the outstanding ones, and re-asserts the metaTag on any video that was fetched but not yet tagged. A resume keeps the `--folder` scope the run started with unless you pass a different one. `--dry-run` prints the plan and touches nothing. The confirmation before a real import needs `--force` when there is no TTY to answer it. A run with failed videos exits 1 and lists them.
+Progress is saved after every status change to `$XDG_STATE_HOME/bunnynet/stream-import/<account>/<source>-<library>.json` (default `~/.local/state/...`), one file per account, source, and library. A run that is interrupted, or finishes with failures, is resumed with `--resume`, which retries the failed videos, works the outstanding ones, and re-asserts the metaTag on any video that was fetched but not yet tagged. A run with videos still encoding exits 0 and stays open in the state file until `status` sees them finish. A resume keeps the `--folder` scope the run started with unless you pass a different one. `--dry-run` prints the plan and touches nothing. The confirmation before a real import needs `--force` when there is no TTY to answer it. A run with failed videos exits 1 and lists them.
 
-| Flag                                                               | Description                                                                                          |
-| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `--lib`, `--library`                                               | Destination video library name or ID (defaults to the linked library)                                |
-| `--source`, `-s`                                                   | Source platform: `vimeo`, `s3`, `wistia`, `mux`, `cloudflare`, `jwplayer`, `brightcove`              |
-| `--folder`                                                         | Import one source folder only (Vimeo, S3, Wistia, Brightcove)                                        |
-| `--dry-run`                                                        | Print the plan without importing                                                                     |
-| `--resume`                                                         | Continue the saved import for this source and library                                                |
-| `--force`, `-f`                                                    | Skip the confirmation prompt (required when there is no TTY)                                         |
-| `--concurrency`, `-c`                                              | Videos imported in parallel, 1 to 20 (default 3)                                                     |
-| `--bucket`, `--prefix`, `--url-ttl`                                | S3 overrides for the bucket, key prefix, and pre-signed URL lifetime in seconds (60 to 604800)       |
-| `--request-timeout`, `--processing-timeout`, `--migration-timeout` | Per-request HTTP timeout in seconds; per-video encode wait and overall per-video timeout, in minutes |
+| Flag                                                               | Description                                                                                                                                  |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--lib`, `--library`                                               | Destination video library name or ID (defaults to the linked library)                                                                        |
+| `--source`, `-s`                                                   | Source platform: `vimeo`, `s3`, `wistia`, `mux`, `cloudflare`, `jwplayer`, `brightcove`                                                      |
+| `--folder`                                                         | Import one source folder only (Vimeo, S3, Wistia, Brightcove)                                                                                |
+| `--dry-run`                                                        | Print the plan without importing                                                                                                             |
+| `--resume`                                                         | Continue the saved import for this source and library                                                                                        |
+| `--wait`                                                           | Stay until Bunny has encoded every video, with live progress; the default returns once they are queued                                       |
+| `--force`, `-f`                                                    | Skip the confirmation prompt (required when there is no TTY)                                                                                 |
+| `--concurrency`, `-c`                                              | Videos imported in parallel, 1 to 20 (default 3)                                                                                             |
+| `--bucket`, `--prefix`, `--url-ttl`                                | S3 overrides for the bucket, key prefix, and pre-signed URL lifetime in seconds (60 to 604800)                                               |
+| `--request-timeout`, `--processing-timeout`, `--migration-timeout` | Per-request HTTP timeout in seconds; with `--wait`, how long to wait for one video to encode, and the per-step timeout per video, in minutes |
+
+`bunny stream import status` reads the saved run for the library (and `--source`, when more than one platform has been imported into it), asks Bunny for the current state of every video it queued, and prints one row each: Bunny's status, encode percentage, size, and when it was queued. It exits 1 when any video has failed, so it doubles as a poll in scripts.
 
 ### `bunny sandbox`
 
