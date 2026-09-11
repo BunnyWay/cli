@@ -15,7 +15,8 @@ import {
 } from "@bunny.net/stream-import";
 import type { CfStreamVideo, CloudflareConfig } from "./types.ts";
 
-const PER_PAGE = 100;
+/** The API's maximum and default page size. */
+const PAGE_LIMIT = 1000;
 const DOWNLOAD_POLL_INTERVAL_MS = 5_000;
 const DOWNLOAD_POLL_ATTEMPTS = 60;
 
@@ -37,7 +38,7 @@ export class CloudflareStreamClient {
 
   async validateCredentials(): Promise<void> {
     try {
-      await this.http.get("", { params: { per_page: 1 } });
+      await this.http.get("", { params: { limit: 1 } });
     } catch (error) {
       if (isHttpError(error, 401) || isHttpError(error, 403)) {
         throw new UserError(
@@ -53,25 +54,30 @@ export class CloudflareStreamClient {
     return { "Account ID": this.accountId };
   }
 
-  /** Cursor pagination: `after` takes the last uid from the previous page. */
+  /** Date-cursor pagination: `after` is an exclusive RFC 3339 creation time, so the list is walked oldest-first. */
   async listVideos(): Promise<CfStreamVideo[]> {
     const videos: CfStreamVideo[] = [];
-    let cursor: string | undefined;
+    const seen = new Set<string>();
+    let after: string | undefined;
 
     while (true) {
       const data = await this.http.get("", {
-        params: { per_page: PER_PAGE, after: cursor },
+        params: { limit: PAGE_LIMIT, asc: true, after },
       });
       const items = (data.result ?? []) as CfStreamVideo[];
-      if (items.length === 0) break;
+      let added = 0;
+      for (const video of items) {
+        if (seen.has(video.uid)) continue;
+        seen.add(video.uid);
+        added++;
+        if (video.readyToStream) videos.push(video);
+      }
 
-      videos.push(...items.filter((v) => v.readyToStream));
-      if (items.length < PER_PAGE) break;
-
-      const next = items.at(-1)?.uid;
-      // Without a usable cursor the next request would repeat this page forever.
-      if (!next || next === cursor) break;
-      cursor = next;
+      const last = items.at(-1)?.created;
+      // A page of nothing new means the cursor cannot advance: the only exit besides a short page.
+      if (added === 0 || items.length < PAGE_LIMIT || !last) break;
+      // `created` has second precision and `after` is exclusive, so step back one second and let `seen` absorb the repeats rather than drop a boundary video.
+      after = new Date(new Date(last).getTime() - 1000).toISOString();
     }
 
     return videos;
