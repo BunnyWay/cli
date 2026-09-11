@@ -3,6 +3,7 @@ import {
   createFileStateStore,
   DEFAULT_PROCESSING_TIMEOUT,
   DEFAULT_REQUEST_TIMEOUT,
+  DEFAULT_STALLED_AFTER_MS,
   readMigrationState,
   refreshMigrationState,
   stripAnsi,
@@ -89,7 +90,7 @@ export const streamImportStatusCommand: CommandModule =
         processingTimeout: DEFAULT_PROCESSING_TIMEOUT,
         logger: importLogger(verbose),
       });
-      const { state, videos } = await withSpinner(
+      const { state, videos, stalled } = await withSpinner(
         "Checking with Bunny...",
         () => refreshMigrationState(saved, engine),
       );
@@ -97,8 +98,11 @@ export const streamImportStatusCommand: CommandModule =
 
       const rows = state.videoMigrations.map((m) => {
         const video = m.bunnyVideoId ? videos.get(m.bunnyVideoId) : undefined;
+        const isStalled = Boolean(
+          m.bunnyVideoId && stalled.has(m.bunnyVideoId),
+        );
         const label = video
-          ? videoStatusText(video.status)
+          ? `${videoStatusText(video.status)}${isStalled ? " (stalled?)" : ""}`
           : m.status === "failed"
             ? "Failed"
             : m.status === "pending"
@@ -111,6 +115,7 @@ export const streamImportStatusCommand: CommandModule =
           bunnyVideoId: m.bunnyVideoId,
           status: m.status,
           bunnyStatus: label,
+          stalled: isStalled,
           encodeProgress: m.encodeProgress,
           size: video?.storageSize ?? 0,
           queuedAt: m.startedAt,
@@ -156,6 +161,11 @@ export const streamImportStatusCommand: CommandModule =
         logger.info(
           `${completed} finished, ${processing} processing, ${failed.length} failed.`,
         );
+        if (stalled.size > 0) {
+          logger.warn(
+            `${stalled.size} videos have been processing with no data for over ${DEFAULT_STALLED_AFTER_MS / 60_000} minutes. If that persists, Bunny's fetch may have failed silently: delete them in the dashboard and re-run the import.`,
+          );
+        }
         if (failed.length > 0) {
           for (const r of failed)
             logger.error(`${stripAnsi(r.name)}: ${r.error}`);
