@@ -145,11 +145,7 @@ export class BrightcoveClient {
       const sources =
         (await this.get<BrightcoveSource[] | null>(`/videos/${id}/sources`)) ??
         [];
-      const [best] = sources
-        .filter(
-          (s) => s.src && (s.container === "MP4" || s.type === "video/mp4"),
-        )
-        .sort((a, b) => (b.width || 0) - (a.width || 0));
+      const best = bestMp4Source(sources);
       if (best) return { url: best.src, size: best.size || 0 };
     } catch {
       // Fall through to the digital master.
@@ -157,11 +153,30 @@ export class BrightcoveClient {
 
     try {
       const master = await this.get(`/videos/${id}/digital_master`);
-      if (master?.url) return { url: master.url, size: master.size || 0 };
+      if (master?.url && isHttps(master.url))
+        return { url: master.url, size: master.size || 0 };
     } catch {
       // No master available either.
     }
 
     return null;
   }
+}
+
+function isHttps(url: string): boolean {
+  return url.startsWith("https://");
+}
+
+/** Widest HTTPS MP4 rendition; an http:// source would only be rejected later by the engine's URL guard. */
+export function bestMp4Source(
+  sources: BrightcoveSource[],
+): BrightcoveSource | undefined {
+  return sources
+    .filter(
+      (s) =>
+        s.src &&
+        isHttps(s.src) &&
+        (s.container === "MP4" || s.type === "video/mp4"),
+    )
+    .sort((a, b) => (b.width || 0) - (a.width || 0))[0];
 }
