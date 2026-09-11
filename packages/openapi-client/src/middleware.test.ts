@@ -287,6 +287,7 @@ test("redacts credentials from debug bodies", async () => {
     { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
     new Request("https://api.bunny.net/registries", {
       method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         displayName: "ghcr",
         passwordCredentials: { userName: "notrab", password: "ghp_secret" },
