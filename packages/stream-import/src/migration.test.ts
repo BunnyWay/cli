@@ -543,6 +543,63 @@ describe("resume", () => {
     ]);
   });
 
+  test("a fresh run re-tags a video Bunny holds untagged from a dead run instead of fetching it again", async () => {
+    const { store } = memoryStore(
+      savedState({
+        videoMigrations: [
+          {
+            sourceVideoId: "222",
+            videoName: "Work",
+            sourceFolderId: null,
+            bunnyVideoId: "orphan",
+            bunnyCollectionId: null,
+            status: "processing",
+            error: null,
+            startedAt: "2026-01-01T00:00:00.000Z",
+            completedAt: null,
+            encodeProgress: 0,
+          },
+          {
+            sourceVideoId: "111",
+            videoName: "Holiday",
+            sourceFolderId: null,
+            bunnyVideoId: "deleted-in-dashboard",
+            bunnyCollectionId: null,
+            status: "processing",
+            error: null,
+            startedAt: "2026-01-01T00:00:00.000Z",
+            completedAt: null,
+            encodeProgress: 0,
+          },
+        ],
+      }),
+    );
+    const bunny = fakeBunny({
+      listVideos: mock(async () => [
+        { guid: "orphan", status: 2, metaTags: [] },
+      ]),
+    });
+
+    const state = await service({
+      adapter: fakeAdapter({ listContent: async () => twoVideos() }),
+      bunny,
+      store,
+    }).runMigration();
+
+    expect(state.id).not.toBe("migration-1");
+    expect(bunny.setVideoMetadata).toHaveBeenCalledWith(
+      "orphan",
+      expect.objectContaining({ sourceId: "222" }),
+      expect.any(AbortSignal),
+    );
+    // The other video is gone from Bunny, so it is fetched afresh.
+    expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
+    expect(state.videoMigrations.map((m) => m.bunnyVideoId).sort()).toEqual([
+      "bunny-1",
+      "orphan",
+    ]);
+  });
+
   test("starts fresh when the saved run belongs to another source, library, or account", async () => {
     for (const saved of [
       savedState({ source: "s3" }),

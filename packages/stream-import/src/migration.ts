@@ -92,6 +92,8 @@ export class MigrationService {
 
   private state: MigrationState | null = null;
   private sourceIndex = new Map<string, BunnyVideo>();
+  /** Every video GUID in the library, tagged or not, from the same listing that built the index. */
+  private knownGuids = new Set<string>();
 
   /** Discovery result, cached so the run does not re-walk the source after the summary. */
   private discovery: {
@@ -132,6 +134,9 @@ export class MigrationService {
     if (this.indexLoaded) return this.sourceIndex;
     const bunnyVideos = await this.bunny.listVideos();
     this.sourceIndex = buildSourceIndex(bunnyVideos, this.adapter.dedupTag);
+    this.knownGuids = new Set(
+      bunnyVideos.flatMap((v) => (v.guid ? [v.guid] : [])),
+    );
     this.indexLoaded = true;
 
     return this.sourceIndex;
@@ -226,6 +231,16 @@ export class MigrationService {
       }
 
       await this.createCollections(state, targetFolders);
+      if (!resume) {
+        this.adoptOrphans(
+          state,
+          new Set(
+            [...targetVideos.values(), targetUncategorized]
+              .flat()
+              .map((v) => v.sourceId),
+          ),
+        );
+      }
       this.prepareEntries(state, targetVideos, targetUncategorized);
       this.reconcileWithBunny(state);
 
@@ -293,6 +308,55 @@ export class MigrationService {
     };
   }
 
+  /** Whether a saved run is about this source, library, and account. */
+  private matchesRun(saved: MigrationState): string | null {
+    if (
+      saved.source !== this.adapter.id ||
+      saved.bunnyLibraryId !== this.libraryId
+    ) {
+      return `Saved import is for ${saved.source} to library ${saved.bunnyLibraryId}.`;
+    }
+    // Only compared when both sides know the account, so a state file written by an older host still matches.
+    if (
+      saved.bunnyAccountId &&
+      this.accountId &&
+      saved.bunnyAccountId !== this.accountId
+    ) {
+      return "Saved import belongs to a different bunny.net account.";
+    }
+
+    return null;
+  }
+
+  /**
+   * A fresh run still reads the previous journal for one thing: videos Bunny
+   * holds that never got their tag (the run died between fetch and tag). Those
+   * are re-tagged, not fetched again, or every such crash would leave a duplicate.
+   */
+  private adoptOrphans(state: MigrationState, inScope: Set<string>): void {
+    const saved = this.store.load();
+    if (!saved || this.matchesRun(saved)) return;
+
+    for (const entry of saved.videoMigrations) {
+      const guid = entry.bunnyVideoId;
+      if (!guid || !inScope.has(entry.sourceVideoId)) continue;
+      // Tagged already, or replaced by a tagged copy: the index handles it. Gone from Bunny: fetch again.
+      if (this.isTagged(guid) || this.sourceIndex.has(entry.sourceVideoId))
+        continue;
+      if (!this.knownGuids.has(guid)) continue;
+
+      state.videoMigrations.push({
+        ...entry,
+        status: "processing",
+        error: null,
+        completedAt: null,
+      });
+      this.logger.info(
+        `Recovering: ${stripAnsi(entry.videoName)} (in Bunny, tag missing)`,
+      );
+    }
+  }
+
   /** Anything that is not already finished can be resumed, including runs marked `failed`. */
   private resumableState(): MigrationState {
     const existing = this.store.load();
@@ -302,25 +366,9 @@ export class MigrationService {
 
       return this.newState();
     }
-    if (
-      existing.source !== this.adapter.id ||
-      existing.bunnyLibraryId !== this.libraryId
-    ) {
-      this.logger.warn(
-        `Saved import is for ${existing.source} to library ${existing.bunnyLibraryId}. Starting fresh.`,
-      );
-
-      return this.newState();
-    }
-    // Only compared when both sides know the account, so a state file written by an older host still resumes.
-    if (
-      existing.bunnyAccountId &&
-      this.accountId &&
-      existing.bunnyAccountId !== this.accountId
-    ) {
-      this.logger.warn(
-        "Saved import belongs to a different bunny.net account. Starting fresh.",
-      );
+    const mismatch = this.matchesRun(existing);
+    if (mismatch) {
+      this.logger.warn(`${mismatch} Starting fresh.`);
 
       return this.newState();
     }

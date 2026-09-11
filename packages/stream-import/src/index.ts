@@ -60,5 +60,5 @@ export {
   readMigrationState,
   validateMigrationState,
 } from "./state.ts";
-export type { RefreshedMigration } from "./status.ts";
-export { refreshMigrationState } from "./status.ts";
+export type { RefreshedMigration, RefreshOptions } from "./status.ts";
+export { DEFAULT_STALLED_AFTER_MS, refreshMigrationState } from "./status.ts";
