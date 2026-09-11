@@ -26,14 +26,15 @@ test("example", () => {
 
 ## Monorepo structure
 
-This is a Bun workspace monorepo with six packages:
+This is a Bun workspace monorepo with seven packages, plus one package per Stream import source adapter:
 
 - `packages/openapi-client/` (`@bunny.net/openapi-client`) — standalone, type-safe OpenAPI client, zero CLI deps
 - `packages/config/` (`@bunny.net/config`) — shared Zod schemas, types, and JSON Schema for `bunny.jsonc`
 - `packages/database-shell/` (`@bunny.net/database-shell`) — standalone SQL shell engine (REPL, formatting, masking)
 - `packages/sandbox/` (`@bunny.net/sandbox`) — standalone sandbox SDK (create, file buffering, command exec, port exposure) over Magic Containers + SSH
 - `packages/tools/` (`@bunny.net/tools`) — headless tool definitions (`defineTool`: schema, kind, run) shared by the CLI and any tool host; internal workspace package, not published
-- `packages/cli/` (`@bunny.net/cli`) — the CLI, depends on the other five
+- `packages/stream-import/` (`@bunny.net/stream-import`) — headless Stream import engine, published to npm; `packages/stream-import-<source>/` hold one adapter each (vimeo, s3, wistia, mux, cloudflare, jwplayer, brightcove)
+- `packages/cli/` (`@bunny.net/cli`) — the CLI, depends on all of them
 
 ## Project conventions
 

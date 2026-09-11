@@ -43,20 +43,22 @@ Platform primitives: `Bun.serve()` (auth callback server), `Bun.spawn()` (browse
 
 Bun workspace monorepo. Run `ls packages/` for the authoritative list; the platform-specific binary packages (`cli-*`, `database-shell-*`) hold only a `package.json` plus a compiled binary and are published by CI.
 
-| Package                           | Published | Purpose                                                                                |
-| --------------------------------- | --------- | -------------------------------------------------------------------------------------- |
-| `@bunny.net/cli`                  | yes       | The CLI. Depends on everything below.                                                  |
-| `@bunny.net/openapi-client`       | yes       | Type-safe API client generated from OpenAPI specs. Zero CLI deps.                      |
-| `@bunny.net/database-client`      | yes       | SQL client for Bunny Database. `fetch`-only hrana-over-HTTP. Zero deps.                |
-| `@bunny.net/database-shell`       | yes       | Standalone SQL shell engine (REPL, dot-commands, formatting, masking). Binary: `bsql`. |
-| `@bunny.net/sandbox`              | yes       | Sandbox SDK over Magic Containers provisioning plus an SSH/SFTP transport.             |
-| `@bunny.net/scriptable-dns-types` | yes       | Ambient declarations for the Scriptable DNS runtime globals. Types only.               |
-| `@bunny.net/database-rest`        | no        | Mountable REST surface over a database.                                                |
-| `@bunny.net/database-adapter`     | no        | Introspection and adapter layer shared by studio and REST.                             |
-| `@bunny.net/database-openapi`     | no        | OpenAPI description of the REST surface.                                               |
-| `@bunny.net/database-studio`      | no        | Local web UI served by `db studio`.                                                    |
-| `@bunny.net/config`               | no        | Zod schemas, types, and JSON Schema for `bunny.jsonc`.                                 |
-| `@bunny.net/tools`                | yes       | Typed tool definitions (Zod schema, kind, run) shared by the CLI and any tool host.    |
+| Package                           | Published | Purpose                                                                                      |
+| --------------------------------- | --------- | -------------------------------------------------------------------------------------------- |
+| `@bunny.net/cli`                  | yes       | The CLI. Depends on everything below.                                                        |
+| `@bunny.net/openapi-client`       | yes       | Type-safe API client generated from OpenAPI specs. Zero CLI deps.                            |
+| `@bunny.net/database-client`      | yes       | SQL client for Bunny Database. `fetch`-only hrana-over-HTTP. Zero deps.                      |
+| `@bunny.net/database-shell`       | yes       | Standalone SQL shell engine (REPL, dot-commands, formatting, masking). Binary: `bsql`.       |
+| `@bunny.net/sandbox`              | yes       | Sandbox SDK over Magic Containers provisioning plus an SSH/SFTP transport.                   |
+| `@bunny.net/scriptable-dns-types` | yes       | Ambient declarations for the Scriptable DNS runtime globals. Types only.                     |
+| `@bunny.net/database-rest`        | no        | Mountable REST surface over a database.                                                      |
+| `@bunny.net/database-adapter`     | no        | Introspection and adapter layer shared by studio and REST.                                   |
+| `@bunny.net/database-openapi`     | no        | OpenAPI description of the REST surface.                                                     |
+| `@bunny.net/database-studio`      | no        | Local web UI served by `db studio`.                                                          |
+| `@bunny.net/config`               | no        | Zod schemas, types, and JSON Schema for `bunny.jsonc`.                                       |
+| `@bunny.net/tools`                | yes       | Typed tool definitions (Zod schema, kind, run) shared by the CLI and any tool host.          |
+| `@bunny.net/stream-import`        | yes       | Headless Stream import engine: discovery, dedup, collection mapping, fetch, resumable state. |
+| `@bunny.net/stream-import-<src>`  | yes       | One source adapter per package: vimeo, s3, wistia, mux, cloudflare, jwplayer, brightcove.    |
 
 Each package's README is the reference for its public API. Do not restate it here.
 
@@ -593,6 +595,7 @@ Per-package deviations, each with a reason:
 - **`openapi-client`** regenerates its gitignored types first, then runs `scripts/build.ts`, which drives the TypeScript compiler API and copies the generated `.d.ts` into `dist/generated/` (tsc never emits its own inputs). `rewriteRelativeImportExtensions` fixes specifiers in emitted **JS**; TypeScript has no declaration-emit equivalent, so an `afterDeclarations` transformer rewrites them in the emitted **`.d.ts`** on the AST.
 - **`sandbox`** depends on `openapi-client` with `workspace:*`, so its release job uses `bun publish`, which rewrites that spec to the local version in the tarball. `npm publish` would ship the unresolvable `workspace:*` verbatim. Its `tsconfig.build.json` overrides `paths` to `{}` so openapi-client resolves via `dist/` instead of source, which would otherwise violate `rootDir`; the job therefore builds openapi-client first.
 - **`tools`** follows the `sandbox` pattern exactly: `workspace:*` on `openapi-client`, `paths: {}` in `tsconfig.build.json`, openapi-client built first, `bun publish`. It also imports the per-API type entrypoint `@bunny.net/openapi-client/magic-containers`, which resolves through openapi-client's `exports` once that `dist/` exists.
+- **`stream-import` and the `stream-import-<source>` adapters** follow the `sandbox` pattern: `workspace:*` between them, `paths: {}` in `tsconfig.build.json`, dependencies built first, `bun publish`. The engine never imports an adapter; the CLI's `commands/stream/import-sources.ts` is the only registry, so a host can bring its own adapter without loading the others (the S3 adapter alone carries the AWS SDK).
 - **`database-client`** is the simplest case: zero dependencies, so `npm publish` works, and no declaration transformer. `tsconfig.build.json` sets `include: ["src"]` to keep `examples/` out of the program. Because the program is scoped to `src`, the package cannot import its own `package.json`, which is why its default `User-Agent` is versionless.
 
 Publish jobs for independently versioned packages are gated on a version bump detected via `npm view`. Only the CLI and its platform packages are in a `fixed` group.

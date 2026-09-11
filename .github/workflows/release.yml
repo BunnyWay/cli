@@ -43,6 +43,8 @@ jobs:
       database-shell-version: ${{ steps.check-database-shell.outputs.version }}
       openapi-client-version: ${{ steps.check-openapi-client.outputs.version }}
       sandbox-version: ${{ steps.check-sandbox.outputs.version }}
+      stream-import-version: ${{ steps.check-stream-import.outputs.version }}
+      stream-import-adapters-version: ${{ steps.check-stream-import-adapters.outputs.version }}
       scriptable-dns-types-version: ${{ steps.check-scriptable-dns-types.outputs.version }}
     steps:
       - uses: actions/checkout@v5
@@ -68,6 +70,28 @@ jobs:
           else
             echo "No version change: $VERSION"
           fi
+      - name: Check stream-import version
+        id: check-stream-import
+        run: |
+          VERSION=$(node -p "require('./packages/stream-import/package.json').version")
+          PUBLISHED=$(npm view @bunny.net/stream-import version 2>/dev/null || echo "0.0.0")
+          if [ "$VERSION" != "$PUBLISHED" ]; then
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "New version detected: $VERSION (published: $PUBLISHED)"
+          else
+            echo "No version change: $VERSION"
+          fi
+      - name: Check stream-import adapter versions
+        id: check-stream-import-adapters
+        run: |
+          for pkg in stream-import-vimeo stream-import-s3 stream-import-wistia stream-import-mux stream-import-cloudflare stream-import-jwplayer stream-import-brightcove; do
+            VERSION=$(node -p "require('./packages/$pkg/package.json').version")
+            PUBLISHED=$(npm view @bunny.net/$pkg version 2>/dev/null || echo "0.0.0")
+            if [ "$VERSION" != "$PUBLISHED" ]; then
+              echo "version=changed" >> $GITHUB_OUTPUT
+              echo "New version detected for $pkg: $VERSION (published: $PUBLISHED)"
+            fi
+          done
       - name: Check scriptable-dns-types version
         id: check-scriptable-dns-types
         run: |
@@ -563,3 +587,81 @@ jobs:
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-stream-import:
+    name: Publish stream-import
+    runs-on: ubuntu-latest
+    needs: version
+    if: needs.version.outputs.stream-import-version
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .tool-versions
+      - run: bun install
+
+      # The build type-checks against openapi-client's package exports (dist/), so build it first.
+      - name: Build openapi-client
+        run: bun run --filter @bunny.net/openapi-client build
+
+      - name: Build package
+        run: bun run --filter @bunny.net/stream-import build
+
+      # bun publish (not npm) rewrites the workspace:* dependency on @bunny.net/openapi-client to a real version.
+      - name: Publish @bunny.net/stream-import
+        run: |
+          cd packages/stream-import
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -n "$(npm view "@bunny.net/stream-import@$VERSION" version 2>/dev/null)" ]; then
+            echo "Skipping @bunny.net/stream-import@$VERSION (already published)"
+          else
+            bun publish --access public
+          fi
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-stream-import-adapters:
+    name: Publish ${{ matrix.pkg }}
+    runs-on: ubuntu-latest
+    needs:
+      - version
+      - publish-stream-import
+    # The adapters build against stream-import's package exports (dist/) and depend on its published version, so they publish after it.
+    if: always() && needs.version.outputs.stream-import-adapters-version && needs.publish-stream-import.result != 'failure'
+    strategy:
+      matrix:
+        pkg:
+          - stream-import-vimeo
+          - stream-import-s3
+          - stream-import-wistia
+          - stream-import-mux
+          - stream-import-cloudflare
+          - stream-import-jwplayer
+          - stream-import-brightcove
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .tool-versions
+      - run: bun install
+
+      - name: Build openapi-client and stream-import
+        run: |
+          bun run --filter @bunny.net/openapi-client build
+          bun run --filter @bunny.net/stream-import build
+
+      - name: Build package
+        run: bun run --filter @bunny.net/${{ matrix.pkg }} build
+
+      # bun publish (not npm) rewrites the workspace:* dependency on @bunny.net/stream-import to a real version.
+      - name: Publish @bunny.net/${{ matrix.pkg }}
+        run: |
+          cd packages/${{ matrix.pkg }}
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -n "$(npm view "@bunny.net/${{ matrix.pkg }}@$VERSION" version 2>/dev/null)" ]; then
+            echo "Skipping @bunny.net/${{ matrix.pkg }}@$VERSION (already published)"
+          else
+            bun publish --access public
+          fi
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
