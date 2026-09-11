@@ -1094,6 +1094,55 @@ Every deploy publishes: the files land in an immutable `deploys/<id>/` directory
 | `--keep-storage`                       | `delete`                                                   | Delete the pull zone but keep the storage zone and its deploy files                                                     |
 | `--force`, `-f`                        | `deployments publish`, `prune`, `domains remove`, `delete` | Skip the confirmation prompts                                                                                           |
 
+### `bunny stream`
+
+> **Experimental**: hidden from `--help` and the landing page while it stabilizes.
+
+Stream exposes one command today: **`bunny stream import`**, which moves an existing video library into Bunny Stream from another platform. The destination library is resolved with the account API key on the core API; the library's own Stream API key is then read from it automatically for the video-level API, so there is nothing extra to configure. The CLI never prints that key.
+
+#### `bunny stream import`
+
+Move an existing video library into Stream from **Vimeo**, **AWS S3**, **Wistia**, **Mux**, **Cloudflare Stream**, **JW Player**, or **Brightcove**. bunny.net fetches every file straight from the source over a URL, so nothing passes through your machine. The destination library is the `--lib`/`--library` flag; omitted, it resolves from the directory's linked library (`.bunny/stream.json`), then an interactive picker, which offers to link the directory to the library you pick.
+
+```bash
+bunny stream import                                  # interactive: pick the library, the source, and enter credentials
+bunny stream import --lib 12345 --source vimeo --dry-run   # show the plan: folders, videos, what is already imported
+bunny stream import --lib 12345 --source vimeo       # confirms, then imports
+bunny stream import --lib 12345 --source vimeo --folder 987654   # one Vimeo project only
+bunny stream import --lib 12345 --source s3 --bucket my-videos --prefix 2024/ --force   # unattended
+bunny stream import --lib 12345 --source vimeo --resume   # continue an interrupted or partly failed run
+```
+
+Source folders (Vimeo and Wistia projects, Brightcove folders, the first level of S3 prefixes) become collections of the same name, created when missing. Every imported video carries a per-source metaTag (`vimeoId`, `s3Source`, `wistiaId`, `muxAssetId`, `cfStreamId`, `jwPlayerId`, `brightcoveId`), and that tag is how a re-run knows what to skip, so running the import twice never duplicates a video. `--folder` is rejected for Mux, Cloudflare Stream, and JW Player, which have no folder concept.
+
+Source credentials come from environment variables, listed below. Interactively, anything missing is prompted for (secrets masked) and the command then names the variables to set to skip the prompts next time; nothing is stored. Unattended runs (`--output json`, no TTY) fail naming the missing variables instead. With `--source` omitted, the command uses the one source whose variables are all set; otherwise it prompts for a choice, or errors when unattended.
+
+| Source       | Variables                                                                                                                                                            |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vimeo`      | `VIMEO_ACCESS_TOKEN` (scopes `public`, `private`, `video_files`; downloads need a Standard plan or above)                                                            |
+| `s3`         | `S3_BUCKET`, `AWS_REGION` (or `AWS_DEFAULT_REGION`); optional `S3_PREFIX`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `S3_PRESIGNED_URL_TTL` |
+| `wistia`     | `WISTIA_ACCESS_TOKEN`                                                                                                                                                |
+| `mux`        | `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`                                                                                                                                   |
+| `cloudflare` | `CLOUDFLARE_API_TOKEN` (Stream:Read), `CLOUDFLARE_ACCOUNT_ID`                                                                                                        |
+| `jwplayer`   | `JWPLAYER_API_KEY` (v2), `JWPLAYER_SITE_ID`                                                                                                                          |
+| `brightcove` | `BRIGHTCOVE_CLIENT_ID`, `BRIGHTCOVE_CLIENT_SECRET` (CMS video read), `BRIGHTCOVE_ACCOUNT_ID`                                                                         |
+
+For S3, leave the AWS keys unset to use the default AWS credential chain (instance roles, `~/.aws`). bunny.net fetches objects through pre-signed URLs, so the IAM policy needs `s3:ListBucket` and `s3:GetObject`. Only keys with a video extension are imported; `--bucket`, `--prefix`, and `--url-ttl` override the variables for one run.
+
+Progress is saved after every status change to `$XDG_STATE_HOME/bunnynet/stream-import/<source>-<library>.json` (default `~/.local/state/...`), one file per source and library. A run that is interrupted, or finishes with failures, is resumed with `--resume`, which only works the outstanding videos and re-asserts the metaTag on any video that was fetched but not yet tagged. `--dry-run` prints the plan and touches nothing. The confirmation before a real import needs `--force` when there is no TTY to answer it. A run with failed videos exits 1 and lists them.
+
+| Flag                                                               | Description                                                                                          |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `--lib`, `--library`                                               | Destination video library name or ID (defaults to the linked library)                                |
+| `--source`, `-s`                                                   | Source platform: `vimeo`, `s3`, `wistia`, `mux`, `cloudflare`, `jwplayer`, `brightcove`              |
+| `--folder`                                                         | Import one source folder only (Vimeo, S3, Wistia, Brightcove)                                        |
+| `--dry-run`                                                        | Print the plan without importing                                                                     |
+| `--resume`                                                         | Continue the saved import for this source and library                                                |
+| `--force`, `-f`                                                    | Skip the confirmation prompt (required when there is no TTY)                                         |
+| `--concurrency`, `-c`                                              | Videos imported in parallel, 1 to 20 (default 3)                                                     |
+| `--bucket`, `--prefix`, `--url-ttl`                                | S3 overrides for the bucket, key prefix, and pre-signed URL lifetime in seconds (60 to 604800)       |
+| `--request-timeout`, `--processing-timeout`, `--migration-timeout` | Per-request HTTP timeout in seconds; per-video encode wait and overall per-video timeout, in minutes |
+
 ### `bunny sandbox`
 
 Manage on-demand cloud sandbox environments backed by Bunny Magic Containers. Each sandbox is a fully isolated Ubuntu container with Node.js, Bun, Python (plus `uv`), the bunny CLI, and Claude Code pre-installed, alongside the tooling agents reach for: `git`, `gh`, `ripgrep`, `fd`, `jq`, `tmux`, `sqlite3`, `tree`, and `fzf`. A 10 GB persistent volume is mounted at `/workplace`, your default working directory.
