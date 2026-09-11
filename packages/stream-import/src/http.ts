@@ -7,6 +7,7 @@
 
 import { UserError } from "@bunny.net/openapi-client";
 import { MAX_RATE_LIMIT_RETRIES } from "./constants.ts";
+import { trimTrailingSlashes } from "./sanitize.ts";
 
 /** Cap a hostile `Retry-After` so a bad header cannot park the process for hours. */
 const MAX_RETRY_AFTER_SECONDS = 300;
@@ -71,7 +72,7 @@ function buildUrl(baseUrl: string, path: string, params?: Query): URL {
   const url = /^https?:\/\//i.test(path)
     ? new URL(path)
     : new URL(
-        `${baseUrl.replace(/\/+$/, "")}${path && !path.startsWith("/") ? "/" : ""}${path}`,
+        `${trimTrailingSlashes(baseUrl)}${path && !path.startsWith("/") ? "/" : ""}${path}`,
       );
   for (const [key, value] of Object.entries(params ?? {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));

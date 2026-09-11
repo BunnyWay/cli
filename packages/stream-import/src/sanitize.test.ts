@@ -6,6 +6,7 @@ import {
   sanitizeMetadata,
   sanitizeString,
   stripAnsi,
+  trimTrailingSlashes,
 } from "./sanitize.ts";
 
 const ESC = "\u001B";
@@ -13,9 +14,25 @@ const ESC = "\u001B";
 describe("sanitizeString", () => {
   test("strips ANSI escapes and control characters, then truncates", () => {
     expect(stripAnsi(`${ESC}[31mred${ESC}[39m`)).toBe("red");
+    expect(stripAnsi(`${ESC}[;5mblink`)).toBe("blink");
+    expect(stripAnsi(`${ESC}]8;;https://x.test\u0007link`)).toBe("link");
     expect(sanitizeString(`evil\u0000title${ESC}[31m\n`)).toBe("eviltitle");
     expect(sanitizeString("x".repeat(600), 10)).toHaveLength(10);
   });
+
+  // A hostile title of 20k semicolons after an escape took over a second with the old pattern.
+  test("stays linear on an unterminated escape full of separators", () => {
+    const started = performance.now();
+    stripAnsi(`${ESC}${";".repeat(20_000)}`);
+    stripAnsi(`${ESC}[${";".repeat(20_000)}`);
+    expect(performance.now() - started).toBeLessThan(200);
+  });
+});
+
+test("trimTrailingSlashes drops every trailing slash and nothing else", () => {
+  expect(trimTrailingSlashes("videos///")).toBe("videos");
+  expect(trimTrailingSlashes("///")).toBe("");
+  expect(trimTrailingSlashes("a/b")).toBe("a/b");
 });
 
 describe("sanitizeMetadata", () => {

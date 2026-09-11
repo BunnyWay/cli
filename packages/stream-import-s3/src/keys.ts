@@ -1,4 +1,7 @@
-import { VIDEO_EXTENSIONS } from "@bunny.net/stream-import";
+import {
+  trimTrailingSlashes,
+  VIDEO_EXTENSIONS,
+} from "@bunny.net/stream-import";
 
 /** S3 has no media-type concept, so extension matching is the only client-side filter available. */
 export function isVideoKey(key: string | undefined): boolean {
@@ -33,7 +36,7 @@ export function prefixToId(folderPrefix: string, rootPrefix: string): string {
     ? folderPrefix.slice(rootPrefix.length)
     : folderPrefix;
 
-  return stripped.replace(/\/+$/, "");
+  return trimTrailingSlashes(stripped);
 }
 
 /** Inverse of {@link prefixToId}. */

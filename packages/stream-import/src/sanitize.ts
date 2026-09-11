@@ -3,9 +3,10 @@
  * the behaviour is covered by tests.
  */
 
+// `;` is deliberately absent from the intermediate class: the parameter groups own it, so no input has two ways to match (CodeQL flagged the ambiguous form as polynomial).
 const ANSI_PATTERN =
   // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping terminal escapes is the point
-  /[\u001B\u009B][[\]()#;?]*(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d/#&.:=?%@~_]*)*)?\u0007|(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-ntqry=><~])/g;
+  /[\u001B\u009B][[\]()#?]*(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d/#&.:=?%@~_]*)*)?\u0007|\d{0,4}(?:;\d{0,4})*[\dA-PR-TZcf-ntqry=><~])/g;
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control chars is the point
 const CONTROL_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
@@ -95,4 +96,12 @@ export function isHttpsUrl(url: string): boolean {
 /** Bunny GUIDs and collection IDs, validated before going into a path. */
 export function isValidBunnyGuid(guid: string): boolean {
   return /^[a-zA-Z0-9-]{1,64}$/.test(guid);
+}
+
+/** Drop trailing slashes without a regex: `/\/+$/` backtracks quadratically on a run of slashes. */
+export function trimTrailingSlashes(input: string): string {
+  let end = input.length;
+  while (end > 0 && input[end - 1] === "/") end--;
+
+  return input.slice(0, end);
 }

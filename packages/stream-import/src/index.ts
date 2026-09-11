@@ -46,6 +46,7 @@ export {
   sanitizeMetadata,
   sanitizeString,
   stripAnsi,
+  trimTrailingSlashes,
 } from "./sanitize.ts";
 export { buildSourceIndex } from "./source-index.ts";
 export { assertFolderSupported } from "./source-plugin.ts";
