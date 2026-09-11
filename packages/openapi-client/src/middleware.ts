@@ -76,10 +76,15 @@ const extractors: Array<
  * a failed request throws before it reaches handler code.
  */
 
-const SECRET_KEY = /password|secret|token|accesskey|apikey|credential/i;
+const SECRET_KEY =
+  /password|secret|token|accesskey|apikey|credential|authorization/i;
+// A URL's query string is where pre-signed credentials live (X-Amz-Signature, bearer params), so it goes wholesale.
+const URL_QUERY = /^(https?:\/\/[^?#\s]*)\?[^#\s]*/i;
 
 function redact(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redact);
+  if (typeof value === "string")
+    return value.replace(URL_QUERY, "$1?[redacted]");
   if (value === null || typeof value !== "object") return value;
   return Object.fromEntries(
     Object.entries(value).map(([key, child]) => [

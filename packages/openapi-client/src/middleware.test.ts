@@ -291,12 +291,18 @@ test("redacts credentials from debug bodies", async () => {
       body: JSON.stringify({
         displayName: "ghcr",
         passwordCredentials: { userName: "notrab", password: "ghp_secret" },
+        url: "https://bucket.s3.amazonaws.com/clip.mp4?X-Amz-Signature=sig123",
+        headers: { Authorization: "Bearer bearer123" },
       }),
     }),
   );
 
   const traced = logs.join("\n");
   expect(traced).not.toContain("ghp_secret");
-  expect(traced).toContain("[redacted]");
+  expect(traced).not.toContain("sig123");
+  expect(traced).not.toContain("bearer123");
+  expect(traced).toContain(
+    "https://bucket.s3.amazonaws.com/clip.mp4?[redacted]",
+  );
   expect(traced).toContain("notrab");
 });
