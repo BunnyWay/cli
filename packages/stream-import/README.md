@@ -70,7 +70,7 @@ const state = await service.runMigration({ concurrency: 3 }); // do it
 1. **Discover.** The adapter lists folders and videos. Folders become Stream collections with the same name (matched case-insensitively, created when missing). Sources without folders put everything in the library root.
 2. **De-duplicate.** Existing Stream videos are indexed by a per-source metaTag (`vimeoId`, `s3Source`, and so on). A video whose tag is already present is skipped, so re-running an import is safe.
 3. **Fetch.** For each new video the adapter resolves a download URL, the engine checks it against the adapter's host allowlist (HTTPS only by default), and bunny.net is asked to fetch it. The metaTag is written immediately after, and a resumed run re-asserts it for any video interrupted between those two steps.
-4. **Wait.** The engine polls until bunny.net finishes encoding, fails, or the processing timeout elapses, working `concurrency` videos at a time.
+4. **Wait, if asked.** With `wait: true` the engine polls until bunny.net finishes encoding, fails, or the processing timeout elapses, working `concurrency` videos at a time. By default it returns once every video is queued and tagged; `refreshMigrationState(state, bunny)` later pulls Bunny's progress into the saved state without needing the source adapter.
 
 State is persisted through the `StateStore` after every status transition, so an interrupted run resumes with `runMigration({ resume: true })`. A run with failures is marked `failed` rather than `completed` for the same reason. `createFileStateStore(path)` is the file-backed implementation; it validates what it reads and creates the file owner-only.
 

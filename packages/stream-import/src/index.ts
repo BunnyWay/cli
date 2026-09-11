@@ -34,6 +34,7 @@ export type { Http, HttpOptions, Query, RequestOptions } from "./http.ts";
 export { createHttp, HttpError, isHttpError } from "./http.ts";
 export type {
   MigrationOptions,
+  MigrationPhase,
   MigrationServiceOptions,
   MigrationSummary,
   SummaryVideo,
@@ -48,7 +49,8 @@ export {
   stripAnsi,
   trimTrailingSlashes,
 } from "./sanitize.ts";
-export { buildSourceIndex } from "./source-index.ts";
+export type { BunnyVideoHealth } from "./source-index.ts";
+export { buildSourceIndex, videoHealth } from "./source-index.ts";
 export { assertFolderSupported } from "./source-plugin.ts";
 export type { FileStateStoreOptions } from "./state.ts";
 export {
@@ -58,3 +60,5 @@ export {
   readMigrationState,
   validateMigrationState,
 } from "./state.ts";
+export type { RefreshedMigration } from "./status.ts";
+export { refreshMigrationState } from "./status.ts";

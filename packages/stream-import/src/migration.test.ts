@@ -110,7 +110,11 @@ describe("getSummary", () => {
       }),
     );
     const listVideos = mock(async () => [
-      { guid: "b1", metaTags: [{ property: "vimeoId", value: "111" }] },
+      {
+        guid: "b1",
+        status: 4,
+        metaTags: [{ property: "vimeoId", value: "111" }],
+      },
     ]);
     const svc = service({
       adapter: fakeAdapter({ listContent }),
@@ -142,7 +146,7 @@ describe("runMigration", () => {
         }),
       }),
       bunny,
-    }).runMigration();
+    }).runMigration({ wait: true });
 
     expect(bunny.setVideoMetadata).toHaveBeenCalledWith(
       "bunny-1",
@@ -164,7 +168,11 @@ describe("runMigration", () => {
   test("skips a video the dedup index already knows about", async () => {
     const bunny = fakeBunny({
       listVideos: mock(async () => [
-        { guid: "existing", metaTags: [{ property: "vimeoId", value: "111" }] },
+        {
+          guid: "existing",
+          status: 4,
+          metaTags: [{ property: "vimeoId", value: "111" }],
+        },
       ]),
     });
 
@@ -174,7 +182,72 @@ describe("runMigration", () => {
     }).runMigration();
 
     expect(bunny.fetchVideoFromUrl).not.toHaveBeenCalled();
-    expect(state.videoMigrations[0]?.bunnyVideoId).toBe("existing");
+    expect(state.videoMigrations[0]).toMatchObject({
+      bunnyVideoId: "existing",
+      status: "completed",
+    });
+  });
+
+  test("by default hands the videos to Bunny and returns without waiting for encoding", async () => {
+    const bunny = fakeBunny();
+    const state = await service({
+      adapter: fakeAdapter({ listContent: async () => oneVideo() }),
+      bunny,
+    }).runMigration();
+
+    expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
+    expect(bunny.setVideoMetadata).toHaveBeenCalledTimes(1);
+    expect(bunny.waitForVideoProcessing).not.toHaveBeenCalled();
+    expect(state.videoMigrations[0]?.status).toBe("processing");
+    expect(state.status).toBe("in_progress");
+  });
+
+  test("a tagged video Bunny is still working on is reported and left alone; one Bunny failed is imported again", async () => {
+    const bunny = fakeBunny({
+      listVideos: mock(async () => [
+        {
+          guid: "busy",
+          status: 2,
+          encodeProgress: 40,
+          metaTags: [{ property: "vimeoId", value: "111" }],
+        },
+        {
+          guid: "dead",
+          status: 6,
+          metaTags: [{ property: "vimeoId", value: "222" }],
+        },
+      ]),
+    });
+    const svc = service({
+      adapter: fakeAdapter({
+        listContent: async () =>
+          content({
+            uncategorizedVideos: [
+              { sourceId: "111", displayName: "Busy", folderId: null },
+              { sourceId: "222", displayName: "Dead", folderId: null },
+            ],
+          }),
+      }),
+      bunny,
+    });
+
+    const summary = await svc.getSummary();
+    expect(summary).toMatchObject({
+      alreadyMigrated: 0,
+      processingOnBunny: 1,
+      failedOnBunny: 1,
+      newVideos: 1,
+    });
+
+    const state = await svc.runMigration();
+    expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
+    expect(bunny.setVideoMetadata).toHaveBeenCalledTimes(1);
+    expect(state.videoMigrations[0]).toMatchObject({
+      bunnyVideoId: "busy",
+      status: "processing",
+      encodeProgress: 40,
+    });
+    expect(state.videoMigrations[1]?.bunnyVideoId).toBe("bunny-1");
   });
 
   test("maps folders to collections and scopes to one folder when asked", async () => {
@@ -258,7 +331,7 @@ describe("runMigration", () => {
           }),
       }),
       bunny,
-    }).runMigration({ concurrency: 1 });
+    }).runMigration({ concurrency: 1, wait: true });
 
     expect(state.status).toBe("failed");
     expect(state.videoMigrations.map((m) => m.status)).toEqual([
@@ -284,7 +357,7 @@ describe("runMigration", () => {
     const state = await service({
       adapter: fakeAdapter({ listContent: async () => oneVideo() }),
       bunny: fakeBunny({ waitForVideoProcessing }),
-    }).runMigration({ migrationTimeoutMs: 20 });
+    }).runMigration({ migrationTimeoutMs: 20, wait: true });
     await new Promise((r) => setTimeout(r, 30));
 
     expect(seen?.aborted).toBe(true);
@@ -452,7 +525,7 @@ describe("resume", () => {
       adapter: fakeAdapter({ listContent: async () => twoVideos() }),
       bunny,
       store,
-    }).runMigration({ resume: true });
+    }).runMigration({ resume: true, wait: true });
 
     expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
     expect(bunny.setVideoMetadata).toHaveBeenCalledWith(
@@ -499,7 +572,7 @@ describe("state persistence", () => {
       adapter: fakeAdapter({ listContent: async () => oneVideo() }),
       bunny,
       store,
-    }).runMigration();
+    }).runMigration({ wait: true });
 
     const statuses = saves.map((s) => s.videoMigrations[0]?.status);
     expect(statuses).toContain("fetching");
