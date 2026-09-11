@@ -8,6 +8,7 @@ import {
   prefixToId,
   toSourceId,
 } from "./keys.ts";
+import { s3ConfigSchema } from "./plugin.ts";
 import {
   validateAwsRegion,
   validateS3BucketName,
@@ -77,6 +78,44 @@ describe("validation", () => {
     expect(validateAwsRegion("us-gov-west-1")).toBe(true);
     expect(validateAwsRegion("cn-north-1")).toBe(true);
     expect(validateAwsRegion("US-EAST-1")).toBe(false);
+  });
+
+  test("static credentials are all or nothing", () => {
+    const base = { region: "us-east-1", bucket: "my-bucket" };
+    expect(s3ConfigSchema.safeParse(base).success).toBe(true);
+    expect(
+      s3ConfigSchema.safeParse({
+        ...base,
+        accessKeyId: "AKIA",
+        secretAccessKey: "s",
+      }).success,
+    ).toBe(true);
+    const half = s3ConfigSchema.safeParse({ ...base, accessKeyId: "AKIA" });
+    expect(half.success).toBe(false);
+    expect(half.error?.issues[0]?.path).toEqual(["secretAccessKey"]);
+    expect(
+      s3ConfigSchema.safeParse({ ...base, sessionToken: "tok" }).success,
+    ).toBe(false);
+  });
+
+  test("with a custom endpoint, download URLs must be on that host instead of AWS", () => {
+    const sig = "X-Amz-Signature=abc&X-Amz-Credential=def";
+    const endpoint = "https://minio.example.com";
+    expect(
+      validateS3Url(`https://minio.example.com/bucket/k.mp4?${sig}`, endpoint),
+    ).toBe(true);
+    expect(
+      validateS3Url(`https://bucket.minio.example.com/k.mp4?${sig}`, endpoint),
+    ).toBe(true);
+    expect(
+      validateS3Url(
+        `https://my-bucket.s3.amazonaws.com/k.mp4?${sig}`,
+        endpoint,
+      ),
+    ).toBe(false);
+    expect(validateS3Url(`https://minio.example.com/bucket/k.mp4?${sig}`)).toBe(
+      false,
+    );
   });
 
   test("download URLs must be signed, HTTPS, and on a real AWS S3 host", () => {

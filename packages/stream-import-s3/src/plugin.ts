@@ -11,22 +11,44 @@ import { S3SourceClient } from "./client.ts";
 import type { S3Config } from "./types.ts";
 import { validateAwsRegion, validateS3BucketName } from "./validate.ts";
 
-export const s3ConfigSchema = z.object({
-  region: z.string().refine(validateAwsRegion, "Not a valid AWS region"),
-  bucket: z.string().refine(validateS3BucketName, "Not a valid S3 bucket name"),
-  prefix: z.string().optional(),
-  // Credentials are optional: omitting them uses the AWS default chain, which is how this runs on instance roles.
-  accessKeyId: z.string().optional(),
-  secretAccessKey: z.string().optional(),
-  sessionToken: z.string().optional(),
-  endpoint: z.url().optional(),
-  presignedUrlTtl: z
-    .number()
-    .int()
-    .min(MIN_PRESIGNED_URL_TTL_SECONDS)
-    .max(MAX_PRESIGNED_URL_TTL_SECONDS)
-    .optional(),
-});
+export const s3ConfigSchema = z
+  .object({
+    region: z.string().refine(validateAwsRegion, "Not a valid AWS region"),
+    bucket: z
+      .string()
+      .refine(validateS3BucketName, "Not a valid S3 bucket name"),
+    prefix: z.string().optional(),
+    // Credentials are optional: omitting them uses the AWS default chain, which is how this runs on instance roles.
+    accessKeyId: z.string().optional(),
+    secretAccessKey: z.string().optional(),
+    sessionToken: z.string().optional(),
+    endpoint: z.url().optional(),
+    presignedUrlTtl: z
+      .number()
+      .int()
+      .min(MIN_PRESIGNED_URL_TTL_SECONDS)
+      .max(MAX_PRESIGNED_URL_TTL_SECONDS)
+      .optional(),
+  })
+  // A lone key would silently hand the import to whatever the ambient chain resolves, so the pair is all or nothing.
+  .superRefine((config, ctx) => {
+    if (Boolean(config.accessKeyId) !== Boolean(config.secretAccessKey)) {
+      ctx.addIssue({
+        code: "custom",
+        path: [config.accessKeyId ? "secretAccessKey" : "accessKeyId"],
+        message:
+          "Set both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or neither to use the default credential chain",
+      });
+    }
+    if (config.sessionToken && !config.accessKeyId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["sessionToken"],
+        message:
+          "AWS_SESSION_TOKEN needs AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY",
+      });
+    }
+  });
 
 export const s3Source: SourcePlugin<S3Config> = {
   id: "s3",
@@ -78,6 +100,15 @@ export const s3Source: SourcePlugin<S3Config> = {
       env: "AWS_SESSION_TOKEN",
       secret: true,
       required: false,
+    },
+    {
+      key: "endpoint",
+      label: "S3 endpoint URL",
+      env: "S3_ENDPOINT",
+      fallbackEnv: ["AWS_ENDPOINT_URL_S3"],
+      secret: false,
+      required: false,
+      hint: "Only for S3-compatible providers; leave blank for AWS",
     },
     {
       key: "presignedUrlTtl",

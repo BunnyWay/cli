@@ -26,7 +26,7 @@ export class S3SourceClient {
   private readonly defaultTtl: number;
 
   constructor(config: S3Config, _ctx: SourceContext) {
-    // Both keys or neither: a half-set pair would silently fall back to the ambient chain and import from the wrong account.
+    // The schema has already rejected a half-set pair; this only picks static keys over the ambient chain.
     const credentials =
       config.accessKeyId && config.secretAccessKey
         ? {
@@ -40,6 +40,8 @@ export class S3SourceClient {
       region: config.region,
       credentials,
       endpoint: config.endpoint,
+      // Path-style is the one addressing every S3-compatible provider serves without per-bucket DNS.
+      forcePathStyle: Boolean(config.endpoint),
     });
 
     this.defaultTtl = clampTtl(

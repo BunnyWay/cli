@@ -16,6 +16,7 @@ export class S3SourceAdapter implements SourceAdapter {
   private readonly bucket: string;
   private readonly prefix: string;
   private readonly urlTtlSeconds?: number;
+  private readonly endpoint?: string;
 
   constructor(
     private readonly client: S3SourceClient,
@@ -24,6 +25,7 @@ export class S3SourceAdapter implements SourceAdapter {
     this.bucket = config.bucket;
     this.prefix = config.prefix ?? "";
     this.urlTtlSeconds = config.presignedUrlTtl;
+    this.endpoint = config.endpoint;
   }
 
   validateCredentials(): Promise<void> {
@@ -35,7 +37,7 @@ export class S3SourceAdapter implements SourceAdapter {
   }
 
   validateUrl(url: string): boolean {
-    return validateS3Url(url);
+    return validateS3Url(url, this.endpoint);
   }
 
   async listContent(opts?: { folderId?: string }): Promise<SourceContent> {

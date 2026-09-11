@@ -35,10 +35,13 @@ export function validateAwsRegion(region: string): boolean {
  *   {bucket}.s3-accelerate.amazonaws.com           Transfer Acceleration
  *   ...and the same under .amazonaws.com.cn        AWS China
  *
+ * With a custom `endpoint` (S3-compatible providers) the host must be that
+ * endpoint's, bare or with the bucket as a subdomain, instead of an AWS one.
+ *
  * The URL must also carry a SigV4 or SigV2 signature: without one Bunny would
  * just get a 403 from a private object.
  */
-export function validateS3Url(url: string): boolean {
+export function validateS3Url(url: string, endpoint?: string): boolean {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -49,17 +52,28 @@ export function validateS3Url(url: string): boolean {
   if (parsed.protocol !== "https:") return false;
 
   const host = parsed.hostname.toLowerCase();
-  if (
-    !/^(?:[a-z0-9.-]+\.)?s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com(?:\.cn)?$/.test(
-      host,
-    )
-  ) {
-    return false;
-  }
+  if (!isAllowedS3Host(host, endpoint)) return false;
 
   const q = parsed.searchParams;
   const sigV4 = q.has("X-Amz-Signature") && q.has("X-Amz-Credential");
   const sigV2 = q.has("Signature") && q.has("AWSAccessKeyId");
 
   return sigV4 || sigV2;
+}
+
+function isAllowedS3Host(host: string, endpoint?: string): boolean {
+  if (endpoint) {
+    let endpointHost: string;
+    try {
+      endpointHost = new URL(endpoint).hostname.toLowerCase();
+    } catch {
+      return false;
+    }
+
+    return host === endpointHost || host.endsWith(`.${endpointHost}`);
+  }
+
+  return /^(?:[a-z0-9.-]+\.)?s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com(?:\.cn)?$/.test(
+    host,
+  );
 }

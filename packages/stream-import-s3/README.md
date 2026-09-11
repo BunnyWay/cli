@@ -32,15 +32,16 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 
 ## Credentials
 
-| Setting                                     | Environment variable                                        |
-| ------------------------------------------- | ----------------------------------------------------------- |
-| Bucket                                      | `S3_BUCKET`                                                 |
-| Region                                      | `AWS_REGION` (or `AWS_DEFAULT_REGION`, default `us-east-1`) |
-| Key prefix (optional)                       | `S3_PREFIX`                                                 |
-| Access key ID (optional)                    | `AWS_ACCESS_KEY_ID`                                         |
-| Secret access key (optional)                | `AWS_SECRET_ACCESS_KEY`                                     |
-| Session token (optional)                    | `AWS_SESSION_TOKEN`                                         |
-| Pre-signed URL lifetime, seconds (optional) | `S3_PRESIGNED_URL_TTL` (default 21600, max 604800)          |
+| Setting                                               | Environment variable                                        |
+| ----------------------------------------------------- | ----------------------------------------------------------- |
+| Bucket                                                | `S3_BUCKET`                                                 |
+| Region                                                | `AWS_REGION` (or `AWS_DEFAULT_REGION`, default `us-east-1`) |
+| Key prefix (optional)                                 | `S3_PREFIX`                                                 |
+| Access key ID (optional)                              | `AWS_ACCESS_KEY_ID`                                         |
+| Secret access key (optional)                          | `AWS_SECRET_ACCESS_KEY`                                     |
+| Session token (optional)                              | `AWS_SESSION_TOKEN`                                         |
+| Endpoint URL, S3-compatible providers only (optional) | `S3_ENDPOINT` (or `AWS_ENDPOINT_URL_S3`)                    |
+| Pre-signed URL lifetime, seconds (optional)           | `S3_PRESIGNED_URL_TTL` (default 21600, max 604800)          |
 
 Leave the keys unset to use the AWS default credential chain. The IAM policy needs `s3:ListBucket` on the bucket and `s3:GetObject` on the objects.
 
