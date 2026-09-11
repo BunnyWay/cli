@@ -25,6 +25,8 @@ const sleep = (ms: number) =>
 export interface RateLimitOptions {
   maxRetries: number;
   logger: Logger;
+  /** Deadline for each replay; the original request's signal has usually fired during the back-off. */
+  requestTimeout: number;
   /** Injected by tests so they do not actually wait. */
   wait?: (ms: number) => Promise<void>;
 }
@@ -32,6 +34,7 @@ export interface RateLimitOptions {
 export function createRateLimitMiddleware({
   maxRetries,
   logger,
+  requestTimeout,
   wait = sleep,
 }: RateLimitOptions): Middleware {
   // Typed loosely: openapi-fetch declares its Request from undici types, which Bun's global fetch signature rejects.
@@ -75,8 +78,12 @@ export function createRateLimitMiddleware({
         );
         await wait(retryAfter * 1000);
 
-        // Clone per attempt so `template` stays replayable for the next one.
-        current = await fetch(template.clone() as Parameters<typeof fetch>[0]);
+        // Clone per attempt so `template` stays replayable; a fresh signal because the clone inherits the original's, already expired by a 30s back-off.
+        current = await fetch(
+          new Request(template.clone() as unknown as Request, {
+            signal: AbortSignal.timeout(requestTimeout),
+          }) as Parameters<typeof fetch>[0],
+        );
       }
 
       replayable.delete(id);

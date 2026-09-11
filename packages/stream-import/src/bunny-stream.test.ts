@@ -128,6 +128,28 @@ describe("rate limiting", () => {
     await expect(replayed.clone().json()).resolves.toEqual({ name: "Holiday" });
   });
 
+  test("replays under a fresh deadline rather than the original request's expired signal", async () => {
+    const abortedAtSend: boolean[] = [];
+    fetchMock.mockImplementation(async (request: Request) => {
+      abortedAtSend.push(request.signal.aborted);
+      return abortedAtSend.length === 1
+        ? limited()
+        : json({ guid: "col-1", name: "Holiday" });
+    });
+    const client = new BunnyStream({
+      client: createStreamClient({ apiKey: "k", userAgent: "t" }),
+      libraryId: 1,
+      requestTimeout: 1,
+      processingTimeout: 30_000,
+      logger: silentLogger,
+      retryWait: () => new Promise((r) => setTimeout(r, 10)),
+    });
+
+    await client.createCollection("Holiday");
+
+    expect(abortedAtSend).toEqual([false, false]);
+  });
+
   test("gives up with a clear error after the per-request retry budget", async () => {
     fetchMock.mockResolvedValue(limited());
 

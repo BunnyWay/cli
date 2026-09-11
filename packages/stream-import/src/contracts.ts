@@ -171,6 +171,9 @@ export interface VideoMigration {
   startedAt: string | null;
   completedAt: string | null;
   encodeProgress: number;
+  /** Captured at fetch time so a resumed entry re-tags with the same metadata. */
+  description?: string;
+  tags?: string[];
 }
 
 export interface MigrationState {
@@ -179,6 +182,10 @@ export interface MigrationState {
   updatedAt: string;
   source: string;
   bunnyLibraryId: string;
+  /** Library IDs are account-scoped, so a resume also checks the account the run was started under. */
+  bunnyAccountId?: string;
+  /** The `--folder` the run was scoped to, so a resume defaults to the same scope. */
+  sourceFolderId?: string | null;
   folderMappings: FolderMapping[];
   videoMigrations: VideoMigration[];
   status: MigrationStatus;

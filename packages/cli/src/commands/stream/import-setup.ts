@@ -17,11 +17,21 @@ import type { OutputFormat } from "@/core/types.ts";
 import { isInteractive, prompts } from "@/core/ui.ts";
 import { requireSource, SOURCES } from "./import-sources.ts";
 
-/** Saved import progress, one file per source and library, under the XDG state directory. */
-export function importStatePath(source: string, libraryId: number): string {
+/** Saved import progress under the XDG state directory: one file per account, source, and library, since library IDs repeat across accounts. */
+export function importStatePath(
+  source: string,
+  libraryId: number,
+  accountId: string,
+): string {
   const base = process.env.XDG_STATE_HOME ?? join(homedir(), ".local", "state");
 
-  return join(base, "bunnynet", "stream-import", `${source}-${libraryId}.json`);
+  return join(
+    base,
+    "bunnynet",
+    "stream-import",
+    accountId,
+    `${source}-${libraryId}.json`,
+  );
 }
 
 /** The engine's logger contract over the CLI logger; `debug` closes over --verbose. */

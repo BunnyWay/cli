@@ -65,3 +65,16 @@ export async function resolveLibrary(
   }
   return fetchLibrary(client, match.Id);
 }
+
+/** The account that owns the API key; library IDs are only unique within it. */
+export async function fetchAccountId(client: CoreClient): Promise<string> {
+  const { data } = await client.GET("/user");
+  if (!data?.AccountId) {
+    throw new UserError(
+      "Could not determine the bunny.net account for this API key.",
+      'Run "bunny whoami" to check the key, or "bunny login" to re-authenticate.',
+    );
+  }
+
+  return data.AccountId;
+}

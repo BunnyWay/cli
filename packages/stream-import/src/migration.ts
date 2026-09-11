@@ -64,6 +64,8 @@ export interface MigrationServiceOptions {
   store: StateStore;
   logger: Logger;
   libraryId: string;
+  /** Owner of the destination library; a saved run under another account is not resumed. */
+  accountId?: string;
   /** Human-readable source name, from the plugin descriptor. */
   label?: string;
 }
@@ -74,6 +76,7 @@ export class MigrationService {
   private readonly store: StateStore;
   private readonly logger: Logger;
   private readonly libraryId: string;
+  private readonly accountId: string | undefined;
   private readonly label: string;
 
   private state: MigrationState | null = null;
@@ -89,17 +92,13 @@ export class MigrationService {
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingSave = false;
 
-  private metadataCache = new Map<
-    string,
-    { description?: string; tags?: string[] }
-  >();
-
   constructor(options: MigrationServiceOptions) {
     this.adapter = options.adapter;
     this.bunny = options.bunny;
     this.store = options.store;
     this.logger = options.logger;
     this.libraryId = options.libraryId;
+    this.accountId = options.accountId;
     this.label = options.label ?? options.adapter.id;
   }
 
@@ -181,6 +180,7 @@ export class MigrationService {
     } = options;
 
     const state = resume ? this.resumableState() : this.newState();
+    if (!resume) state.sourceFolderId = folderId ?? null;
     this.state = state;
 
     try {
@@ -243,6 +243,7 @@ export class MigrationService {
       updatedAt: new Date().toISOString(),
       source: this.adapter.id,
       bunnyLibraryId: this.libraryId,
+      bunnyAccountId: this.accountId,
       folderMappings: [],
       videoMigrations: [],
       status: "in_progress",
@@ -268,6 +269,18 @@ export class MigrationService {
 
       return this.newState();
     }
+    // Only compared when both sides know the account, so a state file written by an older host still resumes.
+    if (
+      existing.bunnyAccountId &&
+      this.accountId &&
+      existing.bunnyAccountId !== this.accountId
+    ) {
+      this.logger.warn(
+        "Saved import belongs to a different bunny.net account. Starting fresh.",
+      );
+
+      return this.newState();
+    }
     if (existing.status === "completed") {
       this.logger.warn("Previous import already completed. Starting fresh.");
 
@@ -276,8 +289,21 @@ export class MigrationService {
 
     this.logger.info("Resuming previous import...");
     existing.status = "in_progress";
+    this.requeueFailed(existing);
 
     return existing;
+  }
+
+  /** A failed entry that already has a Bunny video resumes at tagging; one without starts over. */
+  private requeueFailed(state: MigrationState): void {
+    const failed = state.videoMigrations.filter((m) => m.status === "failed");
+    if (failed.length === 0) return;
+    for (const m of failed) {
+      m.status = m.bunnyVideoId ? "processing" : "pending";
+      m.error = null;
+      m.completedAt = null;
+    }
+    this.logger.info(`Retrying ${failed.length} failed videos`);
   }
 
   private async createCollections(
@@ -352,21 +378,25 @@ export class MigrationService {
     migration: VideoMigration,
     timeoutMs: number,
   ): Promise<void> {
+    const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<never>((_, reject) => {
-      timer = setTimeout(
-        () =>
-          reject(
-            new Error(
-              `Import timeout after ${Math.round(timeoutMs / 60_000)} minutes`,
-            ),
+      timer = setTimeout(() => {
+        reject(
+          new Error(
+            `Import timeout after ${Math.round(timeoutMs / 60_000)} minutes`,
           ),
-        timeoutMs,
-      );
+        );
+        // The loser of the race must stop too, or it keeps polling and later rewrites this entry as completed.
+        controller.abort();
+      }, timeoutMs);
     });
 
     try {
-      await Promise.race([this.migrateVideo(migration), deadline]);
+      await Promise.race([
+        this.migrateVideo(migration, controller.signal),
+        deadline,
+      ]);
     } catch (error) {
       // `migrateVideo` handles its own failures, so anything arriving here is the timeout or a genuine escape.
       migration.status = "failed";
@@ -381,7 +411,10 @@ export class MigrationService {
     }
   }
 
-  private async migrateVideo(migration: VideoMigration): Promise<void> {
+  private async migrateVideo(
+    migration: VideoMigration,
+    signal: AbortSignal,
+  ): Promise<void> {
     try {
       const existing = this.sourceIndex.get(migration.sourceVideoId);
       if (existing?.guid) {
@@ -400,20 +433,25 @@ export class MigrationService {
         this.logger.info(`Resuming: ${stripAnsi(migration.videoName)}`);
         videoId = migration.bunnyVideoId;
       } else {
-        videoId = await this.startFetch(migration);
+        videoId = await this.startFetch(migration, signal);
       }
 
-      await this.tagVideo(migration, videoId);
+      await this.tagVideo(migration, videoId, signal);
 
       const processed = await this.bunny.waitForVideoProcessing(
         videoId,
         (progress, status) => {
+          if (signal.aborted) return;
           migration.encodeProgress = progress;
           if (status === BunnyVideoStatus.Finished)
             migration.status = "completed";
           this.scheduleSave();
         },
+        undefined,
+        signal,
       );
+      // Once the timeout has claimed this entry, nothing here may touch it again.
+      if (signal.aborted) return;
 
       if (!processed.success)
         throw new Error(processed.error ?? "Processing failed");
@@ -422,6 +460,7 @@ export class MigrationService {
       migration.completedAt = new Date().toISOString();
       this.logger.success(`Completed: ${stripAnsi(migration.videoName)}`);
     } catch (error) {
+      if (signal.aborted) return;
       migration.status = "failed";
       migration.error = safeErrorMessage(error, "Import failed");
       this.logger.error(
@@ -432,7 +471,10 @@ export class MigrationService {
     this.flush();
   }
 
-  private async startFetch(migration: VideoMigration): Promise<string> {
+  private async startFetch(
+    migration: VideoMigration,
+    signal: AbortSignal,
+  ): Promise<string> {
     migration.status = "fetching";
     migration.startedAt = new Date().toISOString();
     migration.error = null;
@@ -444,10 +486,8 @@ export class MigrationService {
     );
     if (!info) throw new Error("No download link available");
 
-    this.metadataCache.set(migration.sourceVideoId, {
-      description: info.description,
-      tags: info.tags,
-    });
+    if (info.description) migration.description = info.description;
+    if (info.tags?.length) migration.tags = info.tags;
 
     const isValid =
       this.adapter.validateUrl?.(info.url) ?? isHttpsUrl(info.url);
@@ -459,6 +499,7 @@ export class MigrationService {
     const result = await this.bunny.fetchVideoFromUrl(
       { url: info.url, title: info.title, headers: info.headers },
       migration.bunnyCollectionId ?? undefined,
+      signal,
     );
     if (!result.success || !result.videoId) {
       throw new Error(result.error ?? "Failed to initiate fetch");
@@ -475,22 +516,27 @@ export class MigrationService {
   private async tagVideo(
     migration: VideoMigration,
     videoId: string,
+    signal: AbortSignal,
   ): Promise<void> {
-    await this.bunny.setVideoMetadata(videoId, {
-      sourceId: migration.sourceVideoId,
-      sourceIdProperty: this.adapter.dedupTag,
-      ...this.discoveredMetadata(migration),
-    });
+    await this.bunny.setVideoMetadata(
+      videoId,
+      {
+        sourceId: migration.sourceVideoId,
+        sourceIdProperty: this.adapter.dedupTag,
+        ...this.discoveredMetadata(migration),
+      },
+      signal,
+    );
   }
 
-  /** Description and tags are only known from `getDownloadInfo`, which a resume does not re-run: the dedup tag is what matters for correctness. */
+  /** Description and tags were saved on the entry at fetch time, so a resumed re-tag keeps them. */
   private discoveredMetadata(migration: VideoMigration): {
     description?: string;
     tags?: string[];
   } {
-    const cached = this.metadataCache.get(migration.sourceVideoId);
+    const { description, tags } = migration;
 
-    return cached ? sanitizeMetadata(cached) : {};
+    return description || tags ? sanitizeMetadata({ description, tags }) : {};
   }
 
   // ── State persistence ──────────────────────────────────────────────

@@ -79,6 +79,7 @@ function service(opts: {
   adapter?: SourceAdapter;
   bunny?: BunnyStream;
   store?: StateStore;
+  accountId?: string;
 }) {
   return new MigrationService({
     adapter: opts.adapter ?? fakeAdapter(),
@@ -86,6 +87,7 @@ function service(opts: {
     store: opts.store ?? memoryStore().store,
     logger: silentLogger,
     libraryId: "12345",
+    accountId: opts.accountId ?? "acct-1",
     label: "Vimeo",
   });
 }
@@ -142,12 +144,16 @@ describe("runMigration", () => {
       bunny,
     }).runMigration();
 
-    expect(bunny.setVideoMetadata).toHaveBeenCalledWith("bunny-1", {
-      sourceId: "111",
-      sourceIdProperty: "vimeoId",
-      description: "Summer trip",
-      tags: ["beach", "2024"],
-    });
+    expect(bunny.setVideoMetadata).toHaveBeenCalledWith(
+      "bunny-1",
+      {
+        sourceId: "111",
+        sourceIdProperty: "vimeoId",
+        description: "Summer trip",
+        tags: ["beach", "2024"],
+      },
+      expect.any(AbortSignal),
+    );
     expect(state.status).toBe("completed");
     expect(state.videoMigrations[0]).toMatchObject({
       status: "completed",
@@ -204,6 +210,7 @@ describe("runMigration", () => {
     expect(bunny.fetchVideoFromUrl).toHaveBeenCalledWith(
       expect.anything(),
       "col-Keep",
+      expect.any(AbortSignal),
     );
     expect(state.videoMigrations.map((m) => m.sourceVideoId)).toEqual(["1"]);
   });
@@ -260,16 +267,27 @@ describe("runMigration", () => {
     ]);
   });
 
-  test("fails a video that exceeds the per-video timeout without swallowing it", async () => {
-    const bunny = fakeBunny({
-      waitForVideoProcessing: mock(() => new Promise(() => {})),
-    });
+  test("a video that exceeds the per-video timeout fails, is cancelled, and cannot complete late", async () => {
+    let seen: AbortSignal | undefined;
+    // Stands in for a poll that only notices the abort a moment later and then reports success.
+    const waitForVideoProcessing = mock(
+      (_id: string, _cb: unknown, _t: unknown, signal: AbortSignal) => {
+        seen = signal;
+        return new Promise((resolve) =>
+          signal.addEventListener("abort", () =>
+            setTimeout(() => resolve({ success: true }), 5),
+          ),
+        );
+      },
+    );
 
     const state = await service({
       adapter: fakeAdapter({ listContent: async () => oneVideo() }),
-      bunny,
+      bunny: fakeBunny({ waitForVideoProcessing }),
     }).runMigration({ migrationTimeoutMs: 20 });
+    await new Promise((r) => setTimeout(r, 30));
 
+    expect(seen?.aborted).toBe(true);
     expect(state.videoMigrations[0]?.status).toBe("failed");
     expect(state.videoMigrations[0]?.error).toMatch(/timeout/i);
   });
@@ -299,6 +317,7 @@ describe("resume", () => {
     updatedAt: "2026-01-01T00:00:00.000Z",
     source: "vimeo",
     bunnyLibraryId: "12345",
+    bunnyAccountId: "acct-1",
     folderMappings: [],
     videoMigrations: [
       {
@@ -387,16 +406,75 @@ describe("resume", () => {
     }).runMigration({ resume: true });
 
     expect(bunny.fetchVideoFromUrl).not.toHaveBeenCalled();
-    expect(bunny.setVideoMetadata).toHaveBeenCalledWith("orphan-guid", {
-      sourceId: "222",
-      sourceIdProperty: "vimeoId",
-    });
+    expect(bunny.setVideoMetadata).toHaveBeenCalledWith(
+      "orphan-guid",
+      { sourceId: "222", sourceIdProperty: "vimeoId" },
+      expect.any(AbortSignal),
+    );
   });
 
-  test("starts fresh when the saved run belongs to another source or library", async () => {
+  test("retries failed entries: a fresh fetch without a video, a re-tag with saved metadata when there is one", async () => {
+    const bunny = fakeBunny();
+    const { store } = memoryStore(
+      savedState({
+        videoMigrations: [
+          {
+            sourceVideoId: "111",
+            videoName: "Holiday",
+            sourceFolderId: null,
+            bunnyVideoId: null,
+            bunnyCollectionId: null,
+            status: "failed",
+            error: "No download link available",
+            startedAt: "2026-01-01T00:00:00.000Z",
+            completedAt: null,
+            encodeProgress: 0,
+          },
+          {
+            sourceVideoId: "222",
+            videoName: "Work",
+            sourceFolderId: null,
+            bunnyVideoId: "half-done",
+            bunnyCollectionId: null,
+            status: "failed",
+            error: "Processing timeout",
+            startedAt: "2026-01-01T00:00:00.000Z",
+            completedAt: null,
+            encodeProgress: 40,
+            description: "Quarterly update",
+            tags: ["q1", "all-hands"],
+          },
+        ],
+      }),
+    );
+
+    const state = await service({
+      adapter: fakeAdapter({ listContent: async () => twoVideos() }),
+      bunny,
+      store,
+    }).runMigration({ resume: true });
+
+    expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
+    expect(bunny.setVideoMetadata).toHaveBeenCalledWith(
+      "half-done",
+      expect.objectContaining({
+        sourceId: "222",
+        description: "Quarterly update",
+        tags: ["q1", "all-hands"],
+      }),
+      expect.any(AbortSignal),
+    );
+    expect(state.videoMigrations.map((m) => m.status)).toEqual([
+      "completed",
+      "completed",
+    ]);
+  });
+
+  test("starts fresh when the saved run belongs to another source, library, or account", async () => {
     for (const saved of [
       savedState({ source: "s3" }),
       savedState({ bunnyLibraryId: "99999" }),
+      savedState({ bunnyAccountId: "acct-other" }),
     ]) {
       const state = await service({
         adapter: fakeAdapter({ listContent: async () => twoVideos() }),

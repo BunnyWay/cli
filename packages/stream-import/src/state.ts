@@ -49,6 +49,8 @@ const videoMigration = z.object({
   startedAt: z.string().nullable(),
   completedAt: z.string().nullable(),
   encodeProgress: z.number().min(0).max(100),
+  description: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 // `source` is a plain string, not a closed enum, so a state file written with an extra source module still parses.
@@ -58,6 +60,8 @@ export const migrationStateSchema = z.object({
   updatedAt: z.string(),
   source: z.string(),
   bunnyLibraryId: z.string(),
+  bunnyAccountId: z.string().optional(),
+  sourceFolderId: z.string().nullable().optional(),
   folderMappings: z.array(folderMapping),
   videoMigrations: z.array(videoMigration),
   status: migrationStatus,

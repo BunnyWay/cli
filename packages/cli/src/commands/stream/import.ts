@@ -9,10 +9,14 @@ import {
   MigrationService,
   type MigrationState,
   type MigrationSummary,
+  readMigrationState,
   stripAnsi,
 } from "@bunny.net/stream-import";
 import type { Argv, CommandModule } from "yargs";
-import type { VideoLibraryModel } from "@/commands/stream/api.ts";
+import {
+  fetchAccountId,
+  type VideoLibraryModel,
+} from "@/commands/stream/api.ts";
 import { resolveLibraryInteractive } from "@/commands/stream/interactive.ts";
 import {
   connectStreamLibrary,
@@ -26,7 +30,7 @@ import { UserError } from "@/core/errors.ts";
 import { formatBytes, formatKeyValue, progressBar } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
-import { confirm, withSpinner } from "@/core/ui.ts";
+import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
 import { VERSION } from "@/core/version.ts";
 import {
   importLogger,
@@ -254,9 +258,18 @@ export const streamImportCommand: CommandModule = defineCommand<ImportArgs>({
       offerLink: true,
     });
     const libraryId = library.Id as number;
+    const accountId = await fetchAccountId(coreClient);
 
     const plugin = await resolveImportSource(args.source, output);
-    assertFolderSupported(plugin, args.folder);
+    const statePath = importStatePath(plugin.id, libraryId, accountId);
+    // A resume without --folder keeps the saved scope; rediscovering the whole source would append every other folder to the run.
+    const savedFolder = args.resume
+      ? readMigrationState(statePath)?.sourceFolderId
+      : undefined;
+    const folder = args.folder ?? savedFolder ?? undefined;
+    if (!args.folder && folder)
+      logger.info(`Resuming the import of folder ${folder}.`);
+    assertFolderSupported(plugin, folder);
 
     const requestTimeout = args.requestTimeout
       ? args.requestTimeout * 1000
@@ -291,17 +304,18 @@ export const streamImportCommand: CommandModule = defineCommand<ImportArgs>({
           : DEFAULT_PROCESSING_TIMEOUT,
         logger: engineLog,
       }),
-      store: createFileStateStore(importStatePath(plugin.id, libraryId), {
+      store: createFileStateStore(statePath, {
         onWarn: (message) => logger.warn(message),
       }),
       logger: engineLog,
       libraryId: String(libraryId),
+      accountId,
       label: plugin.label,
     });
 
     const summary = await withSpinner(
       `Discovering ${plugin.label} content...`,
-      () => service.getSummary(args.folder),
+      () => service.getSummary(folder),
     );
     const base = {
       library: libraryJson(library),
@@ -338,6 +352,11 @@ export const streamImportCommand: CommandModule = defineCommand<ImportArgs>({
       return;
     }
 
+    requireConfirmable(output, {
+      force: args.force,
+      message: `Importing ${summary.newVideos} videos needs a confirmation prompt.`,
+      hint: "Re-run with --force to import without a prompt, or --dry-run to only show the plan.",
+    });
     const proceed = await confirm(
       `Import ${summary.newVideos} videos into ${library.Name}?`,
       { force: args.force, initial: true },
@@ -350,7 +369,7 @@ export const streamImportCommand: CommandModule = defineCommand<ImportArgs>({
 
     const startedAt = Date.now();
     const state = await service.runMigration({
-      folderId: args.folder,
+      folderId: folder,
       concurrency: args.concurrency,
       resume: args.resume,
       migrationTimeoutMs: args.migrationTimeout
@@ -392,7 +411,7 @@ export const streamImportCommand: CommandModule = defineCommand<ImportArgs>({
         state,
         Date.now() - startedAt,
         output,
-        `bunny stream import --lib ${libraryId} --source ${plugin.id} --resume`,
+        `bunny stream import --lib ${libraryId} --source ${plugin.id}${folder ? ` --folder ${folder}` : ""} --resume`,
       );
     }
     if (failed.length > 0) process.exitCode = 1;

@@ -101,14 +101,17 @@ export class BunnyStream {
       createRateLimitMiddleware({
         maxRetries: MAX_RATE_LIMIT_RETRIES,
         logger,
+        requestTimeout,
         wait: options.retryWait,
       }),
     );
   }
 
-  /** Per-request deadline. openapi-fetch takes a signal but has no timeout option. */
-  private signal(ms = this.requestTimeout): AbortSignal {
-    return AbortSignal.timeout(ms);
+  /** Per-request deadline (openapi-fetch has no timeout option), also cut short by the caller's signal when there is one. */
+  private signal(outer?: AbortSignal, ms = this.requestTimeout): AbortSignal {
+    const timeout = AbortSignal.timeout(ms);
+
+    return outer ? AbortSignal.any([timeout, outer]) : timeout;
   }
 
   private get path() {
@@ -209,13 +212,16 @@ export class BunnyStream {
   }
 
   /** Returns null for a video that no longer exists. */
-  async getVideo(videoId: string): Promise<BunnyVideo | null> {
+  async getVideo(
+    videoId: string,
+    signal?: AbortSignal,
+  ): Promise<BunnyVideo | null> {
     try {
       const { data } = await this.stream.GET(
         "/library/{libraryId}/videos/{videoId}",
         {
           params: { path: { ...this.path, videoId } },
-          signal: this.signal(),
+          signal: this.signal(signal),
         },
       );
 
@@ -233,11 +239,12 @@ export class BunnyStream {
       collectionId?: string;
       metaTags?: BunnyMetaTag[];
     },
+    signal?: AbortSignal,
   ): Promise<void> {
     await this.stream.POST("/library/{libraryId}/videos/{videoId}", {
       params: { path: { ...this.path, videoId } },
       body: update,
-      signal: this.signal(),
+      signal: this.signal(signal),
     });
   }
 
@@ -250,6 +257,7 @@ export class BunnyStream {
   async fetchVideoFromUrl(
     request: { url: string; title?: string; headers?: Record<string, string> },
     collectionId?: string,
+    signal?: AbortSignal,
   ): Promise<FetchVideoResult> {
     try {
       const { data } = await this.stream.POST(
@@ -264,7 +272,7 @@ export class BunnyStream {
             ...(request.title ? { title: request.title } : {}),
             ...(request.headers ? { headers: request.headers } : {}),
           },
-          signal: this.signal(),
+          signal: this.signal(signal),
         },
       );
 
@@ -303,6 +311,7 @@ export class BunnyStream {
       sourceId?: string;
       sourceIdProperty?: string;
     },
+    signal?: AbortSignal,
   ): Promise<void> {
     const metaTags: BunnyMetaTag[] = [];
 
@@ -319,7 +328,8 @@ export class BunnyStream {
       metaTags.push({ property: "keywords", value: metadata.tags.join(", ") });
     }
 
-    if (metaTags.length > 0) await this.updateVideo(videoId, { metaTags });
+    if (metaTags.length > 0)
+      await this.updateVideo(videoId, { metaTags }, signal);
   }
 
   /** Polls until the encoder finishes, errors, or the processing timeout hits. */
@@ -327,11 +337,13 @@ export class BunnyStream {
     videoId: string,
     onProgress?: (progress: number, status: number) => void,
     timeoutMs?: number,
+    signal?: AbortSignal,
   ): Promise<ProcessingResult> {
     const deadline = Date.now() + (timeoutMs ?? this.processingTimeout);
 
     while (Date.now() < deadline) {
-      const video = await this.getVideo(videoId);
+      if (signal?.aborted) return { success: false, error: "Cancelled" };
+      const video = await this.getVideo(videoId, signal);
       if (!video) return { success: false, error: "Video not found" };
 
       onProgress?.(video.encodeProgress ?? 0, video.status);
@@ -344,12 +356,27 @@ export class BunnyStream {
         case BunnyVideoStatus.UploadFailed:
           return { success: false, error: "Video upload failed", video };
         default:
-          await new Promise((r) => setTimeout(r, PROCESSING_POLL_INTERVAL_MS));
+          await sleep(PROCESSING_POLL_INTERVAL_MS, signal);
       }
     }
 
     return { success: false, error: "Processing timeout" };
   }
+}
+
+/** Resolves after `ms`, or as soon as `signal` aborts, so a cancelled poll does not hold the process for another interval. */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 /**
