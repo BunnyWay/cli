@@ -22,6 +22,6 @@ export const VIDEO_EXTENSIONS = [
   ".mpeg",
   ".3gp",
   ".ogv",
-  ".ts",
+  // `.ts` is deliberately absent: an HLS bucket holds thousands of segments with that extension.
   ".m2ts",
 ];
