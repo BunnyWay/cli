@@ -6,7 +6,12 @@ import type {
   SourceFolder,
   SourceVideo,
 } from "@bunny.net/stream-import";
-import { extractFolderId, extractVideoId, type VimeoClient } from "./client.ts";
+import {
+  extractFolderId,
+  extractVideoId,
+  selectDownload,
+  type VimeoClient,
+} from "./client.ts";
 import type { VimeoVideo } from "./types.ts";
 import { validateVimeoUrl } from "./validate.ts";
 
@@ -78,10 +83,9 @@ export class VimeoSourceAdapter implements SourceAdapter {
   }
 
   async getDownloadInfo(sourceId: string): Promise<DownloadInfo | null> {
-    const download = await this.client.getVideoDownloadLink(sourceId);
-    if (!download) return null;
-
     const video = await this.client.getVideo(sourceId);
+    const download = selectDownload(video);
+    if (!download) return null;
 
     return {
       url: download.link,

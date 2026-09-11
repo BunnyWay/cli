@@ -79,22 +79,16 @@ export class JWPlayerClient {
     return this.http.get<JWMedia>(`/media/${encodeURIComponent(mediaId)}/`);
   }
 
-  /** Highest-resolution MP4 for a media item. The Management API sometimes omits sources, in which case the Delivery API has them. */
+  /** Highest-resolution MP4 for an already-fetched media item. The Management API sometimes omits sources, in which case the Delivery API has them. */
   async getDownloadUrl(
-    mediaId: string,
+    media: JWMedia,
   ): Promise<{ url: string; size: number } | null> {
-    const fromManagement = await this.bestMp4(async () => {
-      const data = await this.http.get(
-        `/media/${encodeURIComponent(mediaId)}/`,
-      );
-
-      return data.sources ?? [];
-    });
+    const fromManagement = await this.bestMp4(async () => media.sources ?? []);
     if (fromManagement) return fromManagement;
 
     return this.bestMp4(async () => {
       const data = await this.delivery.get(
-        `/media/${encodeURIComponent(mediaId)}`,
+        `/media/${encodeURIComponent(media.id)}`,
       );
 
       return data?.playlist?.[0]?.sources ?? [];

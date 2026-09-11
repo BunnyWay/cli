@@ -4,7 +4,7 @@ import type {
   SourceContent,
   SourceVideo,
 } from "@bunny.net/stream-import";
-import type { WistiaClient } from "./client.ts";
+import { selectDownload, type WistiaClient } from "./client.ts";
 import type { WistiaMedia } from "./types.ts";
 
 export class WistiaSourceAdapter implements SourceAdapter {
@@ -62,10 +62,9 @@ export class WistiaSourceAdapter implements SourceAdapter {
   }
 
   async getDownloadInfo(sourceId: string): Promise<DownloadInfo | null> {
-    const download = await this.client.getDownloadUrl(sourceId);
-    if (!download) return null;
-
     const media = await this.client.getMedia(sourceId);
+    const download = selectDownload(media);
+    if (!download) return null;
 
     return {
       url: download.url,

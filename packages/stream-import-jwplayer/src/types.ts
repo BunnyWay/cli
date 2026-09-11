@@ -1,4 +1,6 @@
 export interface JWMedia {
+  /** Present on the Management API's media record; the Delivery API has them when it is not. */
+  sources?: JWMediaSource[];
   id: string;
   type: string;
   created: string;

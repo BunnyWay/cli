@@ -118,35 +118,8 @@ export class VimeoClient {
     );
   }
 
-  /** Best available source: a real download link if the account tier allows one, otherwise the highest-resolution streaming file. */
   async getVideoDownloadLink(videoId: string): Promise<VimeoDownload | null> {
-    const video = await this.getVideo(videoId);
-
-    if (video.download?.length) {
-      const [best] = [...video.download].sort((a, b) => {
-        if (a.quality === "source") return -1;
-        if (b.quality === "source") return 1;
-
-        return (b.height || 0) - (a.height || 0);
-      });
-
-      return best ?? null;
-    }
-
-    if (video.files?.length) {
-      const [best] = [...video.files].sort(
-        (a, b) => (b.height || 0) - (a.height || 0),
-      );
-      if (!best) return null;
-
-      return {
-        ...best,
-        // Streaming files do not carry an expiry; the field is only advisory.
-        expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      };
-    }
-
-    return null;
+    return selectDownload(await this.getVideo(videoId));
   }
 
   async getAllVideosWithFolders(): Promise<{
@@ -173,6 +146,35 @@ export class VimeoClient {
       uncategorizedVideos: all.filter((v) => !filed.has(v.uri)),
     };
   }
+}
+
+/** Best available source: a real download link if the account tier allows one, otherwise the highest-resolution streaming file. */
+export function selectDownload(video: VimeoVideo): VimeoDownload | null {
+  if (video.download?.length) {
+    const [best] = [...video.download].sort((a, b) => {
+      if (a.quality === "source") return -1;
+      if (b.quality === "source") return 1;
+
+      return (b.height || 0) - (a.height || 0);
+    });
+
+    return best ?? null;
+  }
+
+  if (video.files?.length) {
+    const [best] = [...video.files].sort(
+      (a, b) => (b.height || 0) - (a.height || 0),
+    );
+    if (!best) return null;
+
+    return {
+      ...best,
+      // Streaming files do not carry an expiry; the field is only advisory.
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    };
+  }
+
+  return null;
 }
 
 /** `/users/1/projects/12345` -> `12345` */

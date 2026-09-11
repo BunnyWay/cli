@@ -36,10 +36,9 @@ export class JWPlayerAdapter implements SourceAdapter {
     sourceId: string,
     fallbackTitle?: string,
   ): Promise<DownloadInfo | null> {
-    const download = await this.client.getDownloadUrl(sourceId);
-    if (!download) return null;
-
     const media = await this.client.getMedia(sourceId);
+    const download = await this.client.getDownloadUrl(media);
+    if (!download) return null;
 
     return {
       url: download.url,

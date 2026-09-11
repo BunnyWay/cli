@@ -80,17 +80,7 @@ export class WistiaClient {
   async getDownloadUrl(
     hashedId: string,
   ): Promise<{ url: string; size: number } | null> {
-    const media = await this.getMedia(hashedId);
-    if (!media.assets?.length) return null;
-
-    for (const preferred of ASSET_PRIORITY) {
-      const asset = media.assets.find((a) => a.type === preferred);
-      if (asset) return { url: asset.url, size: asset.fileSize };
-    }
-
-    const mp4 = media.assets.find((a) => a.contentType?.includes("video/mp4"));
-
-    return mp4 ? { url: mp4.url, size: mp4.fileSize } : null;
+    return selectDownload(await this.getMedia(hashedId));
   }
 
   /** Wistia paginates with `page`/`per_page` and signals the end with a short page. */
@@ -109,4 +99,20 @@ export class WistiaClient {
 
     return all;
   }
+}
+
+/** The preferred asset of an already-fetched media, so callers needing the metadata too make one request. */
+export function selectDownload(
+  media: WistiaMedia,
+): { url: string; size: number } | null {
+  if (!media.assets?.length) return null;
+
+  for (const preferred of ASSET_PRIORITY) {
+    const asset = media.assets.find((a) => a.type === preferred);
+    if (asset) return { url: asset.url, size: asset.fileSize };
+  }
+
+  const mp4 = media.assets.find((a) => a.contentType?.includes("video/mp4"));
+
+  return mp4 ? { url: mp4.url, size: mp4.fileSize } : null;
 }
