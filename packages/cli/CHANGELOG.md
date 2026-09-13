@@ -1,5 +1,19 @@
 # @bunny.net/cli
 
+## 0.17.0
+
+### Minor Changes
+
+- [#214](https://github.com/BunnyWay/cli/pull/214) [`df79bb9`](https://github.com/BunnyWay/cli/commit/df79bb968187fc3d0b5e3ae201b7c00ee6ae8dc9) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites deploy` serves single-page apps on refresh (`sites.spa`, detected from the framework) and uses a root `404.html` as the not-found page.
+
+### Patch Changes
+
+- [#221](https://github.com/BunnyWay/cli/pull/221) [`8cac91e`](https://github.com/BunnyWay/cli/commit/8cac91edab4a1ab931943cfb22ff2acd6056b99c) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fewer manual steps between creating a resource and using it: adding a custom domain (sites, scripts, storage) whose nameservers already point at bunny.net but has no Bunny DNS zone in the account now offers to create the zone and add the record, instead of printing a CNAME you have nowhere to set; `scripts env push` (and `env set --from-file`) sends a local `.env` to an Edge Script, picking which variables to push and which are secrets; storage `.env` writes now include `BUNNY_STORAGE_CDN_URL` and a lowercased `BUNNY_STORAGE_REGION` that the S3 endpoint accepts; `db create --mode auto|single|manual` answers the region prompt from the command line; `env set` asks whether a prompted value is a secret even when the name was given; and the lifecycle verbs follow one rule, with every previous spelling kept as an alias: `create` makes a new resource and `delete` destroys it (`storage zones create`/`delete`, `dns zone create`/`delete`), while `add` attaches something to an existing resource and `remove` takes it away again (`sandbox url remove`, `sandbox env remove`).
+
+- [#218](https://github.com/BunnyWay/cli/pull/218) [`919ef47`](https://github.com/BunnyWay/cli/commit/919ef477da75c44e904e0916d073f415bab64405) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Friendlier handling of small mistakes: "Did you mean" for top-level typos, one-line help pointers (JSON under `--output json`), a clean error for unknown profiles and non-numeric IDs, a login hint naming the credential source on every 401, a warning when `BUNNY_API_KEY` is set instead of `BUNNYNET_API_KEY`, a confirmation on `config profile delete`, and timeouts on the update check. `delete` now also answers to `rm`, a bare `bunny -v` prints the version, and help lists a command's own flags ahead of the global ones.
+
+- [#209](https://github.com/BunnyWay/cli/pull/209) [`ffc2fb3`](https://github.com/BunnyWay/cli/commit/ffc2fb364a2963c9782e377d62e78725fe503834) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites migrate` moves a site created with the earlier Edge Script router onto the edge-rule architecture in place, keeping its domain, certificate, and deploy history.
+
 ## 0.16.1
 
 ### Patch Changes

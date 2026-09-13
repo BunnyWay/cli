@@ -130,7 +130,7 @@ bunny sandbox url add my-sandbox 8080 --label my-api
 
 ```bash
 bunny sandbox url list my-sandbox                      # user-created endpoints (alias: ls)
-bunny sandbox url delete my-sandbox port-3000
+bunny sandbox url remove my-sandbox port-3000
 bunny sandbox url rm my-sandbox my-api -f              # alias; --force skips confirmation
 ```
 
@@ -154,7 +154,7 @@ bunny sandbox env set my-sandbox --env-file .env
 
 ```bash
 bunny sandbox env list my-sandbox                      # alias: ls (internal AGENT_TOKEN hidden)
-bunny sandbox env delete my-sandbox NODE_ENV
+bunny sandbox env remove my-sandbox NODE_ENV
 bunny sandbox env rm my-sandbox A B                    # aliases: rm, unset
 ```
 

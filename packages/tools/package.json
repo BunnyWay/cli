@@ -1,0 +1,21 @@
+{
+  "name": "@bunny.net/tools",
+  "version": "0.0.1",
+  "description": "bunny.net operations defined once: typed tools with Zod schemas, shared by the CLI and any future tool host.",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./apps": "./src/apps/index.ts",
+    "./registry": "./src/registry/index.ts"
+  },
+  "dependencies": {
+    "@bunny.net/openapi-client": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

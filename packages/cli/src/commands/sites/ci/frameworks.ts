@@ -12,14 +12,26 @@ export interface FrameworkPreset {
   toolchain: "js" | "ruby" | "hugo" | "python" | "zola" | "dotnet" | "none";
   /** Explicit build command; js presets run it via the package manager, others run it directly. Omit on js to run the package.json `build` script. */
   build?: string;
+  /** Serves index.html for client-side routes unless `sites.spa` overrides. */
+  spa?: boolean;
 }
 
 // Static must stay last: the interactive prompt defaults to it.
 export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
-  { id: "analog", label: "Analog", dir: "dist/analog/public", toolchain: "js" },
+  {
+    id: "analog",
+    label: "Analog",
+    dir: "dist/analog/public",
+    toolchain: "js",
+  },
   // Angular's application builder emits dist/<project>/browser; adjust if yours differs.
-  { id: "angular", label: "Angular", dir: "dist", toolchain: "js" },
-  { id: "astro", label: "Astro", dir: "dist", toolchain: "js" },
+  { id: "angular", label: "Angular", dir: "dist", toolchain: "js", spa: true },
+  {
+    id: "astro",
+    label: "Astro",
+    dir: "dist",
+    toolchain: "js",
+  },
   {
     id: "brunch",
     label: "Brunch",
@@ -30,9 +42,19 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
   { id: "docusaurus", label: "Docusaurus", dir: "build", toolchain: "js" },
   { id: "elderjs", label: "Elder.js", dir: "public", toolchain: "js" },
   { id: "eleventy", label: "Eleventy", dir: "_site", toolchain: "js" },
-  { id: "ember", label: "Ember", dir: "dist", toolchain: "js" },
-  { id: "gatsby", label: "Gatsby", dir: "public", toolchain: "js" },
-  { id: "gridsome", label: "Gridsome", dir: "dist", toolchain: "js" },
+  { id: "ember", label: "Ember", dir: "dist", toolchain: "js", spa: true },
+  {
+    id: "gatsby",
+    label: "Gatsby",
+    dir: "public",
+    toolchain: "js",
+  },
+  {
+    id: "gridsome",
+    label: "Gridsome",
+    dir: "dist",
+    toolchain: "js",
+  },
   {
     id: "hexo",
     label: "Hexo",
@@ -40,7 +62,12 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     toolchain: "js",
     build: "hexo generate",
   },
-  { id: "next", label: "Next.js (static export)", dir: "out", toolchain: "js" },
+  {
+    id: "next",
+    label: "Next.js (static export)",
+    dir: "out",
+    toolchain: "js",
+  },
   {
     id: "nuxt",
     label: "Nuxt (static generate)",
@@ -48,19 +75,32 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     toolchain: "js",
     build: "nuxi generate",
   },
-  { id: "preact", label: "Preact (preact-cli)", dir: "build", toolchain: "js" },
-  { id: "qwik", label: "Qwik (static adapter)", dir: "dist", toolchain: "js" },
+  {
+    id: "preact",
+    label: "Preact (preact-cli)",
+    dir: "build",
+    toolchain: "js",
+    spa: true,
+  },
+  {
+    id: "qwik",
+    label: "Qwik (static adapter)",
+    dir: "dist",
+    toolchain: "js",
+  },
   {
     id: "react",
     label: "React (Create React App)",
     dir: "build",
     toolchain: "js",
+    spa: true,
   },
   {
     id: "react-router",
     label: "React Router",
     dir: "build/client",
     toolchain: "js",
+    spa: true,
   },
   {
     id: "solidstart",
@@ -74,14 +114,26 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     dir: "build",
     toolchain: "js",
   },
-  { id: "vite", label: "Vite", dir: "dist", toolchain: "js" },
+  {
+    id: "vite",
+    label: "Vite",
+    dir: "dist",
+    toolchain: "js",
+    spa: true,
+  },
   {
     id: "vitepress",
     label: "VitePress",
     dir: ".vitepress/dist",
     toolchain: "js",
   },
-  { id: "vue", label: "Vue (Vue CLI)", dir: "dist", toolchain: "js" },
+  {
+    id: "vue",
+    label: "Vue (Vue CLI)",
+    dir: "dist",
+    toolchain: "js",
+    spa: true,
+  },
   {
     id: "jekyll",
     label: "Jekyll",

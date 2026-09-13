@@ -18,6 +18,7 @@ import {
   writeRemoteState,
 } from "./api.ts";
 import {
+  type DeployRecord,
   GATE_RULE_DESC,
   LEGACY_STATE_VERSION,
   type LegacySiteState,
@@ -117,12 +118,6 @@ function fakeLegacyState(
     deploys: [],
     ...overrides,
   };
-}
-
-function seedLegacy(legacy: LegacySiteState): string {
-  const raw = JSON.stringify(legacy);
-  store.set(REMOTE_STATE_PATH, raw);
-  return sha256Hex(raw);
 }
 
 function fakeComputeClient(
@@ -275,6 +270,12 @@ function fakeCoreClient(opts: {
         if (existing >= 0) rules[existing] = rule;
         else rules.push({ ...rule, Guid: `guid-${nextGuid++}` });
         edgeRules.set(id, rules);
+        return { data: undefined };
+      }
+      if (path === "/storagezone/{id}") {
+        const id = (options?.params as { path: { id: number } }).path.id;
+        const zone = zones.find((z) => z.Id === id);
+        if (zone) Object.assign(zone, options?.body);
         return { data: undefined };
       }
       if (path === "/pullzone/{id}/setForceSSL") return { data: undefined };
@@ -484,7 +485,7 @@ test("createSite provisions storage zone → pull zone → edge rules → state"
   const rules = coreCalls
     .filter((c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate")
     .map((c) => c.body as EdgeRule);
-  expect(rules).toHaveLength(5);
+  expect(rules).toHaveLength(6);
   const rewrite = rules.find((r) => r.Description === REWRITE_RULE_DESC);
   expect(rewrite).toMatchObject({
     ActionType: 17,
@@ -545,7 +546,7 @@ test("createSite re-run after a crash upserts the same native Storage rules", as
   const upserts = coreCalls
     .filter((c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate")
     .map((c) => c.body as EdgeRule);
-  expect(upserts).toHaveLength(5);
+  expect(upserts).toHaveLength(6);
   expect(upserts.every((r) => r.Guid)).toBe(true);
   expect(originOf(upserts)).toEqual(firstOrigin);
 });
@@ -587,7 +588,7 @@ test("createSite re-run reuses existing resources and converges", async () => {
     coreCalls.filter(
       (c) => c.path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate",
     ),
-  ).toHaveLength(5);
+  ).toHaveLength(6);
   expect(await readRemoteState(fakeConnection())).not.toBeNull();
 });
 
@@ -821,6 +822,38 @@ test("promoteDeploy retargets the rewrite rule, probes the edge, and purges twic
     ActionParameter2: "my-site",
     ActionParameter3: "/deploys/e5f6/",
   });
+});
+
+test("promoteDeploy keeps the storage zone's not-found settings on the live deploy", async () => {
+  const coreCalls: Call[] = [];
+  const coreClient = fakeCoreClient({
+    calls: coreCalls,
+    storageZones: [{ ...ZONE }],
+  });
+  const deploy = (id: string, notFound?: DeployRecord["notFound"]) => ({
+    id,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    source: "content" as const,
+    contentHash: id,
+    files: 1,
+    bytes: 1,
+    notFound,
+  });
+  const state = fakeState({
+    deploys: [deploy("spa1", "spa"), deploy("plain")],
+  });
+  const writes = () =>
+    coreCalls
+      .filter((c) => c.method === "POST" && c.path === "/storagezone/{id}")
+      .map((c) => c.body);
+
+  await promoteDeploy({ coreClient, state, deployId: "spa1" });
+  await promoteDeploy({ coreClient, state, deployId: "spa1" });
+  await promoteDeploy({ coreClient, state, deployId: "plain" });
+  expect(writes()).toEqual([
+    { Custom404FilePath: "/deploys/spa1/index.html", Rewrite404To200: true },
+    { Custom404FilePath: "", Rewrite404To200: false },
+  ]);
 });
 
 // ---- discovery ----

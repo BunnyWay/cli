@@ -5,17 +5,17 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { spinner } from "@/core/ui.ts";
 
-interface DeleteArgs {
+interface RemoveArgs {
   name: string;
   keys: string[];
 }
 
-export const sandboxEnvDeleteCommand = defineCommand<DeleteArgs>({
-  command: "delete <name> <keys..>",
-  aliases: ["rm", "unset"],
+export const sandboxEnvRemoveCommand = defineCommand<RemoveArgs>({
+  command: "remove <name> <keys..>",
+  aliases: ["delete", "rm", "unset"],
   describe: "Remove persisted environment variables from a sandbox.",
   examples: [
-    ["$0 sandbox env delete my-sandbox NODE_ENV", "Remove a variable"],
+    ["$0 sandbox env remove my-sandbox NODE_ENV", "Remove a variable"],
     ["$0 sandbox env rm my-sandbox A B", "Remove multiple variables"],
   ],
 

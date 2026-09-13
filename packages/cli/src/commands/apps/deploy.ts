@@ -491,7 +491,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       if (!reg?.hostName) {
         throw new UserError(
           `Registry ${registryId} not found or has no hostname.`,
-          "Use `bunny registries list` to check your registries.",
+          "Use `bunny apps registries list` to check your registries.",
         );
       }
 
@@ -1063,7 +1063,7 @@ async function buildAndPushContainer(
   if (!reg?.hostName) {
     throw new UserError(
       `Registry ${registryId} not found or has no hostname.`,
-      "Use `bunny registries list` to check your registries.",
+      "Use `bunny apps registries list` to check your registries.",
     );
   }
 

@@ -64,8 +64,9 @@ export const dbShowCommand = defineCommand<ShowArgs>({
     const spin = spinner("Fetching database...");
     spin.start();
 
-    const [db, liveMetrics, regionConfig] = await Promise.all([
-      fetchDatabase(client, databaseId),
+    // The database lookup goes first so an unknown ID fails with its own message, not a live-status 400.
+    const db = await fetchDatabase(client, databaseId);
+    const [liveMetrics, regionConfig] = await Promise.all([
       fetchLiveStatus(client, [databaseId]),
       fetchRegionConfig(client),
     ]);

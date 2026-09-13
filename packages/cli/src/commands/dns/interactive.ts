@@ -120,7 +120,7 @@ export async function resolveZoneInteractive(
   if (zones.length === 0) {
     throw new UserError(
       "No DNS zones found.",
-      'Create one with "bunny dns zones add <domain>".',
+      'Create one with "bunny dns zones create <domain>".',
     );
   }
 

@@ -93,7 +93,7 @@ export async function resolveStorageZoneInteractive(
   if (zones.length === 0) {
     throw new UserError(
       "No storage zones found.",
-      'Create one with "bunny storage zones add <name>".',
+      'Create one with "bunny storage zones create <name>".',
     );
   }
 

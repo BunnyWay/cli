@@ -49,6 +49,7 @@ interface DeleteArgs {
  */
 export const scriptsDeleteCommand = defineCommand<DeleteArgs>({
   command: COMMAND,
+  aliases: ["rm"],
   describe: DESCRIPTION,
   examples: [
     ["$0 scripts delete 12345", "Interactive — double confirmation"],

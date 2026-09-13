@@ -51,6 +51,7 @@ interface DeleteArgs {
  */
 export const dbDeleteCommand = defineCommand<DeleteArgs>({
   command: COMMAND,
+  aliases: ["rm"],
   describe: DESCRIPTION,
   examples: [
     ["$0 db delete db_01KCH…", "Interactive — double confirmation"],

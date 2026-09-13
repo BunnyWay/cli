@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { parseDotenv } from "@/core/env.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, spinner } from "@/core/ui.ts";
@@ -27,7 +28,6 @@ import {
   readDockerfileExposedPorts,
   resolveRegistryForImage,
 } from "./docker.ts";
-import { parseDotenv } from "./env/parse.ts";
 import {
   confirmEndpointSuggestions,
   endpointRequestToConfig,

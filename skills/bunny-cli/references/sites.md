@@ -39,7 +39,7 @@ This is the rule that shapes every other command here:
 - Deploys stay immutable under their own ID, so `deployments publish <id>` rolls back to any earlier one by retargeting the edge rule; no files move and nothing is re-uploaded.
 - Custom domains are vanity hostnames on the site's pull zone; without one the site serves at `https://sites-<name>-<suffix>.b-cdn.net`.
 
-Content is root-served, so client-side routers (TanStack Router, React Router, Vue Router in history mode) and root-absolute assets work as-is. Deploys are not individually addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served. To review a change before it goes live, build and serve it locally, or deploy it to a separate site.
+Content is root-served, so root-absolute assets work as-is. Single-page apps get `index.html` for extensionless misses when the detected framework is client-routed (Vite, CRA, React Router, Angular, Vue CLI, Ember, Preact) and the output has no root `404.html`; `sites.spa` in `bunny.jsonc` or `--spa`/`--no-spa` on the deploy decides explicitly, and otherwise a root `404.html` is the not-found page. The mode is recorded per deploy and follows rollbacks. Deploys are not individually addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served. To review a change before it goes live, build and serve it locally, or deploy it to a separate site.
 
 ## Deploy IDs
 
@@ -129,7 +129,7 @@ bunny sites domains list
 bunny sites domains remove example.com
 ```
 
-A custom domain is the site's production URL and nothing more. The first added domain is recorded as the production URL. If the domain is on a Bunny DNS zone in the account, the CLI offers to create the record; otherwise it prints the CNAME target. The CLI verifies a certificate actually landed on the exact hostname before forcing HTTPS or reporting success, and probes the domain over TLS afterwards, so a mismatched certificate (e.g. shadowed by another zone's wildcard) warns instead of printing a broken URL. Re-running `bunny sites domains add <domain>` after a partial setup reconciles the remaining steps instead of failing on the already-attached hostname.
+A custom domain is the site's production URL and nothing more. The first added domain is recorded as the production URL. If the domain is on a Bunny DNS zone in the account, the CLI offers to create the record; if its nameservers already point at bunny.net without a zone in the account, it offers to create the zone first (shared flow in `core/hostnames/flow.ts`, so scripts and storage domains behave the same); otherwise it prints the CNAME target. The CLI verifies a certificate actually landed on the exact hostname before forcing HTTPS or reporting success, and probes the domain over TLS afterwards, so a mismatched certificate (e.g. shadowed by another zone's wildcard) warns instead of printing a broken URL. Re-running `bunny sites domains add <domain>` after a partial setup reconciles the remaining steps instead of failing on the already-attached hostname.
 
 ---
 

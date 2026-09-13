@@ -1,4 +1,6 @@
 import type { Argv, CommandModule } from "yargs";
+import { profileExists } from "@/config/index.ts";
+import { UserError, unauthorizedError } from "./errors.ts";
 import { logger } from "./logger.ts";
 import type { GlobalArgs } from "./types.ts";
 
@@ -21,6 +23,70 @@ interface CommandDef<A = Record<string, never>> {
   handler: (args: A & GlobalArgs) => Promise<void>;
   /** Runs after the handler. Use for cleanup. */
   postRun?: (args: A & GlobalArgs) => Promise<void>;
+}
+
+/** Root-level options inherited by every command. */
+export const GLOBAL_OPTION_KEYS = [
+  "profile",
+  "output",
+  "api-key",
+  "verbose",
+  "help",
+  "version",
+];
+
+// Positional names declared in a command string such as `add [domain] [values..]`.
+function positionalNames(command: string): string[] {
+  return [...command.matchAll(/[<[]([^>\]]+)[>\]]/g)].flatMap((m) =>
+    (m[1] ?? "").replace(/\.\.$/, "").split("|"),
+  );
+}
+
+/** The long flag names a parser knows, without yargs' camelCase duplicates. */
+export function optionKeys(y: Argv): string[] {
+  return Object.keys(optionsOf(y).key).filter(
+    (k) => k.length > 1 && !/[A-Z]/.test(k),
+  );
+}
+
+// Own flags are grouped first so they lead the help text; the inherited globals follow under their own heading.
+export function groupHelpOptions(y: Argv, command = ""): void {
+  const positionals = positionalNames(command);
+  const own = optionKeys(y).filter(
+    (k) => !GLOBAL_OPTION_KEYS.includes(k) && !positionals.includes(k),
+  );
+  if (own.length > 0) y.group(own, "Options:");
+  y.group(GLOBAL_OPTION_KEYS, "Global Options:");
+}
+
+// Runtime accessor that @types/yargs leaves out.
+function optionsOf(y: Argv): {
+  key: Record<string, unknown>;
+  number: string[];
+} {
+  return (
+    y as unknown as { getOptions(): ReturnType<typeof optionsOf> }
+  ).getOptions();
+}
+
+// yargs turns a non-numeric value for a number option into NaN instead of failing, so reject it here.
+function rejectNaN(
+  y: Argv,
+  command: string,
+  argv: Record<string, unknown>,
+): true {
+  const positionals = positionalNames(command);
+  for (const key of optionsOf(y).number) {
+    const value = argv[key];
+    const values = Array.isArray(value) ? value : [value];
+    if (values.some((v) => typeof v === "number" && !Number.isFinite(v))) {
+      const label = positionals.includes(key)
+        ? key
+        : `${key.length === 1 ? "-" : "--"}${key}`;
+      throw new UserError(`Invalid value for ${label}: expected a number.`);
+    }
+  }
+  return true;
 }
 
 /**
@@ -53,7 +119,11 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
         y = y.example(cmd, desc) as any;
       }
     }
-    return y;
+    groupHelpOptions(y, def.command);
+    return y.check(
+      (argv) => rejectNaN(y, def.command, argv as Record<string, unknown>),
+      false,
+    );
   };
 
   return {
@@ -70,12 +140,24 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
       } catch (err: any) {
         const isUser = err?.isUserError;
         const isApi = err?.name === "ApiError";
+        // bunny.net answers 403 for a key it rejects, so both statuses get the credential hint.
+        const rejected =
+          isApi && (err.status === 401 || err.status === 403)
+            ? unauthorizedError({
+                ...args,
+                hasProfile: profileExists(args.profile),
+              })
+            : undefined;
+        // A 403 also covers a valid key without permission, so keep the API's own wording there.
+        const message =
+          (err.status === 401 ? rejected?.message : undefined) ??
+          err?.message ??
+          "An unexpected error occurred.";
+        const hint = rejected?.hint ?? err?.hint;
 
         if (args.output === "json") {
-          const payload: Record<string, unknown> = {
-            error: err?.message ?? "An unexpected error occurred.",
-          };
-          if (isUser && err.hint) payload.hint = err.hint;
+          const payload: Record<string, unknown> = { error: message };
+          if (isUser && hint) payload.hint = hint;
           if (isApi) {
             payload.status = err.status;
             if (err.field) payload.field = err.field;
@@ -86,23 +168,16 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
           process.exit(isUser ? 1 : 2);
         }
 
-        if (isApi && err.validationErrors?.length) {
-          logger.error(err.message);
-          for (const ve of err.validationErrors) {
+        logger.error(isUser ? message : "An unexpected error occurred.");
+        if (isUser) {
+          for (const ve of err.validationErrors ?? []) {
             logger.dim(`  ${ve.field ?? "unknown"}: ${ve.message}`);
           }
-          process.exit(1);
+          if (hint) logger.dim(hint);
+        } else if (args.verbose) {
+          console.error(err);
         }
-
-        if (isUser) {
-          logger.error(err.message);
-          if (err.hint) logger.dim(err.hint);
-          process.exit(1);
-        }
-
-        logger.error("An unexpected error occurred.");
-        if (args.verbose) console.error(err);
-        process.exit(2);
+        process.exit(isUser ? 1 : 2);
       }
     },
   };

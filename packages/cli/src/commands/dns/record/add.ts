@@ -259,7 +259,7 @@ async function writeAndReport(
 /**
  * Interactively build and add one record to a zone: pick a type, gather its
  * fields (with the Scriptable DNS option for A/AAAA/CNAME/TXT), then write it.
- * Reused by the records `add` wizard and the `zones add` post-scan menu.
+ * Reused by the records `add` wizard and the `zones create` post-scan menu.
  */
 export async function addRecordInteractive(opts: {
   client: CoreClient;

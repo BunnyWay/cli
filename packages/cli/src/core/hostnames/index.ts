@@ -2,7 +2,9 @@ export {
   type BunnyDnsMatch,
   type BunnyDnsResult,
   findBunnyDnsZone,
+  findDelegatedZoneCandidate,
   offerBunnyDnsRecord,
+  offerBunnyDnsZone,
 } from "./bunny-dns.ts";
 export {
   addHostname,

@@ -67,11 +67,12 @@ export const RegionsConfigSchema = z.union([
   }),
 ]);
 
-// Static-site config (`bunny sites`), all optional: `name` links the directory to a site, `dir` is the deploy root, `build` is the command `sites deploy --build` runs.
+// Static-site config (`bunny sites`), all optional: `name` links the directory to a site, `dir` is the deploy root, `build` is the command `sites deploy --build` runs, `spa` serves index.html for client-side routes (default: detected from the framework).
 export const SiteConfigSchema = z.object({
   name: z.string().optional(),
   dir: z.string().optional(),
   build: z.string().optional(),
+  spa: z.boolean().optional(),
 });
 
 // The `app` block: Magic Containers deploy intent.

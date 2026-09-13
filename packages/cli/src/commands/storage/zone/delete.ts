@@ -11,19 +11,19 @@ import { logger } from "@/core/logger.ts";
 import { loadManifest, removeManifest } from "@/core/manifest.ts";
 import { confirm, prompts, spinner } from "@/core/ui.ts";
 
-interface ZoneRemoveArgs {
+interface ZoneDeleteArgs {
   zone?: string;
   force?: boolean;
 }
 
-export const storageZoneRemoveCommand = defineCommand<ZoneRemoveArgs>({
-  command: "remove [zone]",
-  aliases: ["rm"],
+export const storageZoneDeleteCommand = defineCommand<ZoneDeleteArgs>({
+  command: "delete [zone]",
+  aliases: ["remove", "rm"],
   describe: "Delete a storage zone and all of its files.",
   examples: [
-    ["$0 storage zones remove my-zone", "Delete a zone"],
-    ["$0 storage zones remove my-zone --force", "Skip confirmation"],
-    ["$0 storage zones remove", "Pick a zone interactively"],
+    ["$0 storage zones delete my-zone", "Delete a zone"],
+    ["$0 storage zones delete my-zone --force", "Skip confirmation"],
+    ["$0 storage zones delete", "Pick a zone interactively"],
   ],
 
   builder: (yargs) =>

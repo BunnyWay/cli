@@ -50,7 +50,7 @@ bunny scripts init --template-repo https://github.com/owner/my-template         
 
 - `--repo`/`--template-repo` without `--type` defaults to `standalone`.
 - With `--github-actions`, git is initialized automatically and the `SCRIPT_ID` to add as a GitHub repo secret is printed after script creation.
-- The interactive wizard offers an optional custom domain after creating the script (same DNS + HTTPS flow as `domains add`). If the domain is in one of the account's Bunny DNS zones, it offers — after confirmation — to add or repoint the DNS record, then issues SSL straight away since DNS is already live on bunny's resolvers.
+- The interactive wizard offers an optional custom domain after creating the script (same DNS + HTTPS flow as `domains add`). If the domain is in one of the account's Bunny DNS zones, it offers — after confirmation — to add or repoint the DNS record, then issues SSL straight away since DNS is already live on bunny's resolvers. A domain delegated to bunny's nameservers with no zone in the account gets an offer to create the zone first.
 
 ---
 

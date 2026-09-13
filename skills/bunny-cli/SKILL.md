@@ -51,12 +51,12 @@ bunny sandbox exec my-sandbox -- bun install
 bunny sandbox url add my-sandbox 3000
 
 # manage Edge Storage
-bunny storage zones add my-zone --region DE --pull-zone
+bunny storage zones create my-zone --region DE --pull-zone
 bunny storage files upload ./photo.png --to images/
 bunny storage zones credentials my-zone --connection s3
 
 # manage DNS
-bunny dns zones add example.com
+bunny dns zones create example.com
 bunny dns zones nameservers example.com               # is the registrar delegated to bunny yet?
 bunny dns records add example.com api A 198.51.100.1
 bunny dns records preset google-workspace example.com # apply a preset record set

@@ -5,10 +5,10 @@ import { resolveAppId, resolveContainerId } from "@/commands/apps/config.ts";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
+import { parseDotenv } from "@/core/env.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { spinner } from "@/core/ui.ts";
-import { parseDotenv } from "./parse.ts";
 
 const COMMAND = "push [file]";
 const DESCRIPTION = "Bulk-set environment variables from a .env file.";

@@ -9,6 +9,7 @@ import { appsListCommand } from "./list.ts";
 import { appsPullCommand } from "./pull.ts";
 import { appsPushCommand } from "./push.ts";
 import { appsRegionsNamespace } from "./regions/index.ts";
+import { appsRegistriesNamespace } from "./registries/index.ts";
 import { appsRestartCommand } from "./restart.ts";
 import { appsShowCommand } from "./show.ts";
 import { appsUndeployCommand } from "./undeploy.ts";
@@ -26,6 +27,7 @@ export const appsNamespace = defineNamespace("apps", false as never, [
   appsPullCommand,
   appsPushCommand,
   appsRegionsNamespace,
+  appsRegistriesNamespace,
   appsRestartCommand,
   appsShowCommand,
   appsUndeployCommand,
