@@ -26,13 +26,14 @@ jobs:
             case "$1" in
               *.json) echo "application/json" ;;
               *.svg)  echo "image/svg+xml" ;;
+              *.sql)  echo "application/sql" ;;
               *.png)  echo "image/png" ;;
               *.md)   echo "text/markdown" ;;
               *)      echo "application/octet-stream" ;;
             esac
           }
 
-          find templates -type f ! -name '.gitkeep' -print0 | while IFS= read -r -d '' file; do
+          find templates -type f ! -name '.gitkeep' ! -name '*.test.ts' -print0 | while IFS= read -r -d '' file; do
             remote="$file"
             upload_file="$file"
             tmp=""
