@@ -1,0 +1,118 @@
+[
+  {
+    "id": "blog",
+    "name": "Blog",
+    "description": "Users write posts, organised by tags and discussed in threaded comments.",
+    "tables": ["users", "posts", "tags", "post_tags", "comments"]
+  },
+  {
+    "id": "course-platform",
+    "name": "Course Platform",
+    "description": "Instructors publish courses made of sections and lessons; students enrol, work through lessons, and leave reviews.",
+    "tables": [
+      "users",
+      "courses",
+      "sections",
+      "lessons",
+      "enrollments",
+      "lesson_progress",
+      "reviews"
+    ],
+    "views": ["enrollment_progress"]
+  },
+  {
+    "id": "ecommerce",
+    "name": "E-commerce Shop",
+    "description": "A catalog of products sold as variants, guest and customer carts, discount codes, and orders that keep their own copy of what was bought.",
+    "tables": [
+      "customers",
+      "addresses",
+      "categories",
+      "products",
+      "product_categories",
+      "product_images",
+      "product_variants",
+      "carts",
+      "cart_items",
+      "discount_codes",
+      "orders",
+      "order_items"
+    ]
+  },
+  {
+    "id": "event-ticketing",
+    "name": "Event Ticketing",
+    "description": "Venues host events that sell ticket types; attendees place orders and receive tickets that are scanned at the door.",
+    "tables": [
+      "venues",
+      "events",
+      "ticket_types",
+      "attendees",
+      "orders",
+      "tickets"
+    ],
+    "views": ["ticket_availability"]
+  },
+  {
+    "id": "helpdesk",
+    "name": "Helpdesk",
+    "description": "Customers raise tickets that agents work through a thread of messages, with internal notes, attachments, canned replies, and satisfaction scores.",
+    "tables": [
+      "agents",
+      "customers",
+      "tickets",
+      "ticket_messages",
+      "attachments",
+      "tags",
+      "ticket_tags",
+      "canned_responses",
+      "satisfaction_ratings"
+    ]
+  },
+  {
+    "id": "invoicing",
+    "name": "Invoicing",
+    "description": "Clients, invoices built from line items, and payments, with views for line amounts, invoice totals, and outstanding balances.",
+    "tables": ["clients", "tax_rates", "invoices", "invoice_items", "payments"],
+    "views": ["invoice_item_amounts", "invoice_totals", "invoice_balances"]
+  },
+  {
+    "id": "link-shortener",
+    "name": "Link Shortener",
+    "description": "Short slugs that redirect to target URLs, with per-click analytics and a stats view.",
+    "tables": ["links", "clicks"],
+    "views": ["link_stats"]
+  },
+  {
+    "id": "saas-starter",
+    "name": "SaaS Starter",
+    "description": "Users sign in, belong to organizations, invite team mates, issue API keys, subscribe to a plan, and leave an audit trail.",
+    "tables": [
+      "users",
+      "sessions",
+      "organizations",
+      "memberships",
+      "invitations",
+      "api_keys",
+      "plans",
+      "subscriptions",
+      "audit_log"
+    ]
+  },
+  {
+    "id": "video-platform",
+    "name": "Video Platform",
+    "description": "Channels publish Bunny Stream videos into playlists; viewers watch, react, comment, and subscribe.",
+    "tables": [
+      "users",
+      "channels",
+      "videos",
+      "playlists",
+      "playlist_videos",
+      "video_views",
+      "reactions",
+      "comments",
+      "subscriptions"
+    ]
+  }
+]
