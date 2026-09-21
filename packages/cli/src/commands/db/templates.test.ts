@@ -39,13 +39,13 @@ function memoryClient(): MigrationClient {
   };
 }
 
-test("every template is embedded and resolves by short or versioned id", () => {
+test("every template is embedded and resolves by id", () => {
   expect(DATABASE_TEMPLATES.length).toBeGreaterThan(0);
   for (const template of DATABASE_TEMPLATES) {
     expect(template.sql).toContain("CREATE TABLE");
     expect(findTemplate(template.id)).toBe(template);
-    expect(findTemplate(template.id.replace(/-\d+$/, ""))).toBe(template);
   }
+  expect(findTemplate("blog-0")).toBeUndefined();
 });
 
 test("a written template migration applies and creates its tables", async () => {

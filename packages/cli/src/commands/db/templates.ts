@@ -1,31 +1,31 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import blogSql from "@templates/databases/blog-0.sql" with { type: "text" };
-import coursePlatformSql from "@templates/databases/course-platform-0.sql" with {
+import blogSql from "@templates/databases/blog.sql" with { type: "text" };
+import coursePlatformSql from "@templates/databases/course-platform.sql" with {
   type: "text",
 };
-import ecommerceSql from "@templates/databases/ecommerce-0.sql" with {
+import ecommerceSql from "@templates/databases/ecommerce.sql" with {
   type: "text",
 };
-import eventTicketingSql from "@templates/databases/event-ticketing-0.sql" with {
+import eventTicketingSql from "@templates/databases/event-ticketing.sql" with {
   type: "text",
 };
-import helpdeskSql from "@templates/databases/helpdesk-0.sql" with {
+import helpdeskSql from "@templates/databases/helpdesk.sql" with {
   type: "text",
 };
 import templateIndexJson from "@templates/databases/index.jsonc" with {
   type: "text",
 };
-import invoicingSql from "@templates/databases/invoicing-0.sql" with {
+import invoicingSql from "@templates/databases/invoicing.sql" with {
   type: "text",
 };
-import linkShortenerSql from "@templates/databases/link-shortener-0.sql" with {
+import linkShortenerSql from "@templates/databases/link-shortener.sql" with {
   type: "text",
 };
-import saasStarterSql from "@templates/databases/saas-starter-0.sql" with {
+import saasStarterSql from "@templates/databases/saas-starter.sql" with {
   type: "text",
 };
-import videoPlatformSql from "@templates/databases/video-platform-0.sql" with {
+import videoPlatformSql from "@templates/databases/video-platform.sql" with {
   type: "text",
 };
 import { UserError } from "@/core/errors.ts";
@@ -50,21 +50,16 @@ export interface DatabaseTemplate extends TemplateIndexEntry {
 export const TEMPLATE_NONE = "none";
 
 const SQL_BY_ID: Record<string, string> = {
-  "blog-0": blogSql,
-  "course-platform-0": coursePlatformSql,
-  "ecommerce-0": ecommerceSql,
-  "event-ticketing-0": eventTicketingSql,
-  "helpdesk-0": helpdeskSql,
-  "invoicing-0": invoicingSql,
-  "link-shortener-0": linkShortenerSql,
-  "saas-starter-0": saasStarterSql,
-  "video-platform-0": videoPlatformSql,
+  blog: blogSql,
+  "course-platform": coursePlatformSql,
+  ecommerce: ecommerceSql,
+  "event-ticketing": eventTicketingSql,
+  helpdesk: helpdeskSql,
+  invoicing: invoicingSql,
+  "link-shortener": linkShortenerSql,
+  "saas-starter": saasStarterSql,
+  "video-platform": videoPlatformSql,
 };
-
-/** Template ids carry a version suffix the dashboard needs, so `blog` also names `blog-0`. */
-function baseId(id: string): string {
-  return id.trim().toLowerCase().replace(/-\d+$/, "");
-}
 
 function buildCatalog(): DatabaseTemplate[] {
   const entries = JSON.parse(templateIndexJson) as TemplateIndexEntry[];
@@ -73,7 +68,7 @@ function buildCatalog(): DatabaseTemplate[] {
   for (const entry of entries) {
     const sql = SQL_BY_ID[entry.id];
     if (!sql) continue;
-    catalog.push({ ...entry, slug: slugify(baseId(entry.id)), sql });
+    catalog.push({ ...entry, slug: slugify(entry.id), sql });
   }
 
   return catalog;
@@ -82,10 +77,10 @@ function buildCatalog(): DatabaseTemplate[] {
 /** Schema templates embedded at bundle time from templates/databases/. */
 export const DATABASE_TEMPLATES: DatabaseTemplate[] = buildCatalog();
 
-/** Resolve a `--template` value, accepting either `blog` or the dashboard's `blog-0`. */
+/** Resolve a `--template` value against the catalog, ignoring case. */
 export function findTemplate(id: string): DatabaseTemplate | undefined {
-  const wanted = baseId(id);
-  return DATABASE_TEMPLATES.find((template) => baseId(template.id) === wanted);
+  const wanted = id.trim().toLowerCase();
+  return DATABASE_TEMPLATES.find((template) => template.id === wanted);
 }
 
 /** Resolve a `--template` value or explain what was expected. */
@@ -95,7 +90,7 @@ export function requireTemplate(id: string): DatabaseTemplate {
 
   throw new UserError(
     `Unknown database template: ${id}`,
-    `Available templates: ${DATABASE_TEMPLATES.map((t) => baseId(t.id)).join(", ")}, or ${TEMPLATE_NONE} for an empty database.`,
+    `Available templates: ${DATABASE_TEMPLATES.map((t) => t.id).join(", ")}, or ${TEMPLATE_NONE} for an empty database.`,
   );
 }
 

@@ -1,12 +1,12 @@
 [
   {
-    "id": "blog-0",
+    "id": "blog",
     "name": "Blog",
     "description": "Users write posts, organised by tags and discussed in threaded comments.",
     "tables": ["users", "posts", "tags", "post_tags", "comments"]
   },
   {
-    "id": "course-platform-0",
+    "id": "course-platform",
     "name": "Course Platform",
     "description": "Instructors publish courses made of sections and lessons; students enrol, work through lessons, and leave reviews.",
     "tables": [
@@ -21,7 +21,7 @@
     "views": ["enrollment_progress"]
   },
   {
-    "id": "ecommerce-0",
+    "id": "ecommerce",
     "name": "E-commerce Shop",
     "description": "A catalog of products sold as variants, guest and customer carts, discount codes, and orders that keep their own copy of what was bought.",
     "tables": [
@@ -40,7 +40,7 @@
     ]
   },
   {
-    "id": "event-ticketing-0",
+    "id": "event-ticketing",
     "name": "Event Ticketing",
     "description": "Venues host events that sell ticket types; attendees place orders and receive tickets that are scanned at the door.",
     "tables": [
@@ -54,7 +54,7 @@
     "views": ["ticket_availability"]
   },
   {
-    "id": "helpdesk-0",
+    "id": "helpdesk",
     "name": "Helpdesk",
     "description": "Customers raise tickets that agents work through a thread of messages, with internal notes, attachments, canned replies, and satisfaction scores.",
     "tables": [
@@ -70,21 +70,21 @@
     ]
   },
   {
-    "id": "invoicing-0",
+    "id": "invoicing",
     "name": "Invoicing",
     "description": "Clients, invoices built from line items, and payments, with views for line amounts, invoice totals, and outstanding balances.",
     "tables": ["clients", "tax_rates", "invoices", "invoice_items", "payments"],
     "views": ["invoice_item_amounts", "invoice_totals", "invoice_balances"]
   },
   {
-    "id": "link-shortener-0",
+    "id": "link-shortener",
     "name": "Link Shortener",
     "description": "Short slugs that redirect to target URLs, with per-click analytics and a stats view.",
     "tables": ["links", "clicks"],
     "views": ["link_stats"]
   },
   {
-    "id": "saas-starter-0",
+    "id": "saas-starter",
     "name": "SaaS Starter",
     "description": "Users sign in, belong to organizations, invite team mates, issue API keys, subscribe to a plan, and leave an audit trail.",
     "tables": [
@@ -100,7 +100,7 @@
     ]
   },
   {
-    "id": "video-platform-0",
+    "id": "video-platform",
     "name": "Video Platform",
     "description": "Channels publish Bunny Stream videos into playlists; viewers watch, react, comment, and subscribe.",
     "tables": [
