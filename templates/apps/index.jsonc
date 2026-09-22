@@ -119,6 +119,7 @@
     "id": "wordpress-0",
     "name": "WordPress",
     "description": "A self-hosted WordPress CMS with MariaDB, ready to deploy on Magic Containers.",
-    "images": ["wordpress.apache", "mariadb.latest"]
+    "images": ["wordpress.apache", "mariadb.latest"],
+    "allowedInTrial": false
   }
 ]
