@@ -102,14 +102,14 @@
   {
     "id": "video-platform",
     "name": "Video Platform",
-    "description": "Channels publish Bunny Stream videos, with plays and comments.",
+    "description": "Channels publish Bunny Stream videos, playlists, and comments.",
     "tables": [
       "users",
       "channels",
       "videos",
       "playlists",
       "playlist_videos",
-      "video_views",
+      "watch_progress",
       "reactions",
       "comments",
       "subscriptions"

@@ -74,7 +74,9 @@ CREATE TABLE IF NOT EXISTS invitations (
 
 -- Store only a hash of the key, so a leaked database cannot be used to
 -- call your API. prefix is the handful of leading characters kept in
--- clear text so a key is recognisable in the UI.
+-- clear text so a key is recognisable in the UI. Update last_used_at
+-- at most once an hour: touching it on every request would send one
+-- write per API call to the same row.
 CREATE TABLE IF NOT EXISTS api_keys (
   id INTEGER PRIMARY KEY,
   organization_id INTEGER NOT NULL

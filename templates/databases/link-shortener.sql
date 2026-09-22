@@ -17,9 +17,11 @@ CREATE TABLE IF NOT EXISTS links (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
--- One row per redirect served. visitor_hash identifies a repeat
--- visitor without storing their IP address: hash the address with a
--- secret salt before inserting.
+-- One row per redirect served, so this table grows with traffic and
+-- every hit costs a write. Prune old rows, or roll them up into daily
+-- totals, once a link has been live for a while. visitor_hash
+-- identifies a repeat visitor without storing their IP address: hash
+-- the address with a secret salt before inserting.
 CREATE TABLE IF NOT EXISTS clicks (
   id INTEGER PRIMARY KEY,
   link_id INTEGER NOT NULL REFERENCES links(id) ON DELETE CASCADE,

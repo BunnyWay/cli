@@ -89,7 +89,9 @@ CREATE INDEX IF NOT EXISTS enrollments_course_id_idx
   ON enrollments (course_id);
 
 -- One row per lesson a student has opened. Rows are absent until the
--- student starts the lesson.
+-- student starts the lesson. Save watched_seconds when playback
+-- pauses or the lesson finishes; writing it on a timer turns one
+-- student watching one video into a steady stream of writes.
 CREATE TABLE IF NOT EXISTS lesson_progress (
   enrollment_id INTEGER NOT NULL
     REFERENCES enrollments(id) ON DELETE CASCADE,
