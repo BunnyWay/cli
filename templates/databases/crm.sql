@@ -74,6 +74,8 @@ CREATE INDEX IF NOT EXISTS deals_stage_id_status_idx
   ON deals (stage_id, status);
 CREATE INDEX IF NOT EXISTS deals_owner_id_idx ON deals (owner_id);
 CREATE INDEX IF NOT EXISTS deals_company_id_idx ON deals (company_id);
+-- Serves the deals listed on a contact record.
+CREATE INDEX IF NOT EXISTS deals_contact_id_idx ON deals (contact_id);
 
 -- One row each time a deal lands in a stage, written by the trigger
 -- below. Subtract consecutive entered_at values to get time in stage,
@@ -87,6 +89,9 @@ CREATE TABLE IF NOT EXISTS deal_stage_history (
 
 CREATE INDEX IF NOT EXISTS deal_stage_history_deal_id_entered_at_idx
   ON deal_stage_history (deal_id, entered_at);
+-- Searched when a stage is deleted.
+CREATE INDEX IF NOT EXISTS deal_stage_history_stage_id_idx
+  ON deal_stage_history (stage_id);
 
 -- Calls, emails, meetings, and notes. An activity can point at a
 -- company, a contact, a deal, or any combination of the three, since
@@ -118,6 +123,9 @@ CREATE INDEX IF NOT EXISTS activities_company_id_idx
 -- Serves the task list: what is due and not yet done.
 CREATE INDEX IF NOT EXISTS activities_due_at_idx
   ON activities (due_at) WHERE completed_at IS NULL;
+-- Serves one rep's activity feed, and the clean up when they leave.
+CREATE INDEX IF NOT EXISTS activities_user_id_idx
+  ON activities (user_id);
 
 -- The board totals: how many open deals sit in each stage and what
 -- they are worth.

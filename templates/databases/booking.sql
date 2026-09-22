@@ -110,6 +110,9 @@ CREATE INDEX IF NOT EXISTS bookings_customer_id_idx
 
 -- Serves the day view: everything booked in a window, soonest first.
 CREATE INDEX IF NOT EXISTS bookings_starts_at_idx ON bookings (starts_at);
+-- Serves a service's history, and the check when one is deleted.
+CREATE INDEX IF NOT EXISTS bookings_service_id_idx
+  ON bookings (service_id);
 
 CREATE TRIGGER IF NOT EXISTS bookings_set_updated_at
 AFTER UPDATE ON bookings BEGIN

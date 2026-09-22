@@ -87,6 +87,8 @@ CREATE TABLE IF NOT EXISTS uploads (
 
 CREATE INDEX IF NOT EXISTS uploads_submission_id_idx
   ON uploads (submission_id);
+-- Searched when a field is deleted.
+CREATE INDEX IF NOT EXISTS uploads_field_id_idx ON uploads (field_id);
 
 -- A submission read back in field order, with the labels attached.
 CREATE VIEW IF NOT EXISTS submission_answers AS

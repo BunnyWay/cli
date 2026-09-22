@@ -129,6 +129,9 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
+-- Searched when a plan is deleted.
+CREATE INDEX IF NOT EXISTS subscriptions_plan_id_idx
+  ON subscriptions (plan_id);
 
 -- Who did what, for the organization's activity feed. target_type and
 -- target_id name the affected record, metadata holds JSON details.
@@ -147,6 +150,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 CREATE INDEX IF NOT EXISTS audit_log_organization_id_created_at_idx
   ON audit_log (organization_id, created_at DESC);
+-- Serves one person's history, and the clean up when they leave.
+CREATE INDEX IF NOT EXISTS audit_log_actor_id_idx
+  ON audit_log (actor_id);
 
 CREATE TRIGGER IF NOT EXISTS users_set_updated_at AFTER UPDATE ON users BEGIN
   UPDATE users SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')

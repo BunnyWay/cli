@@ -79,6 +79,9 @@ CREATE TABLE IF NOT EXISTS playlist_videos (
   added_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   PRIMARY KEY (playlist_id, video_id)
 );
+-- Searched when a video is deleted.
+CREATE INDEX IF NOT EXISTS playlist_videos_video_id_idx
+  ON playlist_videos (video_id);
 
 -- Where a viewer got to, so the player can offer to resume. One row
 -- per viewer per video rather than one per play: write it when
@@ -95,6 +98,9 @@ CREATE TABLE IF NOT EXISTS watch_progress (
 -- Serves the continue watching row: what this viewer last picked up.
 CREATE INDEX IF NOT EXISTS watch_progress_user_id_updated_at_idx
   ON watch_progress (user_id, updated_at DESC);
+-- Searched when a video is deleted.
+CREATE INDEX IF NOT EXISTS watch_progress_video_id_idx
+  ON watch_progress (video_id);
 
 -- The primary key allows one reaction per viewer per video, so
 -- switching from a like to a dislike replaces the row.
@@ -105,6 +111,9 @@ CREATE TABLE IF NOT EXISTS reactions (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   PRIMARY KEY (video_id, user_id)
 );
+-- Searched when a user is deleted.
+CREATE INDEX IF NOT EXISTS reactions_user_id_idx
+  ON reactions (user_id);
 
 CREATE TABLE IF NOT EXISTS comments (
   id INTEGER PRIMARY KEY,
@@ -117,6 +126,10 @@ CREATE TABLE IF NOT EXISTS comments (
 );
 
 CREATE INDEX IF NOT EXISTS comments_video_id_idx ON comments (video_id);
+-- Searched when a user or a parent comment is deleted.
+CREATE INDEX IF NOT EXISTS comments_user_id_idx ON comments (user_id);
+CREATE INDEX IF NOT EXISTS comments_parent_id_idx
+  ON comments (parent_id);
 
 CREATE TABLE IF NOT EXISTS subscriptions (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

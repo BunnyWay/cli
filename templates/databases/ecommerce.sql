@@ -122,6 +122,9 @@ CREATE TABLE IF NOT EXISTS cart_items (
   quantity INTEGER NOT NULL CHECK (quantity > 0),
   UNIQUE (cart_id, variant_id)
 );
+-- Searched when a variant is deleted.
+CREATE INDEX IF NOT EXISTS cart_items_variant_id_idx
+  ON cart_items (variant_id);
 
 -- kind 'percent' reads value as a percentage off, 'fixed' reads it as
 -- an amount in cents. use_count is bumped by the checkout code.
@@ -171,6 +174,13 @@ CREATE INDEX IF NOT EXISTS orders_customer_id_idx ON orders (customer_id);
 -- Serves the orders queue: newest orders in a given state first.
 CREATE INDEX IF NOT EXISTS orders_status_placed_at_idx
   ON orders (status, placed_at DESC);
+-- Searched when an address or a discount code is deleted.
+CREATE INDEX IF NOT EXISTS orders_shipping_address_id_idx
+  ON orders (shipping_address_id);
+CREATE INDEX IF NOT EXISTS orders_billing_address_id_idx
+  ON orders (billing_address_id);
+CREATE INDEX IF NOT EXISTS orders_discount_code_id_idx
+  ON orders (discount_code_id);
 
 -- sku, name, and unit_price_cents are copied from the variant at
 -- checkout so renaming or repricing a product never rewrites history.
@@ -186,6 +196,9 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 CREATE INDEX IF NOT EXISTS order_items_order_id_idx
   ON order_items (order_id);
+-- Searched when a variant is deleted.
+CREATE INDEX IF NOT EXISTS order_items_variant_id_idx
+  ON order_items (variant_id);
 
 CREATE TRIGGER IF NOT EXISTS customers_set_updated_at
 AFTER UPDATE ON customers BEGIN

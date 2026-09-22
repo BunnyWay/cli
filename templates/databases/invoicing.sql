@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS invoice_items (
 
 CREATE INDEX IF NOT EXISTS invoice_items_invoice_id_idx
   ON invoice_items (invoice_id);
+-- Searched when a tax rate is deleted.
+CREATE INDEX IF NOT EXISTS invoice_items_tax_rate_id_idx
+  ON invoice_items (tax_rate_id);
 
 -- An invoice can be paid in instalments, so it may have many payments.
 CREATE TABLE IF NOT EXISTS payments (
