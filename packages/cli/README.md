@@ -150,7 +150,7 @@ Create a new database. Interactively prompts for name and region selection (auto
 
 It also offers a schema to start from. Picking a template writes its SQL to `migrations/0001_<template>.sql` and applies it to the new database as its first migration, so the schema is versioned in your project and recorded in the migration history from the start. `--template` answers that prompt: pass a template name, or `none` for an empty database. A project that already has migrations refuses a template, because the new file would be applied out of order.
 
-Available templates: `blog`, `course-platform`, `ecommerce`, `event-ticketing`, `helpdesk`, `invoicing`, `link-shortener`, `saas-starter`, `video-platform`.
+Available templates: `blog`, `booking`, `course-platform`, `crm`, `ecommerce`, `event-ticketing`, `feature-flags`, `forms`, `helpdesk`, `invoicing`, `link-shortener`, `saas-starter`, `video-platform`.
 
 ```bash
 # Interactive — prompts for name and region mode

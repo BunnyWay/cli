@@ -6,6 +6,20 @@
     "tables": ["users", "posts", "tags", "post_tags", "comments"]
   },
   {
+    "id": "booking",
+    "name": "Appointment Booking",
+    "description": "Staff, services, weekly hours, and bookings that avoid clashes.",
+    "tables": [
+      "customers",
+      "services",
+      "staff",
+      "staff_services",
+      "availability",
+      "time_off",
+      "bookings"
+    ]
+  },
+  {
     "id": "course-platform",
     "name": "Course Platform",
     "description": "Instructors publish lessons; students enrol and track progress.",
@@ -19,6 +33,21 @@
       "reviews"
     ],
     "views": ["enrollment_progress"]
+  },
+  {
+    "id": "crm",
+    "name": "CRM",
+    "description": "Companies, contacts, and deals moving through pipeline stages.",
+    "tables": [
+      "users",
+      "companies",
+      "contacts",
+      "stages",
+      "deals",
+      "deal_stage_history",
+      "activities"
+    ],
+    "views": ["pipeline_summary"]
   },
   {
     "id": "ecommerce",
@@ -52,6 +81,26 @@
       "tickets"
     ],
     "views": ["ticket_availability"]
+  },
+  {
+    "id": "feature-flags",
+    "name": "Feature Flags",
+    "description": "Flags with per-environment values and targeting rules.",
+    "tables": [
+      "environments",
+      "flags",
+      "flag_settings",
+      "rules",
+      "flag_changes"
+    ],
+    "views": ["flag_state"]
+  },
+  {
+    "id": "forms",
+    "name": "Forms",
+    "description": "Custom fields, submissions, answers, and uploaded files.",
+    "tables": ["forms", "fields", "submissions", "answers", "uploads"],
+    "views": ["submission_answers"]
   },
   {
     "id": "helpdesk",
