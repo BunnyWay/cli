@@ -2,13 +2,13 @@
   {
     "id": "blog",
     "name": "Blog",
-    "description": "Users write posts, organised by tags and discussed in threaded comments.",
+    "description": "Authors publish tagged posts and readers reply in threads.",
     "tables": ["users", "posts", "tags", "post_tags", "comments"]
   },
   {
     "id": "course-platform",
     "name": "Course Platform",
-    "description": "Instructors publish courses made of sections and lessons; students enrol, work through lessons, and leave reviews.",
+    "description": "Instructors publish lessons; students enrol and track progress.",
     "tables": [
       "users",
       "courses",
@@ -23,7 +23,7 @@
   {
     "id": "ecommerce",
     "name": "E-commerce Shop",
-    "description": "A catalog of products sold as variants, guest and customer carts, discount codes, and orders that keep their own copy of what was bought.",
+    "description": "Products and variants, with carts, discounts, and orders.",
     "tables": [
       "customers",
       "addresses",
@@ -42,7 +42,7 @@
   {
     "id": "event-ticketing",
     "name": "Event Ticketing",
-    "description": "Venues host events that sell ticket types; attendees place orders and receive tickets that are scanned at the door.",
+    "description": "Venues run events that sell tickets, scanned at the door.",
     "tables": [
       "venues",
       "events",
@@ -56,7 +56,7 @@
   {
     "id": "helpdesk",
     "name": "Helpdesk",
-    "description": "Customers raise tickets that agents work through a thread of messages, with internal notes, attachments, canned replies, and satisfaction scores.",
+    "description": "Customer tickets with agent replies, internal notes, and tags.",
     "tables": [
       "agents",
       "customers",
@@ -72,21 +72,21 @@
   {
     "id": "invoicing",
     "name": "Invoicing",
-    "description": "Clients, invoices built from line items, and payments, with views for line amounts, invoice totals, and outstanding balances.",
+    "description": "Invoices built from line items, with totals and balances owed.",
     "tables": ["clients", "tax_rates", "invoices", "invoice_items", "payments"],
     "views": ["invoice_item_amounts", "invoice_totals", "invoice_balances"]
   },
   {
     "id": "link-shortener",
     "name": "Link Shortener",
-    "description": "Short slugs that redirect to target URLs, with per-click analytics and a stats view.",
+    "description": "Short slugs that redirect to any URL, with click analytics.",
     "tables": ["links", "clicks"],
     "views": ["link_stats"]
   },
   {
     "id": "saas-starter",
     "name": "SaaS Starter",
-    "description": "Users sign in, belong to organizations, invite team mates, issue API keys, subscribe to a plan, and leave an audit trail.",
+    "description": "Multi-tenant accounts with API keys, plans, and an audit log.",
     "tables": [
       "users",
       "sessions",
@@ -102,7 +102,7 @@
   {
     "id": "video-platform",
     "name": "Video Platform",
-    "description": "Channels publish Bunny Stream videos into playlists; viewers watch, react, comment, and subscribe.",
+    "description": "Channels publish Bunny Stream videos, with plays and comments.",
     "tables": [
       "users",
       "channels",
