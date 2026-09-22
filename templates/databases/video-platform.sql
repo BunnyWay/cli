@@ -30,8 +30,9 @@ CREATE INDEX IF NOT EXISTS channels_owner_id_idx ON channels (owner_id);
 
 -- The media itself lives in Bunny Stream: stream_library_id and
 -- stream_video_id are what you pass to the Stream API and player.
--- view_count is a running total kept by the trigger below, so the
--- video page never has to count rows in video_views.
+-- Bunny Stream counts plays for you, so refresh view_count from its
+-- statistics on a schedule. Incrementing it on every play would send
+-- one write per viewer to the same row, which SQLite serialises.
 CREATE TABLE IF NOT EXISTS videos (
   id INTEGER PRIMARY KEY,
   channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
@@ -78,24 +79,28 @@ CREATE TABLE IF NOT EXISTS playlist_videos (
   added_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   PRIMARY KEY (playlist_id, video_id)
 );
+-- Searched when a video is deleted.
+CREATE INDEX IF NOT EXISTS playlist_videos_video_id_idx
+  ON playlist_videos (video_id);
 
--- One row per play. user_id is NULL for a signed-out viewer, who is
--- identified by session_id instead.
-CREATE TABLE IF NOT EXISTS video_views (
-  id INTEGER PRIMARY KEY,
+-- Where a viewer got to, so the player can offer to resume. One row
+-- per viewer per video rather than one per play: write it when
+-- playback pauses or finishes, not on a timer while the video runs.
+CREATE TABLE IF NOT EXISTS watch_progress (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   video_id INTEGER NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
-  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  session_id TEXT,
   watched_seconds INTEGER NOT NULL DEFAULT 0,
   completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),
-  country TEXT CHECK (country IS NULL OR length(country) = 2),
-  started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  PRIMARY KEY (user_id, video_id)
 );
 
-CREATE INDEX IF NOT EXISTS video_views_video_id_started_at_idx
-  ON video_views (video_id, started_at DESC);
-CREATE INDEX IF NOT EXISTS video_views_user_id_idx
-  ON video_views (user_id);
+-- Serves the continue watching row: what this viewer last picked up.
+CREATE INDEX IF NOT EXISTS watch_progress_user_id_updated_at_idx
+  ON watch_progress (user_id, updated_at DESC);
+-- Searched when a video is deleted.
+CREATE INDEX IF NOT EXISTS watch_progress_video_id_idx
+  ON watch_progress (video_id);
 
 -- The primary key allows one reaction per viewer per video, so
 -- switching from a like to a dislike replaces the row.
@@ -106,6 +111,9 @@ CREATE TABLE IF NOT EXISTS reactions (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   PRIMARY KEY (video_id, user_id)
 );
+-- Searched when a user is deleted.
+CREATE INDEX IF NOT EXISTS reactions_user_id_idx
+  ON reactions (user_id);
 
 CREATE TABLE IF NOT EXISTS comments (
   id INTEGER PRIMARY KEY,
@@ -118,6 +126,10 @@ CREATE TABLE IF NOT EXISTS comments (
 );
 
 CREATE INDEX IF NOT EXISTS comments_video_id_idx ON comments (video_id);
+-- Searched when a user or a parent comment is deleted.
+CREATE INDEX IF NOT EXISTS comments_user_id_idx ON comments (user_id);
+CREATE INDEX IF NOT EXISTS comments_parent_id_idx
+  ON comments (parent_id);
 
 CREATE TABLE IF NOT EXISTS subscriptions (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -130,11 +142,6 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 CREATE INDEX IF NOT EXISTS subscriptions_channel_id_idx
   ON subscriptions (channel_id);
 
-CREATE TRIGGER IF NOT EXISTS video_views_increment_view_count
-AFTER INSERT ON video_views BEGIN
-  UPDATE videos SET view_count = view_count + 1 WHERE id = NEW.video_id;
-END;
-
 CREATE TRIGGER IF NOT EXISTS users_set_updated_at AFTER UPDATE ON users BEGIN
   UPDATE users SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   WHERE id = NEW.id;
@@ -146,8 +153,8 @@ AFTER UPDATE ON channels BEGIN
   WHERE id = NEW.id;
 END;
 
--- Named columns only, so counting a view does not make the video look
--- freshly edited.
+-- Named columns only, so refreshing view_count does not make the
+-- video look freshly edited.
 CREATE TRIGGER IF NOT EXISTS videos_set_updated_at
 AFTER UPDATE OF
   title, description, thumbnail_url, duration_seconds, visibility,
@@ -167,4 +174,11 @@ CREATE TRIGGER IF NOT EXISTS comments_set_updated_at
 AFTER UPDATE ON comments BEGIN
   UPDATE comments SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS watch_progress_set_updated_at
+AFTER UPDATE ON watch_progress BEGIN
+  UPDATE watch_progress
+  SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  WHERE user_id = NEW.user_id AND video_id = NEW.video_id;
 END;

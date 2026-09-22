@@ -69,6 +69,9 @@ CREATE TABLE IF NOT EXISTS comments (
 
 CREATE INDEX IF NOT EXISTS comments_post_id_idx ON comments (post_id);
 CREATE INDEX IF NOT EXISTS comments_parent_id_idx ON comments (parent_id);
+-- Searched when a user is deleted.
+CREATE INDEX IF NOT EXISTS comments_author_id_idx
+  ON comments (author_id);
 
 CREATE TRIGGER IF NOT EXISTS users_set_updated_at AFTER UPDATE ON users BEGIN
   UPDATE users SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')

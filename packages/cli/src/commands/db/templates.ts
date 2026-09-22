@@ -1,15 +1,18 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import blogSql from "@templates/databases/blog.sql" with { type: "text" };
+import bookingSql from "@templates/databases/booking.sql" with { type: "text" };
 import coursePlatformSql from "@templates/databases/course-platform.sql" with {
   type: "text",
 };
+import crmSql from "@templates/databases/crm.sql" with { type: "text" };
 import ecommerceSql from "@templates/databases/ecommerce.sql" with {
   type: "text",
 };
-import eventTicketingSql from "@templates/databases/event-ticketing.sql" with {
+import featureFlagsSql from "@templates/databases/feature-flags.sql" with {
   type: "text",
 };
+import formsSql from "@templates/databases/forms.sql" with { type: "text" };
 import helpdeskSql from "@templates/databases/helpdesk.sql" with {
   type: "text",
 };
@@ -17,9 +20,6 @@ import templateIndexJson from "@templates/databases/index.jsonc" with {
   type: "text",
 };
 import invoicingSql from "@templates/databases/invoicing.sql" with {
-  type: "text",
-};
-import linkShortenerSql from "@templates/databases/link-shortener.sql" with {
   type: "text",
 };
 import saasStarterSql from "@templates/databases/saas-starter.sql" with {
@@ -51,12 +51,14 @@ export const TEMPLATE_NONE = "none";
 
 const SQL_BY_ID: Record<string, string> = {
   blog: blogSql,
+  booking: bookingSql,
   "course-platform": coursePlatformSql,
+  crm: crmSql,
   ecommerce: ecommerceSql,
-  "event-ticketing": eventTicketingSql,
+  "feature-flags": featureFlagsSql,
+  forms: formsSql,
   helpdesk: helpdeskSql,
   invoicing: invoicingSql,
-  "link-shortener": linkShortenerSql,
   "saas-starter": saasStarterSql,
   "video-platform": videoPlatformSql,
 };

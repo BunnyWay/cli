@@ -89,7 +89,9 @@ CREATE INDEX IF NOT EXISTS enrollments_course_id_idx
   ON enrollments (course_id);
 
 -- One row per lesson a student has opened. Rows are absent until the
--- student starts the lesson.
+-- student starts the lesson. Save watched_seconds when playback
+-- pauses or the lesson finishes; writing it on a timer turns one
+-- student watching one video into a steady stream of writes.
 CREATE TABLE IF NOT EXISTS lesson_progress (
   enrollment_id INTEGER NOT NULL
     REFERENCES enrollments(id) ON DELETE CASCADE,
@@ -101,6 +103,9 @@ CREATE TABLE IF NOT EXISTS lesson_progress (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   PRIMARY KEY (enrollment_id, lesson_id)
 );
+-- Searched when a lesson is deleted.
+CREATE INDEX IF NOT EXISTS lesson_progress_lesson_id_idx
+  ON lesson_progress (lesson_id);
 
 CREATE TABLE IF NOT EXISTS reviews (
   id INTEGER PRIMARY KEY,
@@ -111,6 +116,8 @@ CREATE TABLE IF NOT EXISTS reviews (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   UNIQUE (course_id, user_id)
 );
+-- Searched when a user is deleted.
+CREATE INDEX IF NOT EXISTS reviews_user_id_idx ON reviews (user_id);
 
 -- Lessons completed out of lessons in the course, per enrolled
 -- student. A course with no lessons yet reports 0 percent.

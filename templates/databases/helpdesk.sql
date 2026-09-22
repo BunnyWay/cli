@@ -69,6 +69,11 @@ CREATE TABLE IF NOT EXISTS ticket_messages (
 
 CREATE INDEX IF NOT EXISTS ticket_messages_ticket_id_created_at_idx
   ON ticket_messages (ticket_id, created_at);
+-- Searched when a customer or an agent is deleted.
+CREATE INDEX IF NOT EXISTS ticket_messages_customer_id_idx
+  ON ticket_messages (customer_id);
+CREATE INDEX IF NOT EXISTS ticket_messages_agent_id_idx
+  ON ticket_messages (agent_id);
 
 CREATE TABLE IF NOT EXISTS attachments (
   id INTEGER PRIMARY KEY,
