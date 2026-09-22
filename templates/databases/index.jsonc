@@ -69,20 +69,6 @@
     ]
   },
   {
-    "id": "event-ticketing",
-    "name": "Event Ticketing",
-    "description": "Venues run events that sell tickets, scanned at the door.",
-    "tables": [
-      "venues",
-      "events",
-      "ticket_types",
-      "attendees",
-      "orders",
-      "tickets"
-    ],
-    "views": ["ticket_availability"]
-  },
-  {
     "id": "feature-flags",
     "name": "Feature Flags",
     "description": "Flags with per-environment values and targeting rules.",
@@ -124,13 +110,6 @@
     "description": "Invoices built from line items, with totals and balances owed.",
     "tables": ["clients", "tax_rates", "invoices", "invoice_items", "payments"],
     "views": ["invoice_item_amounts", "invoice_totals", "invoice_balances"]
-  },
-  {
-    "id": "link-shortener",
-    "name": "Link Shortener",
-    "description": "Short slugs that redirect to any URL, with click analytics.",
-    "tables": ["links", "clicks"],
-    "views": ["link_stats"]
   },
   {
     "id": "saas-starter",

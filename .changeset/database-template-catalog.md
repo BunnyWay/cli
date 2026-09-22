@@ -2,4 +2,4 @@
 "@bunny.net/cli": minor
 ---
 
-db create offers booking, CRM, feature flag, and form schema templates
+db create offers eleven schema templates, including booking, CRM, feature flags, and forms
