@@ -99,7 +99,7 @@ if download "${BASE_URL}/SHA256SUMS" "$SUMSFILE" 2>/dev/null; then
     exit 1
   fi
 else
-  echo "Warning: this release has no SHA256SUMS; skipping checksum verification."
+  echo "Warning: could not fetch SHA256SUMS for this release; skipping checksum verification."
 fi
 
 chmod +x "$TMPFILE"

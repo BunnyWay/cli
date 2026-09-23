@@ -364,6 +364,27 @@ jobs:
           chmod +x packages/cli-linux-x64/bunny-baseline
           chmod +x packages/cli-darwin-x64/bunny-baseline
 
+      # Everything that can fail runs before the npm publish, which cannot be undone.
+      - name: Collect release binaries
+        run: |
+          mkdir release
+          mv npm-artifacts/cli-linux-x64/bunny release/bunny-linux-x64
+          mv npm-artifacts/cli-linux-arm64/bunny release/bunny-linux-arm64
+          mv npm-artifacts/cli-darwin-x64/bunny release/bunny-darwin-x64
+          mv npm-artifacts/cli-darwin-arm64/bunny release/bunny-darwin-arm64
+          mv npm-artifacts/cli-windows-x64/bunny.exe release/bunny-windows-x64.exe
+          mv npm-artifacts/bunny-linux-x64-baseline/bunny-linux-x64-baseline release/
+          mv npm-artifacts/bunny-darwin-x64-baseline/bunny-darwin-x64-baseline release/
+
+      - name: Generate checksums
+        working-directory: release
+        run: sha256sum bunny-* > SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-checksums: release/SHA256SUMS
+
       - name: Publish platform packages
         run: |
           for pkg in cli-linux-x64 cli-linux-arm64 cli-darwin-x64 cli-darwin-arm64 cli-windows-x64; do
@@ -390,26 +411,6 @@ jobs:
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Collect release binaries
-        run: |
-          mkdir release
-          mv npm-artifacts/cli-linux-x64/bunny release/bunny-linux-x64
-          mv npm-artifacts/cli-linux-arm64/bunny release/bunny-linux-arm64
-          mv npm-artifacts/cli-darwin-x64/bunny release/bunny-darwin-x64
-          mv npm-artifacts/cli-darwin-arm64/bunny release/bunny-darwin-arm64
-          mv npm-artifacts/cli-windows-x64/bunny.exe release/bunny-windows-x64.exe
-          mv npm-artifacts/bunny-linux-x64-baseline/bunny-linux-x64-baseline release/
-          mv npm-artifacts/bunny-darwin-x64-baseline/bunny-darwin-x64-baseline release/
-
-      - name: Generate checksums
-        working-directory: release
-        run: sha256sum bunny-* > SHA256SUMS
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@v4
-        with:
-          subject-checksums: release/SHA256SUMS
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2

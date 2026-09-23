@@ -584,7 +584,7 @@ Three distribution channels:
 2. **npm**, via the platform-specific binary package pattern. `@bunny.net/cli` ships a JS shim that delegates to the right platform package. Platform packages are versioned in lockstep through the `fixed` array in `.changeset/config.json`.
 3. **GitHub Releases**, with binaries, a `SHA256SUMS` file, and a build provenance attestation over those checksums, attached by `.github/workflows/release.yml`.
 
-On macOS, `bun build --compile` leaves an invalid signature: ad-hoc on arm64, and the Bun runtime's own Developer ID on cross-compiled x64. The release workflow strips it and re-signs ad hoc (`net.bunny.cli` / `net.bunny.database-shell`) before upload, so npm and release binaries carry a valid signature. Developer ID signing and notarization are not set up (no Apple Developer account); when they are, the signature must be applied after compile, which is where the ad-hoc step lives now.
+On macOS, `bun build --compile` leaves an invalid signature: ad-hoc on arm64, and the Bun runtime's own Developer ID on cross-compiled x64. The release workflow strips it and re-signs ad hoc (`net.bunny.cli` / `net.bunny.database-shell`) before upload, so npm and release binaries carry a valid signature. Developer ID signing and notarization are not set up yet; when they are, the signature must be applied after compile, which is where the ad-hoc step lives now.
 
 ### Publishing libraries
 
