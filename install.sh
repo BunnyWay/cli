@@ -29,6 +29,25 @@ has_avx2() {
   esac
 }
 
+download() {
+  if command -v curl > /dev/null 2>&1; then
+    curl -fsSL "$1" -o "$2"
+  elif command -v wget > /dev/null 2>&1; then
+    wget -qO "$2" "$1"
+  else
+    echo "Error: curl or wget is required."
+    exit 1
+  fi
+}
+
+sha256() {
+  if command -v sha256sum > /dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum > /dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
 OS=$(get_os)
 ARCH=$(get_arch)
 
@@ -51,24 +70,36 @@ BINARY="bunny-${OS}-${ARCH}${VARIANT}"
 # redirect so we don't hit api.github.com (rate-limited to 60 req/hr).
 if [ -n "${1:-}" ]; then
   VERSION="$1"
-  URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}"
+  BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
   echo "Installing bunny ${VERSION} (${OS}/${ARCH})..."
 else
-  URL="https://github.com/${REPO}/releases/latest/download/${BINARY}"
+  BASE_URL="https://github.com/${REPO}/releases/latest/download"
   echo "Installing bunny (${OS}/${ARCH})..."
 fi
 
 TMPFILE=$(mktemp)
-trap 'rm -f "$TMPFILE"' EXIT
+SUMSFILE=$(mktemp)
+trap 'rm -f "$TMPFILE" "$SUMSFILE"' EXIT
 
-# Download
-if command -v curl > /dev/null 2>&1; then
-  curl -fsSL "$URL" -o "$TMPFILE"
-elif command -v wget > /dev/null 2>&1; then
-  wget -qO "$TMPFILE" "$URL"
+download "${BASE_URL}/${BINARY}" "$TMPFILE"
+
+# Releases published before checksums shipped have no SHA256SUMS, so only a mismatch is fatal.
+if download "${BASE_URL}/SHA256SUMS" "$SUMSFILE" 2>/dev/null; then
+  EXPECTED=$(awk -v f="$BINARY" '$2 == f { print $1 }' "$SUMSFILE")
+  ACTUAL=$(sha256 "$TMPFILE")
+  if [ -z "$EXPECTED" ]; then
+    echo "Error: ${BINARY} is not listed in the release's SHA256SUMS."
+    exit 1
+  elif [ -z "$ACTUAL" ]; then
+    echo "Warning: sha256sum or shasum not found; skipping checksum verification."
+  elif [ "$EXPECTED" != "$ACTUAL" ]; then
+    echo "Error: checksum mismatch for ${BINARY}."
+    echo "  expected: ${EXPECTED}"
+    echo "  actual:   ${ACTUAL}"
+    exit 1
+  fi
 else
-  echo "Error: curl or wget is required."
-  exit 1
+  echo "Warning: this release has no SHA256SUMS; skipping checksum verification."
 fi
 
 chmod +x "$TMPFILE"
@@ -88,12 +119,12 @@ else
   sudo mv "$TMPFILE" "${INSTALL_DIR}/${BIN_NAME}"
 fi
 
-# macOS: clear quarantine xattr (set by curl) and ad-hoc sign so Gatekeeper
-# and the Apple Silicon kernel allow execution. Without this, first run on
-# darwin-arm64 fails with "killed: 9".
+# macOS: older releases shipped an invalid signature that arm64 kills with "killed: 9", so re-sign only when it fails to verify.
 if [ "$OS" = "darwin" ]; then
   xattr -d com.apple.quarantine "${INSTALL_DIR}/${BIN_NAME}" 2>/dev/null || true
-  codesign --sign - --force "${INSTALL_DIR}/${BIN_NAME}" 2>/dev/null || true
+  if ! codesign --verify "${INSTALL_DIR}/${BIN_NAME}" 2>/dev/null; then
+    codesign --sign - --force "${INSTALL_DIR}/${BIN_NAME}" 2>/dev/null || true
+  fi
 fi
 
 echo "bunny installed to ${INSTALL_DIR}/${BIN_NAME}"
