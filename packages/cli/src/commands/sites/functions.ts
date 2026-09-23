@@ -15,6 +15,7 @@ import {
   SCRIPT_MANIFEST,
   SCRIPT_TYPE_STANDALONE,
 } from "@/commands/scripts/constants.ts";
+import type { CoreClient } from "@/commands/storage/api.ts";
 import { UserError } from "@/core/errors.ts";
 import { saveManifestAt } from "@/core/manifest.ts";
 import { type ComputeClient, sha256Hex } from "./api.ts";
@@ -152,7 +153,7 @@ export async function discoverFunctions(
   return functions.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// The generated entry accepts both a bare handler and a `{ fetch }` object, hands it to the Edge Scripting runtime directly (no SDK dependency), and answers CORS for any origin since the frontend calls the function cross-origin; a handler that sets its own Access-Control-Allow-Origin wins. Responses default to `Cache-Control: no-store` because standalone scripts run after the CDN cache; WebSocket upgrades pass through untouched.
+// The generated entry accepts both a bare handler and a `{ fetch }` object, hands it to the Edge Scripting runtime directly (no SDK dependency), and answers CORS for any origin since the frontend calls the function cross-origin; a handler that sets its own Access-Control-Allow-Origin wins. Responses default to `Cache-Control: no-cache`, which also keeps the CDN from storing them (standalone scripts run after the cache); WebSocket upgrades pass through untouched.
 export function functionEntrySource(handlerPath: string): string {
   return [
     `import handler from ${JSON.stringify(handlerPath)};`,
@@ -164,7 +165,7 @@ export function functionEntrySource(handlerPath: string): string {
     "  if (res.status === 101) return res;",
     "  const headers = new Headers(res.headers);",
     '  if (!headers.has("Access-Control-Allow-Origin")) for (const [k, v] of Object.entries(cors(req))) headers.set(k, v);',
-    '  if (!headers.has("Cache-Control")) headers.set("Cache-Control", "no-store");',
+    '  if (!headers.has("Cache-Control")) headers.set("Cache-Control", "no-cache");',
     "  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });",
     "});",
     "",
@@ -196,6 +197,7 @@ export async function buildFunction(
   if (fn.entry) {
     return bundleEdgeScript({
       source: functionEntrySource(fn.entry),
+      root: fn.dir,
       label: `Function "${fn.name}"`,
     });
   }
@@ -229,32 +231,55 @@ function bareHostname(value: string): string {
   return value.replace(/^https?:\/\//, "").replace(/\/$/, "");
 }
 
-// Create the function's standalone script with a linked pull zone, then read the zone's hostname back (the create response doesn't always carry it).
+// Both overrides at -1 make the zone deliver the script's own Cache-Control; new zones default to rewriting it to `public, max-age=2592000`.
+const FUNCTION_CACHE_SETTINGS = {
+  CacheControlMaxAgeOverride: -1,
+  CacheControlPublicMaxAgeOverride: -1,
+};
+
+// Create the function's standalone script with a linked pull zone, read the zone's hostname back (the create response doesn't always carry it), and let the script own caching; any failure after the create deletes the script so a retry doesn't orphan it.
 async function createFunctionScript(
-  client: ComputeClient,
+  clients: { compute: ComputeClient; core: CoreClient },
   site: string,
   fn: SiteFunction,
 ): Promise<FunctionRecord> {
-  const created = await createScriptResource(client, {
+  const created = await createScriptResource(clients.compute, {
     Name: functionScriptName(site, fn.name),
     ScriptType: SCRIPT_TYPE_STANDALONE,
     CreateLinkedPullZone: true,
   });
-  let zone = created.LinkedPullZones?.[0];
-  if (!zone?.DefaultHostname) {
-    zone = (await fetchScript(client, created.Id)).LinkedPullZones?.[0];
+  try {
+    let zone = created.LinkedPullZones?.[0];
+    if (!zone?.DefaultHostname) {
+      zone = (await fetchScript(clients.compute, created.Id))
+        .LinkedPullZones?.[0];
+    }
+    if (zone?.Id == null || !zone.DefaultHostname) {
+      throw new UserError(
+        `Function "${fn.name}" was created, but its pull zone has no hostname yet.`,
+        "Re-run the deploy; the zone may still be provisioning.",
+      );
+    }
+    await clients.core.POST("/pullzone/{id}", {
+      params: { path: { id: zone.Id } },
+      body: FUNCTION_CACHE_SETTINGS,
+    });
+    return {
+      scriptId: created.Id,
+      pullZoneId: zone.Id,
+      hostname: bareHostname(zone.DefaultHostname),
+    };
+  } catch (err) {
+    await clients.compute
+      .DELETE("/compute/script/{id}", {
+        params: {
+          path: { id: created.Id },
+          query: { deleteLinkedPullZones: true },
+        },
+      })
+      .catch(() => {});
+    throw err;
   }
-  if (!zone?.DefaultHostname) {
-    throw new UserError(
-      `Function "${fn.name}" was created as script ${created.Id}, but its pull zone has no hostname yet.`,
-      "Re-run the deploy; the zone may still be provisioning.",
-    );
-  }
-  return {
-    scriptId: created.Id,
-    pullZoneId: zone.Id,
-    hostname: bareHostname(zone.DefaultHostname),
-  };
 }
 
 export interface PreparedFunction {
@@ -266,31 +291,41 @@ export interface PreparedFunction {
   warnings: string[];
 }
 
-// Build every function and create the scripts missing from `state.functions` (mutated; the caller writes state) so their URLs exist before the site builds; nothing is published yet, so a deploy that fails validation later leaves live functions untouched.
+// Build every function, then create the scripts missing from `state.functions` (mutated) so their URLs exist before the site builds. Builds all run first so a broken one fails before anything is created, and `onCreated` persists each new record at once so a later failure can't orphan it. Nothing is published yet, so a deploy that fails validation leaves live functions untouched.
 export async function prepareFunctions(opts: {
   computeClient: ComputeClient;
+  coreClient: CoreClient;
   state: RemoteSiteState;
   functions: SiteFunction[];
   onStep?: (message: string) => void;
+  onCreated?: () => Promise<void>;
 }): Promise<PreparedFunction[]> {
-  const { computeClient, state, functions } = opts;
+  const { state, functions } = opts;
+  const clients = { compute: opts.computeClient, core: opts.coreClient };
   const step = opts.onStep ?? (() => {});
   for (const fn of functions) assertScriptNameFits(state.name, fn);
   state.functions ??= {};
   const records = state.functions;
-  const prepared: PreparedFunction[] = [];
 
+  const built: { fn: SiteFunction; bundle: EdgeScriptBundle }[] = [];
   for (const fn of functions) {
     step(`Building function ${fn.name}...`);
-    const { code, warnings } = await buildFunction(fn);
+    built.push({ fn, bundle: await buildFunction(fn) });
+  }
 
+  const prepared: PreparedFunction[] = [];
+  for (const {
+    fn,
+    bundle: { code, warnings },
+  } of built) {
     // Own-property lookup: a function named `constructor` must not resolve to Object.prototype's.
     let record = Object.hasOwn(records, fn.name) ? records[fn.name] : undefined;
     const created = !record;
     if (!record) {
       step(`Creating function ${fn.name}...`);
-      record = await createFunctionScript(computeClient, state.name, fn);
+      record = await createFunctionScript(clients, state.name, fn);
       records[fn.name] = record;
+      await opts.onCreated?.();
     }
 
     // A folder function is a script project in its own right: link it so `bunny scripts` commands work from inside it.

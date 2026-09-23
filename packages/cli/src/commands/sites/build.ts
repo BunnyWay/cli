@@ -75,7 +75,8 @@ export async function runBuildCommand(
     cwd,
     env: { ...process.env, ...env },
     stdin: "ignore",
-    stdout: "inherit",
+    // Build chatter goes to stderr with the rest of the CLI's status output, so `--output json` stdout stays parseable.
+    stdout: 2,
     stderr: "inherit",
   });
   const code = await proc.exited;

@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { CoreClient } from "@/commands/storage/api.ts";
 import type { ComputeClient } from "./api.ts";
 import { type RemoteSiteState, STATE_VERSION } from "./constants.ts";
 import {
@@ -23,6 +24,15 @@ function scaffold(files: Record<string, string>): void {
 }
 
 afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+function recordingCore(calls: string[]): CoreClient {
+  return {
+    POST: async (path: string, init: { body: unknown }) => {
+      calls.push(`${path} ${JSON.stringify(init.body)}`);
+      return { data: {} };
+    },
+  } as unknown as CoreClient;
+}
 
 test("discovers folder and single-file functions, skipping dot entries", async () => {
   scaffold({
@@ -68,7 +78,12 @@ test("rejects a name whose Edge Script name exceeds the API cap", async () => {
   };
   const functions = await discoverFunctions(root);
   await expect(
-    prepareFunctions({ computeClient, state, functions }),
+    prepareFunctions({
+      computeClient,
+      coreClient: recordingCore([]),
+      state,
+      functions,
+    }),
   ).rejects.toThrow("longer than 100");
 });
 
@@ -82,7 +97,7 @@ test("bundles a handler into a self-contained script", async () => {
   const { code } = await buildFunction(fn!);
   expect(code).toContain("Bunny.v1.serve");
   expect(code).toContain("Access-Control-Allow-Origin");
-  expect(code).toContain('"no-store"');
+  expect(code).toContain('"no-cache"');
   expect(code).toContain("hello");
   expect(code).not.toContain("import ");
 });
@@ -111,10 +126,25 @@ test("prepare creates a script once, publish uploads only changed code", async (
     deploys: [],
   };
   const functions = await discoverFunctions(root);
+  const coreCalls: string[] = [];
+  const coreClient = recordingCore(coreCalls);
+  let persisted = 0;
 
-  const prepared = await prepareFunctions({ computeClient, state, functions });
-  // Creation is persisted in state before anything is published.
+  const prepared = await prepareFunctions({
+    computeClient,
+    coreClient,
+    state,
+    functions,
+    onCreated: async () => {
+      persisted++;
+    },
+  });
+  // Creation is persisted in state before anything is published, and the zone hands caching to the script.
   expect(calls).toEqual(["/compute/script"]);
+  expect(persisted).toBe(1);
+  expect(coreCalls).toEqual([
+    '/pullzone/{id} {"CacheControlMaxAgeOverride":-1,"CacheControlPublicMaxAgeOverride":-1}',
+  ]);
   expect(state.functions?.hello).toMatchObject({ scriptId: 42 });
   expect(state.functions?.hello?.codeHash).toBeUndefined();
 
@@ -143,7 +173,12 @@ test("prepare creates a script once, publish uploads only changed code", async (
   });
 
   calls.length = 0;
-  const again = await prepareFunctions({ computeClient, state, functions });
+  const again = await prepareFunctions({
+    computeClient,
+    coreClient,
+    state,
+    functions,
+  });
   const second = await publishFunctions({
     computeClient,
     prepared: again,
@@ -151,6 +186,36 @@ test("prepare creates a script once, publish uploads only changed code", async (
   });
   expect(second[0]).toMatchObject({ created: false, uploaded: false });
   expect(calls).toEqual([]);
+});
+
+test("a script whose zone never gets a hostname is deleted, not orphaned", async () => {
+  scaffold({ "functions/hello.ts": "export default () => new Response();" });
+  const calls: string[] = [];
+  const computeClient = {
+    POST: async () => ({ data: { Id: 42, LinkedPullZones: [] } }),
+    GET: async () => ({ data: { Id: 42, LinkedPullZones: [] } }),
+    DELETE: async (path: string) => {
+      calls.push(`DELETE ${path}`);
+      return {};
+    },
+  } as unknown as ComputeClient;
+  const state: RemoteSiteState = {
+    version: STATE_VERSION,
+    name: "my-site",
+    storageZoneId: 1,
+    pullZoneId: 2,
+    deploys: [],
+  };
+  await expect(
+    prepareFunctions({
+      computeClient,
+      coreClient: recordingCore([]),
+      state,
+      functions: await discoverFunctions(root),
+    }),
+  ).rejects.toThrow("no hostname yet");
+  expect(calls).toEqual(["DELETE /compute/script/{id}"]);
+  expect(state.functions).toEqual({});
 });
 
 test("a function named constructor is not mistaken for an existing record", async () => {
@@ -174,6 +239,7 @@ test("a function named constructor is not mistaken for an existing record", asyn
   };
   const [prepared] = await prepareFunctions({
     computeClient,
+    coreClient: recordingCore([]),
     state,
     functions: await discoverFunctions(root),
   });

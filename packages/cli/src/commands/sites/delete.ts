@@ -99,13 +99,13 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
       }),
     );
 
-    // Only drop the local link when it pointed at this site.
+    const failures = results.filter((r) => !r.deleted);
+
+    // Only drop the local link when it pointed at this site, and keep it while a re-run still has something to retry.
     const manifest = loadManifest<SiteManifest>(SITES_MANIFEST);
-    if (manifest.id === state.storageZoneId) {
+    if (failures.length === 0 && manifest.id === state.storageZoneId) {
       removeManifest(SITES_MANIFEST);
     }
-
-    const failures = results.filter((r) => !r.deleted);
 
     if (output === "json") {
       logger.log(

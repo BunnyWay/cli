@@ -126,6 +126,22 @@ export async function readRemoteState(
   return { state, etag: sha256Hex(raw) };
 }
 
+// Ours wins per function, except that a hash both writers changed is dropped: which publish landed last is unknown, so the next deploy re-uploads rather than trusting either.
+export function mergeFunctionRecords(
+  remote: RemoteSiteState["functions"],
+  ours: RemoteSiteState["functions"],
+): RemoteSiteState["functions"] {
+  const merged = { ...remote, ...ours };
+  for (const [name, record] of Object.entries(ours ?? {})) {
+    const theirs =
+      remote && Object.hasOwn(remote, name) ? remote[name] : undefined;
+    if (theirs?.codeHash && theirs.codeHash !== record.codeHash) {
+      merged[name] = { ...record, codeHash: undefined };
+    }
+  }
+  return merged;
+}
+
 // Write `_bunny/site.json` (returns the new etag). On an `expectedEtag` mismatch a parseable concurrent state is reconciled: deploy records merge (minus any `removedIds` this writer intentionally deleted, so a prune racing a deploy doesn't resurrect pruned records), and the current/previous pointers follow `promotedTo` (last promote wins; a non-promoting writer adopts the concurrent pointers rather than clobber them with its stale read). An unparseable conflict aborts rather than overwrite.
 export async function writeRemoteState(
   connection: StorageZone,
@@ -154,7 +170,7 @@ export async function writeRemoteState(
         ...state.deploys,
         ...remote.deploys.filter((d) => !ours.has(d.id) && !removed.has(d.id)),
       ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-      state.functions = { ...remote.functions, ...state.functions };
+      state.functions = mergeFunctionRecords(remote.functions, state.functions);
       if (opts?.promotedTo) {
         // Our promote wins (it set CURRENT_DEPLOY last), and the concurrent writer's production deploy becomes the rollback target.
         state.current = opts.promotedTo;
@@ -914,6 +930,14 @@ export async function deleteSiteResources(opts: {
         );
       }
     }
+  } else if (results.some((r) => r.resource === "function" && !r.deleted)) {
+    // The storage zone holds the only record of the function script IDs, so it outlives a failed function delete and a re-run can retry it.
+    results.push({
+      resource: "storage zone",
+      id: state.storageZoneId,
+      deleted: false,
+      error: "kept so a re-run can retry the failed function deletes",
+    });
   } else {
     await attempt("storage zone", state.storageZoneId, () =>
       coreClient.DELETE("/storagezone/{id}", {

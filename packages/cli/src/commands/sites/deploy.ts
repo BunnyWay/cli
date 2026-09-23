@@ -39,6 +39,7 @@ import {
   deployIdError,
   findDeploy,
   functionEnvName,
+  functionUrl,
   markCurrent,
   type NotFoundMode,
   type RemoteSiteState,
@@ -344,22 +345,24 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       prepared = await withSpinner("Preparing functions...", (spin) =>
         prepareFunctions({
           computeClient,
+          coreClient,
           state,
           functions,
           onStep: (message) => {
             spin.text = message;
+          },
+          // Each new script ID is persisted as soon as it exists, so a failure further on retries against it rather than creating a duplicate.
+          onCreated: async () => {
+            etag = await writeRemoteState(connection, state, etag);
           },
         }),
       );
       for (const warning of prepared.flatMap((p) => p.warnings)) {
         logger.warn(warning);
       }
-      // New script IDs are persisted straight away, so a failure further on retries against them rather than creating duplicates.
-      if (prepared.some((p) => p.created)) {
-        etag = await writeRemoteState(connection, state, etag);
-      }
     }
-    for (const name of staleFunctions(state, functions)) {
+    const stale = staleFunctions(state, functions);
+    for (const name of stale) {
       logger.warn(
         `Function "${name}" is deployed but has no folder here; it keeps serving until its script (${state.functions?.[name]?.scriptId}) is deleted.`,
       );
@@ -523,14 +526,33 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         etag = await writeRemoteState(connection, state, etag);
       }
     }
-    const functionsJson = functionResults.map((r) => ({
-      name: r.name,
-      url: r.url,
-      env: functionEnvName(r.name),
-      scriptId: r.scriptId,
-      created: r.created,
-      uploaded: r.uploaded,
-    }));
+    // Functions whose folder is gone still serve, so automation reading the JSON sees them too.
+    const functionsJson = [
+      ...functionResults.map((r) => ({
+        name: r.name,
+        url: r.url,
+        env: functionEnvName(r.name),
+        scriptId: r.scriptId,
+        created: r.created,
+        uploaded: r.uploaded,
+        stale: false,
+      })),
+      ...stale.flatMap((name) => {
+        const record = state.functions?.[name];
+        if (!record) return [];
+        return [
+          {
+            name,
+            url: functionUrl(record.hostname),
+            env: functionEnvName(name),
+            scriptId: record.scriptId,
+            created: false,
+            uploaded: false,
+            stale: true,
+          },
+        ];
+      }),
+    ];
     const logFunctions = () => {
       if (functionResults.length === 0) return;
       logger.info("Functions:");

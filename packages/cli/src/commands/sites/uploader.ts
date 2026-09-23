@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { StorageZone } from "@/commands/storage/files-api.ts";
 import { mapWithConcurrency } from "@/core/concurrency.ts";
@@ -35,7 +35,12 @@ export function collectFiles(
   opts: { exclude?: string[] } = {},
 ): LocalFile[] {
   const files: LocalFile[] = [];
-  const exclude = new Set((opts.exclude ?? []).map((p) => resolve(p)));
+  // Real paths on both sides, so a symlinked deploy dir can't slip an excluded tree past the comparison.
+  const exclude = new Set(
+    (opts.exclude ?? [])
+      .filter((p) => existsSync(p))
+      .map((p) => realpathSync(p)),
+  );
 
   const walk = (abs: string, rel: string) => {
     for (const entry of readdirSync(abs, { withFileTypes: true })) {
@@ -56,7 +61,7 @@ export function collectFiles(
     }
   };
 
-  walk(resolve(dir), "");
+  walk(realpathSync(resolve(dir)), "");
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 

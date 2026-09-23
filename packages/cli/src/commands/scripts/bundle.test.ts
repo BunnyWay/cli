@@ -36,6 +36,8 @@ test("inlines dependencies and leaves runtime imports for Deno", async () => {
   expect(code).toContain('from "node:crypto"');
   expect(code).toContain('from "npm:zod@3"');
   expect(code).toContain("module.exports = () =>");
+  expect(code).toContain("// node_modules/dep/index.js");
+  expect(code).not.toContain("bunny-bundle-test-");
   expect(warnings).toEqual([]);
 });
 

@@ -1,4 +1,6 @@
+import { realpathSync } from "node:fs";
 import { builtinModules } from "node:module";
+import { dirname, relative, sep } from "node:path";
 import { UserError } from "@/core/errors.ts";
 import { formatBytes } from "@/core/format.ts";
 
@@ -47,11 +49,27 @@ async function builtinShim(name: string): Promise<string> {
   ].join("\n");
 }
 
+// Bun labels each inlined module with a cwd-relative path comment; re-rooting them keeps local paths out of the upload and the hash identical wherever the deploy runs.
+function rerootModuleComments(code: string, root: string): string {
+  // Bun reports real paths, so a symlinked root (macOS /var -> /private/var) must be resolved to match.
+  const rel = relative(realpathSync(process.cwd()), realpathSync(root));
+  if (!rel) return code;
+  const prefix = `// ${rel.split(sep).join("/")}/`;
+  return code
+    .split("\n")
+    .map((line) =>
+      line.startsWith(prefix) ? `// ${line.slice(prefix.length)}` : line,
+    )
+    .join("\n");
+}
+
 /** Bundle an Edge Script for the Deno-based runtime: local files and dependencies are inlined, `node:`/`npm:` imports stay for the runtime, bare builtins gain the `node:` prefix Deno requires, and `jsr:`, URL, and Bun imports are refused. */
 export async function bundleEdgeScript(opts: {
   /** Entry file, or generated `source` for an in-memory entry. */
   entry?: string;
   source?: string;
+  /** Directory the output's module comments are relative to (default: the entry's). */
+  root?: string;
   label: string;
 }): Promise<EdgeScriptBundle> {
   const { entry, source, label } = opts;
@@ -117,7 +135,8 @@ export async function bundleEdgeScript(opts: {
     );
   }
 
-  const code = await output.text();
+  const root = opts.root ?? (entry ? dirname(entry) : process.cwd());
+  const code = rerootModuleComments(await output.text(), root);
   assertScriptSize(code, label);
   const warnings = BUN_GLOBAL_RE.test(code)
     ? [

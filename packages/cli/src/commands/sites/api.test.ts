@@ -8,6 +8,7 @@ import {
   createSite,
   deleteSiteResources,
   fetchSites,
+  mergeFunctionRecords,
   migrateSite,
   promoteDeploy,
   promoteVerification,
@@ -951,6 +952,34 @@ test("deleteSiteResources deletes the pull zone and storage zone", async () => {
     .filter((c) => c.method === "DELETE")
     .map((c) => c.path);
   expect(deletedPaths).toEqual(["/pullzone/{id}", "/storagezone/{id}"]);
+});
+
+test("deleteSiteResources keeps the storage zone when a function delete fails", async () => {
+  const coreCalls: Call[] = [];
+  const results = await deleteSiteResources({
+    coreClient: fakeCoreClient({ calls: coreCalls }),
+    computeClient: fakeComputeClient([], { deleteError: new Error("503") }),
+    state: {
+      ...fakeState(),
+      functions: { hello: { scriptId: 9, hostname: "fn.b-cdn.net" } },
+    },
+  });
+  expect(results.find((r) => r.resource === "storage zone")).toMatchObject({
+    deleted: false,
+  });
+  expect(coreCalls.map((c) => c.path)).not.toContain("/storagezone/{id}");
+});
+
+test("mergeFunctionRecords drops a hash both writers changed", () => {
+  const merged = mergeFunctionRecords(
+    {
+      a: { scriptId: 1, hostname: "a", codeHash: "theirs" },
+      b: { scriptId: 2, hostname: "b" },
+    },
+    { a: { scriptId: 1, hostname: "a", codeHash: "ours" } },
+  );
+  expect(merged?.a?.codeHash).toBeUndefined();
+  expect(merged?.b).toEqual({ scriptId: 2, hostname: "b" });
 });
 
 // Regression: the live API returns GET /pullzone as a paginated envelope
