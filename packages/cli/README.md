@@ -1386,13 +1386,7 @@ Generate a shell completion script. Add the output to your shell profile to enab
 bunny completion >> ~/.zshrc # zsh; use ~/.bashrc for bash
 ```
 
-Fish loads completion files from its own directory:
-
-```bash
-mkdir -p ~/.config/fish/completions && bunny completion > ~/.config/fish/completions/bunny.fish
-```
-
-After `bunny login` succeeds, it prints the exact line for your shell.
+After `bunny login` succeeds, it prints the exact line for your shell (zsh or bash).
 
 ## Global Options
 

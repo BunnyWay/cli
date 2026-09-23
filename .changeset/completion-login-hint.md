@@ -2,4 +2,4 @@
 "@bunny.net/cli": patch
 ---
 
-feat(login): `bunny login` now ends with a shell-specific tip for enabling tab completion (`bunny completion >> ~/.zshrc` style for zsh/bash, a lazy-loaded completions file for fish)
+`bunny login` now ends with a tip for enabling shell completion in zsh and bash

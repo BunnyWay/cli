@@ -1,5 +1,5 @@
 import { basename } from "node:path";
-import { logger } from "../../core/logger.ts";
+import { logger } from "@/core/logger.ts";
 
 const SHELL_HINTS: Record<string, string> = {
   zsh: "Tip: enable shell completions with: `bunny completion >> ~/.zshrc`.",
@@ -22,9 +22,8 @@ export function hintShellCompletion(
 
   if (!shell) return;
 
-  // yargs doesn't support fish shell completions yet until next release.
-  // Once https://github.com/yargs/yargs/pull/2569 is merged, remove this check.
-  if (shell.includes("fish")) return;
+  // yargs emits a fish script from 18.2.0; drop this guard once the repo is on it.
+  if (basename(shell) === "fish") return;
 
   const hint = completionHint(shell);
   if (hint) logger.dim(hint);
