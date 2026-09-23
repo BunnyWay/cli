@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { createCoreClient } from "@bunny.net/openapi-client";
+import { hintShellCompletion } from "@/commands/completion/hint.ts";
 import { offerGlobalSkillInstall } from "@/commands/skills/offer.ts";
 import { profileExists, resolveConfig, setProfile } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
@@ -303,5 +304,6 @@ export const authLoginCommand = defineCommand<{
     }
 
     await offerGlobalSkillInstall(output, installSkill);
+    hintShellCompletion(output);
   },
 });
