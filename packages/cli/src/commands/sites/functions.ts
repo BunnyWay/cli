@@ -7,6 +7,11 @@ import {
   uploadScriptCode,
 } from "@/commands/scripts/api.ts";
 import {
+  assertScriptSize,
+  bundleEdgeScript,
+  type EdgeScriptBundle,
+} from "@/commands/scripts/bundle.ts";
+import {
   SCRIPT_MANIFEST,
   SCRIPT_TYPE_STANDALONE,
 } from "@/commands/scripts/constants.ts";
@@ -25,9 +30,6 @@ import {
 export const DEFAULT_FUNCTIONS_DIR = "functions";
 
 const ENTRY_EXTENSIONS = [".ts", ".js", ".mjs"];
-const ENTRY_MODULE = "bunny:entry";
-const ENTRY_NAMESPACE = "bunny";
-const ENTRY_FILTER = /^bunny:entry$/;
 const BUILD_OUTPUT_DIR = "dist";
 
 // A name becomes a URL segment and part of the Edge Script name, so it stays lowercase and dash-separated.
@@ -150,7 +152,7 @@ export async function discoverFunctions(
   return functions.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// The generated entry accepts both a bare handler and a `{ fetch }` object, hands it to the Edge Scripting runtime directly (no SDK dependency), and answers CORS for any origin since the frontend calls the function cross-origin; a handler that sets its own Access-Control-Allow-Origin wins.
+// The generated entry accepts both a bare handler and a `{ fetch }` object, hands it to the Edge Scripting runtime directly (no SDK dependency), and answers CORS for any origin since the frontend calls the function cross-origin; a handler that sets its own Access-Control-Allow-Origin wins. Responses default to `Cache-Control: no-store` because standalone scripts run after the CDN cache; WebSocket upgrades pass through untouched.
 export function functionEntrySource(handlerPath: string): string {
   return [
     `import handler from ${JSON.stringify(handlerPath)};`,
@@ -159,51 +161,20 @@ export function functionEntrySource(handlerPath: string): string {
     "Bunny.v1.serve(async (req) => {",
     '  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(req) });',
     "  const res = await respond(req);",
-    '  if (res.headers.has("Access-Control-Allow-Origin")) return res;',
+    "  if (res.status === 101) return res;",
     "  const headers = new Headers(res.headers);",
-    "  for (const [k, v] of Object.entries(cors(req))) headers.set(k, v);",
+    '  if (!headers.has("Access-Control-Allow-Origin")) for (const [k, v] of Object.entries(cors(req))) headers.set(k, v);',
+    '  if (!headers.has("Cache-Control")) headers.set("Cache-Control", "no-store");',
     "  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });",
     "});",
     "",
   ].join("\n");
 }
 
-// The generated entry is a virtual module, so nothing is written next to the user's code and the bundle (and its hash) doesn't vary with a temp path.
-async function bundleHandler(fn: SiteFunction, entry: string): Promise<string> {
-  const result = await Bun.build({
-    entrypoints: [ENTRY_MODULE],
-    target: "browser",
-    format: "esm",
-    plugins: [
-      {
-        name: "bunny-function-entry",
-        setup(build) {
-          build.onResolve({ filter: ENTRY_FILTER }, () => ({
-            path: ENTRY_MODULE,
-            namespace: ENTRY_NAMESPACE,
-          }));
-          build.onLoad({ filter: /.*/, namespace: ENTRY_NAMESPACE }, () => ({
-            contents: functionEntrySource(entry),
-            loader: "ts",
-          }));
-        },
-      },
-    ],
-  });
-  const output = result.outputs[0];
-  if (!result.success || !output) {
-    throw new UserError(
-      `Couldn't bundle function "${fn.name}".`,
-      result.logs.map(String).join("\n"),
-    );
-  }
-  return output.text();
-}
-
 async function buildWithScript(
   fn: SiteFunction,
   build: string,
-): Promise<string> {
+): Promise<EdgeScriptBundle> {
   await runBuildCommand(build, fn.dir, {});
   const built = findEntry(join(fn.dir, BUILD_OUTPUT_DIR), ["index"]);
   if (!built) {
@@ -212,13 +183,22 @@ async function buildWithScript(
       `Point the build at ${BUILD_OUTPUT_DIR}/index.js (or .ts/.mjs), or add an index.ts handler and drop the build script.`,
     );
   }
-  return Bun.file(built).text();
+  const code = await Bun.file(built).text();
+  assertScriptSize(code, `Function "${fn.name}"`);
+  return { code, warnings: [] };
 }
 
 /** The single file to upload as the function's Edge Script code. */
-export async function buildFunction(fn: SiteFunction): Promise<string> {
+export async function buildFunction(
+  fn: SiteFunction,
+): Promise<EdgeScriptBundle> {
   if (fn.build) return buildWithScript(fn, fn.build);
-  if (fn.entry) return bundleHandler(fn, fn.entry);
+  if (fn.entry) {
+    return bundleEdgeScript({
+      source: functionEntrySource(fn.entry),
+      label: `Function "${fn.name}"`,
+    });
+  }
   throw new UserError(`Function "${fn.name}" has nothing to build.`);
 }
 
@@ -283,6 +263,7 @@ export interface PreparedFunction {
   codeHash: string;
   record: FunctionRecord;
   created: boolean;
+  warnings: string[];
 }
 
 // Build every function and create the scripts missing from `state.functions` (mutated; the caller writes state) so their URLs exist before the site builds; nothing is published yet, so a deploy that fails validation later leaves live functions untouched.
@@ -301,7 +282,7 @@ export async function prepareFunctions(opts: {
 
   for (const fn of functions) {
     step(`Building function ${fn.name}...`);
-    const code = await buildFunction(fn);
+    const { code, warnings } = await buildFunction(fn);
 
     // Own-property lookup: a function named `constructor` must not resolve to Object.prototype's.
     let record = Object.hasOwn(records, fn.name) ? records[fn.name] : undefined;
@@ -321,7 +302,14 @@ export async function prepareFunctions(opts: {
       });
     }
 
-    prepared.push({ fn, code, codeHash: sha256Hex(code), record, created });
+    prepared.push({
+      fn,
+      code,
+      codeHash: sha256Hex(code),
+      record,
+      created,
+      warnings,
+    });
   }
   return prepared;
 }

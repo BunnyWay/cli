@@ -351,6 +351,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           },
         }),
       );
+      for (const warning of prepared.flatMap((p) => p.warnings)) {
+        logger.warn(warning);
+      }
       // New script IDs are persisted straight away, so a failure further on retries against them rather than creating duplicates.
       if (prepared.some((p) => p.created)) {
         etag = await writeRemoteState(connection, state, etag);

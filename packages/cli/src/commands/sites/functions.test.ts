@@ -79,9 +79,10 @@ test("bundles a handler into a self-contained script", async () => {
     "functions/hello/greet.ts": "export const greet = () => 'hello';",
   });
   const [fn] = await discoverFunctions(root);
-  const code = await buildFunction(fn!);
+  const { code } = await buildFunction(fn!);
   expect(code).toContain("Bunny.v1.serve");
   expect(code).toContain("Access-Control-Allow-Origin");
+  expect(code).toContain('"no-store"');
   expect(code).toContain("hello");
   expect(code).not.toContain("import ");
 });
