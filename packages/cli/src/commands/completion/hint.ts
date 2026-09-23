@@ -22,9 +22,6 @@ export function hintShellCompletion(
 
   if (!shell) return;
 
-  // yargs emits a fish script from 18.2.0; drop this guard once the repo is on it.
-  if (basename(shell) === "fish") return;
-
   const hint = completionHint(shell);
   if (hint) logger.dim(hint);
 }
