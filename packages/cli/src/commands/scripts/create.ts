@@ -17,7 +17,7 @@ import {
 import { logger } from "@/core/logger.ts";
 import { loadManifest, saveManifest } from "@/core/manifest.ts";
 import { confirm, prompts, spinner } from "@/core/ui.ts";
-import { promptOpenInBrowser } from "./api.ts";
+import { createScriptResource, promptOpenInBrowser } from "./api.ts";
 import {
   type EdgeScriptTypes,
   parseScriptType,
@@ -85,21 +85,18 @@ export async function createScript(opts: {
   const spin = spinner(`Creating script "${opts.name}"...`);
   spin.start();
 
-  const { data: script } = await client.POST("/compute/script", {
-    body: {
+  let script: Awaited<ReturnType<typeof createScriptResource>>;
+  try {
+    script = await createScriptResource(client, {
       Name: opts.name,
       ScriptType: opts.scriptType,
       CreateLinkedPullZone: opts.createLinkedPullZone,
       ...(opts.linkedPullZoneName
         ? { LinkedPullZoneName: opts.linkedPullZoneName }
         : {}),
-    },
-  });
-
-  spin.stop();
-
-  if (!script || script.Id == null) {
-    throw new UserError("Failed to create Edge Script.");
+    });
+  } finally {
+    spin.stop();
   }
 
   return {

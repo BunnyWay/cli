@@ -1,4 +1,7 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
+import {
+  createComputeClient,
+  createCoreClient,
+} from "@bunny.net/openapi-client";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
@@ -64,9 +67,13 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     });
     const { state } = site;
 
-    const what = args["keep-storage"]
+    let what = args["keep-storage"]
       ? "its pull zone"
       : "its pull zone and ALL deploy files";
+    const functionCount = Object.keys(state.functions ?? {}).length;
+    if (functionCount > 0) {
+      what += `, plus ${functionCount} function${functionCount === 1 ? "" : "s"}`;
+    }
     requireConfirmable(output, {
       force,
       message: `Deleting "${state.name}" needs a confirmation prompt.`,
@@ -85,19 +92,20 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     const results = await withSpinner("Deleting site resources...", () =>
       deleteSiteResources({
         coreClient,
+        computeClient: createComputeClient(options),
         state,
         keepStorage: args["keep-storage"],
         connection: site.connection,
       }),
     );
 
-    // Only drop the local link when it pointed at this site.
+    const failures = results.filter((r) => !r.deleted);
+
+    // Only drop the local link when it pointed at this site, and keep it while a re-run still has something to retry.
     const manifest = loadManifest<SiteManifest>(SITES_MANIFEST);
-    if (manifest.id === state.storageZoneId) {
+    if (failures.length === 0 && manifest.id === state.storageZoneId) {
       removeManifest(SITES_MANIFEST);
     }
-
-    const failures = results.filter((r) => !r.deleted);
 
     if (output === "json") {
       logger.log(

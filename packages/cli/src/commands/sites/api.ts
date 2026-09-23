@@ -126,6 +126,22 @@ export async function readRemoteState(
   return { state, etag: sha256Hex(raw) };
 }
 
+// Ours wins per function, except that a hash both writers changed is dropped: which publish landed last is unknown, so the next deploy re-uploads rather than trusting either.
+export function mergeFunctionRecords(
+  remote: RemoteSiteState["functions"],
+  ours: RemoteSiteState["functions"],
+): RemoteSiteState["functions"] {
+  const merged = { ...remote, ...ours };
+  for (const [name, record] of Object.entries(ours ?? {})) {
+    const theirs =
+      remote && Object.hasOwn(remote, name) ? remote[name] : undefined;
+    if (theirs?.codeHash && theirs.codeHash !== record.codeHash) {
+      merged[name] = { ...record, codeHash: undefined };
+    }
+  }
+  return merged;
+}
+
 // Write `_bunny/site.json` (returns the new etag). On an `expectedEtag` mismatch a parseable concurrent state is reconciled: deploy records merge (minus any `removedIds` this writer intentionally deleted, so a prune racing a deploy doesn't resurrect pruned records), and the current/previous pointers follow `promotedTo` (last promote wins; a non-promoting writer adopts the concurrent pointers rather than clobber them with its stale read). An unparseable conflict aborts rather than overwrite.
 export async function writeRemoteState(
   connection: StorageZone,
@@ -154,6 +170,7 @@ export async function writeRemoteState(
         ...state.deploys,
         ...remote.deploys.filter((d) => !ours.has(d.id) && !removed.has(d.id)),
       ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      state.functions = mergeFunctionRecords(remote.functions, state.functions);
       if (opts?.promotedTo) {
         // Our promote wins (it set CURRENT_DEPLOY last), and the concurrent writer's production deploy becomes the rollback target.
         state.current = opts.promotedTo;
@@ -856,21 +873,22 @@ export async function migrateSite(opts: {
 }
 
 export interface TeardownResult {
-  resource: "pull zone" | "storage zone";
+  resource: "pull zone" | "storage zone" | "function";
   id: number;
   deleted: boolean;
   error?: string;
 }
 
-// Tear down a site's resources; the pull zone references the storage zone so it goes first, and each step is best-effort so a partial delete can be re-run.
+// Tear down a site's resources; functions go first (each script takes its linked pull zone with it), then the pull zone, then the storage zone it references. Each step is best-effort so a partial delete can be re-run.
 export async function deleteSiteResources(opts: {
   coreClient: CoreClient;
+  computeClient: ComputeClient;
   state: RemoteSiteState;
   keepStorage?: boolean;
   /** The storage connection; needed to tombstone the site marker with --keep-storage. */
   connection?: StorageZone;
 }): Promise<TeardownResult[]> {
-  const { coreClient, state } = opts;
+  const { coreClient, computeClient, state } = opts;
   const results: TeardownResult[] = [];
 
   const attempt = async (
@@ -886,6 +904,16 @@ export async function deleteSiteResources(opts: {
     }
   };
 
+  for (const fn of Object.values(state.functions ?? {})) {
+    await attempt("function", fn.scriptId, () =>
+      computeClient.DELETE("/compute/script/{id}", {
+        params: {
+          path: { id: fn.scriptId },
+          query: { deleteLinkedPullZones: true },
+        },
+      }),
+    );
+  }
   await attempt("pull zone", state.pullZoneId, () =>
     coreClient.DELETE("/pullzone/{id}", {
       params: { path: { id: state.pullZoneId } },
@@ -902,6 +930,14 @@ export async function deleteSiteResources(opts: {
         );
       }
     }
+  } else if (results.some((r) => r.resource === "function" && !r.deleted)) {
+    // The storage zone holds the only record of the function script IDs, so it outlives a failed function delete and a re-run can retry it.
+    results.push({
+      resource: "storage zone",
+      id: state.storageZoneId,
+      deleted: false,
+      error: "kept so a re-run can retry the failed function deletes",
+    });
   } else {
     await attempt("storage zone", state.storageZoneId, () =>
       coreClient.DELETE("/storagezone/{id}", {

@@ -80,12 +80,16 @@ bunny scripts create my-script --domain shop.example.com
 ```bash
 bunny scripts deploy dist/index.js                    # deploy and publish
 bunny scripts deploy dist/index.js --skip-publish     # upload without publishing
+bunny scripts deploy src/index.ts --bundle            # bundle the entry and its deps first
 bunny scripts deploy dist/index.js 12345              # target a specific script
 ```
 
-| Flag             | Description                    |
-| ---------------- | ------------------------------ |
-| `--skip-publish` | Upload code without publishing |
+| Flag             | Description                                                      |
+| ---------------- | ---------------------------------------------------------------- |
+| `--skip-publish` | Upload code without publishing                                   |
+| `--bundle`       | Bundle the entry and its dependencies for the edge runtime first |
+
+`--bundle` targets the Deno-based edge runtime: `package.json` dependencies are inlined, `node:` and `npm:` imports stay for the runtime, bare builtins become `node:` imports, and `jsr:`, URL, and `bun:` imports are rejected. Code over 10 MB is rejected before upload.
 
 After publishing, the live URL and any custom domains are printed. The last deployment always wins, whether triggered by GitHub Actions or a manual CLI deploy.
 

@@ -37,6 +37,16 @@ export interface DeployRecord {
   bytes: number;
 }
 
+// A function deployed with the site: its own standalone Edge Script behind its linked pull zone, which the frontend calls by URL.
+export interface FunctionRecord {
+  scriptId: number;
+  pullZoneId?: number;
+  /** The function's own pull zone host; the frontend calls it directly. */
+  hostname: string;
+  /** Hash of the uploaded code; an unchanged function skips its upload. */
+  codeHash?: string;
+}
+
 // Source of truth (at `_bunny/site.json`) for a site's resource pair and deploys; `.bunny/site.json` is just a local pointer to it.
 export interface RemoteSiteState {
   version: number;
@@ -48,6 +58,8 @@ export interface RemoteSiteState {
   current?: string;
   previous?: string;
   deploys: DeployRecord[];
+  /** Functions by name; absent on sites without any. */
+  functions?: Record<string, FunctionRecord>;
 }
 
 /** Router-era (version 1) state; the current format plus the script fields, which is all the migration has to drop. */
@@ -122,6 +134,16 @@ export const REWRITE_RULE_DESC = "bunny sites: serve the published deploy";
 export const GATE_RULE_DESC = "bunny sites: block direct deploy access";
 export const STATE_RULE_DESC = "bunny sites: block site state access";
 export const ASSETS_RULE_DESC = "bunny sites: browser-cache static assets";
+
+/** Where the frontend reaches a function: its own pull zone, called cross-origin. */
+export function functionUrl(hostname: string): string {
+  return `https://${hostname}`;
+}
+
+/** Build-time variable carrying a function's URL, e.g. BUNNY_FUNCTION_CREATE_SHARE_URL. */
+export function functionEnvName(name: string, prefix = ""): string {
+  return `${prefix}BUNNY_FUNCTION_${name.toUpperCase().replace(/-/g, "_")}_URL`;
+}
 
 // Browser-cache TTL for static assets (1 day); HTML stays at the zone-level max-age=0 so new deploys show immediately.
 export const ASSET_BROWSER_TTL_SECONDS = 86400;
