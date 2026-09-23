@@ -10,13 +10,27 @@ on:
 permissions:
   contents: read
 
+# Runs queue instead of overlapping, so an older sync can never delete a template a newer one just uploaded.
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
 jobs:
   upload:
     name: Upload to Bunny Storage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # A later push that changed templates has its own queued run, so this one (or a re-run of an old commit) must not sync.
+      - name: Skip if main has newer templates
+        id: tip
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git fetch --quiet --depth=1 origin main
+          if ! git diff --quiet HEAD FETCH_HEAD -- templates; then
+            echo "::notice::Skipping sync: templates changed on main after ${GITHUB_SHA}."
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Upload templates
+        if: steps.tip.outputs.stale != 'true'
         env:
           BUNNYNET_STORAGE_ENDPOINT: ${{ vars.BUNNYNET_STORAGE_ENDPOINT }}
           BUNNYNET_STORAGE_ZONE: ${{ vars.BUNNYNET_STORAGE_ZONE }}
@@ -34,35 +48,60 @@ jobs:
           }
 
           find templates -type f ! -name '.gitkeep' ! -name '*.test.ts' -print0 | while IFS= read -r -d '' file; do
-            remote="$file"
-            upload_file="$file"
-            tmp=""
-
-            if [[ "$file" == *.jsonc ]]; then
-              tmp=$(mktemp)
-              if ! jq . "$file" > "$tmp"; then
-                echo "::error file=$file::Invalid JSON (or JSONC with comments — switch the workflow to a JSONC stripper)"
-                rm -f "$tmp"
-                exit 1
-              fi
-              upload_file="$tmp"
-              remote="${file%.jsonc}.json"
-            fi
-
-            CHECKSUM=$(sha256sum "$upload_file" | awk '{print toupper($1)}')
-            CONTENT_TYPE=$(content_type_for "$remote")
-            echo "Uploading $file -> $remote ($CONTENT_TYPE)"
+            CHECKSUM=$(sha256sum "$file" | awk '{print toupper($1)}')
+            CONTENT_TYPE=$(content_type_for "$file")
+            echo "Uploading $file ($CONTENT_TYPE)"
             curl --fail --show-error --silent \
               -X PUT \
               -H "AccessKey: ${BUNNYNET_STORAGE_PASSWORD}" \
               -H "Content-Type: ${CONTENT_TYPE}" \
               -H "Checksum: ${CHECKSUM}" \
-              --upload-file "$upload_file" \
-              "https://${BUNNYNET_STORAGE_ENDPOINT}/${BUNNYNET_STORAGE_ZONE}/${remote}"
-
-            if [ -n "$tmp" ]; then rm -f "$tmp"; fi
+              --upload-file "$file" \
+              "https://${BUNNYNET_STORAGE_ENDPOINT}/${BUNNYNET_STORAGE_ZONE}/${file}"
           done
+      # Only main mirrors to storage; a dispatch from another branch must not delete templates that main still has.
+      - name: Delete removed templates
+        if: github.ref == 'refs/heads/main' && steps.tip.outputs.stale != 'true'
+        env:
+          BUNNYNET_STORAGE_ENDPOINT: ${{ vars.BUNNYNET_STORAGE_ENDPOINT }}
+          BUNNYNET_STORAGE_ZONE: ${{ vars.BUNNYNET_STORAGE_ZONE }}
+          BUNNYNET_STORAGE_PASSWORD: ${{ secrets.BUNNYNET_STORAGE_PASSWORD }}
+        run: |
+          set -o pipefail
+          BASE="https://${BUNNYNET_STORAGE_ENDPOINT}/${BUNNYNET_STORAGE_ZONE}"
+
+          list_remote() {
+            local dir="$1" json name
+            json=$(curl --fail --show-error --silent \
+              -H "AccessKey: ${BUNNYNET_STORAGE_PASSWORD}" \
+              -H "Accept: application/json" \
+              "${BASE}/${dir}") || return 1
+            while IFS= read -r name; do
+              list_remote "${dir}${name}/" || return 1
+            done < <(jq -r '.[] | select(.IsDirectory) | .ObjectName' <<< "$json")
+            jq -r --arg d "$dir" '.[] | select(.IsDirectory | not) | $d + .ObjectName' <<< "$json"
+          }
+
+          expected=$(find templates -type f ! -name '.gitkeep' ! -name '*.test.ts' | sort)
+          if [ -z "$expected" ]; then
+            echo "::error::No local templates found; refusing to delete anything"
+            exit 1
+          fi
+          remote=$(list_remote "templates/" | sort)
+
+          while IFS= read -r stale; do
+            case "$stale" in
+              templates/?*) ;;
+              *) echo "::error::Refusing to delete '${stale}' outside templates/"; exit 1 ;;
+            esac
+            echo "Deleting $stale"
+            curl --fail --show-error --silent --output /dev/null \
+              -X DELETE \
+              -H "AccessKey: ${BUNNYNET_STORAGE_PASSWORD}" \
+              "${BASE}/${stale}"
+          done < <(comm -23 <(printf '%s\n' "$remote") <(printf '%s\n' "$expected") | grep -v '^$')
       - name: Purge CDN cache
+        if: steps.tip.outputs.stale != 'true'
         env:
           BUNNYNET_API_KEY: ${{ secrets.BUNNYNET_API_KEY }}
           BUNNYNET_TEMPLATES_URL: ${{ vars.BUNNYNET_TEMPLATES_URL }}

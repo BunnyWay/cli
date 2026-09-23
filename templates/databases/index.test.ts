@@ -14,7 +14,7 @@ interface DatabaseTemplate {
 
 const dir = import.meta.dir;
 const index: DatabaseTemplate[] = await Bun.file(
-  join(dir, "index.jsonc"),
+  join(dir, "index.json"),
 ).json();
 
 function objectNames(db: Database, type: "table" | "view"): string[] {
