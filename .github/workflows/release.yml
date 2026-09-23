@@ -160,7 +160,6 @@ jobs:
       - name: Re-sign macOS binary
         if: runner.os == 'macOS'
         run: |
-          codesign --remove-signature ${{ matrix.binary }}
           codesign --sign - --force --identifier net.bunny.cli ${{ matrix.binary }}
           codesign --verify --strict --verbose=2 ${{ matrix.binary }}
 
@@ -208,7 +207,6 @@ jobs:
       - name: Re-sign macOS binary
         if: runner.os == 'macOS'
         run: |
-          codesign --remove-signature ${{ matrix.binary }}
           codesign --sign - --force --identifier net.bunny.cli ${{ matrix.binary }}
           codesign --verify --strict --verbose=2 ${{ matrix.binary }}
 
@@ -263,7 +261,6 @@ jobs:
       - name: Re-sign macOS binary
         if: runner.os == 'macOS'
         run: |
-          codesign --remove-signature ${{ matrix.binary }}
           codesign --sign - --force --identifier net.bunny.database-shell ${{ matrix.binary }}
           codesign --verify --strict --verbose=2 ${{ matrix.binary }}
 
@@ -308,7 +305,6 @@ jobs:
       - name: Re-sign macOS binary
         if: runner.os == 'macOS'
         run: |
-          codesign --remove-signature ${{ matrix.binary }}
           codesign --sign - --force --identifier net.bunny.database-shell ${{ matrix.binary }}
           codesign --verify --strict --verbose=2 ${{ matrix.binary }}
 
