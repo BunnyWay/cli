@@ -580,9 +580,11 @@ Produces a single native executable with the runtime, dependencies, and source i
 
 Three distribution channels:
 
-1. **Shell installer** (`install.sh` at the repo root): downloads the prebuilt binary into `~/.bunny/bin`, honours `BUNNY_INSTALL_DIR`, clears the quarantine xattr and ad-hoc codesigns on macOS so Gatekeeper allows execution, and uses the `releases/latest/download` redirect to avoid the API rate limit.
+1. **Shell installer** (`install.sh` at the repo root): downloads the prebuilt binary into `~/.bunny/bin`, honours `BUNNY_INSTALL_DIR`, and resolves `latest` to a tag once through the github.com `releases/latest` redirect (not the rate-limited API), so the binary and `SHA256SUMS` always come from the same release. It verifies the binary against the release's `SHA256SUMS`; a mismatch is fatal, but a missing file only warns, because the script deploys on merge (before the next release exists) and pinned older versions predate checksums. On macOS it re-signs ad hoc only when `codesign --verify` fails, so the invalid signatures on old releases still run while a valid signature is never overwritten.
 2. **npm**, via the platform-specific binary package pattern. `@bunny.net/cli` ships a JS shim that delegates to the right platform package. Platform packages are versioned in lockstep through the `fixed` array in `.changeset/config.json`.
-3. **GitHub Releases**, with binaries attached by `.github/workflows/release.yml`.
+3. **GitHub Releases**, with binaries, a `SHA256SUMS` file, and a build provenance attestation over those checksums, attached by `.github/workflows/release.yml`.
+
+On macOS, `bun build --compile` leaves an invalid signature: ad-hoc on arm64, and the Bun runtime's own Developer ID on cross-compiled x64. The release workflow replaces it with an ad-hoc signature (`net.bunny.cli` / `net.bunny.database-shell`) before upload, so npm and release binaries carry a valid signature. Developer ID signing and notarization are not set up yet; when they are, the signature must be applied after compile, which is where the ad-hoc step lives now.
 
 ### Publishing libraries
 
