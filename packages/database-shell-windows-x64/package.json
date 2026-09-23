@@ -2,6 +2,7 @@
   "name": "@bunny.net/database-shell-windows-x64",
   "version": "0.2.7",
   "description": "Bunny Database shell binary for Windows x64",
+  "license": "MIT",
   "os": [
     "win32"
   ],
@@ -9,7 +10,8 @@
     "x64"
   ],
   "files": [
-    "bsql.exe"
+    "bsql.exe",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"

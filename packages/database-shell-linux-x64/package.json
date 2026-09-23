@@ -2,6 +2,7 @@
   "name": "@bunny.net/database-shell-linux-x64",
   "version": "0.2.7",
   "description": "Bunny Database shell binary for Linux x64",
+  "license": "MIT",
   "os": [
     "linux"
   ],
@@ -10,7 +11,8 @@
   ],
   "files": [
     "bsql",
-    "bsql-baseline"
+    "bsql-baseline",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"
