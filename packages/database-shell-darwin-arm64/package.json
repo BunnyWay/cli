@@ -2,6 +2,7 @@
   "name": "@bunny.net/database-shell-darwin-arm64",
   "version": "0.2.7",
   "description": "Bunny Database shell binary for macOS arm64",
+  "license": "MIT",
   "os": [
     "darwin"
   ],
@@ -9,7 +10,8 @@
     "arm64"
   ],
   "files": [
-    "bsql"
+    "bsql",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"

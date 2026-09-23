@@ -127,3 +127,7 @@ bun run release
 bun link
 bunny <command>
 ```
+
+## License
+
+[MIT](./LICENSE)

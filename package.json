@@ -1,6 +1,7 @@
 {
   "name": "@bunny.net/monorepo",
   "private": true,
+  "license": "MIT",
   "workspaces": [
     "packages/*",
     "packages/database-client/examples/bun",

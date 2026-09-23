@@ -1427,3 +1427,7 @@ bunny completion >> ~/.zshrc
 | `BUNNYNET_API_URL`       | API base URL (default: `https://api.bunny.net`)                 |
 | `BUNNYNET_DASHBOARD_URL` | Dashboard URL for auth flow (default: `https://dash.bunny.net`) |
 | `NO_COLOR`               | Disable colored output ([no-color.org](https://no-color.org))   |
+
+## License
+
+[MIT](./LICENSE)
