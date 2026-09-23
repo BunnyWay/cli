@@ -40,6 +40,17 @@ download() {
   fi
 }
 
+latest_version() {
+  url="https://github.com/${REPO}/releases/latest"
+  resolved=""
+  if command -v curl > /dev/null 2>&1; then
+    resolved=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$url" 2>/dev/null) || true
+  elif command -v wget > /dev/null 2>&1; then
+    resolved=$(wget -S --spider "$url" 2>&1 | awk '/^ *[Ll]ocation: /{loc=$2} END{print loc}') || true
+  fi
+  echo "${resolved##*/}"
+}
+
 sha256() {
   if command -v sha256sum > /dev/null 2>&1; then
     sha256sum "$1" | awk '{print $1}'
@@ -66,16 +77,22 @@ fi
 
 BINARY="bunny-${OS}-${ARCH}${VARIANT}"
 
-# Pinned version uses the tagged release URL; otherwise use the `latest`
-# redirect so we don't hit api.github.com (rate-limited to 60 req/hr).
 if [ -n "${1:-}" ]; then
   VERSION="$1"
-  BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
-  echo "Installing bunny ${VERSION} (${OS}/${ARCH})..."
 else
-  BASE_URL="https://github.com/${REPO}/releases/latest/download"
-  echo "Installing bunny (${OS}/${ARCH})..."
+  # Resolve `latest` once via the github.com redirect (not the rate-limited API) so the binary and SHA256SUMS come from the same release.
+  VERSION=$(latest_version)
+  case "$VERSION" in
+    v*) ;;
+    *)
+      echo "Error: could not resolve the latest bunny release."
+      exit 1
+      ;;
+  esac
 fi
+
+BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
+echo "Installing bunny ${VERSION} (${OS}/${ARCH})..."
 
 TMPFILE=$(mktemp)
 SUMSFILE=$(mktemp)
