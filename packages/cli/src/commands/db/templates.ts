@@ -16,9 +16,7 @@ import formsSql from "@templates/databases/forms.sql" with { type: "text" };
 import helpdeskSql from "@templates/databases/helpdesk.sql" with {
   type: "text",
 };
-import templateIndexJson from "@templates/databases/index.jsonc" with {
-  type: "text",
-};
+import templateIndex from "@templates/databases/index.json";
 import invoicingSql from "@templates/databases/invoicing.sql" with {
   type: "text",
 };
@@ -31,7 +29,7 @@ import videoPlatformSql from "@templates/databases/video-platform.sql" with {
 import { UserError } from "@/core/errors.ts";
 import { checksum, slugify } from "./migrations/engine.ts";
 
-/** Entry shape in templates/databases/index.jsonc, shared with the dashboard. */
+/** Entry shape in templates/databases/index.json, shared with the dashboard. */
 interface TemplateIndexEntry {
   id: string;
   name: string;
@@ -64,7 +62,7 @@ const SQL_BY_ID: Record<string, string> = {
 };
 
 function buildCatalog(): DatabaseTemplate[] {
-  const entries = JSON.parse(templateIndexJson) as TemplateIndexEntry[];
+  const entries: TemplateIndexEntry[] = templateIndex;
   const catalog: DatabaseTemplate[] = [];
 
   for (const entry of entries) {

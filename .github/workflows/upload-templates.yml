@@ -34,33 +34,16 @@ jobs:
           }
 
           find templates -type f ! -name '.gitkeep' ! -name '*.test.ts' -print0 | while IFS= read -r -d '' file; do
-            remote="$file"
-            upload_file="$file"
-            tmp=""
-
-            if [[ "$file" == *.jsonc ]]; then
-              tmp=$(mktemp)
-              if ! jq . "$file" > "$tmp"; then
-                echo "::error file=$file::Invalid JSON (or JSONC with comments — switch the workflow to a JSONC stripper)"
-                rm -f "$tmp"
-                exit 1
-              fi
-              upload_file="$tmp"
-              remote="${file%.jsonc}.json"
-            fi
-
-            CHECKSUM=$(sha256sum "$upload_file" | awk '{print toupper($1)}')
-            CONTENT_TYPE=$(content_type_for "$remote")
-            echo "Uploading $file -> $remote ($CONTENT_TYPE)"
+            CHECKSUM=$(sha256sum "$file" | awk '{print toupper($1)}')
+            CONTENT_TYPE=$(content_type_for "$file")
+            echo "Uploading $file ($CONTENT_TYPE)"
             curl --fail --show-error --silent \
               -X PUT \
               -H "AccessKey: ${BUNNYNET_STORAGE_PASSWORD}" \
               -H "Content-Type: ${CONTENT_TYPE}" \
               -H "Checksum: ${CHECKSUM}" \
-              --upload-file "$upload_file" \
-              "https://${BUNNYNET_STORAGE_ENDPOINT}/${BUNNYNET_STORAGE_ZONE}/${remote}"
-
-            if [ -n "$tmp" ]; then rm -f "$tmp"; fi
+              --upload-file "$file" \
+              "https://${BUNNYNET_STORAGE_ENDPOINT}/${BUNNYNET_STORAGE_ZONE}/${file}"
           done
       # Only main mirrors to storage; a dispatch from another branch must not delete templates that main still has.
       - name: Delete removed templates
@@ -85,7 +68,7 @@ jobs:
             jq -r --arg d "$dir" '.[] | select(.IsDirectory | not) | $d + .ObjectName' <<< "$json"
           }
 
-          expected=$(find templates -type f ! -name '.gitkeep' ! -name '*.test.ts' | sed 's/\.jsonc$/.json/' | sort)
+          expected=$(find templates -type f ! -name '.gitkeep' ! -name '*.test.ts' | sort)
           if [ -z "$expected" ]; then
             echo "::error::No local templates found; refusing to delete anything"
             exit 1
