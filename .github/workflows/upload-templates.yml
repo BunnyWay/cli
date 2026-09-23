@@ -62,6 +62,47 @@ jobs:
 
             if [ -n "$tmp" ]; then rm -f "$tmp"; fi
           done
+      # Only main mirrors to storage; a dispatch from another branch must not delete templates that main still has.
+      - name: Delete removed templates
+        if: github.ref == 'refs/heads/main'
+        env:
+          BUNNYNET_STORAGE_ENDPOINT: ${{ vars.BUNNYNET_STORAGE_ENDPOINT }}
+          BUNNYNET_STORAGE_ZONE: ${{ vars.BUNNYNET_STORAGE_ZONE }}
+          BUNNYNET_STORAGE_PASSWORD: ${{ secrets.BUNNYNET_STORAGE_PASSWORD }}
+        run: |
+          set -o pipefail
+          BASE="https://${BUNNYNET_STORAGE_ENDPOINT}/${BUNNYNET_STORAGE_ZONE}"
+
+          list_remote() {
+            local dir="$1" json name
+            json=$(curl --fail --show-error --silent \
+              -H "AccessKey: ${BUNNYNET_STORAGE_PASSWORD}" \
+              -H "Accept: application/json" \
+              "${BASE}/${dir}") || return 1
+            while IFS= read -r name; do
+              list_remote "${dir}${name}/" || return 1
+            done < <(jq -r '.[] | select(.IsDirectory) | .ObjectName' <<< "$json")
+            jq -r --arg d "$dir" '.[] | select(.IsDirectory | not) | $d + .ObjectName' <<< "$json"
+          }
+
+          expected=$(find templates -type f ! -name '.gitkeep' ! -name '*.test.ts' | sed 's/\.jsonc$/.json/' | sort)
+          if [ -z "$expected" ]; then
+            echo "::error::No local templates found; refusing to delete anything"
+            exit 1
+          fi
+          remote=$(list_remote "templates/" | sort)
+
+          while IFS= read -r stale; do
+            case "$stale" in
+              templates/?*) ;;
+              *) echo "::error::Refusing to delete '${stale}' outside templates/"; exit 1 ;;
+            esac
+            echo "Deleting $stale"
+            curl --fail --show-error --silent --output /dev/null \
+              -X DELETE \
+              -H "AccessKey: ${BUNNYNET_STORAGE_PASSWORD}" \
+              "${BASE}/${stale}"
+          done < <(comm -23 <(printf '%s\n' "$remote") <(printf '%s\n' "$expected") | grep -v '^$')
       - name: Purge CDN cache
         env:
           BUNNYNET_API_KEY: ${{ secrets.BUNNYNET_API_KEY }}
