@@ -109,8 +109,8 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
     }
 
     const failures: Array<{ id: string; error: string }> = [];
+    const pruned = new Set<string>();
     await withSpinner("Pruning deploys...", async (spin) => {
-      const pruned = new Set<string>();
       for (const [index, victim] of victims.entries()) {
         spin.text = `Pruning ${victim.id} (${index + 1}/${victims.length})...`;
         try {
@@ -132,9 +132,7 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       });
     });
 
-    const prunedIds = victims
-      .filter((v) => !failures.some((f) => f.id === v.id))
-      .map((v) => v.id);
+    const prunedIds = [...pruned];
 
     if (output === "json") {
       logger.log(

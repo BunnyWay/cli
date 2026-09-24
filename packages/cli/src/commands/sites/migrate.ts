@@ -22,8 +22,11 @@ import {
   siteFiles,
   type ZoneState,
 } from "./api.ts";
-import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
-import { productionUrl } from "./deploy.ts";
+import {
+  productionUrl,
+  SITES_MANIFEST,
+  type SiteManifest,
+} from "./constants.ts";
 import { sitePositionalBuilder } from "./interactive.ts";
 
 interface MigrateArgs {

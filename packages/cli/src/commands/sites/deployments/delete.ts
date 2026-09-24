@@ -1,7 +1,7 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import {
   deleteDeployFiles,
-  readRemoteState,
+  rereadRemoteState,
   writeRemoteState,
 } from "@/commands/sites/api.ts";
 import {
@@ -134,14 +134,10 @@ export const sitesDeploymentsDeleteCommand = defineCommand<DeleteArgs>({
 
     const deleted = await withSpinner(`Deleting deploy ${id}...`, async () => {
       // Revalidate on fresh state right before anything destructive: the confirmation window is long enough for a concurrent deploy to make this one live.
-      const fresh = await readRemoteState(connection);
-      if (fresh === null) {
-        throw new UserError(
-          "Couldn't re-read the site state.",
-          "Retry the delete; nothing was deleted.",
-        );
-      }
-      const { state: latest, etag: latestEtag } = fresh;
+      const { state: latest, etag: latestEtag } = await rereadRemoteState(
+        connection,
+        "Retry the delete; nothing was deleted.",
+      );
       const freshRecord = latest.deploys.find((d) => d.id === id);
       if (!freshRecord) return false; // gone since the first read; same no-op as above
       const freshBlocker = deleteBlocker(latest, id);

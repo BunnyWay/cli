@@ -77,9 +77,7 @@ async function contextFromRef(
       "Pass the storage zone ID instead (see `bunny sites list`).",
     );
   }
-  const summary = matches[0];
-  const context = summary && (await siteContextFromZone(summary.storageZone));
-  if (context) return context;
+  if (matches[0]) return matches[0];
 
   if (zone) {
     throw new UserError(
@@ -93,17 +91,22 @@ async function contextFromRef(
   );
 }
 
-export interface SelectedSite {
+interface SelectedSite {
   site: SiteContext;
   // Offer to link the directory to the site: prompts for a picked site, a no-op otherwise (an explicit `--link` is already applied by then), so commands can always call it.
   offerLink: () => Promise<void>;
 }
 
-function linkDirectory(site: SiteContext, output: OutputFormat): void {
+/** Point `.bunny/site.json` at a site. */
+export function saveSiteLink(state: { storageZoneId: number; name: string }) {
   saveManifest<SiteManifest>(SITES_MANIFEST, {
-    id: site.state.storageZoneId,
-    name: site.state.name,
+    id: state.storageZoneId,
+    name: state.name,
   });
+}
+
+function linkDirectory(site: SiteContext, output: OutputFormat): void {
+  saveSiteLink(site.state);
   // A JSON consumer reads the result from the payload, not from a log line.
   if (output !== "json") {
     logger.success(
@@ -209,11 +212,7 @@ export async function selectSite(
   });
   if (!selected) throw new UserError("A site is required.");
 
-  const summary = selected as (typeof sites)[number];
-  const context = await siteContextFromZone(summary.storageZone);
-  if (!context) {
-    throw new UserError(`Site "${summary.state.name}" could not be loaded.`);
-  }
+  const context = selected as SiteContext;
 
   // A picked site is prompted about at the end of the command, unless --link/--no-link already settled it.
   if (args.link !== undefined) return linked(context);
