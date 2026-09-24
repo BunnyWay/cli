@@ -212,7 +212,12 @@ export async function selectSite(
   });
   if (!selected) throw new UserError("A site is required.");
 
-  const context = selected as SiteContext;
+  // Re-read after the pick: the list is stale by the time a human answers, and destructive commands act on it.
+  const summary = selected as SiteContext;
+  const context = await siteContextFromZone(summary.storageZone);
+  if (!context) {
+    throw new UserError(`Site "${summary.state.name}" could not be loaded.`);
+  }
 
   // A picked site is prompted about at the end of the command, unless --link/--no-link already settled it.
   if (args.link !== undefined) return linked(context);

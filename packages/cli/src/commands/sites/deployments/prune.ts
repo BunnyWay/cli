@@ -9,7 +9,6 @@ import {
   isValidDeployId,
   pruneVictims,
 } from "@/commands/sites/constants.ts";
-import { deleteBlocker } from "@/commands/sites/deployments/delete.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -115,17 +114,22 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
 
     const failures: Array<{ id: string; error: string }> = [];
     const pruned = new Set<string>();
+    const kept: string[] = [];
     await withSpinner("Pruning deploys...", async (spin) => {
       // Revalidate right before deleting: the site pick and confirmation are long enough for a concurrent publish to make a victim live.
       const { state: latest, etag: latestEtag } = await rereadRemoteState(
         connection,
         "Retry the prune; nothing was deleted.",
       );
+      const stillVictims = new Set(
+        pruneVictims(latest.deploys, keep, latest.current, latest.previous).map(
+          (d) => d.id,
+        ),
+      );
       for (const [index, victim] of victims.entries()) {
         spin.text = `Pruning ${victim.id} (${index + 1}/${victims.length})...`;
-        const blocker = deleteBlocker(latest, victim.id);
-        if (blocker) {
-          failures.push({ id: victim.id, error: `Became ${blocker}; kept.` });
+        if (!stillVictims.has(victim.id)) {
+          kept.push(victim.id);
           continue;
         }
         try {
@@ -152,7 +156,7 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
     if (output === "json") {
       logger.log(
         JSON.stringify(
-          { site: state.name, pruned: prunedIds, failures },
+          { site: state.name, pruned: prunedIds, kept, failures },
           null,
           2,
         ),
@@ -164,6 +168,11 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
     if (prunedIds.length > 0) {
       logger.success(
         `Pruned ${prunedIds.length} deploy(s): ${prunedIds.join(", ")}.`,
+      );
+    }
+    if (kept.length > 0) {
+      logger.info(
+        `Kept ${kept.join(", ")}: no longer prunable after a concurrent change.`,
       );
     }
     for (const failure of failures) {
