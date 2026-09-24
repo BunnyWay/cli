@@ -1143,6 +1143,7 @@ function importFixture(calls: Call[]) {
         StorageZoneId: 10,
         Hostnames: [
           { IsSystemHostname: true, Value: "legacy.b-cdn.net" },
+          { IsSystemHostname: false, Value: "*.example.com" },
           { IsSystemHostname: false, Value: "www.example.com" },
         ],
       },
@@ -1167,7 +1168,7 @@ test("importSite leaves serving untouched until the first publish applies routin
   const rules = (
     await coreClient.GET("/pullzone/{id}", { params: { path: { id: 30 } } })
   ).data?.EdgeRules?.map((r) => r.Description);
-  expect(rules).toEqual([GATE_RULE_DESC, STATE_RULE_DESC]);
+  expect(rules).toEqual([STATE_RULE_DESC]);
   const cacheWrites = () =>
     calls.filter(
       (c) =>

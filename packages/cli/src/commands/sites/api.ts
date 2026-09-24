@@ -653,7 +653,6 @@ export async function planSiteImport(opts: {
   coreClient: CoreClient;
   storageZone: StorageZoneModel;
   name: string;
-  pullZoneId?: number;
 }): Promise<SiteImportPlan> {
   const { coreClient, storageZone, name } = opts;
   const zoneName = storageZone.Name ?? String(storageZone.Id);
@@ -686,30 +685,18 @@ export async function planSiteImport(opts: {
   const linked = (await fetchPullZones(coreClient)).filter(
     (pz) => pz.StorageZoneId === storageZone.Id,
   );
-  let pullZone: PullZone | undefined;
-  if (opts.pullZoneId != null) {
-    pullZone = linked.find((pz) => pz.Id === opts.pullZoneId);
-    if (!pullZone) {
-      throw new UserError(
-        `Pull zone ${opts.pullZoneId} doesn't use storage zone "${zoneName}" as its origin.`,
-        linked.length > 0
-          ? `Pull zones serving it: ${linked.map((pz) => pz.Id).join(", ")}.`
-          : undefined,
-      );
-    }
-  } else if (linked.length === 1) {
-    pullZone = linked[0];
-  } else if (linked.length === 0) {
+  // Every other pull zone on the origin would serve `_bunny/` and `deploys/` unguarded, so the site must be the zone's only one.
+  if (linked.length !== 1) {
     throw new UserError(
-      `No pull zone serves storage zone "${zoneName}".`,
-      "Attach one with `bunny storage zones update`, or start fresh with `bunny sites create <name>`.",
-    );
-  } else {
-    throw new UserError(
-      `Storage zone "${zoneName}" is served by ${linked.length} pull zones.`,
-      `Pick the one the site should own with --pull-zone (${linked.map((pz) => `${pz.Id} ${pz.Name ?? ""}`.trim()).join(", ")}).`,
+      linked.length === 0
+        ? `No pull zone serves storage zone "${zoneName}".`
+        : `Storage zone "${zoneName}" is served by ${linked.length} pull zones (${linked.map((pz) => pz.Id).join(", ")}).`,
+      linked.length === 0
+        ? "Attach one with `bunny storage zones update`, or start fresh with `bunny sites create <name>`."
+        : "Detach all but the one the site should own, then re-run the import.",
     );
   }
+  const pullZone = linked[0];
   if (pullZone?.Id == null) {
     throw new UserError(`Pull zone for "${zoneName}" has no ID.`);
   }
@@ -758,21 +745,25 @@ export async function importSite(opts: {
     storageZoneId: plan.storageZone.Id as number,
     pullZoneId: plan.pullZone.Id as number,
     domain:
-      plan.pullZone.Hostnames?.find((h) => !h.IsSystemHostname && h.Value)
-        ?.Value ?? undefined,
+      plan.pullZone.Hostnames?.find(
+        (h) => !h.IsSystemHostname && h.Value && !h.Value.startsWith("*."),
+      )?.Value ?? undefined,
     deploys: [],
   };
-  const existing = await fetchEdgeRules(coreClient, state.pullZoneId);
-  const blockRules = siteRules(
+  // Storage has no create-if-absent, so recheck right before the write to narrow a concurrent import or create to the smallest window.
+  if ((await classifySiteZone(plan.storageZone)).kind !== "none") {
+    throw new UserError(
+      `Storage zone "${plan.storageZone.Name}" became a site while this import was waiting.`,
+      "Run `bunny sites list` to see it.",
+    );
+  }
+  // Only the state rule lands now: `deploys/` doesn't exist until the first deploy, and blocking it early could hide nested paths the live site still serves.
+  const stateRule = siteRules(
     { Id: state.storageZoneId, Name: plan.storageZone.Name ?? "" },
     PLACEHOLDER_DEPLOY,
-  ).filter(
-    (rule) =>
-      rule.Description === GATE_RULE_DESC ||
-      rule.Description === STATE_RULE_DESC,
-  );
-  for (const rule of blockRules) {
-    await upsertEdgeRule(coreClient, state.pullZoneId, rule, existing);
+  ).find((rule) => rule.Description === STATE_RULE_DESC);
+  if (stateRule) {
+    await upsertEdgeRule(coreClient, state.pullZoneId, stateRule);
   }
   await writeRemoteState(siteFiles.connect(plan.storageZone), state);
   return state;
@@ -886,6 +877,10 @@ export async function promoteDeploy(opts: {
       "Re-run the command; the pull zone may still be provisioning.",
     );
   }
+  // Fallible settings go before the rules switch routing, so a failure leaves the old site serving.
+  if (!state.current) {
+    await applySiteCacheSettings(coreClient, state.pullZoneId);
+  }
   await ensureSiteRules({
     coreClient,
     pullZoneId: state.pullZoneId,
@@ -893,9 +888,6 @@ export async function promoteDeploy(opts: {
     deployId,
   });
   await ensureNotFoundSettings(coreClient, storageZone, state, deployId);
-  if (!state.current) {
-    await applySiteCacheSettings(coreClient, state.pullZoneId);
-  }
   await purge();
   await waitForEdgePropagation(host, deployId);
   await purge();

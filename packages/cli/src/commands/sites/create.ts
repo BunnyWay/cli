@@ -50,7 +50,6 @@ interface CreateArgs {
   domain?: string;
   link?: boolean;
   "from-zone"?: string;
-  "pull-zone"?: number;
   force?: boolean;
 }
 
@@ -89,9 +88,10 @@ async function importExistingZone(opts: {
   const { coreClient, args } = opts;
   const { output } = args;
   const interactive = isInteractive(output);
-  if (args.region || args.tier) {
+  if (args.region || args.tier || args.domain) {
     throw new UserError(
-      "--region and --tier don't apply to --from-zone; the zone keeps its own.",
+      "--region, --tier and --domain don't apply to --from-zone.",
+      "The zone keeps its region, tier and hostnames; add another domain later with `bunny sites domains add`.",
     );
   }
 
@@ -111,7 +111,6 @@ async function importExistingZone(opts: {
       coreClient,
       storageZone,
       name,
-      pullZoneId: args["pull-zone"],
     }),
   );
   const hostnames = (plan.pullZone.Hostnames ?? [])
@@ -258,11 +257,6 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
         describe:
           "Import an existing storage zone (name or ID) and its pull zone instead of creating new ones",
       })
-      .option("pull-zone", {
-        type: "number",
-        describe:
-          "With --from-zone: the pull zone the site owns, when several serve the storage zone",
-      })
       .option("force", {
         alias: "f",
         type: "boolean",
@@ -287,9 +281,6 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
         siteName: args.name ?? siteConfig?.name,
       });
       return;
-    }
-    if (args["pull-zone"] != null) {
-      throw new UserError("--pull-zone only applies with --from-zone.");
     }
     const name = await promptSiteName(
       args.name ?? siteConfig?.name,
