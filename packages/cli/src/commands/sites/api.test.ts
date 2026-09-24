@@ -470,6 +470,14 @@ test("createSite provisions storage zone → pull zone → edge rules → state"
     ActionParameter3: `/deploys/${PLACEHOLDER_DEPLOY}/`,
   });
   expect(rewrite?.ExtraActions?.some((a) => a.ActionType === 6)).toBe(false);
+  const gate = rules.find((r) => r.Description === GATE_RULE_DESC);
+  expect(gate?.Triggers?.[0]?.PatternMatches).toEqual(["*/deploys/*"]);
+
+  // The system host redirects HTTP to HTTPS out of the box.
+  const forceSsl = coreCalls.find(
+    (c) => c.path === "/pullzone/{id}/setForceSSL",
+  );
+  expect(forceSsl?.body).toMatchObject({ ForceSSL: true });
 
   // Remote state marks the zone as a site.
   const written = await readRemoteState(fakeConnection());

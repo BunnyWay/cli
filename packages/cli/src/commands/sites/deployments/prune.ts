@@ -1,10 +1,15 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { deleteDeployFiles, writeRemoteState } from "@/commands/sites/api.ts";
+import {
+  deleteDeployFiles,
+  rereadRemoteState,
+  writeRemoteState,
+} from "@/commands/sites/api.ts";
 import {
   DEFAULT_KEEP_DEPLOYS,
   isValidDeployId,
   pruneVictims,
 } from "@/commands/sites/constants.ts";
+import { deleteBlocker } from "@/commands/sites/deployments/delete.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -74,7 +79,7 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       output,
       force: args.force,
     });
-    const { state, connection, etag } = site;
+    const { state, connection } = site;
 
     const victims = pruneVictims(
       state.deploys,
@@ -111,8 +116,18 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
     const failures: Array<{ id: string; error: string }> = [];
     const pruned = new Set<string>();
     await withSpinner("Pruning deploys...", async (spin) => {
+      // Revalidate right before deleting: the site pick and confirmation are long enough for a concurrent publish to make a victim live.
+      const { state: latest, etag: latestEtag } = await rereadRemoteState(
+        connection,
+        "Retry the prune; nothing was deleted.",
+      );
       for (const [index, victim] of victims.entries()) {
         spin.text = `Pruning ${victim.id} (${index + 1}/${victims.length})...`;
+        const blocker = deleteBlocker(latest, victim.id);
+        if (blocker) {
+          failures.push({ id: victim.id, error: `Became ${blocker}; kept.` });
+          continue;
+        }
         try {
           // Never interpolate an unvalidated ID into a storage path.
           if (!isValidDeployId(victim.id)) {
@@ -126,8 +141,8 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
         }
       }
       // Only forget deploys whose files are actually gone.
-      state.deploys = state.deploys.filter((d) => !pruned.has(d.id));
-      await writeRemoteState(connection, state, etag, {
+      latest.deploys = latest.deploys.filter((d) => !pruned.has(d.id));
+      await writeRemoteState(connection, latest, latestEtag, {
         removedIds: [...pruned],
       });
     });
