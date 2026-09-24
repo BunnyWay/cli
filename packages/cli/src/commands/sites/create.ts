@@ -1,5 +1,9 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import type { CoreClient, StorageZoneModel } from "@/commands/storage/api.ts";
+import {
+  type CoreClient,
+  resolveStorageZone,
+  type StorageZoneModel,
+} from "@/commands/storage/api.ts";
 import {
   ZONE_TIER_CHOICES,
   type ZoneTierChoice,
@@ -9,13 +13,20 @@ import {
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
-import { errorMessage } from "@/core/errors.ts";
+import { errorMessage, UserError } from "@/core/errors.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import { normalizeHostname } from "@/core/hostnames/index.ts";
 import { logger } from "@/core/logger.ts";
 import { saveManifest } from "@/core/manifest.ts";
-import { confirm, isInteractive, prompts } from "@/core/ui.ts";
-import { siteContextFromZone } from "./api.ts";
+import type { OutputFormat } from "@/core/types.ts";
+import {
+  confirm,
+  isInteractive,
+  prompts,
+  requireConfirmable,
+  withSpinner,
+} from "@/core/ui.ts";
+import { importSite, planSiteImport, siteContextFromZone } from "./api.ts";
 import {
   gitTopLevel,
   hasGitHubOrigin,
@@ -24,7 +35,11 @@ import {
   scaffoldSitesWorkflow,
 } from "./ci/scaffold.ts";
 import { loadSiteConfig } from "./config.ts";
-import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
+import {
+  isValidSiteName,
+  SITES_MANIFEST,
+  type SiteManifest,
+} from "./constants.ts";
 import { setupSiteDomain } from "./domains/index.ts";
 import { createSiteWithProgress, promptSiteName } from "./provision.ts";
 
@@ -34,6 +49,9 @@ interface CreateArgs {
   tier?: ZoneTierChoice;
   domain?: string;
   link?: boolean;
+  "from-zone"?: string;
+  "pull-zone"?: number;
+  force?: boolean;
 }
 
 // Attach a custom production domain to a just-created site; never throws (the site already exists and the domain can be retried via `sites domains add`).
@@ -62,6 +80,123 @@ async function attachDomainToCreatedSite(opts: {
   }
 }
 
+// Adopt an existing storage zone and its pull zone as a site, keeping its hostnames; nothing it serves changes until the first deploy.
+async function importExistingZone(opts: {
+  coreClient: CoreClient;
+  args: CreateArgs & { output: OutputFormat };
+  siteName?: string;
+}): Promise<void> {
+  const { coreClient, args } = opts;
+  const { output } = args;
+  const interactive = isInteractive(output);
+  if (args.region || args.tier) {
+    throw new UserError(
+      "--region and --tier don't apply to --from-zone; the zone keeps its own.",
+    );
+  }
+
+  const storageZone = await resolveStorageZone(
+    coreClient,
+    args["from-zone"] as string,
+  );
+  const zoneName = (storageZone.Name ?? "").toLowerCase();
+  const name = await promptSiteName(
+    opts.siteName ?? (isValidSiteName(zoneName) ? zoneName : undefined),
+    interactive,
+    "Pass one: bunny sites create <name> --from-zone <zone>.",
+  );
+
+  const plan = await withSpinner("Checking storage zone...", () =>
+    planSiteImport({
+      coreClient,
+      storageZone,
+      name,
+      pullZoneId: args["pull-zone"],
+    }),
+  );
+  const hostnames = (plan.pullZone.Hostnames ?? [])
+    .map((h) => h.Value)
+    .filter((v): v is string => !!v);
+
+  requireConfirmable(output, {
+    force: args.force,
+    message: "Importing a storage zone needs a confirmation prompt.",
+    hint: "Pass --force to import without prompting.",
+  });
+  if (output !== "json") {
+    logger.log(
+      `Import storage zone "${storageZone.Name}" (${storageZone.Id}) as site "${name}":`,
+    );
+    logger.log();
+    logger.log(
+      formatKeyValue(
+        [
+          { key: "Pull zone", value: String(plan.pullZone.Id) },
+          { key: "Hostnames", value: hostnames.join(", ") || "-" },
+          {
+            key: "Root entries",
+            value: `${plan.rootEntries} (served until the first deploy, then kept in storage unserved)`,
+          },
+          ...(plan.foreignRules > 0
+            ? [
+                {
+                  key: "Other edge rules",
+                  value: `${plan.foreignRules} (left in place; check they don't conflict)`,
+                },
+              ]
+            : []),
+        ],
+        output,
+      ),
+    );
+    logger.log();
+    logger.dim(
+      "  Nothing changes for visitors until the first deploy, which switches the pull zone to sites routing and caching (30-day edge cache, browsers revalidate HTML).",
+    );
+    logger.log();
+  }
+  const confirmed = await confirm("Import it?", {
+    force: args.force,
+    initial: true,
+  });
+  if (!confirmed) {
+    logger.log("Import cancelled.");
+    return;
+  }
+
+  const state = await withSpinner("Importing...", () =>
+    importSite({ coreClient, plan, name }),
+  );
+  if (args.link !== false) {
+    saveManifest<SiteManifest>(SITES_MANIFEST, {
+      id: state.storageZoneId,
+      name,
+    });
+  }
+
+  if (output === "json") {
+    logger.log(
+      JSON.stringify(
+        {
+          name,
+          storageZoneId: state.storageZoneId,
+          pullZoneId: state.pullZoneId,
+          hostnames,
+          imported: true,
+          linked: args.link !== false,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+  logger.success(`Imported "${storageZone.Name}" as site "${name}".`);
+  logger.log();
+  logger.dim("  Go live on the existing hostnames:  bunny sites deploy <dir>");
+  logger.dim("  Deploy from GitHub Actions:         bunny sites ci init");
+}
+
 // Create a static site: a storage zone (files) and a pull zone (CDN) whose edge rules serve the published deploy dir; state lives at `_bunny/site.json` in the storage zone.
 export const sitesCreateCommand = defineCommand<CreateArgs>({
   command: "create [name]",
@@ -83,6 +218,10 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
     [
       "$0 sites create my-site --tier ssd",
       "Store files on the Edge (SSD) tier (always DE)",
+    ],
+    [
+      "$0 sites create my-site --from-zone my-zone",
+      "Import an existing storage zone and its pull zone, keeping its hostnames",
     ],
   ],
 
@@ -113,6 +252,22 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
         type: "boolean",
         describe:
           "Link this directory to the new site (default: true). Use --no-link to skip.",
+      })
+      .option("from-zone", {
+        type: "string",
+        describe:
+          "Import an existing storage zone (name or ID) and its pull zone instead of creating new ones",
+      })
+      .option("pull-zone", {
+        type: "number",
+        describe:
+          "With --from-zone: the pull zone the site owns, when several serve the storage zone",
+      })
+      .option("force", {
+        alias: "f",
+        type: "boolean",
+        default: false,
+        describe: "With --from-zone: import without the confirmation prompt",
       }),
 
   handler: async (args) => {
@@ -123,6 +278,19 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
     const loadedConfig = loadSiteConfig();
     const siteConfig = loadedConfig?.config;
     const configRoot = loadedConfig?.root;
+
+    if (args["from-zone"]) {
+      const config = resolveConfig(profile, apiKey, verbose);
+      await importExistingZone({
+        coreClient: createCoreClient(clientOptions(config, verbose)),
+        args,
+        siteName: args.name ?? siteConfig?.name,
+      });
+      return;
+    }
+    if (args["pull-zone"] != null) {
+      throw new UserError("--pull-zone only applies with --from-zone.");
+    }
     const name = await promptSiteName(
       args.name ?? siteConfig?.name,
       interactive,

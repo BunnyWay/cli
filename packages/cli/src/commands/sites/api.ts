@@ -15,6 +15,7 @@ import {
   connectStorageZone,
   deleteFile,
   downloadFile,
+  listFiles,
   type StorageZone,
   uploadFile,
 } from "@/commands/storage/files-api.ts";
@@ -66,6 +67,7 @@ export const siteFiles = {
   download: downloadFile,
   upload: uploadFile,
   remove: deleteFile,
+  list: listFiles,
 };
 
 /** Everything a sites command needs once the site is resolved. */
@@ -320,7 +322,7 @@ const SITE_CACHE_SETTINGS = {
   CacheControlPublicMaxAgeOverride: 0,
 };
 
-// Not reapplied on publish like the edge rules are, so a zone provisioned before it existed needs `migrateSite` to set it.
+// Applied at create/migrate and again on a site's first publish, which is when an imported zone takes them on.
 export async function applySiteCacheSettings(
   coreClient: CoreClient,
   pullZoneId: number,
@@ -633,6 +635,149 @@ export async function createSite(
   };
 }
 
+// Paths the site layout writes to; a zone already using either at its root can't be imported without clobbering or hiding content.
+const RESERVED_ROOT_ENTRIES = [DEPLOYS_DIR, "_bunny"];
+const SITE_RULE_PREFIX = "bunny sites:";
+
+export interface SiteImportPlan {
+  storageZone: StorageZoneModel;
+  pullZone: PullZone;
+  /** Files and directories at the zone root; they keep serving until the first deploy, then stay in storage unserved. */
+  rootEntries: number;
+  /** Edge rules the site doesn't manage; they keep running alongside the site's rules. */
+  foreignRules: number;
+}
+
+// Check an existing storage zone can become a site without touching it: not already a site, no reserved root paths, exactly one storage-backed pull zone (or the one named), no edge script, and a free site name.
+export async function planSiteImport(opts: {
+  coreClient: CoreClient;
+  storageZone: StorageZoneModel;
+  name: string;
+  pullZoneId?: number;
+}): Promise<SiteImportPlan> {
+  const { coreClient, storageZone, name } = opts;
+  const zoneName = storageZone.Name ?? String(storageZone.Id);
+
+  const existing = await classifySiteZone(storageZone);
+  if (existing.kind === "current") {
+    throw new UserError(
+      `Storage zone "${zoneName}" is already the site "${existing.state.name}".`,
+      `Run \`bunny sites link ${existing.state.name}\` to use it from this directory.`,
+    );
+  }
+  if (existing.kind === "legacy") {
+    throw new UserError(
+      `Storage zone "${zoneName}" is a site from an older CLI.`,
+      `Run \`bunny sites migrate ${storageZone.Id}\` instead.`,
+    );
+  }
+
+  const root = await siteFiles.list(siteFiles.connect(storageZone), "");
+  const reserved = root.find((entry) =>
+    RESERVED_ROOT_ENTRIES.includes(entry.objectName),
+  );
+  if (reserved) {
+    throw new UserError(
+      `Storage zone "${zoneName}" already has a "${reserved.objectName}" ${reserved.isDirectory ? "directory" : "file"} at its root, which sites reserves.`,
+      "Move or delete it, then re-run the import.",
+    );
+  }
+
+  const linked = (await fetchPullZones(coreClient)).filter(
+    (pz) => pz.StorageZoneId === storageZone.Id,
+  );
+  let pullZone: PullZone | undefined;
+  if (opts.pullZoneId != null) {
+    pullZone = linked.find((pz) => pz.Id === opts.pullZoneId);
+    if (!pullZone) {
+      throw new UserError(
+        `Pull zone ${opts.pullZoneId} doesn't use storage zone "${zoneName}" as its origin.`,
+        linked.length > 0
+          ? `Pull zones serving it: ${linked.map((pz) => pz.Id).join(", ")}.`
+          : undefined,
+      );
+    }
+  } else if (linked.length === 1) {
+    pullZone = linked[0];
+  } else if (linked.length === 0) {
+    throw new UserError(
+      `No pull zone serves storage zone "${zoneName}".`,
+      "Attach one with `bunny storage zones update`, or start fresh with `bunny sites create <name>`.",
+    );
+  } else {
+    throw new UserError(
+      `Storage zone "${zoneName}" is served by ${linked.length} pull zones.`,
+      `Pick the one the site should own with --pull-zone (${linked.map((pz) => `${pz.Id} ${pz.Name ?? ""}`.trim()).join(", ")}).`,
+    );
+  }
+  if (pullZone?.Id == null) {
+    throw new UserError(`Pull zone for "${zoneName}" has no ID.`);
+  }
+  const pullZoneId = pullZone.Id;
+
+  // The site's rewrite rule and an attached script would both route requests, and sites has no way to reconcile them.
+  const scriptId = await fetchMiddlewareScriptId(coreClient, pullZoneId);
+  if (scriptId != null) {
+    throw new UserError(
+      `Pull zone ${pullZoneId} runs edge script ${scriptId}.`,
+      "Detach the script from the pull zone first; sites serves deploys with edge rules instead.",
+    );
+  }
+
+  const taken = (await fetchSites(coreClient)).some(
+    (site) => site.state.name === name,
+  );
+  if (taken) {
+    throw new UserError(
+      `A site named "${name}" already exists.`,
+      "Pass a different name: bunny sites create <name> --from-zone <zone>.",
+    );
+  }
+
+  const rules = await fetchEdgeRules(coreClient, pullZoneId);
+  return {
+    storageZone,
+    pullZone,
+    rootEntries: root.length,
+    foreignRules: rules.filter(
+      (rule) => !rule.Description?.startsWith(SITE_RULE_PREFIX),
+    ).length,
+  };
+}
+
+// Mark the zone as a site: only the block rules and state land now, so the existing site keeps serving untouched until the first deploy brings the rewrite rule and cache settings.
+export async function importSite(opts: {
+  coreClient: CoreClient;
+  plan: SiteImportPlan;
+  name: string;
+}): Promise<RemoteSiteState> {
+  const { coreClient, plan, name } = opts;
+  const state: RemoteSiteState = {
+    version: STATE_VERSION,
+    name,
+    storageZoneId: plan.storageZone.Id as number,
+    pullZoneId: plan.pullZone.Id as number,
+    domain:
+      plan.pullZone.Hostnames?.find((h) => !h.IsSystemHostname && h.Value)
+        ?.Value ?? undefined,
+    deploys: [],
+  };
+  const existing = await fetchEdgeRules(coreClient, state.pullZoneId);
+  const blockRules = siteRules(
+    { Id: state.storageZoneId, Name: plan.storageZone.Name ?? "" },
+    PLACEHOLDER_DEPLOY,
+  ).filter(
+    (rule) =>
+      rule.Description === GATE_RULE_DESC ||
+      rule.Description === STATE_RULE_DESC,
+  );
+  for (const rule of blockRules) {
+    await upsertEdgeRule(coreClient, state.pullZoneId, rule, existing);
+  }
+  await writeRemoteState(siteFiles.connect(plan.storageZone), state);
+  return state;
+}
+
 /** The pull zone's system hostname (`*.b-cdn.net`), or undefined on any failure. */
 export async function fetchSystemHostname(
   coreClient: CoreClient,
@@ -748,6 +893,9 @@ export async function promoteDeploy(opts: {
     deployId,
   });
   await ensureNotFoundSettings(coreClient, storageZone, state, deployId);
+  if (!state.current) {
+    await applySiteCacheSettings(coreClient, state.pullZoneId);
+  }
   await purge();
   await waitForEdgePropagation(host, deployId);
   await purge();

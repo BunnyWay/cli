@@ -8,7 +8,9 @@ import {
   createSite,
   deleteSiteResources,
   fetchSites,
+  importSite,
   migrateSite,
+  planSiteImport,
   promoteDeploy,
   promoteVerification,
   readRemoteState,
@@ -26,6 +28,7 @@ import {
   REMOTE_STATE_PATH,
   REWRITE_RULE_DESC,
   type RemoteSiteState,
+  STATE_RULE_DESC,
   STATE_VERSION,
 } from "./constants.ts";
 
@@ -66,6 +69,17 @@ beforeEach(() => {
     for (const key of [...store.keys()]) {
       if (key.startsWith(path)) store.delete(key);
     }
+  };
+  siteFiles.list = async () => {
+    const roots = new Map<string, boolean>();
+    for (const key of store.keys()) {
+      const [head, ...rest] = key.split("/");
+      roots.set(head as string, rest.length > 0);
+    }
+    return [...roots].map(([objectName, isDirectory]) => ({
+      objectName,
+      isDirectory,
+    })) as Awaited<ReturnType<typeof siteFiles.list>>;
   };
 });
 
@@ -1114,4 +1128,67 @@ test("migrateSite deletes the live script, never the one stale state recorded", 
   const result = await migrateSite(detached.opts);
   expect(result.detachedScriptId).toBeNull();
   expect(detached.deletes).toHaveLength(0);
+});
+
+// ---- importing an existing zone ----
+
+function importFixture(calls: Call[]) {
+  return fakeCoreClient({
+    calls,
+    storageZones: [{ ...ZONE }],
+    pullZones: [
+      {
+        Id: 30,
+        Name: "legacy",
+        StorageZoneId: 10,
+        Hostnames: [
+          { IsSystemHostname: true, Value: "legacy.b-cdn.net" },
+          { IsSystemHostname: false, Value: "www.example.com" },
+        ],
+      },
+    ],
+  });
+}
+
+test("importSite leaves serving untouched until the first publish applies routing and caching", async () => {
+  store.set("index.html", "<h1>old</h1>");
+  const calls: Call[] = [];
+  const coreClient = importFixture(calls);
+
+  const plan = await planSiteImport({
+    coreClient,
+    storageZone: ZONE,
+    name: "my-site",
+  });
+  const state = await importSite({ coreClient, plan, name: "my-site" });
+
+  expect(plan.rootEntries).toBe(1);
+  expect(state.domain).toBe("www.example.com");
+  const rules = (
+    await coreClient.GET("/pullzone/{id}", { params: { path: { id: 30 } } })
+  ).data?.EdgeRules?.map((r) => r.Description);
+  expect(rules).toEqual([GATE_RULE_DESC, STATE_RULE_DESC]);
+  const cacheWrites = () =>
+    calls.filter(
+      (c) =>
+        c.method === "POST" &&
+        c.path === "/pullzone/{id}" &&
+        (c.body as Record<string, unknown>).CacheControlMaxAgeOverride != null,
+    );
+  expect(cacheWrites()).toHaveLength(0);
+  expect((await readRemoteState(fakeConnection()))?.state).toEqual(state);
+
+  await promoteDeploy({ coreClient, state, deployId: "abc12345" });
+  expect(cacheWrites()).toHaveLength(1);
+});
+
+test("planSiteImport refuses a zone already using a reserved root path", async () => {
+  store.set("deploys/v1/index.html", "mine");
+  await expect(
+    planSiteImport({
+      coreClient: importFixture([]),
+      storageZone: ZONE,
+      name: "my-site",
+    }),
+  ).rejects.toThrow('"deploys" directory');
 });

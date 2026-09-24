@@ -84,7 +84,7 @@ async function contextFromRef(
   if (zone) {
     throw new UserError(
       `Storage zone "${zone.Name}" is not a bunny site.`,
-      "Create one with `bunny sites create <name>`.",
+      `Import it with \`bunny sites create <name> --from-zone ${zone.Id}\`, or create a new one with \`bunny sites create <name>\`.`,
     );
   }
   throw new UserError(
