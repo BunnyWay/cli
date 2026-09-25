@@ -1,12 +1,7 @@
 import { expect, test } from "bun:test";
 import type { Logger } from "@bunny.net/stream-import";
 import { resolveSourceConfig } from "@bunny.net/stream-import";
-import {
-  findSource,
-  requireSource,
-  SOURCE_IDS,
-  SOURCES,
-} from "./import-sources.ts";
+import { requireSource, SOURCE_IDS, SOURCES } from "./sources.ts";
 
 const noopLogger: Logger = {
   log: () => {},
@@ -91,17 +86,5 @@ test("every source resolves its credentials from the documented environment vari
     expect(resolveSourceConfig(requireSource(id), { env }), id).toMatchObject(
       expected,
     );
-  }
-});
-
-test("requireSource names the alternatives for an unknown or missing id", () => {
-  expect(requireSource("vimeo").label).toBe("Vimeo");
-  expect(findSource("nope")).toBeUndefined();
-  expect(() => requireSource(undefined)).toThrow(/No source selected/);
-  try {
-    requireSource("youtube");
-    expect.unreachable();
-  } catch (error) {
-    expect((error as { hint?: string }).hint).toContain("vimeo, s3");
   }
 });

@@ -28,6 +28,7 @@
       "@bunny.net/tools": ["./packages/tools/src/index.ts"],
       "@bunny.net/tools/apps": ["./packages/tools/src/apps/index.ts"],
       "@bunny.net/tools/registry": ["./packages/tools/src/registry/index.ts"],
+      "@bunny.net/tools/stream": ["./packages/tools/src/stream/index.ts"],
       "@bunny.net/stream-import": ["./packages/stream-import/src/index.ts"],
       "@bunny.net/stream-import-brightcove": [
         "./packages/stream-import-brightcove/src/index.ts"

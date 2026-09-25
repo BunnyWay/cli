@@ -28,9 +28,7 @@ function fakeContext(calls: string[]) {
       };
     },
   } as unknown as CoreClient;
-  return createToolContext({
-    clients: { core, streamLibrary: () => ({}) as never },
-  });
+  return createToolContext({ clients: { core } });
 }
 
 let dir = "";
@@ -55,9 +53,9 @@ test("an explicit reference wins over the linked library, which resolves unatten
   const linked = await resolveLibraryInteractive(fakeContext(calls), undefined);
   const named = await resolveLibraryInteractive(fakeContext([]), "marketing");
 
-  expect(linked.library.id).toBe(1);
+  expect(linked.id).toBe(1);
   expect(calls).not.toContain("/videolibrary");
-  expect(named.library.id).toBe(2);
+  expect(named.id).toBe(2);
 });
 
 test("with nothing to go on, unattended runs name the --library flag", async () => {

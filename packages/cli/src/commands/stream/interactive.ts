@@ -1,8 +1,7 @@
 import type { ToolContext } from "@bunny.net/tools";
 import {
-  openStreamLibrary,
   type StreamLibrary,
-  type StreamLibraryConnection,
+  streamLibrariesGet,
   streamLibrariesList,
 } from "@bunny.net/tools/stream";
 import { UserError } from "@/core/errors.ts";
@@ -32,15 +31,15 @@ async function maybeLinkLibrary(library: StreamLibrary): Promise<void> {
   logger.success(`Linked this directory to video library ${library.name}.`);
 }
 
-/** Open the library named by `ref`, else the linked one, else a picker (TTY only); `offerLink` offers to link a picked library. */
+/** The library named by `ref`, else the linked one, else a picker (TTY only); `offerLink` offers to link a picked library. */
 export async function resolveLibraryInteractive(
   ctx: ToolContext,
   ref: string | undefined,
   opts: { output?: OutputFormat; offerLink?: boolean } = {},
-): Promise<StreamLibraryConnection> {
+): Promise<StreamLibrary> {
   if (ref) {
     return withSpinner("Resolving video library...", () =>
-      openStreamLibrary(ctx, ref),
+      streamLibrariesGet.run(ctx, { library: ref }),
     );
   }
 
@@ -49,7 +48,7 @@ export async function resolveLibraryInteractive(
   if (manifest.id) {
     const linkedId = manifest.id;
     return withSpinner("Loading linked video library...", () =>
-      openStreamLibrary(ctx, linkedId),
+      streamLibrariesGet.run(ctx, { library: String(linkedId) }),
     );
   }
 
@@ -78,10 +77,9 @@ export async function resolveLibraryInteractive(
   });
   if (id === undefined) throw new UserError("A library is required.");
 
-  const connection = await withSpinner("Loading video library...", () =>
-    openStreamLibrary(ctx, id),
-  );
+  const library = libraries.find((lib) => lib.id === id);
+  if (!library) throw new UserError("A library is required.");
   // The picker only runs interactively, so the link offer can't taint machine output.
-  if (opts.offerLink) await maybeLinkLibrary(connection.library);
-  return connection;
+  if (opts.offerLink) await maybeLinkLibrary(library);
+  return library;
 }

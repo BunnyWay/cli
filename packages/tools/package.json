@@ -14,6 +14,14 @@
   },
   "dependencies": {
     "@bunny.net/openapi-client": "workspace:*",
+    "@bunny.net/stream-import": "workspace:*",
+    "@bunny.net/stream-import-brightcove": "workspace:*",
+    "@bunny.net/stream-import-cloudflare": "workspace:*",
+    "@bunny.net/stream-import-jwplayer": "workspace:*",
+    "@bunny.net/stream-import-mux": "workspace:*",
+    "@bunny.net/stream-import-s3": "workspace:*",
+    "@bunny.net/stream-import-vimeo": "workspace:*",
+    "@bunny.net/stream-import-wistia": "workspace:*",
     "zod": "^4.3.6"
   },
   "devDependencies": {

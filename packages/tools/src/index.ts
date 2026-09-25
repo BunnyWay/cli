@@ -8,8 +8,10 @@ export type {
   ToolClients,
   ToolContext,
   ToolContextOptions,
+  ToolContextOverrides,
+  ToolEnv,
 } from "./context.ts";
-export { createToolContext } from "./context.ts";
+export { createToolContext, extendToolContext } from "./context.ts";
 export type { Tool, ToolDefinition, ToolKind } from "./define-tool.ts";
 export { defineTool } from "./define-tool.ts";
 export {

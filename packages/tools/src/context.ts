@@ -43,7 +43,11 @@ export interface ToolContextOptions {
   onDebug?: (message: string) => void;
   /** Pre-built clients, for tests and hosts that construct their own. */
   clients?: Partial<ToolClients>;
+  /** Where tools read host configuration such as third-party source credentials. Defaults to `process.env`. */
+  env?: ToolEnv;
 }
+
+export type ToolEnv = Readonly<Record<string, string | undefined>>;
 
 /**
  * Everything a tool needs from its host: credentials, clients, cancellation,
@@ -53,6 +57,10 @@ export interface ToolContextOptions {
 export interface ToolContext {
   readonly clients: ToolClients;
   readonly signal?: AbortSignal;
+  /** Host environment; third-party credentials are read from here so they never travel in tool input. */
+  readonly env: ToolEnv;
+  /** Identifies the host to third-party APIs a tool calls, e.g. a video source. */
+  readonly userAgent: string;
   progress(message: string): void;
   debug(message: string): void;
 }
@@ -125,7 +133,27 @@ export function createToolContext(
   return {
     clients,
     signal: options.signal,
+    env: options.env ?? process.env,
+    userAgent: options.userAgent ?? DEFAULT_USER_AGENT,
     progress: (message) => options.onProgress?.(message),
     debug: (message) => options.onDebug?.(message),
+  };
+}
+
+export interface ToolContextOverrides {
+  /** Layered over the context's env for this invocation only, e.g. credentials a host just prompted for. */
+  env?: ToolEnv;
+  onProgress?: (message: string) => void;
+}
+
+/** A context sharing `ctx`'s clients, with an env overlay or a different progress sink. */
+export function extendToolContext(
+  ctx: ToolContext,
+  overrides: ToolContextOverrides,
+): ToolContext {
+  return {
+    ...ctx,
+    env: overrides.env ? { ...ctx.env, ...overrides.env } : ctx.env,
+    progress: overrides.onProgress ?? ctx.progress,
   };
 }

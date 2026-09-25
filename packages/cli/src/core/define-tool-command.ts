@@ -1,4 +1,9 @@
-import type { Tool, ToolContext } from "@bunny.net/tools";
+import {
+  extendToolContext,
+  type Tool,
+  type ToolContext,
+  type ToolEnv,
+} from "@bunny.net/tools";
 import type { Argv, CommandModule } from "yargs";
 import type { z } from "zod";
 import { resolveConfig } from "@/config/index.ts";
@@ -11,12 +16,17 @@ import { spinner } from "./ui.ts";
 /** Returned by {@link ToolCommandDef.prepare} to stop without running the tool. */
 export const CANCELLED = Symbol("cancelled");
 
+/** Returned by {@link ToolCommandDef.prepare} when it has already finished the command, e.g. a dry run that printed its plan. */
+export const DONE = Symbol("done");
+
 /** The result of turning CLI arguments into a single tool invocation. */
 export interface Prepared<Schema extends z.ZodObject> {
   /** Validated by the tool's schema before it runs. */
   input: z.input<Schema>;
   /** Confirmation gate. Required for destructive tools; closes over what `prepare` resolved so the prompt can name the resource. */
   confirm?: () => Promise<boolean>;
+  /** Layered over the environment for this invocation only, e.g. credentials entered at a prompt; never part of `input`. */
+  env?: ToolEnv;
 }
 
 interface ToolCommandDef<A, Schema extends z.ZodObject, Result> {
@@ -26,13 +36,17 @@ interface ToolCommandDef<A, Schema extends z.ZodObject, Result> {
   aliases?: readonly string[];
   /** Defaults to the tool's description. */
   describe?: string;
+  hidden?: boolean;
   examples?: ReadonlyArray<readonly [string, string]>;
+  epilogue?: string;
   builder?: (yargs: Argv) => Argv<A>;
+  /** Argument validation that should fail before any prompt or API call. */
+  preRun?: (args: A & GlobalArgs) => Promise<void>;
   /** Turn CLI arguments into one invocation. Prompts, pickers, manifest lookups, and confirmations all belong here. */
   prepare: (
     args: A & GlobalArgs,
     ctx: ToolContext,
-  ) => Promise<Prepared<Schema> | typeof CANCELLED>;
+  ) => Promise<Prepared<Schema> | typeof CANCELLED | typeof DONE>;
   /** Spinner text while the tool runs. Tool progress messages replace it. */
   progress?: string;
   /** CLI-local follow-up such as manifest cleanup. Runs for every output format. */
@@ -71,8 +85,11 @@ export function defineToolCommand<A, Schema extends z.ZodObject, Result>(
     command: def.command,
     aliases: def.aliases,
     describe: def.describe ?? def.tool.description,
+    hidden: def.hidden,
     examples: def.examples,
+    epilogue: def.epilogue,
     builder: def.builder,
+    preRun: def.preRun,
 
     handler: async (args) => {
       const config = resolveConfig(args.profile, args.apiKey, args.verbose);
@@ -86,6 +103,7 @@ export function defineToolCommand<A, Schema extends z.ZodObject, Result>(
       });
 
       const prepared = await def.prepare(args, ctx);
+      if (prepared === DONE) return;
       if (prepared === CANCELLED) {
         logger.log("Cancelled.");
         return;
@@ -105,7 +123,10 @@ export function defineToolCommand<A, Schema extends z.ZodObject, Result>(
       spin.start();
       let result: Result;
       try {
-        result = await def.tool.invoke(ctx, prepared.input);
+        const runCtx = prepared.env
+          ? extendToolContext(ctx, { env: prepared.env })
+          : ctx;
+        result = await def.tool.invoke(runCtx, prepared.input);
       } finally {
         spin.stop();
       }

@@ -80,15 +80,23 @@ How `kind` maps onto a protocol's annotations is the host's call. `read` is the 
 
 ## Tools
 
-| Tool                     | Kind        | Notes                                     |
-| ------------------------ | ----------- | ----------------------------------------- |
-| `apps.registries.list`   | read        | Container registries for Magic Containers |
-| `apps.registries.get`    | read        | By registry ID                            |
-| `apps.registries.create` | write       | Type derived from `server` when omitted   |
-| `apps.registries.update` | write       | Credentials rotate together; name merges  |
-| `apps.registries.delete` | destructive | Fails while apps still use the registry   |
-| `registry.repositories`  | read        | bunny.net OCI registry, prefix stripped   |
-| `registry.tags`          | read        | Bare repository name in, bare name back   |
+| Tool                     | Kind        | Notes                                                  |
+| ------------------------ | ----------- | ------------------------------------------------------ |
+| `apps.registries.list`   | read        | Container registries for Magic Containers              |
+| `apps.registries.get`    | read        | By registry ID                                         |
+| `apps.registries.create` | write       | Type derived from `server` when omitted                |
+| `apps.registries.update` | write       | Credentials rotate together; name merges               |
+| `apps.registries.delete` | destructive | Fails while apps still use the registry                |
+| `registry.repositories`  | read        | bunny.net OCI registry, prefix stripped                |
+| `registry.tags`          | read        | Bare repository name in, bare name back                |
+| `stream.libraries.list`  | read        | Video libraries, sorted by name                        |
+| `stream.libraries.get`   | read        | By ID or exact name                                    |
+| `stream.import.sources`  | read        | Source platforms and their env readiness, never values |
+| `stream.import.plan`     | read        | What an import would do; writes nothing                |
+| `stream.import.run`      | write       | Queues the import; journals progress locally           |
+| `stream.import.status`   | read        | Refreshes a saved import against Bunny                 |
+
+`stream.import.*` reads each source platform's credentials from `ctx.env` (default `process.env`; pass `env` to `createToolContext`), never from input, so they stay out of a model's context. `plan`, `run`, and `status` share a journal under `$XDG_STATE_HOME/bunnynet/stream-import/`, so they are `localFiles`. A `plan` followed by a `run` for the same target on the same context reuses the plan's discovery. Hosts should leave `run`'s `wait` off and poll `status`.
 
 `apps.registries` manages the credentials bunny.net uses to pull images from third-party registries. `registry` reads the bunny.net registry itself, the one you push to, over the OCI distribution API rather than a generated client, so it uses `ctx.clients.registry`.
 

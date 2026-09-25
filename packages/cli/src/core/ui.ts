@@ -1,4 +1,4 @@
-import ora from "ora";
+import ora, { type Ora } from "ora";
 import promptsLib from "prompts";
 import { UserError } from "./errors.ts";
 import { logger } from "./logger.ts";
@@ -185,9 +185,22 @@ export function requireConfirmable(
   throw new UserError(opts.message, opts.hint);
 }
 
+// Every spinner this process made, so a line written mid-spin can clear and redraw whichever is live.
+const spinners = new Set<Ora>();
+
 /** Creates an ora spinner. Automatically silenced in non-TTY environments. */
 export function spinner(text: string) {
-  return ora({ text, isSilent: !process.stdout.isTTY });
+  const spin = ora({ text, isSilent: !process.stdout.isTTY });
+  spinners.add(spin);
+  return spin;
+}
+
+/** Write above any live spinner (clear, write, redraw), so the line never lands on a half-drawn frame. */
+export function aboveSpinners(write: () => void): void {
+  const live = [...spinners].filter((s) => s.isSpinning);
+  for (const s of live) s.clear();
+  write();
+  for (const s of live) s.render();
 }
 
 /** Run `fn` under a started spinner, stopping it whatever happens; `fn` may update `spin.text`. */

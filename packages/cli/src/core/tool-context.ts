@@ -3,6 +3,7 @@ import type { ResolvedConfig } from "@/config/index.ts";
 import { registryUrl } from "./bunny-registry.ts";
 import { clientOptions } from "./client-options.ts";
 import { logger } from "./logger.ts";
+import { aboveSpinners } from "./ui.ts";
 import { VERSION } from "./version.ts";
 
 export interface ToolContextOpts {
@@ -30,6 +31,8 @@ export function toolContext(
     userAgent: `bunny-cli/${VERSION}`,
     signal: opts.signal,
     onProgress: opts.onProgress,
-    onDebug: opts.verbose ? (msg) => logger.debug(msg, true) : undefined,
+    onDebug: opts.verbose
+      ? (msg) => aboveSpinners(() => logger.debug(msg, true))
+      : undefined,
   });
 }
