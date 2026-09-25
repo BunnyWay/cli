@@ -2,6 +2,7 @@
   "name": "@bunny.net/cli-linux-x64",
   "version": "0.17.0",
   "description": "bunny.net CLI binary for Linux x64",
+  "license": "MIT",
   "os": [
     "linux"
   ],
@@ -10,7 +11,8 @@
   ],
   "files": [
     "bunny",
-    "bunny-baseline"
+    "bunny-baseline",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"

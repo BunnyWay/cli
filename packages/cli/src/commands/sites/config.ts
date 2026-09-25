@@ -12,7 +12,7 @@ import {
 import { UserError } from "@/core/errors.ts";
 import { syncJsonc } from "@/core/jsonc.ts";
 
-export interface LoadedSiteConfig {
+interface LoadedSiteConfig {
   config: SiteConfig;
   /** Directory containing bunny.jsonc; `sites.dir` resolves against this. */
   root: string;

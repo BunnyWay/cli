@@ -1,37 +1,29 @@
+import apiMd from "@skills/bunny-cli/references/api.md" with { type: "text" };
+import authMd from "@skills/bunny-cli/references/auth.md" with { type: "text" };
+import databaseMd from "@skills/bunny-cli/references/database.md" with {
+  type: "text",
+};
+import databaseClientMd from "@skills/bunny-cli/references/database-client.md" with {
+  type: "text",
+};
+import dnsMd from "@skills/bunny-cli/references/dns.md" with { type: "text" };
+import sandboxMd from "@skills/bunny-cli/references/sandbox.md" with {
+  type: "text",
+};
+import scriptsMd from "@skills/bunny-cli/references/scripts.md" with {
+  type: "text",
+};
+import sitesMd from "@skills/bunny-cli/references/sites.md" with {
+  type: "text",
+};
+import storageMd from "@skills/bunny-cli/references/storage.md" with {
+  type: "text",
+};
+import streamMd from "@skills/bunny-cli/references/stream.md" with {
+  type: "text",
+};
+import skillMd from "@skills/bunny-cli/SKILL.md" with { type: "text" };
 import type { ProjectSkill } from "@/core/agent-skill.ts";
-import apiMd from "../../../../../skills/bunny-cli/references/api.md" with {
-  type: "text",
-};
-import authMd from "../../../../../skills/bunny-cli/references/auth.md" with {
-  type: "text",
-};
-import databaseMd from "../../../../../skills/bunny-cli/references/database.md" with {
-  type: "text",
-};
-import databaseClientMd from "../../../../../skills/bunny-cli/references/database-client.md" with {
-  type: "text",
-};
-import dnsMd from "../../../../../skills/bunny-cli/references/dns.md" with {
-  type: "text",
-};
-import sandboxMd from "../../../../../skills/bunny-cli/references/sandbox.md" with {
-  type: "text",
-};
-import scriptsMd from "../../../../../skills/bunny-cli/references/scripts.md" with {
-  type: "text",
-};
-import sitesMd from "../../../../../skills/bunny-cli/references/sites.md" with {
-  type: "text",
-};
-import storageMd from "../../../../../skills/bunny-cli/references/storage.md" with {
-  type: "text",
-};
-import streamMd from "../../../../../skills/bunny-cli/references/stream.md" with {
-  type: "text",
-};
-import skillMd from "../../../../../skills/bunny-cli/SKILL.md" with {
-  type: "text",
-};
 
 const AGENTS_SECTION = `## bunny.net CLI
 

@@ -77,9 +77,7 @@ export interface SiteContext {
   connection: StorageZone;
 }
 
-export interface SiteSummary {
-  state: RemoteSiteState;
-  storageZone: StorageZoneModel;
+interface SiteSummary extends SiteContext {
   systemHostname?: string;
 }
 
@@ -124,6 +122,17 @@ export async function readRemoteState(
   const state = parseRemoteState(raw);
   if (!state) return null;
   return { state, etag: sha256Hex(raw) };
+}
+
+// Re-read state right before a destructive step, since a confirmation window is long enough for a concurrent writer to change it.
+export async function rereadRemoteState(
+  connection: StorageZone,
+  retryHint: string,
+): Promise<{ state: RemoteSiteState; etag: string }> {
+  const fresh = await readRemoteState(connection);
+  if (!fresh)
+    throw new UserError("Couldn't re-read the site state.", retryHint);
+  return fresh;
 }
 
 // Write `_bunny/site.json` (returns the new etag). On an `expectedEtag` mismatch a parseable concurrent state is reconciled: deploy records merge (minus any `removedIds` this writer intentionally deleted, so a prune racing a deploy doesn't resurrect pruned records), and the current/previous pointers follow `promotedTo` (last promote wins; a non-promoting writer adopts the concurrent pointers rather than clobber them with its stale read). An unparseable conflict aborts rather than overwrite.
@@ -259,11 +268,7 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
         const zone = await fetchStorageZone(client, pz.StorageZoneId as number);
         const context = await siteContextFromZone(zone);
         if (!context || context.state.pullZoneId !== pz.Id) return null;
-        return {
-          state: context.state,
-          storageZone: zone,
-          systemHostname: systemHostname(pz.Hostnames),
-        };
+        return { ...context, systemHostname: systemHostname(pz.Hostnames) };
       } catch {
         return null;
       }
@@ -439,7 +444,7 @@ function siteRules(
 }
 
 // Converge the pull zone's rules on `deployId`; create and promote both funnel through here, so a missing or stale rule heals on any run.
-export async function ensureSiteRules(opts: {
+async function ensureSiteRules(opts: {
   coreClient: CoreClient;
   pullZoneId: number;
   storageZone: StorageZoneModel;
@@ -459,7 +464,7 @@ export async function ensureSiteRules(opts: {
   }
 }
 
-export interface CreateSiteOptions {
+interface CreateSiteOptions {
   coreClient: CoreClient;
   name: string;
   /** Explicitly requested region; a fresh zone falls back to DE, and a resumed zone must already be in it. */
@@ -469,9 +474,7 @@ export interface CreateSiteOptions {
   onStep?: (message: string) => void;
 }
 
-export interface CreateSiteResult {
-  state: RemoteSiteState;
-  storageZone: StorageZoneModel;
+export interface CreateSiteResult extends SiteContext {
   systemHostname?: string;
   reused: { storageZone: boolean; pullZone: boolean };
 }
@@ -615,9 +618,10 @@ export async function createSite(
     deploys: [],
   };
   // A fresh zone's credentials propagate asynchronously and refuse writes for the first seconds; retry briefly instead of failing the create.
+  let etag: string;
   for (let attempt = 0; ; attempt++) {
     try {
-      await writeRemoteState(connection, state);
+      etag = await writeRemoteState(connection, state);
       break;
     } catch (err) {
       if (attempt >= 5 || !/unauthorized/i.test(errorMessage(err))) throw err;
@@ -627,7 +631,9 @@ export async function createSite(
 
   return {
     state,
+    etag,
     storageZone,
+    connection,
     systemHostname: systemHostname(pullZone.Hostnames),
     reused,
   };
@@ -855,7 +861,7 @@ export async function migrateSite(opts: {
   return { state, detachedScriptId, deletedScriptId, scriptError };
 }
 
-export interface TeardownResult {
+interface TeardownResult {
   resource: "pull zone" | "storage zone";
   id: number;
   deleted: boolean;

@@ -3,7 +3,7 @@ import type { components } from "@bunny.net/openapi-client/generated/database.d.
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
-import { UserError } from "@/core/errors.ts";
+import { errorMessage, UserError } from "@/core/errors.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, saveManifest } from "@/core/manifest.ts";
@@ -17,7 +17,23 @@ import {
   ENV_DATABASE_AUTH_TOKEN,
   ENV_DATABASE_URL,
 } from "./constants.ts";
+import { resolveCredentials } from "./credentials.ts";
+import { connectForMigrations } from "./migrations/client.ts";
+import { ARG_DIR } from "./migrations/constants.ts";
+import {
+  applyMigration,
+  ensureMigrationsTable,
+  resolveCreateMigrationsDir,
+} from "./migrations/engine.ts";
 import { groupedRegionChoices } from "./region-choices.ts";
+import {
+  assertNoExistingMigrations,
+  type DatabaseTemplate,
+  requireTemplate,
+  TEMPLATE_NONE,
+  templateChoices,
+  writeTemplateMigration,
+} from "./templates.ts";
 
 type PossibleRegion = components["schemas"]["PossibleRegion"];
 
@@ -82,6 +98,7 @@ const ARG_STORAGE_REGION = "storage-region";
 const ARG_LINK = "link";
 const ARG_TOKEN = "token";
 const ARG_SAVE_ENV = "save-env";
+const ARG_TEMPLATE = "template";
 
 interface CreateArgs {
   [ARG_NAME]?: string;
@@ -92,6 +109,8 @@ interface CreateArgs {
   [ARG_LINK]?: boolean;
   [ARG_TOKEN]?: boolean;
   [ARG_SAVE_ENV]?: boolean;
+  [ARG_TEMPLATE]?: string;
+  [ARG_DIR]?: string;
 }
 
 /**
@@ -129,6 +148,10 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     [
       "$0 db create --name my-app --mode auto",
       "Let bunny pick the regions instead of asking",
+    ],
+    [
+      "$0 db create --name my-app --template blog",
+      "Start from a schema template, applied as the first migration",
     ],
     [
       "$0 db create --name my-app --primary FR --output json",
@@ -174,6 +197,15 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         type: "boolean",
         describe:
           "Save BUNNY_DATABASE_URL and BUNNY_DATABASE_AUTH_TOKEN to .env (skips prompt). No effect without --token.",
+      })
+      .option(ARG_TEMPLATE, {
+        type: "string",
+        describe: `Schema template to start from, e.g. blog (skips prompt). Use ${TEMPLATE_NONE} for an empty database.`,
+      })
+      .option(ARG_DIR, {
+        type: "string",
+        describe:
+          "Directory the template's migration is written to (default: migrations)",
       }),
 
   handler: async (args) => {
@@ -216,6 +248,28 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     const nameError = validateDbName(name);
     if (nameError) throw new UserError(nameError);
 
+    const interactive = isInteractive(output);
+
+    // Step 2: Schema. Resolved before creation, so a bad choice leaves no database behind.
+    const templateArg = args[ARG_TEMPLATE];
+    let template: DatabaseTemplate | undefined;
+
+    if (templateArg && templateArg !== TEMPLATE_NONE) {
+      template = requireTemplate(templateArg);
+    } else if (!templateArg && interactive) {
+      const { value } = await prompts({
+        type: "select",
+        name: "value",
+        message: "Schema:",
+        choices: templateChoices(),
+      });
+      if (!value) throw new UserError("Schema selection is required.");
+      if (value !== TEMPLATE_NONE) template = requireTemplate(value);
+    }
+
+    const migrationsDir = resolveCreateMigrationsDir(args[ARG_DIR]);
+    if (template) assertNoExistingMigrations(migrationsDir);
+
     // Fetch available regions from config
     const configSpin = spinner("Fetching available regions...");
     configSpin.start();
@@ -228,7 +282,6 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     const availablePrimary = regionConfig.primary_regions;
     const availableReplicas = regionConfig.replica_regions;
 
-    const interactive = isInteractive(output);
     let primaryRegions: PossibleRegion[];
     let replicasRegions: PossibleRegion[];
     let storageRegion = args["storage-region"];
@@ -437,6 +490,48 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       }
     }
 
+    // The template lands as the first migration, so the schema is versioned in the project and recorded in the journal.
+    let appliedMigration: string | null = null;
+
+    if (template) {
+      const migration = writeTemplateMigration(template, migrationsDir);
+
+      const { url, token: migrationToken } = await resolveCredentials({
+        databaseId: data.db_id,
+        profile,
+        apiKey,
+        verbose,
+      });
+
+      const migrationClient = connectForMigrations({
+        url,
+        authToken: migrationToken,
+      });
+
+      const applySpin = spinner(`Applying ${migration.name}...`);
+      if (textOutput) applySpin.start();
+
+      try {
+        await ensureMigrationsTable(migrationClient);
+        const { statements } = await applyMigration(migrationClient, migration);
+        applySpin.stop();
+        appliedMigration = migration.name;
+
+        if (textOutput) {
+          logger.success(
+            `Applied ${migration.displayPath} (${statements} statement${statements === 1 ? "" : "s"}).`,
+          );
+          logger.log();
+        }
+      } catch (err: unknown) {
+        applySpin.stop();
+        throw new UserError(
+          `Could not apply ${migration.displayPath}: ${errorMessage(err)}`,
+          "The database was created and the migration written. Run `bunny db migrations apply` to retry.",
+        );
+      }
+    }
+
     // Offer to create an auth token
     const tokenArg = args[ARG_TOKEN];
     let shouldCreateToken: boolean;
@@ -533,6 +628,8 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
             name: db?.name ?? name,
             url: db?.url ?? null,
             linked: shouldLink,
+            template: template?.id ?? null,
+            migration: appliedMigration,
             token,
             saved_to_env: savedToEnv,
           },

@@ -1,13 +1,15 @@
 {
   "name": "@bunny.net/database-shell",
   "version": "0.2.7",
+  "license": "MIT",
   "type": "module",
   "module": "src/index.ts",
   "bin": {
     "bsql": "./bin/bsql.cjs"
   },
   "files": [
-    "bin"
+    "bin",
+    "LICENSE"
   ],
   "exports": {
     ".": "./src/index.ts"

@@ -148,6 +148,10 @@ For `db shell`, the CLI also reads `BUNNY_DATABASE_AUTH_TOKEN` from `.env` to sk
 
 Create a new database. Interactively prompts for name and region selection (automatic, single region, or manual) when flags are omitted. `--mode` answers that prompt from the command line: `auto` lets bunny pick, `single` takes the closest region, and `manual` needs a terminal to pick in. It pairs with the prompt, not with `--primary`: naming the regions yourself leaves `--mode` nothing to choose, so passing both is an error, and `--replicas` only means something next to `--primary`. After creation, prompts to link the directory, generate an auth token, and save credentials to `.env`.
 
+It also offers a schema to start from. Picking a template writes its SQL to `migrations/0001_<template>.sql` and applies it to the new database as its first migration, so the schema is versioned in your project and recorded in the migration history from the start. `--template` answers that prompt: pass a template name, or `none` for an empty database. A project that already has migrations refuses a template, because the new file would be applied out of order.
+
+Available templates: `blog`, `booking`, `course-platform`, `crm`, `ecommerce`, `feature-flags`, `forms`, `helpdesk`, `invoicing`, `saas-starter`, `video-platform`.
+
 ```bash
 # Interactive — prompts for name and region mode
 bunny db create
@@ -160,6 +164,12 @@ bunny db create --name mydb --primary FR
 
 # Multi-region with replicas
 bunny db create --name mydb --primary FR,DE --replicas UK,NY
+
+# Start from a schema template, applied as the first migration
+bunny db create --name mydb --template blog
+
+# Skip the schema prompt and start empty
+bunny db create --name mydb --template none
 
 # Fully non-interactive (CI / scripts)
 bunny db create --name mydb --primary FR --link --token --save-env --output json
@@ -175,8 +185,10 @@ bunny db create --name mydb --primary FR --link --token --save-env --output json
 | `--link`           | Link the current directory to the new database (skips prompt). Use `--no-link` to skip.  |
 | `--token`          | Generate a full-access auth token (skips prompt). Use `--no-token` to skip.              |
 | `--save-env`       | Save `BUNNY_DATABASE_URL` and `BUNNY_DATABASE_AUTH_TOKEN` to `.env`. Requires `--token`. |
+| `--template`       | Schema template to start from (skips prompt). `none` creates an empty database.          |
+| `--dir`            | Directory the template's migration is written to (default: `migrations`)                 |
 
-In `--output json` mode, prompts are suppressed entirely — flags are the only way to opt in to linking, token creation, and `.env` writes. The JSON output gains `linked`, `token`, and `saved_to_env` fields reflecting what happened.
+In `--output json` mode, prompts are suppressed entirely: flags are the only way to opt in to linking, token creation, and `.env` writes. The JSON output gains `linked`, `token`, `saved_to_env`, `template`, and `migration` fields reflecting what happened.
 
 #### `bunny db list`
 
@@ -1436,11 +1448,19 @@ The method is case-insensitive (`get` and `GET` both work). Paths are relative t
 
 ### `bunny completion`
 
-Generate a shell completion script. Add the output to your shell profile to enable tab completion.
+Generate a shell completion script. Add the output to your shell profile to enable tab completion:
 
 ```bash
-bunny completion >> ~/.zshrc
+bunny completion >> ~/.zshrc # zsh; use ~/.bashrc for bash
 ```
+
+Fish loads completion files from its own directory:
+
+```bash
+mkdir -p ~/.config/fish/completions && bunny completion > ~/.config/fish/completions/bunny.fish
+```
+
+After `bunny login` succeeds, it prints the exact line for your shell (zsh, bash, or fish).
 
 ## Global Options
 
@@ -1471,3 +1491,7 @@ bunny completion >> ~/.zshrc
 | `BUNNYNET_API_URL`       | API base URL (default: `https://api.bunny.net`)                 |
 | `BUNNYNET_DASHBOARD_URL` | Dashboard URL for auth flow (default: `https://dash.bunny.net`) |
 | `NO_COLOR`               | Disable colored output ([no-color.org](https://no-color.org))   |
+
+## License
+
+[MIT](./LICENSE)

@@ -1,0 +1,146 @@
+[
+  {
+    "id": "blog",
+    "name": "Blog",
+    "description": "Authors publish tagged posts and readers reply in threads.",
+    "tables": ["users", "posts", "tags", "post_tags", "comments"]
+  },
+  {
+    "id": "booking",
+    "name": "Appointment Booking",
+    "description": "Staff, services, weekly hours, and bookings that avoid clashes.",
+    "tables": [
+      "customers",
+      "services",
+      "staff",
+      "staff_services",
+      "availability",
+      "time_off",
+      "bookings"
+    ]
+  },
+  {
+    "id": "course-platform",
+    "name": "Course Platform",
+    "description": "Instructors publish lessons; students enrol and track progress.",
+    "tables": [
+      "users",
+      "courses",
+      "sections",
+      "lessons",
+      "enrollments",
+      "lesson_progress",
+      "reviews"
+    ],
+    "views": ["enrollment_progress"]
+  },
+  {
+    "id": "crm",
+    "name": "CRM",
+    "description": "Companies, contacts, and deals moving through pipeline stages.",
+    "tables": [
+      "users",
+      "companies",
+      "contacts",
+      "stages",
+      "deals",
+      "deal_stage_history",
+      "activities"
+    ],
+    "views": ["pipeline_summary"]
+  },
+  {
+    "id": "ecommerce",
+    "name": "E-commerce Shop",
+    "description": "Products and variants, with carts, discounts, and orders.",
+    "tables": [
+      "customers",
+      "addresses",
+      "categories",
+      "products",
+      "product_categories",
+      "product_images",
+      "product_variants",
+      "carts",
+      "cart_items",
+      "discount_codes",
+      "orders",
+      "order_items"
+    ]
+  },
+  {
+    "id": "feature-flags",
+    "name": "Feature Flags",
+    "description": "Flags with per-environment values and targeting rules.",
+    "tables": [
+      "environments",
+      "flags",
+      "flag_settings",
+      "rules",
+      "flag_changes"
+    ],
+    "views": ["flag_state"]
+  },
+  {
+    "id": "forms",
+    "name": "Forms",
+    "description": "Custom fields, submissions, answers, and uploaded files.",
+    "tables": ["forms", "fields", "submissions", "answers", "uploads"],
+    "views": ["submission_answers"]
+  },
+  {
+    "id": "helpdesk",
+    "name": "Helpdesk",
+    "description": "Customer tickets with agent replies, internal notes, and tags.",
+    "tables": [
+      "agents",
+      "customers",
+      "tickets",
+      "ticket_messages",
+      "attachments",
+      "tags",
+      "ticket_tags",
+      "canned_responses",
+      "satisfaction_ratings"
+    ]
+  },
+  {
+    "id": "invoicing",
+    "name": "Invoicing",
+    "description": "Invoices built from line items, with totals and balances owed.",
+    "tables": ["clients", "tax_rates", "invoices", "invoice_items", "payments"],
+    "views": ["invoice_item_amounts", "invoice_totals", "invoice_balances"]
+  },
+  {
+    "id": "saas-starter",
+    "name": "SaaS Starter",
+    "description": "Multi-tenant accounts with API keys, plans, and an audit log.",
+    "tables": [
+      "users",
+      "sessions",
+      "organizations",
+      "memberships",
+      "invitations",
+      "api_keys",
+      "plans",
+      "subscriptions",
+      "audit_log"
+    ]
+  },
+  {
+    "id": "video-platform",
+    "name": "Video Platform",
+    "description": "Channels publish Bunny Stream videos, playlists, and comments.",
+    "tables": [
+      "users",
+      "channels",
+      "videos",
+      "playlists",
+      "playlist_videos",
+      "watch_progress",
+      "reactions",
+      "comments",
+      "subscriptions"
+    ]
+  }
+]

@@ -42,7 +42,7 @@ export async function hasGitHubOrigin(root: string): Promise<boolean> {
   return host === "github.com" || host?.endsWith(".github.com") === true;
 }
 
-export interface ScaffoldResult {
+interface ScaffoldResult {
   /** Workflow path relative to the repo root. */
   path: string;
   preset: FrameworkPreset;
@@ -262,7 +262,7 @@ export async function printWorkflowInstructions(
   printSecretHint();
 }
 
-export function printSecretHint(): void {
+function printSecretHint(): void {
   logger.log("Then add your API key as a repository secret:");
   logger.accent("  gh secret set BUNNYNET_API_KEY");
   logger.dim("  (or GitHub repo Settings -> Secrets and variables -> Actions)");

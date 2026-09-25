@@ -80,7 +80,7 @@ packages/cli/src/
 - **One command per file.** Each file in `commands/` exports a single command or namespace.
 - **Namespaces are directories** with an `index.ts` calling `defineNamespace()`. Leaf commands are `.ts` files calling `defineCommand()`.
 - **Top-level commands** (`login`, `logout`, `whoami`, `open`, `docs`, `api`) register directly in `cli.ts`.
-- **Import CLI-internal modules with `@/`, not `../`.** The root `tsconfig.json` maps `@/*` to `packages/cli/src/*`; `bun run`, `bun test`, `bun build --compile`, and `tsc` all honour it. Same-directory `./` imports stay relative, and so do the few specifiers that reach outside `src/` (the root `package.json`, the embedded `skills/` markdown). The alias is CLI-only: the published packages emit through `tsc`, which does not rewrite `paths` on emit.
+- **Import CLI-internal modules with `@/`, not `../`.** The root `tsconfig.json` maps `@/*` to `packages/cli/src/*`; `bun run`, `bun test`, `bun build --compile`, and `tsc` all honour it. Repo-root assets the CLI embeds at bundle time have their own mappings, `@templates/*` and `@skills/*`, so no import climbs out of the package on a `../` chain. Same-directory `./` imports stay relative, and so does the CLI's own `package.json`. The aliases are CLI-only: the published packages emit through `tsc`, which does not rewrite `paths` on emit.
 - **`commands/` do not create API clients.** API work goes in `@bunny.net/tools`; see "Tools layer". `core/tools-boundary.test.ts` ratchets the remaining direct uses down.
 - **`core/` never imports from `commands/`.** Layering is one-way. When two domains need the same vocabulary, lift it into `core/` and re-export, do not import upward or duplicate.
 - **Keep `core/` mostly flat.** A cohesive reusable feature spanning several files may take a subdirectory (`core/hostnames/`).
@@ -587,9 +587,11 @@ Produces a single native executable with the runtime, dependencies, and source i
 
 Three distribution channels:
 
-1. **Shell installer** (`install.sh` at the repo root): downloads the prebuilt binary into `~/.bunny/bin`, honours `BUNNY_INSTALL_DIR`, clears the quarantine xattr and ad-hoc codesigns on macOS so Gatekeeper allows execution, and uses the `releases/latest/download` redirect to avoid the API rate limit.
+1. **Shell installer** (`install.sh` at the repo root): downloads the prebuilt binary into `~/.bunny/bin`, honours `BUNNY_INSTALL_DIR`, and resolves `latest` to a tag once through the github.com `releases/latest` redirect (not the rate-limited API), so the binary and `SHA256SUMS` always come from the same release. It verifies the binary against the release's `SHA256SUMS`; a mismatch is fatal, but a missing file only warns, because the script deploys on merge (before the next release exists) and pinned older versions predate checksums. On macOS it re-signs ad hoc only when `codesign --verify` fails, so the invalid signatures on old releases still run while a valid signature is never overwritten.
 2. **npm**, via the platform-specific binary package pattern. `@bunny.net/cli` ships a JS shim that delegates to the right platform package. Platform packages are versioned in lockstep through the `fixed` array in `.changeset/config.json`.
-3. **GitHub Releases**, with binaries attached by `.github/workflows/release.yml`.
+3. **GitHub Releases**, with binaries, a `SHA256SUMS` file, and a build provenance attestation over those checksums, attached by `.github/workflows/release.yml`.
+
+On macOS, `bun build --compile` leaves an invalid signature: ad-hoc on arm64, and the Bun runtime's own Developer ID on cross-compiled x64. The release workflow replaces it with an ad-hoc signature (`net.bunny.cli` / `net.bunny.database-shell`) before upload, so npm and release binaries carry a valid signature. Developer ID signing and notarization are not set up yet; when they are, the signature must be applied after compile, which is where the ad-hoc step lives now.
 
 ### Publishing libraries
 

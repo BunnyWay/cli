@@ -18,6 +18,9 @@
     "paths": {
       // CLI-internal absolute imports. Only the CLI: packages published via tsc emit paths unrewritten.
       "@/*": ["./packages/cli/src/*"],
+      // Repo-root assets the CLI embeds at bundle time.
+      "@templates/*": ["./templates/*"],
+      "@skills/*": ["./skills/*"],
       "@bunny.net/database-client": ["./packages/database-client/src/index.ts"],
       "@bunny.net/openapi-client": ["./packages/openapi-client/src/index.ts"],
       "@bunny.net/openapi-client/generated/*": [

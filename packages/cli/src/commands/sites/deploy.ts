@@ -20,7 +20,7 @@ import {
   deleteDeployFiles,
   fetchSystemHostname,
   promoteDeploy,
-  readRemoteState,
+  rereadRemoteState,
   writeRemoteState,
 } from "./api.ts";
 import {
@@ -37,7 +37,7 @@ import {
   findDeploy,
   markCurrent,
   type NotFoundMode,
-  type RemoteSiteState,
+  productionUrl,
 } from "./constants.ts";
 import { type DeployIdentity, resolveDeployIdentity } from "./deploy-id.ts";
 import { deleteBlocker } from "./deployments/delete.ts";
@@ -92,7 +92,7 @@ export function looksLikeSpa(paths: string[]): boolean {
   );
 }
 
-export interface DeployTarget {
+interface DeployTarget {
   /** The ID this deploy will live under in storage. */
   deployId: string;
   /** True when these exact bytes are already uploaded under `deployId`. */
@@ -189,15 +189,6 @@ const DOMAIN_HINT =
 
 const DEPLOY_ID_HINT =
   "IDs become storage paths, so they take letters, digits, and -, _ or . (e.g. 20260827-1433-r42).";
-
-// A site's live URL: the custom domain when it has one, else its b-cdn.net host. Always https (b-cdn.net hosts carry bunny's certificate).
-export function productionUrl(
-  state: RemoteSiteState,
-  systemHost?: string,
-): string | undefined {
-  const host = state.domain ?? systemHost;
-  return host ? `https://${host}` : undefined;
-}
 
 // A CLI path arg is cwd-relative; `sites.dir` and the detected output dir are relative to the bunny.jsonc root, where the build runs.
 export function resolveDeployDir(
@@ -502,13 +493,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       const existing = state.deploys.find((d) => d.id === deployId);
       if (existing && existing.contentHash !== identity.contentHash) {
         // Revalidate on fresh state right before anything destructive: the confirmation window is long enough for a concurrent publish to have made this ID live.
-        const fresh = await readRemoteState(connection);
-        if (!fresh) {
-          throw new UserError(
-            "Couldn't re-read the site state.",
-            "Retry the deploy; nothing was replaced.",
-          );
-        }
+        const fresh = await rereadRemoteState(
+          connection,
+          "Retry the deploy; nothing was replaced.",
+        );
         const blocker = deleteBlocker(fresh.state, deployId);
         if (blocker) {
           throw new UserError(

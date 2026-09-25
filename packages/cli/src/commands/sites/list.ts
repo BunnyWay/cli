@@ -6,6 +6,7 @@ import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { withSpinner } from "@/core/ui.ts";
 import { fetchSites } from "./api.ts";
+import { productionUrl } from "./constants.ts";
 
 export const sitesListCommand = defineCommand({
   command: "list",
@@ -54,11 +55,7 @@ export const sitesListCommand = defineCommand({
         ["Name", "URL", "Deploys", "Current"],
         sites.map((s) => [
           s.state.name,
-          s.state.domain
-            ? `https://${s.state.domain}`
-            : s.systemHostname
-              ? `https://${s.systemHostname}`
-              : "-",
+          productionUrl(s.state, s.systemHostname) ?? "-",
           String(s.state.deploys.length),
           s.state.current ?? "-",
         ]),
