@@ -39,7 +39,7 @@ export async function resolveLibraryInteractive(
 ): Promise<StreamLibrary> {
   if (ref) {
     return withSpinner("Resolving video library...", () =>
-      streamLibrariesGet.run(ctx, { library: ref }),
+      streamLibrariesGet.invoke(ctx, { library: ref }),
     );
   }
 
@@ -48,7 +48,7 @@ export async function resolveLibraryInteractive(
   if (manifest.id) {
     const linkedId = manifest.id;
     return withSpinner("Loading linked video library...", () =>
-      streamLibrariesGet.run(ctx, { library: String(linkedId) }),
+      streamLibrariesGet.invoke(ctx, { library: String(linkedId) }),
     );
   }
 
@@ -60,7 +60,7 @@ export async function resolveLibraryInteractive(
   }
 
   const libraries = await withSpinner("Fetching video libraries...", () =>
-    streamLibrariesList.run(ctx, {}),
+    streamLibrariesList.invoke(ctx, {}),
   );
   if (libraries.length === 0) {
     throw new UserError(

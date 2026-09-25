@@ -11,6 +11,7 @@ import { extendToolContext } from "@bunny.net/tools";
 import {
   type ImportPlan,
   type ImportRun,
+  MAX_PLAN_LIMIT,
   requireSource,
   SOURCE_IDS,
   SOURCES,
@@ -26,6 +27,7 @@ import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { confirm, requireConfirmable } from "@/core/ui.ts";
 import {
+  cliImportError,
   promptSourceCredentials,
   resolveImportSource,
   withToolSpinner,
@@ -108,6 +110,18 @@ function statusCommand(libraryId: number, source: string): string {
   return `bunny stream import status --library ${libraryId} --source ${source}`;
 }
 
+function resumeCommand(result: ImportRun, library?: string): string {
+  const id = result.library?.id ?? library;
+  const flag = id === undefined ? "" : ` --library ${id}`;
+  const folder = result.folder ? ` --folder ${result.folder}` : "";
+  return `bunny stream import${flag} --source ${result.source}${folder} --resume`;
+}
+
+// Titles and spacing are for people; csv and markdown output stays pure table.
+function decorated(output: OutputFormat): boolean {
+  return output === "text" || output === "table";
+}
+
 function renderSummary(
   plan: ImportPlan,
   sourceLabel: string,
@@ -141,13 +155,14 @@ function renderSummary(
   if (summary.totalSize > 0)
     entries.push({ key: "Size", value: formatBytes(summary.totalSize) });
 
-  logger.log(bunny.bold(`${sourceLabel} to Bunny Stream`));
+  if (decorated(output))
+    logger.log(bunny.bold(`${sourceLabel} to Bunny Stream`));
   logger.log(formatKeyValue(entries, output));
-  logger.log("");
+  if (decorated(output)) logger.log("");
 }
 
 /** The dry-run plan: every video that would be imported, grouped by the collection it would land in. */
-function renderPlan(summary: ImportPlan["summary"]): void {
+function renderPlan({ summary }: ImportPlan): void {
   const byFolder = new Map<string | null, string[]>();
   for (const video of summary.newVideosList) {
     const list = byFolder.get(video.folder) ?? [];
@@ -162,19 +177,33 @@ function renderPlan(summary: ImportPlan["summary"]): void {
     );
     for (const name of names) logger.log(`  - ${stripAnsi(name)}`);
   }
+  if (summary.newVideos > summary.newVideosList.length) {
+    logger.log(
+      `...and ${summary.newVideos - summary.newVideosList.length} more.`,
+    );
+  }
   if (summary.alreadyMigrated > 0) {
     logger.log("");
     logger.log(`${summary.alreadyMigrated} already imported, skipped.`);
   }
 }
 
-function renderResult(result: ImportRun, output: OutputFormat): void {
+function renderResult(
+  result: ImportRun,
+  output: OutputFormat,
+  libraryArg?: string,
+): void {
   const { library, failed } = result;
+  const libraryName = library?.name ?? "the library";
 
   for (const warning of result.warnings) logger.warn(warning);
-  logger.log("");
-  if (result.waited) {
-    logger.log(bunny.bold("Import complete"));
+  if (decorated(output)) logger.log("");
+  if (result.status === "paused") {
+    logger.warn(
+      `Import interrupted: ${result.queued} videos queued so far into ${libraryName}.`,
+    );
+  } else if (result.waited) {
+    if (decorated(output)) logger.log(bunny.bold("Import complete"));
     logger.log(
       formatKeyValue(
         [
@@ -187,21 +216,20 @@ function renderResult(result: ImportRun, output: OutputFormat): void {
     );
   } else if (result.processing > 0) {
     logger.success(
-      `Queued ${result.processing} videos into ${library.name}. Bunny is fetching and encoding them now.`,
+      `Queued ${result.processing} videos into ${libraryName}. Bunny is fetching and encoding them now.`,
     );
-    logger.info(
-      `Check progress with ${bunny(statusCommand(library.id, result.source))}`,
-    );
+    if (library)
+      logger.info(
+        `Check progress with ${bunny(statusCommand(library.id, result.source))}`,
+      );
   }
 
   if (failed.length > 0) {
     logger.log("");
     for (const m of failed) logger.error(`${stripAnsi(m.name)}: ${m.error}`);
-    const folder = result.folder ? ` --folder ${result.folder}` : "";
-    logger.info(
-      `Resume with ${bunny(`bunny stream import --library ${library.id} --source ${result.source}${folder} --resume`)}`,
-    );
   }
+  if (failed.length > 0 || result.status === "paused")
+    logger.info(`Resume with ${bunny(resumeCommand(result, libraryArg))}`);
 }
 
 export const streamImportRunCommand = defineToolCommand({
@@ -211,6 +239,7 @@ export const streamImportRunCommand = defineToolCommand({
   // Hidden from the namespace's command list: it *is* `bunny stream import`.
   hidden: true,
   progress: "Importing...",
+  interruptible: true,
   examples: [
     [
       "$0 stream import --source vimeo",
@@ -320,7 +349,9 @@ export const streamImportRunCommand = defineToolCommand({
       offerLink: !args.dryRun,
     });
     const plugin = await resolveImportSource(ctx, args.source, output);
+    if (!args.source) assertFolderSupported(plugin, args.folder);
     const env = await promptSourceCredentials(
+      ctx,
       plugin,
       {
         bucket: args.bucket,
@@ -339,26 +370,31 @@ export const streamImportRunCommand = defineToolCommand({
       urlTtl: args.urlTtl,
       requestTimeout: args.requestTimeout,
     };
+    const dryRun = Boolean(args.dryRun);
+    // The CLI is not a model context, so its lists go up to the tool's maximum.
     const plan = await withToolSpinner(
       extendToolContext(ctx, { env }),
       "Resolving video library...",
-      (stepCtx) => streamImportPlan.invoke(stepCtx, target),
-    );
+      (stepCtx) =>
+        streamImportPlan.invoke(stepCtx, { ...target, limit: MAX_PLAN_LIMIT }),
+    ).catch((error) => {
+      throw cliImportError(error) ?? error;
+    });
     const { summary } = plan;
     if (plan.folderFromSavedRun)
       logger.info(`Resuming the import of folder ${plan.folder}.`);
 
-    const dryRun = Boolean(args.dryRun);
-    // Every exit before the run prints this one shape, so `dryRun` is always present.
-    const printPlan = () =>
+    // Every exit before the run prints this one shape; `outcome` says which exit it was.
+    const printPlan = (outcome: "no_videos" | "nothing_new" | "dry_run") =>
       logger.log(
         JSON.stringify(
           {
+            outcome,
             library: plan.library,
             source: plan.source,
+            folder: plan.folder,
             dryRun,
-            imported: 0,
-            processing: summary.processingOnBunny,
+            truncated: plan.truncated,
             summary,
           },
           null,
@@ -369,7 +405,7 @@ export const streamImportRunCommand = defineToolCommand({
     if (output !== "json") renderSummary(plan, plugin.label, output);
 
     if (summary.totalVideos === 0) {
-      if (output === "json") printPlan();
+      if (output === "json") printPlan("no_videos");
       else logger.warn(`No videos found at ${plugin.label}.`);
 
       return DONE;
@@ -381,7 +417,7 @@ export const streamImportRunCommand = defineToolCommand({
       !(args.wait && summary.processingOnBunny > 0)
     ) {
       if (output === "json") {
-        printPlan();
+        printPlan("nothing_new");
 
         return DONE;
       }
@@ -399,11 +435,11 @@ export const streamImportRunCommand = defineToolCommand({
 
     if (dryRun) {
       if (output === "json") {
-        printPlan();
+        printPlan("dry_run");
 
         return DONE;
       }
-      renderPlan(summary);
+      renderPlan(plan);
       logger.log("");
       logger.info("Dry run. Remove --dry-run to import for real.");
 
@@ -417,6 +453,7 @@ export const streamImportRunCommand = defineToolCommand({
         wait: args.wait,
         videoTimeout: args.videoTimeout,
         processingTimeout: args.processingTimeout,
+        expectedCount: summary.newVideos > 0 ? summary.newVideos : undefined,
       },
       env,
       confirm:
@@ -437,8 +474,17 @@ export const streamImportRunCommand = defineToolCommand({
   },
 
   after: (result) => {
-    if (result.failed.length > 0) process.exitCode = 1;
+    if (result.status === "paused") process.exitCode = 130;
+    else if (result.failed.length > 0) process.exitCode = 1;
   },
 
-  render: (result, { output }) => renderResult(result, output),
+  onError: cliImportError,
+
+  json: (result) => ({
+    outcome: result.status === "paused" ? "paused" : "imported",
+    ...result,
+  }),
+
+  render: (result, { output, library }) =>
+    renderResult(result, output, library),
 });

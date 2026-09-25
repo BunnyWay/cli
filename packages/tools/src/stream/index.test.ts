@@ -1,11 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
 import { type CoreClient, createToolContext } from "../context.ts";
 import type { VideoLibraryModel } from "./api.ts";
-import {
-  openStreamLibrary,
-  streamLibrariesGet,
-  streamLibrariesList,
-} from "./index.ts";
+import { openStreamLibrary } from "./connect.ts";
+import { streamLibrariesGet, streamLibrariesList } from "./index.ts";
 
 const LIBRARIES: VideoLibraryModel[] = [
   { Id: 2, Name: "zebra", VideoCount: 1, ApiKey: "zebra-key" },

@@ -6,9 +6,9 @@ import type { ToolContext } from "./context.ts";
 const NAME_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/;
 
 /**
- * What a tool does to remote state, from the host's point of view.
+ * What a tool does to remote state (bunny.net or a third-party source) from the host's point of view; local files count under `localFiles`.
  *
- * - `read` touches nothing; safe to run unattended.
+ * - `read` changes no remote state; safe to run unattended.
  * - `write` creates or updates remote state; invoking it is normally intent enough.
  * - `destructive` deletes data or cannot be undone; a host should confirm first.
  */
@@ -32,7 +32,7 @@ export interface ToolDefinition<
   resultSchema?: z.ZodType<Result>;
   /** True when the result contains credentials, so a host can mask or withhold it. */
   sensitive?: boolean;
-  /** True when path inputs refer to the host's local filesystem; a remote host should exclude these. */
+  /** True when the tool reads or writes the host's local filesystem (path inputs, a local journal); a remote host should exclude these. */
   localFiles?: boolean;
   /** Extra detail for `--help` and tool descriptions. Each entry is `[input, description]`. */
   examples?: ReadonlyArray<readonly [z.input<Schema>, string]>;

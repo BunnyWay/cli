@@ -72,7 +72,7 @@ export async function fetchAccountId(
   if (!data?.AccountId) {
     throw new UserError(
       "Could not determine the bunny.net account for this API key.",
-      'Run "bunny whoami" to check the key, or "bunny login" to re-authenticate.',
+      "The bunny.net API key may be invalid or expired; check it or authenticate again.",
     );
   }
   return data.AccountId;

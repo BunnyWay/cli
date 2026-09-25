@@ -55,16 +55,20 @@ export const ImportPlanSchema = z.object({
   /** The folder scope, from input or, on a resume, from the saved run. */
   folder: z.string().nullable(),
   folderFromSavedRun: z.boolean(),
+  /** True when a summary list was cut to the input `limit`; the counts are never cut. */
+  truncated: z.boolean(),
   summary: ImportSummarySchema,
 });
 
 export type ImportPlan = z.infer<typeof ImportPlanSchema>;
 
 export const ImportRunSchema = z.object({
-  library: StreamLibrarySchema,
+  /** Null only when the call was aborted before the library was resolved. */
+  library: StreamLibrarySchema.nullable(),
   source: z.string(),
   folder: z.string().nullable(),
   dryRun: z.literal(false),
+  /** `paused` when the call was aborted; a resume continues it. */
   status: z.enum(["in_progress", "completed", "failed", "paused"]),
   waited: z.boolean(),
   /** Videos this run tried to hand to Bunny, including any that then failed. */
@@ -88,8 +92,8 @@ export const ImportRunSchema = z.object({
   ),
   /** Engine notices worth keeping, such as a resume that found nothing to resume. */
   warnings: z.array(z.string()),
-  /** The local journal a resume or a status check reads. */
-  statePath: z.string(),
+  /** The local journal a resume or a status check reads; null when an aborted call never reached one. */
+  statePath: z.string().nullable(),
   elapsedMs: z.number(),
 });
 

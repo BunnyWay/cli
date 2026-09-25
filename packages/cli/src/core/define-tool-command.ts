@@ -49,6 +49,10 @@ interface ToolCommandDef<A, Schema extends z.ZodObject, Result> {
   ) => Promise<Prepared<Schema> | typeof CANCELLED | typeof DONE>;
   /** Spinner text while the tool runs. Tool progress messages replace it. */
   progress?: string;
+  /** Ctrl-C aborts the tool's signal instead of killing the process, so it can stop cleanly and return; a second Ctrl-C exits. */
+  interruptible?: boolean;
+  /** Reword a tool error for the CLI, e.g. put a command into a host-neutral hint. Returns the error to throw, or undefined to rethrow the original. */
+  onError?: (error: unknown, args: A & GlobalArgs) => Error | undefined;
   /** CLI-local follow-up such as manifest cleanup. Runs for every output format. */
   after?: (result: Result, args: A & GlobalArgs) => void | Promise<void>;
   /** Take over printing entirely, ahead of both json and `render`. Return true once it has printed. */
@@ -94,8 +98,10 @@ export function defineToolCommand<A, Schema extends z.ZodObject, Result>(
     handler: async (args) => {
       const config = resolveConfig(args.profile, args.apiKey, args.verbose);
       const spin = spinner(def.progress ?? "Working...");
+      const controller = new AbortController();
       const ctx = toolContext(config, {
         verbose: args.verbose,
+        signal: controller.signal,
         // Only steer the spinner while it runs, so progress never overwrites a prompt shown during prepare().
         onProgress: (message) => {
           if (spin.isSpinning) spin.text = message;
@@ -120,6 +126,12 @@ export function defineToolCommand<A, Schema extends z.ZodObject, Result>(
         return;
       }
 
+      const exitNow = () => process.exit(130);
+      const interrupt = () => {
+        controller.abort();
+        process.once("SIGINT", exitNow);
+      };
+      if (def.interruptible) process.once("SIGINT", interrupt);
       spin.start();
       let result: Result;
       try {
@@ -127,8 +139,12 @@ export function defineToolCommand<A, Schema extends z.ZodObject, Result>(
           ? extendToolContext(ctx, { env: prepared.env })
           : ctx;
         result = await def.tool.invoke(runCtx, prepared.input);
+      } catch (error) {
+        throw def.onError?.(error, args) ?? error;
       } finally {
         spin.stop();
+        process.off("SIGINT", interrupt);
+        process.off("SIGINT", exitNow);
       }
 
       await def.after?.(result, args);

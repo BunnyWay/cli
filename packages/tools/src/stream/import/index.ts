@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { UserError } from "@bunny.net/openapi-client";
 import {
   acquireStateLock,
@@ -28,13 +29,36 @@ import {
   type ImportStatus,
   ImportStatusSchema,
 } from "./model.ts";
-import { engineLogger, openImport, seconds } from "./session.ts";
-import { requireSource, SOURCE_IDS, SOURCES } from "./sources.ts";
-import { findSavedImportSource, importStatePath } from "./state.ts";
+import {
+  engineLogger,
+  type ImportSession,
+  type OpenedImport,
+  openImport,
+  seconds,
+} from "./session.ts";
+import {
+  AMBIENT_CREDENTIAL_ENV,
+  requireSource,
+  SOURCE_IDS,
+  SOURCES,
+} from "./sources.ts";
+import {
+  findSavedImportSource,
+  importStatePath,
+  SavedImportError,
+} from "./state.ts";
 
 export * from "./model.ts";
 export { findSource, requireSource, SOURCE_IDS, SOURCES } from "./sources.ts";
-export { findSavedImportSource, importStatePath } from "./state.ts";
+export {
+  findSavedImportSource,
+  importStatePath,
+  SavedImportError,
+  StateHomeError,
+} from "./state.ts";
+
+export const DEFAULT_PLAN_LIMIT = 100;
+export const MAX_PLAN_LIMIT = 10_000;
 
 const library = z
   .string()
@@ -118,10 +142,17 @@ export const streamImportSources = defineTool({
       };
       try {
         const status = describeSource(plugin, ctx.env);
+        const missing = status.missing.map((f) => f.env);
+        const ambient = AMBIENT_CREDENTIAL_ENV[plugin.id] ?? [];
+        const needsKeys =
+          !ctx.allowAmbientCredentials && ambient.every((env) => !ctx.env[env]);
+        if (!needsKeys)
+          return { ...base, readiness: status.readiness, missing, error: null };
         return {
           ...base,
-          readiness: status.readiness,
-          missing: status.missing.map((f) => f.env),
+          readiness:
+            status.readiness === "ready" ? "partial" : status.readiness,
+          missing: [...missing, ...ambient.filter((e) => !missing.includes(e))],
           error: null,
         };
       } catch (error) {
@@ -142,21 +173,44 @@ export const streamImportPlan = defineTool({
   title: "Plan a video import",
   description:
     "Discover a source's videos and compare them with a Stream library: how many exist, how many are already imported or still processing, and which would be imported. Changes nothing and writes no state; fails naming the environment variables a source still needs.",
-  schema: z.strictObject(target),
+  schema: z.strictObject({
+    ...target,
+    limit: z
+      .number()
+      .int()
+      .min(0)
+      .max(MAX_PLAN_LIMIT)
+      .optional()
+      .describe(
+        `Most video names to return in each summary list (default ${DEFAULT_PLAN_LIMIT}); counts always cover every video.`,
+      ),
+  }),
   kind: "read",
   localFiles: true,
   resultSchema: ImportPlanSchema,
   examples: [[{ library: "12345", source: "vimeo" }, "Plan a Vimeo import"]],
   run: async (ctx, input): Promise<ImportPlan> => {
-    const session = await openImport(ctx, input, { keep: true });
+    const session = await openImport(ctx, input);
     ctx.progress(`Discovering ${session.plugin.label} content...`);
     const summary = await session.service.getSummary(session.folder);
+    const limit = input.limit ?? DEFAULT_PLAN_LIMIT;
+    const lists = [
+      summary.newVideosList,
+      summary.migratedVideosList,
+      summary.processingList,
+    ];
     return {
       library: session.library,
       source: session.plugin.id,
       folder: session.folder ?? null,
       folderFromSavedRun: session.folderFromSavedRun,
-      summary,
+      truncated: lists.some((list) => list.length > limit),
+      summary: {
+        ...summary,
+        newVideosList: summary.newVideosList.slice(0, limit),
+        migratedVideosList: summary.migratedVideosList.slice(0, limit),
+        processingList: summary.processingList.slice(0, limit),
+      },
     };
   },
 });
@@ -181,7 +235,7 @@ export const streamImportRun = defineTool({
   name: "stream.import.run",
   title: "Import videos",
   description:
-    "Hand every not-yet-imported video from a source to a Stream library, tag it so a re-run skips it, and return once all are queued; Bunny then fetches and encodes them. Resumable and idempotent. Progress is journaled locally; poll `stream.import.status` rather than setting `wait`.",
+    "Hand every not-yet-imported video from a source to a Stream library, tag it so a re-run skips it, and return once all are queued; Bunny then fetches and encodes them. Discovers the source afresh, so it may differ from an earlier plan. Resumable and idempotent; an aborted call returns with status `paused`. Progress is journaled locally; poll `stream.import.status` rather than setting `wait`.",
   schema: z.strictObject({
     ...target,
     concurrency: z
@@ -217,12 +271,19 @@ export const streamImportRun = defineTool({
       .describe(
         "Stay until Bunny has encoded every video, which can take hours. Hosts should leave this off and poll `stream.import.status`.",
       ),
+    expectedCount: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe(
+        "The plan's `newVideos` a user confirmed; a whole-source run (no `folder`, no `resume`) that fetches a different number adds a warning.",
+      ),
   }),
   kind: "write",
   localFiles: true,
   resultSchema: ImportRunSchema,
   examples: [[{ library: "12345", source: "vimeo" }, "Import from Vimeo"]],
-  // The engine takes no AbortSignal yet, so `ctx.signal` only cancels the library lookup.
   run: async (ctx, input): Promise<ImportRun> => {
     const processingTimeoutMs = seconds(
       input.processingTimeout,
@@ -232,30 +293,77 @@ export const streamImportRun = defineTool({
       input.videoTimeout,
       DEFAULT_MIGRATION_TIMEOUT,
     );
-    const session = await openImport(ctx, input, { processingTimeoutMs });
     const startedAt = Date.now();
+    const opened: OpenedImport = {};
+    let session: ImportSession;
+    let state: MigrationState;
     let queued = 0;
-    const state = await session.service.runMigration({
-      folderId: session.folder,
-      concurrency: input.concurrency ?? DEFAULT_CONCURRENCY,
-      resume: input.resume,
-      wait: input.wait,
-      // With `wait` the per-video timer also covers the encode, so it never undercuts the processing timeout.
-      migrationTimeoutMs: input.wait
-        ? Math.max(videoTimeoutMs, processingTimeoutMs)
-        : videoTimeoutMs,
-      onProgress: (s, phase, progress) => {
-        if (phase === "wait") return ctx.progress(waitText(s));
-        if (!progress) return;
-        queued = progress.total;
-        ctx.progress(
-          `Handing videos to Bunny: ${progress.done}/${progress.total}`,
-        );
-      },
-    });
+    // Entries with no Bunny video when queuing began: what a plan's `newVideos` counts, unlike re-tags and adopted orphans.
+    let fetched = 0;
+    try {
+      session = await openImport(ctx, input, { processingTimeoutMs, opened });
+      state = await session.service.runMigration({
+        folderId: session.folder,
+        concurrency: input.concurrency ?? DEFAULT_CONCURRENCY,
+        resume: input.resume,
+        wait: input.wait,
+        // With `wait` the per-video timer also covers the encode, so it never undercuts the processing timeout.
+        migrationTimeoutMs: input.wait
+          ? Math.max(videoTimeoutMs, processingTimeoutMs)
+          : videoTimeoutMs,
+        signal: ctx.signal,
+        onProgress: (s, phase, progress) => {
+          if (phase === "wait") return ctx.progress(waitText(s));
+          if (!progress) return;
+          if (progress.done === 0)
+            fetched = s.videoMigrations.filter(
+              (m) =>
+                !m.bunnyVideoId &&
+                (m.status === "pending" || m.status === "fetching"),
+            ).length;
+          queued = progress.total;
+          ctx.progress(
+            `Handing videos to Bunny: ${progress.done}/${progress.total}`,
+          );
+        },
+      });
+    } catch (error) {
+      // An abort that lands in a lookup surfaces as an error; it is still a pause, so every host can offer a resume.
+      if (!ctx.signal?.aborted) throw error;
+      const { library = null, statePath } = opened;
+      return {
+        library,
+        source: input.source,
+        folder: input.folder ?? null,
+        dryRun: false,
+        status: "paused",
+        waited: Boolean(input.wait),
+        queued,
+        completed: 0,
+        processing: 0,
+        failed: [],
+        collections: [],
+        warnings: [],
+        statePath: statePath && existsSync(statePath) ? statePath : null,
+        elapsedMs: Date.now() - startedAt,
+      };
+    }
 
     const by = (status: string) =>
       state.videoMigrations.filter((m) => m.status === status);
+    const { warnings } = session.sink;
+    // A folder or a resume can queue journal entries the plan never counted, so only a fresh whole-source run is compared.
+    if (
+      input.expectedCount !== undefined &&
+      !session.folder &&
+      !input.resume &&
+      state.status !== "paused" &&
+      fetched !== input.expectedCount
+    ) {
+      warnings.push(
+        `The source changed after the plan: ${input.expectedCount} videos were confirmed, ${fetched} were queued.`,
+      );
+    }
     return {
       library: session.library,
       source: session.plugin.id,
@@ -272,7 +380,7 @@ export const streamImportRun = defineTool({
         error: m.error,
       })),
       collections: state.folderMappings,
-      warnings: session.sink.warnings,
+      warnings,
       statePath: session.statePath,
       elapsedMs: Date.now() - startedAt,
     };
@@ -307,16 +415,21 @@ export const streamImportStatus = defineTool({
       input.source ?? findSavedImportSource(lib.id, accountId, ctx.env),
     );
     const statePath = importStatePath(plugin.id, lib.id, accountId, ctx.env);
-    // Held across the read and the refresh so a run that starts and finishes meanwhile is not overwritten with older state.
+    // Checked before locking, so a library with no import gets no state directory or lock file.
+    const found = readMigrationState(statePath);
+    if (!found) {
+      throw new SavedImportError(
+        `No ${plugin.label} import found for library ${lib.name}.`,
+        "Run an import with this `library` and `source` first.",
+        lib.id,
+        [],
+        plugin.id,
+      );
+    }
+    // Held across the re-read and the refresh so a run that starts and finishes meanwhile is not overwritten with older state.
     const lock = acquireStateLock(statePath);
     try {
-      const saved = readMigrationState(statePath);
-      if (!saved) {
-        throw new UserError(
-          `No ${plugin.label} import found for library ${lib.name}.`,
-          `Start one with \`bunny stream import --library ${lib.id} --source ${plugin.id}\`.`,
-        );
-      }
+      const saved = readMigrationState(statePath) ?? found;
 
       const engine = new BunnyStream({
         client,

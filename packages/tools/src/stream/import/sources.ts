@@ -21,6 +21,11 @@ export const SOURCES: readonly SourcePlugin[] = [
 
 export const SOURCE_IDS: string[] = SOURCES.map((s) => s.id);
 
+/** Keys a source otherwise takes from an ambient chain (the AWS default chain for s3), so they count as missing unless the host allows ambient credentials. */
+export const AMBIENT_CREDENTIAL_ENV: Readonly<Record<string, string[]>> = {
+  s3: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+};
+
 export function findSource(id: string): SourcePlugin | undefined {
   return SOURCES.find((s) => s.id === id);
 }

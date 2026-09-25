@@ -43,8 +43,10 @@ export interface ToolContextOptions {
   onDebug?: (message: string) => void;
   /** Pre-built clients, for tests and hosts that construct their own. */
   clients?: Partial<ToolClients>;
-  /** Where tools read host configuration such as third-party source credentials. Defaults to `process.env`. */
+  /** Where tools read host configuration such as third-party source credentials. Defaults to empty: a host opts in to exposing its environment. */
   env?: ToolEnv;
+  /** Let source adapters fall back to ambient credentials (AWS profiles, SSO, instance roles). Off by default; only a host acting as the local user should enable it. */
+  allowAmbientCredentials?: boolean;
 }
 
 export type ToolEnv = Readonly<Record<string, string | undefined>>;
@@ -61,6 +63,8 @@ export interface ToolContext {
   readonly env: ToolEnv;
   /** Identifies the host to third-party APIs a tool calls, e.g. a video source. */
   readonly userAgent: string;
+  /** Whether source adapters may use credentials found outside `env`, such as a local AWS profile. */
+  readonly allowAmbientCredentials: boolean;
   progress(message: string): void;
   debug(message: string): void;
 }
@@ -133,8 +137,9 @@ export function createToolContext(
   return {
     clients,
     signal: options.signal,
-    env: options.env ?? process.env,
+    env: options.env ?? {},
     userAgent: options.userAgent ?? DEFAULT_USER_AGENT,
+    allowAmbientCredentials: options.allowAmbientCredentials ?? false,
     progress: (message) => options.onProgress?.(message),
     debug: (message) => options.onDebug?.(message),
   };

@@ -10,8 +10,6 @@ import {
 } from "./model.ts";
 
 export type { VideoLibraryModel } from "./api.ts";
-export type { StreamLibraryConnection } from "./connect.ts";
-export { openStreamLibrary } from "./connect.ts";
 export * from "./import/index.ts";
 export type { StreamLibrary } from "./model.ts";
 export { StreamLibrarySchema, toStreamLibrary } from "./model.ts";

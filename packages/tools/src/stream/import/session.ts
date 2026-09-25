@@ -1,3 +1,4 @@
+import { UserError } from "@bunny.net/openapi-client";
 import {
   assertFolderSupported,
   BunnyStream,
@@ -11,7 +12,7 @@ import {
   resolveSourceConfig,
   type SourcePlugin,
 } from "@bunny.net/stream-import";
-import type { ToolClients, ToolContext } from "../../context.ts";
+import type { ToolContext } from "../../context.ts";
 import { openStreamLibrary } from "../connect.ts";
 import type { StreamLibrary } from "../model.ts";
 import { requireSource } from "./sources.ts";
@@ -29,15 +30,13 @@ export interface ImportTarget {
   requestTimeout?: number;
 }
 
-/** Where engine output goes; repointed at each tool call's context so a reused session reports to the current host. */
+/** Where engine output goes for one tool call, plus the warnings it collects for the result. */
 export interface EngineSink {
   ctx: ToolContext;
   warnings: string[];
 }
 
 export interface ImportSession {
-  key: string;
-  plannedAt: number;
   plugin: SourcePlugin;
   library: StreamLibrary;
   accountId: string;
@@ -47,6 +46,11 @@ export interface ImportSession {
   service: MigrationService;
   sink: EngineSink;
 }
+
+/** What {@link openImport} resolved before it returned or failed. */
+export type OpenedImport = Partial<
+  Pick<ImportSession, "library" | "statePath">
+>;
 
 /** Engine lines become progress (and debug traces); `collect` keeps the run's warnings for the result. */
 export function engineLogger(sink: EngineSink, collect = false): Logger {
@@ -74,27 +78,6 @@ export function seconds(value: number | undefined, fallbackMs: number): number {
   return value === undefined ? fallbackMs : value * 1000;
 }
 
-// A plan leaves its session here so a run on the same context and target skips a second discovery walk.
-const planned = new WeakMap<ToolClients, ImportSession>();
-// A long-lived host may run hours after planning; past this the source is walked again so new videos are not missed.
-const PLAN_REUSE_MS = 10 * 60_000;
-
-function sessionKey(
-  target: ImportTarget,
-  config: Record<string, string | number>,
-  processingTimeoutMs: number,
-): string {
-  return JSON.stringify([
-    target.library,
-    target.source,
-    target.folder ?? null,
-    Boolean(target.resume),
-    seconds(target.requestTimeout, DEFAULT_REQUEST_TIMEOUT),
-    processingTimeoutMs,
-    config,
-  ]);
-}
-
 function sourceOverrides(target: ImportTarget) {
   return {
     bucket: target.bucket,
@@ -103,11 +86,25 @@ function sourceOverrides(target: ImportTarget) {
   };
 }
 
-/** Resolve the library, source config, and scope, then build the engine; `keep` parks the session for a later run. */
+// The engine words these for a terminal; a tool names its input fields and its env instead.
+function hostNeutral<T>(fn: () => T, hint: string, message?: string): T {
+  try {
+    return fn();
+  } catch (error) {
+    if (!(error instanceof UserError)) throw error;
+    throw new UserError(message ?? error.message, hint);
+  }
+}
+
+/** Resolve the library, source config, and scope, then build the engine; every call opens fresh so no state is shared between tool calls. */
 export async function openImport(
   ctx: ToolContext,
   target: ImportTarget,
-  opts: { processingTimeoutMs?: number; keep?: boolean } = {},
+  opts: {
+    processingTimeoutMs?: number;
+    /** Filled as each step resolves, so a caller that is aborted midway knows how far it got. */
+    opened?: OpenedImport;
+  } = {},
 ): Promise<ImportSession> {
   const processingTimeoutMs =
     opts.processingTimeoutMs ?? DEFAULT_PROCESSING_TIMEOUT;
@@ -117,31 +114,30 @@ export async function openImport(
     env: ctx.env,
     overrides: sourceOverrides(target),
   });
-  const key = sessionKey(target, resolved, processingTimeoutMs);
-
-  const parked = planned.get(ctx.clients);
-  planned.delete(ctx.clients);
-  if (parked?.key === key && Date.now() - parked.plannedAt < PLAN_REUSE_MS) {
-    parked.sink.ctx = ctx;
-    parked.sink.warnings = [];
-    if (opts.keep) planned.set(ctx.clients, parked);
-    return parked;
-  }
 
   ctx.progress("Resolving video library...");
   const { library, accountId, client } = await openStreamLibrary(
     ctx,
     target.library,
   );
+  if (opts.opened) opts.opened.library = library;
   const statePath = importStatePath(plugin.id, library.id, accountId, ctx.env);
+  if (opts.opened) opts.opened.statePath = statePath;
   // A resume without a folder keeps the saved scope; rediscovering the whole source would append every other folder to the run.
   const savedFolder = target.resume
     ? (readMigrationState(statePath)?.sourceFolderId ?? undefined)
     : undefined;
   const folder = target.folder ?? savedFolder;
-  assertFolderSupported(plugin, folder);
+  hostNeutral(
+    () => assertFolderSupported(plugin, folder),
+    "Omit `folder` to import everything.",
+    `${plugin.label} has no folders, so \`folder\` cannot be used.`,
+  );
 
-  const config = parseSourceConfig(plugin, resolved);
+  const config = hostNeutral(
+    () => parseSourceConfig(plugin, resolved),
+    "Set the environment variables above in the tool context's env.",
+  );
   const requestTimeout = seconds(
     target.requestTimeout,
     DEFAULT_REQUEST_TIMEOUT,
@@ -152,13 +148,12 @@ export async function openImport(
     userAgent: ctx.userAgent,
     requestTimeout,
     logger,
+    allowAmbientCredentials: ctx.allowAmbientCredentials,
   });
   ctx.progress(`Checking ${plugin.label} credentials...`);
   await adapter.validateCredentials();
 
   const session: ImportSession = {
-    key,
-    plannedAt: Date.now(),
     plugin,
     library,
     accountId,
@@ -184,6 +179,5 @@ export async function openImport(
       label: plugin.label,
     }),
   };
-  if (opts.keep) planned.set(ctx.clients, session);
   return session;
 }

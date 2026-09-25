@@ -30,6 +30,9 @@ export function toolContext(
     registryUrl: registryUrl(),
     userAgent: `bunny-cli/${VERSION}`,
     signal: opts.signal,
+    // The CLI acts as the local user, so their environment and AWS profile are legitimate credential sources.
+    env: process.env,
+    allowAmbientCredentials: true,
     onProgress: opts.onProgress,
     onDebug: opts.verbose
       ? (msg) => aboveSpinners(() => logger.debug(msg, true))

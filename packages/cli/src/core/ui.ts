@@ -185,14 +185,34 @@ export function requireConfirmable(
   throw new UserError(opts.message, opts.hint);
 }
 
-// Every spinner this process made, so a line written mid-spin can clear and redraw whichever is live.
+// Every started spinner, so a line written mid-spin can clear and redraw whichever is live.
 const spinners = new Set<Ora>();
 
 /** Creates an ora spinner. Automatically silenced in non-TTY environments. */
 export function spinner(text: string) {
   const spin = ora({ text, isSilent: !process.stdout.isTTY });
-  spinners.add(spin);
+  const start = spin.start.bind(spin);
+  const stop = spin.stop.bind(spin);
+  const persist = spin.stopAndPersist.bind(spin);
+  // succeed/fail/warn/info end in stopAndPersist, which skips stop() when silent, so both are wrapped.
+  spin.start = (startText?: string) => {
+    spinners.add(spin);
+    return start(startText);
+  };
+  spin.stop = () => {
+    spinners.delete(spin);
+    return stop();
+  };
+  spin.stopAndPersist = (options) => {
+    spinners.delete(spin);
+    return persist(options);
+  };
   return spin;
+}
+
+/** How many spinners are started and not yet stopped; for tests. */
+export function trackedSpinners(): number {
+  return spinners.size;
 }
 
 /** Write above any live spinner (clear, write, redraw), so the line never lands on a half-drawn frame. */

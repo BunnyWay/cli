@@ -1,6 +1,7 @@
 import {
   type CredentialField,
   missingCredentials,
+  parseSourceConfig,
   resolveSourceConfig,
   type SourcePlugin,
 } from "@bunny.net/stream-import";
@@ -8,6 +9,7 @@ import { extendToolContext, type ToolContext } from "@bunny.net/tools";
 import {
   requireSource,
   SOURCE_IDS,
+  StateHomeError,
   streamImportSources,
 } from "@bunny.net/tools/stream";
 import { bunny } from "@/core/colors.ts";
@@ -15,6 +17,13 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
+
+/** Reword an import tool error whose hint names the tool context's env; undefined leaves the error as it is. */
+export function cliImportError(error: unknown): Error | undefined {
+  if (error instanceof StateHomeError)
+    return new UserError(error.message, "Set XDG_STATE_HOME or HOME.");
+  return undefined;
+}
 
 /** Run one tool call under its own spinner, which the tool's progress messages steer. */
 export function withToolSpinner<T>(
@@ -41,7 +50,7 @@ export async function resolveImportSource(
 ): Promise<SourcePlugin> {
   if (requested) return requireSource(requested);
 
-  const sources = await streamImportSources.run(ctx, {});
+  const sources = await streamImportSources.invoke(ctx, {});
   const ready = sources.filter((s) => s.readiness === "ready");
   if (ready.length === 1 && ready[0]) {
     logger.info(
@@ -75,28 +84,41 @@ export async function resolveImportSource(
   return requireSource(id);
 }
 
-/** Prompts, interactively, for required credentials that neither a flag nor the environment sets; returns them as env overrides for this run only. */
+/** Prompts, interactively, for required credentials that neither a flag nor the tool context's env sets; returns them as env overrides for this run only. */
 export async function promptSourceCredentials(
+  ctx: ToolContext,
   plugin: SourcePlugin,
   overrides: Record<string, string | number | undefined>,
   output: OutputFormat,
 ): Promise<Record<string, string>> {
-  const resolved = resolveSourceConfig(plugin, { overrides });
-  if (
-    missingCredentials(plugin, resolved).length === 0 ||
-    !isInteractive(output)
-  ) {
-    return {};
-  }
+  const { env } = ctx;
+  const entered = isInteractive(output)
+    ? await promptMissing(plugin, env, overrides)
+    : {};
+  // Validated here so a bad value fails with the CLI's wording rather than the tool's host-neutral one.
+  parseSourceConfig(
+    plugin,
+    resolveSourceConfig(plugin, { env: { ...env, ...entered }, overrides }),
+  );
+  return entered;
+}
 
+async function promptMissing(
+  plugin: SourcePlugin,
+  env: ToolContext["env"],
+  overrides: Record<string, string | number | undefined>,
+): Promise<Record<string, string>> {
+  const resolved = resolveSourceConfig(plugin, { env, overrides });
+  if (missingCredentials(plugin, resolved).length === 0) return {};
   const explicit = resolveSourceConfig(plugin, {
+    env,
     overrides,
     includeDefaults: false,
   });
   const toPrompt = plugin.credentials.filter(
     (f) => f.required && explicit[f.key] === undefined,
   );
-  // What is left is a bad combination of set values, which a prompt cannot fix; the tool names it.
+  // What is left is a bad combination of set values, which a prompt cannot fix.
   if (toPrompt.length === 0) return {};
 
   logger.log(bunny.bold(`${plugin.label} credentials`));

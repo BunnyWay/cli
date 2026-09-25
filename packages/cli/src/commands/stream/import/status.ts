@@ -1,14 +1,17 @@
 import { stripAnsi } from "@bunny.net/stream-import";
 import {
   requireSource,
+  SavedImportError,
   SOURCE_IDS,
   streamImportStatus,
 } from "@bunny.net/tools/stream";
 import type { Argv } from "yargs";
 import { bunny } from "@/core/colors.ts";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
+import { UserError } from "@/core/errors.ts";
 import { formatBytes, formatTable, formatTimeAgo } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import { cliImportError } from "../import-setup.ts";
 import { resolveLibraryInteractive } from "../interactive.ts";
 
 interface StatusArgs {
@@ -54,6 +57,15 @@ export const streamImportStatusCommand = defineToolCommand({
     return { input: { library: String(library.id), source: args.source } };
   },
 
+  onError: (error) => {
+    if (!(error instanceof SavedImportError)) return cliImportError(error);
+    const hint =
+      error.sources.length > 1
+        ? `Pass --source <${error.sources.join("|")}> to pick one.`
+        : `Start one with \`bunny stream import --library ${error.libraryId}${error.source ? ` --source ${error.source}` : ""}\`.`;
+    return new UserError(error.message, hint);
+  },
+
   after: (result) => {
     if (result.failed > 0) process.exitCode = 1;
   },
@@ -61,7 +73,8 @@ export const streamImportStatusCommand = defineToolCommand({
   render: (result, { output }) => {
     const { library, videos } = result;
     const label = requireSource(result.source).label;
-    logger.log(bunny.bold(`${label} to ${library.name}`));
+    const decorated = output === "text" || output === "table";
+    if (decorated) logger.log(bunny.bold(`${label} to ${library.name}`));
     logger.log(
       formatTable(
         ["Video", "Bunny status", "Encoded", "Size", "Queued"],
@@ -75,7 +88,7 @@ export const streamImportStatusCommand = defineToolCommand({
         output,
       ),
     );
-    logger.log("");
+    if (decorated) logger.log("");
     logger.info(
       `${result.completed} finished, ${result.processing} processing, ${result.failed} failed.`,
     );
