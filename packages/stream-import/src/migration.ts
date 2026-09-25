@@ -256,9 +256,18 @@ export class MigrationService {
       this.prepareEntries(state, targetVideos, targetUncategorized);
       this.reconcileWithBunny(state);
 
+      // A resumed journal can hold other folders' videos; only the confirmed scope is imported, while re-tagging a video already in Bunny is always allowed.
+      const inScope = new Set(
+        [...targetVideos.values(), targetUncategorized]
+          .flat()
+          .map((v) => v.sourceId),
+      );
+      const scoped = (m: VideoMigration) =>
+        !folderId || inScope.has(m.sourceVideoId) || Boolean(m.bunnyVideoId);
+
       // Phase 1: hand every video to Bunny and tag it. This is the import.
-      const toQueue = state.videoMigrations.filter((m) =>
-        this.needsQueueing(m),
+      const toQueue = state.videoMigrations.filter(
+        (m) => scoped(m) && this.needsQueueing(m),
       );
       if (toQueue.length > 0) {
         this.logger.info(
@@ -278,7 +287,7 @@ export class MigrationService {
       // Phase 2, opt-in: stay until Bunny has encoded them.
       if (wait) {
         const toAwait = state.videoMigrations.filter(
-          (m) => m.status === "processing" && m.bunnyVideoId,
+          (m) => m.status === "processing" && m.bunnyVideoId && scoped(m),
         );
         if (toAwait.length > 0) {
           this.logger.info(

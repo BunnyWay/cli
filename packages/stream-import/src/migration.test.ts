@@ -444,6 +444,34 @@ describe("resume", () => {
     expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
   });
 
+  test("a resume scoped to another folder imports only that folder and leaves the saved run's videos pending", async () => {
+    const bunny = fakeBunny();
+    const { store } = memoryStore(savedState());
+    const folderVideo = {
+      sourceId: "333",
+      displayName: "Talk",
+      folderId: "f1",
+    };
+
+    const state = await service({
+      adapter: fakeAdapter({
+        listContent: async () =>
+          content({
+            folders: [{ id: "f1", name: "Talks" }],
+            videos: new Map([["f1", [folderVideo]]]),
+            uncategorizedVideos: twoVideos().uncategorizedVideos,
+          }),
+      }),
+      bunny,
+      store,
+    }).runMigration({ resume: true, folderId: "f1" });
+
+    expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
+    expect(
+      state.videoMigrations.find((m) => m.sourceVideoId === "222")?.status,
+    ).toBe("pending");
+  });
+
   test("re-asserts the dedup tag on a video interrupted mid-processing instead of re-fetching", async () => {
     const bunny = fakeBunny();
     const { store } = memoryStore(

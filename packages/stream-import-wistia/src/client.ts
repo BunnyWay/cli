@@ -61,15 +61,13 @@ export class WistiaClient {
     return this.paginate<WistiaProject>("/projects.json");
   }
 
-  /** Video medias in a project. The project endpoint embeds them. */
+  /** Video medias in a project, paged from `/medias.json` since the project endpoint's embedded list is not paginated. */
   async listMediaInProject(projectHashedId: string): Promise<WistiaMedia[]> {
-    const data = await this.http.get(
-      `/projects/${encodeURIComponent(projectHashedId)}.json`,
-    );
+    const medias = await this.paginate<WistiaMedia>("/medias.json", {
+      project_id: projectHashedId,
+    });
 
-    return ((data.medias ?? []) as WistiaMedia[]).filter(
-      (m) => m.type === "Video",
-    );
+    return medias.filter((m) => m.type === "Video");
   }
 
   async getMedia(hashedId: string): Promise<WistiaMedia> {
@@ -85,12 +83,15 @@ export class WistiaClient {
   }
 
   /** Wistia paginates with `page`/`per_page` and signals the end with a short page. */
-  private async paginate<T>(path: string): Promise<T[]> {
+  private async paginate<T>(
+    path: string,
+    params: Record<string, string> = {},
+  ): Promise<T[]> {
     const all: T[] = [];
 
     for (let page = 1; ; page++) {
       const data = await this.http.get(path, {
-        params: { page, per_page: PER_PAGE },
+        params: { ...params, page, per_page: PER_PAGE },
       });
       const items = (data ?? []) as T[];
       if (items.length === 0) break;
