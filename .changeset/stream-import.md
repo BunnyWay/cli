@@ -1,5 +1,6 @@
 ---
 "@bunny.net/cli": minor
+"@bunny.net/openapi-client": patch
 "@bunny.net/stream-import": minor
 "@bunny.net/stream-import-vimeo": minor
 "@bunny.net/stream-import-s3": minor

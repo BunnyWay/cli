@@ -591,8 +591,11 @@ jobs:
   publish-stream-import:
     name: Publish stream-import
     runs-on: ubuntu-latest
-    needs: version
-    if: needs.version.outputs.stream-import-version
+    needs:
+      - version
+      - publish-openapi-client
+    # stream-import depends on the published openapi-client version, so it publishes after it.
+    if: always() && needs.version.outputs.stream-import-version && needs.publish-openapi-client.result != 'failure'
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -653,7 +656,7 @@ jobs:
       - name: Build package
         run: bun run --filter @bunny.net/${{ matrix.pkg }} build
 
-      # bun publish (not npm) rewrites the workspace:* dependency on @bunny.net/stream-import to a real version.
+      # bun publish (not npm) rewrites the workspace:^ dependency on @bunny.net/stream-import to a real version.
       - name: Publish @bunny.net/${{ matrix.pkg }}
         run: |
           cd packages/${{ matrix.pkg }}
