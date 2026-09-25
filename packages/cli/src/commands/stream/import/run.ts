@@ -308,7 +308,7 @@ export const streamImportRunCommand: CommandModule = defineCommand<ImportArgs>({
         type: "number",
         default: DEFAULT_PROCESSING_TIMEOUT / 1000,
         describe:
-          "With --wait: seconds to wait for Bunny to encode one video (60-86400)",
+          "With --wait: seconds to wait for Bunny to encode one video; raises --video-timeout when larger (60-86400)",
       }) as Argv<ImportArgs>;
   },
 
@@ -351,7 +351,19 @@ export const streamImportRunCommand: CommandModule = defineCommand<ImportArgs>({
       },
       output,
     );
-    const engineLog = importLogger(verbose);
+    let spin: ReturnType<typeof spinner> | undefined;
+    const baseLog = importLogger(verbose);
+    // Engine lines clear the spinner, print, then redraw it, so they never land on a half-drawn frame.
+    const engineLog = Object.fromEntries(
+      Object.entries(baseLog).map(([level, write]) => [
+        level,
+        (msg: string) => {
+          spin?.clear();
+          write(msg);
+          spin?.render();
+        },
+      ]),
+    ) as unknown as typeof baseLog;
     const adapter = plugin.createAdapter(sourceConfig, {
       userAgent: `bunny-cli/${VERSION}`,
       requestTimeout,
@@ -467,7 +479,6 @@ export const streamImportRunCommand: CommandModule = defineCommand<ImportArgs>({
     }
 
     const startedAt = Date.now();
-    let spin: ReturnType<typeof spinner> | undefined;
     const show = (text: string) => {
       spin ??= spinner(text).start();
       spin.text = text;
@@ -479,7 +490,13 @@ export const streamImportRunCommand: CommandModule = defineCommand<ImportArgs>({
         concurrency: args.concurrency,
         resume: args.resume,
         wait: args.wait,
-        migrationTimeoutMs: ms(args.videoTimeout, DEFAULT_MIGRATION_TIMEOUT),
+        // With --wait the per-video timer also covers the encode, so it never undercuts --processing-timeout.
+        migrationTimeoutMs: args.wait
+          ? Math.max(
+              ms(args.videoTimeout, DEFAULT_MIGRATION_TIMEOUT),
+              ms(args.processingTimeout, DEFAULT_PROCESSING_TIMEOUT),
+            )
+          : ms(args.videoTimeout, DEFAULT_MIGRATION_TIMEOUT),
         onProgress: (
           s: MigrationState,
           phase: MigrationPhase,
@@ -487,7 +504,8 @@ export const streamImportRunCommand: CommandModule = defineCommand<ImportArgs>({
         ) => {
           if (output === "json") return;
           if (phase === "wait") return show(waitText(s));
-          if (!progress) return;
+          // Verbose request traces bypass the engine logger, so a spinner would interleave with them.
+          if (!progress || verbose) return;
           const { done, total } = progress;
           show(`Handing videos to Bunny: ${done}/${total}`);
           // Stop at the end of the queue so the engine's next log line does not land on the spinner.

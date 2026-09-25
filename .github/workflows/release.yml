@@ -595,7 +595,7 @@ jobs:
       - version
       - publish-openapi-client
     # stream-import depends on the published openapi-client version, so it publishes after it.
-    if: always() && needs.version.outputs.stream-import-version && needs.publish-openapi-client.result != 'failure'
+    if: ${{ !cancelled() && needs.version.outputs.stream-import-version && needs.publish-openapi-client.result != 'failure' }}
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -630,7 +630,7 @@ jobs:
       - version
       - publish-stream-import
     # The adapters build against stream-import's package exports (dist/) and depend on its published version, so they publish after it.
-    if: always() && needs.version.outputs.stream-import-adapters-version && needs.publish-stream-import.result != 'failure'
+    if: ${{ !cancelled() && needs.version.outputs.stream-import-adapters-version && needs.publish-stream-import.result != 'failure' }}
     strategy:
       matrix:
         pkg:

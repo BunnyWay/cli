@@ -1133,20 +1133,20 @@ For S3, leave both AWS keys unset to use the default AWS credential chain (insta
 
 Progress is saved after every status change to `$XDG_STATE_HOME/bunnynet/stream-import/<account>/<source>-<library>.json` (default `~/.local/state/...`), one file per account, source, and library. A run that is interrupted, or finishes with failures, is resumed with `--resume`, which retries the failed videos, works the outstanding ones, and re-asserts the metaTag on any video that was fetched but not yet tagged. A run with videos still encoding exits 0 and stays open in the state file until `status` sees them finish. A resume keeps the `--folder` scope the run started with unless you pass a different one. `--dry-run` prints the plan and writes nothing: no state file, no directory link, nothing in the library. With `--output json`, every run that stops before importing (dry run, nothing new, no videos) prints the same `{ library, source, dryRun, imported, processing, summary }` document. The confirmation before a real import defaults to No and needs `--force` when there is no TTY to answer it. `status` leaves the state file alone while an import is running against it. A run with failed videos exits 1 and lists them.
 
-| Flag                                | Description                                                                                                          |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `--library`, `--lib`                | Destination video library name or ID (defaults to the linked library)                                                |
-| `--source`, `-s`                    | Source platform: `vimeo`, `s3`, `wistia`, `mux`, `cloudflare`, `jwplayer`, `brightcove`                              |
-| `--folder`                          | Import one source folder only (Vimeo, S3, Wistia, Brightcove)                                                        |
-| `--dry-run`                         | Print the plan without importing                                                                                     |
-| `--resume`                          | Continue the saved import for this source and library                                                                |
-| `--wait`                            | Stay until Bunny has encoded every video, with live progress; the default returns once they are queued               |
-| `--force`, `-f`                     | Skip the confirmation prompt (required when there is no TTY)                                                         |
-| `--concurrency`, `-c`               | Videos imported in parallel, 1 to 20 (default 3)                                                                     |
-| `--bucket`, `--prefix`, `--url-ttl` | S3 overrides for the bucket, key prefix, and pre-signed URL lifetime in seconds (60 to 604800)                       |
-| `--request-timeout`                 | Seconds before one HTTP request gives up, 1 to 3600 (default 30)                                                     |
-| `--video-timeout`                   | Seconds before one video's hand-off to Bunny, or its encode wait with `--wait`, gives up, 60 to 86400 (default 5400) |
-| `--processing-timeout`              | With `--wait`, seconds to wait for Bunny to encode one video, 60 to 86400 (default 3600)                             |
+| Flag                                | Description                                                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `--library`, `--lib`                | Destination video library name or ID (defaults to the linked library)                                                          |
+| `--source`, `-s`                    | Source platform: `vimeo`, `s3`, `wistia`, `mux`, `cloudflare`, `jwplayer`, `brightcove`                                        |
+| `--folder`                          | Import one source folder only (Vimeo, S3, Wistia, Brightcove)                                                                  |
+| `--dry-run`                         | Print the plan without importing                                                                                               |
+| `--resume`                          | Continue the saved import for this source and library                                                                          |
+| `--wait`                            | Stay until Bunny has encoded every video, with live progress; the default returns once they are queued                         |
+| `--force`, `-f`                     | Skip the confirmation prompt (required when there is no TTY)                                                                   |
+| `--concurrency`, `-c`               | Videos imported in parallel, 1 to 20 (default 3)                                                                               |
+| `--bucket`, `--prefix`, `--url-ttl` | S3 overrides for the bucket, key prefix, and pre-signed URL lifetime in seconds (60 to 604800)                                 |
+| `--request-timeout`                 | Seconds before one HTTP request gives up, 1 to 3600 (default 30)                                                               |
+| `--video-timeout`                   | Seconds before one video's hand-off to Bunny, or its encode wait with `--wait`, gives up, 60 to 86400 (default 5400)           |
+| `--processing-timeout`              | With `--wait`, seconds to wait for Bunny to encode one video, 60 to 86400 (default 3600); raises `--video-timeout` when larger |
 
 `bunny stream import status` reads the saved run for the library (and `--source`, when more than one platform has been imported into it), asks Bunny for the current state of every video it queued, and prints one row each: Bunny's status, encode percentage, size, and when it was queued. A video still processing with no data after 30 minutes is marked `(stalled?)`: Bunny gives no signal for a fetch that died silently, so that is the cue to delete it in the dashboard and re-run. It exits 1 when any video has failed, so it doubles as a poll in scripts.
 
