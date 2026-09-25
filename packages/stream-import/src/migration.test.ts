@@ -457,7 +457,7 @@ describe("resume", () => {
       adapter: fakeAdapter({
         listContent: async () =>
           content({
-            folders: [{ id: "f1", name: "Talks" }],
+            folders: [{ id: "f1", name: "Talks", videoCount: 1 }],
             videos: new Map([["f1", [folderVideo]]]),
             uncategorizedVideos: twoVideos().uncategorizedVideos,
           }),
