@@ -8,6 +8,8 @@ Mux source adapter for [`@bunny.net/stream-import`](../stream-import#readme), th
 bun add @bunny.net/stream-import @bunny.net/stream-import-mux
 ```
 
+The adapter runs on the `@bunny.net/stream-import` version it depends on, so install a matching minor of the engine alongside it.
+
 ## Usage
 
 ```ts
@@ -39,7 +41,7 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 
 Create an access token at dashboard.mux.com/settings/api-keys.
 
-Mux has no folders, so every asset is imported uncategorized. The master (original) file is preferred when temporary master access is enabled and ready; otherwise the best static MP4 rendition the asset reports as ready is used (`highest.mp4`, then resolution renditions, then the deprecated `high`/`medium`/`low` names), on a public playback ID. An asset with neither is skipped, so enable master access or static renditions before importing. Titles come from `meta.title`, falling back to `passthrough`. The dedup metaTag is `muxAssetId`.
+Mux has no folders, so every asset is imported uncategorized. The master (original) file is preferred when temporary master access is enabled and ready; otherwise the best static MP4 rendition the asset reports as ready is used (`highest.mp4`, then resolution renditions, then the deprecated `high`/`medium`/`low` names), on a public playback ID. An asset with neither is skipped, so enable master access or static renditions before importing, and audio-only assets are always skipped. Download URLs must be HTTPS on a `mux.com` subdomain. Titles come from `meta.title`, falling back to `passthrough`. The dedup metaTag is `muxAssetId`.
 
 ## Disclaimer
 

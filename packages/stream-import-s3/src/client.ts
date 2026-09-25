@@ -25,8 +25,8 @@ export class S3SourceClient {
   private readonly client: S3Client;
   private readonly defaultTtl: number;
 
-  constructor(config: S3Config, _ctx: SourceContext) {
-    // The schema has already rejected a half-set pair; this only picks static keys over the ambient chain.
+  constructor(config: S3Config, ctx: SourceContext) {
+    // The schema has already rejected a half-set pair; the ambient chain is used only when the host opts in.
     const credentials =
       config.accessKeyId && config.secretAccessKey
         ? {
@@ -34,7 +34,9 @@ export class S3SourceClient {
             secretAccessKey: config.secretAccessKey,
             sessionToken: config.sessionToken,
           }
-        : undefined;
+        : ctx.allowAmbientCredentials
+          ? undefined
+          : refuseAmbientCredentials;
 
     this.client = new S3Client({
       region: config.region,
@@ -139,8 +141,14 @@ export class S3SourceClient {
       for (const cp of response.CommonPrefixes ?? []) {
         if (!cp.Prefix) continue;
         const id = prefixToId(cp.Prefix, root);
-        if (id)
-          folders.push({ id, name: id, prefix: cp.Prefix, videoCount: 0 });
+        if (!id) {
+          // An empty path segment (`root//clip.mp4`) has no folder name, so its objects are uncategorized.
+          uncategorizedVideos.push(
+            ...(await this.listVideosByPrefix(bucket, cp.Prefix)),
+          );
+          continue;
+        }
+        folders.push({ id, name: id, prefix: cp.Prefix, videoCount: 0 });
       }
 
       for (const item of response.Contents ?? []) {
@@ -162,12 +170,17 @@ export class S3SourceClient {
   }
 
   /** User metadata (`x-amz-meta-*`), for richer titles and descriptions. */
-  async headObject(bucket: string, key: string): Promise<S3Object | null> {
+  async headObject(
+    bucket: string,
+    key: string,
+    signal?: AbortSignal,
+  ): Promise<S3Object | null> {
     if (!validateS3Key(key)) throw new UserError("Invalid S3 object key");
 
     try {
       const response = await this.client.send(
         new HeadObjectCommand({ Bucket: bucket, Key: key }),
+        { abortSignal: signal },
       );
 
       return {
@@ -213,6 +226,14 @@ export class S3SourceClient {
   }
 }
 
+/** Stands in for the SDK's default chain so a host that has not opted in never picks up ambient credentials. */
+async function refuseAmbientCredentials(): Promise<never> {
+  throw new UserError(
+    "No AWS access keys are configured.",
+    "Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY; the AWS default credential chain is used only when the host allows ambient credentials.",
+  );
+}
+
 /** GLACIER, DEEP_ARCHIVE and the Intelligent-Tiering archive tiers need a restore before GetObject works; GLACIER_IR is instant. */
 export function archivedReason(obj: S3Object): string | null {
   const restored = obj.restore?.includes('ongoing-request="false"') ?? false;
@@ -253,7 +274,7 @@ function asUserError(error: unknown, bucket: string): unknown {
   if (name === "CredentialsProviderError" || name === "InvalidAccessKeyId") {
     return new UserError(
       "Invalid AWS credentials.",
-      "Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or configure the AWS default credential chain.",
+      "Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY; the AWS default credential chain is used only when the host allows ambient credentials.",
     );
   }
   if (!(error instanceof S3ServiceException)) return error;

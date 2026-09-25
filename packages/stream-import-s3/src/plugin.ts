@@ -13,12 +13,12 @@ import { validateAwsRegion, validateS3BucketName } from "./validate.ts";
 
 export const s3ConfigSchema = z
   .object({
-    region: z.string().refine(validateAwsRegion, "Not a valid AWS region"),
+    region: z.string().min(1),
     bucket: z
       .string()
       .refine(validateS3BucketName, "Not a valid S3 bucket name"),
     prefix: z.string().optional(),
-    // Credentials are optional: omitting them uses the AWS default chain, which is how this runs on instance roles.
+    // Credentials are optional: omitting them uses the AWS default chain when the host allows ambient credentials.
     accessKeyId: z.string().optional(),
     secretAccessKey: z.string().optional(),
     sessionToken: z.string().optional(),
@@ -37,6 +37,14 @@ export const s3ConfigSchema = z
   })
   // A lone key would silently hand the import to whatever the ambient chain resolves, so the pair is all or nothing.
   .superRefine((config, ctx) => {
+    // S3-compatible providers use their own region names, such as `auto`.
+    if (!config.endpoint && !validateAwsRegion(config.region)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["region"],
+        message: "Not a valid AWS region",
+      });
+    }
     if (Boolean(config.accessKeyId) !== Boolean(config.secretAccessKey)) {
       ctx.addIssue({
         code: "custom",

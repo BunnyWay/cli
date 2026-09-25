@@ -80,12 +80,17 @@ export class BrightcoveClient {
     return this.inflightToken;
   }
 
-  private async get<T = any>(path: string, params?: Query): Promise<T> {
+  private async get<T = any>(
+    path: string,
+    params?: Query,
+    signal?: AbortSignal,
+  ): Promise<T> {
     const token = await this.ensureToken();
 
     return this.http.get<T>(path, {
       params,
       headers: { Authorization: `Bearer ${token}` },
+      signal,
     });
   }
 
@@ -138,35 +143,36 @@ export class BrightcoveClient {
     return videos;
   }
 
-  async getVideo(videoId: string): Promise<BrightcoveVideo> {
-    return this.get<BrightcoveVideo>(`/videos/${encodeURIComponent(videoId)}`);
+  async getVideo(
+    videoId: string,
+    signal?: AbortSignal,
+  ): Promise<BrightcoveVideo | null> {
+    try {
+      return await this.get<BrightcoveVideo>(
+        `/videos/${encodeURIComponent(videoId)}`,
+        undefined,
+        signal,
+      );
+    } catch (error) {
+      if (isHttpError(error, 404)) return null;
+      throw error;
+    }
   }
 
-  /** Highest-resolution MP4 rendition, falling back to the digital master. */
+  /** Highest-resolution HTTPS MP4 rendition; the digital master endpoint exposes no download URL. */
   async getDownloadUrl(
     videoId: string,
+    signal?: AbortSignal,
   ): Promise<{ url: string; size: number } | null> {
-    const id = encodeURIComponent(videoId);
+    const sources =
+      (await this.get<BrightcoveSource[] | null>(
+        `/videos/${encodeURIComponent(videoId)}/sources`,
+        undefined,
+        signal,
+      )) ?? [];
+    const best = bestMp4Source(sources);
 
-    try {
-      const sources =
-        (await this.get<BrightcoveSource[] | null>(`/videos/${id}/sources`)) ??
-        [];
-      const best = bestMp4Source(sources);
-      if (best) return { url: best.src, size: best.size || 0 };
-    } catch (error) {
-      if (!isHttpError(error, 404)) throw error;
-    }
-
-    try {
-      const master = await this.get(`/videos/${id}/digital_master`);
-      if (master?.url && isHttps(master.url))
-        return { url: master.url, size: master.size || 0 };
-    } catch (error) {
-      if (!isHttpError(error, 404)) throw error;
-    }
-
-    return null;
+    return best ? { url: best.src, size: best.size || 0 } : null;
   }
 }
 

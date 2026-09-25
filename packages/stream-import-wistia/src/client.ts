@@ -4,6 +4,7 @@ import {
   createHttp,
   type Http,
   isHttpError,
+  type Query,
   type SourceContext,
   UserError,
 } from "@bunny.net/stream-import";
@@ -47,6 +48,12 @@ export class WistiaClient {
           "Create one under Account > API Access in Wistia.",
         );
       }
+      if (isHttpError(error, 403)) {
+        throw new UserError(
+          "Wistia refused the access token (403).",
+          "Give the token the Read all data permission under Account > API Access in Wistia.",
+        );
+      }
       throw error;
     }
   }
@@ -61,32 +68,34 @@ export class WistiaClient {
     return this.paginate<WistiaProject>("/projects.json");
   }
 
-  /** Video medias in a project, paged from `/medias.json` since the project endpoint's embedded list is not paginated. */
-  async listMediaInProject(projectHashedId: string): Promise<WistiaMedia[]> {
+  /** Video medias in a project, paged from `/medias.json` (which takes the numeric project id) oldest-first so pages stay stable. */
+  async listMediaInProject(projectId: number): Promise<WistiaMedia[]> {
     const medias = await this.paginate<WistiaMedia>("/medias.json", {
-      project_id: projectHashedId,
+      project_id: projectId,
+      sort_by: "created",
+      sort_direction: 1,
     });
 
     return medias.filter((m) => m.type === "Video");
   }
 
-  async getMedia(hashedId: string): Promise<WistiaMedia> {
-    return this.http.get<WistiaMedia>(
-      `/medias/${encodeURIComponent(hashedId)}.json`,
-    );
-  }
-
-  async getDownloadUrl(
+  async getMedia(
     hashedId: string,
-  ): Promise<{ url: string; size: number } | null> {
-    return selectDownload(await this.getMedia(hashedId));
+    signal?: AbortSignal,
+  ): Promise<WistiaMedia | null> {
+    try {
+      return await this.http.get<WistiaMedia>(
+        `/medias/${encodeURIComponent(hashedId)}.json`,
+        { signal },
+      );
+    } catch (error) {
+      if (isHttpError(error, 404)) return null;
+      throw error;
+    }
   }
 
   /** Wistia paginates with `page`/`per_page` and signals the end with a short page. */
-  private async paginate<T>(
-    path: string,
-    params: Record<string, string> = {},
-  ): Promise<T[]> {
+  private async paginate<T>(path: string, params: Query = {}): Promise<T[]> {
     const all: T[] = [];
 
     for (let page = 1; ; page++) {

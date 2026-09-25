@@ -28,6 +28,8 @@ export interface MuxAsset {
   /** `status` is the deprecated set-level state; current renditions carry it per file. */
   static_renditions?: { status?: string; files?: MuxRendition[] };
   master?: { status: string; url?: string };
+  /** "video" | "audio" | "text" */
+  tracks?: Array<{ type: string }>;
 }
 
 export interface MuxConfig {

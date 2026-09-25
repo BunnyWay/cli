@@ -8,6 +8,8 @@ Wistia source adapter for [`@bunny.net/stream-import`](../stream-import#readme),
 bun add @bunny.net/stream-import @bunny.net/stream-import-wistia
 ```
 
+The adapter runs on the `@bunny.net/stream-import` version it depends on, so install a matching minor of the engine alongside it.
+
 ## Usage
 
 ```ts

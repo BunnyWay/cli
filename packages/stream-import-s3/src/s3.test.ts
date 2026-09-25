@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import type { Logger } from "@bunny.net/stream-import";
 import { S3SourceAdapter } from "./adapter.ts";
-import { archivedReason, type S3SourceClient } from "./client.ts";
+import { archivedReason, S3SourceClient } from "./client.ts";
 import {
   extractVideoNameFromKey,
   fromSourceId,
@@ -82,7 +83,7 @@ describe("validation", () => {
     expect(validateAwsRegion("US-EAST-1")).toBe(false);
   });
 
-  test("static credentials are all or nothing", () => {
+  test("static credentials are all or nothing, and only AWS regions are shape-checked", () => {
     const base = { region: "us-east-1", bucket: "my-bucket" };
     expect(s3ConfigSchema.safeParse(base).success).toBe(true);
     expect(
@@ -102,6 +103,16 @@ describe("validation", () => {
       s3ConfigSchema.safeParse({ ...base, endpoint: "http://minio.local" })
         .success,
     ).toBe(false);
+    expect(s3ConfigSchema.safeParse({ ...base, region: "auto" }).success).toBe(
+      false,
+    );
+    expect(
+      s3ConfigSchema.safeParse({
+        ...base,
+        region: "auto",
+        endpoint: "https://acc.r2.cloudflarestorage.com",
+      }).success,
+    ).toBe(true);
   });
 
   test("with a custom endpoint, download URLs must be on that host instead of AWS", () => {
@@ -165,7 +176,7 @@ describe("validation", () => {
   });
 });
 
-test("--folder lists only that prefix under the root, and a nested id works", async () => {
+test("--folder lists only that prefix under the root, and a nested id lands in its top-level collection", async () => {
   const prefixes: string[] = [];
   const client = {
     listVideosByPrefix: async (_bucket: string, prefix: string) => {
@@ -190,8 +201,42 @@ test("--folder lists only that prefix under the root, and a nested id works", as
   const content = await adapter.listContent({ folderId: "2024/q1" });
 
   expect(prefixes).toEqual(["media/2024/q1/"]);
+  expect(content.folders[0]).toMatchObject({ id: "2024/q1", name: "2024" });
   expect(content.videos.get("2024/q1")?.[0]?.sourceId).toBe(
     "b/media/2024/q1/clip.mp4",
+  );
+});
+
+const ctx = { userAgent: "t", requestTimeout: 5_000, logger: {} as Logger };
+const keys = { accessKeyId: "AKIA", secretAccessKey: "s" };
+
+test("objects under an empty path segment are listed and imported uncategorized", async () => {
+  const client = new S3SourceClient(
+    { region: "us-east-1", bucket: "b", ...keys },
+    ctx,
+  );
+  const requests: Array<{ Prefix?: string; Delimiter?: string }> = [];
+  (client as unknown as { client: unknown }).client = {
+    send: async (command: {
+      input: { Prefix?: string; Delimiter?: string };
+    }) => {
+      requests.push(command.input);
+      return command.input.Delimiter
+        ? { CommonPrefixes: [{ Prefix: "/" }, { Prefix: "a/" }] }
+        : { Contents: [{ Key: `${command.input.Prefix}clip.mp4` }] };
+    },
+  };
+
+  const result = await client.getAllVideosWithFolders("b", "");
+
+  expect(result.folders.map((f) => f.id)).toEqual(["a"]);
+  expect(result.uncategorizedVideos.map((o) => o.key)).toEqual(["/clip.mp4"]);
+});
+
+test("without static keys the ambient chain is refused unless the host allows it", async () => {
+  const client = new S3SourceClient({ region: "us-east-1", bucket: "b" }, ctx);
+  await expect(client.validateCredentials("my-bucket")).rejects.toThrow(
+    "No AWS access keys are configured.",
   );
 });
 

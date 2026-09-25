@@ -55,17 +55,18 @@ export class S3SourceAdapter implements SourceAdapter {
       duration: undefined,
     });
 
-    // A folder id is a prefix below the root, so a nested one like `a/b` lists just that subtree.
+    // A nested id like `a/b` lists just that subtree but lands in collection `a`, where full discovery puts it.
     if (opts?.folderId) {
       const folderId = opts.folderId;
       const objects = await this.client.listVideosByPrefix(
         this.bucket,
         idToPrefix(folderId, this.prefix),
       );
+      const name = folderId.split("/")[0] || folderId;
 
       return {
         folders: objects.length
-          ? [{ id: folderId, name: folderId, videoCount: objects.length }]
+          ? [{ id: folderId, name, videoCount: objects.length }]
           : [],
         videos: new Map([[folderId, objects.map((o) => toVideo(o, folderId))]]),
         uncategorizedVideos: [],
@@ -97,12 +98,18 @@ export class S3SourceAdapter implements SourceAdapter {
     };
   }
 
-  async getDownloadInfo(sourceId: string): Promise<DownloadInfo | null> {
+  async getDownloadInfo(
+    sourceId: string,
+    signal?: AbortSignal,
+  ): Promise<DownloadInfo | null> {
     const { bucket, key } = fromSourceId(sourceId);
     if (!key) return null;
 
     // Metadata is a bonus: a bucket that denies HeadObject should still import.
-    const head = await this.client.headObject(bucket, key).catch(() => null);
+    const head = await this.client
+      .headObject(bucket, key, signal)
+      .catch(() => null);
+    signal?.throwIfAborted();
     const archived = head && archivedReason(head);
     if (archived) throw new Error(archived);
 

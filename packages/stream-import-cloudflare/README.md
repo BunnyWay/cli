@@ -8,6 +8,8 @@ Cloudflare Stream source adapter for [`@bunny.net/stream-import`](../stream-impo
 bun add @bunny.net/stream-import @bunny.net/stream-import-cloudflare
 ```
 
+The adapter runs on the `@bunny.net/stream-import` version it depends on, so install a matching minor of the engine alongside it.
+
 ## Usage
 
 ```ts
@@ -37,7 +39,7 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 | API token  | `CLOUDFLARE_API_TOKEN` (permission Stream:Edit) |
 | Account ID | `CLOUDFLARE_ACCOUNT_ID`                         |
 
-Cloudflare Stream has no folders, so every video is imported uncategorized. An MP4 download is generated on demand and polled for up to five minutes before the video is handed to bunny.net. Videos with Require Signed URLs turned on are skipped with that as the reason, since Bunny cannot fetch their MP4 without a signed token. The dedup metaTag is `cfStreamId`.
+Cloudflare Stream has no folders, so every video is imported uncategorized. An MP4 download is generated on demand and polled for up to five minutes before the video is handed to bunny.net; a download Cloudflare fails to generate stops the poll with its reason. Download URLs must be HTTPS on `cloudflarestream.com` or `videodelivery.net` (or a subdomain). Videos with Require Signed URLs turned on are skipped with that as the reason, since Bunny cannot fetch their MP4 without a signed token. The dedup metaTag is `cfStreamId`.
 
 ## Disclaimer
 

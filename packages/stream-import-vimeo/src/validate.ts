@@ -1,8 +1,8 @@
 // Vimeo input guards; `validateVimeoUrl` is the security boundary that keeps Bunny off arbitrary hosts.
 
-/** Vimeo IDs are numeric. Guards against path traversal in a URL path segment. */
+/** Numeric, optionally with an unlisted `:hash`. Guards against path traversal in a URL path segment. */
 export function validateVimeoId(id: string): boolean {
-  return /^\d+$/.test(id);
+  return /^\d+(?::[a-z0-9]+)?$/i.test(id);
 }
 
 const ALLOWED_VIMEO_HOSTS = [

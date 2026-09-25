@@ -15,6 +15,14 @@ export interface CfStreamVideo {
   creator?: string;
 }
 
+export interface CfDownload {
+  /** "inprogress" | "ready" | "error" */
+  status: string;
+  url?: string;
+  percentComplete?: number;
+  error?: string;
+}
+
 export interface CloudflareConfig {
   apiToken: string;
   accountId: string;

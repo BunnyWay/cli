@@ -8,6 +8,8 @@ Brightcove source adapter for [`@bunny.net/stream-import`](../stream-import#read
 bun add @bunny.net/stream-import @bunny.net/stream-import-brightcove
 ```
 
+The adapter runs on the `@bunny.net/stream-import` version it depends on, so install a matching minor of the engine alongside it.
+
 ## Usage
 
 ```ts
@@ -40,7 +42,7 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 
 Create an OAuth client at studio.brightcove.com/admin/oauthclient with CMS video read permissions.
 
-Brightcove folders become Stream collections. The highest-resolution MP4 rendition wins, falling back to the digital master. The dedup metaTag is `brightcoveId`.
+Brightcove folders become Stream collections. The highest-resolution HTTPS MP4 rendition wins; a video without one fails with that as the reason, since the digital master endpoint exposes no download URL. Download URLs only need to be HTTPS: renditions are served from whichever CDN the account's delivery profile uses, so there is no fixed host to allow. The dedup metaTag is `brightcoveId`.
 
 ## Disclaimer
 

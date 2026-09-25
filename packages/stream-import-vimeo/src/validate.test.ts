@@ -1,9 +1,18 @@
 import { expect, test } from "bun:test";
 import { validateVimeoId, validateVimeoUrl } from "./validate.ts";
 
-test("ids are numeric only, so nothing can escape a URL path segment", () => {
+test("ids are numeric with an optional unlisted hash, so nothing can escape a URL path segment", () => {
   expect(validateVimeoId("123456789")).toBe(true);
-  for (const bad of ["../../me/videos", "123/456", "12 34", "", "abc"]) {
+  expect(validateVimeoId("123456789:ab12cd34ef")).toBe(true);
+  for (const bad of [
+    "../../me/videos",
+    "123/456",
+    "12 34",
+    "",
+    "abc",
+    "1:",
+    "1:a/b",
+  ]) {
     expect(validateVimeoId(bad), bad).toBe(false);
   }
 });

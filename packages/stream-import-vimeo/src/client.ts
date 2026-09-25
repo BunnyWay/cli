@@ -20,14 +20,18 @@ const VIMEO_API_BASE = "https://api.vimeo.com";
 const VIDEO_FIELDS =
   "uri,name,description,duration,width,height,created_time,modified_time,privacy,pictures,download,tags";
 
-/** Vimeo account tiers that include original-file download access. */
+/** Vimeo account tiers, current and legacy, that include file download access. */
 const PREMIUM_ACCOUNTS = [
   "standard",
   "advanced",
-  "pro",
+  "enterprise",
   "plus",
+  "pro",
+  "pro_unlimited",
   "premium",
   "business",
+  "live_pro",
+  "live_business",
   "live_premium",
   "producer",
 ];
@@ -57,6 +61,12 @@ export class VimeoClient {
         throw new UserError(
           "Invalid Vimeo access token.",
           "Create one at https://developer.vimeo.com/apps with the public, private and video_files scopes.",
+        );
+      }
+      if (isHttpError(error, 403)) {
+        throw new UserError(
+          "Vimeo refused the access token (403).",
+          "Regenerate it at https://developer.vimeo.com/apps with the public, private and video_files scopes.",
         );
       }
       throw error;
@@ -109,18 +119,30 @@ export class VimeoClient {
     return videos;
   }
 
-  async getVideo(videoId: string): Promise<VimeoVideo> {
+  async getVideo(
+    videoId: string,
+    signal?: AbortSignal,
+  ): Promise<VimeoVideo | null> {
     const id = extractVideoId(videoId);
     if (!validateVimeoId(id))
       throw new UserError(`Invalid Vimeo video ID: ${videoId}`);
 
-    return this.http.get<VimeoVideo>(
-      `/videos/${encodeURIComponent(id)}?fields=${VIDEO_FIELDS},files`,
-    );
+    try {
+      // Not URI-encoded: the validated id is digits with an optional `:hash`, and Vimeo expects the colon as-is.
+      return await this.http.get<VimeoVideo>(
+        `/videos/${id}?fields=${VIDEO_FIELDS},files`,
+        { signal },
+      );
+    } catch (error) {
+      if (isHttpError(error, 404)) return null;
+      throw error;
+    }
   }
 
   async getVideoDownloadLink(videoId: string): Promise<VimeoDownload | null> {
-    return selectDownload(await this.getVideo(videoId));
+    const video = await this.getVideo(videoId);
+
+    return video ? selectDownload(video) : null;
   }
 
   async getAllVideosWithFolders(): Promise<{
@@ -195,7 +217,7 @@ export function extractFolderId(uri: string): string {
   return uri.split("/").at(-1) ?? "";
 }
 
-/** `/videos/123456789` -> `123456789` */
+/** `/videos/123456789` -> `123456789`; an unlisted `/videos/123:abc` keeps its hash. */
 export function extractVideoId(uri: string): string {
   return uri.replace(/^\/videos\//, "");
 }

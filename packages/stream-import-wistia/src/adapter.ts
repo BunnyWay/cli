@@ -1,8 +1,9 @@
-import type {
-  DownloadInfo,
-  SourceAdapter,
-  SourceContent,
-  SourceVideo,
+import {
+  type DownloadInfo,
+  type SourceAdapter,
+  type SourceContent,
+  type SourceVideo,
+  UserError,
 } from "@bunny.net/stream-import";
 import {
   selectDownload,
@@ -34,23 +35,29 @@ export class WistiaSourceAdapter implements SourceAdapter {
 
     if (opts?.folderId) {
       const folderId = opts.folderId;
-      const medias = await this.client.listMediaInProject(folderId);
       const project = projects.find((p) => p.hashedId === folderId);
+      if (!project) {
+        const byNumber = projects.find((p) => String(p.id) === folderId);
+        throw new UserError(
+          `No Wistia project with ID ${folderId}.`,
+          byNumber
+            ? `Use the project's hashed ID instead: ${byNumber.hashedId}.`
+            : "Use the project's hashed ID, as shown in its Wistia URL.",
+        );
+      }
+      const id = project.hashedId;
+      const medias = await this.client.listMediaInProject(project.id);
 
       return {
-        folders: project
-          ? [{ id: folderId, name: project.name, videoCount: medias.length }]
-          : [],
-        videos: new Map([
-          [folderId, medias.map((m) => toSourceVideo(m, folderId))],
-        ]),
+        folders: [{ id, name: project.name, videoCount: medias.length }],
+        videos: new Map([[id, medias.map((m) => toSourceVideo(m, id))]]),
         uncategorizedVideos: [],
       };
     }
 
     const videos = new Map<string, SourceVideo[]>();
     for (const project of projects) {
-      const medias = await this.client.listMediaInProject(project.hashedId);
+      const medias = await this.client.listMediaInProject(project.id);
       videos.set(
         project.hashedId,
         medias.map((m) => toSourceVideo(m, project.hashedId)),
@@ -69,14 +76,18 @@ export class WistiaSourceAdapter implements SourceAdapter {
     };
   }
 
-  async getDownloadInfo(sourceId: string): Promise<DownloadInfo | null> {
-    const media = await this.client.getMedia(sourceId);
+  async getDownloadInfo(
+    sourceId: string,
+    signal?: AbortSignal,
+  ): Promise<DownloadInfo | null> {
+    const media = await this.client.getMedia(sourceId, signal);
+    if (!media) return null;
     const download = selectDownload(media);
     if (!download) return null;
 
     return {
       url: download.url,
-      title: media.name,
+      title: media.name ?? "",
       description: media.description ?? undefined,
     };
   }

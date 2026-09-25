@@ -72,16 +72,21 @@ export class BrightcoveAdapter implements SourceAdapter {
 
   async getDownloadInfo(
     sourceId: string,
-    fallbackTitle?: string,
+    signal?: AbortSignal,
   ): Promise<DownloadInfo | null> {
-    const download = await this.client.getDownloadUrl(sourceId);
-    if (!download) return null;
+    const video = await this.client.getVideo(sourceId, signal);
+    if (!video) return null;
 
-    const video = await this.client.getVideo(sourceId);
+    const download = await this.client.getDownloadUrl(sourceId, signal);
+    if (!download) {
+      throw new Error(
+        "Brightcove video has no HTTPS MP4 rendition; add one to its ingest profile, then re-run the import",
+      );
+    }
 
     return {
       url: download.url,
-      title: video.name || fallbackTitle || sourceId,
+      title: video.name || "",
       description: video.description ?? undefined,
       tags: video.tags?.length ? video.tags : undefined,
     };

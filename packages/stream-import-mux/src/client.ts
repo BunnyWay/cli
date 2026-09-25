@@ -51,6 +51,12 @@ export class MuxClient {
           "Create an access token at https://dashboard.mux.com/settings/api-keys.",
         );
       }
+      if (isHttpError(error, 403)) {
+        throw new UserError(
+          "Mux refused the access token (403).",
+          "Give the token Mux Video Read permission at https://dashboard.mux.com/settings/api-keys.",
+        );
+      }
       throw error;
     }
   }
@@ -61,26 +67,43 @@ export class MuxClient {
     return { "Assets visible": data.data?.length ? "yes" : "none" };
   }
 
-  /** Only `ready` assets can be fetched. */
+  /** Only `ready` assets with a video track can be fetched; pages on `next_cursor`, falling back to page numbers when the API returns none. */
   async listAssets(): Promise<MuxAsset[]> {
     const assets: MuxAsset[] = [];
+    let cursor: string | undefined;
 
     for (let page = 1; ; page++) {
       const data = await this.http.get("/assets", {
-        params: { limit: PAGE_LIMIT, page },
+        params: cursor
+          ? { limit: PAGE_LIMIT, cursor }
+          : { limit: PAGE_LIMIT, page },
       });
       const items = (data.data ?? []) as MuxAsset[];
-      assets.push(...items.filter((a) => a.status === "ready"));
+      assets.push(
+        ...items.filter((a) => a.status === "ready" && hasVideoTrack(a)),
+      );
       if (items.length < PAGE_LIMIT) break;
+      cursor = data.next_cursor || undefined;
     }
 
     return assets;
   }
 
-  async getAsset(assetId: string): Promise<MuxAsset> {
-    const data = await this.http.get(`/assets/${encodeURIComponent(assetId)}`);
+  async getAsset(
+    assetId: string,
+    signal?: AbortSignal,
+  ): Promise<MuxAsset | null> {
+    try {
+      const data = await this.http.get(
+        `/assets/${encodeURIComponent(assetId)}`,
+        { signal },
+      );
 
-    return data.data;
+      return data.data;
+    } catch (error) {
+      if (isHttpError(error, 404)) return null;
+      throw error;
+    }
   }
 
   getDownloadUrl(asset: MuxAsset): { url: string; size: number } | null {
@@ -88,10 +111,28 @@ export class MuxClient {
   }
 }
 
+/** An asset whose tracks are known but include no video is audio-only, which Bunny Stream cannot import. */
+export function hasVideoTrack(asset: MuxAsset): boolean {
+  return !asset.tracks || asset.tracks.some((t) => t.type === "video");
+}
+
+/** HTTPS on a Mux host: static renditions on `stream.mux.com`, masters on the temporary download host. */
+export function validateMuxUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+
+    return parsed.protocol === "https:" && host.endsWith(".mux.com");
+  } catch {
+    return false;
+  }
+}
+
 /** The master (original) when temporary access has it ready, else a ready static MP4 on a public playback ID; a signed ID needs a JWT Bunny cannot supply. */
 export function downloadForAsset(
   asset: MuxAsset,
 ): { url: string; size: number } | null {
+  if (!hasVideoTrack(asset)) return null;
   if (
     asset.master_access === "temporary" &&
     asset.master?.status === "ready" &&

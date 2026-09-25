@@ -19,7 +19,7 @@ const file = (name: string, status?: string) => ({
   filesize: "42",
 });
 
-test("prefers a ready master, then only a rendition the asset reports ready, never an unsigned URL for a signed ID", () => {
+test("prefers a ready master, then only a rendition the asset reports ready, never an unsigned URL for a signed ID or an audio-only asset", () => {
   expect(
     downloadForAsset(
       asset({
@@ -50,6 +50,15 @@ test("prefers a ready master, then only a rendition the asset reports ready, nev
       asset({
         playback_ids: [{ id: "sig", policy: "signed" }],
         static_renditions: { status: "ready", files: [file("high.mp4")] },
+      }),
+    ),
+  ).toBeNull();
+  expect(
+    downloadForAsset(
+      asset({
+        tracks: [{ type: "audio" }],
+        master_access: "temporary",
+        master: { status: "ready", url: "https://master.mux.com/a1.m4a" },
       }),
     ),
   ).toBeNull();

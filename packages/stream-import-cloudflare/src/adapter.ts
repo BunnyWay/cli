@@ -4,7 +4,10 @@ import type {
   SourceContent,
   SourceVideo,
 } from "@bunny.net/stream-import";
-import type { CloudflareStreamClient } from "./client.ts";
+import {
+  type CloudflareStreamClient,
+  validateCloudflareUrl,
+} from "./client.ts";
 import type { CfStreamVideo } from "./types.ts";
 
 /** Cloudflare Stream has no folder concept; every video is uncategorized. */
@@ -22,6 +25,10 @@ export class CloudflareStreamAdapter implements SourceAdapter {
     return this.client.getAccountInfo();
   }
 
+  validateUrl(url: string): boolean {
+    return validateCloudflareUrl(url);
+  }
+
   async listContent(): Promise<SourceContent> {
     const videos = await this.client.listVideos();
 
@@ -34,21 +41,22 @@ export class CloudflareStreamAdapter implements SourceAdapter {
 
   async getDownloadInfo(
     sourceId: string,
-    fallbackTitle?: string,
+    signal?: AbortSignal,
   ): Promise<DownloadInfo | null> {
-    const video = await this.client.getVideo(sourceId);
+    const video = await this.client.getVideo(sourceId, signal);
+    if (!video) return null;
     if (video.requireSignedURLs) {
       throw new Error(
         "Cloudflare video requires signed URLs; turn off Require Signed URLs on it in Cloudflare Stream, then re-run the import",
       );
     }
 
-    const download = await this.client.getDownloadUrl(sourceId);
+    const download = await this.client.getDownloadUrl(sourceId, signal);
     if (!download) return null;
 
     return {
       url: download.url,
-      title: video.meta?.name || fallbackTitle || sourceId,
+      title: video.meta?.name || "",
       description: video.meta?.description || undefined,
     };
   }

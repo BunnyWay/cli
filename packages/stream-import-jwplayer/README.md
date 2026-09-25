@@ -8,6 +8,8 @@ JW Player source adapter for [`@bunny.net/stream-import`](../stream-import#readm
 bun add @bunny.net/stream-import @bunny.net/stream-import-jwplayer
 ```
 
+The adapter runs on the `@bunny.net/stream-import` version it depends on, so install a matching minor of the engine alongside it.
+
 ## Usage
 
 ```ts
@@ -39,7 +41,7 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 
 Both are available at dashboard.jwplayer.com.
 
-JW Player has no folders, so every media item is imported uncategorized. The highest-resolution MP4 source wins, read from the Management API and then the public Delivery API. A property with URL signing turned on makes the Delivery API answer 403; the import then fails with that explanation, since Bunny cannot fetch signed files. The dedup metaTag is `jwPlayerId`.
+JW Player has no folders, so every media item is imported uncategorized. The API returns at most 10,000 media per query, so the listing walks `created` date windows oldest-first and splits any window that reaches the cap. The highest-resolution MP4 source wins, read from the Management API and then the public Delivery API. A property with URL signing turned on makes the Delivery API answer 403; the import then fails with that explanation, since Bunny cannot fetch signed files. Download URLs must be HTTPS on `cdn.jwplayer.com`, except for externally hosted media (`hosting_type: external`), which only need HTTPS. The dedup metaTag is `jwPlayerId`.
 
 ## Disclaimer
 

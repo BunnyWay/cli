@@ -58,3 +58,16 @@ test("walks the list oldest-first on a date cursor, stepping back a second and d
   expect(videos).toHaveLength(1000);
   expect(new Set(videos.map((v) => v.uid)).size).toBe(1000);
 });
+
+test("a download that failed to generate stops the poll with its reason", async () => {
+  globalThis.fetch = (async () =>
+    Response.json({
+      result: { default: { status: "error", error: "source too large" } },
+    })) as unknown as typeof fetch;
+  const client = new CloudflareStreamClient(
+    { apiToken: "t", accountId: "acc" },
+    { userAgent: "test", requestTimeout: 5_000, logger: silent },
+  );
+
+  await expect(client.getDownloadUrl("v1")).rejects.toThrow("source too large");
+});

@@ -82,14 +82,18 @@ export class VimeoSourceAdapter implements SourceAdapter {
     };
   }
 
-  async getDownloadInfo(sourceId: string): Promise<DownloadInfo | null> {
-    const video = await this.client.getVideo(sourceId);
+  async getDownloadInfo(
+    sourceId: string,
+    signal?: AbortSignal,
+  ): Promise<DownloadInfo | null> {
+    const video = await this.client.getVideo(sourceId, signal);
+    if (!video) return null;
     const download = selectDownload(video);
     if (!download) return null;
 
     return {
       url: download.link,
-      title: video.name,
+      title: video.name ?? "",
       description: video.description ?? undefined,
       tags: video.tags?.map((t) => t.name),
     };

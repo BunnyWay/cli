@@ -8,6 +8,8 @@ AWS S3 source adapter for [`@bunny.net/stream-import`](../stream-import#readme),
 bun add @bunny.net/stream-import @bunny.net/stream-import-s3
 ```
 
+The adapter runs on the `@bunny.net/stream-import` version it depends on, so install a matching minor of the engine alongside it.
+
 ## Usage
 
 ```ts
@@ -43,9 +45,9 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 | Endpoint URL, S3-compatible providers only (optional) | `S3_ENDPOINT` (or `AWS_ENDPOINT_URL_S3`)                    |
 | Pre-signed URL lifetime, seconds (optional)           | `S3_PRESIGNED_URL_TTL` (default 21600, max 604800)          |
 
-Leave the keys unset to use the AWS default credential chain. The IAM policy needs `s3:ListBucket` on the bucket and `s3:GetObject` on the objects.
+Leave the keys unset to use the AWS default credential chain; this only works when the host passes `allowAmbientCredentials: true` in the adapter context (the Bunny CLI does), and otherwise validation fails asking for static keys. With a custom endpoint the region is passed through unchecked, so an S3-compatible value such as `auto` works. The IAM policy needs `s3:ListBucket` on the bucket and `s3:GetObject` on the objects.
 
-The first level of prefixes below the configured root becomes Stream collections; objects at the root are imported uncategorized. Only keys with a video extension are considered. `--folder` takes a prefix below the root, including a nested one such as `2024/q1`, and lists only that prefix. Each object is handed to bunny.net as a pre-signed `GetObject` URL, and the dedup metaTag is `s3Source`, holding `bucket/key`.
+The first level of prefixes below the configured root becomes Stream collections; objects at the root are imported uncategorized. Only keys with a video extension are considered. Objects under an empty path segment (a key such as `//clip.mp4`) are imported uncategorized. `--folder` takes a prefix below the root, including a nested one such as `2024/q1`, and lists only that prefix; its videos land in the top-level collection (`2024`), the same one a full import uses. Each object is handed to bunny.net as a pre-signed `GetObject` URL, and the dedup metaTag is `s3Source`, holding `bucket/key`.
 
 Objects in `GLACIER`, `DEEP_ARCHIVE`, or an Intelligent-Tiering archive tier are skipped until they are restored; `GLACIER_IR` imports normally.
 

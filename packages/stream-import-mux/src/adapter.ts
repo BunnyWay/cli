@@ -4,7 +4,7 @@ import type {
   SourceContent,
   SourceVideo,
 } from "@bunny.net/stream-import";
-import type { MuxClient } from "./client.ts";
+import { type MuxClient, validateMuxUrl } from "./client.ts";
 import type { MuxAsset } from "./types.ts";
 
 /** Mux has no folder concept; every asset is uncategorized. */
@@ -22,6 +22,10 @@ export class MuxSourceAdapter implements SourceAdapter {
     return this.client.getAccountInfo();
   }
 
+  validateUrl(url: string): boolean {
+    return validateMuxUrl(url);
+  }
+
   async listContent(): Promise<SourceContent> {
     const assets = await this.client.listAssets();
 
@@ -34,15 +38,16 @@ export class MuxSourceAdapter implements SourceAdapter {
 
   async getDownloadInfo(
     sourceId: string,
-    fallbackTitle?: string,
+    signal?: AbortSignal,
   ): Promise<DownloadInfo | null> {
-    const asset = await this.client.getAsset(sourceId);
+    const asset = await this.client.getAsset(sourceId, signal);
+    if (!asset) return null;
     const download = this.client.getDownloadUrl(asset);
     if (!download) return null;
 
     return {
       url: download.url,
-      title: titleOf(asset) || fallbackTitle || sourceId,
+      title: titleOf(asset) || "",
     };
   }
 }
