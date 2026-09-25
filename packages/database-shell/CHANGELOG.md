@@ -1,5 +1,13 @@
 # @bunny.net/database-shell
 
+## 0.2.8
+
+### Patch Changes
+
+- [#231](https://github.com/BunnyWay/cli/pull/231) [`265a661`](https://github.com/BunnyWay/cli/commit/265a6614b19f3eb3fdd3b6bdcb66a7076dceb84e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Ship macOS binaries with a valid signature; CLI releases also publish SHA256SUMS, which install.sh verifies
+
+- [#230](https://github.com/BunnyWay/cli/pull/230) [`a4dec48`](https://github.com/BunnyWay/cli/commit/a4dec48dfafd2a46f4008ad758d2b91ef51c8046) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Publish under the MIT license: every package now declares `license` and ships a LICENSE file
+
 ## 0.2.7
 
 ### Patch Changes
