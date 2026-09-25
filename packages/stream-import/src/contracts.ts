@@ -174,6 +174,8 @@ export interface VideoMigration {
   /** Captured at fetch time so a resumed entry re-tags with the same metadata. */
   description?: string;
   tags?: string[];
+  /** Set while a fetch request's outcome is unknown (timed out, connection lost), so the next run can find the video Bunny may have created. */
+  pendingFetch?: { title: string; at: string };
 }
 
 export interface MigrationState {
@@ -199,4 +201,6 @@ export interface StateStore {
   load(): MigrationState | null;
   save(state: MigrationState): void;
   clear(): void;
+  /** Exclusive hold for the length of a run; returns the release function and throws when another run holds it. */
+  lock?(): () => void;
 }

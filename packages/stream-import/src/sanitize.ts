@@ -55,8 +55,14 @@ const SENSITIVE_PATTERNS: Array<[RegExp, string]> = [
   [/authorization=[^\s&]+/gi, "authorization=[REDACTED]"],
   [/password=[^\s&]+/gi, "password=[REDACTED]"],
   [/secret=[^\s&]+/gi, "secret=[REDACTED]"],
+  [
+    /\b(x-amz-signature|x-amz-security-token|x-amz-credential|signature|token)=[^\s&]+/gi,
+    "$1=[REDACTED]",
+  ],
   [/AKIA[0-9A-Z]{16}/g, "[REDACTED]"],
 ];
+
+const STACK_FRAME = /\n\s+at /;
 
 /**
  * Turn an unknown thrown value into a message safe to print: credentials
@@ -73,7 +79,7 @@ export function safeErrorMessage(error: unknown, context: string): string {
 
   if (!message) return `${context}: An internal error occurred`;
 
-  if (message.includes("at ") || message.includes("/node_modules/")) {
+  if (STACK_FRAME.test(message) || message.includes("/node_modules/")) {
     return `${context}: An internal error occurred`;
   }
 

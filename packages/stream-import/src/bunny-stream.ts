@@ -51,6 +51,8 @@ export interface FetchVideoResult {
   success: boolean;
   videoId?: string;
   error?: string;
+  /** The request may have reached Bunny (timeout, dropped connection, 5xx), so a video could exist that this call never saw. */
+  indeterminate?: boolean;
 }
 
 export interface ProcessingResult {
@@ -72,7 +74,6 @@ function isApiErrorWithStatus(error: unknown, status: number): boolean {
 export class BunnyStream {
   private readonly stream: StreamClient;
   private readonly libraryId: number;
-  private readonly requestTimeout: number;
   private readonly processingTimeout: number;
   private readonly logger: Logger;
 
@@ -91,12 +92,11 @@ export class BunnyStream {
     }
 
     this.libraryId = libraryId;
-    this.requestTimeout = requestTimeout;
     this.processingTimeout = processingTimeout;
     this.logger = logger;
     this.stream = client;
 
-    // Registered after the client's own auth middleware, so it sees a 429 first.
+    // Registered after the client's own auth middleware, so it sees a 429 first; it also owns the per-request deadline.
     this.stream.use(
       createRateLimitMiddleware({
         maxRetries: MAX_RATE_LIMIT_RETRIES,
@@ -105,13 +105,6 @@ export class BunnyStream {
         wait: options.retryWait,
       }),
     );
-  }
-
-  /** Per-request deadline (openapi-fetch has no timeout option), also cut short by the caller's signal when there is one. */
-  private signal(outer?: AbortSignal, ms = this.requestTimeout): AbortSignal {
-    const timeout = AbortSignal.timeout(ms);
-
-    return outer ? AbortSignal.any([timeout, outer]) : timeout;
   }
 
   private get path() {
@@ -128,7 +121,6 @@ export class BunnyStream {
         "/library/{libraryId}/collections",
         {
           params: { path: this.path, query: { page, itemsPerPage: PAGE_SIZE } },
-          signal: this.signal(),
         },
       );
 
@@ -146,7 +138,6 @@ export class BunnyStream {
       {
         params: { path: this.path },
         body: { name },
-        signal: this.signal(),
       },
     );
 
@@ -200,7 +191,6 @@ export class BunnyStream {
             ...(collectionId ? { collection: collectionId } : {}),
           },
         },
-        signal: this.signal(),
       });
 
       const items = data?.items ?? [];
@@ -221,7 +211,7 @@ export class BunnyStream {
         "/library/{libraryId}/videos/{videoId}",
         {
           params: { path: { ...this.path, videoId } },
-          signal: this.signal(signal),
+          signal,
         },
       );
 
@@ -244,7 +234,7 @@ export class BunnyStream {
     await this.stream.POST("/library/{libraryId}/videos/{videoId}", {
       params: { path: { ...this.path, videoId } },
       body: update,
-      signal: this.signal(signal),
+      signal,
     });
   }
 
@@ -272,7 +262,7 @@ export class BunnyStream {
             ...(request.title ? { title: request.title } : {}),
             ...(request.headers ? { headers: request.headers } : {}),
           },
-          signal: this.signal(signal),
+          signal,
         },
       );
 
@@ -295,10 +285,11 @@ export class BunnyStream {
 
       return { success: true, videoId: body.id };
     } catch (error) {
+      const indeterminate = !(error instanceof ApiError && error.status < 500);
       if (error instanceof Error)
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, indeterminate };
 
-      return { success: false, error: "Video fetch failed" };
+      return { success: false, error: "Video fetch failed", indeterminate };
     }
   }
 

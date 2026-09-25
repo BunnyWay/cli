@@ -600,6 +600,93 @@ describe("resume", () => {
     ]);
   });
 
+  test("a fresh folder-scoped run recovers orphans from the journal despite flushing collections first, including other folders' orphans", async () => {
+    const orphan = (id: string, folder: string) => ({
+      sourceVideoId: id,
+      videoName: `Video ${id}`,
+      sourceFolderId: folder,
+      bunnyVideoId: `orphan-${id}`,
+      bunnyCollectionId: `col-${folder}`,
+      status: "processing" as const,
+      error: null,
+      startedAt: "2026-01-01T00:00:00.000Z",
+      completedAt: null,
+      encodeProgress: 0,
+    });
+    const { store } = memoryStore(
+      savedState({ videoMigrations: [orphan("a", "f1"), orphan("b", "f2")] }),
+    );
+    const bunny = fakeBunny({
+      listVideos: mock(async () => [
+        { guid: "orphan-a", status: 2, metaTags: [] },
+        { guid: "orphan-b", status: 2, metaTags: [] },
+      ]),
+    });
+    const listContent = async () =>
+      content({
+        folders: [
+          { id: "f1", name: "One", videoCount: 1 },
+          { id: "f2", name: "Two", videoCount: 1 },
+        ],
+        videos: new Map([
+          ["f1", [{ sourceId: "a", displayName: "Video a", folderId: "f1" }]],
+          ["f2", [{ sourceId: "b", displayName: "Video b", folderId: "f2" }]],
+        ]),
+      });
+
+    await service({
+      adapter: fakeAdapter({ listContent }),
+      bunny,
+      store,
+    }).runMigration({ folderId: "f1" });
+
+    expect(bunny.fetchVideoFromUrl).not.toHaveBeenCalled();
+    const tagged = (
+      bunny.setVideoMetadata as ReturnType<typeof mock>
+    ).mock.calls
+      .map((c) => c[0])
+      .sort();
+    expect(tagged).toEqual(["orphan-a", "orphan-b"]);
+  });
+
+  test("a fetch whose response was lost is matched to the untagged video Bunny created, not fetched again", async () => {
+    const { store } = memoryStore();
+    const adapter = fakeAdapter({ listContent: async () => oneVideo() });
+    const lost = fakeBunny({
+      fetchVideoFromUrl: mock(async () => ({
+        success: false,
+        error: "The operation timed out.",
+        indeterminate: true,
+      })),
+    });
+    const first = await service({ adapter, bunny: lost, store }).runMigration();
+    expect(first.videoMigrations[0]?.status).toBe("failed");
+
+    const uploaded = new Date().toISOString().replace("Z", "");
+    const bunny = fakeBunny({
+      listVideos: mock(async () => [
+        {
+          guid: "lost-guid",
+          title: "Video 111",
+          dateUploaded: uploaded,
+          status: 2,
+          metaTags: [],
+        },
+      ]),
+    });
+    const state = await service({ adapter, bunny, store }).runMigration({
+      resume: true,
+    });
+
+    expect(bunny.fetchVideoFromUrl).not.toHaveBeenCalled();
+    expect(bunny.setVideoMetadata).toHaveBeenCalledWith(
+      "lost-guid",
+      expect.objectContaining({ sourceId: "111" }),
+      expect.any(AbortSignal),
+    );
+    expect(state.videoMigrations[0]?.pendingFetch).toBeUndefined();
+  });
+
   test("starts fresh when the saved run belongs to another source, library, or account", async () => {
     for (const saved of [
       savedState({ source: "s3" }),

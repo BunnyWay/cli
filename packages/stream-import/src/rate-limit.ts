@@ -8,7 +8,9 @@
  *
  * `onRequest` stashes an unconsumed clone of the request: by the time
  * `onResponse` runs, the original request's body has been read by `fetch`, so a
- * POST could not otherwise be replayed.
+ * POST could not otherwise be replayed. It also applies the per-request
+ * deadline, so the stashed clone carries only the caller's signal and a replay
+ * gets a fresh deadline while still honouring the caller's cancellation.
  */
 
 import { ApiError } from "@bunny.net/openapi-client";
@@ -25,7 +27,7 @@ const sleep = (ms: number) =>
 export interface RateLimitOptions {
   maxRetries: number;
   logger: Logger;
-  /** Deadline for each replay; the original request's signal has usually fired during the back-off. */
+  /** Deadline for each attempt, applied here so a replay gets a fresh one. */
   requestTimeout: number;
   /** Injected by tests so they do not actually wait. */
   wait?: (ms: number) => Promise<void>;
@@ -42,9 +44,13 @@ export function createRateLimitMiddleware({
 
   return {
     onRequest({ request, id }) {
-      replayable.set(id, request.clone() as unknown as Request);
+      const original = request as unknown as Request;
+      replayable.set(id, original.clone() as unknown as Request);
 
-      return undefined;
+      return withDeadline(
+        original,
+        requestTimeout,
+      ) as unknown as typeof request;
     },
 
     async onResponse({ request, response, id }) {
@@ -78,11 +84,13 @@ export function createRateLimitMiddleware({
         );
         await wait(retryAfter * 1000);
 
-        // Clone per attempt so `template` stays replayable; a fresh signal because the clone inherits the original's, already expired by a 30s back-off.
+        template.signal.throwIfAborted();
+        // Clone per attempt so `template` stays replayable.
         current = await fetch(
-          new Request(template.clone() as unknown as Request, {
-            signal: AbortSignal.timeout(requestTimeout),
-          }) as Parameters<typeof fetch>[0],
+          withDeadline(
+            template.clone() as unknown as Request,
+            requestTimeout,
+          ) as Parameters<typeof fetch>[0],
         );
       }
 
@@ -104,4 +112,11 @@ export function createRateLimitMiddleware({
       return undefined;
     },
   };
+}
+
+/** The request bounded by `ms` on top of whatever signal the caller gave it. */
+function withDeadline(request: Request, ms: number): Request {
+  return new Request(request, {
+    signal: AbortSignal.any([request.signal, AbortSignal.timeout(ms)]),
+  });
 }

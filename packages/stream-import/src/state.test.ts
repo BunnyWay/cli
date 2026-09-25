@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MigrationState } from "./contracts.ts";
 import {
+  acquireStateLock,
   createFileStateStore,
   getMigrationStateErrors,
   validateMigrationState,
@@ -92,5 +99,23 @@ describe("createFileStateStore", () => {
 
     store.clear();
     expect(store.load()).toBeNull();
+  });
+
+  test("the lock excludes a second run, reclaims a dead holder's lock, and saves leave no temp file", () => {
+    const path = join(dir, "vimeo-12345.json");
+    const release = createFileStateStore(path).lock?.();
+    expect(acquireStateLock(path)).toBeNull();
+    createFileStateStore(path).save(validState());
+    expect(readdirSync(dir).sort()).toEqual([
+      "vimeo-12345.json",
+      "vimeo-12345.json.lock",
+    ]);
+    release?.();
+
+    writeFileSync(`${path}.lock`, "999999999");
+    const lock = acquireStateLock(path);
+    expect(lock).not.toBeNull();
+    lock?.release();
+    expect(readdirSync(dir)).toEqual(["vimeo-12345.json"]);
   });
 });

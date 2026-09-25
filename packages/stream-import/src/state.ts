@@ -5,14 +5,15 @@
  */
 
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
+import { UserError } from "@bunny.net/openapi-client";
 import { z } from "zod";
 import type { MigrationState, StateStore } from "./contracts.ts";
 
@@ -51,6 +52,7 @@ const videoMigration = z.object({
   encodeProgress: z.number().min(0).max(100),
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  pendingFetch: z.object({ title: z.string(), at: z.string() }).optional(),
 });
 
 // `source` is a plain string, not a closed enum, so a state file written with an extra source module still parses.
@@ -123,14 +125,86 @@ export function createFileStateStore(
 
     save(state) {
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-      writeFileSync(path, JSON.stringify(state, null, 2), { mode: 0o600 });
+      // Write-then-rename, so a crash mid-write leaves the previous journal intact.
+      const temp = `${path}.${process.pid}.tmp`;
       try {
-        chmodSync(path, 0o600);
-      } catch {}
+        writeFileSync(temp, JSON.stringify(state, null, 2), { mode: 0o600 });
+        renameSync(temp, path);
+      } catch (error) {
+        try {
+          unlinkSync(temp);
+        } catch {}
+        throw error;
+      }
     },
 
     clear() {
       if (existsSync(path)) unlinkSync(path);
     },
+
+    lock() {
+      const lock = acquireStateLock(path);
+      if (!lock) {
+        throw new UserError(
+          "Another import is already running against this state file.",
+          `Wait for it to finish, or remove ${path}.lock if that process is gone.`,
+        );
+      }
+
+      return lock.release;
+    },
   };
+}
+
+export interface StateLock {
+  release(): void;
+}
+
+/** Take `<statePath>.lock` exclusively; null while a live process holds it, and a dead holder's lock is reclaimed. */
+export function acquireStateLock(statePath: string): StateLock | null {
+  const lockPath = `${statePath}.lock`;
+  mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      writeFileSync(lockPath, String(process.pid), { flag: "wx", mode: 0o600 });
+
+      return {
+        release() {
+          try {
+            if (readFileSync(lockPath, "utf8") === String(process.pid))
+              unlinkSync(lockPath);
+          } catch {}
+        },
+      };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      if (isAlive(readLockPid(lockPath))) return null;
+      try {
+        unlinkSync(lockPath);
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
+function readLockPid(lockPath: string): number {
+  try {
+    return Number.parseInt(readFileSync(lockPath, "utf8"), 10);
+  } catch {
+    return Number.NaN;
+  }
+}
+
+function isAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+
+    return true;
+  } catch (error) {
+    // EPERM means the process exists but belongs to someone else.
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
 }

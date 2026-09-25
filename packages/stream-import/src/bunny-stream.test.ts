@@ -150,6 +150,22 @@ describe("rate limiting", () => {
     expect(abortedAtSend).toEqual([false, false]);
   });
 
+  test("does not replay once the caller has cancelled during the back-off", async () => {
+    fetchMock.mockResolvedValue(limited());
+    const controller = new AbortController();
+    const client = new BunnyStream({
+      client: createStreamClient({ apiKey: "k", userAgent: "t" }),
+      libraryId: 1,
+      requestTimeout: 30_000,
+      processingTimeout: 30_000,
+      logger: silentLogger,
+      retryWait: async () => controller.abort(),
+    });
+
+    await expect(client.getVideo("abc", controller.signal)).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   test("gives up with a clear error after the per-request retry budget", async () => {
     fetchMock.mockResolvedValue(limited());
 

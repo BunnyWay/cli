@@ -37,6 +37,7 @@ export type {
   MigrationPhase,
   MigrationServiceOptions,
   MigrationSummary,
+  QueueProgress,
   SummaryVideo,
 } from "./migration.ts";
 export { MigrationService, runPool } from "./migration.ts";
@@ -52,8 +53,9 @@ export {
 export type { BunnyVideoHealth } from "./source-index.ts";
 export { buildSourceIndex, videoHealth } from "./source-index.ts";
 export { assertFolderSupported } from "./source-plugin.ts";
-export type { FileStateStoreOptions } from "./state.ts";
+export type { FileStateStoreOptions, StateLock } from "./state.ts";
 export {
+  acquireStateLock,
   createFileStateStore,
   getMigrationStateErrors,
   migrationStateSchema,

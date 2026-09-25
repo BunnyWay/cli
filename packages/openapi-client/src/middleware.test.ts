@@ -292,7 +292,7 @@ test("redacts credentials from debug bodies", async () => {
         displayName: "ghcr",
         passwordCredentials: { userName: "notrab", password: "ghp_secret" },
         url: "https://bucket.s3.amazonaws.com/clip.mp4?X-Amz-Signature=sig123",
-        headers: { Authorization: "Bearer bearer123" },
+        headers: { Authorization: "Bearer bearer123", "X-Api-Key": "xkey123" },
       }),
     }),
   );
@@ -301,6 +301,7 @@ test("redacts credentials from debug bodies", async () => {
   expect(traced).not.toContain("ghp_secret");
   expect(traced).not.toContain("sig123");
   expect(traced).not.toContain("bearer123");
+  expect(traced).not.toContain("xkey123");
   expect(traced).toContain(
     "https://bucket.s3.amazonaws.com/clip.mp4?[redacted]",
   );
