@@ -287,7 +287,10 @@ export class MigrationService {
       // Phase 2, opt-in: stay until Bunny has encoded them.
       if (wait) {
         const toAwait = state.videoMigrations.filter(
-          (m) => m.status === "processing" && m.bunnyVideoId && scoped(m),
+          (m) =>
+            m.status === "processing" &&
+            m.bunnyVideoId &&
+            (!folderId || inScope.has(m.sourceVideoId)),
         );
         if (toAwait.length > 0) {
           this.logger.info(
