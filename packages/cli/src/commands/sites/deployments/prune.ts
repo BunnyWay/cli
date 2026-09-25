@@ -129,7 +129,10 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       for (const [index, victim] of victims.entries()) {
         spin.text = `Pruning ${victim.id} (${index + 1}/${victims.length})...`;
         if (!stillVictims.has(victim.id)) {
-          kept.push(victim.id);
+          // A deploy deleted concurrently is already gone, not kept.
+          if (latest.deploys.some((d) => d.id === victim.id)) {
+            kept.push(victim.id);
+          }
           continue;
         }
         try {
