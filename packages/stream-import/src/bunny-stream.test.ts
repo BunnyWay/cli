@@ -198,6 +198,7 @@ describe("fetchVideoFromUrl", () => {
     });
     expect(noId.success).toBe(false);
     expect(noId.error).toMatch(/no video ID/i);
+    expect(noId.indeterminate).toBe(true);
 
     fetchMock.mockResolvedValueOnce(
       json({ success: false, message: "Invalid URL" }, { status: 400 }),

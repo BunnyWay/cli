@@ -65,36 +65,38 @@ export function createRateLimitMiddleware({
       // The budget is a local, so every paginated request gets its own.
       let attempt = 0;
 
-      while (current.status === 429 && attempt < maxRetries) {
-        attempt++;
-        const header = Number.parseInt(
-          current.headers.get("retry-after") ?? "",
-          10,
-        );
-        const retryAfter = Math.min(
-          Math.max(
-            Number.isNaN(header) ? DEFAULT_RETRY_AFTER_SECONDS : header,
-            1,
-          ),
-          MAX_RETRY_AFTER_SECONDS,
-        );
+      try {
+        while (current.status === 429 && attempt < maxRetries) {
+          attempt++;
+          const header = Number.parseInt(
+            current.headers.get("retry-after") ?? "",
+            10,
+          );
+          const retryAfter = Math.min(
+            Math.max(
+              Number.isNaN(header) ? DEFAULT_RETRY_AFTER_SECONDS : header,
+              1,
+            ),
+            MAX_RETRY_AFTER_SECONDS,
+          );
 
-        logger.warn(
-          `Bunny rate limit hit. Waiting ${retryAfter}s (attempt ${attempt}/${maxRetries})...`,
-        );
-        await wait(retryAfter * 1000);
+          logger.warn(
+            `Bunny rate limit hit. Waiting ${retryAfter}s (attempt ${attempt}/${maxRetries})...`,
+          );
+          await wait(retryAfter * 1000);
 
-        template.signal.throwIfAborted();
-        // Clone per attempt so `template` stays replayable.
-        current = await fetch(
-          withDeadline(
-            template.clone() as unknown as Request,
-            requestTimeout,
-          ) as Parameters<typeof fetch>[0],
-        );
+          template.signal.throwIfAborted();
+          // Clone per attempt so `template` stays replayable.
+          current = await fetch(
+            withDeadline(
+              template.clone() as unknown as Request,
+              requestTimeout,
+            ) as Parameters<typeof fetch>[0],
+          );
+        }
+      } finally {
+        replayable.delete(id);
       }
-
-      replayable.delete(id);
 
       if (current.status === 429) {
         throw new ApiError(

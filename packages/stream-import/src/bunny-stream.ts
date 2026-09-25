@@ -28,12 +28,7 @@ export type StreamClient = ReturnType<typeof createStreamClient>;
 const PAGE_SIZE = 100;
 const PROCESSING_POLL_INTERVAL_MS = 5_000;
 
-/**
- * `POST /videos/fetch` is documented as returning a bare `StatusModel`, but the
- * GUID it also returns is what the entire dedup / metaTag / progress chain is
- * keyed on. If Bunny ever stops returning it, `fetchVideoFromUrl` fails loudly
- * instead of silently importing untagged videos.
- */
+/** `POST /videos/fetch` is documented as a bare `StatusModel`, but it also returns the GUID that dedup and tagging are keyed on. */
 type FetchVideoResponse = BunnyStatusModel & { id?: string | null };
 
 export interface BunnyStreamOptions {
@@ -275,11 +270,13 @@ export class BunnyStream {
         };
       }
 
+      // Bunny queued the video but did not say which one, so the next run matches it by title instead of fetching again.
       if (!body?.id) {
         return {
           success: false,
           error:
-            "Bunny accepted the fetch but returned no video ID, so the video cannot be tracked or de-duplicated.",
+            "Bunny accepted the fetch but returned no video ID; the next run will match the video by title and tag it.",
+          indeterminate: true,
         };
       }
 

@@ -6,6 +6,7 @@
 
 import {
   existsSync,
+  linkSync,
   mkdirSync,
   readFileSync,
   renameSync,
@@ -161,6 +162,9 @@ export interface StateLock {
 }
 
 /** Take `<statePath>.lock` exclusively; null while a live process holds it, and a dead holder's lock is reclaimed. */
+// Locks this process holds, so a leftover lock carrying our pid (a reused pid after a crash) reads as stale.
+const heldLocks = new Set<string>();
+
 export function acquireStateLock(statePath: string): StateLock | null {
   const lockPath = `${statePath}.lock`;
   mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
@@ -168,9 +172,11 @@ export function acquireStateLock(statePath: string): StateLock | null {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       writeFileSync(lockPath, String(process.pid), { flag: "wx", mode: 0o600 });
+      heldLocks.add(lockPath);
 
       return {
         release() {
+          heldLocks.delete(lockPath);
           try {
             if (readFileSync(lockPath, "utf8") === String(process.pid))
               unlinkSync(lockPath);
@@ -179,14 +185,37 @@ export function acquireStateLock(statePath: string): StateLock | null {
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      if (isAlive(readLockPid(lockPath))) return null;
-      try {
-        unlinkSync(lockPath);
-      } catch {}
+      const stalePid = readLockPid(lockPath);
+      const ours = stalePid === process.pid;
+      if (ours ? heldLocks.has(lockPath) : isAlive(stalePid)) return null;
+      if (!claimStaleLock(lockPath, stalePid)) return null;
     }
   }
 
   return null;
+}
+
+// Rename is atomic, so of two processes clearing one stale lock only one gets the file; a live lock grabbed by mistake is linked back.
+function claimStaleLock(lockPath: string, stalePid: number): boolean {
+  const claimed = `${lockPath}.${process.pid}.stale`;
+  try {
+    renameSync(lockPath, claimed);
+  } catch {
+    return true;
+  }
+  if (readLockPid(claimed) !== stalePid) {
+    try {
+      linkSync(claimed, lockPath);
+    } catch {}
+    try {
+      unlinkSync(claimed);
+    } catch {}
+    return false;
+  }
+  try {
+    unlinkSync(claimed);
+  } catch {}
+  return true;
 }
 
 function readLockPid(lockPath: string): number {

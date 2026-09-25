@@ -362,7 +362,9 @@ export class MigrationService {
 
     // Deliberately not limited to the folder scope: re-tagging is a metadata write, and leaving an orphan out of the new journal loses it.
     for (const entry of saved.videoMigrations) {
-      const guid = entry.bunnyVideoId ?? this.findLostFetch(entry, claimed);
+      const guid =
+        entry.bunnyVideoId ??
+        this.findLostFetch(entry, claimed, saved.videoMigrations);
       if (!guid) continue;
       // Tagged already, or replaced by a tagged copy: the index handles it. Gone from Bunny: fetch again.
       if (this.isTagged(guid) || this.sourceIndex.has(entry.sourceVideoId))
@@ -393,7 +395,7 @@ export class MigrationService {
     );
     for (const m of state.videoMigrations) {
       if (m.bunnyVideoId || !m.pendingFetch) continue;
-      const guid = this.findLostFetch(m, claimed);
+      const guid = this.findLostFetch(m, claimed, state.videoMigrations);
       m.pendingFetch = undefined;
       if (!guid) continue;
       claimed.add(guid);
@@ -409,9 +411,18 @@ export class MigrationService {
   private findLostFetch(
     entry: VideoMigration,
     claimed: Set<string>,
+    entries: VideoMigration[],
   ): string | null {
     const pending = entry.pendingFetch;
     if (!pending) return null;
+    // Two lost fetches with one title cannot be told apart, so neither is matched and both fetch again.
+    const sameTitle = entries.filter(
+      (m) =>
+        !m.bunnyVideoId &&
+        m.pendingFetch &&
+        m.pendingFetch.title === pending.title,
+    );
+    if (sameTitle.length > 1) return null;
     const sentAt = Date.parse(pending.at) - CLOCK_SKEW_MS;
     const matches = this.untagged.filter(
       (v) =>
@@ -592,9 +603,7 @@ export class MigrationService {
     const deadline = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
         reject(
-          new Error(
-            `Import timeout after ${Math.round(timeoutMs / 60_000)} minutes`,
-          ),
+          new Error(`Import timeout after ${Math.round(timeoutMs / 1000)}s`),
         );
         controller.abort();
       }, timeoutMs);

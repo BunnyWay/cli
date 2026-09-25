@@ -117,5 +117,8 @@ describe("createFileStateStore", () => {
     expect(lock).not.toBeNull();
     lock?.release();
     expect(readdirSync(dir)).toEqual(["vimeo-12345.json"]);
+
+    writeFileSync(`${path}.lock`, String(process.pid));
+    expect(acquireStateLock(path)).not.toBeNull();
   });
 });

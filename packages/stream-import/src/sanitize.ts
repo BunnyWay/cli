@@ -56,13 +56,13 @@ const SENSITIVE_PATTERNS: Array<[RegExp, string]> = [
   [/password=[^\s&]+/gi, "password=[REDACTED]"],
   [/secret=[^\s&]+/gi, "secret=[REDACTED]"],
   [
-    /\b(x-amz-signature|x-amz-security-token|x-amz-credential|signature|token)=[^\s&]+/gi,
+    /(x-amz-signature|x-amz-security-token|x-amz-credential|signature|token)=[^\s&]+/gi,
     "$1=[REDACTED]",
   ],
   [/AKIA[0-9A-Z]{16}/g, "[REDACTED]"],
 ];
 
-const STACK_FRAME = /\n\s+at /;
+const STACK_FRAME = /\n[ \t]+at /;
 
 /**
  * Turn an unknown thrown value into a message safe to print: credentials

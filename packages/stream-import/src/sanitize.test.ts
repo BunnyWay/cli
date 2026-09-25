@@ -66,12 +66,12 @@ describe("safeErrorMessage", () => {
   test("redacts pre-signed query params and keeps ordinary messages that merely contain 'at '", () => {
     const out = safeErrorMessage(
       new Error(
-        "Unsupported format at https://x.test/a.mp4?X-Amz-Credential=cred1&X-Amz-Security-Token=st1&X-Amz-Signature=sig1&token=t1&Signature=s1",
+        "Unsupported format at https://x.test/a.mp4?X-Amz-Credential=cred1&X-Amz-Security-Token=st1&X-Amz-Signature=sig1&token=t1&Signature=s1&id_token=it1",
       ),
       "Import failed",
     );
     expect(out).toStartWith("Unsupported format at https://x.test/a.mp4?");
-    expect(out).not.toMatch(/cred1|st1|sig1|t1|s1/);
+    expect(out).not.toMatch(/cred1|st1|sig1|t1|s1|it1/);
   });
 
   test("collapses stack traces and node_modules paths, and handles non-Error values", () => {
