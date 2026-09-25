@@ -1,6 +1,6 @@
 ---
 name: bunny-cli
-description: Manage bunny.net resources from the command line (databases, DNS, Edge Storage, Edge Scripts, static sites, sandboxes, authentication, and raw API requests) and query a Bunny Database from application code with `@bunny.net/database-client`. Use when working with bunny.net (pullzones, DNS zones/records, databases, Edge Storage zones and files, Edge Scripts, Magic Containers, static-site hosting/deploys, cloud sandboxes), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
+description: Manage bunny.net resources from the command line (databases, DNS, Edge Storage, Edge Scripts, static sites, sandboxes, Stream video imports, authentication, and raw API requests) and query a Bunny Database from application code with `@bunny.net/database-client`. Use when working with bunny.net (pullzones, DNS zones/records, databases, Edge Storage zones and files, Edge Scripts, Magic Containers, static-site hosting/deploys, cloud sandboxes, moving a video library into Bunny Stream from Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
 ---
 
 # bunny.net CLI Skill
@@ -67,6 +67,11 @@ bunny sites create my-site                            # provision (served at sit
 bunny sites deploy ./dist                             # deploy a directory and publish it as the live site
 bunny sites domains add example.com --wait            # custom production domain
 bunny sites deployments publish --previous --force    # instant rollback
+
+# import a video library into Bunny Stream (experimental)
+bunny stream import --library 12345 --source vimeo --dry-run   # plan first
+bunny stream import --library 12345 --source vimeo --force     # hand every video to Bunny
+bunny stream import status --library 12345                     # encoding progress
 ```
 
 ## Decision Tree
@@ -81,6 +86,7 @@ Use this to route to the correct reference file:
 - **Static sites (create, deploy, rollback, custom domains, GitHub Actions)** -> `references/sites.md`
 - **Edge Storage (zones, files, connection credentials, S3/FTP/HTTP, custom domains)** -> `references/storage.md`
 - **Sandboxes (create, exec, ssh, files list/cp, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
+- **Import a video library into Bunny Stream (experimental: Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, Brightcove; dry run, resume, status)** -> `references/stream.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)
 

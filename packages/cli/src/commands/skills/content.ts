@@ -26,6 +26,9 @@ import sitesMd from "../../../../../skills/bunny-cli/references/sites.md" with {
 import storageMd from "../../../../../skills/bunny-cli/references/storage.md" with {
   type: "text",
 };
+import streamMd from "../../../../../skills/bunny-cli/references/stream.md" with {
+  type: "text",
+};
 import skillMd from "../../../../../skills/bunny-cli/SKILL.md" with {
   type: "text",
 };
@@ -42,7 +45,7 @@ This project uses bunny.net. Manage its resources with the \`bunny\` CLI: databa
 - When the CLI has no command for something, fall back to \`bunny api <METHOD> <path>\` against api.bunny.net.`;
 
 /** The shipped bunny-cli skill, embedded at bundle time from skills/bunny-cli/. */
-// Experimental namespaces (apps, registries) stay out of the skill until they stabilize.
+// Experimental namespaces (apps, registries) stay out of the skill until they stabilize; stream import ships early, labelled experimental.
 export const BUNNY_CLI_SKILL: ProjectSkill = {
   name: "bunny-cli",
   agentsSection: AGENTS_SECTION,
@@ -57,5 +60,6 @@ export const BUNNY_CLI_SKILL: ProjectSkill = {
     "references/scripts.md": scriptsMd,
     "references/sites.md": sitesMd,
     "references/storage.md": storageMd,
+    "references/stream.md": streamMd,
   },
 };
