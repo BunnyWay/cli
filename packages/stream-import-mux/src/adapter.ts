@@ -42,8 +42,7 @@ export class MuxSourceAdapter implements SourceAdapter {
 
     return {
       url: download.url,
-      title: asset.passthrough || fallbackTitle || sourceId,
-      description: asset.passthrough || undefined,
+      title: titleOf(asset) || fallbackTitle || sourceId,
     };
   }
 }
@@ -51,10 +50,14 @@ export class MuxSourceAdapter implements SourceAdapter {
 function toSourceVideo(asset: MuxAsset): SourceVideo {
   return {
     sourceId: asset.id,
-    // Mux has no title field; `passthrough` is where a title usually lands.
-    displayName: asset.passthrough || asset.id,
+    displayName: titleOf(asset) || asset.id,
     folderId: null,
     size: undefined,
     duration: asset.duration || undefined,
   };
+}
+
+/** `meta.title` is Mux's title field; older assets often carry a title in `passthrough` instead. */
+function titleOf(asset: MuxAsset): string | undefined {
+  return asset.meta?.title || asset.passthrough || undefined;
 }

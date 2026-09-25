@@ -36,10 +36,15 @@ export class CloudflareStreamAdapter implements SourceAdapter {
     sourceId: string,
     fallbackTitle?: string,
   ): Promise<DownloadInfo | null> {
+    const video = await this.client.getVideo(sourceId);
+    if (video.requireSignedURLs) {
+      throw new Error(
+        "Cloudflare video requires signed URLs; turn off Require Signed URLs on it in Cloudflare Stream, then re-run the import",
+      );
+    }
+
     const download = await this.client.getDownloadUrl(sourceId);
     if (!download) return null;
-
-    const video = await this.client.getVideo(sourceId);
 
     return {
       url: download.url,

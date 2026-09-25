@@ -39,4 +39,4 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 
 Both are available at dashboard.jwplayer.com.
 
-JW Player has no folders, so every media item is imported uncategorized. The highest-resolution MP4 source wins, read from the Management API and then the public Delivery API. The dedup metaTag is `jwPlayerId`.
+JW Player has no folders, so every media item is imported uncategorized. The highest-resolution MP4 source wins, read from the Management API and then the public Delivery API. A property with URL signing turned on makes the Delivery API answer 403; the import then fails with that explanation, since Bunny cannot fetch signed files. The dedup metaTag is `jwPlayerId`.

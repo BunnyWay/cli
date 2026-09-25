@@ -45,4 +45,10 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 
 Leave the keys unset to use the AWS default credential chain. The IAM policy needs `s3:ListBucket` on the bucket and `s3:GetObject` on the objects.
 
-The first level of prefixes below the configured root becomes Stream collections; objects at the root are imported uncategorized. Only keys with a video extension are considered. Each object is handed to bunny.net as a pre-signed `GetObject` URL, and the dedup metaTag is `s3Source`, holding `bucket/key`.
+The first level of prefixes below the configured root becomes Stream collections; objects at the root are imported uncategorized. Only keys with a video extension are considered. `--folder` takes a prefix below the root, including a nested one such as `2024/q1`, and lists only that prefix. Each object is handed to bunny.net as a pre-signed `GetObject` URL, and the dedup metaTag is `s3Source`, holding `bucket/key`.
+
+Objects in `GLACIER`, `DEEP_ARCHIVE`, or an Intelligent-Tiering archive tier are skipped until they are restored; `GLACIER_IR` imports normally.
+
+A pre-signed URL made from temporary credentials (an STS or SSO session) stops working when that session expires, whatever `S3_PRESIGNED_URL_TTL` says.
+
+Accepted download hosts: `{bucket}.s3.amazonaws.com`, `{bucket}.s3.{region}.amazonaws.com`, the path-style `s3.amazonaws.com` and `s3.{region}.amazonaws.com`, `{bucket}.s3-accelerate.amazonaws.com`, the dualstack and FIPS variants of each, and the same under `.amazonaws.com.cn`. With a custom endpoint, only that endpoint's host (bare or with the bucket as a subdomain) is accepted.

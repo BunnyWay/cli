@@ -14,7 +14,7 @@ export interface WistiaAsset {
   height: number;
   fileSize: number;
   contentType: string;
-  /** "OriginalFile", "HdMp4Video", "MdMp4Video", "SdMp4Video", ... */
+  /** "OriginalFile", "HdMp4VideoFile", "MdMp4VideoFile", "Mp4VideoFile", "IPhoneVideoFile", ... */
   type: string;
 }
 

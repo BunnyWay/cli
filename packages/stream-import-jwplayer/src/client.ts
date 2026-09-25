@@ -1,7 +1,4 @@
-/**
- * JW Player (JWX) Management API v2.
- * https://docs.jwplayer.com/platform/reference/overview
- */
+// JW Player (JWX) Management API v2: https://docs.jwplayer.com/platform/reference/overview
 
 import {
   createHttp,
@@ -83,34 +80,40 @@ export class JWPlayerClient {
   async getDownloadUrl(
     media: JWMedia,
   ): Promise<{ url: string; size: number } | null> {
-    const fromManagement = await this.bestMp4(async () => media.sources ?? []);
-    if (fromManagement) return fromManagement;
+    return (
+      bestMp4(media.sources ?? []) ??
+      bestMp4(await this.deliverySources(media.id))
+    );
+  }
 
-    return this.bestMp4(async () => {
+  private async deliverySources(mediaId: string): Promise<JWMediaSource[]> {
+    try {
       const data = await this.delivery.get(
-        `/media/${encodeURIComponent(media.id)}`,
+        `/media/${encodeURIComponent(mediaId)}`,
       );
 
       return data?.playlist?.[0]?.sources ?? [];
-    });
-  }
-
-  private async bestMp4(
-    load: () => Promise<JWMediaSource[]>,
-  ): Promise<{ url: string; size: number } | null> {
-    let sources: JWMediaSource[];
-    try {
-      sources = await load();
-    } catch {
-      return null;
+    } catch (error) {
+      if (isHttpError(error, 404)) return [];
+      if (isHttpError(error, 403)) {
+        throw new UserError(
+          "JW Player refused the media download (403): this property has URL signing turned on, so Bunny cannot fetch its files.",
+          "Turn off URL signing for the property in the JW Player dashboard, then re-run the import.",
+        );
+      }
+      throw error;
     }
-
-    const [best] = sources
-      .filter(
-        (s) => s.file && (s.type === "video/mp4" || s.file.endsWith(".mp4")),
-      )
-      .sort((a, b) => (b.width || 0) - (a.width || 0));
-
-    return best ? { url: best.file, size: best.filesize || 0 } : null;
   }
+}
+
+function bestMp4(
+  sources: JWMediaSource[],
+): { url: string; size: number } | null {
+  const [best] = sources
+    .filter(
+      (s) => s.file && (s.type === "video/mp4" || s.file.endsWith(".mp4")),
+    )
+    .sort((a, b) => (b.width || 0) - (a.width || 0));
+
+  return best ? { url: best.file, size: best.filesize || 0 } : null;
 }

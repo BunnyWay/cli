@@ -1,8 +1,4 @@
-/**
- * S3 input guards. `validateS3Url` is a security boundary: it is the last check
- * before a URL is handed to Bunny's fetch endpoint, so a misconfigured or
- * hostile source cannot point Bunny at an arbitrary host.
- */
+// S3 input guards; `validateS3Url` is the last check before a URL reaches Bunny's fetch endpoint.
 
 /** https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html */
 export function validateS3BucketName(name: string): boolean {
@@ -27,20 +23,7 @@ export function validateAwsRegion(region: string): boolean {
   return /^[a-z]{2}(?:-gov)?-[a-z]+-\d+$/.test(region);
 }
 
-/**
- * Accepts the AWS S3 endpoint forms:
- *   {bucket}.s3.amazonaws.com                      legacy global
- *   {bucket}.s3.{region}.amazonaws.com             virtual-hosted
- *   s3.amazonaws.com / s3.{region}.amazonaws.com   path style
- *   {bucket}.s3-accelerate.amazonaws.com           Transfer Acceleration
- *   ...and the same under .amazonaws.com.cn        AWS China
- *
- * With a custom `endpoint` (S3-compatible providers) the host must be that
- * endpoint's, bare or with the bucket as a subdomain, instead of an AWS one.
- *
- * The URL must also carry a SigV4 or SigV2 signature: without one Bunny would
- * just get a 403 from a private object.
- */
+/** A signed (SigV4 or SigV2) HTTPS URL on an AWS S3 host, or on the custom `endpoint` host when one is set; the README lists the host forms. */
 export function validateS3Url(url: string, endpoint?: string): boolean {
   let parsed: URL;
   try {
@@ -73,7 +56,7 @@ function isAllowedS3Host(host: string, endpoint?: string): boolean {
     return host === endpointHost || host.endsWith(`.${endpointHost}`);
   }
 
-  return /^(?:[a-z0-9.-]+\.)?s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com(?:\.cn)?$/.test(
+  return /^(?:[a-z0-9.-]+\.)?s3(?:-accelerate|-fips)?(?:\.dualstack)?(?:[.-][a-z0-9-]+)?\.amazonaws\.com(?:\.cn)?$/.test(
     host,
   );
 }

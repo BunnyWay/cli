@@ -34,7 +34,7 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 
 | Setting    | Environment variable                            |
 | ---------- | ----------------------------------------------- |
-| API token  | `CLOUDFLARE_API_TOKEN` (permission Stream:Read) |
+| API token  | `CLOUDFLARE_API_TOKEN` (permission Stream:Edit) |
 | Account ID | `CLOUDFLARE_ACCOUNT_ID`                         |
 
-Cloudflare Stream has no folders, so every video is imported uncategorized. An MP4 download is generated on demand and polled for up to five minutes before the video is handed to bunny.net. The dedup metaTag is `cfStreamId`.
+Cloudflare Stream has no folders, so every video is imported uncategorized. An MP4 download is generated on demand and polled for up to five minutes before the video is handed to bunny.net. Videos with Require Signed URLs turned on are skipped with that as the reason, since Bunny cannot fetch their MP4 without a signed token. The dedup metaTag is `cfStreamId`.

@@ -4,8 +4,13 @@ import type {
   SourceContent,
   SourceVideo,
 } from "@bunny.net/stream-import";
-import type { S3SourceClient } from "./client.ts";
-import { extractVideoNameFromKey, fromSourceId, toSourceId } from "./keys.ts";
+import { archivedReason, type S3SourceClient } from "./client.ts";
+import {
+  extractVideoNameFromKey,
+  fromSourceId,
+  idToPrefix,
+  toSourceId,
+} from "./keys.ts";
 import type { S3Config, S3Object } from "./types.ts";
 import { validateS3Url } from "./validate.ts";
 
@@ -41,11 +46,6 @@ export class S3SourceAdapter implements SourceAdapter {
   }
 
   async listContent(opts?: { folderId?: string }): Promise<SourceContent> {
-    const result = await this.client.getAllVideosWithFolders(
-      this.bucket,
-      this.prefix,
-    );
-
     const toVideo = (obj: S3Object, folderId: string | null): SourceVideo => ({
       sourceId: toSourceId(obj.bucket, obj.key),
       displayName: extractVideoNameFromKey(obj.key),
@@ -55,20 +55,27 @@ export class S3SourceAdapter implements SourceAdapter {
       duration: undefined,
     });
 
+    // A folder id is a prefix below the root, so a nested one like `a/b` lists just that subtree.
     if (opts?.folderId) {
       const folderId = opts.folderId;
-      const folder = result.folders.find((f) => f.id === folderId);
-      const objects = result.videos.get(folderId) ?? [];
+      const objects = await this.client.listVideosByPrefix(
+        this.bucket,
+        idToPrefix(folderId, this.prefix),
+      );
 
       return {
-        folders: folder
-          ? [{ id: folder.id, name: folder.name, videoCount: objects.length }]
+        folders: objects.length
+          ? [{ id: folderId, name: folderId, videoCount: objects.length }]
           : [],
         videos: new Map([[folderId, objects.map((o) => toVideo(o, folderId))]]),
         uncategorizedVideos: [],
       };
     }
 
+    const result = await this.client.getAllVideosWithFolders(
+      this.bucket,
+      this.prefix,
+    );
     const videos = new Map<string, SourceVideo[]>();
     for (const [folderId, objects] of result.videos) {
       videos.set(
@@ -94,14 +101,16 @@ export class S3SourceAdapter implements SourceAdapter {
     const { bucket, key } = fromSourceId(sourceId);
     if (!key) return null;
 
+    // Metadata is a bonus: a bucket that denies HeadObject should still import.
+    const head = await this.client.headObject(bucket, key).catch(() => null);
+    const archived = head && archivedReason(head);
+    if (archived) throw new Error(archived);
+
     const url = await this.client.getPresignedDownloadUrl(
       bucket,
       key,
       this.urlTtlSeconds,
     );
-
-    // Metadata is a bonus: a bucket that denies HeadObject should still import.
-    const head = await this.client.headObject(bucket, key).catch(() => null);
     const description = head?.userMetadata?.description;
     const tags = head?.userMetadata?.tags
       ?.split(",")

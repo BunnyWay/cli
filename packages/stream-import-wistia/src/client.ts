@@ -1,7 +1,4 @@
-/**
- * Wistia Data API. Projects are folders, medias are videos, assets are
- * renditions. https://docs.wistia.com/reference/get_medias
- */
+// Wistia Data API (projects are folders, medias are videos, assets are renditions): https://docs.wistia.com/reference/get_medias
 
 import {
   createHttp,
@@ -14,13 +11,17 @@ import type { WistiaConfig, WistiaMedia, WistiaProject } from "./types.ts";
 
 const PER_PAGE = 100;
 
-/** Best-first: a real MP4 rendition beats the original, which may be a MOV. */
+/** Best-first: the original wins because Bunny transcodes any format, then the MP4 renditions from HD down. */
 const ASSET_PRIORITY = [
-  "HdMp4Video",
-  "MdMp4Video",
-  "SdMp4Video",
   "OriginalFile",
+  "HdMp4VideoFile",
+  "MdMp4VideoFile",
+  "Mp4VideoFile",
+  "IPhoneVideoFile",
 ];
+
+/** Wistia serves delivery URLs from these domains and their subdomains. */
+const DELIVERY_DOMAINS = ["wistia.com", "wistia.net"];
 
 export class WistiaClient {
   private readonly http: Http;
@@ -101,18 +102,52 @@ export class WistiaClient {
   }
 }
 
-/** The preferred asset of an already-fetched media, so callers needing the metadata too make one request. */
+/** The preferred asset of an already-fetched media, so callers needing the metadata too make one request. Throws for a media Wistia has not finished processing. */
 export function selectDownload(
   media: WistiaMedia,
 ): { url: string; size: number } | null {
+  if (media.status && media.status !== "ready") {
+    throw new Error(`Wistia media is ${media.status}, not ready for download`);
+  }
   if (!media.assets?.length) return null;
 
-  for (const preferred of ASSET_PRIORITY) {
-    const asset = media.assets.find((a) => a.type === preferred);
-    if (asset) return { url: asset.url, size: asset.fileSize };
+  const asset =
+    ASSET_PRIORITY.map((type) =>
+      media.assets?.find((a) => a.type === type),
+    ).find(Boolean) ??
+    media.assets.find((a) => a.contentType?.includes("video/mp4"));
+
+  return asset ? { url: toHttps(asset.url), size: asset.fileSize } : null;
+}
+
+/** Wistia documents delivery URLs as `http://`, but its delivery hosts serve the same path over HTTPS. */
+function toHttps(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" && isWistiaHost(parsed.hostname)) {
+      parsed.protocol = "https:";
+      return parsed.toString();
+    }
+  } catch {
+    // Left as-is; validateWistiaUrl rejects it.
   }
 
-  const mp4 = media.assets.find((a) => a.contentType?.includes("video/mp4"));
+  return url;
+}
 
-  return mp4 ? { url: mp4.url, size: mp4.fileSize } : null;
+function isWistiaHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+
+  return DELIVERY_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
+}
+
+/** HTTPS on a Wistia delivery host only, so a tampered asset URL cannot point Bunny elsewhere. */
+export function validateWistiaUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+
+    return parsed.protocol === "https:" && isWistiaHost(parsed.hostname);
+  } catch {
+    return false;
+  }
 }

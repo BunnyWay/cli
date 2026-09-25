@@ -1,9 +1,4 @@
-/**
- * Mux Video API. https://docs.mux.com/api-reference/video
- *
- * Downloads come from static renditions at `stream.mux.com/{playback_id}/...`
- * or from temporary master access.
- */
+// Mux Video API: https://docs.mux.com/api-reference/video
 
 import {
   createHttp,
@@ -15,7 +10,22 @@ import {
 import type { MuxAsset, MuxConfig } from "./types.ts";
 
 const PAGE_LIMIT = 100;
-const RENDITION_PRIORITY = ["high.mp4", "medium.mp4", "low.mp4"];
+/** Best-first across the current per-file renditions and the deprecated `mp4_support` names. */
+const RENDITION_PRIORITY = [
+  "highest.mp4",
+  "capped-1080p.mp4",
+  "2160p.mp4",
+  "1440p.mp4",
+  "1080p.mp4",
+  "high.mp4",
+  "720p.mp4",
+  "medium.mp4",
+  "540p.mp4",
+  "480p.mp4",
+  "360p.mp4",
+  "low.mp4",
+  "270p.mp4",
+];
 
 export class MuxClient {
   private readonly http: Http;
@@ -78,33 +88,34 @@ export class MuxClient {
   }
 }
 
-/** Only a public playback ID can back a stream.mux.com URL: a signed one needs a JWT Bunny cannot supply, so those assets fall through to the master. */
+/** The master (original) when temporary access has it ready, else a ready static MP4 on a public playback ID; a signed ID needs a JWT Bunny cannot supply. */
 export function downloadForAsset(
   asset: MuxAsset,
 ): { url: string; size: number } | null {
-  const publicId = asset.playback_ids?.find((p) => p.policy === "public")?.id;
-  const mp4 = asset.mp4_support !== "none";
-
-  if (publicId && mp4 && asset.static_renditions?.status === "ready") {
-    const files = asset.static_renditions.files ?? [];
-    for (const name of RENDITION_PRIORITY) {
-      const file = files.find((f) => f.name === name);
-      if (file) {
-        return {
-          url: `https://stream.mux.com/${publicId}/${name}`,
-          size: file.filesize || 0,
-        };
-      }
-    }
-  }
-
-  if (asset.master_access === "temporary" && asset.master?.url) {
+  if (
+    asset.master_access === "temporary" &&
+    asset.master?.status === "ready" &&
+    asset.master.url
+  ) {
     return { url: asset.master.url, size: 0 };
   }
 
-  // MP4 support is on but the rendition list has not caught up yet; the URL is deterministic and resolves once encoding finishes.
-  if (publicId && mp4) {
-    return { url: `https://stream.mux.com/${publicId}/high.mp4`, size: 0 };
+  const publicId = asset.playback_ids?.find((p) => p.policy === "public")?.id;
+  if (!publicId) return null;
+
+  const renditions = asset.static_renditions;
+  // Current renditions report `status` per file; the deprecated API only reports it once for the set.
+  const ready = (renditions?.files ?? []).filter((f) =>
+    f.status ? f.status === "ready" : renditions?.status === "ready",
+  );
+  for (const name of RENDITION_PRIORITY) {
+    const file = ready.find((f) => f.name === name);
+    if (file) {
+      return {
+        url: `https://stream.mux.com/${publicId}/${name}`,
+        size: Number(file.filesize) || 0,
+      };
+    }
   }
 
   return null;

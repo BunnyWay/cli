@@ -41,7 +41,7 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@bunny.net/stream-import": "workspace:*",
+    "@bunny.net/stream-import": "workspace:^",
     "zod": "^4.3.6"
   },
   "devDependencies": {

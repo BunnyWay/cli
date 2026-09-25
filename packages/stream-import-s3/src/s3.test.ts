@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { S3SourceAdapter } from "./adapter.ts";
+import { archivedReason, type S3SourceClient } from "./client.ts";
 import {
   extractVideoNameFromKey,
   fromSourceId,
@@ -96,6 +98,10 @@ describe("validation", () => {
     expect(
       s3ConfigSchema.safeParse({ ...base, sessionToken: "tok" }).success,
     ).toBe(false);
+    expect(
+      s3ConfigSchema.safeParse({ ...base, endpoint: "http://minio.local" })
+        .success,
+    ).toBe(false);
   });
 
   test("with a custom endpoint, download URLs must be on that host instead of AWS", () => {
@@ -126,6 +132,9 @@ describe("validation", () => {
       "s3.us-east-2.amazonaws.com",
       "my-bucket.s3-accelerate.amazonaws.com",
       "my-bucket.s3.cn-north-1.amazonaws.com.cn",
+      "s3.dualstack.us-east-1.amazonaws.com",
+      "my-bucket.s3.dualstack.eu-west-1.amazonaws.com",
+      "my-bucket.s3-accelerate.dualstack.amazonaws.com",
     ]) {
       expect(validateS3Url(`https://${host}/key.mp4?${sig}`), host).toBe(true);
     }
@@ -154,4 +163,56 @@ describe("validation", () => {
     ).toBe(false);
     expect(validateS3Url("not a url")).toBe(false);
   });
+});
+
+test("--folder lists only that prefix under the root, and a nested id works", async () => {
+  const prefixes: string[] = [];
+  const client = {
+    listVideosByPrefix: async (_bucket: string, prefix: string) => {
+      prefixes.push(prefix);
+      return [
+        {
+          bucket: "b",
+          key: `${prefix}clip.mp4`,
+          size: 1,
+          etag: "",
+          lastModified: "",
+        },
+      ];
+    },
+  } as unknown as S3SourceClient;
+  const adapter = new S3SourceAdapter(client, {
+    region: "us-east-1",
+    bucket: "b",
+    prefix: "media",
+  });
+
+  const content = await adapter.listContent({ folderId: "2024/q1" });
+
+  expect(prefixes).toEqual(["media/2024/q1/"]);
+  expect(content.videos.get("2024/q1")?.[0]?.sourceId).toBe(
+    "b/media/2024/q1/clip.mp4",
+  );
+});
+
+test("archived objects need a restore, but GLACIER_IR and restored copies import", () => {
+  const obj = {
+    bucket: "b",
+    key: "k.mp4",
+    size: 1,
+    etag: "",
+    lastModified: "",
+  };
+  expect(archivedReason({ ...obj, storageClass: "DEEP_ARCHIVE" })).toContain(
+    "restore it",
+  );
+  expect(archivedReason({ ...obj, storageClass: "GLACIER_IR" })).toBeNull();
+  expect(
+    archivedReason({
+      ...obj,
+      storageClass: "GLACIER",
+      restore:
+        'ongoing-request="false", expiry-date="Fri, 21 Dec 2012 00:00:00 GMT"',
+    }),
+  ).toBeNull();
 });

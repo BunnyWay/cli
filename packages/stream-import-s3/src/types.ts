@@ -5,6 +5,10 @@ export interface S3Object {
   etag: string;
   lastModified: string;
   storageClass?: string;
+  /** Intelligent-Tiering archive tier, from HeadObject: "ARCHIVE_ACCESS" | "DEEP_ARCHIVE_ACCESS". */
+  archiveStatus?: string;
+  /** The HeadObject `x-amz-restore` header, e.g. `ongoing-request="false", expiry-date="..."`. */
+  restore?: string;
   contentType?: string;
   userMetadata?: Record<string, string>;
 }

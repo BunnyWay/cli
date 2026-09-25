@@ -1,10 +1,4 @@
-/**
- * Cloudflare Stream API.
- * https://developers.cloudflare.com/stream/viewing-videos/download-videos/
- *
- * Downloads are not immediate: an MP4 has to be generated first, then polled
- * until ready.
- */
+// Cloudflare Stream API; an MP4 download is generated on request, then polled until ready: https://developers.cloudflare.com/stream/viewing-videos/download-videos/
 
 import {
   createHttp,
@@ -43,7 +37,7 @@ export class CloudflareStreamClient {
       if (isHttpError(error, 401) || isHttpError(error, 403)) {
         throw new UserError(
           "Invalid Cloudflare API token or account ID.",
-          "The token needs the Stream:Read permission (https://dash.cloudflare.com/profile/api-tokens).",
+          "The token needs the Stream:Edit permission (https://dash.cloudflare.com/profile/api-tokens).",
         );
       }
       throw error;
@@ -122,9 +116,10 @@ export class CloudflareStreamClient {
       return dflt?.status === "ready" && dflt.url
         ? { url: dflt.url, size: 0 }
         : null;
-    } catch {
-      // No download has been requested for this video yet.
-      return null;
+    } catch (error) {
+      // 404 means no download has been requested yet; auth and rate-limit failures must surface.
+      if (isHttpError(error, 404)) return null;
+      throw error;
     }
   }
 }

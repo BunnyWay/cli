@@ -8,6 +8,7 @@ import {
 import type {
   VimeoConfig,
   VimeoDownload,
+  VimeoFile,
   VimeoFolder,
   VimeoPaginatedResponse,
   VimeoVideo,
@@ -161,8 +162,9 @@ export function selectDownload(video: VimeoVideo): VimeoDownload | null {
     return best ?? null;
   }
 
-  if (video.files?.length) {
-    const [best] = [...video.files].sort(
+  const progressive = (video.files ?? []).filter(isProgressiveMp4);
+  if (progressive.length) {
+    const [best] = progressive.sort(
       (a, b) => (b.height || 0) - (a.height || 0),
     );
     if (!best) return null;
@@ -175,6 +177,17 @@ export function selectDownload(video: VimeoVideo): VimeoDownload | null {
   }
 
   return null;
+}
+
+/** Only a single progressive MP4 can be fetched by Bunny; `hls` and `dash` entries are streaming manifests. */
+function isProgressiveMp4(file: VimeoFile): boolean {
+  if (file.type !== "video/mp4" || !file.link) return false;
+  if (file.quality === "hls" || file.quality === "dash") return false;
+  try {
+    return !/\.(?:m3u8|mpd)$/i.test(new URL(file.link).pathname);
+  } catch {
+    return false;
+  }
 }
 
 /** `/users/1/projects/12345` -> `12345` */

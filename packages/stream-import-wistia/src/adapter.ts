@@ -4,7 +4,11 @@ import type {
   SourceContent,
   SourceVideo,
 } from "@bunny.net/stream-import";
-import { selectDownload, type WistiaClient } from "./client.ts";
+import {
+  selectDownload,
+  validateWistiaUrl,
+  type WistiaClient,
+} from "./client.ts";
 import type { WistiaMedia } from "./types.ts";
 
 export class WistiaSourceAdapter implements SourceAdapter {
@@ -19,6 +23,10 @@ export class WistiaSourceAdapter implements SourceAdapter {
 
   getAccountInfo(): Promise<Record<string, string>> {
     return this.client.getAccountInfo();
+  }
+
+  validateUrl(url: string): boolean {
+    return validateWistiaUrl(url);
   }
 
   async listContent(opts?: { folderId?: string }): Promise<SourceContent> {

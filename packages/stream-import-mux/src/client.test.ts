@@ -8,40 +8,49 @@ const asset = (overrides: Partial<MuxAsset>): MuxAsset => ({
   duration: 10,
   created_at: "0",
   master_access: "none",
-  mp4_support: "standard",
   ...overrides,
 });
 
-test("a signed-only asset never yields an unsigned stream.mux.com URL", () => {
-  const signed = { id: "sig", policy: "signed" };
+const pub = { id: "pub", policy: "public" };
+const file = (name: string, status?: string) => ({
+  name,
+  ext: "mp4",
+  status,
+  filesize: "42",
+});
+
+test("prefers a ready master, then only a rendition the asset reports ready, never an unsigned URL for a signed ID", () => {
   expect(
     downloadForAsset(
       asset({
-        playback_ids: [signed],
+        playback_ids: [pub],
         master_access: "temporary",
         master: { status: "ready", url: "https://master.mux.com/a1.mp4" },
+        static_renditions: { files: [file("highest.mp4", "ready")] },
       }),
     ),
   ).toEqual({ url: "https://master.mux.com/a1.mp4", size: 0 });
-  expect(downloadForAsset(asset({ playback_ids: [signed] }))).toBeNull();
   expect(
     downloadForAsset(
       asset({
-        playback_ids: [signed, { id: "pub", policy: "public" }],
+        playback_ids: [pub],
+        master_access: "temporary",
+        master: { status: "preparing" },
         static_renditions: {
-          status: "ready",
-          files: [
-            {
-              name: "high.mp4",
-              ext: "mp4",
-              width: 1920,
-              height: 1080,
-              bitrate: 1,
-              filesize: 42,
-            },
-          ],
+          files: [file("highest.mp4", "preparing"), file("720p.mp4", "ready")],
         },
       }),
     ),
-  ).toEqual({ url: "https://stream.mux.com/pub/high.mp4", size: 42 });
+  ).toEqual({ url: "https://stream.mux.com/pub/720p.mp4", size: 42 });
+  expect(
+    downloadForAsset(asset({ playback_ids: [pub], mp4_support: "standard" })),
+  ).toBeNull();
+  expect(
+    downloadForAsset(
+      asset({
+        playback_ids: [{ id: "sig", policy: "signed" }],
+        static_renditions: { status: "ready", files: [file("high.mp4")] },
+      }),
+    ),
+  ).toBeNull();
 });

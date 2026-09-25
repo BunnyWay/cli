@@ -22,7 +22,12 @@ export const s3ConfigSchema = z
     accessKeyId: z.string().optional(),
     secretAccessKey: z.string().optional(),
     sessionToken: z.string().optional(),
-    endpoint: z.url().optional(),
+    endpoint: z
+      .url({
+        protocol: /^https$/,
+        error: "S3 endpoint must be an https:// URL",
+      })
+      .optional(),
     presignedUrlTtl: z
       .number()
       .int()

@@ -1,7 +1,4 @@
-/**
- * Brightcove CMS API, with OAuth 2.0 client credentials.
- * https://apis.support.brightcove.com/cms/
- */
+// Brightcove CMS API, with OAuth 2.0 client credentials: https://apis.support.brightcove.com/cms/
 
 import {
   createHttp,
@@ -93,7 +90,17 @@ export class BrightcoveClient {
   }
 
   async validateCredentials(): Promise<void> {
-    await this.get("/counts/videos");
+    try {
+      await this.get("/counts/videos");
+    } catch (error) {
+      if (isHttpError(error, 401) || isHttpError(error, 403)) {
+        throw new UserError(
+          `Brightcove refused access to account ${this.config.accountId}.`,
+          "Check BRIGHTCOVE_ACCOUNT_ID, and that the OAuth client belongs to that account with CMS video read permissions.",
+        );
+      }
+      throw error;
+    }
   }
 
   async getAccountInfo(): Promise<Record<string, string>> {
@@ -147,16 +154,16 @@ export class BrightcoveClient {
         [];
       const best = bestMp4Source(sources);
       if (best) return { url: best.src, size: best.size || 0 };
-    } catch {
-      // Fall through to the digital master.
+    } catch (error) {
+      if (!isHttpError(error, 404)) throw error;
     }
 
     try {
       const master = await this.get(`/videos/${id}/digital_master`);
       if (master?.url && isHttps(master.url))
         return { url: master.url, size: master.size || 0 };
-    } catch {
-      // No master available either.
+    } catch (error) {
+      if (!isHttpError(error, 404)) throw error;
     }
 
     return null;

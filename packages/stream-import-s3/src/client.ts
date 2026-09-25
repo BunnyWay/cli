@@ -177,6 +177,8 @@ export class S3SourceClient {
         etag: (response.ETag ?? "").replaceAll('"', ""),
         lastModified: response.LastModified?.toISOString() ?? "",
         storageClass: response.StorageClass,
+        archiveStatus: response.ArchiveStatus,
+        restore: response.Restore,
         contentType: response.ContentType,
         userMetadata: response.Metadata,
       };
@@ -211,6 +213,21 @@ export class S3SourceClient {
   }
 }
 
+/** GLACIER, DEEP_ARCHIVE and the Intelligent-Tiering archive tiers need a restore before GetObject works; GLACIER_IR is instant. */
+export function archivedReason(obj: S3Object): string | null {
+  const restored = obj.restore?.includes('ongoing-request="false"') ?? false;
+  if (restored) return null;
+  const tier =
+    obj.storageClass === "GLACIER" || obj.storageClass === "DEEP_ARCHIVE"
+      ? obj.storageClass
+      : obj.archiveStatus;
+  if (!tier) return null;
+
+  return obj.restore?.includes('ongoing-request="true"')
+    ? `S3 object is in ${tier} and its restore is still in progress`
+    : `S3 object is in ${tier}; restore it in S3 before importing`;
+}
+
 function clampTtl(ttl: number): number {
   return Math.min(
     Math.max(ttl, MIN_PRESIGNED_URL_TTL_SECONDS),
@@ -231,6 +248,14 @@ function toS3Object(item: S3SdkObject, bucket: string): S3Object {
 
 /** Turn the SDK's exceptions into messages that say what to do about them. */
 function asUserError(error: unknown, bucket: string): unknown {
+  // The credential chain throws a plain Error subclass, not an S3ServiceException, so match it by name first.
+  const name = (error as { name?: string } | null)?.name;
+  if (name === "CredentialsProviderError" || name === "InvalidAccessKeyId") {
+    return new UserError(
+      "Invalid AWS credentials.",
+      "Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or configure the AWS default credential chain.",
+    );
+  }
   if (!(error instanceof S3ServiceException)) return error;
 
   switch (error.$metadata?.httpStatusCode) {
@@ -247,18 +272,6 @@ function asUserError(error: unknown, bucket: string): unknown {
     case 404:
       return new UserError(`Bucket "${bucket}" not found.`);
     default:
-      break;
+      return error;
   }
-
-  if (
-    error.name === "CredentialsProviderError" ||
-    error.name === "InvalidAccessKeyId"
-  ) {
-    return new UserError(
-      "Invalid AWS credentials.",
-      "Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or configure the AWS default credential chain.",
-    );
-  }
-
-  return error;
 }

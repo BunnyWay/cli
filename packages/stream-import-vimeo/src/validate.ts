@@ -1,8 +1,4 @@
-/**
- * Vimeo input guards. `validateVimeoUrl` is a security boundary: it is what
- * stops a compromised or misconfigured source from persuading Bunny to fetch
- * from an arbitrary host.
- */
+// Vimeo input guards; `validateVimeoUrl` is the security boundary that keeps Bunny off arbitrary hosts.
 
 /** Vimeo IDs are numeric. Guards against path traversal in a URL path segment. */
 export function validateVimeoId(id: string): boolean {
