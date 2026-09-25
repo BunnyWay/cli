@@ -46,6 +46,8 @@ export function sanitizeMetadata(meta: {
 }
 
 const SENSITIVE_PATTERNS: Array<[RegExp, string]> = [
+  [/(https?:\/\/)[^\s/@?#]+@/gi, "$1[REDACTED]@"],
+  [/\bbasic\s+[A-Za-z0-9+/]{8,}={0,2}/gi, "basic [REDACTED]"],
   [/api[_-]?key=[^\s&]+/gi, "api_key=[REDACTED]"],
   [/access[_-]?key[_-]?id=[^\s&]+/gi, "access_key_id=[REDACTED]"],
   [/secret[_-]?access[_-]?key=[^\s&]+/gi, "secret_access_key=[REDACTED]"],

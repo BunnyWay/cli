@@ -285,13 +285,14 @@ test("redacts credentials from debug bodies", async () => {
   const logs: string[] = [];
   await runRequest(
     { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
-    new Request("https://api.bunny.net/registries", {
+    new Request("https://api.bunny.net/registries?token=urltok", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         displayName: "ghcr",
         passwordCredentials: { userName: "notrab", password: "ghp_secret" },
         url: "https://bucket.s3.amazonaws.com/clip.mp4?X-Amz-Signature=sig123",
+        note: "pull from https://u:pw123@git.example.com/r.git?sig=qsig#top",
         headers: { Authorization: "Bearer bearer123", "X-Api-Key": "xkey123" },
       }),
     }),
@@ -302,6 +303,10 @@ test("redacts credentials from debug bodies", async () => {
   expect(traced).not.toContain("sig123");
   expect(traced).not.toContain("bearer123");
   expect(traced).not.toContain("xkey123");
+  expect(traced).not.toMatch(/urltok|pw123|qsig/);
+  expect(traced).toContain(
+    "pull from https://[redacted]@git.example.com/r.git?[redacted]#top",
+  );
   expect(traced).toContain(
     "https://bucket.s3.amazonaws.com/clip.mp4?[redacted]",
   );

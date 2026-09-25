@@ -33,7 +33,8 @@ export function coerceCredential(
 }
 
 export interface ResolveSourceConfigOptions {
-  env?: Env;
+  /** Required so the engine never reads the process environment on its own. */
+  env: Env;
   /** Per-field values from flags or prompts; they win over the environment. */
   overrides?: Record<string, string | number | undefined>;
   /**
@@ -47,9 +48,9 @@ export interface ResolveSourceConfigOptions {
 /** Every field a plugin declares, read from overrides then the environment, coerced to its declared type. */
 export function resolveSourceConfig(
   plugin: SourcePlugin,
-  options: ResolveSourceConfigOptions = {},
+  options: ResolveSourceConfigOptions,
 ): SourceConfigValues {
-  const { env = process.env, overrides = {}, includeDefaults = true } = options;
+  const { env, overrides = {}, includeDefaults = true } = options;
   const resolved: SourceConfigValues = {};
 
   for (const field of plugin.credentials) {
@@ -90,7 +91,7 @@ export interface SourceStatus {
 }
 
 /** How usable a source is from the environment alone. */
-export function describeSource(plugin: SourcePlugin, env?: Env): SourceStatus {
+export function describeSource(plugin: SourcePlugin, env: Env): SourceStatus {
   const explicit = resolveSourceConfig(plugin, { env, includeDefaults: false });
   const missing = missingCredentials(
     plugin,

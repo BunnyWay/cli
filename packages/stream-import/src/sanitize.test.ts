@@ -25,6 +25,8 @@ describe("sanitizeString", () => {
     const started = performance.now();
     stripAnsi(`${ESC}${";".repeat(20_000)}`);
     stripAnsi(`${ESC}[${";".repeat(20_000)}`);
+    safeErrorMessage(`https://${"a:".repeat(50_000)}`, "x");
+    safeErrorMessage("basic ".repeat(20_000), "x");
     expect(performance.now() - started).toBeLessThan(200);
   });
 });
@@ -53,13 +55,14 @@ describe("safeErrorMessage", () => {
   test("redacts credentials wherever they appear", () => {
     const out = safeErrorMessage(
       new Error(
-        "api_key=abc123 access_token=tok123 Bearer eyJhbGci password=hunter2 AKIAIOSFODNN7EXAMPLE",
+        "api_key=abc123 access_token=tok123 Bearer eyJhbGci password=hunter2 AKIAIOSFODNN7EXAMPLE https://u:pw123@x.test/a Authorization: Basic dXNlcjpwYXNz",
       ),
       "Import failed",
     );
     expect(out).not.toMatch(
-      /abc123|tok123|eyJhbGci|hunter2|AKIAIOSFODNN7EXAMPLE/,
+      /abc123|tok123|eyJhbGci|hunter2|AKIAIOSFODNN7EXAMPLE|pw123|dXNlcjpwYXNz/,
     );
+    expect(out).toContain("https://[REDACTED]@x.test/a");
     expect(out).toContain("api_key=[REDACTED]");
   });
 

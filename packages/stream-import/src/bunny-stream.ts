@@ -22,11 +22,14 @@ import {
 import { MAX_RATE_LIMIT_RETRIES } from "./constants.ts";
 import type { Logger } from "./contracts.ts";
 import { createRateLimitMiddleware } from "./rate-limit.ts";
+import { sleep } from "./time.ts";
 
 export type StreamClient = ReturnType<typeof createStreamClient>;
 
 const PAGE_SIZE = 100;
 const PROCESSING_POLL_INTERVAL_MS = 5_000;
+/** Consecutive failed polls tolerated while waiting, so one transient error does not fail an encode that is still running. */
+const MAX_CONSECUTIVE_POLL_ERRORS = 3;
 
 /** `POST /videos/fetch` is documented as a bare `StatusModel`, but it also returns the GUID that dedup and tagging are keyed on. */
 type FetchVideoResponse = BunnyStatusModel & { id?: string | null };
@@ -39,7 +42,9 @@ export interface BunnyStreamOptions {
   processingTimeout: number;
   logger: Logger;
   /** Injected by tests so a 429 back-off does not really wait. */
-  retryWait?: (ms: number) => Promise<void>;
+  retryWait?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /** Delay between processing polls; injected by tests. */
+  pollIntervalMs?: number;
 }
 
 export interface FetchVideoResult {
@@ -57,19 +62,23 @@ export interface ProcessingResult {
 }
 
 // Duck-typed rather than `instanceof`, so a second copy of the client package still matches.
+function apiErrorStatus(error: unknown): number | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  if ((error as { name?: string }).name !== "ApiError") return undefined;
+  const status = (error as { status?: unknown }).status;
+
+  return typeof status === "number" ? status : undefined;
+}
+
 function isApiErrorWithStatus(error: unknown, status: number): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { name?: string }).name === "ApiError" &&
-    (error as { status?: number }).status === status
-  );
+  return apiErrorStatus(error) === status;
 }
 
 export class BunnyStream {
   private readonly stream: StreamClient;
   private readonly libraryId: number;
   private readonly processingTimeout: number;
+  private readonly pollInterval: number;
   private readonly logger: Logger;
 
   /** Collections by lowercased name, so phase 2 lists them once rather than once per folder. */
@@ -88,6 +97,7 @@ export class BunnyStream {
 
     this.libraryId = libraryId;
     this.processingTimeout = processingTimeout;
+    this.pollInterval = options.pollIntervalMs ?? PROCESSING_POLL_INTERVAL_MS;
     this.logger = logger;
     this.stream = client;
 
@@ -233,12 +243,7 @@ export class BunnyStream {
     });
   }
 
-  /**
-   * Ask Bunny to pull the video from `url`.
-   *
-   * Errors are returned rather than thrown so one bad video fails its own
-   * entry instead of aborting the run.
-   */
+  /** Ask Bunny to pull the video from `url`; errors are returned, not thrown, so one bad video fails only its own entry. */
   async fetchVideoFromUrl(
     request: { url: string; title?: string; headers?: Record<string, string> },
     collectionId?: string,
@@ -282,7 +287,8 @@ export class BunnyStream {
 
       return { success: true, videoId: body.id };
     } catch (error) {
-      const indeterminate = !(error instanceof ApiError && error.status < 500);
+      const status = apiErrorStatus(error);
+      const indeterminate = !(status !== undefined && status < 500);
       if (error instanceof Error)
         return { success: false, error: error.message, indeterminate };
 
@@ -328,10 +334,20 @@ export class BunnyStream {
     signal?: AbortSignal,
   ): Promise<ProcessingResult> {
     const deadline = Date.now() + (timeoutMs ?? this.processingTimeout);
+    let pollErrors = 0;
 
     while (Date.now() < deadline) {
       if (signal?.aborted) return { success: false, error: "Cancelled" };
-      const video = await this.getVideo(videoId, signal);
+      let video: BunnyVideo | null;
+      try {
+        video = await this.getVideo(videoId, signal);
+      } catch (error) {
+        if (signal?.aborted) return { success: false, error: "Cancelled" };
+        if (++pollErrors > MAX_CONSECUTIVE_POLL_ERRORS) throw error;
+        await sleep(this.pollInterval, signal);
+        continue;
+      }
+      pollErrors = 0;
       if (!video) return { success: false, error: "Video not found" };
 
       onProgress?.(video.encodeProgress ?? 0, video.status);
@@ -344,7 +360,7 @@ export class BunnyStream {
         case BunnyVideoStatus.UploadFailed:
           return { success: false, error: "Video upload failed", video };
         default:
-          await sleep(PROCESSING_POLL_INTERVAL_MS, signal);
+          await sleep(this.pollInterval, signal);
       }
     }
 
@@ -352,30 +368,7 @@ export class BunnyStream {
   }
 }
 
-/** Resolves after `ms`, or as soon as `signal` aborts, so a cancelled poll does not hold the process for another interval. */
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const onAbort = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
-/**
- * Stream pagination has no `hasMoreItems` (Core does), so termination is
- * computed from the page counters. Comparing `items.length === perPage` would
- * cost an extra request whenever the total is an exact multiple of the page
- * size and loop forever if the server ignored `page`.
- *
- * The empty-page and page-bound guards keep a malformed envelope from
- * spinning: if the counters are missing, fall back to the page-size heuristic.
- */
+/** Stream pages carry no `hasMoreItems`, so termination comes from the counters, falling back to the page-size heuristic when they are missing. */
 function hasMorePages(
   envelope:
     | { totalItems?: number; currentPage?: number; itemsPerPage?: number }

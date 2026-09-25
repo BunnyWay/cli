@@ -56,6 +56,7 @@ export interface SourceContent {
 export interface DownloadInfo {
   /** A URL Bunny Stream can fetch directly. Must be HTTPS. */
   url: string;
+  /** Empty when the source has no title; the engine then uses the name found during discovery. */
   title: string;
   description?: string;
   tags?: string[];
@@ -85,7 +86,7 @@ export interface SourceAdapter {
    */
   getDownloadInfo(
     sourceId: string,
-    fallbackTitle?: string,
+    signal?: AbortSignal,
   ): Promise<DownloadInfo | null>;
 
   /**
@@ -140,6 +141,8 @@ export interface SourceContext {
   userAgent: string;
   requestTimeout: number;
   logger: Logger;
+  /** When true an adapter may fall back to ambient platform credentials such as the AWS default chain; hosts leave it false unless they intend that. */
+  allowAmbientCredentials?: boolean;
 }
 
 // ── Migration state ──────────────────────────────────────────────────

@@ -111,6 +111,33 @@ describe("errors", () => {
   });
 });
 
+test("waitForVideoProcessing rides out transient poll errors but fails after more than three in a row", async () => {
+  const boom = () => json({ message: "Boom" }, { status: 500 });
+  const client = new BunnyStream({
+    client: createStreamClient({ apiKey: "k", userAgent: "t" }),
+    libraryId: 1,
+    requestTimeout: 5_000,
+    processingTimeout: 30_000,
+    logger: silentLogger,
+    pollIntervalMs: 0,
+  });
+  fetchMock
+    .mockResolvedValueOnce(boom())
+    .mockResolvedValueOnce(boom())
+    .mockResolvedValueOnce(boom())
+    .mockResolvedValueOnce(json({ guid: "v", status: 3 }))
+    .mockResolvedValueOnce(boom())
+    .mockResolvedValueOnce(json({ guid: "v", status: 4 }));
+  await expect(client.waitForVideoProcessing("v")).resolves.toMatchObject({
+    success: true,
+  });
+
+  fetchMock.mockReset();
+  fetchMock.mockImplementation(async () => boom());
+  await expect(client.waitForVideoProcessing("v")).rejects.toThrow("Boom");
+  expect(fetchMock).toHaveBeenCalledTimes(4);
+});
+
 describe("rate limiting", () => {
   const limited = () =>
     new Response(null, { status: 429, headers: { "retry-after": "1" } });

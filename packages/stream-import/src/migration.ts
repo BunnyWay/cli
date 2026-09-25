@@ -26,6 +26,7 @@ import {
   stripAnsi,
 } from "./sanitize.ts";
 import { buildSourceIndex, videoHealth } from "./source-index.ts";
+import { parseBunnyDate } from "./time.ts";
 
 /** How long encode-progress updates accumulate before hitting disk; status transitions still write through immediately. */
 const PROGRESS_SAVE_DEBOUNCE_MS = 2_000;
@@ -41,6 +42,8 @@ export interface MigrationOptions {
   wait?: boolean;
   /** Ceiling for one unit of work on one video: the queue step, or the encode wait when `wait` is on. */
   migrationTimeoutMs?: number;
+  /** Pauses the run: no new videos start, in-flight ones are abandoned for the next resume, and the state comes back `paused` instead of throwing. */
+  signal?: AbortSignal;
   onProgress?: (
     state: MigrationState,
     phase: MigrationPhase,
@@ -116,6 +119,8 @@ export class MigrationService {
   } | null = null;
   private indexLoaded = false;
 
+  /** True only while `runMigration` holds the lock, so abandoned work can never write after it is released. */
+  private active = false;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingSave = false;
   private notify: MigrationOptions["onProgress"];
@@ -217,20 +222,27 @@ export class MigrationService {
   // ── The run ────────────────────────────────────────────────────────
 
   async runMigration(options: MigrationOptions = {}): Promise<MigrationState> {
-    const {
-      folderId,
-      concurrency = DEFAULT_CONCURRENCY,
-      resume = false,
-      wait = false,
-    } = options;
-    const timeout = options.migrationTimeoutMs ?? DEFAULT_MIGRATION_TIMEOUT;
+    const { folderId, resume = false, wait = false, signal } = options;
+    const concurrency = Math.max(
+      1,
+      Math.floor(positiveOr(options.concurrency, DEFAULT_CONCURRENCY)),
+    );
+    const timeout = positiveOr(
+      options.migrationTimeoutMs,
+      DEFAULT_MIGRATION_TIMEOUT,
+    );
 
     const releaseLock = this.store.lock?.();
+    this.active = true;
+    this.state = null;
     // Read before anything flushes: a fresh run's first save replaces the journal that orphan recovery needs.
     const saved = this.store.load();
     const state = resume ? this.resumableState(saved) : this.newState();
-    if (!resume || folderId) state.sourceFolderId = folderId ?? null;
-    this.state = state;
+    const resumed = state === saved;
+    // Never narrow a resumed scope: a run over a different scope widens it to null, meaning the whole library or a mix.
+    if (!resumed) state.sourceFolderId = folderId ?? null;
+    else if ((state.sourceFolderId ?? null) !== (folderId ?? null))
+      state.sourceFolderId = null;
     this.notify = options.onProgress;
 
     try {
@@ -250,11 +262,11 @@ export class MigrationService {
         this.logger.info(`Found ${index.size} previously imported videos`);
       }
 
-      if (resume) this.recoverLostFetches(state);
-      else this.adoptOrphans(state, saved);
-      await this.createCollections(state, targetFolders);
-      this.prepareEntries(state, targetVideos, targetUncategorized);
-      this.reconcileWithBunny(state);
+      if (signal?.aborted) {
+        state.status = "paused";
+
+        return state;
+      }
 
       // A resumed journal can hold other folders' videos; only the confirmed scope is imported, while re-tagging a video already in Bunny is always allowed.
       const inScope = new Set(
@@ -262,8 +274,20 @@ export class MigrationService {
           .flat()
           .map((v) => v.sourceId),
       );
+      const inFolder = (m: VideoMigration) =>
+        !folderId || inScope.has(m.sourceVideoId);
       const scoped = (m: VideoMigration) =>
-        !folderId || inScope.has(m.sourceVideoId) || Boolean(m.bunnyVideoId);
+        inFolder(m) || Boolean(m.bunnyVideoId);
+
+      if (resumed) {
+        this.requeueFailed(state, inFolder);
+        this.recoverLostFetches(state);
+      } else this.adoptOrphans(state, saved);
+      // Only now does the new state reach the store, so a failure above leaves the saved journal untouched.
+      this.state = state;
+      await this.createCollections(state, targetFolders);
+      this.prepareEntries(state, targetVideos, targetUncategorized);
+      this.reconcileWithBunny(state);
 
       // Phase 1: hand every video to Bunny and tag it. This is the import.
       const toQueue = state.videoMigrations.filter(
@@ -275,51 +299,75 @@ export class MigrationService {
         );
         const progress = { done: 0, total: toQueue.length };
         options.onProgress?.(state, "queue", { ...progress });
-        await runPool(toQueue, concurrency, async (migration) => {
-          await this.withTimeout(migration, timeout, (signal) =>
-            this.queueVideo(migration, signal),
-          );
-          progress.done++;
-          options.onProgress?.(state, "queue", { ...progress });
-        });
+        await runPool(
+          toQueue,
+          concurrency,
+          async (migration) => {
+            await this.withTimeout(
+              migration,
+              timeout,
+              (perVideo) => this.queueVideo(migration, perVideo),
+              signal,
+            );
+            if (signal?.aborted) return;
+            progress.done++;
+            options.onProgress?.(state, "queue", { ...progress });
+          },
+          signal,
+        );
       }
 
       // Phase 2, opt-in: stay until Bunny has encoded them.
-      if (wait) {
+      if (wait && !signal?.aborted) {
         const toAwait = state.videoMigrations.filter(
           (m) =>
             m.status === "processing" &&
             m.bunnyVideoId &&
-            (!folderId ||
-              inScope.has(m.sourceVideoId) ||
-              m.sourceFolderId === folderId),
+            (inFolder(m) || m.sourceFolderId === folderId),
         );
         if (toAwait.length > 0) {
           this.logger.info(
             `Waiting for ${toAwait.length} videos to finish encoding`,
           );
           options.onProgress?.(state, "wait");
-          await runPool(toAwait, concurrency, async (migration) => {
-            await this.withTimeout(migration, timeout, (signal) =>
-              this.awaitVideo(migration, signal),
-            );
-            options.onProgress?.(state, "wait");
-          });
+          await runPool(
+            toAwait,
+            concurrency,
+            async (migration) => {
+              await this.withTimeout(
+                migration,
+                timeout,
+                (perVideo) => this.awaitVideo(migration, perVideo),
+                signal,
+              );
+              options.onProgress?.(state, "wait");
+            },
+            signal,
+          );
         }
       }
 
-      state.status = overallStatus(state);
+      // An entry the source no longer lists, in a scope this run discovered, can never progress, so it does not hold the run open.
+      const gone = (m: VideoMigration) =>
+        !inScope.has(m.sourceVideoId) &&
+        !m.bunnyVideoId &&
+        (!folderId || m.sourceFolderId === folderId);
+      state.status = signal?.aborted
+        ? "paused"
+        : overallStatus(state.videoMigrations.filter((m) => !gone(m)));
       this.flush();
 
       return state;
     } catch (error) {
       if (this.state) {
-        this.state.status = "failed";
+        this.state.status = signal?.aborted ? "paused" : "failed";
         this.flush();
+        if (signal?.aborted) return this.state;
       }
       throw error;
     } finally {
       this.cancelPendingSave();
+      this.active = false;
       releaseLock?.();
     }
   }
@@ -358,11 +406,7 @@ export class MigrationService {
     return null;
   }
 
-  /**
-   * A fresh run still reads the previous journal for one thing: videos Bunny
-   * holds that never got their tag (the run died between fetch and tag). Those
-   * are re-tagged, not fetched again, or every such crash would leave a duplicate.
-   */
+  /** A fresh run re-tags videos a dead run left in Bunny untagged, so a crash between fetch and tag never costs a duplicate. */
   private adoptOrphans(
     state: MigrationState,
     saved: MigrationState | null,
@@ -373,12 +417,12 @@ export class MigrationService {
         m.bunnyVideoId ? [m.bunnyVideoId] : [],
       ),
     );
+    const ambiguous = ambiguousTitles(saved.videoMigrations);
 
     // Deliberately not limited to the folder scope: re-tagging is a metadata write, and leaving an orphan out of the new journal loses it.
     for (const entry of saved.videoMigrations) {
       const guid =
-        entry.bunnyVideoId ??
-        this.findLostFetch(entry, claimed, saved.videoMigrations);
+        entry.bunnyVideoId ?? this.findLostFetch(entry, claimed, ambiguous);
       if (!guid) continue;
       // Tagged already, or replaced by a tagged copy: the index handles it. Gone from Bunny: fetch again.
       if (this.isTagged(guid) || this.sourceIndex.has(entry.sourceVideoId))
@@ -407,9 +451,10 @@ export class MigrationService {
         m.bunnyVideoId ? [m.bunnyVideoId] : [],
       ),
     );
+    const ambiguous = ambiguousTitles(state.videoMigrations);
     for (const m of state.videoMigrations) {
       if (m.bunnyVideoId || !m.pendingFetch) continue;
-      const guid = this.findLostFetch(m, claimed, state.videoMigrations);
+      const guid = this.findLostFetch(m, claimed, ambiguous);
       m.pendingFetch = undefined;
       if (!guid) continue;
       claimed.add(guid);
@@ -425,18 +470,11 @@ export class MigrationService {
   private findLostFetch(
     entry: VideoMigration,
     claimed: Set<string>,
-    entries: VideoMigration[],
+    ambiguous: Set<string>,
   ): string | null {
     const pending = entry.pendingFetch;
-    if (!pending) return null;
     // Two lost fetches with one title cannot be told apart, so neither is matched and both fetch again.
-    const sameTitle = entries.filter(
-      (m) =>
-        !m.bunnyVideoId &&
-        m.pendingFetch &&
-        m.pendingFetch.title === pending.title,
-    );
-    if (sameTitle.length > 1) return null;
+    if (!pending || ambiguous.has(pending.title)) return null;
     const sentAt = Date.parse(pending.at) - CLOCK_SKEW_MS;
     const matches = this.untagged.filter(
       (v) =>
@@ -470,14 +508,18 @@ export class MigrationService {
 
     this.logger.info("Resuming previous import...");
     existing.status = "in_progress";
-    this.requeueFailed(existing);
 
     return existing;
   }
 
-  /** A failed entry that already has a Bunny video resumes at tagging; one without starts over. */
-  private requeueFailed(state: MigrationState): void {
-    const failed = state.videoMigrations.filter((m) => m.status === "failed");
+  /** A failed entry in this run's scope that already has a Bunny video resumes at tagging; one without starts over. */
+  private requeueFailed(
+    state: MigrationState,
+    inScope: (m: VideoMigration) => boolean,
+  ): void {
+    const failed = state.videoMigrations.filter(
+      (m) => m.status === "failed" && inScope(m),
+    );
     if (failed.length === 0) return;
     for (const m of failed) {
       m.status = m.bunnyVideoId ? "processing" : "pending";
@@ -611,7 +653,9 @@ export class MigrationService {
     migration: VideoMigration,
     timeoutMs: number,
     work: (signal: AbortSignal) => Promise<void>,
+    runSignal?: AbortSignal,
   ): Promise<void> {
+    if (runSignal?.aborted) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<never>((_, reject) => {
@@ -622,10 +666,20 @@ export class MigrationService {
         controller.abort();
       }, timeoutMs);
     });
+    // A paused run abandons the work where it stands, leaving the entry for the next resume.
+    let onPause = () => {};
+    const paused = new Promise<void>((resolve) => {
+      onPause = () => {
+        controller.abort();
+        resolve();
+      };
+    });
+    runSignal?.addEventListener("abort", onPause, { once: true });
 
     try {
-      await Promise.race([work(controller.signal), deadline]);
+      await Promise.race([work(controller.signal), deadline, paused]);
     } catch (error) {
+      if (runSignal?.aborted) return;
       // The work handles its own failures, so anything arriving here is the timeout or a genuine escape.
       migration.status = "failed";
       migration.error = safeErrorMessage(error, "Import failed");
@@ -635,6 +689,7 @@ export class MigrationService {
       this.flush();
     } finally {
       if (timer) clearTimeout(timer);
+      runSignal?.removeEventListener("abort", onPause);
     }
   }
 
@@ -719,9 +774,14 @@ export class MigrationService {
 
     const info = await this.adapter.getDownloadInfo(
       migration.sourceVideoId,
-      migration.videoName,
+      signal,
     );
-    if (!info) throw new Error("No download link available");
+    signal.throwIfAborted();
+    if (!info)
+      throw new Error(
+        "No download available: the video was not found at the source or has no usable file",
+      );
+    const title = info.title || migration.videoName;
 
     if (info.description) migration.description = info.description;
     if (info.tags?.length) migration.tags = info.tags;
@@ -734,25 +794,27 @@ export class MigrationService {
     this.logger.debug(`Importing: ${stripAnsi(migration.videoName)}`);
 
     migration.pendingFetch = {
-      title: info.title,
+      title,
       at: new Date().toISOString(),
     };
     this.flush();
     const result = await this.bunny.fetchVideoFromUrl(
-      { url: info.url, title: info.title, headers: info.headers },
+      { url: info.url, title, headers: info.headers },
       migration.bunnyCollectionId ?? undefined,
       signal,
     );
     if (!result.success || !result.videoId) {
+      signal.throwIfAborted();
       if (!result.indeterminate) migration.pendingFetch = undefined;
       throw new Error(result.error ?? "Failed to initiate fetch");
     }
 
-    // Persisted before the metaTag write so a resume can find the video.
+    // Saved before the abort check and the metaTag write, so a pause or resume can never lose a video Bunny created.
     migration.pendingFetch = undefined;
     migration.bunnyVideoId = result.videoId;
     migration.status = "processing";
     this.flush();
+    signal.throwIfAborted();
 
     return result.videoId;
   }
@@ -787,7 +849,7 @@ export class MigrationService {
 
   /** Write through immediately. Used for every status transition. */
   private flush(): void {
-    if (!this.state) return;
+    if (!this.state || !this.active) return;
     this.cancelPendingSave();
     this.state.updatedAt = new Date().toISOString();
     this.store.save(this.state);
@@ -800,7 +862,7 @@ export class MigrationService {
     this.saveTimer = setTimeout(() => {
       this.pendingSave = false;
       this.saveTimer = null;
-      if (this.state) {
+      if (this.state && this.active) {
         this.state.updatedAt = new Date().toISOString();
         this.store.save(this.state);
       }
@@ -821,13 +883,25 @@ export class MigrationService {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-/** Bunny sends UTC timestamps without a zone suffix, which `Date.parse` would read as local time. */
-function parseBunnyDate(value: string | undefined): number {
-  if (!value) return Number.NaN;
+/** A finite positive number, or the default: NaN, zero, and negatives from a host's flag parsing never reach the engine. */
+function positiveOr(value: number | undefined, fallback: number): number {
+  return value !== undefined && Number.isFinite(value) && value > 0
+    ? value
+    : fallback;
+}
 
-  return Date.parse(
-    /(?:[zZ]|[+-]\d\d:?\d\d)$/.test(value) ? value : `${value}Z`,
-  );
+/** Titles shared by more than one unresolved lost fetch, computed once so resolving one entry cannot make its twin look unique. */
+function ambiguousTitles(entries: VideoMigration[]): Set<string> {
+  const seen = new Set<string>();
+  const ambiguous = new Set<string>();
+  for (const m of entries) {
+    if (m.bunnyVideoId || !m.pendingFetch) continue;
+    const { title } = m.pendingFetch;
+    if (seen.has(title)) ambiguous.add(title);
+    seen.add(title);
+  }
+
+  return ambiguous;
 }
 
 function countVideos(
@@ -863,14 +937,17 @@ export async function runPool<T>(
   items: T[],
   concurrency: number,
   worker: (item: T) => Promise<void>,
+  signal?: AbortSignal,
 ): Promise<void> {
   if (items.length === 0) return;
   let cursor = 0;
 
   const runners = Array.from(
-    { length: Math.max(1, Math.min(concurrency, items.length)) },
+    {
+      length: Math.max(1, Math.min(Math.floor(concurrency) || 1, items.length)),
+    },
     async () => {
-      while (true) {
+      while (!signal?.aborted) {
         const index = cursor++;
         if (index >= items.length) return;
         await worker(items[index] as T);
@@ -882,8 +959,8 @@ export async function runPool<T>(
 }
 
 /** Failed anywhere wins; otherwise anything Bunny is still working on keeps the run open. */
-function overallStatus(state: MigrationState): MigrationState["status"] {
-  const statuses = state.videoMigrations.map((m) => m.status);
+function overallStatus(entries: VideoMigration[]): MigrationState["status"] {
+  const statuses = entries.map((m) => m.status);
   if (statuses.includes("failed")) return "failed";
   if (statuses.some((s) => s !== "completed")) return "in_progress";
 

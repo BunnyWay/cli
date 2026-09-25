@@ -161,10 +161,10 @@ export interface StateLock {
   release(): void;
 }
 
-/** Take `<statePath>.lock` exclusively; null while a live process holds it, and a dead holder's lock is reclaimed. */
 // Locks this process holds, so a leftover lock carrying our pid (a reused pid after a crash) reads as stale.
 const heldLocks = new Set<string>();
 
+/** Take `<statePath>.lock` exclusively; null while a live process holds it, and a dead holder's lock is reclaimed. */
 export function acquireStateLock(statePath: string): StateLock | null {
   const lockPath = `${statePath}.lock`;
   mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
@@ -203,7 +203,8 @@ function claimStaleLock(lockPath: string, stalePid: number): boolean {
   } catch {
     return true;
   }
-  if (readLockPid(claimed) !== stalePid) {
+  // Object.is so an unreadable lock (NaN pid) still matches itself and can be reclaimed.
+  if (!Object.is(readLockPid(claimed), stalePid)) {
     try {
       linkSync(claimed, lockPath);
     } catch {}

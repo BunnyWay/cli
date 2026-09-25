@@ -8,6 +8,7 @@ import type { BunnyStream } from "./bunny-stream.ts";
 import type { BunnyVideo } from "./bunny-types.ts";
 import type { MigrationState } from "./contracts.ts";
 import { videoHealth } from "./source-index.ts";
+import { parseBunnyDate } from "./time.ts";
 
 /** Bunny gives no "stuck" signal, so this long at zero bytes is the best proxy for a fetch that silently died. */
 export const DEFAULT_STALLED_AFTER_MS = 30 * 60_000;
@@ -72,7 +73,7 @@ export async function refreshMigrationState(
         if (
           since &&
           (video.storageSize ?? 0) === 0 &&
-          now - Date.parse(since) > stalledAfterMs
+          now - parseBunnyDate(since) > stalledAfterMs
         ) {
           stalled.add(entry.bunnyVideoId);
         }

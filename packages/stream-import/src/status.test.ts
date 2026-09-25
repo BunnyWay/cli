@@ -46,7 +46,8 @@ test("pulls each entry's Bunny status into the state and settles the run status"
         status: 3,
         encodeProgress: 55,
         storageSize: 0,
-        dateUploaded: "2026-01-01T00:00:00.000Z",
+        // Zone-less like Bunny's own, so reading it as local time breaks one of the two assertions below off UTC.
+        dateUploaded: "2026-01-01T00:00:00.000",
       },
       { guid: "g-dead", status: 6 },
     ]),

@@ -16,21 +16,19 @@
 import { ApiError } from "@bunny.net/openapi-client";
 import type { Middleware } from "openapi-fetch";
 import type { Logger } from "./contracts.ts";
+import { sleep } from "./time.ts";
 
 /** Cap a hostile `Retry-After` so a bad header cannot park the process for hours. */
 const MAX_RETRY_AFTER_SECONDS = 300;
 const DEFAULT_RETRY_AFTER_SECONDS = 30;
-
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export interface RateLimitOptions {
   maxRetries: number;
   logger: Logger;
   /** Deadline for each attempt, applied here so a replay gets a fresh one. */
   requestTimeout: number;
-  /** Injected by tests so they do not actually wait. */
-  wait?: (ms: number) => Promise<void>;
+  /** Injected by tests so they do not actually wait; must return early when `signal` aborts. */
+  wait?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
 export function createRateLimitMiddleware({
@@ -83,7 +81,7 @@ export function createRateLimitMiddleware({
           logger.warn(
             `Bunny rate limit hit. Waiting ${retryAfter}s (attempt ${attempt}/${maxRetries})...`,
           );
-          await wait(retryAfter * 1000);
+          await wait(retryAfter * 1000, template.signal);
 
           template.signal.throwIfAborted();
           // Clone per attempt so `template` stays replayable.

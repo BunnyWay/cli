@@ -146,7 +146,11 @@ describe("runMigration", () => {
         }),
       }),
       bunny,
-    }).runMigration({ wait: true });
+    }).runMigration({
+      wait: true,
+      concurrency: Number.NaN,
+      migrationTimeoutMs: Number.NaN,
+    });
 
     expect(bunny.setVideoMetadata).toHaveBeenCalledWith(
       "bunny-1",
@@ -365,6 +369,64 @@ describe("runMigration", () => {
     expect(state.videoMigrations[0]?.error).toMatch(/timeout/i);
   });
 
+  test("a timeout during the download lookup never starts the fetch and never writes after the run", async () => {
+    const { store, saves } = memoryStore();
+    const bunny = fakeBunny();
+    const adapter = fakeAdapter({
+      listContent: async () => oneVideo(),
+      getDownloadInfo: (_id, signal) =>
+        new Promise((resolve) =>
+          signal?.addEventListener("abort", () =>
+            setTimeout(
+              () =>
+                resolve({ url: "https://player.vimeo.com/a.mp4", title: "A" }),
+              5,
+            ),
+          ),
+        ),
+    });
+
+    await service({ adapter, bunny, store }).runMigration({
+      migrationTimeoutMs: 20,
+    });
+    const savesAtReturn = saves.length;
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(bunny.fetchVideoFromUrl).not.toHaveBeenCalled();
+    expect(saves).toHaveLength(savesAtReturn);
+    expect(saves.at(-1)?.videoMigrations[0]?.status).toBe("failed");
+  });
+
+  test("an aborted signal pauses the run: no new videos start, the wait is skipped, and the state comes back paused", async () => {
+    const controller = new AbortController();
+    const { store } = memoryStore();
+    const bunny = fakeBunny();
+    const adapter = fakeAdapter({
+      listContent: async () =>
+        content({
+          uncategorizedVideos: [
+            { sourceId: "1", displayName: "One", folderId: null },
+            { sourceId: "2", displayName: "Two", folderId: null },
+          ],
+        }),
+      getDownloadInfo: async (sourceId) => {
+        controller.abort();
+        return { url: `https://player.vimeo.com/${sourceId}.mp4`, title: "x" };
+      },
+    });
+
+    const state = await service({ adapter, bunny, store }).runMigration({
+      concurrency: 1,
+      wait: true,
+      signal: controller.signal,
+    });
+
+    expect(state.status).toBe("paused");
+    expect(store.load()?.status).toBe("paused");
+    expect(bunny.fetchVideoFromUrl).not.toHaveBeenCalled();
+    expect(bunny.waitForVideoProcessing).not.toHaveBeenCalled();
+  });
+
   test("propagates an unexpected escape instead of silently ignoring it", async () => {
     const bunny = fakeBunny({
       listVideos: mock(async () => {
@@ -444,9 +506,12 @@ describe("resume", () => {
     expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
   });
 
-  test("a resume scoped to another folder imports only that folder and leaves the saved run's videos pending", async () => {
+  test("a resume scoped to another folder imports only that folder, leaves other failures alone, and widens the saved scope", async () => {
     const bunny = fakeBunny();
-    const { store } = memoryStore(savedState());
+    const saved = savedState();
+    const outside = saved.videoMigrations[1];
+    if (outside) Object.assign(outside, { status: "failed", error: "boom" });
+    const { store } = memoryStore(saved);
     const folderVideo = {
       sourceId: "333",
       displayName: "Talk",
@@ -468,8 +533,9 @@ describe("resume", () => {
 
     expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
     expect(
-      state.videoMigrations.find((m) => m.sourceVideoId === "222")?.status,
-    ).toBe("pending");
+      state.videoMigrations.find((m) => m.sourceVideoId === "222"),
+    ).toMatchObject({ status: "failed", error: "boom" });
+    expect(state.sourceFolderId).toBeNull();
   });
 
   test("re-asserts the dedup tag on a video interrupted mid-processing instead of re-fetching", async () => {
@@ -713,6 +779,67 @@ describe("resume", () => {
       expect.any(AbortSignal),
     );
     expect(state.videoMigrations[0]?.pendingFetch).toBeUndefined();
+  });
+
+  test("two lost fetches sharing a title stay ambiguous even after the first is resolved", async () => {
+    const lost = (id: string) => ({
+      sourceVideoId: id,
+      videoName: "Dup",
+      sourceFolderId: null,
+      bunnyVideoId: null,
+      bunnyCollectionId: null,
+      status: "failed" as const,
+      error: "timed out",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      completedAt: null,
+      encodeProgress: 0,
+      pendingFetch: { title: "Dup", at: "2026-01-01T00:00:00.000Z" },
+    });
+    const { store } = memoryStore(
+      savedState({ videoMigrations: [lost("111"), lost("222")] }),
+    );
+    const bunny = fakeBunny({
+      listVideos: mock(async () => [
+        {
+          guid: "dup-guid",
+          title: "Dup",
+          dateUploaded: "2026-01-01T00:00:01",
+          status: 2,
+          metaTags: [],
+        },
+      ]),
+    });
+
+    await service({
+      adapter: fakeAdapter({ listContent: async () => twoVideos() }),
+      bunny,
+      store,
+    }).runMigration({ resume: true });
+
+    expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(2);
+    expect(bunny.setVideoMetadata).not.toHaveBeenCalledWith(
+      "dup-guid",
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  test("a fresh run that fails during discovery leaves the saved journal untouched", async () => {
+    const { store, saves } = memoryStore(savedState());
+
+    await expect(
+      service({
+        adapter: fakeAdapter({
+          listContent: async () => {
+            throw new Error("source down");
+          },
+        }),
+        store,
+      }).runMigration(),
+    ).rejects.toThrow("source down");
+
+    expect(saves).toHaveLength(0);
+    expect(store.load()?.id).toBe("migration-1");
   });
 
   test("starts fresh when the saved run belongs to another source, library, or account", async () => {
