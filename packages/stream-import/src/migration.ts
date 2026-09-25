@@ -306,7 +306,7 @@ export class MigrationService {
             await this.withTimeout(
               migration,
               timeout,
-              (perVideo) => this.queueVideo(migration, perVideo),
+              (perVideo) => this.queueVideo(migration, perVideo, signal),
               signal,
               false,
             );
@@ -710,6 +710,7 @@ export class MigrationService {
   private async queueVideo(
     migration: VideoMigration,
     signal: AbortSignal,
+    runSignal?: AbortSignal,
   ): Promise<void> {
     try {
       let videoId: string;
@@ -718,7 +719,7 @@ export class MigrationService {
         this.logger.debug(`Resuming: ${stripAnsi(migration.videoName)}`);
         videoId = migration.bunnyVideoId;
       } else {
-        videoId = await this.startFetch(migration, signal);
+        videoId = await this.startFetch(migration, signal, runSignal);
       }
 
       await this.tagVideo(migration, videoId, signal);
@@ -726,6 +727,17 @@ export class MigrationService {
       this.logger.debug(`Queued: ${stripAnsi(migration.videoName)}`);
     } catch (error) {
       if (signal.aborted) return;
+      // Paused before anything reached Bunny: back to pending, untouched, for the next resume.
+      if (
+        runSignal?.aborted &&
+        !migration.bunnyVideoId &&
+        !migration.pendingFetch
+      ) {
+        migration.status = "pending";
+        migration.startedAt = null;
+        this.flush();
+        return;
+      }
       migration.status = "failed";
       migration.error = safeErrorMessage(error, "Import failed");
       this.logger.error(
@@ -779,17 +791,20 @@ export class MigrationService {
   private async startFetch(
     migration: VideoMigration,
     signal: AbortSignal,
+    runSignal?: AbortSignal,
   ): Promise<string> {
     migration.status = "fetching";
     migration.startedAt = new Date().toISOString();
     migration.error = null;
     this.flush();
 
+    // A pause cancels the source lookup; only a fetch already sent to Bunny is allowed to settle.
     const info = await this.adapter.getDownloadInfo(
       migration.sourceVideoId,
-      signal,
+      runSignal ? AbortSignal.any([signal, runSignal]) : signal,
     );
     signal.throwIfAborted();
+    runSignal?.throwIfAborted();
     if (!info)
       throw new Error(
         "No download available: the video was not found at the source or has no usable file",
@@ -806,6 +821,7 @@ export class MigrationService {
 
     this.logger.debug(`Importing: ${stripAnsi(migration.videoName)}`);
 
+    runSignal?.throwIfAborted();
     migration.pendingFetch = {
       title,
       at: new Date().toISOString(),

@@ -409,10 +409,13 @@ describe("runMigration", () => {
             { sourceId: "2", displayName: "Two", folderId: null },
           ],
         }),
-      getDownloadInfo: async (sourceId) => {
-        controller.abort();
-        return { url: `https://player.vimeo.com/${sourceId}.mp4`, title: "x" };
-      },
+    });
+    const fetchVideoFromUrl = bunny.fetchVideoFromUrl as ReturnType<
+      typeof mock
+    >;
+    fetchVideoFromUrl.mockImplementation(async () => {
+      controller.abort();
+      return { success: true, videoId: "bunny-1" };
     });
 
     const state = await service({ adapter, bunny, store }).runMigration({
@@ -429,6 +432,29 @@ describe("runMigration", () => {
         ?.bunnyVideoId,
     ).toBe("bunny-1");
     expect(bunny.waitForVideoProcessing).not.toHaveBeenCalled();
+  });
+
+  test("a pause during the source lookup starts no fetch and leaves the video pending", async () => {
+    const controller = new AbortController();
+    const { store } = memoryStore();
+    const bunny = fakeBunny();
+    const adapter = fakeAdapter({
+      listContent: async () => oneVideo(),
+      getDownloadInfo: async (sourceId, signal) => {
+        controller.abort();
+        await Promise.resolve();
+        signal?.throwIfAborted();
+        return { url: `https://player.vimeo.com/${sourceId}.mp4`, title: "x" };
+      },
+    });
+
+    const state = await service({ adapter, bunny, store }).runMigration({
+      signal: controller.signal,
+    });
+
+    expect(state.status).toBe("paused");
+    expect(bunny.fetchVideoFromUrl).not.toHaveBeenCalled();
+    expect(store.load()?.videoMigrations[0]?.status).toBe("pending");
   });
 
   test("propagates an unexpected escape instead of silently ignoring it", async () => {

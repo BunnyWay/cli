@@ -65,7 +65,7 @@ const state = await service.runMigration({ concurrency: 3 }); // do it
 
 `getSummary()` walks the source once and reports how many videos are new versus already imported; `runMigration()` reuses that discovery, so calling both with the same `folderId` costs one pass.
 
-`runMigration()` also takes a `signal`: aborting it starts no new videos, lets a hand-off already talking to Bunny settle and be recorded (so a resume never submits it twice), abandons any encode wait, skips the wait phase, and returns the state saved as `paused` rather than throwing, ready for `resume: true`.
+`runMigration()` also takes a `signal`: aborting it starts no new videos, cancels any source lookup before a fetch is sent, lets a fetch already sent to Bunny settle and be recorded (so a resume never submits it twice), abandons any encode wait, skips the wait phase, and returns the state saved as `paused` rather than throwing, ready for `resume: true`.
 
 ## How an import works
 
