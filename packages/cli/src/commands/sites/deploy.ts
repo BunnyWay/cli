@@ -18,6 +18,7 @@ import {
 } from "@/core/ui.ts";
 import {
   deleteDeployFiles,
+  ensureDeployGate,
   fetchSystemHostname,
   promoteDeploy,
   rereadRemoteState,
@@ -514,6 +515,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         await deleteDeployFiles(connection, deployId);
       }
 
+      if (!state.current) {
+        await ensureDeployGate(coreClient, state, site.storageZone);
+      }
       await withSpinner(`Uploading ${files.length} files...`, (spin) =>
         uploadDeploy(connection, deployId, files, {
           onFileUploaded: (done, total) => {

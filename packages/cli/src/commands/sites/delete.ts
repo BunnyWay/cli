@@ -66,7 +66,7 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
 
     const what = args["keep-storage"]
       ? "its pull zone"
-      : "its pull zone and ALL deploy files";
+      : "its pull zone and its storage zone with everything in it";
     requireConfirmable(output, {
       force,
       message: `Deleting "${state.name}" needs a confirmation prompt.`,
