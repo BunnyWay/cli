@@ -397,7 +397,7 @@ describe("runMigration", () => {
     expect(saves.at(-1)?.videoMigrations[0]?.status).toBe("failed");
   });
 
-  test("an aborted signal pauses the run: no new videos start, the wait is skipped, and the state comes back paused", async () => {
+  test("an aborted signal pauses the run: the hand-off in flight settles and is recorded, no new videos start, the wait is skipped", async () => {
     const controller = new AbortController();
     const { store } = memoryStore();
     const bunny = fakeBunny();
@@ -423,7 +423,11 @@ describe("runMigration", () => {
 
     expect(state.status).toBe("paused");
     expect(store.load()?.status).toBe("paused");
-    expect(bunny.fetchVideoFromUrl).not.toHaveBeenCalled();
+    expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
+    expect(
+      store.load()?.videoMigrations.find((m) => m.sourceVideoId === "1")
+        ?.bunnyVideoId,
+    ).toBe("bunny-1");
     expect(bunny.waitForVideoProcessing).not.toHaveBeenCalled();
   });
 

@@ -65,7 +65,7 @@ const state = await service.runMigration({ concurrency: 3 }); // do it
 
 `getSummary()` walks the source once and reports how many videos are new versus already imported; `runMigration()` reuses that discovery, so calling both with the same `folderId` costs one pass.
 
-`runMigration()` also takes a `signal`: aborting it starts no new videos, abandons the in-flight ones (and any back-off or encode wait) where they stand, skips the wait phase, and returns the state saved as `paused` rather than throwing, ready for `resume: true`.
+`runMigration()` also takes a `signal`: aborting it starts no new videos, lets a hand-off already talking to Bunny settle and be recorded (so a resume never submits it twice), abandons any encode wait, skips the wait phase, and returns the state saved as `paused` rather than throwing, ready for `resume: true`.
 
 ## How an import works
 
@@ -74,7 +74,7 @@ const state = await service.runMigration({ concurrency: 3 }); // do it
 3. **Fetch.** For each new video the adapter resolves a download URL, the engine checks it against the adapter's host allowlist (HTTPS only by default), and bunny.net is asked to fetch it. The metaTag is written immediately after, and a resumed run re-asserts it for any video interrupted between those two steps. If the fetch request times out, its outcome is unknown, so the next run looks for an untagged video with the same title created after the request and tags it instead of fetching again; when the match is ambiguous (two lost fetches share a title, or two untagged videos fit) those videos are fetched again.
 4. **Wait, if asked.** With `wait: true` the engine polls until bunny.net finishes encoding, fails, or the processing timeout elapses, working `concurrency` videos at a time. By default it returns once every video is queued and tagged; `refreshMigrationState(state, bunny)` later pulls Bunny's progress into the saved state without needing the source adapter.
 
-State is persisted through the `StateStore` after every status transition, so an interrupted run resumes with `runMigration({ resume: true })`. A run with failures is marked `failed` rather than `completed` for the same reason. The run status covers the whole journal, so a folder-scoped run stays `in_progress` while other folders' videos are outstanding (a whole-library resume finishes them), and entries the source no longer lists do not hold it open. `createFileStateStore(path)` is the file-backed implementation; it validates what it reads, writes atomically and owner-only, and holds `<path>.lock` for the length of a run so two runs cannot share one state file (`acquireStateLock(path)` takes the same lock for any other writer).
+State is persisted through the `StateStore` after every status transition, so an interrupted run resumes with `runMigration({ resume: true })`. A run with failures is marked `failed` rather than `completed` for the same reason. The run status covers the whole journal, so a folder-scoped run stays `in_progress` while other folders' videos are outstanding (a whole-library resume finishes them), and an entry with no Bunny video that the source no longer lists is marked `failed` ("No longer listed at the source") so the run and `status` agree. `createFileStateStore(path)` is the file-backed implementation; it validates what it reads, writes atomically and owner-only, and holds `<path>.lock` for the length of a run so two runs cannot share one state file (`acquireStateLock(path)` takes the same lock for any other writer).
 
 ## Sources
 

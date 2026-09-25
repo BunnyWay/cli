@@ -308,6 +308,7 @@ export class MigrationService {
               timeout,
               (perVideo) => this.queueVideo(migration, perVideo),
               signal,
+              false,
             );
             if (signal?.aborted) return;
             progress.done++;
@@ -347,14 +348,20 @@ export class MigrationService {
         }
       }
 
-      // An entry the source no longer lists, in a scope this run discovered, can never progress, so it does not hold the run open.
-      const gone = (m: VideoMigration) =>
-        !inScope.has(m.sourceVideoId) &&
-        !m.bunnyVideoId &&
-        (!folderId || m.sourceFolderId === folderId);
+      // An entry the source no longer lists, in a scope this run discovered, can never progress; it is failed visibly so the run and `status` agree.
+      for (const m of state.videoMigrations) {
+        const gone =
+          !inScope.has(m.sourceVideoId) &&
+          !m.bunnyVideoId &&
+          m.status !== "completed" &&
+          (!folderId || m.sourceFolderId === folderId);
+        if (!gone || signal?.aborted) continue;
+        m.status = "failed";
+        m.error = "No longer listed at the source";
+      }
       state.status = signal?.aborted
         ? "paused"
-        : overallStatus(state.videoMigrations.filter((m) => !gone(m)));
+        : overallStatus(state.videoMigrations);
       this.flush();
 
       return state;
@@ -654,6 +661,7 @@ export class MigrationService {
     timeoutMs: number,
     work: (signal: AbortSignal) => Promise<void>,
     runSignal?: AbortSignal,
+    abandonOnPause = true,
   ): Promise<void> {
     if (runSignal?.aborted) return;
     const controller = new AbortController();
@@ -666,7 +674,7 @@ export class MigrationService {
         controller.abort();
       }, timeoutMs);
     });
-    // A paused run abandons the work where it stands, leaving the entry for the next resume.
+    // A pause abandons an encode wait, but lets a hand-off to Bunny settle so the journal records what Bunny created before the lock is released.
     let onPause = () => {};
     const paused = new Promise<void>((resolve) => {
       onPause = () => {
@@ -674,12 +682,17 @@ export class MigrationService {
         resolve();
       };
     });
-    runSignal?.addEventListener("abort", onPause, { once: true });
+    if (abandonOnPause)
+      runSignal?.addEventListener("abort", onPause, { once: true });
 
     try {
-      await Promise.race([work(controller.signal), deadline, paused]);
+      await Promise.race([
+        work(controller.signal),
+        deadline,
+        ...(abandonOnPause ? [paused] : []),
+      ]);
     } catch (error) {
-      if (runSignal?.aborted) return;
+      if (abandonOnPause && runSignal?.aborted) return;
       // The work handles its own failures, so anything arriving here is the timeout or a genuine escape.
       migration.status = "failed";
       migration.error = safeErrorMessage(error, "Import failed");
