@@ -130,6 +130,12 @@ const CLIENT_FACTORY_IMPORT =
 const CLIENT_OPTIONS_USE = /\bclientOptions\b/;
 // Reaching through a tool context is the same offence: prepare() invokes a read tool instead.
 const TOOL_CLIENTS_USE = /\bctx\.clients\b/;
+// A live library connection or a hand-built import engine is API work too; stream commands call the stream tools.
+const ENGINE_USE =
+  /\bopenStreamLibrary\b|\bnew\s+(?:BunnyStream|MigrationService)\b|\.createAdapter\(/;
+// A value import of an engine class or the journal store, which an alias would hide from ENGINE_USE.
+const ENGINE_IMPORT =
+  /import\s*\{[^}]*(?<!type\s)\b(?:BunnyStream|MigrationService|createFileStateStore)\b[^}]*\}\s*from\s*"@bunny\.net\/stream-import"/;
 
 function commandFiles(dir: string): string[] {
   return readdirSync(dir, { recursive: true, encoding: "utf8" })
@@ -144,7 +150,9 @@ function offenders(): Set<string> {
     if (
       CLIENT_FACTORY_IMPORT.test(src) ||
       CLIENT_OPTIONS_USE.test(src) ||
-      TOOL_CLIENTS_USE.test(src)
+      TOOL_CLIENTS_USE.test(src) ||
+      ENGINE_USE.test(src) ||
+      ENGINE_IMPORT.test(src)
     ) {
       found.add(relative(SRC_ROOT, file));
     }

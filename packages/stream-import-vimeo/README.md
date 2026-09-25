@@ -1,0 +1,47 @@
+# @bunny.net/stream-import-vimeo
+
+Vimeo source adapter for [`@bunny.net/stream-import`](../stream-import#readme), the engine behind `bunny stream import`. It lists the videos on the account and resolves a download URL for each, which bunny.net Stream then fetches directly.
+
+## Install
+
+```bash
+bun add @bunny.net/stream-import @bunny.net/stream-import-vimeo
+```
+
+The adapter runs on the `@bunny.net/stream-import` version it depends on, so install a matching minor of the engine alongside it.
+
+## Usage
+
+```ts
+import { parseSourceConfig, resolveSourceConfig } from "@bunny.net/stream-import";
+import { vimeoSource } from "@bunny.net/stream-import-vimeo";
+
+// Any Logger implementation works; console is enough for a script.
+const logger = { ...console, success: console.log, dim: console.log };
+
+// Credentials resolve from the environment; pass `overrides` for explicit values.
+const config = parseSourceConfig(vimeoSource, resolveSourceConfig(vimeoSource));
+const adapter = vimeoSource.createAdapter(config, {
+  userAgent: "my-app/1.0",
+  requestTimeout: 30_000,
+  logger,
+});
+await adapter.validateCredentials();
+const content = await adapter.listContent();
+```
+
+Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run the import; see that package's README for the full flow.
+
+## Credentials
+
+| Setting      | Environment variable |
+| ------------ | -------------------- |
+| Access token | `VIMEO_ACCESS_TOKEN` |
+
+Create the token at developer.vimeo.com/apps with the `public`, `private`, and `video_files` scopes. Downloads need a paid plan that exposes video files (Standard or above, or a legacy Plus, PRO, Business or Premium plan). The `download` links are preferred; when a video has none, the adapter uses the highest-resolution progressive MP4 from `files`, which needs the same plan (HLS and DASH manifests are never used).
+
+Vimeo projects become Stream collections. The dedup metaTag is `vimeoId`, holding the numeric video ID (with its `:hash` for an unlisted video whose URI carries one). Download URLs are checked against the Vimeo CDN host allowlist before they reach bunny.net.
+
+## Disclaimer
+
+This tool is provided as-is under the MIT License. It is not affiliated with, endorsed by, or sponsored by Vimeo, Inc. "Vimeo" is a registered trademark of Vimeo, Inc. Use of the name is purely descriptive.

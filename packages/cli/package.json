@@ -18,6 +18,7 @@
     "@bunny.net/database-shell": "workspace:*",
     "@bunny.net/sandbox": "workspace:*",
     "@bunny.net/tools": "workspace:*",
+    "@bunny.net/stream-import": "workspace:*",
     "@bunny.net/database-studio": "workspace:*",
     "@types/prompts": "^2.4.9",
     "@types/yargs": "^17.0.35",

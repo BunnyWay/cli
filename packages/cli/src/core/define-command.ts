@@ -12,6 +12,8 @@ interface CommandDef<A = Record<string, never>> {
   hidden?: boolean;
   /** Usage examples shown in `--help` output. Each entry is `[command, description]`. */
   examples?: ReadonlyArray<readonly [string, string]>;
+  /** Text shown at the end of `--help`, after the examples. */
+  epilogue?: string;
   /** Define command-specific flags and positional arguments. */
   builder?: (yargs: Argv) => Argv<A>;
   /**
@@ -42,10 +44,13 @@ function positionalNames(command: string): string[] {
   );
 }
 
-/** The long flag names a parser knows, without yargs' camelCase duplicates. */
+/** The long flag names a parser knows, without yargs' camelCase duplicates or aliases. */
 export function optionKeys(y: Argv): string[] {
-  return Object.keys(optionsOf(y).key).filter(
-    (k) => k.length > 1 && !/[A-Z]/.test(k),
+  const options = optionsOf(y);
+  // yargs keys every alias too, so grouping one would print its flag a second time.
+  const aliases = new Set(Object.values(options.alias ?? {}).flat());
+  return Object.keys(options.key).filter(
+    (k) => k.length > 1 && !/[A-Z]/.test(k) && !aliases.has(k),
   );
 }
 
@@ -62,6 +67,7 @@ export function groupHelpOptions(y: Argv, command = ""): void {
 // Runtime accessor that @types/yargs leaves out.
 function optionsOf(y: Argv): {
   key: Record<string, unknown>;
+  alias: Record<string, string[]>;
   number: string[];
 } {
   return (
@@ -119,6 +125,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
         y = y.example(cmd, desc) as any;
       }
     }
+    if (def.epilogue) y = y.epilogue(def.epilogue) as any;
     groupHelpOptions(y, def.command);
     return y.check(
       (argv) => rejectNaN(y, def.command, argv as Record<string, unknown>),

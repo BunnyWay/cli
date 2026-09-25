@@ -173,3 +173,38 @@ export function maskSecret(secret: string): string {
   const tail = secret.slice(-4);
   return `${"•".repeat(Math.max(secret.length - 4, 4))}${tail}`;
 }
+
+/** A length in seconds as `m:ss`, or `h:mm:ss` from an hour; "-" when unknown. */
+export function formatDuration(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return "-";
+
+  const total = Math.round(seconds);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor(total / 60) % 60;
+  const secs = total % 60;
+  return hours > 0
+    ? `${hours}:${pad(minutes)}:${pad(secs)}`
+    : `${minutes}:${pad(secs)}`;
+}
+
+/** How long ago a timestamp was, in its largest whole unit: `12m ago`, `5h ago`, `3d ago`. */
+export function formatTimeAgo(
+  value: Date | string | null | undefined,
+  now: number = Date.now(),
+): string {
+  if (!value) return "";
+  const seconds = (now - new Date(value).getTime()) / 1000;
+  if (!Number.isFinite(seconds)) return "";
+  if (seconds < 60) return "just now";
+
+  const units: Array<[string, number]> = [
+    ["d", 86_400],
+    ["h", 3_600],
+    ["m", 60],
+  ];
+  for (const [unit, size] of units) {
+    if (seconds >= size) return `${Math.floor(seconds / size)}${unit} ago`;
+  }
+  return "just now";
+}

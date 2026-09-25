@@ -1,4 +1,9 @@
-import type { Tool, ToolContext } from "@bunny.net/tools";
+import {
+  extendToolContext,
+  type Tool,
+  type ToolContext,
+  type ToolEnv,
+} from "@bunny.net/tools";
 import type { Argv, CommandModule } from "yargs";
 import type { z } from "zod";
 import { resolveConfig } from "@/config/index.ts";
@@ -11,12 +16,17 @@ import { spinner } from "./ui.ts";
 /** Returned by {@link ToolCommandDef.prepare} to stop without running the tool. */
 export const CANCELLED = Symbol("cancelled");
 
+/** Returned by {@link ToolCommandDef.prepare} when it has already finished the command, e.g. a dry run that printed its plan. */
+export const DONE = Symbol("done");
+
 /** The result of turning CLI arguments into a single tool invocation. */
 export interface Prepared<Schema extends z.ZodObject> {
   /** Validated by the tool's schema before it runs. */
   input: z.input<Schema>;
   /** Confirmation gate. Required for destructive tools; closes over what `prepare` resolved so the prompt can name the resource. */
   confirm?: () => Promise<boolean>;
+  /** Layered over the environment for this invocation only, e.g. credentials entered at a prompt; never part of `input`. */
+  env?: ToolEnv;
 }
 
 interface ToolCommandDef<A, Schema extends z.ZodObject, Result> {
@@ -26,15 +36,23 @@ interface ToolCommandDef<A, Schema extends z.ZodObject, Result> {
   aliases?: readonly string[];
   /** Defaults to the tool's description. */
   describe?: string;
+  hidden?: boolean;
   examples?: ReadonlyArray<readonly [string, string]>;
+  epilogue?: string;
   builder?: (yargs: Argv) => Argv<A>;
+  /** Argument validation that should fail before any prompt or API call. */
+  preRun?: (args: A & GlobalArgs) => Promise<void>;
   /** Turn CLI arguments into one invocation. Prompts, pickers, manifest lookups, and confirmations all belong here. */
   prepare: (
     args: A & GlobalArgs,
     ctx: ToolContext,
-  ) => Promise<Prepared<Schema> | typeof CANCELLED>;
+  ) => Promise<Prepared<Schema> | typeof CANCELLED | typeof DONE>;
   /** Spinner text while the tool runs. Tool progress messages replace it. */
   progress?: string;
+  /** Ctrl-C aborts the tool's signal instead of killing the process, so it can stop cleanly and return; a second Ctrl-C exits. */
+  interruptible?: boolean;
+  /** Reword a tool error for the CLI, e.g. put a command into a host-neutral hint. Returns the error to throw, or undefined to rethrow the original. */
+  onError?: (error: unknown, args: A & GlobalArgs) => Error | undefined;
   /** CLI-local follow-up such as manifest cleanup. Runs for every output format. */
   after?: (result: Result, args: A & GlobalArgs) => void | Promise<void>;
   /** Take over printing entirely, ahead of both json and `render`. Return true once it has printed. */
@@ -71,14 +89,19 @@ export function defineToolCommand<A, Schema extends z.ZodObject, Result>(
     command: def.command,
     aliases: def.aliases,
     describe: def.describe ?? def.tool.description,
+    hidden: def.hidden,
     examples: def.examples,
+    epilogue: def.epilogue,
     builder: def.builder,
+    preRun: def.preRun,
 
     handler: async (args) => {
       const config = resolveConfig(args.profile, args.apiKey, args.verbose);
       const spin = spinner(def.progress ?? "Working...");
+      const controller = new AbortController();
       const ctx = toolContext(config, {
         verbose: args.verbose,
+        signal: controller.signal,
         // Only steer the spinner while it runs, so progress never overwrites a prompt shown during prepare().
         onProgress: (message) => {
           if (spin.isSpinning) spin.text = message;
@@ -86,6 +109,7 @@ export function defineToolCommand<A, Schema extends z.ZodObject, Result>(
       });
 
       const prepared = await def.prepare(args, ctx);
+      if (prepared === DONE) return;
       if (prepared === CANCELLED) {
         logger.log("Cancelled.");
         return;
@@ -102,12 +126,25 @@ export function defineToolCommand<A, Schema extends z.ZodObject, Result>(
         return;
       }
 
+      const exitNow = () => process.exit(130);
+      const interrupt = () => {
+        controller.abort();
+        process.once("SIGINT", exitNow);
+      };
+      if (def.interruptible) process.once("SIGINT", interrupt);
       spin.start();
       let result: Result;
       try {
-        result = await def.tool.invoke(ctx, prepared.input);
+        const runCtx = prepared.env
+          ? extendToolContext(ctx, { env: prepared.env })
+          : ctx;
+        result = await def.tool.invoke(runCtx, prepared.input);
+      } catch (error) {
+        throw def.onError?.(error, args) ?? error;
       } finally {
         spin.stop();
+        process.off("SIGINT", interrupt);
+        process.off("SIGINT", exitNow);
       }
 
       await def.after?.(result, args);

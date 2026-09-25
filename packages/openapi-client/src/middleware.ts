@@ -36,7 +36,7 @@ const STATUS_MESSAGES: Record<number, string> = {
 
 /**
  * Extract a normalized error from a parsed response body.
- * Each entry handles one API error format — first match wins.
+ * Each entry handles one API error format; first match wins.
  */
 const extractors: Array<
   (
@@ -52,6 +52,10 @@ const extractors: Array<
   // ApiErrorData (Core / Compute)
   (b) =>
     b?.Message ? { message: b.Message, field: b.Field ?? undefined } : null,
+
+  // StatusModel (Stream): lowercase `message`, which the Core extractor above misses.
+  (b) =>
+    typeof b?.message === "string" && b.message ? { message: b.message } : null,
 ];
 
 /**
@@ -67,14 +71,37 @@ const extractors: Array<
  * - **Magic Containers** use RFC 7807 (`{ title, status, detail, errors[] }`).
  *   All error status codes have a JSON body.
  *
- * Command handlers never need to check `response.ok` or parse error bodies —
+ * Command handlers never need to check `response.ok` or parse error bodies:
  * a failed request throws before it reaches handler code.
  */
 
-const SECRET_KEY = /password|secret|token|accesskey|apikey|credential/i;
+const SECRET_KEY =
+  /password|secret|token|accesskey|api[-_]?key|credential|authorization/i;
+const URL_SCHEME = /https?:\/\//i;
+
+// A URL's query string is where pre-signed credentials live (X-Amz-Signature, bearer params), so it goes wholesale, as does any userinfo.
+function redactUrl(token: string): string {
+  const scheme = token.search(URL_SCHEME);
+  if (scheme === -1) return token;
+  const host = token.indexOf("//", scheme) + 2;
+  let end = host;
+  while (end < token.length && !"/?#".includes(token.charAt(end))) end++;
+  const at = token.lastIndexOf("@", end - 1);
+  const authority =
+    at >= host ? `[redacted]${token.slice(at, end)}` : token.slice(host, end);
+  let rest = token.slice(end);
+  const query = rest.indexOf("?");
+  const hash = rest.indexOf("#");
+  if (query !== -1 && (hash === -1 || query < hash)) {
+    rest = `${rest.slice(0, query)}?[redacted]${hash === -1 ? "" : rest.slice(hash)}`;
+  }
+
+  return `${token.slice(0, host)}${authority}${rest}`;
+}
 
 function redact(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redact);
+  if (typeof value === "string") return value.replace(/\S+/g, redactUrl);
   if (value === null || typeof value !== "object") return value;
   return Object.fromEntries(
     Object.entries(value).map(([key, child]) => [
@@ -101,13 +128,24 @@ export function authMiddleware(options: ClientOptions): Middleware {
       request.headers.set("User-Agent", userAgent);
 
       if (debug) {
-        debug(`→ ${request.method} ${request.url}`);
+        debug(`→ ${request.method} ${redact(request.url)}`);
         if (request.body) {
-          const cloned = request.clone();
-          try {
-            const body = await cloned.json();
-            debug(`→ Body: ${JSON.stringify(redact(body), null, 2)}`);
-          } catch {}
+          const contentType = request.headers.get("content-type") ?? "";
+          if (looksLikeJson(contentType)) {
+            const cloned = request.clone();
+            try {
+              const body = await cloned.json();
+              debug(`→ Body: ${JSON.stringify(redact(body), null, 2)}`);
+            } catch {}
+          } else {
+            // Never read a non-JSON body: a binary upload would be buffered in full just to be logged.
+            const length = request.headers.get("content-length");
+            debug(
+              `→ Body (${contentType || "no content-type"}): ${
+                length ? `${length} bytes, not logged` : "not logged"
+              }`,
+            );
+          }
         }
       }
 
@@ -138,7 +176,7 @@ export function authMiddleware(options: ClientOptions): Middleware {
       // default). Callers that fetch downloads opt out via parseAs: "text"
       // (etc.), so a non-JSON body is expected there and passes through. A
       // non-JSON body on a JSON call is almost always a CDN / proxy / captive
-      // portal serving an HTML error page with a 200 status — surface that as
+      // portal serving an HTML error page with a 200 status; surface that as
       // a clear ApiError instead of letting openapi-fetch crash on JSON.parse.
       if (response.ok) {
         const parseAs = options?.parseAs ?? "json";

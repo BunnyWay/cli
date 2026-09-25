@@ -3,6 +3,7 @@ import {
   createCoreClient,
   createDbClient,
   createMcClient,
+  createStreamClient,
   UserError,
 } from "@bunny.net/openapi-client";
 import {
@@ -13,6 +14,7 @@ import {
 export type CoreClient = ReturnType<typeof createCoreClient>;
 export type DbClient = ReturnType<typeof createDbClient>;
 export type McClient = ReturnType<typeof createMcClient>;
+export type StreamClient = ReturnType<typeof createStreamClient>;
 
 /** API clients a tool may reach for. Created on first access, then reused. */
 export interface ToolClients {
@@ -21,6 +23,8 @@ export interface ToolClients {
   readonly mc: McClient;
   /** The OCI registry. Not generated from a spec, so it is hand-rolled in `registry/client.ts`. */
   readonly registry: RegistryClient;
+  /** A Stream client for one video library: its own host, authenticated with that library's key instead of the account key. */
+  streamLibrary(apiKey: string): StreamClient;
 }
 
 export interface ToolContextOptions {
@@ -39,7 +43,13 @@ export interface ToolContextOptions {
   onDebug?: (message: string) => void;
   /** Pre-built clients, for tests and hosts that construct their own. */
   clients?: Partial<ToolClients>;
+  /** Where tools read host configuration such as third-party source credentials. Defaults to empty: a host opts in to exposing its environment. */
+  env?: ToolEnv;
+  /** Let source adapters fall back to ambient credentials (AWS profiles, SSO, instance roles). Off by default; only a host acting as the local user should enable it. */
+  allowAmbientCredentials?: boolean;
 }
+
+export type ToolEnv = Readonly<Record<string, string | undefined>>;
 
 /**
  * Everything a tool needs from its host: credentials, clients, cancellation,
@@ -49,6 +59,12 @@ export interface ToolContextOptions {
 export interface ToolContext {
   readonly clients: ToolClients;
   readonly signal?: AbortSignal;
+  /** Host environment; third-party credentials are read from here so they never travel in tool input. */
+  readonly env: ToolEnv;
+  /** Identifies the host to third-party APIs a tool calls, e.g. a video source. */
+  readonly userAgent: string;
+  /** Whether source adapters may use credentials found outside `env`, such as a local AWS profile. */
+  readonly allowAmbientCredentials: boolean;
   progress(message: string): void;
   debug(message: string): void;
 }
@@ -106,12 +122,43 @@ export function createToolContext(
         }),
       );
     },
+    streamLibrary(apiKey) {
+      const injected = options.clients?.streamLibrary;
+      if (injected) return injected(apiKey);
+      return createStreamClient({
+        apiKey,
+        verbose: Boolean(options.onDebug),
+        userAgent: options.userAgent ?? DEFAULT_USER_AGENT,
+        onDebug: options.onDebug,
+      });
+    },
   };
 
   return {
     clients,
     signal: options.signal,
+    env: options.env ?? {},
+    userAgent: options.userAgent ?? DEFAULT_USER_AGENT,
+    allowAmbientCredentials: options.allowAmbientCredentials ?? false,
     progress: (message) => options.onProgress?.(message),
     debug: (message) => options.onDebug?.(message),
+  };
+}
+
+export interface ToolContextOverrides {
+  /** Layered over the context's env for this invocation only, e.g. credentials a host just prompted for. */
+  env?: ToolEnv;
+  onProgress?: (message: string) => void;
+}
+
+/** A context sharing `ctx`'s clients, with an env overlay or a different progress sink. */
+export function extendToolContext(
+  ctx: ToolContext,
+  overrides: ToolContextOverrides,
+): ToolContext {
+  return {
+    ...ctx,
+    env: overrides.env ? { ...ctx.env, ...overrides.env } : ctx.env,
+    progress: overrides.onProgress ?? ctx.progress,
   };
 }

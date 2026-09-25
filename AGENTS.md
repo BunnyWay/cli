@@ -43,20 +43,22 @@ Platform primitives: `Bun.serve()` (auth callback server), `Bun.spawn()` (browse
 
 Bun workspace monorepo. Run `ls packages/` for the authoritative list; the platform-specific binary packages (`cli-*`, `database-shell-*`) hold only a `package.json` plus a compiled binary and are published by CI.
 
-| Package                           | Published | Purpose                                                                                |
-| --------------------------------- | --------- | -------------------------------------------------------------------------------------- |
-| `@bunny.net/cli`                  | yes       | The CLI. Depends on everything below.                                                  |
-| `@bunny.net/openapi-client`       | yes       | Type-safe API client generated from OpenAPI specs. Zero CLI deps.                      |
-| `@bunny.net/database-client`      | yes       | SQL client for Bunny Database. `fetch`-only hrana-over-HTTP. Zero deps.                |
-| `@bunny.net/database-shell`       | yes       | Standalone SQL shell engine (REPL, dot-commands, formatting, masking). Binary: `bsql`. |
-| `@bunny.net/sandbox`              | yes       | Sandbox SDK over Magic Containers provisioning plus an SSH/SFTP transport.             |
-| `@bunny.net/scriptable-dns-types` | yes       | Ambient declarations for the Scriptable DNS runtime globals. Types only.               |
-| `@bunny.net/database-rest`        | no        | Mountable REST surface over a database.                                                |
-| `@bunny.net/database-adapter`     | no        | Introspection and adapter layer shared by studio and REST.                             |
-| `@bunny.net/database-openapi`     | no        | OpenAPI description of the REST surface.                                               |
-| `@bunny.net/database-studio`      | no        | Local web UI served by `db studio`.                                                    |
-| `@bunny.net/config`               | no        | Zod schemas, types, and JSON Schema for `bunny.jsonc`.                                 |
-| `@bunny.net/tools`                | yes       | Typed tool definitions (Zod schema, kind, run) shared by the CLI and any tool host.    |
+| Package                           | Published | Purpose                                                                                      |
+| --------------------------------- | --------- | -------------------------------------------------------------------------------------------- |
+| `@bunny.net/cli`                  | yes       | The CLI. Depends on everything below.                                                        |
+| `@bunny.net/openapi-client`       | yes       | Type-safe API client generated from OpenAPI specs. Zero CLI deps.                            |
+| `@bunny.net/database-client`      | yes       | SQL client for Bunny Database. `fetch`-only hrana-over-HTTP. Zero deps.                      |
+| `@bunny.net/database-shell`       | yes       | Standalone SQL shell engine (REPL, dot-commands, formatting, masking). Binary: `bsql`.       |
+| `@bunny.net/sandbox`              | yes       | Sandbox SDK over Magic Containers provisioning plus an SSH/SFTP transport.                   |
+| `@bunny.net/scriptable-dns-types` | yes       | Ambient declarations for the Scriptable DNS runtime globals. Types only.                     |
+| `@bunny.net/database-rest`        | no        | Mountable REST surface over a database.                                                      |
+| `@bunny.net/database-adapter`     | no        | Introspection and adapter layer shared by studio and REST.                                   |
+| `@bunny.net/database-openapi`     | no        | OpenAPI description of the REST surface.                                                     |
+| `@bunny.net/database-studio`      | no        | Local web UI served by `db studio`.                                                          |
+| `@bunny.net/config`               | no        | Zod schemas, types, and JSON Schema for `bunny.jsonc`.                                       |
+| `@bunny.net/tools`                | no        | Typed tool definitions (Zod schema, kind, run) shared by the CLI and any tool host.          |
+| `@bunny.net/stream-import`        | yes       | Headless Stream import engine: discovery, dedup, collection mapping, fetch, resumable state. |
+| `@bunny.net/stream-import-<src>`  | yes       | One source adapter per package: vimeo, s3, wistia, mux, cloudflare, jwplayer, brightcove.    |
 
 Each package's README is the reference for its public API. Do not restate it here.
 
@@ -133,7 +135,7 @@ Groups subcommands and enforces `demandCommand(1)`, so a bare namespace shows he
 
 `@bunny.net/tools` holds the work; the CLI holds the experience. One tool definition backs every surface: a yargs command today, an MCP or other tool host next, and a direct import in an agent.
 
-**Target architecture.** Every remote operation lives in a tool; a CLI command is glue: flags in, prompts and confirmations, tool invocation, rendering out. Command modules must not create API clients or call endpoints directly. `packages/cli/src/core/tools-boundary.test.ts` enforces this with an explicit `PENDING_MIGRATION` allowlist: new direct client use fails the test, and migrating a family removes its entries (the list only shrinks). Currently migrated: `apps registries`, `registry`. Host-inherent flows stay in the CLI even at the end state: `auth login` (browser plus loopback callback), docker build/push in `apps deploy`, interactive pickers, and `.env`/`bunny.jsonc` writes.
+**Target architecture.** Every remote operation lives in a tool; a CLI command is glue: flags in, prompts and confirmations, tool invocation, rendering out. Command modules must not create API clients or call endpoints directly. `packages/cli/src/core/tools-boundary.test.ts` enforces this with an explicit `PENDING_MIGRATION` allowlist: new direct client use fails the test, and migrating a family removes its entries (the list only shrinks). Currently migrated: `apps registries`, `registry`, `stream import`. Host-inherent flows stay in the CLI even at the end state: `auth login` (browser plus loopback callback), docker build/push in `apps deploy`, interactive pickers, and `.env`/`bunny.jsonc` writes.
 
 ### `defineTool(def)`
 
@@ -155,11 +157,16 @@ Rules that keep the surfaces honest:
 - **Tools never prompt and never print.** No `prompts`, no `logger`, no spinners. Progress is reported with `ctx.progress(message)` and the host decides how to show it.
 - **Tools return normalized data, not raw API models.** `toRegistry` maps the API payload to a stable camelCase shape and strips credentials. Each shape is a Zod schema with the type inferred from it; this is the contract every surface sees, and it is what `--output json` prints for converted commands.
 - **Input is validated before `run`.** `tool.invoke(ctx, input)` Zod-parses first and rejects with a `UserError` naming the offending field. Results are not validated against `resultSchema`; it is declarative.
-- **`kind` is declared, not inferred.** `read` touches nothing, `write` creates or updates remote state, `destructive` deletes data or cannot be undone. `defineToolCommand` refuses to run a destructive tool without a confirmation.
-- **`sensitive` marks credential-bearing results; `localFiles` marks host-local path inputs.** Masking and exclusion are the host's call; the tool always returns the real value.
+- **`kind` is declared, not inferred, and describes remote state only** (bunny.net, or a third-party source). `read` changes nothing remote, `write` creates or updates remote state, `destructive` deletes data or cannot be undone. Local files a tool writes, such as the `stream.import.*` journal, do not change its kind; `localFiles` declares them, so `stream.import.status` stays `read` while refreshing its journal. `defineToolCommand` refuses to run a destructive tool without a confirmation.
+- **`sensitive` marks credential-bearing results; `localFiles` marks tools that read or write the host's filesystem** (path inputs, a local journal). Masking and exclusion are the host's call; the tool always returns the real value.
 - **The package stays Node-portable.** `node:` builtins only, relative imports (the `@/` alias is CLI-only), no `Bun.*` globals. It is an internal workspace package today, consumed as source and bundled into the CLI binary; the constraint is what keeps a future tool server able to import it.
 
-`ToolContext` (from `createToolContext`) carries credentials, lazily created memoized API clients (`ctx.clients.core`, `ctx.clients.db`, `ctx.clients.mc`), an optional `AbortSignal`, and `progress`/`debug` callbacks. Pass `clients` to inject fakes in tests. The CLI builds it with `toolContext(config, { verbose })` from `core/tool-context.ts`, which defers the "Not logged in." check to first client use.
+`ToolContext` (from `createToolContext`) carries credentials, lazily created memoized API clients (`ctx.clients.core`, `ctx.clients.db`, `ctx.clients.mc`, plus `ctx.clients.streamLibrary(key)` for one library's own Stream key), an optional `AbortSignal`, `ctx.env` (host environment, default `{}`), `ctx.allowAmbientCredentials` (default false), `ctx.userAgent`, and `progress`/`debug` callbacks. Pass `clients` to inject fakes in tests and `env` to pin the environment. The CLI builds it with `toolContext(config, { verbose })` from `core/tool-context.ts`, which defers the "Not logged in." check to first client use and writes debug lines above any live spinner (`aboveSpinners` in `core/ui.ts`). A live client is not serializable, so it is never a tool result; tools-layer helpers such as `openStreamLibrary(ctx, ref)` open one for a tool's own use and are not exported.
+
+- **Third-party credentials never appear in tool input.** Input lands in a model's context, so a tool reads secrets for other platforms (the `stream import` source credentials) from `ctx.env` and fails naming the missing variables. A host that prompts for them layers the answers over the environment for one invocation with `extendToolContext(ctx, { env })` (from `prepare`, return them as `env`), never as input fields. Non-secret options (an S3 bucket, a timeout) may be input.
+- **A tool sees only the environment its host hands it.** `ctx.env` defaults to empty, never the live `process.env`, and tools never read `process.env` or `homedir()` themselves (the import journal needs `XDG_STATE_HOME` or `HOME` in `ctx.env`). The CLI passes `process.env` explicitly in `core/tool-context.ts`, and any prompt that checks for a missing value must check the same `ctx.env`.
+- **Ambient credentials are opt-in.** `allowAmbientCredentials` lets a source adapter use credentials outside `ctx.env` (an AWS profile, SSO, an instance role). Only a host acting as the local user sets it; the CLI does, a shared tool server should not.
+- **Tool errors are host-neutral.** A hint names input fields (`source`, `library`) and env variables, never a CLI command or flag. When CLI wording helps, the command adds it: `defineToolCommand`'s `onError(error, args)` rewrites a tool error (a typed error such as `SavedImportError` carries the fields to word it), or `prepare` fails first with CLI-worded checks.
 
 ### `defineToolCommand(def)`
 
@@ -181,7 +188,7 @@ export const registryRemoveCommand = defineToolCommand({
 });
 ```
 
-`--output json` prints the tool result verbatim and skips `render`, so a CLI run and any other host return the same document. Destructive tools must return a `confirm()` from `prepare`; `write` tools may. Three optional hooks cover what a single `render` cannot: `emit(result, args)` takes over printing entirely (alternate emitters like `--format rclone`), `json(result, args)` reshapes before the JSON print (mask a secret), `after(result, args)` runs CLI-local follow-up such as manifest cleanup for every output format.
+`--output json` prints the tool result verbatim and skips `render`, so a CLI run and any other host return the same document. Destructive tools must return a `confirm()` from `prepare`; `write` tools may. `prepare` may return `CANCELLED` (prints "Cancelled.") or `DONE`, when it has already finished the command itself (a dry run that invoked a read tool and printed its plan); `preRun`, `hidden`, and `epilogue` pass through to `defineCommand`. Three optional hooks cover what a single `render` cannot: `emit(result, args)` takes over printing entirely (alternate emitters like `--format rclone`), `json(result, args)` reshapes before the JSON print (mask a secret), `after(result, args)` runs CLI-local follow-up such as manifest cleanup for every output format, and `onError(error, args)` rewords a tool error for the CLI. `interruptible: true` turns the first Ctrl-C into an abort of `ctx.signal` so a long tool can stop cleanly and return (a second Ctrl-C exits).
 
 Commands that orchestrate several tools stay on `defineCommand` and call `tool.invoke(ctx, input)` directly, building the context with `toolContext(config, { verbose })`.
 
@@ -595,6 +602,7 @@ Per-package deviations, each with a reason:
 - **`openapi-client`** regenerates its gitignored types first, then runs `scripts/build.ts`, which drives the TypeScript compiler API and copies the generated `.d.ts` into `dist/generated/` (tsc never emits its own inputs). `rewriteRelativeImportExtensions` fixes specifiers in emitted **JS**; TypeScript has no declaration-emit equivalent, so an `afterDeclarations` transformer rewrites them in the emitted **`.d.ts`** on the AST.
 - **`sandbox`** depends on `openapi-client` with `workspace:*`, so its release job uses `bun publish`, which rewrites that spec to the local version in the tarball. `npm publish` would ship the unresolvable `workspace:*` verbatim. Its `tsconfig.build.json` overrides `paths` to `{}` so openapi-client resolves via `dist/` instead of source, which would otherwise violate `rootDir`; the job therefore builds openapi-client first.
 - **`tools`** follows the `sandbox` pattern exactly: `workspace:*` on `openapi-client`, `paths: {}` in `tsconfig.build.json`, openapi-client built first, `bun publish`. It also imports the per-API type entrypoint `@bunny.net/openapi-client/magic-containers`, which resolves through openapi-client's `exports` once that `dist/` exists.
+- **`stream-import` and the `stream-import-<source>` adapters** follow the `sandbox` pattern: the engine takes `workspace:*` on `openapi-client` and each adapter takes `workspace:^` on the engine, `paths: {}` in `tsconfig.build.json`, dependencies built first, `bun publish`. The engine never imports an adapter; `packages/tools/src/stream/import/sources.ts` is the only registry (the CLI reaches the adapters through `@bunny.net/tools/stream`, not directly), so a host that drives the engine itself can bring its own adapter without loading the others (the S3 adapter alone carries the AWS SDK).
 - **`database-client`** is the simplest case: zero dependencies, so `npm publish` works, and no declaration transformer. `tsconfig.build.json` sets `include: ["src"]` to keep `examples/` out of the program. Because the program is scoped to `src`, the package cannot import its own `package.json`, which is why its default `User-Agent` is versionless.
 
 Publish jobs for independently versioned packages are gated on a version bump detected via `npm view`. Only the CLI and its platform packages are in a `fixed` group.
