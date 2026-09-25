@@ -41,3 +41,7 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 Create an OAuth client at studio.brightcove.com/admin/oauthclient with CMS video read permissions.
 
 Brightcove folders become Stream collections. The highest-resolution MP4 rendition wins, falling back to the digital master. The dedup metaTag is `brightcoveId`.
+
+## Disclaimer
+
+This tool is provided as-is under the MIT License. It is not affiliated with, endorsed by, or sponsored by Brightcove Inc. "Brightcove" is a registered trademark of Brightcove Inc. Use of the name is purely descriptive.

@@ -39,3 +39,7 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 Create the token at developer.vimeo.com/apps with the `public`, `private`, and `video_files` scopes. Download links are only exposed on a Standard plan or above; on lower tiers the adapter falls back to the highest-resolution progressive MP4 file (HLS and DASH manifests are never used).
 
 Vimeo projects become Stream collections. The dedup metaTag is `vimeoId`, holding the numeric video ID. Download URLs are checked against the Vimeo CDN host allowlist before they reach bunny.net.
+
+## Disclaimer
+
+This tool is provided as-is under the MIT License. It is not affiliated with, endorsed by, or sponsored by Vimeo, Inc. "Vimeo" is a registered trademark of Vimeo, Inc. Use of the name is purely descriptive.

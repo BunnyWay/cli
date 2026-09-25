@@ -52,3 +52,7 @@ Objects in `GLACIER`, `DEEP_ARCHIVE`, or an Intelligent-Tiering archive tier are
 A pre-signed URL made from temporary credentials (an STS or SSO session) stops working when that session expires, whatever `S3_PRESIGNED_URL_TTL` says.
 
 Accepted download hosts: `{bucket}.s3.amazonaws.com`, `{bucket}.s3.{region}.amazonaws.com`, the path-style `s3.amazonaws.com` and `s3.{region}.amazonaws.com`, `{bucket}.s3-accelerate.amazonaws.com`, the dualstack and FIPS variants of each, and the same under `.amazonaws.com.cn`. With a custom endpoint, only that endpoint's host (bare or with the bucket as a subdomain) is accepted.
+
+## Disclaimer
+
+This tool is provided as-is under the MIT License. It is not affiliated with, endorsed by, or sponsored by Amazon Web Services, Inc. or its affiliates. "Amazon S3" and "AWS" are registered trademarks of Amazon.com, Inc. or its affiliates. Use of the names is purely descriptive.
