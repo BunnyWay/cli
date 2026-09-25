@@ -3,6 +3,7 @@ import {
   createCoreClient,
   createDbClient,
   createMcClient,
+  createStreamClient,
   UserError,
 } from "@bunny.net/openapi-client";
 import {
@@ -13,6 +14,7 @@ import {
 export type CoreClient = ReturnType<typeof createCoreClient>;
 export type DbClient = ReturnType<typeof createDbClient>;
 export type McClient = ReturnType<typeof createMcClient>;
+export type StreamClient = ReturnType<typeof createStreamClient>;
 
 /** API clients a tool may reach for. Created on first access, then reused. */
 export interface ToolClients {
@@ -21,6 +23,8 @@ export interface ToolClients {
   readonly mc: McClient;
   /** The OCI registry. Not generated from a spec, so it is hand-rolled in `registry/client.ts`. */
   readonly registry: RegistryClient;
+  /** A Stream client for one video library: its own host, authenticated with that library's key instead of the account key. */
+  streamLibrary(apiKey: string): StreamClient;
 }
 
 export interface ToolContextOptions {
@@ -105,6 +109,16 @@ export function createToolContext(
           url: options.registryUrl,
         }),
       );
+    },
+    streamLibrary(apiKey) {
+      const injected = options.clients?.streamLibrary;
+      if (injected) return injected(apiKey);
+      return createStreamClient({
+        apiKey,
+        verbose: Boolean(options.onDebug),
+        userAgent: options.userAgent ?? DEFAULT_USER_AGENT,
+        onDebug: options.onDebug,
+      });
     },
   };
 

@@ -1,80 +1,79 @@
-import type { createCoreClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { UserError } from "@/core/errors.ts";
+import { UserError } from "@bunny.net/openapi-client";
+import type { components } from "@bunny.net/openapi-client/core";
+import type { CoreClient } from "../context.ts";
 
-export type CoreClient = ReturnType<typeof createCoreClient>;
 export type VideoLibraryModel = components["schemas"]["VideoLibraryModel"];
 
-/** Fetch all Stream video libraries on the account, paginated and sorted by name. */
+type Opts = { signal?: AbortSignal };
+
+/** Every video library on the account, paged through and sorted by name. */
 export async function fetchLibraries(
   client: CoreClient,
+  opts: Opts = {},
 ): Promise<VideoLibraryModel[]> {
   const libraries: VideoLibraryModel[] = [];
-  let page = 1;
-  for (;;) {
+  for (let page = 1; ; page++) {
     const { data } = await client.GET("/videolibrary", {
       params: { query: { page, perPage: 1000 } },
+      signal: opts.signal,
     });
     libraries.push(...(data?.Items ?? []));
     if (!data?.HasMoreItems) break;
-    page++;
   }
   return libraries.sort((a, b) => (a.Name ?? "").localeCompare(b.Name ?? ""));
 }
 
-/** Fetch a single video library by ID. */
 export async function fetchLibrary(
   client: CoreClient,
   id: number,
+  opts: Opts = {},
 ): Promise<VideoLibraryModel> {
   const { data } = await client.GET("/videolibrary/{id}", {
     params: { path: { id } },
+    signal: opts.signal,
   });
   if (!data) throw new UserError(`Video library ${id} not found.`);
   return data;
 }
 
-/**
- * Resolve a library reference (numeric ID or name) to a full library.
- *
- * Numeric input is treated as a library ID; anything else is matched against
- * the account's libraries by name.
- */
+/** A numeric reference is an ID; anything else must match a library name exactly, ignoring case. */
 export async function resolveLibrary(
   client: CoreClient,
-  nameOrId: string,
+  nameOrId: string | number,
+  opts: Opts = {},
 ): Promise<VideoLibraryModel> {
-  const ref = nameOrId.trim();
+  const ref = String(nameOrId).trim();
   if (!ref) throw new UserError("A library name or ID is required.");
+  if (/^\d+$/.test(ref)) return fetchLibrary(client, Number(ref), opts);
 
-  if (/^\d+$/.test(ref)) return fetchLibrary(client, Number(ref));
-
-  // page must be >= 1: at page 0 the endpoint returns a plain array instead of
-  // the { Items, ... } envelope, and the match below would never find anything.
+  // page must be >= 1: at page 0 the endpoint answers with a bare array instead of the { Items } envelope.
   const { data } = await client.GET("/videolibrary", {
     params: { query: { page: 1, search: ref, perPage: 1000 } },
+    signal: opts.signal,
   });
   const match = (data?.Items ?? []).find(
     (lib) => (lib.Name ?? "").toLowerCase() === ref.toLowerCase(),
   );
   if (!match?.Id) {
     throw new UserError(
-      `No video library found for "${nameOrId}".`,
-      "Omit the library to pick one from a list.",
+      `No video library found for "${ref}".`,
+      "Check the name, or pass the library ID.",
     );
   }
-  return fetchLibrary(client, match.Id);
+  return fetchLibrary(client, match.Id, opts);
 }
 
 /** The account that owns the API key; library IDs are only unique within it. */
-export async function fetchAccountId(client: CoreClient): Promise<string> {
-  const { data } = await client.GET("/user");
+export async function fetchAccountId(
+  client: CoreClient,
+  opts: Opts = {},
+): Promise<string> {
+  const { data } = await client.GET("/user", { signal: opts.signal });
   if (!data?.AccountId) {
     throw new UserError(
       "Could not determine the bunny.net account for this API key.",
       'Run "bunny whoami" to check the key, or "bunny login" to re-authenticate.',
     );
   }
-
   return data.AccountId;
 }

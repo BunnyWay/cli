@@ -1,4 +1,5 @@
 import {
+  acquireStateLock,
   BunnyStream,
   createFileStateStore,
   DEFAULT_PROCESSING_TIMEOUT,
@@ -10,11 +11,10 @@ import {
   videoStatusText,
 } from "@bunny.net/stream-import";
 import type { Argv, CommandModule } from "yargs";
-import { formatDuration } from "@/commands/stream/videos-api.ts";
 import { bunny } from "@/core/colors.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
-import { formatBytes, formatTable } from "@/core/format.ts";
+import { formatBytes, formatTable, formatTimeAgo } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { withSpinner } from "@/core/ui.ts";
 import {
@@ -26,16 +26,8 @@ import {
 import { requireSource, SOURCE_IDS } from "../import-sources.ts";
 
 interface StatusArgs {
-  lib?: string;
+  library?: string;
   source?: string;
-}
-
-/** `12:05 ago`, from an ISO timestamp; blank when the entry never started. */
-function ago(iso: string | null): string {
-  if (!iso) return "";
-  const seconds = (Date.now() - new Date(iso).getTime()) / 1000;
-
-  return seconds < 60 ? "just now" : `${formatDuration(seconds)} ago`;
 }
 
 export const streamImportStatusCommand: CommandModule =
@@ -44,7 +36,7 @@ export const streamImportStatusCommand: CommandModule =
     describe: "Show how far Bunny has got with a queued import.",
     examples: [
       [
-        "$0 stream import status --lib 12345 --source vimeo",
+        "$0 stream import status --library 12345 --source vimeo",
         "Progress of the Vimeo import into library 12345",
       ],
       ["$0 stream import status --output json", "The same, as JSON"],
@@ -52,11 +44,11 @@ export const streamImportStatusCommand: CommandModule =
 
     builder: (yargs) =>
       yargs
-        .option("lib", {
-          alias: "library",
+        .option("library", {
+          alias: "lib",
           type: "string",
           describe:
-            "Destination video library ID (defaults to the linked library)",
+            "Destination video library name or ID (defaults to the linked library)",
         })
         .option("source", {
           alias: "s",
@@ -69,7 +61,7 @@ export const streamImportStatusCommand: CommandModule =
     handler: async (args) => {
       const { output, verbose } = args;
       const { library, libraryId, accountId, stream } =
-        await connectImportTarget(args);
+        await connectImportTarget(args, { offerLink: true });
 
       const plugin = requireSource(
         args.source ?? findSavedImportSource(libraryId, accountId),
@@ -78,8 +70,8 @@ export const streamImportStatusCommand: CommandModule =
       const saved = readMigrationState(statePath);
       if (!saved) {
         throw new UserError(
-          `No ${plugin.label} import found for library ${library.Name}.`,
-          `Start one with \`bunny stream import --lib ${libraryId} --source ${plugin.id}\`.`,
+          `No ${plugin.label} import found for library ${library.name}.`,
+          `Start one with \`bunny stream import --library ${libraryId} --source ${plugin.id}\`.`,
         );
       }
 
@@ -94,7 +86,20 @@ export const streamImportStatusCommand: CommandModule =
         "Checking with Bunny...",
         () => refreshMigrationState(saved, engine),
       );
-      createFileStateStore(statePath).save(state);
+      // A live run owns the state file; its own saves will record what this refresh saw.
+      const lock = acquireStateLock(statePath);
+      if (lock) {
+        try {
+          createFileStateStore(statePath).save(state);
+        } finally {
+          lock.release();
+        }
+      } else {
+        logger.debug(
+          "An import is running for this library; not saving the refreshed state.",
+          verbose,
+        );
+      }
 
       const rows = state.videoMigrations.map((m) => {
         const video = m.bunnyVideoId ? videos.get(m.bunnyVideoId) : undefined;
@@ -130,7 +135,7 @@ export const streamImportStatusCommand: CommandModule =
         logger.log(
           JSON.stringify(
             {
-              library: { id: library.Id, name: library.Name },
+              library: { id: library.id, name: library.name },
               source: plugin.id,
               status: state.status,
               completed,
@@ -143,7 +148,7 @@ export const streamImportStatusCommand: CommandModule =
           ),
         );
       } else {
-        logger.log(bunny.bold(`${plugin.label} to ${library.Name}`));
+        logger.log(bunny.bold(`${plugin.label} to ${library.name}`));
         logger.log(
           formatTable(
             ["Video", "Bunny status", "Encoded", "Size", "Queued"],
@@ -152,7 +157,7 @@ export const streamImportStatusCommand: CommandModule =
               r.bunnyStatus,
               `${r.encodeProgress}%`,
               r.size ? formatBytes(r.size) : "",
-              ago(r.queuedAt),
+              formatTimeAgo(r.queuedAt),
             ]),
             output,
           ),
@@ -170,7 +175,7 @@ export const streamImportStatusCommand: CommandModule =
           for (const r of failed)
             logger.error(`${stripAnsi(r.name)}: ${r.error}`);
           logger.info(
-            `Retry with ${bunny(`bunny stream import --lib ${libraryId} --source ${plugin.id} --resume`)}`,
+            `Retry with ${bunny(`bunny stream import --library ${libraryId} --source ${plugin.id} --resume`)}`,
           );
         }
       }

@@ -135,7 +135,7 @@ Groups subcommands and enforces `demandCommand(1)`, so a bare namespace shows he
 
 `@bunny.net/tools` holds the work; the CLI holds the experience. One tool definition backs every surface: a yargs command today, an MCP or other tool host next, and a direct import in an agent.
 
-**Target architecture.** Every remote operation lives in a tool; a CLI command is glue: flags in, prompts and confirmations, tool invocation, rendering out. Command modules must not create API clients or call endpoints directly. `packages/cli/src/core/tools-boundary.test.ts` enforces this with an explicit `PENDING_MIGRATION` allowlist: new direct client use fails the test, and migrating a family removes its entries (the list only shrinks). Currently migrated: `apps registries`, `registry`. Host-inherent flows stay in the CLI even at the end state: `auth login` (browser plus loopback callback), docker build/push in `apps deploy`, interactive pickers, and `.env`/`bunny.jsonc` writes.
+**Target architecture.** Every remote operation lives in a tool; a CLI command is glue: flags in, prompts and confirmations, tool invocation, rendering out. Command modules must not create API clients or call endpoints directly. `packages/cli/src/core/tools-boundary.test.ts` enforces this with an explicit `PENDING_MIGRATION` allowlist: new direct client use fails the test, and migrating a family removes its entries (the list only shrinks). Currently migrated: `apps registries`, `registry`, `stream import`. Host-inherent flows stay in the CLI even at the end state: `auth login` (browser plus loopback callback), docker build/push in `apps deploy`, interactive pickers, and `.env`/`bunny.jsonc` writes.
 
 ### `defineTool(def)`
 
@@ -161,7 +161,7 @@ Rules that keep the surfaces honest:
 - **`sensitive` marks credential-bearing results; `localFiles` marks host-local path inputs.** Masking and exclusion are the host's call; the tool always returns the real value.
 - **The package stays Node-portable.** `node:` builtins only, relative imports (the `@/` alias is CLI-only), no `Bun.*` globals. It is an internal workspace package today, consumed as source and bundled into the CLI binary; the constraint is what keeps a future tool server able to import it.
 
-`ToolContext` (from `createToolContext`) carries credentials, lazily created memoized API clients (`ctx.clients.core`, `ctx.clients.db`, `ctx.clients.mc`), an optional `AbortSignal`, and `progress`/`debug` callbacks. Pass `clients` to inject fakes in tests. The CLI builds it with `toolContext(config, { verbose })` from `core/tool-context.ts`, which defers the "Not logged in." check to first client use.
+`ToolContext` (from `createToolContext`) carries credentials, lazily created memoized API clients (`ctx.clients.core`, `ctx.clients.db`, `ctx.clients.mc`, plus `ctx.clients.streamLibrary(key)` for one library's own Stream key), an optional `AbortSignal`, and `progress`/`debug` callbacks. Pass `clients` to inject fakes in tests. The CLI builds it with `toolContext(config, { verbose })` from `core/tool-context.ts`, which defers the "Not logged in." check to first client use. When a command must hand a live client to a headless engine (a client is not serializable, so it cannot be a tool result), a plain tools-layer helper opens it, as `openStreamLibrary(ctx, ref)` does for `stream import`; the command still never builds one.
 
 ### `defineToolCommand(def)`
 

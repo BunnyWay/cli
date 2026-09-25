@@ -12,6 +12,8 @@ interface CommandDef<A = Record<string, never>> {
   hidden?: boolean;
   /** Usage examples shown in `--help` output. Each entry is `[command, description]`. */
   examples?: ReadonlyArray<readonly [string, string]>;
+  /** Text shown at the end of `--help`, after the examples. */
+  epilogue?: string;
   /** Define command-specific flags and positional arguments. */
   builder?: (yargs: Argv) => Argv<A>;
   /**
@@ -123,6 +125,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
         y = y.example(cmd, desc) as any;
       }
     }
+    if (def.epilogue) y = y.epilogue(def.epilogue) as any;
     groupHelpOptions(y, def.command);
     return y.check(
       (argv) => rejectNaN(y, def.command, argv as Record<string, unknown>),

@@ -4,6 +4,7 @@ export type {
   CoreClient,
   DbClient,
   McClient,
+  StreamClient,
   ToolClients,
   ToolContext,
   ToolContextOptions,

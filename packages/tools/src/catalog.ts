@@ -3,6 +3,7 @@ import { appsTools } from "./apps/index.ts";
 import type { ToolContext } from "./context.ts";
 import type { Tool, ToolKind } from "./define-tool.ts";
 import { registryTools } from "./registry/index.ts";
+import { streamTools } from "./stream/index.ts";
 
 function index(all: Tool[]): Map<string, Tool> {
   const map = new Map<string, Tool>();
@@ -17,7 +18,9 @@ function index(all: Tool[]): Map<string, Tool> {
 
 /** Every tool, sorted by name. This is the curated surface a host or agent gets. */
 export const tools: readonly Tool[] = Object.freeze(
-  [...appsTools, ...registryTools].sort((a, b) => a.name.localeCompare(b.name)),
+  [...appsTools, ...registryTools, ...streamTools].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  ),
 );
 
 const byName = index([...tools]);

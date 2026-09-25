@@ -1,7 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { createCoreClient } from "@bunny.net/openapi-client";
 import {
   type CredentialField,
   describeSource,
@@ -12,59 +11,43 @@ import {
   type SourceConfigValues,
   type SourcePlugin,
 } from "@bunny.net/stream-import";
-import {
-  fetchAccountId,
-  type VideoLibraryModel,
-} from "@/commands/stream/api.ts";
+import type { StreamClient } from "@bunny.net/tools";
+import type { StreamLibrary } from "@bunny.net/tools/stream";
 import { resolveLibraryInteractive } from "@/commands/stream/interactive.ts";
-import {
-  connectStreamLibrary,
-  type StreamClient,
-} from "@/commands/stream/videos-api.ts";
-import { type ResolvedConfig, resolveConfig } from "@/config/index.ts";
-import { clientOptions } from "@/core/client-options.ts";
+import { resolveConfig } from "@/config/index.ts";
 import { bunny } from "@/core/colors.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
+import { toolContext } from "@/core/tool-context.ts";
 import type { GlobalArgs, OutputFormat } from "@/core/types.ts";
 import { isInteractive, prompts } from "@/core/ui.ts";
 import { requireSource, SOURCES } from "./import-sources.ts";
 
 export interface ImportTarget {
-  config: ResolvedConfig;
-  library: VideoLibraryModel;
+  library: StreamLibrary;
   libraryId: number;
   accountId: string;
   /** Authenticated with the library's own key, ready for the engine. */
   stream: StreamClient;
 }
 
-/** Resolve the destination library (flag, linked directory, or picker) and everything the import needs to talk to it. */
+/** Resolve the destination library (flag, linked directory, or picker); `offerLink: false` keeps a dry run from writing the link. */
 export async function connectImportTarget(
-  args: { lib?: string } & Pick<
+  args: { library?: string } & Pick<
     GlobalArgs,
     "profile" | "apiKey" | "output" | "verbose"
   >,
+  opts: { offerLink: boolean },
 ): Promise<ImportTarget> {
   const config = resolveConfig(args.profile, args.apiKey, args.verbose);
-  const coreClient = createCoreClient(clientOptions(config, args.verbose));
-  const library = await resolveLibraryInteractive(coreClient, args.lib, {
-    output: args.output,
-    offerLink: true,
-  });
-  const libraryId = library.Id as number;
-  const accountId = await fetchAccountId(coreClient);
+  const ctx = toolContext(config, { verbose: args.verbose });
+  const { library, accountId, client } = await resolveLibraryInteractive(
+    ctx,
+    args.library,
+    { output: args.output, offerLink: opts.offerLink },
+  );
 
-  return {
-    config,
-    library,
-    libraryId,
-    accountId,
-    stream: connectStreamLibrary(library, {
-      config,
-      verbose: args.verbose,
-    }),
-  };
+  return { library, libraryId: library.id, accountId, stream: client };
 }
 
 /** The one source with a saved import for this library, when `--source` was left out. */
@@ -121,10 +104,7 @@ export function importLogger(verbose: boolean): ImportLogger {
   };
 }
 
-/**
- * Settle which platform the videos come from: `--source` wins, then the only
- * source whose credentials are all in the environment, then a picker.
- */
+// `--source` wins, then the only source whose credentials are all in the environment, then a picker.
 export async function resolveImportSource(
   requested: string | undefined,
   output: OutputFormat,
@@ -165,11 +145,7 @@ export async function resolveImportSource(
   return requireSource(id);
 }
 
-/**
- * Resolve a source's credentials from flags and the environment, prompting for
- * whatever is still unset when the terminal allows it. Unattended runs fail
- * naming the environment variables instead.
- */
+/** Credentials from flags then the environment; when some are missing interactively, prompts only for required fields nobody set. */
 export async function resolveSourceCredentials<C>(
   plugin: SourcePlugin<C>,
   overrides: Record<string, string | number | undefined>,
@@ -183,16 +159,24 @@ export async function resolveSourceCredentials<C>(
     return parseSourceConfig(plugin, resolved);
   }
 
+  const explicit = resolveSourceConfig(plugin, {
+    overrides,
+    includeDefaults: false,
+  });
+  const toPrompt = plugin.credentials.filter(
+    (f) => f.required && explicit[f.key] === undefined,
+  );
+  // What is left is a bad combination of set values, which a prompt cannot fix.
+  if (toPrompt.length === 0) return parseSourceConfig(plugin, resolved);
+
   logger.log(bunny.bold(`${plugin.label} credentials`));
   const entered: SourceConfigValues = {};
-  for (const field of plugin.credentials) {
-    if (resolved[field.key] !== undefined && field.default === undefined)
-      continue;
-    const value = await promptCredential(field, resolved[field.key]);
-    if (value !== undefined) entered[field.key] = value;
+  for (const field of toPrompt) {
+    entered[field.key] = await promptCredential(field);
   }
+  const required = plugin.credentials.filter((f) => f.required);
   logger.dim(
-    `Set ${plugin.credentials.map((f) => f.env).join(", ")} to skip these prompts next time.`,
+    `Set ${required.map((f) => f.env).join(", ")} to skip these prompts next time.`,
   );
 
   return parseSourceConfig(
@@ -201,27 +185,20 @@ export async function resolveSourceCredentials<C>(
   );
 }
 
-async function promptCredential(
-  field: CredentialField,
-  current: string | number | undefined,
-): Promise<string | undefined> {
+async function promptCredential(field: CredentialField): Promise<string> {
   if (field.hint) logger.dim(`  ${field.hint}`);
-  const label = field.required ? field.label : `${field.label} (optional)`;
   const { value } = await prompts({
     type: field.secret ? "password" : "text",
     name: "value",
-    message: `${label}:`,
+    message: `${field.label}:`,
     initial:
-      field.secret || current === undefined ? undefined : String(current),
+      field.secret || field.default === undefined
+        ? undefined
+        : String(field.default),
   });
   if (value === undefined) throw new UserError("Cancelled.");
   const trimmed = String(value).trim();
-  if (!trimmed) {
-    if (field.required && current === undefined)
-      throw new UserError(`${field.label} is required.`);
-
-    return undefined;
-  }
-
-  return trimmed;
+  if (trimmed) return trimmed;
+  if (field.default !== undefined) return String(field.default);
+  throw new UserError(`${field.label} is required.`);
 }
