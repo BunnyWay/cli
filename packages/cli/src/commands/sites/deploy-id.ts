@@ -1,6 +1,6 @@
 import { runGit } from "@/core/git.ts";
 
-export interface HashedFile {
+interface HashedFile {
   /** Posix-style path relative to the deploy root. */
   path: string;
   /** Lowercase or uppercase hex SHA-256 of the file contents. */

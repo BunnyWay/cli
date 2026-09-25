@@ -89,6 +89,15 @@ export function notFoundSettings(
   return { Custom404FilePath: "", Rewrite404To200: false };
 }
 
+// A site's live URL: the custom domain when it has one, else its b-cdn.net host. Always https (b-cdn.net hosts carry bunny's certificate).
+export function productionUrl(
+  state: RemoteSiteState,
+  systemHost?: string,
+): string | undefined {
+  const host = state.domain ?? systemHost;
+  return host ? `https://${host}` : undefined;
+}
+
 /** Point production at `deployId`, remembering the outgoing deploy as previous. */
 export function markCurrent(state: RemoteSiteState, deployId: string): void {
   if (state.current && state.current !== deployId) {
@@ -176,13 +185,13 @@ export function isValidSiteName(name: string): boolean {
 }
 
 // Marks the zones as sites-managed in the dashboard; discovery doesn't key on it (that's pull zone shape + state).
-export const RESOURCE_PREFIX = "sites-";
+const RESOURCE_PREFIX = "sites-";
 
 const RESOURCE_SUFFIX_LENGTH = 6;
 const RESOURCE_SUFFIX_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789";
 
 // Zone names are global across bunny.net, so the random suffix keeps creates from colliding with other accounts' zones.
-export function randomResourceSuffix(): string {
+function randomResourceSuffix(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(RESOURCE_SUFFIX_LENGTH));
   return Array.from(
     bytes,

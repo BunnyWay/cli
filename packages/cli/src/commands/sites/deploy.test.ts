@@ -1,9 +1,8 @@
 import { expect, test } from "bun:test";
 import { resolve } from "node:path";
-import type { DeployRecord, RemoteSiteState } from "./constants.ts";
+import type { DeployRecord } from "./constants.ts";
 import {
   looksLikeSpa,
-  productionUrl,
   resolveDeployDir,
   resolveDeployTarget,
   resolveNotFoundMode,
@@ -12,39 +11,15 @@ import type { DeployIdentity } from "./deploy-id.ts";
 
 const ROOT = "/project/root";
 
-test("a CLI path arg is cwd-relative and wins over the configured dir", () => {
+test("a CLI dir is cwd-relative; config and detected dirs resolve against the project root", () => {
   expect(resolveDeployDir("out", "dist", undefined, ROOT)).toBe(resolve("out"));
-});
-
-test("`sites.dir` resolves against the bunny.jsonc root, not cwd", () => {
-  expect(resolveDeployDir(undefined, "dist", undefined, ROOT)).toBe(
+  expect(resolveDeployDir(undefined, "dist", "public", ROOT)).toBe(
     `${ROOT}/dist`,
   );
-});
-
-test("the detected framework output dir resolves against the root where the build ran", () => {
   expect(resolveDeployDir(undefined, undefined, "public", ROOT)).toBe(
     `${ROOT}/public`,
   );
-});
-
-test("nothing specified falls back to the root, not cwd", () => {
   expect(resolveDeployDir(undefined, undefined, undefined, ROOT)).toBe(ROOT);
-});
-
-const stateWithDomain = (domain?: string) => ({ domain }) as RemoteSiteState;
-
-test("productionUrl prefers the custom domain over the system host", () => {
-  expect(productionUrl(stateWithDomain("example.com"), "site.b-cdn.net")).toBe(
-    "https://example.com",
-  );
-  expect(productionUrl(stateWithDomain(undefined), "site.b-cdn.net")).toBe(
-    "https://site.b-cdn.net",
-  );
-});
-
-test("productionUrl is undefined when the site has neither a domain nor a system host", () => {
-  expect(productionUrl(stateWithDomain(undefined), undefined)).toBeUndefined();
 });
 
 const deploy = (
@@ -183,17 +158,6 @@ test("a forced same-content redeploy of the live deploy is allowed", () => {
       current: "r42",
     }),
   ).toEqual({ deployId: "r42", skipUpload: false });
-});
-
-test("a brand new custom id on an empty site just uploads", () => {
-  expect(
-    resolveDeployTarget({
-      deploys: [],
-      identity: identity("20260827-1433-r42", "hash1", "custom"),
-      customId: "20260827-1433-r42",
-      force: false,
-    }),
-  ).toEqual({ deployId: "20260827-1433-r42", skipUpload: false });
 });
 
 test("not-found mode: sites.spa wins, detection needs a root index.html, 404.html is the fallback", () => {

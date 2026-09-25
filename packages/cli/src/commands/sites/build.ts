@@ -7,7 +7,7 @@ import {
   readPackageJson,
 } from "./ci/frameworks.ts";
 
-export interface AutoBuild {
+interface AutoBuild {
   /** Shell command to run. */
   command: string;
   /** Human label for the prompt: the framework name, or a generic hint. */
