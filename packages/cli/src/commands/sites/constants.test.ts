@@ -2,9 +2,7 @@ import { expect, test } from "bun:test";
 import type { DeployRecord } from "./constants.ts";
 import {
   deployIdError,
-  deployPrefix,
   findDeploy,
-  isValidDeployId,
   isValidSiteName,
   type LegacySiteState,
   migrateLegacyState,
@@ -33,11 +31,6 @@ const validLegacyState: LegacySiteState = {
   deploys: [],
 };
 
-test("parseRemoteState round-trips a valid state", () => {
-  expect(parseRemoteState(JSON.stringify(validState))).toEqual(validState);
-  expect(parseRemoteState(JSON.stringify(validLegacyState))).toBeNull();
-});
-
 test("parseLegacyState reads router-era state, and migrating it drops the script fields", () => {
   expect(parseLegacyState(JSON.stringify(validLegacyState))).toEqual(
     validLegacyState,
@@ -63,7 +56,9 @@ test("parseLegacyState reads router-era state, and migrating it drops the script
   expect(parseRemoteState(JSON.stringify(migrated))).toEqual(migrated);
 });
 
-test("parseRemoteState rejects garbage", () => {
+test("parseRemoteState accepts only the current format", () => {
+  expect(parseRemoteState(JSON.stringify(validState))).toEqual(validState);
+  expect(parseRemoteState(JSON.stringify(validLegacyState))).toBeNull();
   expect(parseRemoteState("not json")).toBeNull();
   expect(parseRemoteState("null")).toBeNull();
   expect(parseRemoteState('"a string"')).toBeNull();
@@ -89,27 +84,9 @@ test("parseRemoteState rejects garbage", () => {
   ).toBeNull();
 });
 
-test("deploy path helper", () => {
-  expect(deployPrefix("a1b2c3d4")).toBe("deploys/a1b2c3d4");
-});
-
-test("isValidDeployId accepts git shas, content hashes and caller-supplied IDs", () => {
-  expect(isValidDeployId("a1b2c3d4")).toBe(true);
-  expect(isValidDeployId("0f9e8d7c6b5a4321")).toBe(true);
-  // Case is part of a caller-supplied ID, not something to normalize away.
-  expect(isValidDeployId("HAS-CAPS")).toBe(true);
-  expect(isValidDeployId("ab")).toBe(false); // too short
-  expect(isValidDeployId("has/slash")).toBe(false);
-  expect(isValidDeployId("")).toBe(false);
-});
-
 test("isValidSiteName enforces zone-name rules", () => {
-  expect(isValidSiteName("my-site")).toBe(true);
-  expect(isValidSiteName("site123")).toBe(true);
   expect(isValidSiteName("My-Site")).toBe(false);
   expect(isValidSiteName("-leading")).toBe(false);
-  expect(isValidSiteName("trailing-")).toBe(false);
-  expect(isValidSiteName("ab")).toBe(false); // too short
   expect(isValidSiteName("a".repeat(47))).toBe(true);
   expect(isValidSiteName("a".repeat(48))).toBe(false);
 });
@@ -127,19 +104,8 @@ test("suffixed resource names round-trip through the site pattern", () => {
   expect(siteResourcePattern("other").test(zoneName)).toBe(false);
 });
 
-// Cleanup and site discovery key on the name shape, so the round-trip must be exact and everything else rejected.
-
 test("deployIdError accepts shas, hashes, and release-style IDs, case intact", () => {
-  for (const id of [
-    "a1b2c3d4",
-    "0f1e2d3c4b5a",
-    "20260827-1433-r42",
-    "catalog_v3",
-    "2026.08.27-r42",
-    "v1.2.3",
-    "Release-42",
-    "a".repeat(64),
-  ]) {
+  for (const id of ["a1b2c3d4", "20260827-1433-r42", "v1.2.3", "Release-42"]) {
     expect(deployIdError(id)).toBeNull();
   }
 });

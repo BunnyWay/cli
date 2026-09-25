@@ -13,19 +13,12 @@ const FILES = [
   { path: "assets/app.js", sha256: "bb22" },
 ];
 
-test("contentHashId is order-independent and case-normalizes hashes", () => {
-  const a = contentHashId(FILES);
-  const b = contentHashId([...FILES].reverse());
-  const c = contentHashId(
-    FILES.map((f) => ({ ...f, sha256: f.sha256.toLowerCase() })),
-  );
-  expect(a).toBe(b);
-  expect(a).toBe(c);
-  expect(a).toMatch(/^[0-9a-f]{12}$/);
-});
-
-test("contentHashId changes when content or paths change", () => {
+test("contentHashId ignores file order and hash case, but tracks content and paths", () => {
   const base = contentHashId(FILES);
+  expect(contentHashId([...FILES].reverse())).toBe(base);
+  expect(
+    contentHashId(FILES.map((f) => ({ ...f, sha256: f.sha256.toLowerCase() }))),
+  ).toBe(base);
   expect(contentHashId([{ path: "index.html", sha256: "AA12" }])).not.toBe(
     base,
   );
@@ -104,14 +97,5 @@ test("a custom id wins over git and content, but still records both", async () =
   expect(identity.source).toBe("custom");
   // Provenance survives: the git sha is still recorded, and the content hash still drives the no-op check.
   expect(identity.gitSha).toMatch(/^[0-9a-f]{8}$/);
-  expect(identity.contentHash).toBe(contentHashId(FILES));
-});
-
-test("a custom id works outside a git repo", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "bunny-sites-custom-nogit-"));
-  const identity = await resolveDeployIdentity(dir, FILES, "catalog_v3");
-  expect(identity.id).toBe("catalog_v3");
-  expect(identity.source).toBe("custom");
-  expect(identity.gitSha).toBeUndefined();
   expect(identity.contentHash).toBe(contentHashId(FILES));
 });

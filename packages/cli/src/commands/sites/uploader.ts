@@ -2,29 +2,28 @@ import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { StorageZone } from "@/commands/storage/files-api.ts";
 import { mapWithConcurrency } from "@/core/concurrency.ts";
-import { UserError } from "@/core/errors.ts";
 import { siteFiles } from "./api.ts";
 import { deployPrefix } from "./constants.ts";
 
-export interface LocalFile {
+interface LocalFile {
   /** Posix-style path relative to the deploy root. */
   path: string;
   absPath: string;
   size: number;
 }
 
-export interface HashedLocalFile extends LocalFile {
+interface HashedLocalFile extends LocalFile {
   sha256: string;
 }
 
-export const DEFAULT_UPLOAD_CONCURRENCY = 8;
+const UPLOAD_CONCURRENCY = 8;
 const UPLOAD_ATTEMPTS = 3;
 
 // Dot-directories that carry web-visible content the site must serve.
 const ALLOWED_DOT_ENTRIES = new Set([".well-known"]);
 
 // Dotfiles/dirs and node_modules never ship (tooling, not content), except standards dirs like `.well-known` that must be served.
-export function shouldSkipEntry(name: string): boolean {
+function shouldSkipEntry(name: string): boolean {
   if (ALLOWED_DOT_ENTRIES.has(name)) return false;
   return name.startsWith(".") || name === "node_modules";
 }
@@ -67,7 +66,7 @@ async function hashFile(file: LocalFile): Promise<HashedLocalFile> {
 export async function hashFiles(
   files: LocalFile[],
 ): Promise<HashedLocalFile[]> {
-  return mapWithConcurrency(files, DEFAULT_UPLOAD_CONCURRENCY, hashFile);
+  return mapWithConcurrency(files, UPLOAD_CONCURRENCY, hashFile);
 }
 
 async function withRetries<T>(fn: () => Promise<T>): Promise<T> {
@@ -85,8 +84,7 @@ async function withRetries<T>(fn: () => Promise<T>): Promise<T> {
   throw lastErr;
 }
 
-export interface UploadDeployOptions {
-  concurrency?: number;
+interface UploadDeployOptions {
   onFileUploaded?: (done: number, total: number, file: HashedLocalFile) => void;
 }
 
@@ -97,26 +95,18 @@ export async function uploadDeploy(
   files: HashedLocalFile[],
   opts?: UploadDeployOptions,
 ): Promise<void> {
-  if (files.length === 0) {
-    throw new UserError("Nothing to upload; the deploy has no files.");
-  }
-
   const prefix = deployPrefix(deployId);
   let done = 0;
-  await mapWithConcurrency(
-    files,
-    opts?.concurrency ?? DEFAULT_UPLOAD_CONCURRENCY,
-    async (file) => {
-      await withRetries(() =>
-        siteFiles.upload(
-          connection,
-          `${prefix}/${file.path}`,
-          Bun.file(file.absPath).stream(),
-          { sha256Checksum: file.sha256.toUpperCase() },
-        ),
-      );
-      done++;
-      opts?.onFileUploaded?.(done, files.length, file);
-    },
-  );
+  await mapWithConcurrency(files, UPLOAD_CONCURRENCY, async (file) => {
+    await withRetries(() =>
+      siteFiles.upload(
+        connection,
+        `${prefix}/${file.path}`,
+        Bun.file(file.absPath).stream(),
+        { sha256Checksum: file.sha256.toUpperCase() },
+      ),
+    );
+    done++;
+    opts?.onFileUploaded?.(done, files.length, file);
+  });
 }

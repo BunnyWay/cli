@@ -197,7 +197,7 @@ export function findPreset(id: string): FrameworkPreset | undefined {
 }
 
 // Runner for a project-local binary; shared by the local build and the emitted CI workflow.
-export const PM_EXEC: Record<PackageManager, string> = {
+const PM_EXEC: Record<PackageManager, string> = {
   bun: "bunx",
   pnpm: "pnpm exec",
   yarn: "yarn",

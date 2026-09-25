@@ -1,5 +1,9 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { deleteDeployFiles, writeRemoteState } from "@/commands/sites/api.ts";
+import {
+  deleteDeployFiles,
+  rereadRemoteState,
+  writeRemoteState,
+} from "@/commands/sites/api.ts";
 import {
   DEFAULT_KEEP_DEPLOYS,
   isValidDeployId,
@@ -74,7 +78,7 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       output,
       force: args.force,
     });
-    const { state, connection, etag } = site;
+    const { state, connection } = site;
 
     const victims = pruneVictims(
       state.deploys,
@@ -109,10 +113,28 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
     }
 
     const failures: Array<{ id: string; error: string }> = [];
+    const pruned = new Set<string>();
+    const kept: string[] = [];
     await withSpinner("Pruning deploys...", async (spin) => {
-      const pruned = new Set<string>();
+      // Revalidate right before deleting: the site pick and confirmation are long enough for a concurrent publish to make a victim live.
+      const { state: latest, etag: latestEtag } = await rereadRemoteState(
+        connection,
+        "Retry the prune; nothing was deleted.",
+      );
+      const stillVictims = new Set(
+        pruneVictims(latest.deploys, keep, latest.current, latest.previous).map(
+          (d) => d.id,
+        ),
+      );
       for (const [index, victim] of victims.entries()) {
         spin.text = `Pruning ${victim.id} (${index + 1}/${victims.length})...`;
+        if (!stillVictims.has(victim.id)) {
+          // A deploy deleted concurrently is already gone, not kept.
+          if (latest.deploys.some((d) => d.id === victim.id)) {
+            kept.push(victim.id);
+          }
+          continue;
+        }
         try {
           // Never interpolate an unvalidated ID into a storage path.
           if (!isValidDeployId(victim.id)) {
@@ -126,20 +148,18 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
         }
       }
       // Only forget deploys whose files are actually gone.
-      state.deploys = state.deploys.filter((d) => !pruned.has(d.id));
-      await writeRemoteState(connection, state, etag, {
+      latest.deploys = latest.deploys.filter((d) => !pruned.has(d.id));
+      await writeRemoteState(connection, latest, latestEtag, {
         removedIds: [...pruned],
       });
     });
 
-    const prunedIds = victims
-      .filter((v) => !failures.some((f) => f.id === v.id))
-      .map((v) => v.id);
+    const prunedIds = [...pruned];
 
     if (output === "json") {
       logger.log(
         JSON.stringify(
-          { site: state.name, pruned: prunedIds, failures },
+          { site: state.name, pruned: prunedIds, kept, failures },
           null,
           2,
         ),
@@ -151,6 +171,11 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
     if (prunedIds.length > 0) {
       logger.success(
         `Pruned ${prunedIds.length} deploy(s): ${prunedIds.join(", ")}.`,
+      );
+    }
+    if (kept.length > 0) {
+      logger.info(
+        `Kept ${kept.join(", ")}: no longer prunable after a concurrent change.`,
       );
     }
     for (const failure of failures) {
