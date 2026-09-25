@@ -333,6 +333,40 @@ export async function applySiteCacheSettings(
   });
 }
 
+// Apply the site cache settings and return a restore for the zone's previous ones, so a failed first publish leaves an imported site as it was.
+async function swapSiteCacheSettings(
+  coreClient: CoreClient,
+  pullZoneId: number,
+): Promise<() => Promise<void>> {
+  const { data } = await coreClient.GET("/pullzone/{id}", {
+    params: { path: { id: pullZoneId } },
+  });
+  const originalSettings = {
+    CacheControlMaxAgeOverride: data?.CacheControlMaxAgeOverride,
+    CacheControlPublicMaxAgeOverride: data?.CacheControlPublicMaxAgeOverride,
+  };
+  await applySiteCacheSettings(coreClient, pullZoneId);
+  return async () => {
+    await coreClient.POST("/pullzone/{id}", {
+      params: { path: { id: pullZoneId } },
+      body: originalSettings,
+    });
+  };
+}
+
+// Block direct `deploys/` requests before a first upload; an imported zone only gets this rule then, since blocking it at import could hide nested paths the old site serves.
+export async function ensureDeployGate(
+  coreClient: CoreClient,
+  state: RemoteSiteState,
+  storageZone: StorageZoneModel,
+): Promise<void> {
+  const gate = siteRules(
+    { Id: state.storageZoneId, Name: storageZone.Name ?? "" },
+    PLACEHOLDER_DEPLOY,
+  ).find((rule) => rule.Description === GATE_RULE_DESC);
+  if (gate) await upsertEdgeRule(coreClient, state.pullZoneId, gate);
+}
+
 // The API's "no middleware script" sentinel on update. `null` is accepted and silently ignored, and `-1` is rejected as a missing script, so neither clears the field.
 const NO_MIDDLEWARE_SCRIPT = 0;
 
@@ -877,17 +911,22 @@ export async function promoteDeploy(opts: {
       "Re-run the command; the pull zone may still be provisioning.",
     );
   }
-  // Fallible settings go before the rules switch routing, so a failure leaves the old site serving.
-  if (!state.current) {
-    await applySiteCacheSettings(coreClient, state.pullZoneId);
+  // A first publish swaps in the site cache settings before routing changes, and puts the old ones back if the switch fails.
+  const restoreCache = state.current
+    ? undefined
+    : await swapSiteCacheSettings(coreClient, state.pullZoneId);
+  try {
+    await ensureSiteRules({
+      coreClient,
+      pullZoneId: state.pullZoneId,
+      storageZone,
+      deployId,
+    });
+    await ensureNotFoundSettings(coreClient, storageZone, state, deployId);
+  } catch (err) {
+    await restoreCache?.().catch(() => {});
+    throw err;
   }
-  await ensureSiteRules({
-    coreClient,
-    pullZoneId: state.pullZoneId,
-    storageZone,
-    deployId,
-  });
-  await ensureNotFoundSettings(coreClient, storageZone, state, deployId);
   await purge();
   await waitForEdgePropagation(host, deployId);
   await purge();
