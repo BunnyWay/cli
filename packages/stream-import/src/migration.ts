@@ -290,7 +290,9 @@ export class MigrationService {
           (m) =>
             m.status === "processing" &&
             m.bunnyVideoId &&
-            (!folderId || inScope.has(m.sourceVideoId)),
+            (!folderId ||
+              inScope.has(m.sourceVideoId) ||
+              m.sourceFolderId === folderId),
         );
         if (toAwait.length > 0) {
           this.logger.info(
