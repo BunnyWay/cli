@@ -67,10 +67,29 @@ function closingQuote(body: string, quote: string): number {
  * keys between.
  */
 export function parseDotenvEntries(text: string): DotenvParse {
-  const entries: DotenvEntry[] = [];
+  const { entries, unterminated } = parseDotenvSpans(text);
+  return {
+    entries: entries.map(({ key, value }) => ({ key, value })),
+    unterminated,
+  };
+}
+
+/** A parsed entry with the first and last line indexes it occupies. */
+export interface DotenvSpan extends DotenvEntry {
+  start: number;
+  end: number;
+}
+
+/** Like `parseDotenvEntries`, but each entry carries its line span. */
+export function parseDotenvSpans(text: string): {
+  entries: DotenvSpan[];
+  unterminated: string[];
+} {
+  const entries: DotenvSpan[] = [];
   const unterminated: string[] = [];
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
+    const start = i;
     const line = (lines[i] ?? "").trim();
     if (!line || line.startsWith("#")) continue;
 
@@ -83,7 +102,7 @@ export function parseDotenvEntries(text: string): DotenvParse {
     const rest = body.slice(eq + 1).trimStart();
     const quote = rest[0] === '"' || rest[0] === "'" ? rest[0] : undefined;
     if (!quote) {
-      entries.push({ key, value: stripComment(rest) });
+      entries.push({ key, value: stripComment(rest), start, end: i });
       continue;
     }
 
@@ -100,7 +119,12 @@ export function parseDotenvEntries(text: string): DotenvParse {
     }
 
     const raw = quoted.slice(0, closed);
-    entries.push({ key, value: quote === '"' ? expandEscapes(raw) : raw });
+    entries.push({
+      key,
+      value: quote === '"' ? expandEscapes(raw) : raw,
+      start,
+      end: i,
+    });
   }
   return { entries, unterminated };
 }

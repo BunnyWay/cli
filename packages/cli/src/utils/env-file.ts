@@ -3,7 +3,9 @@ import { dirname, join, resolve } from "node:path";
 import {
   type DotenvEntry,
   type DotenvParse,
+  type DotenvSpan,
   parseDotenvEntries,
+  parseDotenvSpans,
 } from "@/core/env.ts";
 import { UserError } from "@/core/errors.ts";
 
@@ -61,7 +63,7 @@ export function readEnvValue(
 
 /**
  * Set or update a key in a `.env` file.
- * If the key already exists, the line is replaced in-place.
+ * Every existing definition is replaced in place, keeping any `export ` prefix.
  * If the key doesn't exist, it's appended.
  * If no `envPath` is provided, writes to `cwd/.env` (creates if needed).
  */
@@ -79,11 +81,15 @@ export function writeEnvValue(
   }
 
   const content = readFileSync(target, "utf-8");
-  const regex = new RegExp(`^(export\\s+)?${escapeRegExp(key)}\\s*=.*$`, "gm");
+  const lines = content.split("\n");
+  const spans = keySpans(content, key);
 
-  if (regex.test(content)) {
-    const updated = content.replace(regex, (_, prefix = "") => prefix + line);
-    writeFileSync(target, updated, "utf-8");
+  if (spans.length > 0) {
+    for (const { start, end } of spans.reverse()) {
+      const prefix = lines[start]?.match(/^\s*export\s+/)?.[0] ?? "";
+      lines.splice(start, end - start + 1, prefix + line);
+    }
+    writeFileSync(target, lines.join("\n"), "utf-8");
   } else {
     const separator = content.endsWith("\n") || content === "" ? "" : "\n";
     writeFileSync(target, `${content + separator + line}\n`, "utf-8");
@@ -92,21 +98,18 @@ export function writeEnvValue(
   return target;
 }
 
-/**
- * Remove a key from a `.env` file.
- * Removes the entire line (including any trailing newline).
- */
+/** Remove every definition of a key from a `.env` file, including multiline values. */
 export function removeEnvValue(key: string, envPath: string): void {
   if (!existsSync(envPath)) return;
 
   const content = readFileSync(envPath, "utf-8");
-  const regex = new RegExp(
-    `^(?:export\\s+)?${escapeRegExp(key)}\\s*=.*\\n?`,
-    "gm",
-  );
-  writeFileSync(envPath, content.replace(regex, ""), "utf-8");
+  const lines = content.split("\n");
+  for (const { start, end } of keySpans(content, key).reverse()) {
+    lines.splice(start, end - start + 1);
+  }
+  writeFileSync(envPath, lines.join("\n"), "utf-8");
 }
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function keySpans(content: string, key: string): DotenvSpan[] {
+  return parseDotenvSpans(content).entries.filter((entry) => entry.key === key);
 }

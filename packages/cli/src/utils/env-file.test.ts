@@ -1,8 +1,13 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseEnvFile, readEnvValue } from "./env-file.ts";
+import {
+  parseEnvFile,
+  readEnvValue,
+  removeEnvValue,
+  writeEnvValue,
+} from "./env-file.ts";
 
 function writeEnv(lines: string[]): string {
   const envPath = join(mkdtempSync(join(tmpdir(), "bunny-env-")), ".env");
@@ -76,4 +81,21 @@ test("an empty value reads as unset, and a repeated key takes the last value", (
   } finally {
     process.chdir(originalCwd);
   }
+});
+
+test("write and remove skip a key-shaped line inside another quoted value", () => {
+  const envPath = writeEnv([
+    "export TOKEN=old",
+    'NOTE="line one',
+    'TOKEN=keep"',
+    "",
+  ]);
+
+  writeEnvValue("TOKEN", "new", envPath);
+  expect(readFileSync(envPath, "utf-8")).toBe(
+    'export TOKEN=new\nNOTE="line one\nTOKEN=keep"\n',
+  );
+
+  removeEnvValue("TOKEN", envPath);
+  expect(readFileSync(envPath, "utf-8")).toBe('NOTE="line one\nTOKEN=keep"\n');
 });
