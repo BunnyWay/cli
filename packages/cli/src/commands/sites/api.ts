@@ -492,10 +492,16 @@ async function ensureSiteRules(opts: {
     throw new UserError("The site's storage zone is missing its ID or name.");
   }
   const existing = await fetchEdgeRules(coreClient, pullZoneId);
-  for (const rule of siteRules(
+  const rules = siteRules(
     { Id: storageZoneId, Name: storageZoneName },
     deployId,
-  )) {
+  );
+  // The rewrite rule goes last, so a failure partway through never leaves routing switched.
+  const isRewrite = (rule: EdgeRule) => rule.Description === REWRITE_RULE_DESC;
+  for (const rule of [
+    ...rules.filter((r) => !isRewrite(r)),
+    ...rules.filter(isRewrite),
+  ]) {
     await upsertEdgeRule(coreClient, pullZoneId, rule, existing);
   }
 }
@@ -917,7 +923,7 @@ export async function promoteDeploy(opts: {
       "Re-run the command; the pull zone may still be provisioning.",
     );
   }
-  // A first publish swaps in the site cache settings before routing changes, and puts the old ones back if the switch fails.
+  // A first publish swaps in the site cache settings before routing changes, and puts the old ones back if the rules fail (routing only switches on the last one).
   const restoreCache = state.current
     ? undefined
     : await swapSiteCacheSettings(coreClient, state.pullZoneId);
@@ -928,11 +934,15 @@ export async function promoteDeploy(opts: {
       storageZone,
       deployId,
     });
-    await ensureNotFoundSettings(coreClient, storageZone, state, deployId);
   } catch (err) {
-    await restoreCache?.().catch(() => {});
+    await restoreCache?.().catch((restoreErr) => {
+      logger.warn(
+        `Couldn't restore pull zone ${state.pullZoneId}'s cache settings; it keeps the site's 30-day edge cache: ${errorMessage(restoreErr)}`,
+      );
+    });
     throw err;
   }
+  await ensureNotFoundSettings(coreClient, storageZone, state, deployId);
   await purge();
   await waitForEdgePropagation(host, deployId);
   await purge();

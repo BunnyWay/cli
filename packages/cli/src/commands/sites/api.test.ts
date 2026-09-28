@@ -1049,3 +1049,40 @@ test("planSiteImport refuses a zone already using a reserved root path", async (
     }),
   ).rejects.toThrow('"deploys" directory');
 });
+
+test("a first publish that fails on the rules restores the old cache settings and never switches routing", async () => {
+  const coreClient = importFixture([]);
+  const plan = await planSiteImport({
+    coreClient,
+    storageZone: ZONE,
+    name: "my-site",
+  });
+  const state = await importSite({ coreClient, plan, name: "my-site" });
+  await coreClient.POST("/pullzone/{id}", {
+    params: { path: { id: 30 } },
+    body: { CacheControlMaxAgeOverride: -1 },
+  });
+  const originalPost = coreClient.POST;
+  let upserts = 0;
+  coreClient.POST = (async (path: string, options: unknown) => {
+    if (
+      path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate" &&
+      ++upserts === 2
+    ) {
+      throw new Error("edge rule rejected");
+    }
+    return originalPost(path as never, options as never);
+  }) as typeof coreClient.POST;
+
+  await expect(
+    promoteDeploy({ coreClient, state, deployId: "abc12345" }),
+  ).rejects.toThrow("edge rule rejected");
+
+  const { data } = await coreClient.GET("/pullzone/{id}", {
+    params: { path: { id: 30 } },
+  });
+  expect(data?.CacheControlMaxAgeOverride).toBe(-1);
+  expect(data?.EdgeRules?.map((r) => r.Description)).not.toContain(
+    REWRITE_RULE_DESC,
+  );
+});

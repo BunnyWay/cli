@@ -269,6 +269,12 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       });
       return;
     }
+    if (args.force) {
+      throw new UserError(
+        "--force only applies to --from-zone.",
+        "Creating a new site has no confirmation to skip; drop --force.",
+      );
+    }
     const name = await promptSiteName(
       args.name ?? siteConfig?.name,
       interactive,
