@@ -27,6 +27,8 @@ const ROUTING_TYPES: ReadonlySet<number | undefined> = new Set([
   RECORD_TYPES.FLATTEN,
   RECORD_TYPES.PULLZONE,
   RECORD_TYPES.SCRIPT,
+  RECORD_TYPES.SVCB,
+  RECORD_TYPES.HTTPS,
 ]);
 
 /** Fetch every DNS zone on the account, paginated. */
@@ -106,10 +108,11 @@ export async function findBunnyDnsZone(
   };
 }
 
-/** True when the record already points at this pull zone; PullZone records carry the zone ID in LinkName. */
+/** True when the record is live and points at this pull zone; PullZone records carry the zone ID in LinkName. */
 function routesHere(record: DnsRecordModel, pullZoneId: number): boolean {
   return (
     record.Type === RECORD_TYPES.PULLZONE &&
+    !record.Disabled &&
     Number(record.LinkName) === pullZoneId
   );
 }
@@ -164,6 +167,34 @@ async function addPullZoneRecord(
   }
 }
 
+/** Re-add a record removed by a failed replace; a restore failure is dropped so the original error surfaces. */
+async function restoreRecord(
+  client: CoreClient,
+  zoneId: number,
+  record: DnsRecordModel,
+): Promise<void> {
+  await client
+    .PUT("/dnszone/{zoneId}/records", {
+      params: { path: { zoneId } },
+      body: {
+        Type: record.Type,
+        Name: record.Name,
+        Value: record.Value,
+        Ttl: record.Ttl,
+        Priority: record.Priority,
+        Weight: record.Weight,
+        Port: record.Port,
+        Flags: record.Flags,
+        Tag: record.Tag,
+        ScriptId:
+          record.Type === RECORD_TYPES.SCRIPT
+            ? Number(record.LinkName)
+            : undefined,
+      },
+    })
+    .catch(() => {});
+}
+
 /** The update endpoint ignores Type changes, so a record of another type is replaced rather than edited. */
 async function repointPullZoneRecord(
   client: CoreClient,
@@ -189,7 +220,12 @@ async function repointPullZoneRecord(
     await client.DELETE("/dnszone/{zoneId}/records/{id}", {
       params: { path: { zoneId, id: existing.Id } },
     });
-    await putPullZoneRecord(client, zoneId, name, pullZoneId);
+    try {
+      await putPullZoneRecord(client, zoneId, name, pullZoneId);
+    } catch (err) {
+      await restoreRecord(client, zoneId, existing);
+      throw err;
+    }
   } finally {
     spin.stop();
   }

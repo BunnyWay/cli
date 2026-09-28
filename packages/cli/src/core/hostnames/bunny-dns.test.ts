@@ -58,18 +58,17 @@ function fakeClient(
 }
 
 /** A single-zone client whose writes behave like the API: PUT adds, DELETE removes, POST ignores Type changes. */
-function recordingClient(records: Rec[]): CoreClient {
+function recordingClient(records: Rec[], failFirstPut = false): CoreClient {
+  let puts = 0;
   return {
     ...fakeClient([{ Id: 7, Domain: "example.com" }], { 7: records }),
-    PUT: async (
-      _: string,
-      opts: { body: { Name: string; PullZoneId: number } },
-    ) => {
+    PUT: async (_: string, opts: { body: Rec & { PullZoneId?: number } }) => {
+      if (failFirstPut && puts++ === 0) throw new Error("PUT failed");
+      const { PullZoneId, ...rec } = opts.body;
       records.push({
         Id: 500,
-        Type: 7,
-        Name: opts.body.Name,
-        LinkName: String(opts.body.PullZoneId),
+        ...rec,
+        ...(PullZoneId && { LinkName: String(PullZoneId) }),
       });
       return {};
     },
@@ -216,6 +215,25 @@ describe("offerBunnyDnsRecord", () => {
     expect(result).toBe("updated");
     expect(records).toEqual([
       { Id: 500, Type: 7, Name: "shop", LinkName: "12345" },
+    ]);
+  });
+
+  test("restores the original record when adding the replacement fails", async () => {
+    prompts.inject([true]);
+    const original = { Id: 99, Type: 0, Name: "shop", Value: "192.0.2.4" };
+    const records: Rec[] = [original];
+    const client = recordingClient(records, true);
+
+    await expect(
+      offerBunnyDnsRecord({
+        client,
+        hostname: "shop.example.com",
+        pullZoneId: 12345,
+        match: match(original),
+      }),
+    ).rejects.toThrow("PUT failed");
+    expect(records).toMatchObject([
+      { Type: 0, Name: "shop", Value: "192.0.2.4" },
     ]);
   });
 
