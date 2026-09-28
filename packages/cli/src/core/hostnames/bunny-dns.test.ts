@@ -218,7 +218,7 @@ describe("offerBunnyDnsRecord", () => {
     ]);
   });
 
-  test("restores the original record when adding the replacement fails", async () => {
+  test("leaves the original record in place when adding the replacement fails", async () => {
     prompts.inject([true]);
     const original = { Id: 99, Type: 0, Name: "shop", Value: "192.0.2.4" };
     const records: Rec[] = [original];
@@ -232,9 +232,7 @@ describe("offerBunnyDnsRecord", () => {
         match: match(original),
       }),
     ).rejects.toThrow("PUT failed");
-    expect(records).toMatchObject([
-      { Type: 0, Name: "shop", Value: "192.0.2.4" },
-    ]);
+    expect(records).toEqual([original]);
   });
 
   test("throws when the zone doesn't route here after a write the API accepted", async () => {
