@@ -1,43 +1,23 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { formatTable } from "../../core/format.ts";
-import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { pullZonesList } from "@bunny.net/tools/pullzones";
+import { defineToolCommand } from "@/core/define-tool-command.ts";
+import { formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { statusLabel } from "./show.ts";
 
-type PullZone = components["schemas"]["PullZoneModel"];
-
-export const pzListCommand = defineCommand({
+export const pzListCommand = defineToolCommand({
+  tool: pullZonesList,
   command: "list",
-  aliases: ["ls"] as const,
+  aliases: ["ls"],
   describe: "List all pull zones.",
   examples: [
     ["$0 pz list", "List all pull zones"],
     ["$0 pz list --output json", "JSON output"],
   ],
+  progress: "Fetching pull zones...",
 
-  handler: async ({ profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+  prepare: async () => ({ input: {} }),
 
-    const spin = spinner("Fetching pull zones...");
-    spin.start();
-
-    const { data } = await client.GET("/pullzone");
-
-    spin.stop();
-
-    const zones = ((data ?? []) as PullZone[]).sort(
-      (a: PullZone, b: PullZone) => (a.Name ?? "").localeCompare(b.Name ?? ""),
-    );
-
-    if (output === "json") {
-      logger.log(JSON.stringify(zones, null, 2));
-      return;
-    }
-
+  render: (zones, { output }) => {
     if (zones.length === 0) {
       logger.info("No pull zones found.");
       return;
@@ -46,11 +26,11 @@ export const pzListCommand = defineCommand({
     logger.log(
       formatTable(
         ["ID", "Name", "Origin", "Status"],
-        zones.map((zone: PullZone) => [
-          String(zone.Id ?? ""),
-          zone.Name ?? "",
-          zone.OriginUrl ?? "",
-          zone.Suspended ? "Suspended" : zone.Enabled ? "Active" : "Disabled",
+        zones.map((zone) => [
+          String(zone.id),
+          zone.name,
+          zone.originUrl ?? "",
+          statusLabel(zone.status),
         ]),
         output,
       ),

@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { pzCreateCommand } from "./create.ts";
 import { pzDeleteCommand } from "./delete.ts";
 import { pzLinkCommand } from "./link.ts";

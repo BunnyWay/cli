@@ -1,25 +1,20 @@
-import { createCoreClient } from "@bunny.net/openapi-client";
-import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
-import { logger } from "../../core/logger.ts";
-import { saveManifest } from "../../core/manifest.ts";
-import { prompts, spinner } from "../../core/ui.ts";
+import { pullZonesGet, pullZonesList } from "@bunny.net/tools/pullzones";
+import { CANCELLED, defineToolCommand } from "@/core/define-tool-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { saveManifest } from "@/core/manifest.ts";
+import { prompts } from "@/core/ui.ts";
 import { PULL_ZONE_MANIFEST, type PullZoneManifest } from "./constants.ts";
 
-interface LinkArgs {
-  id?: number;
-}
-
-export const pzLinkCommand = defineCommand<LinkArgs>({
+export const pzLinkCommand = defineToolCommand({
+  tool: pullZonesGet,
   command: "link [id]",
   describe: "Link the current directory to a pull zone.",
   examples: [
     ["$0 pz link", "Interactive selection"],
     ["$0 pz link 12345", "Link by ID"],
   ],
+  progress: "Fetching pull zone...",
 
   builder: (yargs) =>
     yargs.positional("id", {
@@ -27,55 +22,10 @@ export const pzLinkCommand = defineCommand<LinkArgs>({
       describe: "Pull zone ID",
     }),
 
-  handler: async ({ id, profile, output, verbose, apiKey }) => {
-    const config = resolveConfig(profile, apiKey, verbose);
-    const client = createCoreClient(clientOptions(config, verbose));
+  prepare: async ({ id }, ctx) => {
+    if (id) return { input: { pullZone: id } };
 
-    if (id) {
-      const spin = spinner("Fetching pull zone...");
-      spin.start();
-
-      let zone: components["schemas"]["PullZoneModel"] | undefined;
-
-      try {
-        const { data } = await client.GET("/pullzone/{id}", {
-          params: { path: { id } },
-        });
-        zone = data as components["schemas"]["PullZoneModel"] | undefined;
-      } catch (err: unknown) {
-        spin.stop();
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new UserError(`Fetching failed: ${msg}`);
-      }
-
-      spin.stop();
-
-      if (!zone) {
-        throw new UserError(`Pull zone ${id} not found.`);
-      }
-
-      saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, {
-        id: zone.Id ?? id,
-      });
-
-      if (output === "json") {
-        logger.log(JSON.stringify({ id: zone.Id ?? id }));
-        return;
-      }
-
-      logger.success(`Linked to ${zone.Name ?? zone.Id ?? id}.`);
-      return;
-    }
-
-    const spin = spinner("Fetching pull zones...");
-    spin.start();
-
-    const { data } = await client.GET("/pullzone");
-
-    spin.stop();
-
-    const zones = (data ?? []) as components["schemas"]["PullZoneModel"][];
-
+    const zones = await pullZonesList.invoke(ctx, {});
     if (zones.length === 0) {
       throw new UserError(
         "No pull zones found.",
@@ -83,34 +33,24 @@ export const pzLinkCommand = defineCommand<LinkArgs>({
       );
     }
 
-    const sorted = zones.sort((a, b) =>
-      (a.Name ?? "").localeCompare(b.Name ?? ""),
-    );
-
     const { selected } = await prompts({
       type: "select",
       name: "selected",
       message: "Link to a pull zone:",
-      choices: sorted.map((zone) => ({
-        title: zone.Name ?? String(zone.Id),
-        value: zone,
-      })),
+      choices: zones.map((zone) => ({ title: zone.name, value: zone.id })),
     });
+    if (!selected) return CANCELLED;
+    return { input: { pullZone: selected as number } };
+  },
 
-    if (!selected) {
-      logger.log("Link cancelled.");
-      return;
-    }
-
+  after: (zone) => {
     saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, {
-      id: selected.Id,
+      id: zone.id,
+      name: zone.name,
     });
+  },
 
-    if (output === "json") {
-      logger.log(JSON.stringify({ id: selected.Id }));
-      return;
-    }
-
-    logger.success(`Linked to ${selected.Name ?? selected.Id}.`);
+  render: (zone) => {
+    logger.success(`Linked to ${zone.name}.`);
   },
 });

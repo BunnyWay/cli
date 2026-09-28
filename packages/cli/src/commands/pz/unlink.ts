@@ -1,6 +1,6 @@
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
-import { removeManifest } from "../../core/manifest.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { removeManifest } from "@/core/manifest.ts";
 import { PULL_ZONE_MANIFEST } from "./constants.ts";
 
 export const pzUnlinkCommand = defineCommand({
