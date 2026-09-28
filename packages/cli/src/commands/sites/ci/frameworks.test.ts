@@ -67,7 +67,7 @@ test("presetBuildCommand: package.json build, runner exec for overrides, direct 
   const cmd = (id: string, pm: "npm" | "pnpm" | "bun") =>
     presetBuildCommand(findPreset(id) as never, pm);
   expect(cmd("vite", "pnpm")).toBe("pnpm run build");
-  expect(cmd("nuxt", "bun")).toBe("bunx --no-install nuxt generate");
+  expect(cmd("nuxt", "bun")).toBe("bun run nuxt generate");
   expect(cmd("hugo", "npm")).toBe("hugo --minify");
   expect(cmd("static", "npm")).toBeNull();
 });
@@ -87,7 +87,7 @@ test("detectFramework finds Blazor WebAssembly, names its .csproj, and takes the
   });
   const preset = await detectFramework(dir);
   expect(preset?.build).toBe(
-    "dotnet publish App.csproj -c Release -o bin/publish",
+    "dotnet publish App.csproj -c Release -f net10.0 -o bin/publish",
   );
   expect(preset?.dotnetVersion).toBe("10.0.x");
 

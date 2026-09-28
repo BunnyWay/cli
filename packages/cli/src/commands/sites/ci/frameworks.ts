@@ -200,9 +200,9 @@ export function findPreset(id: string): FrameworkPreset | undefined {
   return FRAMEWORK_PRESETS.find((p) => p.id === id);
 }
 
-// Runner for a project-local binary; shared by the local build and the emitted CI workflow. Never falls back to a registry download.
+// Runner for a project-local binary; shared by the local build and the emitted CI workflow. Never falls back to a registry download or a shared cache.
 const PM_EXEC: Record<PackageManager, string> = {
-  bun: "bunx --no-install",
+  bun: "bun run",
   pnpm: "pnpm exec",
   yarn: "yarn",
   npm: "npx --no-install",
@@ -287,15 +287,27 @@ async function detectBlazor(
   for (const name of entries.filter((e) => e.endsWith(".csproj"))) {
     const csproj = await readText(join(root, name));
     if (!csproj?.includes("Microsoft.NET.Sdk.BlazorWebAssembly")) continue;
-    const targets = csproj.match(/<TargetFrameworks?>([^<]+)</)?.[1] ?? "";
-    const versions = [...targets.matchAll(/net(\d+)\.(\d+)/g)]
-      .map((m) => [Number(m[1]), Number(m[2])] as const)
-      .sort((a, b) => b[0] - a[0] || b[1] - a[1]);
-    const newest = versions[0];
+    // Multi-target projects must name one framework to publish, so pick the newest.
+    const plural = csproj.match(/<TargetFrameworks>([^<]+)</)?.[1];
+    const tfms = (
+      plural ??
+      csproj.match(/<TargetFramework>([^<]+)</)?.[1] ??
+      ""
+    )
+      .split(";")
+      .map((t) => ({ tfm: t.trim(), v: t.match(/^net(\d+)\.(\d+)/) }))
+      .filter((t) => t.v)
+      .sort(
+        (a, b) =>
+          Number(b.v?.[1]) - Number(a.v?.[1]) ||
+          Number(b.v?.[2]) - Number(a.v?.[2]),
+      );
+    const newest = tfms[0];
+    const framework = plural && newest ? ` -f ${newest.tfm}` : "";
     return {
       ...preset,
-      build: `dotnet publish ${name} -c Release -o bin/publish`,
-      ...(newest && { dotnetVersion: `${newest[0]}.${newest[1]}.x` }),
+      build: `dotnet publish ${name} -c Release${framework} -o bin/publish`,
+      ...(newest?.v && { dotnetVersion: `${newest.v[1]}.${newest.v[2]}.x` }),
     };
   }
   return undefined;
