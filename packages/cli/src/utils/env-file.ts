@@ -7,7 +7,6 @@ import {
   parseDotenvEntries,
   parseDotenvSpans,
 } from "@/core/env.ts";
-import { UserError } from "@/core/errors.ts";
 
 /**
  * Walk up the directory tree from cwd looking for a `.env` file.
@@ -49,9 +48,7 @@ export function readEnvValue(
     const { entries, unterminated } = parseEnvFile(envPath);
     const value = entries.findLast((entry) => entry.key === key)?.value;
     if (value) return { value, envPath };
-    if (unterminated.length > 0) {
-      throw unclosedQuote(envPath, unterminated);
-    }
+    if (unterminated.length > 0) return undefined;
 
     const parent = dirname(dir);
     if (parent === dir) return undefined;
@@ -80,7 +77,7 @@ export function writeEnvValue(
 
   const content = readFileSync(target, "utf-8");
   const lines = content.split("\n");
-  const spans = keySpans(content, key, target);
+  const spans = keySpans(content, key);
 
   if (spans.length > 0) {
     for (const { start, end } of spans.reverse()) {
@@ -102,18 +99,12 @@ export function removeEnvValue(key: string, envPath: string): void {
 
   const content = readFileSync(envPath, "utf-8");
   const lines = content.split("\n");
-  for (const { start, end } of keySpans(content, key, envPath).reverse()) {
+  for (const { start, end } of keySpans(content, key).reverse()) {
     lines.splice(start, end - start + 1);
   }
   writeFileSync(envPath, lines.join("\n"), "utf-8");
 }
 
-function keySpans(content: string, key: string, envPath: string): DotenvSpan[] {
-  const { entries, unterminated } = parseDotenvSpans(content);
-  if (unterminated.length > 0) throw unclosedQuote(envPath, unterminated);
-  return entries.filter((entry) => entry.key === key);
-}
-
-function unclosedQuote(envPath: string, keys: string[]): UserError {
-  return new UserError(`Unclosed quote in ${envPath}: ${keys.join(", ")}.`);
+function keySpans(content: string, key: string): DotenvSpan[] {
+  return parseDotenvSpans(content).entries.filter((entry) => entry.key === key);
 }
