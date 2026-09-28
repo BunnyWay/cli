@@ -1,5 +1,25 @@
 # @bunny.net/cli
 
+## 0.18.0
+
+### Minor Changes
+
+- [#225](https://github.com/BunnyWay/cli/pull/225) [`e783640`](https://github.com/BunnyWay/cli/commit/e78364078a21e9285ea0dfdbf3932ad2bef18c34) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - db create offers a schema template and applies it as the database's first migration
+
+### Patch Changes
+
+- [#201](https://github.com/BunnyWay/cli/pull/201) [`814eae6`](https://github.com/BunnyWay/cli/commit/814eae6ab32023b02d16bf546234eee63e7d539c) Thanks [@mohammed-io](https://github.com/mohammed-io)! - `bunny login` now ends with a tip for enabling shell completion in zsh, bash, and fish
+
+- [#229](https://github.com/BunnyWay/cli/pull/229) [`5b69aa6`](https://github.com/BunnyWay/cli/commit/5b69aa60480b2cfa01519b071c8b9076f06328b1) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - db create offers eleven schema templates, including booking, CRM, feature flags, and forms
+
+- [#231](https://github.com/BunnyWay/cli/pull/231) [`265a661`](https://github.com/BunnyWay/cli/commit/265a6614b19f3eb3fdd3b6bdcb66a7076dceb84e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Ship macOS binaries with a valid signature; CLI releases also publish SHA256SUMS, which install.sh verifies
+
+- [#230](https://github.com/BunnyWay/cli/pull/230) [`a4dec48`](https://github.com/BunnyWay/cli/commit/a4dec48dfafd2a46f4008ad758d2b91ef51c8046) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Publish under the MIT license: every package now declares `license` and ships a LICENSE file
+
+- [#219](https://github.com/BunnyWay/cli/pull/219) [`9c9c57a`](https://github.com/BunnyWay/cli/commit/9c9c57a5cbe6d16298adcd32ed195a309d07f2b3) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny registries add`/`update` gain `--type` and derive it from `--server` (ghcr.io and docker.io need one), `--output json` returns a normalized registry shape, and API keys and registry credentials are redacted from `--verbose` request traces
+
+- [#219](https://github.com/BunnyWay/cli/pull/219) [`9c9c57a`](https://github.com/BunnyWay/cli/commit/9c9c57a5cbe6d16298adcd32ed195a309d07f2b3) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny registries` moves under `bunny apps registries`, where those registries are used, leaving `bunny registry` unambiguously the bunny.net registry you push to; the list gains a `Source` column separating your connections from bunny.net's public pull-throughs and its own registry, which can no longer be updated or removed by mistake; `registry list` and `registry tags` move onto the tools layer and `list` returns a plain array of repository names under `--output json`
+
 ## 0.17.0
 
 ### Minor Changes
