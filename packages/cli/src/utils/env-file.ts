@@ -50,9 +50,7 @@ export function readEnvValue(
     const value = entries.findLast((entry) => entry.key === key)?.value;
     if (value) return { value, envPath };
     if (unterminated.length > 0) {
-      throw new UserError(
-        `Unclosed quote in ${envPath}: ${unterminated.join(", ")}.`,
-      );
+      throw unclosedQuote(envPath, unterminated);
     }
 
     const parent = dirname(dir);
@@ -82,7 +80,7 @@ export function writeEnvValue(
 
   const content = readFileSync(target, "utf-8");
   const lines = content.split("\n");
-  const spans = keySpans(content, key);
+  const spans = keySpans(content, key, target);
 
   if (spans.length > 0) {
     for (const { start, end } of spans.reverse()) {
@@ -104,12 +102,18 @@ export function removeEnvValue(key: string, envPath: string): void {
 
   const content = readFileSync(envPath, "utf-8");
   const lines = content.split("\n");
-  for (const { start, end } of keySpans(content, key).reverse()) {
+  for (const { start, end } of keySpans(content, key, envPath).reverse()) {
     lines.splice(start, end - start + 1);
   }
   writeFileSync(envPath, lines.join("\n"), "utf-8");
 }
 
-function keySpans(content: string, key: string): DotenvSpan[] {
-  return parseDotenvSpans(content).entries.filter((entry) => entry.key === key);
+function keySpans(content: string, key: string, envPath: string): DotenvSpan[] {
+  const { entries, unterminated } = parseDotenvSpans(content);
+  if (unterminated.length > 0) throw unclosedQuote(envPath, unterminated);
+  return entries.filter((entry) => entry.key === key);
+}
+
+function unclosedQuote(envPath: string, keys: string[]): UserError {
+  return new UserError(`Unclosed quote in ${envPath}: ${keys.join(", ")}.`);
 }

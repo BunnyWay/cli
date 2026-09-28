@@ -98,4 +98,7 @@ test("write and remove skip a key-shaped line inside another quoted value", () =
 
   removeEnvValue("TOKEN", envPath);
   expect(readFileSync(envPath, "utf-8")).toBe('NOTE="line one\nTOKEN=keep"\n');
+
+  writeFileSync(envPath, 'TOKEN=a\nTOKEN="b');
+  expect(() => removeEnvValue("TOKEN", envPath)).toThrow("Unclosed quote");
 });
