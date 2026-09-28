@@ -295,7 +295,8 @@ async function detectBlazor(
       ""
     )
       .split(";")
-      .map((t) => ({ tfm: t.trim(), v: t.match(/^net(\d+)\.(\d+)/) }))
+      .map((t) => t.trim())
+      .map((tfm) => ({ tfm, v: tfm.match(/^net(\d+)\.(\d+)(-[\w.]+)?$/) }))
       .filter((t) => t.v)
       .sort(
         (a, b) =>
@@ -304,9 +305,11 @@ async function detectBlazor(
       );
     const newest = tfms[0];
     const framework = plural && newest ? ` -f ${newest.tfm}` : "";
+    // These values reach a shell, so a filename outside a safe charset is left for dotnet to find.
+    const project = /^[\w.-]+$/.test(name) ? ` ${name}` : "";
     return {
       ...preset,
-      build: `dotnet publish ${name} -c Release${framework} -o bin/publish`,
+      build: `dotnet publish${project} -c Release${framework} -o bin/publish`,
       ...(newest?.v && { dotnetVersion: `${newest.v[1]}.${newest.v[2]}.x` }),
     };
   }

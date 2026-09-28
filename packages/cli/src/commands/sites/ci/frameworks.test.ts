@@ -82,7 +82,7 @@ test("detectPackageManager reads the lockfile", async () => {
 
 test("detectFramework finds Blazor WebAssembly, names its .csproj, and takes the newest target's SDK", async () => {
   const dir = tempRepo({
-    "App.csproj": `<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly"><PropertyGroup><TargetFrameworks>net10.0;net9.0</TargetFrameworks></PropertyGroup></Project>`,
+    "App.csproj": `<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly"><PropertyGroup><TargetFrameworks>net9.0; net10.0</TargetFrameworks></PropertyGroup></Project>`,
     "Api.csproj": `<Project Sdk="Microsoft.NET.Sdk.Web" />`,
   });
   const preset = await detectFramework(dir);
