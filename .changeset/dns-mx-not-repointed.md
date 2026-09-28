@@ -2,4 +2,4 @@
 "@bunny.net/cli": patch
 ---
 
-Custom domain setup no longer offers to repoint MX, TXT or other non-routing records at a pull zone
+Fix custom domain setup silently failing to point a Bunny DNS name at a pull zone when another record already sits at that name

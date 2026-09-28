@@ -106,11 +106,47 @@ export async function findBunnyDnsZone(
   };
 }
 
-/** True when the record already points at this pull zone. */
+/** True when the record already points at this pull zone; PullZone records carry the zone ID in LinkName. */
 function routesHere(record: DnsRecordModel, pullZoneId: number): boolean {
   return (
-    record.Type === RECORD_TYPES.PULLZONE && Number(record.Value) === pullZoneId
+    record.Type === RECORD_TYPES.PULLZONE &&
+    Number(record.LinkName) === pullZoneId
   );
+}
+
+async function putPullZoneRecord(
+  client: CoreClient,
+  zoneId: number,
+  name: string,
+  pullZoneId: number,
+): Promise<void> {
+  // A PullZone record routes the name straight at the pull zone and works at the apex (where CNAMEs can't).
+  await client.PUT("/dnszone/{zoneId}/records", {
+    params: { path: { zoneId } },
+    body: { Type: RECORD_TYPES.PULLZONE, Name: name, PullZoneId: pullZoneId },
+  });
+}
+
+/** Read the zone back and throw unless a record at `name` routes to the pull zone; the API accepts some writes it ignores. */
+async function assertRoutesHere(
+  client: CoreClient,
+  match: BunnyDnsMatch,
+  hostname: string,
+  pullZoneId: number,
+): Promise<void> {
+  const { zoneId, zoneDomain, recordName: name } = match;
+  const { data } = await client.GET("/dnszone/{id}", {
+    params: { path: { id: zoneId } },
+  });
+  const ok = (data?.Records ?? []).some(
+    (r) => normalize(r.Name ?? "") === name && routesHere(r, pullZoneId),
+  );
+  if (!ok) {
+    throw new UserError(
+      `Bunny DNS accepted the change, but ${hostname} still doesn't point at pull zone ${pullZoneId}.`,
+      `Add it manually: bunny dns records add ${zoneDomain} '${name || "@"}' PullZone --pull-zone ${pullZoneId}`,
+    );
+  }
 }
 
 async function addPullZoneRecord(
@@ -122,35 +158,38 @@ async function addPullZoneRecord(
   const spin = spinner("Adding DNS record...");
   spin.start();
   try {
-    // A PullZone record routes the name straight at the pull zone and works at the apex (where CNAMEs can't).
-    await client.PUT("/dnszone/{zoneId}/records", {
-      params: { path: { zoneId } },
-      body: { Type: RECORD_TYPES.PULLZONE, Name: name, PullZoneId: pullZoneId },
-    });
+    await putPullZoneRecord(client, zoneId, name, pullZoneId);
   } finally {
     spin.stop();
   }
 }
 
+/** The update endpoint ignores Type changes, so a record of another type is replaced rather than edited. */
 async function repointPullZoneRecord(
   client: CoreClient,
   zoneId: number,
-  recordId: number,
+  existing: DnsRecordModel & { Id: number },
   name: string,
   pullZoneId: number,
 ): Promise<void> {
   const spin = spinner("Updating DNS record...");
   spin.start();
   try {
-    await client.POST("/dnszone/{zoneId}/records/{id}", {
-      params: { path: { zoneId, id: recordId } },
-      body: {
-        Type: RECORD_TYPES.PULLZONE,
-        Name: name,
-        PullZoneId: pullZoneId,
-        Value: null,
-      },
+    if (existing.Type === RECORD_TYPES.PULLZONE) {
+      await client.POST("/dnszone/{zoneId}/records/{id}", {
+        params: { path: { zoneId, id: existing.Id } },
+        body: {
+          Type: RECORD_TYPES.PULLZONE,
+          Name: name,
+          PullZoneId: pullZoneId,
+        },
+      });
+      return;
+    }
+    await client.DELETE("/dnszone/{zoneId}/records/{id}", {
+      params: { path: { zoneId, id: existing.Id } },
     });
+    await putPullZoneRecord(client, zoneId, name, pullZoneId);
   } finally {
     spin.stop();
   }
@@ -264,6 +303,7 @@ export async function offerBunnyDnsRecord(opts: {
       return "declined";
     }
     await addPullZoneRecord(client, zoneId, recordName, pullZoneId);
+    await assertRoutesHere(client, match, hostname, pullZoneId);
     logger.success(`Pointed ${hostname} here via Bunny DNS.`);
     return "created";
   }
@@ -294,10 +334,11 @@ export async function offerBunnyDnsRecord(opts: {
   await repointPullZoneRecord(
     client,
     zoneId,
-    existing.Id,
+    { ...existing, Id: existing.Id },
     recordName,
     pullZoneId,
   );
+  await assertRoutesHere(client, match, hostname, pullZoneId);
   logger.success(`Repointed ${hostname} here via Bunny DNS.`);
   return "updated";
 }
