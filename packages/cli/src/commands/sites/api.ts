@@ -694,7 +694,7 @@ export interface SiteImportPlan {
   foreignRules: number;
 }
 
-// Check an existing storage zone can become a site without touching it: not already a site, no reserved root paths, exactly one storage-backed pull zone (or the one named), no edge script, and a free site name.
+// Check an existing storage zone can become a site without touching it: not already a site, no reserved root paths, exactly one storage-backed pull zone, no edge script, and a free site name.
 export async function planSiteImport(opts: {
   coreClient: CoreClient;
   storageZone: StorageZoneModel;
@@ -778,7 +778,7 @@ export async function planSiteImport(opts: {
   };
 }
 
-// Mark the zone as a site: only the block rules and state land now, so the existing site keeps serving untouched until the first deploy brings the rewrite rule and cache settings.
+// Mark the zone as a site: only the state rule and state land now, so the existing site keeps serving untouched until the first deploy brings the other rules and cache settings.
 export async function importSite(opts: {
   coreClient: CoreClient;
   plan: SiteImportPlan;
@@ -942,10 +942,27 @@ export async function promoteDeploy(opts: {
     });
     throw err;
   }
-  await ensureNotFoundSettings(coreClient, storageZone, state, deployId);
-  await purge();
-  await waitForEdgePropagation(host, deployId);
-  await purge();
+  // Routing has switched, so the publish must finish and be recorded; a later step failing warns and fails the exit code instead of aborting.
+  const afterSwitch = async (step: string, fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+      return true;
+    } catch (err) {
+      logger.warn(
+        `${deployId} is live, but couldn't ${step}: ${errorMessage(err)}`,
+      );
+      logger.dim("  The next deploy or publish reapplies it.");
+      process.exitCode = 1;
+      return false;
+    }
+  };
+  await afterSwitch("update the 404 settings", () =>
+    ensureNotFoundSettings(coreClient, storageZone, state, deployId),
+  );
+  if (await afterSwitch("purge the cache", purge)) {
+    await waitForEdgePropagation(host, deployId);
+    await afterSwitch("purge the cache", purge);
+  }
 }
 
 // Refuse to replace version-1 state that changed since it was read. `writeRemoteState`'s own conflict merge can't cover this: it reconciles against the current format, and the file being replaced is the older one, so it would abort as unparseable rather than merge.

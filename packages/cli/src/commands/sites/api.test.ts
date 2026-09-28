@@ -1086,3 +1086,44 @@ test("a first publish that fails on the rules restores the old cache settings an
     REWRITE_RULE_DESC,
   );
 });
+
+test("once routing switches, a failed 404 settings update still purges and lets the publish be recorded", async () => {
+  const calls: Call[] = [];
+  const coreClient = importFixture(calls);
+  const plan = await planSiteImport({
+    coreClient,
+    storageZone: ZONE,
+    name: "my-site",
+  });
+  const state = await importSite({ coreClient, plan, name: "my-site" });
+  const originalPost = coreClient.POST;
+  coreClient.POST = (async (path: string, options: unknown) => {
+    if (path === "/storagezone/{id}") throw new Error("storage API down");
+    return originalPost(path as never, options as never);
+  }) as typeof coreClient.POST;
+
+  await promoteDeploy({
+    coreClient,
+    state: {
+      ...state,
+      deploys: [
+        {
+          id: "abc12345",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          source: "content",
+          contentHash: "abc12345",
+          files: 1,
+          bytes: 1,
+          notFound: "spa",
+        },
+      ],
+    },
+    deployId: "abc12345",
+  });
+
+  expect(
+    calls.filter((c) => c.path === "/pullzone/{id}/purgeCache"),
+  ).toHaveLength(2);
+  expect(process.exitCode).toBe(1);
+  process.exitCode = 0;
+});
