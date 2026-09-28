@@ -58,7 +58,7 @@ test("nuxt runs its build override via the package manager's exec runner", () =>
     packageManager: "bun",
   });
   expect(yml).toContain("run: bun install --frozen-lockfile");
-  expect(yml).toContain("run: bunx nuxi generate");
+  expect(yml).toContain("run: bunx --no-install nuxt generate");
   expect(yml).toContain('directory: ".output/public"');
   expect(yml).not.toContain("run: bun run build");
 });

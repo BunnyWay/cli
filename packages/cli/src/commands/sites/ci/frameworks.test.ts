@@ -67,7 +67,7 @@ test("presetBuildCommand: package.json build, runner exec for overrides, direct 
   const cmd = (id: string, pm: "npm" | "pnpm" | "bun") =>
     presetBuildCommand(findPreset(id) as never, pm);
   expect(cmd("vite", "pnpm")).toBe("pnpm run build");
-  expect(cmd("nuxt", "bun")).toBe("bunx nuxi generate");
+  expect(cmd("nuxt", "bun")).toBe("bunx --no-install nuxt generate");
   expect(cmd("hugo", "npm")).toBe("hugo --minify");
   expect(cmd("static", "npm")).toBeNull();
 });
@@ -80,13 +80,12 @@ test("detectPackageManager reads the lockfile", async () => {
   expect(await detectPackageManager(tempRepo({}))).toBe("npm");
 });
 
-test("detectFramework finds Blazor WebAssembly and follows its TargetFramework", async () => {
+test("detectFramework finds Blazor WebAssembly and takes the SDK from its TargetFramework", async () => {
   const dir = tempRepo({
     "App.csproj": `<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly"><PropertyGroup><TargetFramework>net9.0</TargetFramework></PropertyGroup></Project>`,
   });
   const preset = await detectFramework(dir);
   expect(preset?.id).toBe("blazor");
-  expect(preset?.dir).toBe("bin/Release/net9.0/publish/wwwroot");
   expect(preset?.dotnetVersion).toBe("9.0.x");
 
   const server = tempRepo({

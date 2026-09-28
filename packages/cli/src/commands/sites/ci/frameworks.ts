@@ -75,7 +75,7 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     label: "Nuxt (static generate)",
     dir: ".output/public",
     toolchain: "js",
-    build: "nuxi generate",
+    build: "nuxt generate",
   },
   {
     id: "preact",
@@ -178,13 +178,13 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     toolchain: "zola",
     build: "zola build",
   },
-  // Detection swaps net8.0 for the project's TargetFramework.
+  // Detection swaps the SDK channel for the project's TargetFramework.
   {
     id: "blazor",
     label: "Blazor WebAssembly",
-    dir: "bin/Release/net8.0/publish/wwwroot",
+    dir: "publish/wwwroot",
     toolchain: "dotnet",
-    build: "dotnet publish -c Release",
+    build: "dotnet publish -c Release -o publish",
     spa: true,
     dotnetVersion: "8.0.x",
   },
@@ -200,12 +200,12 @@ export function findPreset(id: string): FrameworkPreset | undefined {
   return FRAMEWORK_PRESETS.find((p) => p.id === id);
 }
 
-// Runner for a project-local binary; shared by the local build and the emitted CI workflow.
+// Runner for a project-local binary; shared by the local build and the emitted CI workflow. Never falls back to a registry download.
 const PM_EXEC: Record<PackageManager, string> = {
-  bun: "bunx",
+  bun: "bunx --no-install",
   pnpm: "pnpm exec",
   yarn: "yarn",
-  npm: "npx",
+  npm: "npx --no-install",
 };
 
 /** The build command to run locally for a preset, or null for the static (no-build) preset. */
@@ -287,14 +287,10 @@ async function detectBlazor(
     const csproj = await readText(join(root, name));
     if (!csproj?.includes("Microsoft.NET.Sdk.BlazorWebAssembly")) continue;
     const tfm = csproj.match(
-      /<TargetFramework>(net(\d+\.\d+))<\/TargetFramework>/,
+      /<TargetFramework>net(\d+\.\d+)<\/TargetFramework>/,
     );
     if (!preset || !tfm) return preset;
-    return {
-      ...preset,
-      dir: `bin/Release/${tfm[1]}/publish/wwwroot`,
-      dotnetVersion: `${tfm[2]}.x`,
-    };
+    return { ...preset, dotnetVersion: `${tfm[1]}.x` };
   }
   return undefined;
 }
