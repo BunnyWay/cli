@@ -5,6 +5,7 @@ import {
   type DotenvParse,
   parseDotenvEntries,
 } from "@/core/env.ts";
+import { UserError } from "@/core/errors.ts";
 
 /**
  * Walk up the directory tree from cwd looking for a `.env` file.
@@ -43,10 +44,14 @@ export function readEnvValue(
 
   while (true) {
     const envPath = join(dir, ".env");
-    const value = parseEnvFile(envPath).entries.findLast(
-      (entry) => entry.key === key,
-    )?.value;
+    const { entries, unterminated } = parseEnvFile(envPath);
+    const value = entries.findLast((entry) => entry.key === key)?.value;
     if (value) return { value, envPath };
+    if (unterminated.length > 0) {
+      throw new UserError(
+        `Unclosed quote in ${envPath}: ${unterminated.join(", ")}.`,
+      );
+    }
 
     const parent = dirname(dir);
     if (parent === dir) return undefined;
@@ -74,7 +79,7 @@ export function writeEnvValue(
   }
 
   const content = readFileSync(target, "utf-8");
-  const regex = new RegExp(`^${escapeRegExp(key)}\\s*=.*$`, "m");
+  const regex = new RegExp(`^(?:export\\s+)?${escapeRegExp(key)}\\s*=.*$`, "m");
 
   if (regex.test(content)) {
     writeFileSync(target, content.replace(regex, line), "utf-8");
@@ -94,7 +99,10 @@ export function removeEnvValue(key: string, envPath: string): void {
   if (!existsSync(envPath)) return;
 
   const content = readFileSync(envPath, "utf-8");
-  const regex = new RegExp(`^${escapeRegExp(key)}\\s*=.*\\n?`, "m");
+  const regex = new RegExp(
+    `^(?:export\\s+)?${escapeRegExp(key)}\\s*=.*\\n?`,
+    "m",
+  );
   writeFileSync(envPath, content.replace(regex, ""), "utf-8");
 }
 

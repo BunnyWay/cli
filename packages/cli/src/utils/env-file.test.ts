@@ -61,15 +61,18 @@ test("a quoted value spans lines, and an unclosed one is reported not truncated"
   });
 });
 
-test("an empty value reads as unset instead of taking the next line", () => {
+test("an empty value reads as unset, and a repeated key takes the last value", () => {
   const envPath = writeEnv([
     "BUNNY_DATABASE_URL=",
     "BUNNY_DATABASE_AUTH_TOKEN=",
+    "DUP=first",
+    "DUP=second",
   ]);
   const originalCwd = process.cwd();
   process.chdir(join(envPath, ".."));
   try {
     expect(readEnvValue("BUNNY_DATABASE_URL")).toBeUndefined();
+    expect(readEnvValue("DUP")?.value).toBe("second");
   } finally {
     process.chdir(originalCwd);
   }
