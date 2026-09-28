@@ -23,6 +23,7 @@ const { findBunnyDnsZone, offerBunnyDnsRecord } = await import(
 );
 const { offerBunnyDnsThenSsl } = await import("./flow.ts");
 type CoreClient = import("./client.ts").CoreClient;
+type BunnyDnsMatch = import("./bunny-dns.ts").BunnyDnsMatch;
 
 type Zone = { Id: number; Domain: string };
 type Rec = {
@@ -83,11 +84,11 @@ function recordingClient(records: Rec[]): CoreClient {
   } as unknown as CoreClient;
 }
 
-const match = (existing: Rec | null) => ({
+const match = (existing: Rec | null): BunnyDnsMatch => ({
   zoneId: 7,
   zoneDomain: "example.com",
   recordName: "shop",
-  existing,
+  existing: existing as BunnyDnsMatch["existing"],
   delegated: true,
   nameservers: ["kiki.bunny.net", "coco.bunny.net"],
 });
