@@ -79,3 +79,18 @@ test("detectPackageManager reads the lockfile", async () => {
   );
   expect(await detectPackageManager(tempRepo({}))).toBe("npm");
 });
+
+test("detectFramework finds Blazor WebAssembly and follows its TargetFramework", async () => {
+  const dir = tempRepo({
+    "App.csproj": `<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly"><PropertyGroup><TargetFramework>net9.0</TargetFramework></PropertyGroup></Project>`,
+  });
+  const preset = await detectFramework(dir);
+  expect(preset?.id).toBe("blazor");
+  expect(preset?.dir).toBe("bin/Release/net9.0/publish/wwwroot");
+  expect(preset?.dotnetVersion).toBe("9.0.x");
+
+  const server = tempRepo({
+    "App.csproj": `<Project Sdk="Microsoft.NET.Sdk.Web" />`,
+  });
+  expect(await detectFramework(server)).toBeUndefined();
+});

@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { access, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 export type PackageManager = "bun" | "pnpm" | "yarn" | "npm";
@@ -14,6 +14,8 @@ export interface FrameworkPreset {
   build?: string;
   /** Serves index.html for client-side routes unless `sites.spa` overrides. */
   spa?: boolean;
+  /** SDK channel for the dotnet toolchain's setup step, e.g. `9.0.x`. */
+  dotnetVersion?: string;
 }
 
 // Static must stay last: the interactive prompt defaults to it.
@@ -176,13 +178,15 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     toolchain: "zola",
     build: "zola build",
   },
-  // Blazor WebAssembly publishes to bin/Release/net<ver>/publish/wwwroot; bump the version if needed.
+  // Detection swaps net8.0 for the project's TargetFramework.
   {
     id: "blazor",
     label: "Blazor WebAssembly",
     dir: "bin/Release/net8.0/publish/wwwroot",
     toolchain: "dotnet",
     build: "dotnet publish -c Release",
+    spa: true,
+    dotnetVersion: "8.0.x",
   },
   {
     id: "static",
@@ -216,7 +220,7 @@ export function presetBuildCommand(
   return preset.build ?? null;
 }
 
-// Ordered most-specific first (meta-frameworks depend on vite, so vite goes last); Blazor is selectable via --framework but not auto-detected.
+// Ordered most-specific first (meta-frameworks depend on vite, so vite goes last).
 const JS_DETECTORS: Array<[dependency: string, presetId: string]> = [
   ["@analogjs/platform", "analog"],
   ["astro", "astro"],
@@ -273,6 +277,28 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+// Standalone Blazor WebAssembly only: server-hosted Blazor apps use a different SDK and aren't static.
+async function detectBlazor(
+  root: string,
+): Promise<FrameworkPreset | undefined> {
+  const preset = findPreset("blazor");
+  const entries = await readdir(root).catch(() => [] as string[]);
+  for (const name of entries.filter((e) => e.endsWith(".csproj"))) {
+    const csproj = await readText(join(root, name));
+    if (!csproj?.includes("Microsoft.NET.Sdk.BlazorWebAssembly")) continue;
+    const tfm = csproj.match(
+      /<TargetFramework>(net(\d+\.\d+))<\/TargetFramework>/,
+    );
+    if (!preset || !tfm) return preset;
+    return {
+      ...preset,
+      dir: `bin/Release/${tfm[1]}/publish/wwwroot`,
+      dotnetVersion: `${tfm[2]}.x`,
+    };
+  }
+  return undefined;
+}
+
 export async function detectFramework(
   root: string,
 ): Promise<FrameworkPreset | undefined> {
@@ -286,6 +312,9 @@ export async function detectFramework(
       if (deps[dependency]) return findPreset(presetId);
     }
   }
+
+  const blazor = await detectBlazor(root);
+  if (blazor) return blazor;
 
   const gemfile = await readText(join(root, "Gemfile"));
   if (
