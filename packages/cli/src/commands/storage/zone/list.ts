@@ -1,15 +1,17 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { formatBytes, formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
 import {
   fetchStorageZones,
   type StorageZoneModel,
   toSafeStorageZone,
-} from "../api.ts";
+} from "@/commands/storage/api.ts";
+import { zoneTierLabel } from "@/commands/storage/constants.ts";
+import { isS3Enabled } from "@/commands/storage/s3.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatBytes, formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 export const storageZoneListCommand = defineCommand({
   command: "list",
@@ -45,11 +47,13 @@ export const storageZoneListCommand = defineCommand({
 
     logger.log(
       formatTable(
-        ["ID", "Name", "Region", "Files", "Used"],
+        ["ID", "Name", "Region", "Tier", "S3", "Files", "Used"],
         zones.map((z) => [
           String(z.Id ?? ""),
           z.Name ?? "",
           z.Region ?? "",
+          zoneTierLabel(z),
+          isS3Enabled(z) ? "Yes" : "No",
           String(z.FilesStored ?? 0),
           formatBytes(z.StorageUsed ?? 0),
         ]),

@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/@bunny.net/config/generated/schema.json",
+  "version": "2026-05-11",
+  "sites": {
+    "name": "acme-docs",
+    // Hugo builds directly (no package manager).
+    "build": "hugo --minify",
+    "dir": "public"
+  }
+}

@@ -1,13 +1,13 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { formatKeyValue, formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { renderBarChart, sumChart } from "../../../core/stats.ts";
-import { spinner } from "../../../core/ui.ts";
-import { resolveZoneInteractive } from "../interactive.ts";
-import { queryTypeLabel } from "../query-types.ts";
+import { resolveZoneInteractive } from "@/commands/dns/interactive.ts";
+import { queryTypeLabel } from "@/commands/dns/query-types.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatKeyValue, formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { renderBarChart, sumChart } from "@/core/stats.ts";
+import { spinner } from "@/core/ui.ts";
 
 interface StatsArgs {
   domain?: string;

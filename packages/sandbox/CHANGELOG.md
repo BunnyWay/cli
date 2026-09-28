@@ -1,5 +1,49 @@
 # @bunny.net/sandbox
 
+## 0.4.1
+
+### Patch Changes
+
+- [#230](https://github.com/BunnyWay/cli/pull/230) [`a4dec48`](https://github.com/BunnyWay/cli/commit/a4dec48dfafd2a46f4008ad758d2b91ef51c8046) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Publish under the MIT license: every package now declares `license` and ships a LICENSE file
+
+## 0.4.0
+
+### Minor Changes
+
+- [#143](https://github.com/BunnyWay/cli/pull/143) [`8884779`](https://github.com/BunnyWay/cli/commit/88847797d2216b5cf23ae3e335a7ea2becb3fd95) Thanks [@jedisct1](https://github.com/jedisct1)! - fix(sandbox): let cp copy into an existing remote directory without a trailing slash. The SDK gains a public `sandbox.stat(path)` method, and `bunny sandbox cp` now checks the destination on both sides: an existing directory (or a trailing slash) keeps the source filename instead of failing with "Failed to write".
+
+### Patch Changes
+
+- [#156](https://github.com/BunnyWay/cli/pull/156) [`3dff411`](https://github.com/BunnyWay/cli/commit/3dff411468a9bf3602dfd66f0bdc0a9f2cbf851e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - anycast endpoints now send the `iPv4` IP protocol version documented by the Magic Containers API
+
+- Updated dependencies [[`cdb130a`](https://github.com/BunnyWay/cli/commit/cdb130ad869c96eee4bee8eef610e360f51b4958), [`3dff411`](https://github.com/BunnyWay/cli/commit/3dff411468a9bf3602dfd66f0bdc0a9f2cbf851e)]:
+  - @bunny.net/openapi-client@0.3.0
+
+## 0.3.3
+
+### Patch Changes
+
+- Updated dependencies [[`8b8adb4`](https://github.com/BunnyWay/cli/commit/8b8adb486046513c5921daa06ee6befe9c221334)]:
+  - @bunny.net/openapi-client@0.2.0
+
+## 0.3.2
+
+### Patch Changes
+
+- [#128](https://github.com/BunnyWay/cli/pull/128) [`f6b64a3`](https://github.com/BunnyWay/cli/commit/f6b64a3a414aefe059fbcf1ec6b0003b0dd1d04d) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - Sandbox is now visible on the CLI root help and landing page, with create examples in the README and root help. The backing Magic Containers app is now named `sandbox-<name>` so sandboxes are recognizable in the MC dashboard; default generated sandbox names dropped their `sandbox-` prefix accordingly.
+
+## 0.3.1
+
+### Patch Changes
+
+- [`ad79781`](https://github.com/BunnyWay/cli/commit/ad797813d850fd39df048f8e1cfa3c0cc3598fcd) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(sandbox): Sandbox.get() recovers exposed port mappings from CDN endpoints so domain() works after reconnect
+
+- [#124](https://github.com/BunnyWay/cli/pull/124) [`9e31add`](https://github.com/BunnyWay/cli/commit/9e31add7c64acdf9b31b60ac149598e80715e670) Thanks [@jedisct1](https://github.com/jedisct1)! - fix(sandbox): verify a sandbox's SSH host key before sending a token, pinning it in a known-hosts store to prevent credential disclosure to an impersonating server
+
+- [#122](https://github.com/BunnyWay/cli/pull/122) [`27a1929`](https://github.com/BunnyWay/cli/commit/27a1929c0e3b8973c2c11cf4e19dba9f3360c43a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sandbox): stream blocking command output via `onStdout`/`onStderr` callbacks (composes with `timeout`/`signal`), and support `using`/`await using` (Symbol.dispose/asyncDispose) to release the SSH connection when a sandbox leaves scope.
+
+- [#122](https://github.com/BunnyWay/cli/pull/122) [`27a1929`](https://github.com/BunnyWay/cli/commit/27a1929c0e3b8973c2c11cf4e19dba9f3360c43a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sandbox): runCommand timeout and AbortSignal cancellation, plus listFiles, deleteFile, rename, and exists file operations
+
 ## 0.3.0
 
 ### Minor Changes

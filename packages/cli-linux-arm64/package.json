@@ -1,7 +1,8 @@
 {
   "name": "@bunny.net/cli-linux-arm64",
-  "version": "0.9.1",
+  "version": "0.18.0",
   "description": "bunny.net CLI binary for Linux arm64",
+  "license": "MIT",
   "os": [
     "linux"
   ],
@@ -9,7 +10,8 @@
     "arm64"
   ],
   "files": [
-    "bunny"
+    "bunny",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"

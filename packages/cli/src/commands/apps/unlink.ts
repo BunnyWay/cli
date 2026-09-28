@@ -1,7 +1,7 @@
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
-import { loadManifest, removeManifest } from "../../core/manifest.ts";
-import { confirm } from "../../core/ui.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, removeManifest } from "@/core/manifest.ts";
+import { confirm } from "@/core/ui.ts";
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 
 const COMMAND = "unlink";

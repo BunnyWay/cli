@@ -85,20 +85,20 @@ For compose files that have just one service, the import overlaps with the Docke
 
 ### Deploy flags
 
-| Flag           | Description                                                                                                                 |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `<image>`      | Container image reference to deploy (e.g. `ghcr.io/me/api:v1.2`). Skips build.                                              |
-| `--name`       | App name. Used during the first-run walkthrough; skips the interactive prompt.                                              |
-| `--dockerfile` | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`.                                  |
-| `--context`    | Docker build context directory. Defaults to the directory of the Dockerfile.                                                |
-| `--tag`        | Override the auto-generated `<sha>-<timestamp>` image tag.                                                                  |
-| `--registry`   | bunny.net registry ID to push to. Overrides the value stored in `bunny.jsonc`.                                              |
-| `--container`  | Name of the container to update. Required when `bunny.jsonc` has multiple containers and you pass `<image>`/`--dockerfile`. |
-| `--port`       | Override the container port. Retargets any endpoints written to `bunny.jsonc`.                                              |
-| `--command`    | Override the container `CMD`. Passed as a single string, split on whitespace.                                               |
-| `--config`     | Use this file as the app config instead of cwd's `bunny.jsonc`. Useful in CI / agent flows.                                 |
-| `--dry-run`    | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                    |
-| `--no-push`    | Build only. Skip pushing the image and skip the deploy.                                                                     |
+| Flag           | Description                                                                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<image>`      | Container image reference to deploy (e.g. `ghcr.io/me/api:v1.2`). Skips build.                                                                        |
+| `--name`       | App name. Used during the first-run walkthrough; skips the interactive prompt.                                                                        |
+| `--dockerfile` | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`.                                                            |
+| `--context`    | Docker build context directory. Defaults to the directory of the Dockerfile.                                                                          |
+| `--tag`        | Override the auto-generated `<sha>-<timestamp>` image tag.                                                                                            |
+| `--registry`   | Registry ID to push to, or `bunny` for the bunny.net registry (`registry.bunny.net`, override with `BUNNYNET_REGISTRY_URL`). Overrides `bunny.jsonc`. |
+| `--container`  | Name of the container to update. Required when `bunny.jsonc` has multiple containers and you pass `<image>`/`--dockerfile`.                           |
+| `--port`       | Override the container port. Retargets any endpoints written to `bunny.jsonc`.                                                                        |
+| `--command`    | Override the container `CMD`. Passed as a single string, split on whitespace.                                                                         |
+| `--config`     | Use this file as the app config instead of cwd's `bunny.jsonc`. Useful in CI / agent flows.                                                           |
+| `--dry-run`    | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                                              |
+| `--no-push`    | Build only. Skip pushing the image and skip the deploy.                                                                                               |
 
 ```bash
 # Deploy a pre-built image
@@ -276,6 +276,28 @@ bunny apps volumes list
 bunny apps volumes remove <volume-id> --force
 ```
 
+## `bunny apps registries`
+
+Manage the container registries bunny.net pulls private images from. Running `bunny apps registries` without a subcommand lists them.
+
+```bash
+bunny apps registries
+bunny apps registries list
+bunny apps registries add --name "GitHub" --server ghcr.io --username myorg --password $TOKEN
+bunny apps registries add --name "Docker Hub" --type dockerHub --username myorg --password $TOKEN
+bunny apps registries update <registry-id> --name "GitHub (myorg)"
+bunny apps registries update <registry-id> --username myorg --password $TOKEN   # rotate credentials
+bunny apps registries remove <registry-id>
+```
+
+`ghcr.io` and `docker.io` need a matching registry type; `--server` derives it, or pass `--type gitHub|dockerHub` directly. Omit both for a generic registry. `--output json` returns the normalized registry (`id`, `name`, `hostname`, `username`, `createdAt`, `lastUpdatedAt`) rather than the raw API model.
+
+The `Source` column says where a registry comes from:
+
+- **Connected** is one you added, with your own credentials.
+- **Public** is a shared credential-free pull-through that bunny.net offers for `docker.io` and `ghcr.io`.
+- **bunny.net** is the platform's own registry (`registry.bunny.net`), available to every account. It is what `bunny registry push` pushes to. It cannot be updated or removed, and needs no credentials of yours.
+
 ## `bunny apps regions`
 
 View available regions and app region settings.
@@ -293,7 +315,7 @@ A single-container app:
 
 ```jsonc
 {
-  "$schema": "./node_modules/@bunny.net/app-config/generated/schema.json",
+  "$schema": "./node_modules/@bunny.net/config/generated/schema.json",
   "version": "2026-05-11",
   "app": {
     "id": "app_xxx", // written by the CLI on first deploy

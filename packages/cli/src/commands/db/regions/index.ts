@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { dbRegionsAddCommand } from "./add.ts";
 import { dbRegionsListCommand } from "./list.ts";
 import { dbRegionsRemoveCommand } from "./remove.ts";

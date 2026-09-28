@@ -1,14 +1,14 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../../config/index.ts";
-import { clientOptions } from "../../../../core/client-options.ts";
-import { UserError } from "../../../../core/errors.ts";
+import type { StorageZoneModel } from "@/commands/storage/api.ts";
+import { resolveStorageZoneInteractive } from "@/commands/storage/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { UserError } from "@/core/errors.ts";
 import {
   createHostnamesCommands,
   type ResolvedPullZone,
-} from "../../../../core/hostnames/index.ts";
-import type { OutputFormat } from "../../../../core/types.ts";
-import type { StorageZoneModel } from "../../api.ts";
-import { resolveStorageZoneInteractive } from "../../interactive.ts";
+} from "@/core/hostnames/index.ts";
+import type { OutputFormat } from "@/core/types.ts";
 
 // Pick the storage zone's linked pull zone; require --pull-zone when several exist.
 function resolvePullZoneId(zone: StorageZoneModel, flag?: number): number {
@@ -27,7 +27,7 @@ function resolvePullZoneId(zone: StorageZoneModel, flag?: number): number {
   if (zones.length === 0) {
     throw new UserError(
       `Storage zone ${zone.Name} has no pull zone.`,
-      'Create one with "bunny storage zone add --pull-zone".',
+      "The CLI only creates one during `zones create --pull-zone`; for an existing zone, create a pull zone with it as the origin in the dashboard (https://dash.bunny.net/cdn/add).",
     );
   }
 
@@ -56,18 +56,17 @@ async function resolveStorageZonePullZone(args: {
   const coreClient = createCoreClient(clientOptions(config, args.verbose));
 
   // Explicit ref → linked zone (.bunny/storage.json) → interactive picker, like every other storage command.
-  const zone = await resolveStorageZoneInteractive(
-    coreClient,
-    args.zone,
-    args.output,
-  );
+  const zone = await resolveStorageZoneInteractive(coreClient, args.zone, {
+    output: args.output,
+    offerLink: true,
+  });
   const pullZoneId = resolvePullZoneId(zone, args["pull-zone"]);
 
   return { pullZoneId, coreClient };
 }
 
 export const storageZoneHostnamesCommands = createHostnamesCommands({
-  commandPath: "storage zone domains",
+  commandPath: "storage zones domains",
   namespace: "domains",
   describe: "Manage custom domains for a storage zone's pull zone.",
   hiddenAliases: ["hostnames"],

@@ -1,13 +1,16 @@
 import { mkdir } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
-import { connectStorageZone, downloadFile } from "../files-api.ts";
-import { resolveStorageZoneInteractive } from "../interactive.ts";
+import {
+  connectStorageZone,
+  downloadFile,
+} from "@/commands/storage/files-api.ts";
+import { resolveStorageZoneInteractive } from "@/commands/storage/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 interface DownloadArgs {
   path: string;
@@ -62,8 +65,12 @@ export const storageFileDownloadCommand = defineCommand<DownloadArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref, output);
+    const zone = await resolveStorageZoneInteractive(client, ref, {
+      output,
+      offerLink: true,
+    });
     const connection = connectStorageZone(zone);
+
     const dest = out ?? basename(path);
 
     const spin = spinner(`Downloading ${path}...`);

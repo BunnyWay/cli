@@ -3,15 +3,8 @@ import {
   createCoreClient,
 } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import prompts from "prompts";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { isInteractive, spinner } from "../../../core/ui.ts";
-import type { CoreClient, DnsZoneModel } from "../api.ts";
-import { resolveZoneInteractive } from "../interactive.ts";
+import type { CoreClient, DnsZoneModel } from "@/commands/dns/api.ts";
+import { resolveZoneInteractive } from "@/commands/dns/interactive.ts";
 import {
   CAA_TAGS,
   type DnsRecordTypes,
@@ -20,9 +13,15 @@ import {
   RECORD_TYPES,
   recordName,
   recordTypeLabel,
-} from "../record-types.ts";
-import type { AnswerKind } from "../scripts/constants.ts";
-import { pickOrCreateDnsScript } from "../scripts/interactive.ts";
+} from "@/commands/dns/record-types.ts";
+import type { AnswerKind } from "@/commands/dns/scripts/constants.ts";
+import { pickOrCreateDnsScript } from "@/commands/dns/scripts/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { isInteractive, prompts, spinner } from "@/core/ui.ts";
 import { pickAndApplyPreset } from "./preset.ts";
 
 type AddDnsRecordModel = components["schemas"]["AddDnsRecordModel"];
@@ -260,7 +259,7 @@ async function writeAndReport(
 /**
  * Interactively build and add one record to a zone: pick a type, gather its
  * fields (with the Scriptable DNS option for A/AAAA/CNAME/TXT), then write it.
- * Reused by the records `add` wizard and the `zones add` post-scan menu.
+ * Reused by the records `add` wizard and the `zones create` post-scan menu.
  */
 export async function addRecordInteractive(opts: {
   client: CoreClient;

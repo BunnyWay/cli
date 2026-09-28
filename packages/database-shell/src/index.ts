@@ -1,5 +1,6 @@
 // Public API
-export { createShellClient } from "./client.ts";
+export type { ShellClient } from "./client.ts";
+export { createShellClient, fromDatabase } from "./client.ts";
 export type { MaskType } from "./format.ts";
 export {
   columnMaskType,

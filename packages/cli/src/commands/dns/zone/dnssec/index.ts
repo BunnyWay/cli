@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { dnsZoneDnssecDisableCommand } from "./disable.ts";
 import { dnsZoneDnssecEnableCommand } from "./enable.ts";
 

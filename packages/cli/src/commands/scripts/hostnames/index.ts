@@ -3,16 +3,16 @@ import {
   createCoreClient,
 } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { UserError } from "../../../core/errors.ts";
+import { fetchScript } from "@/commands/scripts/api.ts";
+import { SCRIPT_MANIFEST } from "@/commands/scripts/constants.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { UserError } from "@/core/errors.ts";
 import {
   createHostnamesCommands,
   type ResolvedPullZone,
-} from "../../../core/hostnames/index.ts";
-import { resolveManifestId } from "../../../core/manifest.ts";
-import { fetchScript } from "../api.ts";
-import { SCRIPT_MANIFEST } from "../constants.ts";
+} from "@/core/hostnames/index.ts";
+import { resolveManifestId } from "@/core/manifest.ts";
 
 type EdgeScript = components["schemas"]["EdgeScriptModel"];
 

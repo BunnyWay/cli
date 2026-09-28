@@ -1,10 +1,10 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../config/index.ts";
-import { clientOptions } from "../core/client-options.ts";
-import { defineCommand } from "../core/define-command.ts";
-import { UserError } from "../core/errors.ts";
-import { logger } from "../core/logger.ts";
-import { spinner } from "../core/ui.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 const COMMAND = "whoami";
 const DESCRIPTION = "Show the currently authenticated account.";
@@ -65,10 +65,12 @@ export const whoamiCommand = defineCommand({
     const name =
       [data.FirstName, data.LastName].filter(Boolean).join(" ") || null;
     const email = data.Email ?? null;
+    const accountId = data.AccountId ?? null;
     const roles = data.Roles ?? [];
 
     logger.debug(`Name: ${name}`, verbose);
     logger.debug(`Email: ${email}`, verbose);
+    logger.debug(`Account ID: ${accountId}`, verbose);
     logger.debug(
       `Roles: ${roles.length > 0 ? roles.join(", ") : "(none)"}`,
       verbose,
@@ -80,6 +82,7 @@ export const whoamiCommand = defineCommand({
           {
             name,
             email,
+            accountId,
             profile: config.profile || null,
             source: config.profile ? "config" : "env",
             roles,
@@ -99,6 +102,9 @@ export const whoamiCommand = defineCommand({
     logger.log();
     logger.log(`Logged in as ${greeting || maskedKey} 🐇`);
     logger.log();
+    if (accountId) {
+      logger.dim(`Account ID: ${accountId}`);
+    }
     if (config.profile) {
       logger.dim(`Profile: ${config.profile}`);
     }

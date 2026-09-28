@@ -1,0 +1,8 @@
+{
+  "name": "database-client-example-edge-script",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bunny scripts deploy main.ts"
+  }
+}

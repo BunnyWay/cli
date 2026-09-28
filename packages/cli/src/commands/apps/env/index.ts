@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { appsEnvListCommand } from "./list.ts";
 import { appsEnvPullCommand } from "./pull.ts";
 import { appsEnvPushCommand } from "./push.ts";

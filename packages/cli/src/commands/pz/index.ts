@@ -11,7 +11,7 @@ import { pzUnlinkCommand } from "./unlink.ts";
 // const rulesNamespace = defineNamespace("rules", "Manage pull zone edge rules.", [...]);
 // const hostnamesNamespace = defineNamespace("hostnames", "Manage pull zone hostnames.", [...]);
 
-export const pzNamespace = defineNamespace("pz", "Manage pull zones.", [
+export const pzNamespace = defineNamespace("pz", false, [
   pzListCommand,
   pzCreateCommand,
   pzDeleteCommand,

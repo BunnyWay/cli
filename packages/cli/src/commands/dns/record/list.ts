@@ -1,15 +1,15 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { resolveZoneInteractive } from "../interactive.ts";
+import { resolveZoneInteractive } from "@/commands/dns/interactive.ts";
 import {
   formatRecordValue,
   recordName,
   recordTypeLabel,
-} from "../record-types.ts";
+} from "@/commands/dns/record-types.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
 
 interface ListArgs {
   domain?: string;

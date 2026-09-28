@@ -1,5 +1,5 @@
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { RECORD_TYPES } from "../../../core/dns-record-types.ts";
+import { RECORD_TYPES } from "@/core/dns-record-types.ts";
 
 type AddDnsRecordModel = components["schemas"]["AddDnsRecordModel"];
 

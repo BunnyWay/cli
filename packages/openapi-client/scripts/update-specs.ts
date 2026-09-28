@@ -26,12 +26,12 @@ const specs = [
   },
   {
     name: "origin-errors",
-    url: "https://docs.bunny.net/api-reference/origin-errors/openapi.json",
+    url: "https://bunny.net/docs/api-reference/origin-errors/openapi.json",
     out: "specs/origin-errors.json",
   },
   {
     name: "storage",
-    url: "https://docs.bunny.net/api-reference/storage/openapi.json",
+    url: "https://bunny.net/docs/api-reference/storage/openapi.json",
     out: "specs/storage.json",
   },
   {

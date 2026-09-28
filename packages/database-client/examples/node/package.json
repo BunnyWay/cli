@@ -1,0 +1,14 @@
+{
+  "name": "database-client-example-node",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node --env-file=.env server.ts"
+  },
+  "dependencies": {
+    "@bunny.net/database-client": "*"
+  }
+}

@@ -16,6 +16,6 @@
     "@bunny.net/database-openapi": "workspace:*"
   },
   "devDependencies": {
-    "@bunny.net/database-adapter-libsql": "workspace:*"
+    "@bunny.net/database-adapter": "workspace:*"
   }
 }

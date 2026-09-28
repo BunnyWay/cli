@@ -6,7 +6,11 @@ Standalone, type-safe OpenAPI client for [bunny.net](https://bunny.net). Zero CL
 
 ```bash
 bun add @bunny.net/openapi-client
+# or
+npm install @bunny.net/openapi-client
 ```
+
+Requires a runtime with a global `fetch` (Node.js ≥ 18, Bun, Deno, edge runtimes). ESM-only.
 
 ## Usage
 
@@ -73,26 +77,43 @@ try {
 - `UserError` — expected errors (bad input, missing config). Has an optional `hint` property.
 - `ApiError` — extends `UserError`. Carries `status`, optional `field`, and optional `validationErrors[]`.
 
-## Generated Types
+## Per-API Entrypoints
 
-TypeScript types are generated from OpenAPI specs via `openapi-typescript`. Access them through the `generated` export:
+Each API also has its own subpath entrypoint exporting the client factory together with every type generated from that API's OpenAPI spec (`paths`, `components`, `operations`):
 
 ```typescript
-import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
+import { createCoreClient } from "@bunny.net/openapi-client/core";
+import type { components } from "@bunny.net/openapi-client/core";
 
-type PullZone = components["schemas"]["PullZone"];
+type DnsZone = components["schemas"]["DnsZoneModel"];
 ```
 
-Available type modules:
+| Entrypoint                                   | Exports                                              |
+| -------------------------------------------- | ---------------------------------------------------- |
+| `@bunny.net/openapi-client/core`             | `createCoreClient`, core spec types, DNS scan types  |
+| `@bunny.net/openapi-client/compute`          | `createComputeClient`, compute spec types            |
+| `@bunny.net/openapi-client/database`         | `createDbClient`, database spec types                |
+| `@bunny.net/openapi-client/magic-containers` | `createMcClient`, Magic Containers spec types        |
+| `@bunny.net/openapi-client/origin-errors`    | `createOriginErrorsClient`, origin-errors spec types |
+| `@bunny.net/openapi-client/shield`           | `createShieldClient`, shield spec types              |
+| `@bunny.net/openapi-client/storage`          | `createStorageClient`, storage spec types            |
+| `@bunny.net/openapi-client/stream`           | `createStreamClient`, stream spec types              |
 
-- `@bunny.net/openapi-client/generated/core.d.ts`
-- `@bunny.net/openapi-client/generated/compute.d.ts`
-- `@bunny.net/openapi-client/generated/database.d.ts`
-- `@bunny.net/openapi-client/generated/magic-containers.d.ts`
-- `@bunny.net/openapi-client/generated/origin-errors.d.ts`
-- `@bunny.net/openapi-client/generated/shield.d.ts`
-- `@bunny.net/openapi-client/generated/storage.d.ts`
-- `@bunny.net/openapi-client/generated/stream.d.ts`
+The raw generated modules remain available at `@bunny.net/openapi-client/generated/<spec>.d.ts` for backwards compatibility.
+
+## Custom Clients
+
+The shared middleware — auth-header injection, debug logging, and error normalization — is exported as `authMiddleware`, so you can compose your own `openapi-fetch` client (for example, over a spec of your own or with extra middleware) and keep the same behavior:
+
+```typescript
+import createClient from "openapi-fetch";
+import { authMiddleware } from "@bunny.net/openapi-client";
+import type { paths } from "@bunny.net/openapi-client/core";
+
+const client = createClient<paths>({ baseUrl: "https://api.bunny.net" });
+client.use(authMiddleware({ apiKey: "bny_xxxxxxxxxxxx" }));
+client.use(myLoggingMiddleware);
+```
 
 ## Updating Specs
 

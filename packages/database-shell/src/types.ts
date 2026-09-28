@@ -1,4 +1,4 @@
-import type { Client } from "@libsql/client";
+import type { ShellClient } from "./client.ts";
 
 /** Logger interface for the shell. Defaults to console-based output if not provided. */
 export interface ShellLogger {
@@ -22,7 +22,7 @@ export const PRINT_MODES: PrintMode[] = [
 
 /** Options for starting an interactive shell session. */
 export interface ShellOptions {
-  client: Client;
+  client: ShellClient;
   mode?: PrintMode;
   masked?: boolean;
   timing?: boolean;

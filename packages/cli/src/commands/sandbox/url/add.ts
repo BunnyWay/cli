@@ -1,9 +1,9 @@
 import { Sandbox, SandboxError } from "@bunny.net/sandbox";
-import { getSandbox, resolveConfig } from "../../../config/index.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
+import { getSandbox, resolveConfig } from "@/config/index.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 interface AddArgs {
   name: string;

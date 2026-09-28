@@ -1,7 +1,8 @@
 {
   "name": "@bunny.net/cli-windows-x64",
-  "version": "0.9.1",
+  "version": "0.18.0",
   "description": "bunny.net CLI binary for Windows x64",
+  "license": "MIT",
   "os": [
     "win32"
   ],
@@ -9,7 +10,8 @@
     "x64"
   ],
   "files": [
-    "bunny.exe"
+    "bunny.exe",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"

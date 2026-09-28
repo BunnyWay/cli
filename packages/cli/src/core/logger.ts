@@ -2,7 +2,7 @@ import chalk from "chalk";
 import { bunny } from "./colors.ts";
 
 export const logger = {
-  log: (msg = "") => console.log(msg),
+  log: (msg = "") => process.stdout.write(`${msg}\n`, () => {}),
   info: (msg: string) => console.error(bunny("ℹ"), msg),
   success: (msg: string, symbolColor: (text: string) => string = chalk.green) =>
     console.error(symbolColor("✓"), msg),

@@ -3,16 +3,15 @@
 // the server binds to 127.0.0.1 and the database is throwaway. Not intended
 // for production or for exposing to anything beyond localhost.
 
-import {
-  createLibSQLExecutor,
-  introspect,
-} from "@bunny.net/database-adapter-libsql";
-import { createClient } from "@libsql/client";
+import { Database } from "bun:sqlite";
+import { createExecutor, introspect } from "@bunny.net/database-adapter";
+import { sqliteClient } from "@bunny.net/database-adapter/sqlite";
 import { createRestHandler } from "../src/index.ts";
 
-const client = createClient({ url: ":memory:" });
+const db = new Database(":memory:");
+const client = sqliteClient(db);
 
-await client.executeMultiple(`
+db.exec(`
   CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
@@ -38,7 +37,7 @@ await client.executeMultiple(`
 `);
 
 const schema = await introspect({ client });
-const executor = createLibSQLExecutor({ client });
+const executor = createExecutor({ client });
 const handler = createRestHandler(executor, schema);
 
 const port = Number(process.env.PORT) || 8080;

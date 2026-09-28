@@ -1,16 +1,16 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { formatBytes, formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
 import {
   connectStorageZone,
   listFiles,
   type StorageFile,
-} from "../files-api.ts";
-import { resolveStorageZoneInteractive } from "../interactive.ts";
+} from "@/commands/storage/files-api.ts";
+import { resolveStorageZoneInteractive } from "@/commands/storage/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatBytes, formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 interface ListArgs {
   path?: string;
@@ -43,7 +43,10 @@ export const storageFileListCommand = defineCommand<ListArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref, output);
+    const zone = await resolveStorageZoneInteractive(client, ref, {
+      output,
+      offerLink: true,
+    });
     const connection = connectStorageZone(zone);
 
     const spin = spinner("Listing files...");
@@ -56,13 +59,7 @@ export const storageFileListCommand = defineCommand<ListArgs>({
     }
 
     if (output === "json") {
-      // Drop the SDK-internal _tag and the lazy data() loader.
-      const plain = files.map((file) => ({
-        ...file,
-        _tag: undefined,
-        data: undefined,
-      }));
-      logger.log(JSON.stringify(plain, null, 2));
+      logger.log(JSON.stringify(files, null, 2));
       return;
     }
 

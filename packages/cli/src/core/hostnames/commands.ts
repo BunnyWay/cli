@@ -1,13 +1,19 @@
 import type { Argv, CommandModule } from "yargs";
-import { defineCommand } from "../define-command.ts";
-import { defineNamespace } from "../define-namespace.ts";
-import { UserError } from "../errors.ts";
-import { formatTable } from "../format.ts";
-import { logger } from "../logger.ts";
-import type { GlobalArgs } from "../types.ts";
-import { confirm, isInteractive, spinner } from "../ui.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
+import { UserError } from "@/core/errors.ts";
+import { formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import type { GlobalArgs } from "@/core/types.ts";
+import {
+  confirm,
+  isInteractive,
+  requireConfirmable,
+  spinner,
+} from "@/core/ui.ts";
 import {
   addHostname,
+  type CoreClient,
   enableSsl,
   fetchPullZoneHostnames,
   hostnameUrl,
@@ -19,12 +25,23 @@ import {
   offerBunnyDnsThenSsl,
   offerDnsWaitAndSsl,
   printSslHint,
+  reportIssuedCertificate,
 } from "./flow.ts";
 
 /** Resolves the pull zone (and a core client) for the resource being targeted. */
 export type HostnameResolver = (
   args: GlobalArgs & Record<string, unknown>,
 ) => Promise<ResolvedPullZone>;
+
+/** Context passed to the {@link HostnamesMountOptions.onAdded}/`onRemoved` hooks. */
+export interface HostnameHookContext {
+  coreClient: CoreClient;
+  pullZoneId: number;
+  hostname: string;
+  /** The zone's system hostname: the CNAME target (add only). */
+  cnameTarget?: string;
+  args: GlobalArgs & Record<string, unknown>;
+}
 
 export interface HostnamesMountOptions {
   /** Command breadcrumb used in examples and follow-up hints, e.g. "scripts domains". */
@@ -45,6 +62,15 @@ export interface HostnamesMountOptions {
   describe?: string;
   /** Hidden namespace aliases (e.g. ["hostnames"]) — they work but stay out of help. */
   hiddenAliases?: string[];
+  /**
+   * Runs once a domain is attached, after the SSL/DNS follow-up finishes (or
+   * fails); lets a resource attach companion hostnames or persist the domain.
+   * The hook must handle its own errors; a companion failure shouldn't fail
+   * the add.
+   */
+  onAdded?: (ctx: HostnameHookContext) => Promise<void>;
+  /** Runs after a domain is removed; the counterpart of {@link onAdded}. */
+  onRemoved?: (ctx: HostnameHookContext) => Promise<void>;
 }
 
 /** Echo back the targeting args the user passed so copy-paste follow-up hints keep the same scope. */
@@ -157,144 +183,163 @@ export function createHostnamesCommands(
       const spin = spinner(`Adding ${hostname}...`);
       spin.start();
 
-      const { hostnames, cnameTarget: systemHostname } = await addHostname(
-        coreClient,
-        pullZoneId,
-        hostname,
-      );
+      const {
+        hostnames,
+        cnameTarget: systemHostname,
+        alreadyAttached,
+      } = await addHostname(coreClient, pullZoneId, hostname);
 
       spin.stop();
 
-      let sslIssued = false;
-      let sslError: string | undefined;
-      if (requestSsl) {
-        const sslSpin = spinner("Requesting free SSL certificate...");
-        sslSpin.start();
-        try {
-          await enableSsl(coreClient, pullZoneId, hostname, force, hostnames);
-          sslIssued = true;
-        } catch (err) {
-          sslError = err instanceof Error ? err.message : String(err);
-        }
-        sslSpin.stop();
-      }
-
-      const sslHint = `bunny ${commandPath} ssl ${hostname}${targetSuffix(
-        args as unknown as Record<string, unknown>,
-        targetPositional?.name,
-      )}`;
-
-      // A requested certificate that failed to issue is a command error, like `ssl`.
-      const sslFailed = requestSsl && sslError != null;
-
-      if (args.output === "json") {
-        // With --wait, finish the DNS/SSL flow first so the JSON reflects the real certificate outcome.
-        if (systemHostname && args.wait === true && !sslIssued) {
+      // Companion hostnames need the primary domain's DNS in place first, so the hook runs after the DNS/SSL flow, not here.
+      let hookRan = false;
+      const runOnAdded = async () => {
+        if (hookRan || !opts.onAdded) return;
+        hookRan = true;
+        await opts.onAdded({
+          coreClient,
+          pullZoneId,
+          hostname,
+          cnameTarget: systemHostname,
+          args: args as unknown as GlobalArgs & Record<string, unknown>,
+        });
+      };
+      // The hostname is attached at this point, so the hook must run even when the DNS/SSL flow below throws or returns early (companions attach independently of the apex's certificate); the guard keeps the explicit pre-exit call in the JSON path from double-running it.
+      try {
+        let sslIssued = false;
+        let sslError: string | undefined;
+        if (requestSsl) {
+          const sslSpin = spinner("Requesting free SSL certificate...");
+          sslSpin.start();
           try {
-            sslIssued = await offerDnsWaitAndSsl({
-              coreClient,
-              pullZoneId,
-              hostname,
-              cnameTarget: systemHostname,
-              forceSsl: force,
-              sslHint,
-              assumeYes: true,
-              json: true,
-            });
-            if (sslIssued) sslError = undefined;
+            await enableSsl(coreClient, pullZoneId, hostname, force, hostnames);
+            sslIssued = true;
           } catch (err) {
             sslError = err instanceof Error ? err.message : String(err);
           }
+          sslSpin.stop();
         }
 
-        logger.log(
-          JSON.stringify(
-            {
-              hostname,
-              pullZoneId,
-              cnameTarget: systemHostname ?? null,
-              ssl: sslIssued,
-              forceSSL: sslIssued && force,
-              sslError: sslError ?? null,
-            },
-            null,
-            2,
-          ),
-        );
-        // Emit the full result for agents/CI, then signal failure with a non-zero exit.
-        const sslWanted =
-          requestSsl || (args.wait === true && systemHostname != null);
-        if (sslWanted && !sslIssued) process.exit(1);
-        return;
-      }
+        const sslHint = `bunny ${commandPath} ssl ${hostname}${targetSuffix(
+          args as unknown as Record<string, unknown>,
+          targetPositional?.name,
+        )}`;
 
-      logger.success(`Added ${hostname} to pull zone ${pullZoneId}.`);
+        // A requested certificate that failed to issue is a command error, like `ssl`.
+        const sslFailed = requestSsl && sslError != null;
 
-      if (sslIssued) {
+        if (args.output === "json") {
+          // With --wait, finish the DNS/SSL flow first so the JSON reflects the real certificate outcome.
+          if (systemHostname && args.wait === true && !sslIssued) {
+            try {
+              sslIssued = await offerDnsWaitAndSsl({
+                coreClient,
+                pullZoneId,
+                hostname,
+                cnameTarget: systemHostname,
+                forceSsl: force,
+                sslHint,
+                assumeYes: true,
+                json: true,
+              });
+              if (sslIssued) sslError = undefined;
+            } catch (err) {
+              sslError = err instanceof Error ? err.message : String(err);
+            }
+          }
+
+          await runOnAdded();
+
+          logger.log(
+            JSON.stringify(
+              {
+                hostname,
+                pullZoneId,
+                cnameTarget: systemHostname ?? null,
+                ssl: sslIssued,
+                forceSSL: sslIssued && force,
+                sslError: sslError ?? null,
+              },
+              null,
+              2,
+            ),
+          );
+          // Emit the full result for agents/CI, then signal failure with a non-zero exit.
+          const sslWanted =
+            requestSsl || (args.wait === true && systemHostname != null);
+          if (sslWanted && !sslIssued) process.exit(1);
+          return;
+        }
+
+        if (alreadyAttached) {
+          logger.info(
+            `${hostname} is already on pull zone ${pullZoneId}; finishing setup.`,
+          );
+        } else {
+          logger.success(`Added ${hostname} to pull zone ${pullZoneId}.`);
+        }
+
+        if (sslIssued) {
+          logger.log();
+          await reportIssuedCertificate(hostname, force);
+          return;
+        }
+
+        // Offer to wait for DNS and finish HTTPS in one go (or just do it with --wait).
+        const offerWait =
+          systemHostname != null && (args.wait === true || interactive);
+
+        if (sslFailed && offerWait) {
+          logger.warn(`Couldn't issue a certificate yet: ${sslError}`);
+          logger.dim("  This is normal until DNS propagates.");
+        }
+
+        // If the domain is on Bunny DNS, offer to add the record (prompted) so SSL can issue right away.
+        if (systemHostname && interactive) {
+          const issued = await offerBunnyDnsThenSsl({
+            coreClient,
+            hostname,
+            pullZoneId,
+            cnameTarget: systemHostname,
+            forceSsl: force,
+            sslHint,
+            verbose: args.verbose,
+          });
+          if (issued !== null) return;
+        }
+
+        if (systemHostname) {
+          logger.log();
+          logger.log("Point your DNS at bunny.net to activate it:");
+          logger.accent(`  CNAME  ${hostname}  →  ${systemHostname}`);
+        }
+
         logger.log();
-        logger.success(
-          force
-            ? "SSL certificate issued and HTTPS forced."
-            : "SSL certificate issued.",
-        );
-        logger.log(
-          `  Live at: ${hostnameUrl(hostname, { hasCertificate: true })}`,
-        );
-        return;
+
+        if (systemHostname && offerWait) {
+          await offerDnsWaitAndSsl({
+            coreClient,
+            pullZoneId,
+            hostname,
+            cnameTarget: systemHostname,
+            forceSsl: force,
+            sslHint,
+            assumeYes: args.wait === true,
+          });
+          return;
+        }
+
+        if (sslFailed) {
+          throw new UserError(
+            `Couldn't issue a certificate for ${hostname} yet: ${sslError}`,
+            `This is normal until DNS propagates. Once it's live, run: ${sslHint}`,
+          );
+        }
+
+        printSslHint(sslHint);
+      } finally {
+        await runOnAdded();
       }
-
-      // Offer to wait for DNS and finish HTTPS in one go (or just do it with --wait).
-      const offerWait =
-        systemHostname != null && (args.wait === true || interactive);
-
-      if (sslFailed && offerWait) {
-        logger.warn(`Couldn't issue a certificate yet: ${sslError}`);
-        logger.dim("  This is normal until DNS propagates.");
-      }
-
-      // If the domain is on Bunny DNS, offer to add the record (prompted) so SSL can issue right away.
-      if (systemHostname && interactive) {
-        const issued = await offerBunnyDnsThenSsl({
-          coreClient,
-          hostname,
-          pullZoneId,
-          cnameTarget: systemHostname,
-          forceSsl: force,
-          sslHint,
-          verbose: args.verbose,
-        });
-        if (issued !== null) return;
-      }
-
-      if (systemHostname) {
-        logger.log();
-        logger.log("Point your DNS at bunny.net to activate it:");
-        logger.accent(`  CNAME  ${hostname}  →  ${systemHostname}`);
-      }
-
-      logger.log();
-
-      if (systemHostname && offerWait) {
-        await offerDnsWaitAndSsl({
-          coreClient,
-          pullZoneId,
-          hostname,
-          cnameTarget: systemHostname,
-          forceSsl: force,
-          sslHint,
-          assumeYes: args.wait === true,
-        });
-        return;
-      }
-
-      if (sslFailed) {
-        throw new UserError(
-          `Couldn't issue a certificate for ${hostname} yet: ${sslError}`,
-          `This is normal until DNS propagates. Once it's live, run: ${sslHint}`,
-        );
-      }
-
-      printSslHint(sslHint);
     },
   });
 
@@ -365,14 +410,7 @@ export function createHostnamesCommands(
         return;
       }
 
-      logger.success(
-        force
-          ? `SSL certificate issued for ${hostname} and HTTPS forced.`
-          : `SSL certificate issued for ${hostname}.`,
-      );
-      logger.log(
-        `  Live at: ${hostnameUrl(hostname, { hasCertificate: true })}`,
-      );
+      await reportIssuedCertificate(hostname, force);
     },
   });
 
@@ -479,6 +517,11 @@ export function createHostnamesCommands(
         );
       }
 
+      requireConfirmable(args.output, {
+        force: args.force,
+        message: `Removing ${hostname} needs a confirmation prompt.`,
+        hint: "Re-run with --force to remove it non-interactively.",
+      });
       const confirmed = await confirm(`Remove ${hostname}?`, {
         force: args.force,
       });
@@ -496,6 +539,15 @@ export function createHostnamesCommands(
       });
 
       removeSpin.stop();
+
+      if (opts.onRemoved) {
+        await opts.onRemoved({
+          coreClient,
+          pullZoneId,
+          hostname,
+          args: args as unknown as GlobalArgs & Record<string, unknown>,
+        });
+      }
 
       if (args.output === "json") {
         logger.log(

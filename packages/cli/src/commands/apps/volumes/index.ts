@@ -1,4 +1,4 @@
-import { defineNamespace } from "../../../core/define-namespace.ts";
+import { defineNamespace } from "@/core/define-namespace.ts";
 import { appsVolumesListCommand } from "./list.ts";
 import { appsVolumesRemoveCommand } from "./remove.ts";
 

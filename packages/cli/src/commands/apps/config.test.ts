@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { useTempDir } from "../../test-utils/temp-dir.ts";
+import { useTempDir } from "@/test-utils/temp-dir.ts";
 import {
   configExists,
   loadConfig,
@@ -154,6 +154,40 @@ test("saveConfig strips id/registry/transient-image on disk", () => {
   expect(parsed.app.containers.api.registry).toBeUndefined();
   expect(parsed.app.containers.api.image).toBeUndefined();
   expect(parsed.app.id).toBeUndefined();
+});
+
+test("saveConfig preserves comments and a sibling sites block on an existing file", () => {
+  const path = join(tempDir(), "mixed.jsonc");
+  writeFileSync(
+    path,
+    `{
+  // my deploy config
+  "version": "2026-05-11",
+  "app": {
+    "name": "demo",
+    "id": "app_legacy",
+    "containers": {
+      "api": { "dockerfile": "Dockerfile", "registry": "7545" }
+    }
+  },
+  "sites": { "dir": "dist" }
+}
+`,
+  );
+
+  saveConfig(loadConfig(path), path);
+
+  const text = readFileSync(path, "utf-8");
+  expect(text).toContain("// my deploy config");
+
+  const parsed = JSON.parse(text.replace(/\/\/.*$/gm, "")) as Record<
+    string,
+    any
+  >;
+  expect(parsed.app.id).toBeUndefined();
+  expect(parsed.app.containers.api.registry).toBeUndefined();
+  expect(parsed.app.containers.api.dockerfile).toBe("Dockerfile");
+  expect(parsed.sites).toEqual({ dir: "dist" });
 });
 
 test("load → save → reload preserves intent fields", () => {

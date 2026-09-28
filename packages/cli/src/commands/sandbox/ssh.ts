@@ -1,6 +1,6 @@
-import { getSandbox } from "../../config/index.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { UserError } from "../../core/errors.ts";
+import { getSandbox } from "@/config/index.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
 import { collectEnv, type EnvOptionArgs, withEnvOptions } from "./env-args.ts";
 import { envPrefix, sshArgs, WORKPLACE, withSshEnv } from "./ssh-exec.ts";
 

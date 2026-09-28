@@ -1,17 +1,16 @@
 import { createComputeClient } from "@bunny.net/openapi-client";
-import prompts from "prompts";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
-import { fetchEnvEntries } from "../api.ts";
+import { fetchEnvEntries } from "@/commands/scripts/api.ts";
 import {
   type ScriptSelectorArgs,
   scriptIdOptionBuilder,
   selectScript,
-} from "../interactive.ts";
+} from "@/commands/scripts/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, prompts, spinner } from "@/core/ui.ts";
 
 const COMMAND = "remove [name]";
 const ALIASES = ["rm"] as const;

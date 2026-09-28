@@ -1,7 +1,7 @@
-import { resolveConfig } from "../../config/index.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { formatKeyValue } from "../../core/format.ts";
-import { logger } from "../../core/logger.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatKeyValue } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
 
 export const configShowCommand = defineCommand({
   command: "show",

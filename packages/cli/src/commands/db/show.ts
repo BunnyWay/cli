@@ -1,10 +1,10 @@
 import { createDbClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { formatBytes, formatKeyValue, progressBar } from "../../core/format.ts";
-import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatBytes, formatKeyValue, progressBar } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 import {
   fetchDatabase,
   fetchLiveStatus,
@@ -64,8 +64,9 @@ export const dbShowCommand = defineCommand<ShowArgs>({
     const spin = spinner("Fetching database...");
     spin.start();
 
-    const [db, liveMetrics, regionConfig] = await Promise.all([
-      fetchDatabase(client, databaseId),
+    // The database lookup goes first so an unknown ID fails with its own message, not a live-status 400.
+    const db = await fetchDatabase(client, databaseId);
+    const [liveMetrics, regionConfig] = await Promise.all([
       fetchLiveStatus(client, [databaseId]),
       fetchRegionConfig(client),
     ]);

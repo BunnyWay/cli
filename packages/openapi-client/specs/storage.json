@@ -15,11 +15,7 @@
       "url": "http://github.com/gruntjs/grunt/blob/master/LICENSE-MIT"
     }
   },
-  "security": [
-    {
-      "AccessKeyAuthentication": []
-    }
-  ],
+  "security": [{ "AccessKeyAuthentication": [] }],
   "paths": {
     "/{storageZoneName}/{path}/{fileName}": {
       "get": {
@@ -32,36 +28,28 @@
             "in": "path",
             "description": "The name of your storage zone where you are connecting to.",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "path",
             "in": "path",
             "description": "The directory path to your file. If this is the root of your storage zone, you can ignore this parameter.",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "fileName",
             "in": "path",
             "description": "The name of the file that you wish to download.",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "AccessKey",
             "in": "header",
             "required": true,
             "description": "The API AccessKey used for authentication.",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -74,9 +62,7 @@
               "*/*": {
                 "schema": {
                   "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ErrorObject"
-                  }
+                  "items": { "$ref": "#/components/schemas/ErrorObject" }
                 }
               }
             }
@@ -88,22 +74,15 @@
         "summary": "Upload File",
         "description": "Upload a file to a storage zone based on the URL path. If the directory tree does not exist, it will be created automatically. **The file content should be sent as the body of the request without any type of encoding.**",
         "responses": {
-          "201": {
-            "description": "The file upload was successful."
-          },
-          "400": {
-            "description": "Upload failed."
-          }
+          "201": { "description": "The file upload was successful." },
+          "400": { "description": "Upload failed." }
         },
         "requestBody": {
           "description": "Raw request body should contain the contents of the file. This should be raw file data without any sort of encoding.",
           "required": true,
           "content": {
             "application/octet-stream": {
-              "schema": {
-                "type": "string",
-                "format": "binary"
-              }
+              "schema": { "type": "string", "format": "binary" }
             }
           }
         },
@@ -113,36 +92,28 @@
             "in": "path",
             "description": "he name of your storage zone where you are connecting to.",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "path",
             "in": "path",
             "description": "The directory path to where your file will be stored. If this is the root of your storage zone, you can ignore this parameter.",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "fileName",
             "in": "path",
             "description": "The name that the file will be uploaded as.",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "Checksum",
             "in": "header",
             "required": false,
             "description": "The SHA256 checksum of the uploaded content in HEX format (UPPERCASE). The server will compare the final SHA256 to the checksum and reject the request in case the checksums do not match.",
-            "schema": {
-              "type": "string"
-            },
+            "schema": { "type": "string" },
             "example": "D7A8FBB307D7809469CA9ABCB0082E4F8D5651E46D3CDB762D02D0BF37C9E592"
           },
           {
@@ -150,9 +121,7 @@
             "in": "header",
             "required": true,
             "description": "The API AccessKey used for authentication.",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ]
       },
@@ -166,45 +135,47 @@
             "in": "path",
             "description": "The name of your storage zone where you are connecting to.",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "path",
             "in": "path",
             "description": "The directory path to your file. If this is the root of your storage zone, you can ignore this parameter.",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "fileName",
             "in": "path",
             "description": "The name of the file that you wish to delete.",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "AccessKey",
             "in": "header",
             "required": true,
             "description": "The API AccessKey used for authentication.",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "allowRootDelete",
+            "in": "query",
+            "required": false,
+            "description": "Set to `true` to bypass the root directory deletion guard and delete the storage zone root (`/`).",
+            "schema": { "type": "string", "enum": ["true"] }
+          },
+          {
+            "name": "allowRootDelete",
+            "in": "header",
+            "required": false,
+            "description": "Set to `true` to bypass the root directory deletion guard and delete the storage zone root.",
+            "schema": { "type": "string", "enum": ["true"] }
           }
         ],
         "responses": {
-          "200": {
-            "description": "Object was successfully deleted"
-          },
-          "400": {
-            "description": "Object delete failed"
-          }
+          "200": { "description": "Object was successfully deleted" },
+          "400": { "description": "Object delete failed" }
         }
       }
     },
@@ -219,18 +190,14 @@
             "in": "path",
             "description": "he name of your storage zone where you are connecting to.",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "path",
             "in": "path",
             "description": "The directory path that you want to list.",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -240,9 +207,7 @@
               "*/*": {
                 "schema": {
                   "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/StorageObject"
-                  }
+                  "items": { "$ref": "#/components/schemas/StorageObject" }
                 }
               },
               "application/json": {
@@ -285,11 +250,7 @@
       }
     }
   },
-  "servers": [
-    {
-      "url": "https://storage.bunnycdn.com/"
-    }
-  ],
+  "servers": [{ "url": "https://storage.bunnycdn.com/" }],
   "components": {
     "securitySchemes": {
       "AccessKeyAuthentication": {

@@ -1,9 +1,13 @@
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { checkDelegation, expectedNameservers } from "../dns-nameservers.ts";
-import { RECORD_TYPES, recordTypeLabel } from "../dns-record-types.ts";
-import { UserError } from "../errors.ts";
-import { logger } from "../logger.ts";
-import { confirm, spinner } from "../ui.ts";
+import {
+  BUNNY_NAMESERVERS,
+  checkDelegation,
+  expectedNameservers,
+} from "@/core/dns-nameservers.ts";
+import { RECORD_TYPES, recordTypeLabel } from "@/core/dns-record-types.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, spinner } from "@/core/ui.ts";
 import type { CoreClient } from "./client.ts";
 
 type DnsZoneModel = components["schemas"]["DnsZoneModel"];
@@ -38,6 +42,8 @@ export interface BunnyDnsMatch {
   existing: DnsRecordModel | null;
   /** True when the registrar delegates to bunny's nameservers — if false, records here aren't publicly resolvable yet. */
   delegated: boolean;
+  /** The nameservers the registrar should delegate to (custom ones when the zone has them). */
+  nameservers: readonly string[];
 }
 
 /**
@@ -74,10 +80,8 @@ export async function findBunnyDnsZone(
     null;
 
   // Resolve the live registrar delegation; NameserversDetected defaults to true on a fresh zone.
-  const { status } = await checkDelegation(
-    best.Domain ?? domain,
-    expectedNameservers(data ?? {}),
-  );
+  const nameservers = expectedNameservers(data ?? {});
+  const { status } = await checkDelegation(best.Domain ?? domain, nameservers);
 
   return {
     zoneId: best.Id,
@@ -85,6 +89,7 @@ export async function findBunnyDnsZone(
     recordName,
     existing,
     delegated: status === "bunny",
+    nameservers,
   };
 }
 
@@ -138,6 +143,79 @@ async function repointPullZoneRecord(
   }
 }
 
+/** The longest suffix of `hostname` (never the bare TLD) already delegated to bunny's nameservers, or null. */
+export async function findDelegatedZoneCandidate(
+  hostname: string,
+): Promise<string | null> {
+  const labels = normalize(hostname).replace(/^\*\./, "").split(".");
+  const candidates = labels
+    .map((_, i) => labels.slice(i).join("."))
+    .filter((name) => name.split(".").length >= 2);
+  const checks = await Promise.all(
+    candidates.map((name) => checkDelegation(name, BUNNY_NAMESERVERS)),
+  );
+  const index = checks.findIndex((c) => c.status === "bunny");
+  return index === -1 ? null : (candidates[index] ?? null);
+}
+
+async function createZone(client: CoreClient, domain: string): Promise<number> {
+  const spin = spinner("Creating DNS zone...");
+  spin.start();
+  try {
+    await client.POST("/dnszone", { body: { Domain: domain } });
+    // The create response has no body, so look the zone up to get its ID.
+    const { data } = await client.GET("/dnszone", {
+      params: { query: { search: domain, perPage: 1000 } },
+    });
+    const created = (data?.Items ?? []).find(
+      (z) => normalize(z.Domain ?? "") === normalize(domain),
+    );
+    if (created?.Id == null) {
+      throw new UserError(
+        `Created DNS zone ${domain}, but couldn't look it up afterwards.`,
+        `Check it with: bunny dns zones show ${domain}`,
+      );
+    }
+    return created.Id;
+  } finally {
+    spin.stop();
+  }
+}
+
+export async function offerBunnyDnsZone(opts: {
+  client: CoreClient;
+  hostname: string;
+  domain: string;
+}): Promise<BunnyDnsMatch | null> {
+  logger.log();
+  logger.info(
+    `${opts.domain} already uses bunny.net's nameservers, but there's no Bunny DNS zone for it yet.`,
+  );
+  if (
+    !(await confirm(`Create a Bunny DNS zone for ${opts.domain}?`, {
+      initial: true,
+      optional: true,
+    }))
+  ) {
+    logger.dim(`  Create it later with: bunny dns zones create ${opts.domain}`);
+    return null;
+  }
+
+  const zoneId = await createZone(opts.client, opts.domain);
+  logger.success(`Created DNS zone ${opts.domain} (ID: ${zoneId}).`);
+
+  const host = normalize(opts.hostname);
+  const domain = normalize(opts.domain);
+  return {
+    zoneId,
+    zoneDomain: opts.domain,
+    recordName: host === domain ? "" : host.slice(0, -domain.length - 1),
+    existing: null,
+    delegated: true,
+    nameservers: BUNNY_NAMESERVERS,
+  };
+}
+
 export type BunnyDnsResult = "created" | "updated" | "exists" | "declined";
 
 /**
@@ -167,6 +245,7 @@ export async function offerBunnyDnsRecord(opts: {
     if (
       !(await confirm(`Point ${hostname} at this pull zone now?`, {
         initial: true,
+        optional: true,
       }))
     ) {
       return "declined";
@@ -185,7 +264,12 @@ export async function offerBunnyDnsRecord(opts: {
   logger.warn(
     `${hostname} already ${detail} in your Bunny DNS (${zoneDomain}).`,
   );
-  if (!(await confirm("Repoint it at this pull zone?", { initial: false }))) {
+  if (
+    !(await confirm("Repoint it at this pull zone?", {
+      initial: false,
+      optional: true,
+    }))
+  ) {
     return "declined";
   }
   if (existing.Id == null) {

@@ -3,18 +3,21 @@ import {
   createCoreClient,
 } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { formatDateTime, formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
-import { fetchScriptHostnames, logLiveHostnames } from "../api.ts";
+import {
+  fetchScriptHostnames,
+  logLiveHostnames,
+} from "@/commands/scripts/api.ts";
 import {
   type ScriptSelectorArgs,
   scriptSelectorBuilder,
   selectScript,
-} from "../interactive.ts";
+} from "@/commands/scripts/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatDateTime, formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 type EdgeScriptRelease = components["schemas"]["EdgeScriptReleaseModel"];
 type EdgeScriptReleaseStatus = components["schemas"]["EdgeScriptReleaseStatus"];

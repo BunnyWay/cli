@@ -14,13 +14,26 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
 
-    // Resolve @bunny.net/openapi-client and @bunny.net/sandbox from source in-repo (no prebuild); npm consumers use their package exports. See AGENTS.md "Publishing".
+    // Resolve the compiled-library packages from source in-repo (no prebuild); npm consumers use their package exports. See AGENTS.md "Publishing".
     "paths": {
+      // CLI-internal absolute imports. Only the CLI: packages published via tsc emit paths unrewritten.
+      "@/*": ["./packages/cli/src/*"],
+      // Repo-root assets the CLI embeds at bundle time.
+      "@templates/*": ["./templates/*"],
+      "@skills/*": ["./skills/*"],
+      "@bunny.net/database-client": ["./packages/database-client/src/index.ts"],
       "@bunny.net/openapi-client": ["./packages/openapi-client/src/index.ts"],
       "@bunny.net/openapi-client/generated/*": [
         "./packages/openapi-client/src/generated/*"
       ],
-      "@bunny.net/sandbox": ["./packages/sandbox/src/index.ts"]
+      "@bunny.net/openapi-client/*": ["./packages/openapi-client/src/*"],
+      "@bunny.net/sandbox": ["./packages/sandbox/src/index.ts"],
+      "@bunny.net/tools": ["./packages/tools/src/index.ts"],
+      "@bunny.net/tools/apps": ["./packages/tools/src/apps/index.ts"],
+      "@bunny.net/tools/registry": ["./packages/tools/src/registry/index.ts"],
+      "@bunny.net/sandbox/known-hosts": [
+        "./packages/sandbox/src/known-hosts.ts"
+      ]
     },
 
     // Best practices
@@ -35,5 +48,10 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "exclude": ["packages/database-studio/client", "packages/*/dist"]
+  "exclude": [
+    "packages/database-studio/client",
+    "packages/*/dist",
+    // Standalone projects with their own dependencies, including an @types/node that clashes with bun-types.
+    "packages/database-client/examples"
+  ]
 }

@@ -1,8 +1,8 @@
 import chalk from "chalk";
-import { setProfile } from "../../config/index.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { logger } from "../../core/logger.ts";
-import { readPassword } from "../../core/ui.ts";
+import { setProfile } from "@/config/index.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { readPassword } from "@/core/ui.ts";
 
 export const configInitCommand = defineCommand<{ "api-key"?: string }>({
   command: "init",

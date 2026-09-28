@@ -1,0 +1,186 @@
+import { createCoreClient } from "@bunny.net/openapi-client";
+import {
+  deleteDeployFiles,
+  rereadRemoteState,
+  writeRemoteState,
+} from "@/commands/sites/api.ts";
+import {
+  DEFAULT_KEEP_DEPLOYS,
+  isValidDeployId,
+  pruneVictims,
+} from "@/commands/sites/constants.ts";
+import {
+  type SiteSelectorArgs,
+  selectSite,
+  sitePositionalBuilder,
+} from "@/commands/sites/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { errorMessage, UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
+
+interface PruneArgs extends SiteSelectorArgs {
+  keep?: number;
+  force?: boolean;
+}
+
+// yargs hands us NaN for `--keep abc`, which passes pruneVictims' `Math.max(0, keep)` untouched and marks every deploy but current/previous for deletion; the same goes for a negative count.
+export function resolveKeepCount(keep: number | undefined): number {
+  const value = keep ?? DEFAULT_KEEP_DEPLOYS;
+  if (!Number.isInteger(value) || value < 0) {
+    throw new UserError(
+      "--keep must be a whole number of deploys to keep, 0 or more.",
+      `Omit it to keep the newest ${DEFAULT_KEEP_DEPLOYS}.`,
+    );
+  }
+  return value;
+}
+
+export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
+  command: "prune [site]",
+  describe: "Delete old deploys, keeping the most recent ones.",
+  examples: [
+    [
+      "$0 sites deployments prune",
+      `Keep the ${DEFAULT_KEEP_DEPLOYS} newest deploys`,
+    ],
+    ["$0 sites deployments prune --keep 10", "Keep the 10 newest deploys"],
+    ["$0 sites deployments prune my-site", "Prune a specific site"],
+    ["$0 sites deployments prune --force", "Skip confirmation"],
+  ],
+
+  builder: (yargs) =>
+    sitePositionalBuilder(yargs)
+      .option("keep", {
+        type: "number",
+        default: DEFAULT_KEEP_DEPLOYS,
+        describe:
+          "Number of recent deploys to keep (current and previous are always kept)",
+      })
+      .option("force", {
+        alias: "f",
+        type: "boolean",
+        describe: "Skip the confirmation prompt",
+      }),
+
+  handler: async (args) => {
+    const { profile, output, verbose, apiKey } = args;
+    const keep = resolveKeepCount(args.keep);
+
+    const config = resolveConfig(profile, apiKey, verbose);
+    const client = createCoreClient(clientOptions(config, verbose));
+
+    const { site } = await selectSite(client, {
+      site: args.site,
+      link: false,
+      output,
+      force: args.force,
+    });
+    const { state, connection } = site;
+
+    const victims = pruneVictims(
+      state.deploys,
+      keep,
+      state.current,
+      state.previous,
+    );
+
+    if (victims.length === 0) {
+      if (output === "json") {
+        logger.log(JSON.stringify({ site: state.name, pruned: [] }, null, 2));
+        return;
+      }
+      logger.info("Nothing to prune.");
+      return;
+    }
+
+    requireConfirmable(output, {
+      force: args.force,
+      message: `Pruning ${victims.length} deploy(s) needs a confirmation prompt.`,
+      hint: "Re-run with --force to prune non-interactively.",
+    });
+    const proceed = await confirm(
+      `Delete ${victims.length} old deploy(s) from ${state.name} (${victims
+        .map((v) => v.id)
+        .join(", ")})?`,
+      { force: args.force },
+    );
+    if (!proceed) {
+      logger.log("Cancelled.");
+      return;
+    }
+
+    const failures: Array<{ id: string; error: string }> = [];
+    const pruned = new Set<string>();
+    const kept: string[] = [];
+    await withSpinner("Pruning deploys...", async (spin) => {
+      // Revalidate right before deleting: the site pick and confirmation are long enough for a concurrent publish to make a victim live.
+      const { state: latest, etag: latestEtag } = await rereadRemoteState(
+        connection,
+        "Retry the prune; nothing was deleted.",
+      );
+      const stillVictims = new Set(
+        pruneVictims(latest.deploys, keep, latest.current, latest.previous).map(
+          (d) => d.id,
+        ),
+      );
+      for (const [index, victim] of victims.entries()) {
+        spin.text = `Pruning ${victim.id} (${index + 1}/${victims.length})...`;
+        if (!stillVictims.has(victim.id)) {
+          // A deploy deleted concurrently is already gone, not kept.
+          if (latest.deploys.some((d) => d.id === victim.id)) {
+            kept.push(victim.id);
+          }
+          continue;
+        }
+        try {
+          // Never interpolate an unvalidated ID into a storage path.
+          if (!isValidDeployId(victim.id)) {
+            failures.push({ id: victim.id, error: "Invalid deploy ID." });
+            continue;
+          }
+          await deleteDeployFiles(connection, victim.id);
+          pruned.add(victim.id);
+        } catch (err) {
+          failures.push({ id: victim.id, error: errorMessage(err) });
+        }
+      }
+      // Only forget deploys whose files are actually gone.
+      latest.deploys = latest.deploys.filter((d) => !pruned.has(d.id));
+      await writeRemoteState(connection, latest, latestEtag, {
+        removedIds: [...pruned],
+      });
+    });
+
+    const prunedIds = [...pruned];
+
+    if (output === "json") {
+      logger.log(
+        JSON.stringify(
+          { site: state.name, pruned: prunedIds, kept, failures },
+          null,
+          2,
+        ),
+      );
+      if (failures.length > 0) process.exit(1);
+      return;
+    }
+
+    if (prunedIds.length > 0) {
+      logger.success(
+        `Pruned ${prunedIds.length} deploy(s): ${prunedIds.join(", ")}.`,
+      );
+    }
+    if (kept.length > 0) {
+      logger.info(
+        `Kept ${kept.join(", ")}: no longer prunable after a concurrent change.`,
+      );
+    }
+    for (const failure of failures) {
+      logger.warn(`Couldn't prune ${failure.id}: ${failure.error}`);
+    }
+    if (failures.length > 0) process.exit(1);
+  },
+});

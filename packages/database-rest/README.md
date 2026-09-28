@@ -16,19 +16,21 @@ bun add @bunny.net/database-rest
 > common shared-token case; bring your own for anything more involved.
 
 ```ts
-import { createClient } from "@libsql/client";
-import { createLibSQLExecutor, introspect } from "@bunny.net/database-adapter-libsql";
+import { Database } from "bun:sqlite";
+import { createExecutor, introspect } from "@bunny.net/database-adapter";
+import { sqliteClient } from "@bunny.net/database-adapter/sqlite";
 import { createRestHandler, requireAuth } from "@bunny.net/database-rest";
 
-const client = createClient({ url: ":memory:" });
+const db = new Database(":memory:");
+const client = sqliteClient(db);
 
-await client.executeMultiple(`
+db.exec(`
   CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL);
   INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
 `);
 
 const schema = await introspect({ client });
-const executor = createLibSQLExecutor({ client });
+const executor = createExecutor({ client });
 const handler = createRestHandler(executor, schema);
 
 const token = process.env.API_TOKEN ?? crypto.randomUUID();

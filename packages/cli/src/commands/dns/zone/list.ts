@@ -1,17 +1,17 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
+import { type DnsZoneModel, fetchZones } from "@/commands/dns/api.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
 import {
   checkDelegations,
   type DelegationCheck,
   type DelegationStatus,
   expectedNameservers,
-} from "../../../core/dns-nameservers.ts";
-import { formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
-import { type DnsZoneModel, fetchZones } from "../api.ts";
+} from "@/core/dns-nameservers.ts";
+import { formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 const DELEGATION_LABEL: Record<DelegationStatus, string> = {
   bunny: "Detected",

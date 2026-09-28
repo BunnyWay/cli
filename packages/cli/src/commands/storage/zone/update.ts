@@ -1,18 +1,24 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import prompts from "prompts";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { UserError } from "../../../core/errors.ts";
-import { logger } from "../../../core/logger.ts";
-import { isInteractive, spinner } from "../../../core/ui.ts";
-import type { StorageZoneModel, StorageZoneSettingsModel } from "../api.ts";
+import type promptsLib from "prompts";
+import type {
+  StorageZoneModel,
+  StorageZoneSettingsModel,
+} from "@/commands/storage/api.ts";
 import {
   confirmAddedReplicationRegions,
   normalizeReplicationRegions,
+  type RegionScope,
   replicationChoices,
-} from "../constants.ts";
-import { resolveStorageZoneInteractive } from "../interactive.ts";
+  zoneTierChoice,
+} from "@/commands/storage/constants.ts";
+import { resolveStorageZoneInteractive } from "@/commands/storage/interactive.ts";
+import { isS3Enabled } from "@/commands/storage/s3.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { isInteractive, prompts, spinner } from "@/core/ui.ts";
 
 interface ZoneUpdateArgs {
   zone?: string;
@@ -33,11 +39,17 @@ function hasAnyFlag(args: ZoneUpdateArgs): boolean {
   );
 }
 
+function zoneScope(zone: StorageZoneModel): RegionScope {
+  return { tier: zoneTierChoice(zone), s3: isS3Enabled(zone) };
+}
+
 function settingsFromFlags(
   args: ZoneUpdateArgs,
-  primaryCode?: string,
+  zone: StorageZoneModel,
 ): StorageZoneSettingsModel {
+  const primaryCode = zone.Region ?? undefined;
   const settings: StorageZoneSettingsModel = {};
+  // The API ignores null; only an empty string clears the custom 404.
   if (args.custom404Path !== undefined)
     settings.Custom404FilePath = args.custom404Path;
   if (args.rewrite404To200 !== undefined)
@@ -46,6 +58,8 @@ function settingsFromFlags(
     settings.ReplicationZones = normalizeReplicationRegions(
       args.replication,
       primaryCode,
+      zoneScope(zone),
+      zone.ReplicationRegions ?? [],
     );
   return settings;
 }
@@ -56,11 +70,12 @@ async function promptSettings(
   const existing = (zone.ReplicationRegions ?? []).map((r) => r.toUpperCase());
   if (existing.length)
     logger.dim(`Already replicated (permanent): ${existing.join(", ")}`);
-  const addable = replicationChoices(zone.Region ?? undefined).filter(
-    (region) => !existing.includes(region.code),
-  );
+  const addable = replicationChoices(
+    zone.Region ?? undefined,
+    zoneScope(zone),
+  ).filter((region) => !existing.includes(region.code));
 
-  const questions: prompts.PromptObject[] = [
+  const questions: promptsLib.PromptObject[] = [
     {
       type: "text",
       name: "custom404Path",
@@ -101,7 +116,7 @@ async function promptSettings(
   // Omit ReplicationZones when nothing new was picked so the PATCH body leaves replication untouched.
   const newReplicas: string[] = answers.replication ?? [];
   return {
-    Custom404FilePath: answers.custom404Path || null,
+    Custom404FilePath: answers.custom404Path ?? "",
     Rewrite404To200: answers.rewrite404To200,
     ReplicationZones: newReplicas.length
       ? [...existing, ...newReplicas]
@@ -159,12 +174,14 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref, output, {
+    const zone = await resolveStorageZoneInteractive(client, ref, {
+      output,
       force: args.force,
+      offerLink: true,
     });
     // Flags take full precedence over the editor: a partial set of flags is a partial update.
     const settings = hasFlags
-      ? settingsFromFlags(args, zone.Region ?? undefined)
+      ? settingsFromFlags(args, zone)
       : await promptSettings(zone);
 
     if (settings.ReplicationZones) {

@@ -2,7 +2,9 @@ export {
   type BunnyDnsMatch,
   type BunnyDnsResult,
   findBunnyDnsZone,
+  findDelegatedZoneCandidate,
   offerBunnyDnsRecord,
+  offerBunnyDnsZone,
 } from "./bunny-dns.ts";
 export {
   addHostname,
@@ -12,15 +14,21 @@ export {
   fetchHostnamesForZones,
   fetchPullZoneHostnames,
   type Hostname,
+  hostnameHasCertificate,
   hostnameUrl,
   liveHostnames,
   normalizeHostname,
+  probeTlsCertificate,
   type ResolvedPullZone,
   type SafeHostname,
+  setForceSsl,
+  systemHostname,
+  type TlsProbeResult,
   toSafeHostname,
 } from "./client.ts";
 export {
   createHostnamesCommands,
+  type HostnameHookContext,
   type HostnameResolver,
   type HostnamesMountOptions,
 } from "./commands.ts";
@@ -35,5 +43,6 @@ export {
   offerBunnyDnsThenSsl,
   offerDnsWaitAndSsl,
   printSslHint,
+  reportIssuedCertificate,
   setupHostname,
 } from "./flow.ts";

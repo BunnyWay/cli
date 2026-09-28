@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/@bunny.net/config/generated/schema.json",
+  "version": "2026-05-11",
+  "sites": {
+    "name": "acme-app",
+    "build": "npm run build",
+    "dir": "dist"
+  }
+}

@@ -49,7 +49,7 @@ export interface SandboxHandle {
   ports?: Record<number, string>;
 }
 
-export interface RunCommandOptions {
+interface RunCommandOptionsBase {
   cmd: string;
   args?: string[];
   /** Working directory. Defaults to the sandbox workplace. */
@@ -57,8 +57,40 @@ export interface RunCommandOptions {
   /** Extra environment variables for this command only. */
   env?: Record<string, string>;
   sudo?: boolean;
-  /** Return immediately with a live Command instead of blocking. */
-  detached?: boolean;
+}
+
+/** Options for a blocking command (the default). */
+export interface BlockingCommandOptions extends RunCommandOptionsBase {
+  detached?: false;
+  /** Kill the command and reject with CommandTimeoutError after this many milliseconds. */
+  timeout?: number;
+  /** Abort to kill the command and reject with the signal's reason. */
+  signal?: AbortSignal;
+  /** Called with stdout chunks as they arrive. */
+  onStdout?: (chunk: string) => void;
+  /** Called with stderr chunks as they arrive. */
+  onStderr?: (chunk: string) => void;
+}
+
+/**
+ * Options for a detached command, which returns a live Command immediately.
+ * A detached command manages its own lifetime — use `command.kill()` and
+ * `command.logs()` instead of `timeout`/`signal`/output callbacks.
+ */
+export interface DetachedCommandOptions extends RunCommandOptionsBase {
+  detached: true;
+}
+
+export type RunCommandOptions = BlockingCommandOptions | DetachedCommandOptions;
+
+/** A directory entry returned by listFiles. */
+export interface SandboxFileEntry {
+  name: string;
+  type: "file" | "directory" | "symlink" | "other";
+  /** Size in bytes. */
+  size: number;
+  /** Unix permission bits. */
+  mode: number;
 }
 
 export interface FileToWrite {

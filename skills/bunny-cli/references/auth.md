@@ -8,6 +8,7 @@ Opens a browser to authenticate with bunny.net and stores the API key in a local
 bunny login                # interactive login, saves to "default" profile
 bunny login -p staging     # save to "staging" profile
 bunny login --force        # overwrite existing profile without confirmation
+bunny login --api-key KEY  # no browser: verify and save the key directly
 ```
 
 ### How it works
@@ -20,15 +21,39 @@ bunny login --force        # overwrite existing profile without confirmation
 
 ### Flags
 
-| Flag      | Default | Description                                     |
-| --------- | ------- | ----------------------------------------------- |
-| `--force` | `false` | Overwrite existing profile without confirmation |
+| Flag        | Default | Description                                           |
+| ----------- | ------- | ----------------------------------------------------- |
+| `--force`   | `false` | Overwrite existing profile without confirmation       |
+| `--api-key` | -       | Skip the browser and save this key after verifying it |
 
 ### Notes
 
 - If the browser doesn't open automatically, the URL is printed to the terminal
 - Exits with an error if the profile already exists (use `--force` to overwrite)
 - Uses `BUNNYNET_DASHBOARD_URL` env var if set (default: `https://dash.bunny.net`)
+
+### Headless and remote machines
+
+The browser flow needs a browser the user can see. `bunny login` detects when
+that is impossible (SSH session, CI, container, or a Unix host with no display
+server) and does not open one.
+
+- **With a terminal**: it warns why, then offers to take a pasted API key at a masked prompt, or to print the login URL plus the `ssh -L` port forward the callback needs.
+- **Without a terminal** (agents, CI, piped stdin): it exits immediately with a hint rather than hanging for 5 minutes on a callback nobody can reach.
+
+When running unattended, do not call bare `bunny login`. Either pass the key:
+
+```bash
+bunny login --api-key "$BUNNYNET_API_KEY"
+```
+
+or skip login entirely and export `BUNNYNET_API_KEY`, which takes priority over
+any stored profile and needs no config file. Keys given to `bunny login` are
+checked against `/user` first, so a bad key fails there instead of on the next
+command.
+
+With `--output json`, login prints `{"authenticated": true, "profile": "...",
+"name": "..."}` on stdout and nothing else, so the result is parseable.
 
 ---
 

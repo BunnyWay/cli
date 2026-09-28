@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { useTempDir } from "../../../test-utils/temp-dir.ts";
+import { useTempDir } from "@/test-utils/temp-dir.ts";
 import { findComposeFile, loadComposeFile } from "./index.ts";
 
 const tempDir = useTempDir("bunny-compose-load-");

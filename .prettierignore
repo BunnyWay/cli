@@ -12,7 +12,7 @@ bsql
 # Generated artifacts
 packages/openapi-client/src/generated
 packages/openapi-client/specs
-packages/app-config/generated
+packages/config/generated
 
 # Changesets keeps its own format
 .changeset/*.md

@@ -1,6 +1,6 @@
 import type { createCoreClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
-import { UserError } from "../errors.ts";
+import { UserError } from "@/core/errors.ts";
 
 export type CoreClient = ReturnType<typeof createCoreClient>;
 export type Hostname = components["schemas"]["HostnameModel"];
@@ -91,7 +91,15 @@ export async function fetchHostnamesForZones(
   return results.flat();
 }
 
-/** Pick the system-preferred live URL plus any custom-domain URLs from a hostname list. */
+export function systemHostname(
+  hostnames:
+    | Array<Pick<Hostname, "IsSystemHostname" | "Value">>
+    | null
+    | undefined,
+): string | undefined {
+  return hostnames?.find((h) => h.IsSystemHostname)?.Value ?? undefined;
+}
+
 export function liveHostnames(hostnames: Hostname[]): {
   primary?: string;
   customs: string[];
@@ -134,21 +142,69 @@ export async function createPullZone(
   return data;
 }
 
-/** Add a hostname to a pull zone, returning the zone's hostnames and the CNAME target to point DNS at. */
+/** Add a hostname to a pull zone, returning the zone's hostnames and the CNAME target to point DNS at. A hostname the zone already serves reports `alreadyAttached` instead of failing, so retries after a partial setup reach their follow-up steps. */
 export async function addHostname(
   client: CoreClient,
   pullZoneId: number,
   hostname: string,
-): Promise<{ hostnames: Hostname[]; cnameTarget?: string }> {
-  await client.POST("/pullzone/{id}/addHostname", {
+): Promise<{
+  hostnames: Hostname[];
+  cnameTarget?: string;
+  alreadyAttached: boolean;
+}> {
+  let hostnames: Hostname[] | undefined;
+  let alreadyAttached = false;
+  try {
+    await client.POST("/pullzone/{id}/addHostname", {
+      params: { path: { id: pullZoneId } },
+      body: { Hostname: hostname },
+    });
+  } catch (err) {
+    // The zone decides whether a rejected duplicate counts as attached, not the error.
+    const existing = await fetchPullZoneHostnames(client, pullZoneId).catch(
+      () => null,
+    );
+    const attached = existing?.some(
+      (h) => (h.Value ?? "").toLowerCase() === hostname.toLowerCase(),
+    );
+    if (!attached) throw err;
+    alreadyAttached = true;
+    hostnames = existing ?? undefined;
+  }
+  hostnames ??= await fetchPullZoneHostnames(client, pullZoneId);
+  const cnameTarget = systemHostname(hostnames)?.replace(/^https?:\/\//i, "");
+  return { hostnames, cnameTarget, alreadyAttached };
+}
+
+/** Set a hostname's Force SSL (HTTP→HTTPS redirect) state; assumes the cert is already in place. */
+export async function setForceSsl(
+  client: CoreClient,
+  pullZoneId: number,
+  hostname: string,
+  forceSSL: boolean,
+): Promise<void> {
+  await client.POST("/pullzone/{id}/setForceSSL", {
     params: { path: { id: pullZoneId } },
-    body: { Hostname: hostname },
+    body: { Hostname: hostname, ForceSSL: forceSSL },
   });
-  const hostnames = await fetchPullZoneHostnames(client, pullZoneId);
-  const cnameTarget = hostnames
-    .find((h) => h.IsSystemHostname)
-    ?.Value?.replace(/^https?:\/\//i, "");
-  return { hostnames, cnameTarget };
+}
+
+/** Whether the pull zone reports an active certificate on exactly `hostname`; null when the check itself failed. */
+export async function hostnameHasCertificate(
+  client: CoreClient,
+  pullZoneId: number,
+  hostname: string,
+): Promise<boolean | null> {
+  try {
+    const hostnames = await fetchPullZoneHostnames(client, pullZoneId);
+    return hostnames.some(
+      (h) =>
+        (h.Value ?? "").toLowerCase() === hostname.toLowerCase() &&
+        h.HasCertificate === true,
+    );
+  } catch {
+    return null;
+  }
 }
 
 /** Issue a free SSL certificate for a hostname on a pull zone, then set its Force SSL state. */
@@ -176,9 +232,40 @@ export async function enableSsl(
   await client.GET("/pullzone/loadFreeCertificate", {
     params: { query: { hostname } },
   });
+  // The endpoint can 200 without an exact-name certificate landing (e.g. an overlapping wildcard elsewhere), so trust the zone, not the status code; a failed check (null) must not fail an issuance that likely worked.
+  const certified = await hostnameHasCertificate(client, pullZoneId, hostname);
+  if (certified === false) {
+    throw new UserError(
+      `bunny.net accepted the request, but no certificate is active on "${hostname}" yet.`,
+      "Retry in a minute; if it keeps happening, check for a wildcard hostname on another pull zone that overlaps this name.",
+    );
+  }
   // Always set Force SSL to the requested value so --no-force-ssl can also turn it off.
-  await client.POST("/pullzone/{id}/setForceSSL", {
-    params: { path: { id: pullZoneId } },
-    body: { Hostname: hostname, ForceSSL: forceSSL },
-  });
+  await setForceSsl(client, pullZoneId, hostname, forceSSL);
+}
+
+export type TlsProbeResult = "ok" | "bad-certificate" | "unreachable";
+
+const TLS_PROBE_TIMEOUT_MS = 8_000;
+
+/** Best-effort HTTPS handshake check: "ok" when the certificate verifies for `hostname`, "bad-certificate" when TLS fails (mismatched or missing cert at the edge), "unreachable" when the host can't be reached at all (DNS lag, offline). */
+export async function probeTlsCertificate(
+  hostname: string,
+): Promise<TlsProbeResult> {
+  try {
+    await fetch(`https://${hostname}/`, {
+      method: "HEAD",
+      redirect: "manual",
+      signal: AbortSignal.timeout(TLS_PROBE_TIMEOUT_MS),
+    });
+    return "ok";
+  } catch (err) {
+    for (let e: unknown = err; e instanceof Error; e = e.cause) {
+      const text = `${(e as NodeJS.ErrnoException).code ?? ""} ${e.message}`;
+      if (/cert|tls|ssl|handshake|altname|principal|verify/i.test(text)) {
+        return "bad-certificate";
+      }
+    }
+    return "unreachable";
+  }
 }

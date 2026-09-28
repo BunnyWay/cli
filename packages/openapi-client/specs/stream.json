@@ -9,7 +9,7 @@
       "url": "https://docs.bunny.net",
       "email": "support@bunny.net"
     },
-    "version": "1.4.74"
+    "version": "1.5.17"
   },
   "servers": [
     {
@@ -1408,6 +1408,16 @@
               }
             }
           },
+          "400": {
+            "description": "The request or URL was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
           "404": {
             "description": "The requested video was not found"
           },
@@ -1416,6 +1426,16 @@
           },
           "403": {
             "description": "The request authorization failed"
+          },
+          "422": {
+            "description": "Unable to fetch thumbnail from origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal Server Error"
@@ -1492,7 +1512,24 @@
             "description": "The requested video was not found"
           },
           "400": {
-            "description": "Failed fetching the video"
+            "description": "URL validation failed or request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unable to fetch video from origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
           },
           "429": {
             "description": "Too many fetch jobs queued. Please try again later.",
@@ -1574,7 +1611,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StatusModel"
+                  "$ref": "#/components/schemas/StatusModelOfCaptionValidationModel"
                 }
               }
             }
@@ -1587,7 +1624,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CaptionValidationModel"
+                  "$ref": "#/components/schemas/StatusModelOfCaptionValidationModel"
                 }
               }
             }
@@ -2460,6 +2497,11 @@
             "description": "The file name of the thumbnail inside of the storage",
             "nullable": true
           },
+          "thumbnailUrl": {
+            "type": "string",
+            "description": "The CDN URL of the thumbnail",
+            "nullable": true
+          },
           "thumbnailBlurhash": {
             "type": "string",
             "description": "Thumbnail blurhash to show while the actual thumbnail is being loaded",
@@ -2517,11 +2559,20 @@
             "nullable": true
           },
           "smartGenerateStatus": {
-            "description": "The status of smart generate action (if triggered)",
+            "description": "Aggregate smart generate status derived from per-feature statuses when present: InProgress, then Queued, then Failed, then Finished; otherwise the stored legacy value. See SmartGenerateFeaturesStatus.",
             "nullable": true,
             "oneOf": [
               {
                 "$ref": "#/components/schemas/SmartGenerateStatus"
+              }
+            ]
+          },
+          "smartGenerateFeaturesStatus": {
+            "description": "Per-feature smart generate statuses (title, description, chapters, moments). Null for a feature on legacy rows.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SmartGenerateFeaturesStatusModel"
               }
             ]
           },
@@ -2544,17 +2595,52 @@
       "VideoModelStatus": {
         "type": "integer",
         "description": "",
-        "enum": [0, 1, 2, 3, 4, 5, 6, 7, 8],
-        "x-enum-varnames": [
-          "Created",
-          "Uploaded",
-          "Processing",
-          "Transcoding",
-          "Finished",
-          "Error",
-          "UploadFailed",
-          "JitSegmenting",
-          "JitPlaylistsCreated"
+        "oneOf": [
+          {
+            "title": "Created",
+            "type": "integer",
+            "enum": [0]
+          },
+          {
+            "title": "Uploaded",
+            "type": "integer",
+            "enum": [1]
+          },
+          {
+            "title": "Processing",
+            "type": "integer",
+            "enum": [2]
+          },
+          {
+            "title": "Transcoding",
+            "type": "integer",
+            "enum": [3]
+          },
+          {
+            "title": "Finished",
+            "type": "integer",
+            "enum": [4]
+          },
+          {
+            "title": "Error",
+            "type": "integer",
+            "enum": [5]
+          },
+          {
+            "title": "UploadFailed",
+            "type": "integer",
+            "enum": [6]
+          },
+          {
+            "title": "JitSegmenting",
+            "type": "integer",
+            "enum": [7]
+          },
+          {
+            "title": "JitPlaylistsCreated",
+            "type": "integer",
+            "enum": [8]
+          }
         ]
       },
       "CaptionModel": {
@@ -2657,59 +2743,183 @@
       "Severity": {
         "type": "integer",
         "description": "",
-        "enum": [0, 1, 2, 3],
-        "x-enum-varnames": ["Undefined", "Information", "Warning", "Error"],
-        "x-enum-descriptions": [
-          "Shouldn't be used",
-          "An info message to the user, shouldn't break anythying",
-          "A warning message, for example that the transcoded video may break when playing",
-          "An error, meaning that the video will most likely not be playable"
+        "oneOf": [
+          {
+            "title": "Undefined",
+            "type": "integer",
+            "description": "Shouldn't be used",
+            "enum": [0]
+          },
+          {
+            "title": "Information",
+            "type": "integer",
+            "description": "An info message to the user, shouldn't break anythying",
+            "enum": [1]
+          },
+          {
+            "title": "Warning",
+            "type": "integer",
+            "description": "A warning message, for example that the transcoded video may break when playing",
+            "enum": [2]
+          },
+          {
+            "title": "Error",
+            "type": "integer",
+            "description": "An error, meaning that the video will most likely not be playable",
+            "enum": [3]
+          }
         ]
       },
       "IssueCodes": {
         "type": "integer",
         "description": "",
-        "enum": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-        "x-enum-varnames": [
-          "Undefined",
-          "StreamLengthsDifference",
-          "TranscodingWarnings",
-          "IncompatibleResolution",
-          "InvalidFramerate",
-          "VideoExceededMaxDuration",
-          "AudioExceededMaxDuration",
-          "OriginalCorrupted",
-          "TranscriptionFailed",
-          "JitIncompatible",
-          "JitFailed",
-          "CaptionGenerationFailed"
-        ],
-        "x-enum-descriptions": [
-          "Shouldn't be used",
-          "Marks that there is a mismatch between lengths of audio and video streams in the transcoded file",
-          "Marks that transcoding completed with warnings",
-          "Marks that original video file has incompatible resolution or isn't a video stream",
-          "Marks that original video file has invalid framerate",
-          "Marks that video stream exceeded max duration",
-          "Marks that audio stream exceeded max duration",
-          "Marks that video file is corrupted and couldn't be processed properly",
-          "Marks that video transcription finished with errors and might not be complete",
-          "Marks that video file is not compatible with JIT encoding",
-          "Marks that video failed JIT encoding",
-          "Marks that captions generation failed"
+        "oneOf": [
+          {
+            "title": "Undefined",
+            "type": "integer",
+            "description": "Shouldn't be used",
+            "enum": [0]
+          },
+          {
+            "title": "StreamLengthsDifference",
+            "type": "integer",
+            "description": "Marks that there is a mismatch between lengths of audio and video streams in the transcoded file",
+            "enum": [1]
+          },
+          {
+            "title": "TranscodingWarnings",
+            "type": "integer",
+            "description": "Marks that transcoding completed with warnings",
+            "enum": [2]
+          },
+          {
+            "title": "IncompatibleResolution",
+            "type": "integer",
+            "description": "Marks that original video file has incompatible resolution or isn't a video stream",
+            "enum": [3]
+          },
+          {
+            "title": "InvalidFramerate",
+            "type": "integer",
+            "description": "Marks that original video file has invalid framerate",
+            "enum": [4]
+          },
+          {
+            "title": "VideoExceededMaxDuration",
+            "type": "integer",
+            "description": "Marks that video stream exceeded max duration",
+            "enum": [5]
+          },
+          {
+            "title": "AudioExceededMaxDuration",
+            "type": "integer",
+            "description": "Marks that audio stream exceeded max duration",
+            "enum": [6]
+          },
+          {
+            "title": "OriginalCorrupted",
+            "type": "integer",
+            "description": "Marks that video file is corrupted and couldn't be processed properly",
+            "enum": [7]
+          },
+          {
+            "title": "TranscriptionFailed",
+            "type": "integer",
+            "description": "Marks that video transcription finished with errors and might not be complete",
+            "enum": [8]
+          },
+          {
+            "title": "JitIncompatible",
+            "type": "integer",
+            "description": "Marks that video file is not compatible with JIT encoding",
+            "enum": [9]
+          },
+          {
+            "title": "JitFailed",
+            "type": "integer",
+            "description": "Marks that video failed JIT encoding",
+            "enum": [10]
+          },
+          {
+            "title": "CaptionGenerationFailed",
+            "type": "integer",
+            "description": "Marks that captions generation failed",
+            "enum": [11]
+          }
         ]
       },
       "SmartGenerateStatus": {
         "type": "integer",
         "description": "",
-        "enum": [0, 1, 2, 3, 4],
-        "x-enum-varnames": [
-          "None",
-          "Queued",
-          "InProgress",
-          "Finished",
-          "Failed"
+        "oneOf": [
+          {
+            "title": "None",
+            "type": "integer",
+            "enum": [0]
+          },
+          {
+            "title": "Queued",
+            "type": "integer",
+            "enum": [1]
+          },
+          {
+            "title": "InProgress",
+            "type": "integer",
+            "enum": [2]
+          },
+          {
+            "title": "Finished",
+            "type": "integer",
+            "enum": [3]
+          },
+          {
+            "title": "Failed",
+            "type": "integer",
+            "enum": [4]
+          }
         ]
+      },
+      "SmartGenerateFeaturesStatusModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "description": "Smart generate status for the video title, when applicable.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SmartGenerateStatus"
+              }
+            ]
+          },
+          "description": {
+            "description": "Smart generate status for the video description, when applicable.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SmartGenerateStatus"
+              }
+            ]
+          },
+          "chapters": {
+            "description": "Smart generate status for chapters, when applicable.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SmartGenerateStatus"
+              }
+            ]
+          },
+          "moments": {
+            "description": "Smart generate status for moments, when applicable.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SmartGenerateStatus"
+              }
+            ]
+          }
+        }
       },
       "VideoHeatmapModel": {
         "type": "object",
@@ -2742,6 +2952,10 @@
           "libraryName": {
             "type": "string",
             "nullable": true
+          },
+          "pullZoneId": {
+            "type": "integer",
+            "format": "int64"
           },
           "captionsPath": {
             "type": "string",
@@ -2835,6 +3049,18 @@
             "format": "int32",
             "nullable": true
           },
+          "widevineEmeRobustness": {
+            "type": "string",
+            "nullable": true
+          },
+          "widevineSdOnlyForL3": {
+            "type": "boolean"
+          },
+          "maxSoftwareWidevineResolution": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "zoneTier": {
             "type": "integer",
             "format": "int32",
@@ -2874,8 +3100,23 @@
       "VideoPlaybackSource": {
         "type": "string",
         "description": "",
-        "enum": ["None", "Playlist", "Original"],
-        "x-enum-varnames": ["None", "Playlist", "Original"]
+        "oneOf": [
+          {
+            "title": "None",
+            "type": "string",
+            "enum": ["None"]
+          },
+          {
+            "title": "Playlist",
+            "type": "string",
+            "enum": ["Playlist"]
+          },
+          {
+            "title": "Original",
+            "type": "string",
+            "enum": ["Original"]
+          }
+        ]
       },
       "VideoStatisticsModel": {
         "type": "object",
@@ -2927,8 +3168,28 @@
       "EncoderOutputCodec": {
         "type": "integer",
         "description": "",
-        "enum": [0, 1, 2, 3],
-        "x-enum-varnames": ["x264", "vp9", "hevc", "av1"]
+        "oneOf": [
+          {
+            "title": "x264",
+            "type": "integer",
+            "enum": [0]
+          },
+          {
+            "title": "vp9",
+            "type": "integer",
+            "enum": [1]
+          },
+          {
+            "title": "hevc",
+            "type": "integer",
+            "enum": [2]
+          },
+          {
+            "title": "av1",
+            "type": "integer",
+            "enum": [3]
+          }
+        ]
       },
       "PaginationListOfVideoModel": {
         "type": "object",
@@ -3047,6 +3308,27 @@
           }
         }
       },
+      "StatusModelOfCaptionValidationModel": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/StatusModel"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/CaptionValidationModel"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
       "CaptionValidationModel": {
         "type": "object",
         "additionalProperties": false,
@@ -3070,6 +3352,11 @@
             "items": {
               "type": "string"
             }
+          },
+          "warningMessage": {
+            "type": "string",
+            "description": "UI-friendly summary of warnings found in the uploaded captions file",
+            "nullable": true
           }
         }
       },
@@ -3425,6 +3712,16 @@
             "type": "string",
             "nullable": true
           },
+          "thumbnail_width": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "thumbnail_height": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "width": {
             "type": "integer",
             "format": "int32"
@@ -3444,45 +3741,6 @@
           "provider_url": {
             "type": "string",
             "nullable": true
-          }
-        }
-      },
-      "SyncSessionResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "error": {
-            "type": "string",
-            "nullable": true
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "sessionKey": {
-            "type": "string",
-            "nullable": true
-          },
-          "rocksDbInfo": {
-            "$ref": "#/components/schemas/RocksDbInfo"
-          }
-        }
-      },
-      "RocksDbInfo": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "version": {
-            "type": "string"
-          }
-        }
-      },
-      "SyncSessionRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "lastSequenceNumber": {
-            "type": "integer",
-            "format": "int64"
           }
         }
       }

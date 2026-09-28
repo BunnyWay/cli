@@ -1,5 +1,5 @@
 import type * as readline from "node:readline";
-import type { Client } from "@libsql/client";
+import type { ShellClient } from "./client.ts";
 import {
   EMAIL_SUBSTRINGS,
   printResultSet,
@@ -59,7 +59,7 @@ export interface ShellState {
  */
 export async function executeDotCommand(
   command: string,
-  client: Client,
+  client: ShellClient,
   state: ShellState,
   rl: readline.Interface,
   logger: ShellLogger,

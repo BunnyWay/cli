@@ -1,14 +1,14 @@
 import type { createComputeClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/compute.d.ts";
-import { UserError } from "../../core/errors.ts";
+import { UserError } from "@/core/errors.ts";
 import {
   type CoreClient,
   fetchHostnamesForZones,
   type Hostname,
   liveHostnames,
-} from "../../core/hostnames/index.ts";
-import { logger } from "../../core/logger.ts";
-import { confirm, openBrowser } from "../../core/ui.ts";
+} from "@/core/hostnames/index.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, openBrowser } from "@/core/ui.ts";
 import { SCRIPT_TYPE_MIDDLEWARE, SCRIPT_TYPE_STANDALONE } from "./constants.ts";
 
 type ComputeClient = ReturnType<typeof createComputeClient>;
@@ -161,7 +161,9 @@ export function logLiveHostnames(
 
 /** Prompt to open a script's hostname in the browser, with a deploy hint otherwise. */
 export async function promptOpenInBrowser(hostname: string): Promise<void> {
-  const shouldOpen = await confirm("Open script in browser?");
+  const shouldOpen = await confirm("Open script in browser?", {
+    optional: true,
+  });
   if (shouldOpen) {
     const url = hostname.startsWith("http") ? hostname : `https://${hostname}`;
     logger.dim(`  Opening ${url}`);

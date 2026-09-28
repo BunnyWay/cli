@@ -15,9 +15,7 @@
             "name": "pullZoneId",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "integer"
-            },
+            "schema": { "type": "integer" },
             "description": "The ID of the Pull Zone."
           },
           {
@@ -32,28 +30,17 @@
             "description": "The date for which to retrieve logs, formatted as MM-dd-yyyy."
           }
         ],
-        "security": [
-          {
-            "AccessKeyAuth": []
-          },
-          {
-            "JWTAuth": []
-          }
-        ],
+        "security": [{ "AccessKeyAuth": [] }, { "JWTAuth": [] }],
         "responses": {
           "200": {
             "description": "Successful response with log data",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LogResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/LogResponse" }
               }
             }
           },
-          "401": {
-            "description": "Unauthorized - missing or invalid API key"
-          }
+          "401": { "description": "Unauthorized - missing or invalid API key" }
         }
       }
     }
@@ -79,9 +66,7 @@
         "properties": {
           "logs": {
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/LogEntry"
-            }
+            "items": { "$ref": "#/components/schemas/LogEntry" }
           }
         }
       },
@@ -93,10 +78,7 @@
             "format": "uuid",
             "example": "a6a6b755-b6a4-46be-b523-aa82a17d4bc5"
           },
-          "timestamp": {
-            "type": "integer",
-            "example": 1728952065848
-          },
+          "timestamp": { "type": "integer", "example": 1728952065848 },
           "log": {
             "type": "string",
             "example": "{\"RequestUrl\":\"/apikey\",\"PullZoneId\":308006,\"Message\":\"Origin DNS lookup failed...\",\"ErrorCode\":\"dns_lookup\",\"StatusCode\":502}"
@@ -104,27 +86,14 @@
           "labels": {
             "type": "object",
             "properties": {
-              "ErrorCode": {
-                "type": "string",
-                "example": "dns_lookup"
-              },
-              "StatusCode": {
-                "type": "string",
-                "example": "502"
-              },
-              "ServerZone": {
-                "type": "string",
-                "example": "CA"
-              }
+              "ErrorCode": { "type": "string", "example": "dns_lookup" },
+              "StatusCode": { "type": "string", "example": "502" },
+              "ServerZone": { "type": "string", "example": "CA" }
             }
           }
         }
       }
     }
   },
-  "servers": [
-    {
-      "url": "https://cdn-origin-logging.bunny.net"
-    }
-  ]
+  "servers": [{ "url": "https://cdn-origin-logging.bunny.net" }]
 }

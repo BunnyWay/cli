@@ -1,11 +1,20 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { logger } from "../../../core/logger.ts";
-import { confirm, spinner } from "../../../core/ui.ts";
-import { connectStorageZone, deleteFile } from "../files-api.ts";
-import { resolveStorageZoneInteractive } from "../interactive.ts";
+import {
+  connectStorageZone,
+  deleteFile,
+  isZoneRoot,
+} from "@/commands/storage/files-api.ts";
+import { resolveStorageZoneInteractive } from "@/commands/storage/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import {
+  confirm,
+  confirmTyped,
+  requireConfirmable,
+  spinner,
+} from "@/core/ui.ts";
 
 interface RemoveArgs {
   path: string;
@@ -27,6 +36,7 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
       "$0 storage files remove images/photo.png --zone my-zone",
       "Delete from a specific zone",
     ],
+    ["$0 storage files remove /", "Delete every file in the zone"],
   ],
 
   builder: (yargs) =>
@@ -60,18 +70,38 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const zone = await resolveStorageZoneInteractive(client, ref, output);
+    // Destructive: --force must not silently delete from a picked zone, and no link offer.
+    const zone = await resolveStorageZoneInteractive(client, ref, {
+      output,
+      force,
+    });
     const connection = connectStorageZone(zone);
 
     // A trailing slash deletes a directory and everything under it, recursively.
     const isDirectory = path.endsWith("/");
+    const isRoot = isZoneRoot(path);
+    requireConfirmable(output, {
+      force,
+      message: isRoot
+        ? `Emptying ${zone.Name} needs a confirmation prompt.`
+        : `Deleting "${path}" needs a confirmation prompt.`,
+      hint: "Re-run with --force to delete non-interactively.",
+    });
     const confirmed = await confirm(
-      isDirectory
-        ? `Delete directory ${path} and all of its contents from ${zone.Name}?`
-        : `Delete ${path} from ${zone.Name}?`,
+      isRoot
+        ? `Delete every file in ${zone.Name}? This cannot be undone.`
+        : isDirectory
+          ? `Delete directory ${path} and all of its contents from ${zone.Name}?`
+          : `Delete ${path} from ${zone.Name}?`,
       { force },
     );
     if (!confirmed) {
+      logger.log("Cancelled.");
+      return;
+    }
+
+    // Emptying the zone root is as destructive as deleting the zone, so match its typed confirmation.
+    if (isRoot && !(await confirmTyped(zone.Name ?? "", { force }))) {
       logger.log("Cancelled.");
       return;
     }
@@ -91,6 +121,10 @@ export const storageFileRemoveCommand = defineCommand<RemoveArgs>({
       return;
     }
 
-    logger.success(`Deleted ${path} from ${zone.Name}.`);
+    logger.success(
+      isRoot
+        ? `Deleted all files from ${zone.Name}.`
+        : `Deleted ${path} from ${zone.Name}.`,
+    );
   },
 });

@@ -6,8 +6,8 @@ import {
   RECORD_TYPES,
   recordTypeFromLabel,
   recordTypeLabel,
-} from "../../core/dns-record-types.ts";
-import { UserError } from "../../core/errors.ts";
+} from "@/core/dns-record-types.ts";
+import { UserError } from "@/core/errors.ts";
 
 export { type DnsRecordTypes, RECORD_TYPE_META, RECORD_TYPES, recordTypeLabel };
 export type DnsRecordModel = components["schemas"]["DnsRecordModel"];

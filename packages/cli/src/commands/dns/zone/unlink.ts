@@ -1,8 +1,8 @@
-import { defineCommand } from "../../../core/define-command.ts";
-import { logger } from "../../../core/logger.ts";
-import { loadManifest, removeManifest } from "../../../core/manifest.ts";
-import { confirm } from "../../../core/ui.ts";
-import { DNS_MANIFEST, type DnsManifest } from "../constants.ts";
+import { DNS_MANIFEST, type DnsManifest } from "@/commands/dns/constants.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { loadManifest, removeManifest } from "@/core/manifest.ts";
+import { confirm } from "@/core/ui.ts";
 
 interface UnlinkArgs {
   force?: boolean;

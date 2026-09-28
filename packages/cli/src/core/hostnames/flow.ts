@@ -1,16 +1,19 @@
-import { UserError } from "../errors.ts";
-import { logger } from "../logger.ts";
-import { confirm, spinner } from "../ui.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { confirm, spinner, withSpinner } from "@/core/ui.ts";
 import {
   type BunnyDnsMatch,
   findBunnyDnsZone,
+  findDelegatedZoneCandidate,
   offerBunnyDnsRecord,
+  offerBunnyDnsZone,
 } from "./bunny-dns.ts";
 import {
   addHostname,
   type CoreClient,
   enableSsl,
   hostnameUrl,
+  probeTlsCertificate,
 } from "./client.ts";
 import { anyResolverPointsAt, defaultResolvers } from "./dns.ts";
 
@@ -50,6 +53,47 @@ export function printSslHint(sslHint: string): void {
   logger.accent(`  ${sslHint}`);
 }
 
+// One retry: a certificate issued a moment ago can still be rolling out to the edge.
+const TLS_PROBE_RETRY_DELAY_MS = 5_000;
+
+/**
+ * Print the issued-certificate summary, but verify the edge actually answers
+ * with a valid certificate first (best effort). Issuance can succeed while
+ * serving stays broken, e.g. when a single-label wildcard hostname elsewhere
+ * on the account shadows a deeper subdomain; that must warn, not claim "Live".
+ */
+export async function reportIssuedCertificate(
+  hostname: string,
+  forceSsl: boolean,
+): Promise<void> {
+  logger.success(
+    forceSsl
+      ? `SSL certificate issued for ${hostname} and HTTPS forced.`
+      : `SSL certificate issued for ${hostname}.`,
+  );
+
+  // A wildcard has no probeable name; trust issuance for it.
+  if (hostname.includes("*")) return;
+
+  const probe = await withSpinner("Verifying HTTPS...", async () => {
+    const first = await probeTlsCertificate(hostname);
+    if (first !== "bad-certificate") return first;
+    await Bun.sleep(TLS_PROBE_RETRY_DELAY_MS);
+    return probeTlsCertificate(hostname);
+  });
+
+  if (probe === "bad-certificate") {
+    logger.warn(`HTTPS for ${hostname} isn't serving a valid certificate yet.`);
+    logger.dim(
+      "  Fresh certificates can take a minute to reach the edge. If this persists, another hostname (often a wildcard on a different pull zone) may be answering for this name.",
+    );
+    logger.dim(`  Check again with: curl -vI https://${hostname}`);
+    return;
+  }
+
+  logger.log(`  Live at: ${hostnameUrl(hostname, { hasCertificate: true })}`);
+}
+
 /**
  * Offer to wait for the domain's DNS to point at bunny.net, then issue a
  * free SSL certificate automatically. Polls DNS every few seconds (system
@@ -66,7 +110,10 @@ export async function offerDnsWaitAndSsl(
   const shouldWait =
     opts.dnsAlreadyLive ||
     opts.assumeYes ||
-    (await confirm("Wait for DNS and enable HTTPS now?", { initial: true }));
+    (await confirm("Wait for DNS and enable HTTPS now?", {
+      initial: true,
+      optional: true,
+    }));
 
   if (!shouldWait) {
     printSslHint(opts.sslHint);
@@ -156,14 +203,7 @@ export async function offerDnsWaitAndSsl(
 
   if (!opts.json) {
     logger.success("DNS is live.");
-    logger.success(
-      opts.forceSsl
-        ? `SSL certificate issued for ${opts.hostname} and HTTPS forced.`
-        : `SSL certificate issued for ${opts.hostname}.`,
-    );
-    logger.log(
-      `  Live at: ${hostnameUrl(opts.hostname, { hasCertificate: true })}`,
-    );
+    await reportIssuedCertificate(opts.hostname, opts.forceSsl);
   }
   return true;
 }
@@ -211,8 +251,9 @@ export async function setupHostname(opts: {
   spin.start();
 
   let cnameTarget: string | undefined;
+  let alreadyAttached = false;
   try {
-    ({ cnameTarget } = await addHostname(
+    ({ cnameTarget, alreadyAttached } = await addHostname(
       opts.coreClient,
       opts.pullZoneId,
       opts.domain,
@@ -226,7 +267,13 @@ export async function setupHostname(opts: {
   }
 
   spin.stop();
-  logger.success(`Added ${opts.domain} to pull zone ${opts.pullZoneId}.`);
+  if (alreadyAttached) {
+    logger.info(
+      `${opts.domain} is already on pull zone ${opts.pullZoneId}; finishing setup.`,
+    );
+  } else {
+    logger.success(`Added ${opts.domain} to pull zone ${opts.pullZoneId}.`);
+  }
   if (!cnameTarget) return false;
 
   if (opts.interactive) {
@@ -278,8 +325,14 @@ export async function offerBunnyDnsThenSsl(opts: {
   }) => void | Promise<void>;
 }): Promise<boolean | null> {
   let match: BunnyDnsMatch | null;
+  let zoneCandidate: string | null = null;
   try {
     match = await findBunnyDnsZone(opts.coreClient, opts.hostname);
+    if (!match) {
+      zoneCandidate = await withSpinner("Checking nameservers...", () =>
+        findDelegatedZoneCandidate(opts.hostname),
+      );
+    }
   } catch (err) {
     // Detecting the zone failed (API unreachable, etc.) — fall back to manual DNS.
     if (opts.verbose) {
@@ -287,6 +340,14 @@ export async function offerBunnyDnsThenSsl(opts: {
       logger.dim(`  Bunny DNS check skipped: ${message}`);
     }
     return null;
+  }
+  // Outside the try on purpose: a failed zone write must surface, not fall back to manual DNS.
+  if (!match && zoneCandidate) {
+    match = await offerBunnyDnsZone({
+      client: opts.coreClient,
+      hostname: opts.hostname,
+      domain: zoneCandidate,
+    });
   }
   if (!match) return null;
 
@@ -308,7 +369,14 @@ export async function offerBunnyDnsThenSsl(opts: {
       `${match.zoneDomain} isn't delegated to bunny.net's nameservers yet.`,
     );
     logger.dim(
-      "  The record is set, but won't resolve (or get a certificate) until you point your registrar at bunny.net.",
+      "  The record is set, but won't resolve (or get a certificate) until your registrar points at bunny.net.",
+    );
+    logger.log();
+    logger.log("Set these nameservers at your registrar:");
+    for (const ns of match.nameservers) logger.accent(`  ${ns}`);
+    logger.log();
+    logger.dim(
+      `Check delegation later with:\n  bunny dns zones ns ${match.zoneDomain}`,
     );
     printSslHint(opts.sslHint);
     return false;

@@ -6,10 +6,10 @@ import type {
   EndpointConfig,
   ProbeConfig,
   VolumeConfig,
-} from "@bunny.net/app-config";
-import { CURRENT_VERSION } from "@bunny.net/app-config";
-import { UserError } from "../../../core/errors.ts";
-import { parseDotenv } from "../env/parse.ts";
+} from "@bunny.net/config";
+import { CURRENT_VERSION } from "@bunny.net/config";
+import { parseDotenv } from "@/core/env.ts";
+import { UserError } from "@/core/errors.ts";
 import { parsePortMapping } from "./ports.ts";
 import type { ComposeFile, ComposeService } from "./schema.ts";
 

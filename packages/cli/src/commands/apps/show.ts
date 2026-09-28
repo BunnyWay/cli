@@ -1,10 +1,10 @@
 import { createMcClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../config/index.ts";
-import { clientOptions } from "../../core/client-options.ts";
-import { defineCommand } from "../../core/define-command.ts";
-import { formatKeyValue, formatTable } from "../../core/format.ts";
-import { logger } from "../../core/logger.ts";
-import { spinner } from "../../core/ui.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatKeyValue, formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 import { resolveAppId } from "./config.ts";
 import { STATUS_LABELS } from "./constants.ts";
 

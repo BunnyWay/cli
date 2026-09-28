@@ -1,16 +1,16 @@
 import { createComputeClient } from "@bunny.net/openapi-client";
-import { resolveConfig } from "../../../config/index.ts";
-import { clientOptions } from "../../../core/client-options.ts";
-import { defineCommand } from "../../../core/define-command.ts";
-import { formatTable } from "../../../core/format.ts";
-import { logger } from "../../../core/logger.ts";
-import { spinner } from "../../../core/ui.ts";
-import { fetchEnvEntries } from "../api.ts";
+import { fetchEnvEntries } from "@/commands/scripts/api.ts";
 import {
   type ScriptSelectorArgs,
   scriptSelectorBuilder,
   selectScript,
-} from "../interactive.ts";
+} from "@/commands/scripts/interactive.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { clientOptions } from "@/core/client-options.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { formatTable } from "@/core/format.ts";
+import { logger } from "@/core/logger.ts";
+import { spinner } from "@/core/ui.ts";
 
 const COMMAND = "list [id]";
 const ALIASES = ["ls"] as const;
