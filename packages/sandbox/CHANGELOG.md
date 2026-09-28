@@ -1,5 +1,11 @@
 # @bunny.net/sandbox
 
+## 0.4.1
+
+### Patch Changes
+
+- [#230](https://github.com/BunnyWay/cli/pull/230) [`a4dec48`](https://github.com/BunnyWay/cli/commit/a4dec48dfafd2a46f4008ad758d2b91ef51c8046) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Publish under the MIT license: every package now declares `license` and ships a LICENSE file
+
 ## 0.4.0
 
 ### Minor Changes

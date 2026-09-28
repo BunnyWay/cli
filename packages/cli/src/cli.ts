@@ -12,6 +12,7 @@ import { dbNamespace } from "./commands/db/index.ts";
 import { dnsNamespace } from "./commands/dns/index.ts";
 import { docsCommand } from "./commands/docs.ts";
 import { openCommand } from "./commands/open.ts";
+import { pzNamespace } from "./commands/pz/index.ts";
 import { registryNamespace } from "./commands/registry/index.ts";
 import { sandboxNamespace } from "./commands/sandbox/index.ts";
 import { scriptsNamespace } from "./commands/scripts/index.ts";
@@ -49,6 +50,7 @@ const experimentalCommands: CommandModule[] = [
   sitesNamespace,
   streamNamespace,
   authNamespace,
+  pzNamespace,
 ];
 
 const topLevelNames = [...commands, ...experimentalCommands].flatMap((cmd) => {
