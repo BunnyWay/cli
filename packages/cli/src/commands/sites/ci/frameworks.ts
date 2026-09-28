@@ -178,15 +178,15 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     toolchain: "zola",
     build: "zola build",
   },
-  // Detection swaps the SDK channel for the project's TargetFramework.
+  // bin/ keeps the output gitignored; the LTS SDK builds older targets, and detection pins the project's own.
   {
     id: "blazor",
     label: "Blazor WebAssembly",
-    dir: "publish/wwwroot",
+    dir: "bin/publish/wwwroot",
     toolchain: "dotnet",
-    build: "dotnet publish -c Release -o publish",
+    build: "dotnet publish -c Release -o bin/publish",
     spa: true,
-    dotnetVersion: "8.0.x",
+    dotnetVersion: "10.0.x",
   },
   {
     id: "static",
@@ -282,15 +282,21 @@ async function detectBlazor(
   root: string,
 ): Promise<FrameworkPreset | undefined> {
   const preset = findPreset("blazor");
+  if (!preset) return undefined;
   const entries = await readdir(root).catch(() => [] as string[]);
   for (const name of entries.filter((e) => e.endsWith(".csproj"))) {
     const csproj = await readText(join(root, name));
     if (!csproj?.includes("Microsoft.NET.Sdk.BlazorWebAssembly")) continue;
-    const tfm = csproj.match(
-      /<TargetFramework>net(\d+\.\d+)<\/TargetFramework>/,
-    );
-    if (!preset || !tfm) return preset;
-    return { ...preset, dotnetVersion: `${tfm[1]}.x` };
+    const targets = csproj.match(/<TargetFrameworks?>([^<]+)</)?.[1] ?? "";
+    const versions = [...targets.matchAll(/net(\d+)\.(\d+)/g)]
+      .map((m) => [Number(m[1]), Number(m[2])] as const)
+      .sort((a, b) => b[0] - a[0] || b[1] - a[1]);
+    const newest = versions[0];
+    return {
+      ...preset,
+      build: `dotnet publish ${name} -c Release -o bin/publish`,
+      ...(newest && { dotnetVersion: `${newest[0]}.${newest[1]}.x` }),
+    };
   }
   return undefined;
 }
