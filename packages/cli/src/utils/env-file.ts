@@ -79,10 +79,11 @@ export function writeEnvValue(
   }
 
   const content = readFileSync(target, "utf-8");
-  const regex = new RegExp(`^(?:export\\s+)?${escapeRegExp(key)}\\s*=.*$`, "m");
+  const regex = new RegExp(`^(export\\s+)?${escapeRegExp(key)}\\s*=.*$`, "gm");
 
   if (regex.test(content)) {
-    writeFileSync(target, content.replace(regex, line), "utf-8");
+    const updated = content.replace(regex, (_, prefix = "") => prefix + line);
+    writeFileSync(target, updated, "utf-8");
   } else {
     const separator = content.endsWith("\n") || content === "" ? "" : "\n";
     writeFileSync(target, `${content + separator + line}\n`, "utf-8");
@@ -101,7 +102,7 @@ export function removeEnvValue(key: string, envPath: string): void {
   const content = readFileSync(envPath, "utf-8");
   const regex = new RegExp(
     `^(?:export\\s+)?${escapeRegExp(key)}\\s*=.*\\n?`,
-    "m",
+    "gm",
   );
   writeFileSync(envPath, content.replace(regex, ""), "utf-8");
 }
