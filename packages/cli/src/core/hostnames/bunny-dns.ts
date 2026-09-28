@@ -18,6 +18,17 @@ function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, "");
 }
 
+/** Record types that decide where HTTP traffic for a name goes; MX, TXT, NS and friends coexist with a pull zone route. */
+const ROUTING_TYPES: ReadonlySet<number | undefined> = new Set([
+  RECORD_TYPES.A,
+  RECORD_TYPES.AAAA,
+  RECORD_TYPES.CNAME,
+  RECORD_TYPES.REDIRECT,
+  RECORD_TYPES.FLATTEN,
+  RECORD_TYPES.PULLZONE,
+  RECORD_TYPES.SCRIPT,
+]);
+
 /** Fetch every DNS zone on the account, paginated. */
 async function listAllZones(client: CoreClient): Promise<DnsZoneModel[]> {
   const zones: DnsZoneModel[] = [];
@@ -76,8 +87,10 @@ export async function findBunnyDnsZone(
     params: { path: { id: best.Id } },
   });
   const existing =
-    (data?.Records ?? []).find((r) => normalize(r.Name ?? "") === recordName) ??
-    null;
+    (data?.Records ?? []).find(
+      (r) =>
+        ROUTING_TYPES.has(r.Type) && normalize(r.Name ?? "") === recordName,
+    ) ?? null;
 
   // Resolve the live registrar delegation; NameserversDetected defaults to true on a fresh zone.
   const nameservers = expectedNameservers(data ?? {});

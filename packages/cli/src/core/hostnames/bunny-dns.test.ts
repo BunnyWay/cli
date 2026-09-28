@@ -104,6 +104,14 @@ describe("findBunnyDnsZone", () => {
     expect(match?.existing).toBeNull();
   });
 
+  test("ignores non-routing records like MX at the same name", async () => {
+    const client = fakeClient([{ Id: 7, Domain: "example.com" }], {
+      7: [{ Id: 99, Type: 4, Name: "", Value: "mail.example.com" }],
+    });
+    const match = await findBunnyDnsZone(client, "example.com");
+    expect(match?.existing).toBeNull();
+  });
+
   test("reports delegated:true only when the registrar delegates to bunny", async () => {
     const client = fakeClient([{ Id: 7, Domain: "example.com" }]);
 
