@@ -178,6 +178,7 @@ async function repointPullZoneRecord(
   const { zoneId, recordName: name } = match;
   const spin = spinner("Updating DNS record...");
   spin.start();
+  let deleteError: unknown;
   try {
     if (existing.Type === RECORD_TYPES.PULLZONE) {
       await client.POST("/dnszone/{zoneId}/records/{id}", {
@@ -193,18 +194,26 @@ async function repointPullZoneRecord(
     }
     await putPullZoneRecord(client, zoneId, name, pullZoneId);
     await assertRoutesHere(client, match, hostname, pullZoneId);
-    try {
-      await client.DELETE("/dnszone/{zoneId}/records/{id}", {
+    // The new route is verified, so a failed cleanup warns rather than stopping before SSL.
+    await client
+      .DELETE("/dnszone/{zoneId}/records/{id}", {
         params: { path: { zoneId, id: existing.Id } },
+      })
+      .catch((err: unknown) => {
+        deleteError = err;
       });
-    } catch {
-      throw new UserError(
-        `${hostname} now points at pull zone ${pullZoneId}, but its old ${recordTypeLabel(existing.Type)} record couldn't be removed.`,
-        `Remove it with: bunny dns records remove ${match.zoneDomain} ${existing.Id}`,
-      );
-    }
   } finally {
     spin.stop();
+  }
+  if (deleteError !== undefined) {
+    const reason =
+      deleteError instanceof Error ? deleteError.message : String(deleteError);
+    logger.warn(
+      `Couldn't confirm the old ${recordTypeLabel(existing.Type)} record for ${hostname} was removed: ${reason}`,
+    );
+    logger.dim(
+      `  If it's still listed, remove it with: bunny dns records remove ${match.zoneDomain} ${existing.Id} --force`,
+    );
   }
 }
 
