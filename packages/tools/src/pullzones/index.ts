@@ -88,7 +88,7 @@ export const pullZonesCreate = defineTool({
     const { data } = await ctx.clients.core.POST("/pullzone", {
       body: {
         Name: name,
-        OriginUrl: /^https?:\/\//.test(origin) ? origin : `https://${origin}`,
+        OriginUrl: /^https?:\/\//i.test(origin) ? origin : `https://${origin}`,
       },
       signal: ctx.signal,
     });
