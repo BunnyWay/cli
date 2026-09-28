@@ -193,9 +193,16 @@ async function repointPullZoneRecord(
     }
     await putPullZoneRecord(client, zoneId, name, pullZoneId);
     await assertRoutesHere(client, match, hostname, pullZoneId);
-    await client.DELETE("/dnszone/{zoneId}/records/{id}", {
-      params: { path: { zoneId, id: existing.Id } },
-    });
+    try {
+      await client.DELETE("/dnszone/{zoneId}/records/{id}", {
+        params: { path: { zoneId, id: existing.Id } },
+      });
+    } catch {
+      throw new UserError(
+        `${hostname} now points at pull zone ${pullZoneId}, but its old ${recordTypeLabel(existing.Type)} record couldn't be removed.`,
+        `Remove it with: bunny dns records remove ${match.zoneDomain} ${existing.Id}`,
+      );
+    }
   } finally {
     spin.stop();
   }
