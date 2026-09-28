@@ -9,6 +9,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./apps": "./src/apps/index.ts",
+    "./pullzones": "./src/pullzones/index.ts",
     "./registry": "./src/registry/index.ts"
   },
   "dependencies": {

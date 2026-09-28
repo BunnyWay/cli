@@ -14,7 +14,7 @@ test("every tool has a unique dotted name, a description, an object schema, and 
 
 test("listTools filters by kind and namespace", () => {
   const destructive = listTools({ kind: "destructive" }).map((t) => t.name);
-  expect(destructive).toEqual(["apps.registries.delete"]);
+  expect(destructive).toEqual(["apps.registries.delete", "pullzones.delete"]);
   expect(listTools({ kind: "read" }).map((t) => t.name)).toContain(
     "apps.registries.list",
   );
