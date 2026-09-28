@@ -43,15 +43,10 @@ export function readEnvValue(
 
   while (true) {
     const envPath = join(dir, ".env");
-    if (existsSync(envPath)) {
-      const content = readFileSync(envPath, "utf-8");
-      const regex = new RegExp(
-        `^${escapeRegExp(key)}\\s*=\\s*["']?(.+?)["']?\\s*$`,
-        "m",
-      );
-      const match = content.match(regex);
-      if (match?.[1]) return { value: match[1], envPath };
-    }
+    const value = parseEnvFile(envPath).entries.findLast(
+      (entry) => entry.key === key,
+    )?.value;
+    if (value) return { value, envPath };
 
     const parent = dirname(dir);
     if (parent === dir) return undefined;
