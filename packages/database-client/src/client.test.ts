@@ -845,12 +845,10 @@ describe("errors", () => {
     const db = connect({ url: URL_, fetch: fake.fetch });
     const sql = `${" /*".repeat(5000)} COMMIT`;
 
-    const error = (await db
-      .batch([db.prepare(sql)])
-      .catch((e) => e)) as DatabaseError;
+    await db.batch([db.prepare(sql)]).catch(() => {});
 
     // Unterminated comment: no keyword found, so it is sent as-is rather than rejected.
-    expect(error.code).not.toBe("ARGUMENT_INVALID");
+    expect(fake.captures).toHaveLength(1);
   });
 
   test("transport errors keep the underlying error as cause", async () => {

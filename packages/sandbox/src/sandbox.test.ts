@@ -248,7 +248,7 @@ describe("disposal", () => {
     appId: "app-1",
     name: "s",
     agentToken: "t",
-    sshHost: "1.2.3.4:8023",
+    sshHost: "192.0.2.4:8023",
   };
 
   test("await using disconnects without deleting the sandbox", async () => {
@@ -317,10 +317,10 @@ describe("shellQuote", () => {
 
 describe("splitHost", () => {
   test("defaults to the SSH port", () => {
-    expect(splitHost("1.2.3.4")).toEqual({ host: "1.2.3.4", port: 8023 });
+    expect(splitHost("192.0.2.4")).toEqual({ host: "192.0.2.4", port: 8023 });
   });
   test("parses an explicit port", () => {
-    expect(splitHost("1.2.3.4:2222")).toEqual({ host: "1.2.3.4", port: 2222 });
+    expect(splitHost("192.0.2.4:2222")).toEqual({ host: "192.0.2.4", port: 2222 });
   });
 });
 
@@ -331,7 +331,7 @@ describe("app extraction", () => {
         id: "ct-1",
         environmentVariables: [{ name: "AGENT_TOKEN", value: "secret" }],
         endpoints: [
-          { type: "anycast", publicHost: "1.2.3.4:8023" },
+          { type: "anycast", publicHost: "192.0.2.4:8023" },
           {
             type: "cdn",
             publicHost: "app-3000.b-cdn.net",
@@ -349,7 +349,7 @@ describe("app extraction", () => {
   };
 
   test("reads the anycast host", () => {
-    expect(extractAnycastHost(app)).toBe("1.2.3.4:8023");
+    expect(extractAnycastHost(app)).toBe("192.0.2.4:8023");
   });
   test("recovers the agent token", () => {
     expect(extractAgentToken(app)).toBe("secret");
