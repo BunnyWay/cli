@@ -118,6 +118,8 @@ export function removeEnvValue(key: string, envPath: string): void {
   for (const { start, end } of keySpans(content, key).reverse()) {
     lines.splice(start, end - start + 1);
   }
+  if (!content.endsWith("\n"))
+    lines.push((lines.pop() ?? "").replace(/\r$/, ""));
   writeFileSync(envPath, lines.join("\n"), "utf-8");
 }
 
