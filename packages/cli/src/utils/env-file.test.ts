@@ -116,3 +116,13 @@ test("an unclosed quote blocks a strict read, and a new key is written above it"
     process.chdir(originalCwd);
   }
 });
+
+test("mixed line endings edit the right line", () => {
+  const envPath = writeEnv(["A=1\nB=2\r\nTOKEN=old\r\nC=3\r\n"]);
+  writeEnvValue("TOKEN", "new", envPath);
+  expect(readFileSync(envPath, "utf-8")).toBe(
+    "A=1\nB=2\r\nTOKEN=new\r\nC=3\r\n",
+  );
+  removeEnvValue("TOKEN", envPath);
+  expect(readFileSync(envPath, "utf-8")).toBe("A=1\nB=2\r\nC=3\r\n");
+});
