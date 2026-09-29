@@ -70,7 +70,7 @@ export function parseDotenvEntries(text: string): DotenvParse {
   const { entries, unterminated } = parseDotenvSpans(text);
   return {
     entries: entries.map(({ key, value }) => ({ key, value })),
-    unterminated,
+    unterminated: unterminated.map(({ key }) => key),
   };
 }
 
@@ -80,13 +80,13 @@ export interface DotenvSpan extends DotenvEntry {
   end: number;
 }
 
-/** Like `parseDotenvEntries`, but each entry carries its line span. */
+/** Like `parseDotenvEntries`, but each entry, and each unclosed quote, carries its first line. */
 export function parseDotenvSpans(text: string): {
   entries: DotenvSpan[];
-  unterminated: string[];
+  unterminated: { key: string; start: number }[];
 } {
   const entries: DotenvSpan[] = [];
-  const unterminated: string[] = [];
+  const unterminated: { key: string; start: number }[] = [];
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const start = i;
@@ -114,7 +114,7 @@ export function parseDotenvSpans(text: string): {
       closed = closingQuote(quoted, quote);
     }
     if (closed < 0) {
-      unterminated.push(key);
+      unterminated.push({ key, start });
       continue;
     }
 

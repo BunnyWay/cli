@@ -7,6 +7,7 @@ import {
   parseDotenvEntries,
   parseDotenvSpans,
 } from "@/core/env.ts";
+import { UserError } from "@/core/errors.ts";
 
 /**
  * Walk up the directory tree from cwd looking for a `.env` file.
@@ -37,9 +38,11 @@ export function parseEnvFile(envPath: string): EnvFileParse {
 /**
  * Read a specific key from the nearest `.env` file.
  * Returns the value and the path to the `.env` file, or `undefined` if not found.
+ * With `strict`, an unclosed quote that may hide the key throws instead of reading as unset.
  */
 export function readEnvValue(
   key: string,
+  { strict = false }: { strict?: boolean } = {},
 ): { value: string; envPath: string } | undefined {
   let dir = resolve(process.cwd());
 
@@ -48,7 +51,13 @@ export function readEnvValue(
     const { entries, unterminated } = parseEnvFile(envPath);
     const value = entries.findLast((entry) => entry.key === key)?.value;
     if (value) return { value, envPath };
-    if (unterminated.length > 0) return undefined;
+    if (unterminated.length > 0) {
+      if (!strict) return undefined;
+      throw new UserError(
+        `Unclosed quote in ${envPath}: ${unterminated.join(", ")}.`,
+        `Close the quote so ${key} can be read.`,
+      );
+    }
 
     const parent = dirname(dir);
     if (parent === dir) return undefined;
@@ -59,7 +68,7 @@ export function readEnvValue(
 /**
  * Set or update a key in a `.env` file.
  * Every existing definition is replaced in place, keeping any `export ` prefix.
- * If the key doesn't exist, it's appended.
+ * If the key doesn't exist, it's appended, or inserted above an unclosed quote that would swallow it.
  * If no `envPath` is provided, writes to `cwd/.env` (creates if needed).
  */
 export function writeEnvValue(
@@ -77,13 +86,17 @@ export function writeEnvValue(
 
   const content = readFileSync(target, "utf-8");
   const lines = content.split("\n");
-  const spans = keySpans(content, key);
+  const { entries, unterminated } = parseDotenvSpans(content);
+  const spans = entries.filter((entry) => entry.key === key);
 
   if (spans.length > 0) {
     for (const { start, end } of spans.reverse()) {
       const prefix = lines[start]?.match(/^\s*export\s+/)?.[0] ?? "";
       lines.splice(start, end - start + 1, prefix + line);
     }
+    writeFileSync(target, lines.join("\n"), "utf-8");
+  } else if (unterminated[0]) {
+    lines.splice(unterminated[0].start, 0, line);
     writeFileSync(target, lines.join("\n"), "utf-8");
   } else {
     const separator = content.endsWith("\n") || content === "" ? "" : "\n";

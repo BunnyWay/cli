@@ -143,9 +143,11 @@ export async function resolveCredentials(
   opts: ResolveCredentialsOptions,
 ): Promise<ResolvedCredentials> {
   const useEnv = !opts.databaseId;
-  const envUrl = useEnv ? readEnvValue(ENV_DATABASE_URL)?.value : undefined;
+  const envUrl = useEnv
+    ? readEnvValue(ENV_DATABASE_URL, { strict: true })?.value
+    : undefined;
   const envToken = useEnv
-    ? readEnvValue(ENV_DATABASE_AUTH_TOKEN)?.value
+    ? readEnvValue(ENV_DATABASE_AUTH_TOKEN, { strict: true })?.value
     : undefined;
 
   let url = opts.url ?? envUrl;

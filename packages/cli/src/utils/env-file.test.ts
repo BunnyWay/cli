@@ -99,3 +99,20 @@ test("write and remove skip a key-shaped line inside another quoted value", () =
   removeEnvValue("TOKEN", envPath);
   expect(readFileSync(envPath, "utf-8")).toBe('NOTE="line one\nTOKEN=keep"\n');
 });
+
+test("an unclosed quote blocks a strict read, and a new key is written above it", () => {
+  const envPath = writeEnv(["A=1", 'NOTE="open', "TOKEN=hidden"]);
+  const originalCwd = process.cwd();
+  process.chdir(join(envPath, ".."));
+  try {
+    expect(readEnvValue("TOKEN")).toBeUndefined();
+    expect(() => readEnvValue("TOKEN", { strict: true })).toThrow(
+      "Unclosed quote",
+    );
+
+    writeEnvValue("TOKEN", "new", envPath);
+    expect(readEnvValue("TOKEN")?.value).toBe("new");
+  } finally {
+    process.chdir(originalCwd);
+  }
+});
