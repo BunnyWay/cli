@@ -115,11 +115,12 @@ export function removeEnvValue(key: string, envPath: string): void {
 
   const content = readFileSync(envPath, "utf-8");
   const lines = content.split("\n");
-  for (const { start, end } of keySpans(content, key).reverse()) {
+  const spans = keySpans(content, key);
+  const removesLastLine = spans.at(-1)?.end === lines.length - 1;
+  for (const { start, end } of spans.reverse()) {
     lines.splice(start, end - start + 1);
   }
-  if (!content.endsWith("\n"))
-    lines.push((lines.pop() ?? "").replace(/\r$/, ""));
+  if (removesLastLine) lines.push((lines.pop() ?? "").replace(/\r$/, ""));
   writeFileSync(envPath, lines.join("\n"), "utf-8");
 }
 

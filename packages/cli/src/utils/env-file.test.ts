@@ -129,4 +129,8 @@ test("mixed line endings edit the right line", () => {
   writeFileSync(envPath, "URL=x\r\nTOKEN=old");
   removeEnvValue("TOKEN", envPath);
   expect(readFileSync(envPath, "utf-8")).toBe("URL=x");
+
+  writeFileSync(envPath, "TOKEN=old\nOTHER=value\r");
+  removeEnvValue("TOKEN", envPath);
+  expect(readFileSync(envPath, "utf-8")).toBe("OTHER=value\r");
 });
