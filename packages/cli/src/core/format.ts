@@ -43,7 +43,7 @@ export function formatDateTime(
 }
 
 /** Escape a value for CSV output. */
-export function csvEscape(value: string): string {
+function csvEscape(value: string): string {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
     return `"${value.replace(/"/g, '""')}"`;
   }

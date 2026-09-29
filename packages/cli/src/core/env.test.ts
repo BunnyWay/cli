@@ -58,6 +58,12 @@ describe("parseDotenv", () => {
 });
 
 describe("collectEnv", () => {
+  test("entries override the env file", async () => {
+    const envFile = join(mkdtempSync(join(tmpdir(), "bunny-env-")), ".env");
+    writeFileSync(envFile, "A=1\nB=2\n");
+    expect(await collectEnv(["A=3"], envFile)).toEqual({ A: "3", B: "2" });
+  });
+
   test("an unclosed quote in the env file is an error, not a truncated value", async () => {
     const envFile = join(mkdtempSync(join(tmpdir(), "bunny-env-")), ".env");
     writeFileSync(envFile, 'OK=1\nBROKEN="never closed\n');
