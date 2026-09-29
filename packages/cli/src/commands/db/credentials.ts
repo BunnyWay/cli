@@ -142,7 +142,7 @@ export function envTokenAllowedFor(
 export async function resolveCredentials(
   opts: ResolveCredentialsOptions,
 ): Promise<ResolvedCredentials> {
-  const useEnv = !opts.databaseId;
+  const useEnv = !opts.databaseId && !(opts.url && opts.token);
   const envUrl = useEnv
     ? readEnvValue(ENV_DATABASE_URL, { strict: true })?.value
     : undefined;

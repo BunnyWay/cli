@@ -85,7 +85,8 @@ export function writeEnvValue(
   }
 
   const content = readFileSync(target, "utf-8");
-  const lines = content.split("\n");
+  const eol = content.includes("\r\n") ? "\r\n" : "\n";
+  const lines = content.split(eol);
   const { entries, unterminated } = parseDotenvSpans(content);
   const spans = entries.filter((entry) => entry.key === key);
 
@@ -94,13 +95,13 @@ export function writeEnvValue(
       const prefix = lines[start]?.match(/^\s*export\s+/)?.[0] ?? "";
       lines.splice(start, end - start + 1, prefix + line);
     }
-    writeFileSync(target, lines.join("\n"), "utf-8");
+    writeFileSync(target, lines.join(eol), "utf-8");
   } else if (unterminated[0]) {
     lines.splice(unterminated[0].start, 0, line);
-    writeFileSync(target, lines.join("\n"), "utf-8");
+    writeFileSync(target, lines.join(eol), "utf-8");
   } else {
-    const separator = content.endsWith("\n") || content === "" ? "" : "\n";
-    writeFileSync(target, `${content + separator + line}\n`, "utf-8");
+    const separator = content.endsWith("\n") || content === "" ? "" : eol;
+    writeFileSync(target, content + separator + line + eol, "utf-8");
   }
 
   return target;
@@ -111,11 +112,12 @@ export function removeEnvValue(key: string, envPath: string): void {
   if (!existsSync(envPath)) return;
 
   const content = readFileSync(envPath, "utf-8");
-  const lines = content.split("\n");
+  const eol = content.includes("\r\n") ? "\r\n" : "\n";
+  const lines = content.split(eol);
   for (const { start, end } of keySpans(content, key).reverse()) {
     lines.splice(start, end - start + 1);
   }
-  writeFileSync(envPath, lines.join("\n"), "utf-8");
+  writeFileSync(envPath, lines.join(eol), "utf-8");
 }
 
 function keySpans(content: string, key: string): DotenvSpan[] {
