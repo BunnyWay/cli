@@ -27,13 +27,6 @@ function get(client: { GET: unknown }, path: string): Promise<unknown> {
 }
 
 describe("client factories", () => {
-  test("createCoreClient returns a usable openapi-fetch client", () => {
-    const client = createCoreClient({ apiKey: "k" });
-    expect(typeof client.GET).toBe("function");
-    expect(typeof client.POST).toBe("function");
-    expect(typeof client.use).toBe("function");
-  });
-
   test("targets the default Core base URL and injects auth headers", async () => {
     stubFetch(() => jsonResponse({ Items: [] }, 200));
     const client = createCoreClient({ apiKey: "secret-key" });

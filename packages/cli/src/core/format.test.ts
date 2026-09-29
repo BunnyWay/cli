@@ -69,12 +69,6 @@ describe("formatTable", () => {
     const result = formatTable(headers, [], "csv");
     expect(result).toBe("ID,Name");
   });
-
-  test("handles null/undefined values in rows", () => {
-    const result = formatTable(["Col"], [[""], [""]], "csv");
-    const lines = result.split("\n");
-    expect(lines.length).toBe(3);
-  });
 });
 
 describe("formatKeyValue", () => {

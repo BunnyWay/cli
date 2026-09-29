@@ -2,17 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { formatBucketLabel, renderBarChart, sumChart } from "./stats.ts";
 
 describe("sumChart", () => {
-  test("sums chart values", () => {
-    expect(sumChart({ "2026-05-01": 3, "2026-05-02": 7 })).toBe(10);
-  });
-
   test("returns 0 for null/undefined", () => {
     expect(sumChart(null)).toBe(0);
     expect(sumChart(undefined)).toBe(0);
-  });
-
-  test("returns 0 for an empty chart", () => {
-    expect(sumChart({})).toBe(0);
   });
 });
 

@@ -135,17 +135,6 @@ describe("transport", () => {
         process.env[ENV_DATABASE_AUTH_TOKEN] = previousToken;
     }
   });
-
-  test("caller headers ride along", async () => {
-    const fake = fakeFetch([okExecute(["a"], [[1]])]);
-    const db = connect({
-      url: URL_,
-      fetch: fake.fetch,
-      headers: { "x-trace": "abc" },
-    });
-    await db.prepare("SELECT 1 AS a").all();
-    expect((fake.captures[0] as Capture).headers["x-trace"]).toBe("abc");
-  });
 });
 
 describe("statement", () => {

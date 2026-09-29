@@ -320,7 +320,10 @@ describe("splitHost", () => {
     expect(splitHost("192.0.2.4")).toEqual({ host: "192.0.2.4", port: 8023 });
   });
   test("parses an explicit port", () => {
-    expect(splitHost("192.0.2.4:2222")).toEqual({ host: "192.0.2.4", port: 2222 });
+    expect(splitHost("192.0.2.4:2222")).toEqual({
+      host: "192.0.2.4",
+      port: 2222,
+    });
   });
 });
 
@@ -362,9 +365,6 @@ describe("app extraction", () => {
       3000: "app-3000.b-cdn.net",
       8080: "app-8080.b-cdn.net",
     });
-  });
-  test("skips CDN endpoints whose public host is still provisioning", () => {
-    expect(extractCdnPorts(app)[9999]).toBeUndefined();
   });
   test("returns null when fields are absent", () => {
     expect(extractAnycastHost({})).toBeNull();

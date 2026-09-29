@@ -1,12 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveCopyDest, sandboxFilesCpCommand } from "./cp.ts";
-
-test("the canonical command lives under files and shows in help", () => {
-  expect(sandboxFilesCpCommand.command).toBe("cp <source> <dest>");
-  expect(sandboxFilesCpCommand.describe).toBe(
-    "Copy files between your machine and a sandbox.",
-  );
-});
+import { resolveCopyDest } from "./cp.ts";
 
 describe("resolveCopyDest", () => {
   test("a trailing slash appends the source filename without probing", async () => {

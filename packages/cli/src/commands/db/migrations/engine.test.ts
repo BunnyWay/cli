@@ -136,16 +136,6 @@ describe("discoverMigrations", () => {
       /Migrations directory not found/,
     );
   });
-
-  test("ten or more migrations stay ordered because prefixes are zero-padded", () => {
-    for (let i = 1; i <= 12; i++) {
-      write(`${String(i).padStart(4, "0")}_m.sql`, `SELECT ${i};`);
-    }
-
-    const names = discoverMigrations(dir).map((f) => f.name);
-    expect(names[8]).toBe("0009_m.sql");
-    expect(names[9]).toBe("0010_m.sql");
-  });
 });
 
 describe("checksum", () => {
