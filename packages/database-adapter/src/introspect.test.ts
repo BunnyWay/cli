@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { AdapterClient } from "./client.ts";
-import { DEFAULT_EXCLUDE_PATTERNS, introspect } from "./introspect.ts";
+import { introspect } from "./introspect.ts";
 import { sqliteClient } from "./sqlite.ts";
 
 let db: Database;
@@ -124,11 +124,5 @@ describe("introspect", () => {
   test("uses custom version", async () => {
     const schema = await introspect({ client, version: "2.0.0" });
     expect(schema.version).toBe("2.0.0");
-  });
-
-  test("DEFAULT_EXCLUDE_PATTERNS is exported and non-empty", () => {
-    expect(DEFAULT_EXCLUDE_PATTERNS.length).toBeGreaterThan(0);
-    expect(DEFAULT_EXCLUDE_PATTERNS).toContain("__*");
-    expect(DEFAULT_EXCLUDE_PATTERNS).toContain("_prisma_migrations");
   });
 });

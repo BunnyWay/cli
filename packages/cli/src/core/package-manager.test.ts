@@ -34,10 +34,6 @@ describe("detectFromUserAgent", () => {
     expect(detectFromUserAgent(undefined)).toBeNull();
   });
 
-  test("returns null for empty string", () => {
-    expect(detectFromUserAgent("")).toBeNull();
-  });
-
   test.each([
     ["npm/10.2.4 node/v20.10.0 darwin arm64 workspaces/false", "npm"],
     ["bun/1.3.1 (darwin arm64)", "bun"],

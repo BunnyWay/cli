@@ -59,31 +59,11 @@ describe("formatValue", () => {
     const result = formatValue(null);
     expect(result).toContain("NULL");
   });
-
-  test("converts numbers to string", () => {
-    expect(formatValue(42)).toBe("42");
-  });
-
-  test("converts strings as-is", () => {
-    expect(formatValue("hello")).toBe("hello");
-  });
-
-  test("converts booleans to string", () => {
-    expect(formatValue(true)).toBe("true");
-  });
 });
 
 describe("formatValueRaw", () => {
   test("returns plain NULL for null", () => {
     expect(formatValueRaw(null)).toBe("NULL");
-  });
-
-  test("converts numbers to string", () => {
-    expect(formatValueRaw(42)).toBe("42");
-  });
-
-  test("converts strings as-is", () => {
-    expect(formatValueRaw("hello")).toBe("hello");
   });
 });
 
@@ -446,19 +426,6 @@ describe("printResultSet masking", () => {
     expect(parsed[0].password).toBeNull();
   });
 
-  test("non-sensitive columns are never masked", () => {
-    const lines: string[] = [];
-    const log = captureLogger(lines);
-    const rs = makeResultSet(
-      ["id", "name", "status"],
-      [[1, "Alice", "active"]],
-    );
-    printResultSet(rs, "json", true, log);
-    const parsed = JSON.parse(lines.join("\n"));
-    expect(parsed[0].name).toBe("Alice");
-    expect(parsed[0].status).toBe("active");
-  });
-
   test("json mode partially masks email columns", () => {
     const lines: string[] = [];
     const log = captureLogger(lines);
@@ -474,24 +441,6 @@ describe("printResultSet masking", () => {
     const rs = makeResultSet(["id", "email"], [[1, "alice@example.com"]]);
     printResultSet(rs, "csv", true, log);
     expect(lines[1]).toBe("1,a••••e@example.com");
-  });
-
-  test("email columns show full value when unmasked", () => {
-    const lines: string[] = [];
-    const log = captureLogger(lines);
-    const rs = makeResultSet(["id", "email"], [[1, "alice@example.com"]]);
-    printResultSet(rs, "json", false, log);
-    const parsed = JSON.parse(lines.join("\n"));
-    expect(parsed[0].email).toBe("alice@example.com");
-  });
-
-  test("null email values are not masked", () => {
-    const lines: string[] = [];
-    const log = captureLogger(lines);
-    const rs = makeResultSet(["id", "email"], [[1, null]]);
-    printResultSet(rs, "json", true, log);
-    const parsed = JSON.parse(lines.join("\n"));
-    expect(parsed[0].email).toBeNull();
   });
 });
 

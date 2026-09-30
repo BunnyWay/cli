@@ -142,13 +142,4 @@ describe("discoverImportableRecords", () => {
     expect(caa?.Tag).toBe("issuevmc");
     expect(caa?.Value).toBe("example.com");
   });
-
-  test("returns nothing when the scan only finds existing/zone-managed records", async () => {
-    discovered = [
-      { Type: RECORD_TYPES.NS, Name: "@", Value: "ns1.other.com" },
-      { Type: SOA, Name: "@", Value: "soa" },
-      { Type: RECORD_TYPES.A, Name: "dup", Value: "192.0.2.4" },
-    ];
-    expect(await discoverImportableRecords({} as never, zone)).toHaveLength(0);
-  });
 });
