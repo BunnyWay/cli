@@ -6,7 +6,8 @@ has no dependencies and touches no disk or network, so the CLI, the bunny.net da
 Sites control plane all run the same code.
 
 ```sh
-npm install @bunny.net/framework-detector
+bun add @bunny.net/framework-detector
+# or: npm install @bunny.net/framework-detector
 ```
 
 ## Detect a framework
