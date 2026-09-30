@@ -167,7 +167,8 @@ export function renderSitesWorkflow(opts: {
     "name: Deploy site",
     "on:",
     "  push:",
-    `    branches: [${opts.branch ?? "main"}]`,
+    // Quoted: a ref may contain YAML flow syntax (`release,prod` would otherwise be two branches).
+    `    branches: [${opts.branch ? JSON.stringify(opts.branch) : "main"}]`,
     "  workflow_dispatch:",
     "",
     "# Production deploys serialize across every ref; cancelling mid-upload would leave a half-written deploy directory behind.",
