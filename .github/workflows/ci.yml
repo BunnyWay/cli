@@ -19,6 +19,15 @@ jobs:
       - run: bun run openapi:generate
       - run: bun run lint:ci
       - run: bun run typecheck
+      # Each package builds against the previous one's dist/, so build in dependency order; dist/ is removed after so later steps resolve from source.
+      - name: Build openapi-client and stream-import packages
+        run: |
+          bun run --filter @bunny.net/openapi-client build
+          bun run --filter @bunny.net/stream-import build
+          for pkg in vimeo s3 wistia mux cloudflare jwplayer brightcove; do
+            bun run --filter "@bunny.net/stream-import-$pkg" build
+          done
+          rm -rf packages/openapi-client/dist packages/stream-import/dist packages/stream-import-*/dist
       - run: bun test
       - name: Build database studio
         run: bun run --filter @bunny.net/database-studio build:client

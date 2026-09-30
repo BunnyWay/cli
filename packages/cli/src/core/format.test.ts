@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   csvEscape,
+  formatDuration,
   formatKeyValue,
   formatTable,
+  formatTimeAgo,
   maskSecret,
 } from "./format.ts";
 
@@ -156,4 +158,17 @@ describe("maskSecret", () => {
     expect(maskSecret("12345678")).toBe("••••••••");
     expect(maskSecret("ab")).toBe("••••••••");
   });
+});
+
+test("formatDuration adds hours only past an hour and dashes a nonsense length", () => {
+  expect(formatDuration(65)).toBe("1:05");
+  expect(formatDuration(3725)).toBe("1:02:05");
+  expect(formatDuration(Number.NaN)).toBe("-");
+});
+
+test("formatTimeAgo uses the largest whole unit", () => {
+  const now = Date.parse("2026-01-04T00:00:00Z");
+  expect(formatTimeAgo("2026-01-01T00:00:00Z", now)).toBe("3d ago");
+  expect(formatTimeAgo("2026-01-03T18:30:00Z", now)).toBe("5h ago");
+  expect(formatTimeAgo("2026-01-03T23:59:30Z", now)).toBe("just now");
 });

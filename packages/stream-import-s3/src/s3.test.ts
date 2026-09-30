@@ -1,0 +1,263 @@
+import { describe, expect, test } from "bun:test";
+import type { Logger } from "@bunny.net/stream-import";
+import { S3SourceAdapter } from "./adapter.ts";
+import { archivedReason, S3SourceClient } from "./client.ts";
+import {
+  extractVideoNameFromKey,
+  fromSourceId,
+  idToPrefix,
+  isVideoKey,
+  normalizePrefix,
+  prefixToId,
+  toSourceId,
+} from "./keys.ts";
+import { s3ConfigSchema } from "./plugin.ts";
+import {
+  validateAwsRegion,
+  validateS3BucketName,
+  validateS3Key,
+  validateS3Url,
+} from "./validate.ts";
+
+describe("keys", () => {
+  test("prefixes normalize to a single trailing slash and round-trip through folder ids", () => {
+    expect(normalizePrefix("")).toBe("");
+    expect(normalizePrefix("/videos/2024")).toBe("videos/2024/");
+    const root = normalizePrefix("media");
+    const id = prefixToId("media/Q1 2024.final/", root);
+    expect(id).toBe("Q1 2024.final");
+    expect(idToPrefix(id, root)).toBe("media/Q1 2024.final/");
+    expect(prefixToId("other/2024/", "videos/")).toBe("other/2024");
+  });
+
+  test("source ids round-trip keys containing slashes", () => {
+    const id = toSourceId("my-bucket", "videos/2024/promo.mp4");
+    expect(fromSourceId(id)).toEqual({
+      bucket: "my-bucket",
+      key: "videos/2024/promo.mp4",
+    });
+    expect(fromSourceId("just-a-bucket")).toEqual({
+      bucket: "just-a-bucket",
+      key: "",
+    });
+  });
+
+  test("only keys with a video extension count, and names drop the path and extension", () => {
+    expect(isVideoKey("a/b/clip.mp4")).toBe(true);
+    expect(isVideoKey("CLIP.MOV")).toBe(true);
+    expect(isVideoKey("notes.txt")).toBe(false);
+    expect(isVideoKey("videos/")).toBe(false);
+    expect(isVideoKey("v1.0/clip")).toBe(false);
+    expect(isVideoKey(undefined)).toBe(false);
+    expect(extractVideoNameFromKey("a/promo.v2.final.mp4")).toBe(
+      "promo.v2.final",
+    );
+    expect(extractVideoNameFromKey("a/.hidden")).toBe(".hidden");
+  });
+});
+
+describe("validation", () => {
+  test("bucket names follow the AWS rules", () => {
+    expect(validateS3BucketName("my.bucket.name")).toBe(true);
+    for (const bad of [
+      "ab",
+      "a".repeat(64),
+      "MyBucket",
+      "my_bucket",
+      "-bucket",
+      "my..bucket",
+      "my.-bucket",
+      "192.168.1.1",
+    ]) {
+      expect(validateS3BucketName(bad), bad).toBe(false);
+    }
+  });
+
+  test("keys reject control characters; regions must match the AWS shape", () => {
+    expect(validateS3Key("videos/2024/promo.mp4")).toBe(true);
+    expect(validateS3Key("videos/\u0000evil.mp4")).toBe(false);
+    expect(validateS3Key("videos/\u001B[31mred.mp4")).toBe(false);
+    expect(validateS3Key("a".repeat(1025))).toBe(false);
+    expect(validateAwsRegion("us-gov-west-1")).toBe(true);
+    expect(validateAwsRegion("cn-north-1")).toBe(true);
+    expect(validateAwsRegion("US-EAST-1")).toBe(false);
+  });
+
+  test("static credentials are all or nothing, and only AWS regions are shape-checked", () => {
+    const base = { region: "us-east-1", bucket: "my-bucket" };
+    expect(s3ConfigSchema.safeParse(base).success).toBe(true);
+    expect(
+      s3ConfigSchema.safeParse({
+        ...base,
+        accessKeyId: "AKIA",
+        secretAccessKey: "s",
+      }).success,
+    ).toBe(true);
+    const half = s3ConfigSchema.safeParse({ ...base, accessKeyId: "AKIA" });
+    expect(half.success).toBe(false);
+    expect(half.error?.issues[0]?.path).toEqual(["secretAccessKey"]);
+    expect(
+      s3ConfigSchema.safeParse({ ...base, sessionToken: "tok" }).success,
+    ).toBe(false);
+    expect(
+      s3ConfigSchema.safeParse({ ...base, endpoint: "http://minio.local" })
+        .success,
+    ).toBe(false);
+    expect(s3ConfigSchema.safeParse({ ...base, region: "auto" }).success).toBe(
+      false,
+    );
+    expect(
+      s3ConfigSchema.safeParse({
+        ...base,
+        region: "auto",
+        endpoint: "https://acc.r2.cloudflarestorage.com",
+      }).success,
+    ).toBe(true);
+  });
+
+  test("with a custom endpoint, download URLs must be on that host instead of AWS", () => {
+    const sig = "X-Amz-Signature=abc&X-Amz-Credential=def";
+    const endpoint = "https://minio.example.com";
+    expect(
+      validateS3Url(`https://minio.example.com/bucket/k.mp4?${sig}`, endpoint),
+    ).toBe(true);
+    expect(
+      validateS3Url(`https://bucket.minio.example.com/k.mp4?${sig}`, endpoint),
+    ).toBe(true);
+    expect(
+      validateS3Url(
+        `https://my-bucket.s3.amazonaws.com/k.mp4?${sig}`,
+        endpoint,
+      ),
+    ).toBe(false);
+    expect(validateS3Url(`https://minio.example.com/bucket/k.mp4?${sig}`)).toBe(
+      false,
+    );
+  });
+
+  test("download URLs must be signed, HTTPS, and on a real AWS S3 host", () => {
+    const sig = "X-Amz-Signature=abc&X-Amz-Credential=def";
+    for (const host of [
+      "my-bucket.s3.amazonaws.com",
+      "my-bucket.s3.eu-west-1.amazonaws.com",
+      "s3.us-east-2.amazonaws.com",
+      "my-bucket.s3-accelerate.amazonaws.com",
+      "my-bucket.s3.cn-north-1.amazonaws.com.cn",
+      "s3.dualstack.us-east-1.amazonaws.com",
+      "my-bucket.s3.dualstack.eu-west-1.amazonaws.com",
+      "my-bucket.s3-accelerate.dualstack.amazonaws.com",
+    ]) {
+      expect(validateS3Url(`https://${host}/key.mp4?${sig}`), host).toBe(true);
+    }
+    expect(
+      validateS3Url(
+        "https://b.s3.amazonaws.com/k.mp4?Signature=x&AWSAccessKeyId=y",
+      ),
+    ).toBe(true);
+
+    expect(validateS3Url("https://my-bucket.s3.amazonaws.com/key.mp4")).toBe(
+      false,
+    );
+    expect(
+      validateS3Url("https://b.s3.amazonaws.com/k.mp4?X-Amz-Signature=abc"),
+    ).toBe(false);
+    expect(
+      validateS3Url(`https://s3.amazonaws.com.evil.com/k.mp4?${sig}`),
+    ).toBe(false);
+    expect(
+      validateS3Url(
+        `https://my-bucket.s3.amazonaws.com@attacker.example.com/k.mp4?${sig}`,
+      ),
+    ).toBe(false);
+    expect(
+      validateS3Url(`http://my-bucket.s3.amazonaws.com/key.mp4?${sig}`),
+    ).toBe(false);
+    expect(validateS3Url("not a url")).toBe(false);
+  });
+});
+
+test("--folder lists only that prefix under the root, and a nested id lands in its top-level collection", async () => {
+  const prefixes: string[] = [];
+  const client = {
+    listVideosByPrefix: async (_bucket: string, prefix: string) => {
+      prefixes.push(prefix);
+      return [
+        {
+          bucket: "b",
+          key: `${prefix}clip.mp4`,
+          size: 1,
+          etag: "",
+          lastModified: "",
+        },
+      ];
+    },
+  } as unknown as S3SourceClient;
+  const adapter = new S3SourceAdapter(client, {
+    region: "us-east-1",
+    bucket: "b",
+    prefix: "media",
+  });
+
+  const content = await adapter.listContent({ folderId: "2024/q1" });
+
+  expect(prefixes).toEqual(["media/2024/q1/"]);
+  expect(content.folders[0]).toMatchObject({ id: "2024/q1", name: "2024" });
+  expect(content.videos.get("2024/q1")?.[0]?.sourceId).toBe(
+    "b/media/2024/q1/clip.mp4",
+  );
+});
+
+const ctx = { userAgent: "t", requestTimeout: 5_000, logger: {} as Logger };
+const keys = { accessKeyId: "AKIA", secretAccessKey: "s" };
+
+test("objects under an empty path segment are listed and imported uncategorized", async () => {
+  const client = new S3SourceClient(
+    { region: "us-east-1", bucket: "b", ...keys },
+    ctx,
+  );
+  const requests: Array<{ Prefix?: string; Delimiter?: string }> = [];
+  (client as unknown as { client: unknown }).client = {
+    send: async (command: {
+      input: { Prefix?: string; Delimiter?: string };
+    }) => {
+      requests.push(command.input);
+      return command.input.Delimiter
+        ? { CommonPrefixes: [{ Prefix: "/" }, { Prefix: "a/" }] }
+        : { Contents: [{ Key: `${command.input.Prefix}clip.mp4` }] };
+    },
+  };
+
+  const result = await client.getAllVideosWithFolders("b", "");
+
+  expect(result.folders.map((f) => f.id)).toEqual(["a"]);
+  expect(result.uncategorizedVideos.map((o) => o.key)).toEqual(["/clip.mp4"]);
+});
+
+test("without static keys the ambient chain is refused unless the host allows it", async () => {
+  const client = new S3SourceClient({ region: "us-east-1", bucket: "b" }, ctx);
+  await expect(client.validateCredentials("my-bucket")).rejects.toThrow(
+    "No AWS access keys are configured.",
+  );
+});
+
+test("archived objects need a restore, but GLACIER_IR and restored copies import", () => {
+  const obj = {
+    bucket: "b",
+    key: "k.mp4",
+    size: 1,
+    etag: "",
+    lastModified: "",
+  };
+  expect(archivedReason({ ...obj, storageClass: "DEEP_ARCHIVE" })).toContain(
+    "restore it",
+  );
+  expect(archivedReason({ ...obj, storageClass: "GLACIER_IR" })).toBeNull();
+  expect(
+    archivedReason({
+      ...obj,
+      storageClass: "GLACIER",
+      restore:
+        'ongoing-request="false", expiry-date="Fri, 21 Dec 2012 00:00:00 GMT"',
+    }),
+  ).toBeNull();
+});
