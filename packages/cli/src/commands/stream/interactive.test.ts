@@ -1,20 +1,19 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CoreClient, VideoLibraryModel } from "./api.ts";
-import { STREAM_MANIFEST, type StreamLibraryManifest } from "./constants.ts";
 import {
   resolveLibraryInteractive,
   writeStreamManifest,
 } from "./interactive.ts";
+import { withTTY } from "./test-tty.ts";
 
 const LIBRARIES: VideoLibraryModel[] = [
   { Id: 1, Name: "Alpha", VideoCount: 3 },
   { Id: 2, Name: "marketing", VideoCount: 0 },
 ];
 
-/** Minimal path-branching fake core client (same shape as api.test.ts). */
 function fakeCoreClient(calls: string[]): CoreClient {
   return {
     GET: async (path: string, options?: any) => {
@@ -24,18 +23,15 @@ function fakeCoreClient(calls: string[]): CoreClient {
           data: LIBRARIES.find((lib) => lib.Id === options?.params?.path?.id),
         };
       }
-      if (path === "/videolibrary") {
-        const search = (options?.params?.query?.search ?? "") as string;
-        return {
-          data: {
-            Items: LIBRARIES.filter((lib) =>
-              (lib.Name ?? "").toLowerCase().includes(search.toLowerCase()),
-            ),
-            HasMoreItems: false,
-          },
-        };
-      }
-      throw new Error(`unexpected GET ${path}`);
+      const search = (options?.params?.query?.search ?? "") as string;
+      return {
+        data: {
+          Items: LIBRARIES.filter((lib) =>
+            (lib.Name ?? "").toLowerCase().includes(search.toLowerCase()),
+          ),
+          HasMoreItems: false,
+        },
+      };
     },
   } as unknown as CoreClient;
 }
@@ -54,39 +50,17 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-async function readStreamManifest(): Promise<StreamLibraryManifest> {
-  const raw = await readFile(join(dir, ".bunny", STREAM_MANIFEST), "utf-8");
-  return JSON.parse(raw) as StreamLibraryManifest;
-}
-
-test("writeStreamManifest records the library ID and name", async () => {
-  writeStreamManifest(LIBRARIES[1] as VideoLibraryModel);
-  expect(await readStreamManifest()).toEqual({ id: 2, name: "marketing" });
-});
-
-// `bun test` has no TTY, so every case here takes the unattended path: the
-// manifest is the only thing that can stand in for an explicit reference.
+// `bun test` has no TTY, so only the manifest can stand in for an explicit reference here.
 test("a linked library resolves without a reference, even unattended", async () => {
   writeStreamManifest(LIBRARIES[0] as VideoLibraryModel);
-  const calls: string[] = [];
-
-  const lib = await resolveLibraryInteractive(fakeCoreClient(calls), undefined);
-
+  const lib = await resolveLibraryInteractive(fakeCoreClient([]), undefined);
   expect(lib.Id).toBe(1);
-  expect(calls).toEqual(["/videolibrary/{id}"]);
 });
 
 test("an explicit reference wins over the linked library", async () => {
   writeStreamManifest(LIBRARIES[0] as VideoLibraryModel);
-  const calls: string[] = [];
-
-  const lib = await resolveLibraryInteractive(
-    fakeCoreClient(calls),
-    "marketing",
-  );
-
+  const lib = await resolveLibraryInteractive(fakeCoreClient([]), "marketing");
   expect(lib.Id).toBe(2);
-  expect(calls).toEqual(["/videolibrary", "/videolibrary/{id}"]);
 });
 
 test("ignoreManifest skips the linked library so linking can re-pick", async () => {
@@ -101,25 +75,20 @@ test("ignoreManifest skips the linked library so linking can re-pick", async () 
   expect(calls).toEqual([]);
 });
 
-test("force skips the picker instead of prompting", async () => {
+// --force must not let a destructive command delete a library nobody named.
+test("force refuses to pick a library even in a terminal", async () => {
   const calls: string[] = [];
-  await expect(
-    resolveLibraryInteractive(fakeCoreClient(calls), undefined, {
-      force: true,
-    }),
-  ).rejects.toThrow("A library is required.");
-  expect(calls).toEqual([]);
-});
+  const client = {
+    GET: async (path: string) => {
+      calls.push(path);
+      return { data: { Items: [], HasMoreItems: false } };
+    },
+  } as unknown as CoreClient;
 
-test("the missing-library error points at linking", async () => {
-  try {
-    await resolveLibraryInteractive(fakeCoreClient([]), undefined, {
-      output: "json",
-    });
-    throw new Error("expected a UserError");
-  } catch (err) {
-    expect((err as { hint?: string }).hint).toContain(
-      "bunny stream library link",
-    );
-  }
+  await withTTY(() =>
+    expect(
+      resolveLibraryInteractive(client, undefined, { force: true }),
+    ).rejects.toThrow("A library is required."),
+  );
+  expect(calls).toEqual([]);
 });

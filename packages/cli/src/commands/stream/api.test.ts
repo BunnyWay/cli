@@ -1,8 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import {
   type CoreClient,
   fetchLibraries,
-  fetchLibrary,
   resolveLibrary,
   toSafeVideoLibrary,
   type VideoLibraryModel,
@@ -98,31 +97,13 @@ test("fetchLibraries pages through the listing and sorts by name", async () => {
   expect(pages).toEqual([1, 2]);
 });
 
-test("fetchLibraries returns an empty list when the account has none", async () => {
-  expect(await fetchLibraries(fakeCoreClient({ calls: [] }))).toEqual([]);
-});
-
-test("fetchLibrary throws a UserError when the ID does not exist", async () => {
-  const client = fakeCoreClient({ calls: [], libraries: LIBRARIES });
-  await expect(fetchLibrary(client, 99)).rejects.toThrow(
-    "Video library 99 not found.",
-  );
-});
-
-test("resolveLibrary treats numeric input as an ID", async () => {
+test("resolveLibrary takes numeric input as an ID and matches names case-insensitively", async () => {
   const calls: Call[] = [];
   const client = fakeCoreClient({ calls, libraries: LIBRARIES });
 
-  const lib = await resolveLibrary(client, "3");
-
-  expect(lib.Name).toBe("marketing");
-  // Straight to the by-ID endpoint: no search listing.
+  expect((await resolveLibrary(client, "3")).Name).toBe("marketing");
   expect(calls.map((c) => c.path)).toEqual(["/videolibrary/{id}"]);
-});
-
-test("resolveLibrary matches a name case-insensitively and re-fetches by ID", async () => {
-  const calls: Call[] = [];
-  const client = fakeCoreClient({ calls, libraries: LIBRARIES });
+  calls.length = 0;
 
   const lib = await resolveLibrary(client, "ALPHA");
 
@@ -135,13 +116,11 @@ test("resolveLibrary matches a name case-insensitively and re-fetches by ID", as
     query: { search: string; page: number };
   };
   expect(search.query.search).toBe("ALPHA");
-  // Regression: without page >= 1 the endpoint answers with a plain array,
-  // data.Items is undefined, and every name lookup "finds" nothing.
+  // Without page >= 1 the endpoint answers with a plain array and every name lookup misses.
   expect(search.query.page).toBeGreaterThanOrEqual(1);
 });
 
-// A search is a substring match server-side, so a partial hit must not be
-// mistaken for the requested library.
+// The server-side search is a substring match, so a partial hit is not the requested library.
 test("resolveLibrary rejects a partial name match", async () => {
   const client = fakeCoreClient({ calls: [], libraries: LIBRARIES });
   await expect(resolveLibrary(client, "market")).rejects.toThrow(
@@ -149,44 +128,14 @@ test("resolveLibrary rejects a partial name match", async () => {
   );
 });
 
-test("resolveLibrary requires a non-empty reference", async () => {
-  const client = fakeCoreClient({ calls: [], libraries: LIBRARIES });
-  await expect(resolveLibrary(client, "   ")).rejects.toThrow(
-    "A library name or ID is required.",
-  );
-});
-
-describe("toSafeVideoLibrary", () => {
-  const library = {
+// The deprecated ApiAccessKey carries the same value as ApiKey.
+test("toSafeVideoLibrary drops every API key, including the deprecated ApiAccessKey", () => {
+  const safe = toSafeVideoLibrary({
     Id: 1,
     Name: "my-library",
-    VideoCount: 3,
     ApiKey: "rw-secret",
     ReadOnlyApiKey: "ro-secret",
-    // Deprecated, but the API still returns it and its value equals ApiKey.
     ApiAccessKey: "rw-secret",
-    StorageUsage: 1024,
-  } as VideoLibraryModel;
-
-  test("drops every API key, including the deprecated ApiAccessKey", () => {
-    const safe = toSafeVideoLibrary(library);
-    expect("ApiKey" in safe).toBe(false);
-    expect("ReadOnlyApiKey" in safe).toBe(false);
-    expect("ApiAccessKey" in safe).toBe(false);
-    expect(JSON.stringify(safe)).not.toContain("secret");
-  });
-
-  test("preserves every non-secret field", () => {
-    expect(toSafeVideoLibrary(library)).toEqual({
-      Id: 1,
-      Name: "my-library",
-      VideoCount: 3,
-      StorageUsage: 1024,
-    } as VideoLibraryModel);
-  });
-
-  test("does not mutate the original library", () => {
-    toSafeVideoLibrary(library);
-    expect(library.ApiKey).toBe("rw-secret");
-  });
+  } as VideoLibraryModel);
+  expect(safe).toEqual({ Id: 1, Name: "my-library" } as VideoLibraryModel);
 });

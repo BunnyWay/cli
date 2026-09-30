@@ -46,24 +46,14 @@ export function smartGenerateBody(args: SmartArgs): SmartGenerateModel {
 }
 
 /**
- * Whether the video has nothing for smart generation to read.
- *
- * Smart generation needs a transcript and never makes one: the API rejects the
- * request outright when the video has no captions, even on a library with
- * transcribing enabled. So this is a hard precondition, not a billing gate.
- */
-export function hasNoCaptions(video: VideoModel): boolean {
-  return (video.captions ?? []).length === 0;
-}
-
-/**
  * Refuse a video the API would refuse anyway, and name the way out.
  *
  * Sending the request would only come back as "Video has no captions", so the
  * transcribe pointer is more useful than the round trip.
  */
 export function requireTranscript(video: VideoModel): void {
-  if (!hasNoCaptions(video)) return;
+  // Smart generation reads an existing transcript and never makes one, even on a transcribing library.
+  if ((video.captions ?? []).length > 0) return;
   throw new UserError(
     `${video.title} has no captions, and smart generation needs a transcript.`,
     `Transcribe it first: bunny stream transcribe ${video.guid} (or add captions with "bunny stream caption add").`,

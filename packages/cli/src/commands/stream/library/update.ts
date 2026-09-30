@@ -89,9 +89,15 @@ async function promptSettings(
   if (name && name !== library.Name) settings.Name = name;
   // At least one resolution must stay enabled, so an empty pick is left alone.
   const resolutions: string[] = answers.resolutions ?? [];
-  if (resolutions.length > 0)
+  const resolutionsChanged =
+    resolutions.length !== current.length ||
+    resolutions.some((resolution) => !current.includes(resolution));
+  if (resolutions.length > 0 && resolutionsChanged)
     settings.EnabledResolutions = resolutions.join(",");
-  if (answers.transcribing !== undefined)
+  if (
+    answers.transcribing !== undefined &&
+    answers.transcribing !== (library.EnableTranscribing ?? false)
+  )
     settings.EnableTranscribing = answers.transcribing;
   return settings;
 }

@@ -1,54 +1,77 @@
-import { expect, test } from "bun:test";
-import { cleanupQuery, cleanupSummary } from "./cleanup.ts";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import { cleanupQuery, streamVideoCleanupCommand } from "./cleanup.ts";
 
-test("cleanupQuery maps each flag to its query param", () => {
+test("cleanupQuery trims resolutions and lowercases outputs", () => {
   expect(
-    cleanupQuery({
-      resolutions: " 240p , 360p ",
-      nonConfigured: true,
-      original: true,
-      mp4: true,
-      dryRun: true,
-      outputs: "HLS",
-    }),
-  ).toEqual({
-    resolutionsToDelete: "240p,360p",
-    deleteNonConfiguredResolutions: true,
-    deleteOriginal: true,
-    deleteMp4Files: true,
-    dryRun: true,
-    outputs: "hls",
-  });
+    cleanupQuery({ resolutions: " 240p , 360p ", outputs: "HLS" }),
+  ).toEqual({ resolutionsToDelete: "240p,360p", outputs: "hls" });
 });
 
-test("cleanupQuery sends only what was asked for", () => {
-  expect(cleanupQuery({ all: true })).toEqual({ allResolutions: true });
-});
-
-// Every selector defaults to false server side, so an empty query is a silent no-op.
+// Every selector defaults to false server side, so a dry run alone is a silent no-op.
 test("cleanupQuery refuses to run with nothing selected", () => {
-  expect(() => cleanupQuery({})).toThrow(/Nothing selected to clean up/);
   expect(() => cleanupQuery({ dryRun: true })).toThrow(
     /Nothing selected to clean up/,
   );
-  expect(() => cleanupQuery({ resolutions: " , " })).toThrow(
-    /Nothing selected to clean up/,
-  );
 });
 
-test("cleanupQuery validates --outputs against the documented values", () => {
-  expect(cleanupQuery({ all: true, outputs: "mp4" }).outputs).toBe("mp4");
-  expect(cleanupQuery({ all: true, outputs: "all" }).outputs).toBe("all");
+test("cleanupQuery rejects an undocumented --outputs value", () => {
   expect(() => cleanupQuery({ all: true, outputs: "dash" })).toThrow(
     /Invalid --outputs "dash"/,
   );
 });
 
-test("cleanupSummary describes the selection for the confirmation", () => {
-  expect(
-    cleanupSummary({ resolutionsToDelete: "240p", deleteOriginal: true }),
-  ).toEqual(["resolutions 240p", "the original file"]);
-  expect(cleanupSummary({ allResolutions: true })).toEqual([
-    "every resolution",
-  ]);
+const CLEANUP_PATH = "/library/4321/videos/video-guid/resolutions/cleanup";
+const originalFetch = globalThis.fetch;
+const originalExit = process.exit;
+let seen: string[] = [];
+let printed: string[] = [];
+
+beforeEach(() => {
+  seen = [];
+  printed = [];
+  globalThis.fetch = (async (input: Request) => {
+    const { pathname } = new URL(input.url);
+    seen.push(`${input.method} ${pathname}`);
+    if (pathname.endsWith("/videolibrary/4321")) {
+      return Response.json({ Id: 4321, Name: "lib", ApiKey: "library-key" });
+    }
+    if (pathname === CLEANUP_PATH) return Response.json({ success: true });
+    return Response.json({ guid: "video-guid", title: "clip.mp4" });
+  }) as unknown as typeof fetch;
+  process.exit = ((code?: number) => {
+    throw new Error(`exit ${code}`);
+  }) as never;
+  spyOn(console, "log").mockImplementation((line: string) => {
+    printed.push(line);
+  });
+  spyOn(console, "error").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  process.exit = originalExit;
+  (console.log as any).mockRestore();
+  (console.error as any).mockRestore();
+});
+
+const run = (args: Record<string, unknown>) =>
+  streamVideoCleanupCommand.handler({
+    video: "video-guid",
+    lib: "4321",
+    apiKey: "account-key",
+    profile: "default",
+    output: "json",
+    all: true,
+    ...args,
+  } as never);
+
+test("a dry run skips the confirmation gate, even unattended", async () => {
+  await run({ dryRun: true });
+  expect(seen).toContain(`POST ${CLEANUP_PATH}`);
+});
+
+test("an unattended cleanup without --force refuses before deleting", async () => {
+  await expect(run({})).rejects.toThrow("exit 1");
+  expect(printed.join("\n")).toContain("needs a confirmation prompt");
+  expect(seen).not.toContain(`POST ${CLEANUP_PATH}`);
 });

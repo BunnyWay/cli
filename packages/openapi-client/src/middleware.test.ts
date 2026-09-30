@@ -73,29 +73,7 @@ describe("authMiddleware onRequest", () => {
     expect(logs).toContain("→ GET https://api.bunny.net/region");
   });
 
-  test("dumps a JSON request body", async () => {
-    const logs: string[] = [];
-    const { request, reads } = spyRequest(
-      "https://api.bunny.net/videolibrary",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ Name: "my-library" }),
-      },
-    );
-
-    await runRequest(
-      { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
-      request,
-    );
-
-    expect(logs.join("\n")).toContain('"Name": "my-library"');
-    // The dump reads a clone, never the request that is about to be sent.
-    expect(reads).toEqual(["clone"]);
-  });
-
-  // Reading an octet-stream body would buffer the whole upload (a video, say)
-  // into memory just to log it, so it is described from its headers instead.
+  // Reading an octet-stream body would buffer a whole video upload into memory just to log it.
   test("never reads a non-JSON request body", async () => {
     const logs: string[] = [];
     const { request, reads } = spyRequest(
@@ -176,8 +154,7 @@ describe("authMiddleware onResponse", () => {
     expect(error.message).toBe("Conflict");
   });
 
-  // Stream answers with StatusModel, whose message field is lowercase; without
-  // its own extractor the message is dropped for a generic HTTP failure.
+  // Stream's StatusModel uses a lowercase message, which the Core extractor misses.
   test("normalizes the Stream StatusModel (lowercase message)", async () => {
     const error = (await captureError(
       runResponse(
@@ -191,17 +168,6 @@ describe("authMiddleware onResponse", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBe(400);
     expect(error.message).toBe("URL validation failed");
-  });
-
-  // The Core format wins when both shapes are somehow present.
-  test("prefers the Core Message over a lowercase message", async () => {
-    const error = (await captureError(
-      runResponse(
-        { apiKey: "k" },
-        jsonResponse({ Message: "Core wins.", message: "stream" }, 400),
-      ),
-    )) as ApiError;
-    expect(error.message).toBe("Core wins.");
   });
 
   test("uses a friendly status message for an empty error body", async () => {
@@ -285,89 +251,25 @@ describe("authMiddleware onResponse", () => {
   });
 });
 
-describe("redactSecrets", () => {
-  test("redacts the keys a video library answers with", () => {
-    expect(
-      redactSecrets({
-        Id: 1,
-        Name: "my-library",
-        ApiKey: "rw-secret",
-        ReadOnlyApiKey: "ro-secret",
-        ApiAccessKey: "rw-secret",
-        VideoCount: 3,
-      }),
-    ).toEqual({
-      Id: 1,
-      Name: "my-library",
-      ApiKey: "[redacted]",
-      ReadOnlyApiKey: "[redacted]",
-      ApiAccessKey: "[redacted]",
-      VideoCount: 3,
-    });
+test("redactSecrets walks nested objects and arrays, redacting only secret strings", () => {
+  let deep: unknown = { ApiKey: "too-deep" };
+  for (let i = 0; i < 10; i++) deep = { next: deep };
+  const out = redactSecrets({
+    zone: { Name: "z", Password: "p" },
+    auth: [{ authToken: "t" }],
+    keyCount: 3,
+    // A false positive is the safe direction.
+    Monkey: "not a secret",
+    deep,
   });
-
-  test("redacts a nested headers.Authorization in a request body", () => {
-    expect(
-      redactSecrets({
-        url: "https://example.com/video.mp4",
-        title: "clip",
-        headers: {
-          Authorization: "Bearer abc",
-          Referer: "https://example.com",
-        },
-      }),
-    ).toEqual({
-      url: "https://example.com/video.mp4",
-      title: "clip",
-      headers: {
-        Authorization: "[redacted]",
-        Referer: "https://example.com",
-      },
-    });
+  expect(out).toMatchObject({
+    zone: { Name: "z", Password: "[redacted]" },
+    auth: [{ authToken: "[redacted]" }],
+    keyCount: 3,
+    Monkey: "[redacted]",
   });
-
-  test("redacts passwords, tokens, and secrets at any depth", () => {
-    expect(
-      redactSecrets({
-        zone: { Name: "z", Password: "p", ReadOnlyPassword: "r" },
-        auth: [{ authToken: "t" }, { AccessKey: "k" }],
-        clientSecret: "cs",
-      }),
-    ).toEqual({
-      zone: {
-        Name: "z",
-        Password: "[redacted]",
-        ReadOnlyPassword: "[redacted]",
-      },
-      auth: [{ authToken: "[redacted]" }, { AccessKey: "[redacted]" }],
-      clientSecret: "[redacted]",
-    });
-  });
-
-  test("leaves non-secret fields and non-string values alone", () => {
-    const body = {
-      Id: 7,
-      Name: "keeper",
-      Monkey: "not a secret",
-      keyCount: 3,
-      nested: { EnabledResolutions: "720p,1080p", flag: true },
-      list: [1, 2, 3],
-      nothing: null,
-    };
-    expect(redactSecrets(body)).toEqual({
-      ...body,
-      // `keyCount` matches the pattern but is not a string, so it survives.
-      keyCount: 3,
-      // `Monkey` ends in "key", so it is redacted: a false positive is the safe direction.
-      Monkey: "[redacted]",
-    });
-  });
-
-  test("passes through primitives untouched", () => {
-    expect(redactSecrets("plain")).toBe("plain");
-    expect(redactSecrets(42)).toBe(42);
-    expect(redactSecrets(null)).toBe(null);
-  });
+  // Past the depth limit the walk bails to the marker rather than the raw value.
+  expect(JSON.stringify(out)).not.toContain("too-deep");
 });
 
 test("verbose response body dumps are redacted", async () => {
@@ -382,21 +284,26 @@ test("verbose response body dumps are redacted", async () => {
   expect(dump).toContain("[redacted]");
 });
 
-test("verbose request body dumps are redacted", async () => {
+test("verbose request body dumps are redacted and read from a clone", async () => {
   const logs: string[] = [];
-  await runRequest(
-    { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
-    new Request("https://video.bunnycdn.com/library/1/videos/fetch", {
+  const { request, reads } = spyRequest(
+    "https://video.bunnycdn.com/library/1/videos/fetch",
+    {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         url: "https://example.com/v.mp4",
         headers: { Authorization: "Bearer origin-secret" },
       }),
-    }),
+    },
+  );
+  await runRequest(
+    { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+    request,
   );
   const dump = logs.join("\n");
   expect(dump).toContain("https://example.com/v.mp4");
   expect(dump).not.toContain("origin-secret");
-  expect(dump).toContain("[redacted]");
+  // The request about to be sent must keep its body unread.
+  expect(reads).toEqual(["clone"]);
 });

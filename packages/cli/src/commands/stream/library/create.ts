@@ -4,6 +4,7 @@ import {
   type VideoLibraryCreateModel,
   type VideoLibraryModel,
 } from "@/commands/stream/api.ts";
+import { nameArg } from "@/commands/stream/name-arg.ts";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
@@ -19,28 +20,6 @@ import {
 interface LibraryCreateArgs extends LibrarySettingsArgs {
   libraryName?: string;
   replicationRegions?: string[];
-}
-
-/**
- * The name for the new library, from the positional or `--name`.
- *
- * Both are accepted, but giving both with different values is a mistake worth
- * reporting rather than silently picking a winner.
- */
-export function createLibraryName(
-  positional: string | undefined,
-  flag: string | undefined,
-): string | undefined {
-  const fromPositional = positional?.trim();
-  const fromFlag = flag?.trim();
-
-  if (fromPositional && fromFlag && fromPositional !== fromFlag) {
-    throw new UserError(
-      `Conflicting names: "${fromPositional}" and --name "${fromFlag}".`,
-      "Pass the name once, either as the argument or as --name.",
-    );
-  }
-  return fromFlag || fromPositional || undefined;
 }
 
 export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
@@ -96,7 +75,7 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    let nameInput = createLibraryName(libraryName, args.name);
+    let nameInput = nameArg(libraryName, args.name);
     if (!nameInput && isInteractive(output)) {
       const { value } = await prompts({
         type: "text",

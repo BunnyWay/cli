@@ -28,9 +28,10 @@ function looksLikeJson(contentType: string): boolean {
 
 /**
  * Property names whose string values are secrets: API keys, zone passwords,
- * tokens, and any Authorization-style header.
+ * tokens, cookies, and any Authorization-style header.
  */
-const SECRET_KEY_RE = /^(.*key|.*password|.*secret|.*token|authorization.*)$/i;
+const SECRET_KEY_RE =
+  /^(.*key|.*password|.*secret|.*token|.*authorization.*|.*cookie)$/i;
 
 const REDACTED = "[redacted]";
 
@@ -45,7 +46,7 @@ const REDACTED = "[redacted]";
  */
 export function redactSecrets(value: unknown, depth = 0): unknown {
   // Deeply nested or cyclic bodies are not worth walking; bail to a marker.
-  if (depth > 8) return value;
+  if (depth > 8) return REDACTED;
   if (Array.isArray(value)) {
     return value.map((entry) => redactSecrets(entry, depth + 1));
   }
@@ -55,25 +56,6 @@ export function redactSecrets(value: unknown, depth = 0): unknown {
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
     if (typeof entry === "string" && SECRET_KEY_RE.test(key)) {
       out[key] = REDACTED;
-      continue;
-    }
-    // A `headers` map holds its secrets one level down, keyed by header name.
-    if (
-      /^headers$/i.test(key) &&
-      entry !== null &&
-      typeof entry === "object" &&
-      !Array.isArray(entry)
-    ) {
-      const headers: Record<string, unknown> = {};
-      for (const [name, headerValue] of Object.entries(
-        entry as Record<string, unknown>,
-      )) {
-        headers[name] =
-          typeof headerValue === "string" && SECRET_KEY_RE.test(name)
-            ? REDACTED
-            : redactSecrets(headerValue, depth + 1);
-      }
-      out[key] = headers;
       continue;
     }
     out[key] = redactSecrets(entry, depth + 1);

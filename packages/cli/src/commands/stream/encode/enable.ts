@@ -30,9 +30,7 @@ const BILLING_NOTE =
  * EncodingTier 1 is the whole point of the command, so it is always sent; the
  * optional flags ride along in the same request.
  */
-export function encodeEnableBody(
-  args: EncodeEnableArgs,
-): VideoLibraryUpdateModel {
+function encodeEnableBody(args: EncodeEnableArgs): VideoLibraryUpdateModel {
   return {
     ...librarySettingsFromFlags({
       jit: args.jit,

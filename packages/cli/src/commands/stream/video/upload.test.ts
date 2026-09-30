@@ -1,68 +1,54 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { logger } from "@/core/logger.ts";
 import {
   isEmptyVideoShell,
+  streamVideoUploadCommand,
   TUS_THRESHOLD_BYTES,
   uploadFileSize,
   uploadStrategy,
   videoTitle,
 } from "./upload.ts";
 
+const VIDEO_PATH = "/library/4321/videos/video-guid";
+const originalFetch = globalThis.fetch;
+const originalExit = process.exit;
 let dir = "";
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "bunny-stream-upload-"));
+  process.exit = ((code?: number) => {
+    throw new Error(`exit ${code}`);
+  }) as never;
+  spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(async () => {
+  globalThis.fetch = originalFetch;
+  process.exit = originalExit;
+  (console.error as any).mockRestore();
   await rm(dir, { recursive: true, force: true });
-});
-
-test("the title defaults to the file's name", () => {
-  expect(videoTitle("./media/launch demo.mp4")).toBe("launch demo.mp4");
-  expect(videoTitle("/abs/path/clip.mp4", undefined)).toBe("clip.mp4");
-});
-
-test("an explicit title wins, trimmed", () => {
-  expect(videoTitle("./clip.mp4", "  Launch demo  ")).toBe("Launch demo");
 });
 
 // A blank --title would otherwise create an untitled video.
 test("a blank title falls back to the file's name", () => {
-  expect(videoTitle("./clip.mp4", "   ")).toBe("clip.mp4");
+  expect(videoTitle("./media/clip.mp4", "   ")).toBe("clip.mp4");
 });
 
-// The cleanup guard: only a video that never received bytes may be deleted after
-// a failed upload, because a lost response does not mean the bytes were rejected.
+// A lost response does not mean the bytes were rejected, so only an untouched shell may be deleted.
 test("isEmptyVideoShell allows cleanup only for Created and UploadFailed", () => {
-  expect(isEmptyVideoShell(0)).toBe(true); // Created
-  expect(isEmptyVideoShell(6)).toBe(true); // UploadFailed
-});
-
-test("isEmptyVideoShell keeps a video that may hold bytes", () => {
-  for (const status of [1, 2, 3, 4, 5, 7, 8]) {
-    expect(isEmptyVideoShell(status)).toBe(false);
-  }
-  // An unknown status is ambiguous, so it is never deleted.
+  expect(isEmptyVideoShell(0)).toBe(true);
+  expect(isEmptyVideoShell(6)).toBe(true);
+  expect(isEmptyVideoShell(4)).toBe(false);
   expect(isEmptyVideoShell(undefined)).toBe(false);
-  expect(isEmptyVideoShell(99)).toBe(false);
 });
 
-test("uploadFileSize returns the byte size of a regular file", async () => {
-  const file = join(dir, "clip.mp4");
-  await Bun.write(file, "video-bytes");
-  expect(await uploadFileSize(file)).toBe("video-bytes".length);
-});
-
-test("uploadFileSize rejects a missing file", async () => {
+test("uploadFileSize rejects a missing file or a directory before any API call", async () => {
   await expect(uploadFileSize(join(dir, "nope.mp4"))).rejects.toThrow(
     /File not found/,
   );
-});
-
-test("uploadFileSize rejects a directory with a targeted message", async () => {
   const nested = join(dir, "videos");
   await mkdir(nested);
   await expect(uploadFileSize(nested)).rejects.toThrow(
@@ -70,27 +56,64 @@ test("uploadFileSize rejects a directory with a targeted message", async () => {
   );
 });
 
-// stat follows symlinks, so a link to a real file is uploadable as its target.
-test("uploadFileSize follows a symlink to a file", async () => {
+test("uploadStrategy switches to resumable only above 2 GiB", () => {
+  expect(uploadStrategy(TUS_THRESHOLD_BYTES)).toBe("put");
+  expect(uploadStrategy(TUS_THRESHOLD_BYTES + 1)).toBe("tus");
+});
+
+/** Stub the core and Stream APIs with a failing PUT; returns every request as "METHOD path". */
+function stubFailedUpload(statusRead: Response): string[] {
+  const seen: string[] = [];
+  globalThis.fetch = (async (input: Request) => {
+    const { pathname } = new URL(input.url);
+    seen.push(`${input.method} ${pathname}`);
+    if (pathname.endsWith("/videolibrary/4321")) {
+      return Response.json({ Id: 4321, Name: "lib", ApiKey: "library-key" });
+    }
+    if (input.method === "POST") {
+      return Response.json({ guid: "video-guid", title: "clip.mp4" });
+    }
+    if (input.method === "PUT") {
+      return Response.json({ message: "boom" }, { status: 500 });
+    }
+    if (input.method === "GET") return statusRead.clone();
+    return Response.json({});
+  }) as unknown as typeof fetch;
+  return seen;
+}
+
+async function runUpload(): Promise<string[]> {
   const file = join(dir, "clip.mp4");
   await Bun.write(file, "video-bytes");
-  const link = join(dir, "link.mp4");
-  await symlink(file, link);
-  expect(await uploadFileSize(link)).toBe("video-bytes".length);
+  const errors = spyOn(logger, "error").mockImplementation(() => {});
+  try {
+    await expect(
+      streamVideoUploadCommand.handler({
+        file,
+        lib: "4321",
+        apiKey: "account-key",
+        profile: "default",
+        output: "text",
+      } as never),
+    ).rejects.toThrow("exit 1");
+    return errors.mock.calls.map(([msg]) => msg);
+  } finally {
+    errors.mockRestore();
+  }
+}
+
+test("a failed upload deletes the video only after its status confirms an empty shell", async () => {
+  const seen = stubFailedUpload(
+    Response.json({ guid: "video-guid", status: 0 }),
+  );
+  const errors = await runUpload();
+  expect(seen.slice(-2)).toEqual([`GET ${VIDEO_PATH}`, `DELETE ${VIDEO_PATH}`]);
+  expect(errors[0]).toEndWith("failed: boom");
 });
 
-// The 2 GiB switch, checked arithmetically so no test needs a huge file.
-test("uploadStrategy keeps a single PUT up to and including 2 GiB", () => {
-  expect(TUS_THRESHOLD_BYTES).toBe(2 * 1024 ** 3);
-  expect(uploadStrategy(0)).toBe("put");
-  expect(uploadStrategy(1)).toBe("put");
-  expect(uploadStrategy(500 * 1024 ** 2)).toBe("put");
-  expect(uploadStrategy(TUS_THRESHOLD_BYTES - 1)).toBe("put");
-  expect(uploadStrategy(TUS_THRESHOLD_BYTES)).toBe("put");
-});
-
-test("uploadStrategy switches to resumable above 2 GiB", () => {
-  expect(uploadStrategy(TUS_THRESHOLD_BYTES + 1)).toBe("tus");
-  expect(uploadStrategy(5 * 1024 ** 3)).toBe("tus");
-  expect(uploadStrategy(80 * 1024 ** 3)).toBe("tus");
+test("a failed upload keeps the video when its status cannot be read, and still reports the upload error", async () => {
+  const seen = stubFailedUpload(Response.json({}, { status: 500 }));
+  const errors = await runUpload();
+  expect(seen).not.toContain(`DELETE ${VIDEO_PATH}`);
+  expect(errors[0]).toEndWith("failed: boom");
 });

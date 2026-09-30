@@ -76,7 +76,7 @@ export function cleanupQuery(args: CleanupArgs): CleanupResolutionsQuery {
 }
 
 /** Human-readable summary of what the cleanup will touch. */
-export function cleanupSummary(query: CleanupResolutionsQuery): string[] {
+function cleanupSummary(query: CleanupResolutionsQuery): string[] {
   const parts: string[] = [];
   if (query.allResolutions) parts.push("every resolution");
   if (query.resolutionsToDelete)

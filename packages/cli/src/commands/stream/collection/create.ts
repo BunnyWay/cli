@@ -1,5 +1,6 @@
 import { createCollection } from "@/commands/stream/collection-api.ts";
 import { streamLibraryContext } from "@/commands/stream/context.ts";
+import { nameArg } from "@/commands/stream/name-arg.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
@@ -9,28 +10,6 @@ interface CollectionCreateArgs {
   collectionName?: string;
   name?: string;
   lib?: string;
-}
-
-/**
- * The name for the new collection, from the positional or `--name`.
- *
- * Both are accepted; giving both with different values is a mistake worth
- * reporting rather than silently picking a winner.
- */
-export function collectionName(
-  positional: string | undefined,
-  flag: string | undefined,
-): string | undefined {
-  const fromPositional = positional?.trim();
-  const fromFlag = flag?.trim();
-
-  if (fromPositional && fromFlag && fromPositional !== fromFlag) {
-    throw new UserError(
-      `Conflicting names: "${fromPositional}" and --name "${fromFlag}".`,
-      "Pass the name once, either as the argument or as --name.",
-    );
-  }
-  return fromFlag || fromPositional || undefined;
 }
 
 export const streamCollectionCreateCommand =
@@ -65,7 +44,7 @@ export const streamCollectionCreateCommand =
 
     handler: async (args) => {
       const { lib, profile, output, verbose, apiKey } = args;
-      let wanted = collectionName(args.collectionName, args.name);
+      let wanted = nameArg(args.collectionName, args.name);
 
       // Fail on a missing name before any API call, since an unattended run has
       // no way to supply one later.

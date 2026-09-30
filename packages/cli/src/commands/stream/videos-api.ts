@@ -140,8 +140,8 @@ export async function createVideo(
  * means there may be more, and a short or empty one is the end. `totalItems` is
  * only an upper bound when the API sends it, which keeps a listing that fits
  * exactly to a single request. Page fullness is measured against the size the
- * response reports, so a server that clamps `itemsPerPage` still drains fully,
- * and an omitted or under-reported total no longer truncates the result.
+ * response reports, so a server that clamps `itemsPerPage` or omits the total
+ * still drains fully.
  */
 export async function fetchVideos(
   client: StreamClient,
@@ -213,26 +213,21 @@ export async function uploadVideoFile(
   filePath: string,
 ): Promise<void> {
   const file = Bun.file(filePath);
+  let error: unknown;
   try {
-    const { error } = await client.PUT(
-      "/library/{libraryId}/videos/{videoId}",
-      {
-        params: { path: { libraryId, videoId } },
-        headers: { "Content-Type": "application/octet-stream" },
-        bodySerializer: (body: unknown) => body,
-        // The generated type for an octet-stream body is `string`; the blob is what actually gets sent.
-        body: file as unknown as string,
-      },
-    );
-    if (error) {
-      throw new UserError(
-        `Uploading ${filePath} failed: ${bodyMessage(error)}`,
-      );
-    }
+    ({ error } = await client.PUT("/library/{libraryId}/videos/{videoId}", {
+      params: { path: { libraryId, videoId } },
+      headers: { "Content-Type": "application/octet-stream" },
+      bodySerializer: (body: unknown) => body,
+      // The generated type for an octet-stream body is `string`; the blob is what actually gets sent.
+      body: file as unknown as string,
+    }));
   } catch (err) {
-    if (err instanceof UserError) throw err;
     // A non-OK response arrives here as an ApiError from the shared middleware.
     throw new UserError(`Uploading ${filePath} failed: ${errorMessage(err)}`);
+  }
+  if (error) {
+    throw new UserError(`Uploading ${filePath} failed: ${bodyMessage(error)}`);
   }
 }
 

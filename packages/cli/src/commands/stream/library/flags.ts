@@ -61,7 +61,7 @@ export const RESOLUTION_CHOICES = [
   "2160p",
 ] as const;
 
-export function encodingTierValue(value: string): 0 | 1 {
+function encodingTierValue(value: string): 0 | 1 {
   const tier = ENCODING_TIERS[value.trim().toLowerCase()];
   if (tier === undefined) {
     throw new UserError(
@@ -81,15 +81,12 @@ export function parseCsvFlag(value: string): string[] {
 }
 
 /** Validate a CSV flag against a fixed set, preserving the caller's order. */
-export function parseChoiceCsv(
+function parseChoiceCsv(
   flag: string,
   value: string,
   choices: readonly string[],
-  opts: { lowercase?: boolean } = {},
 ): string[] {
-  const entries = parseCsvFlag(value).map((entry) =>
-    opts.lowercase === false ? entry : entry.toLowerCase(),
-  );
+  const entries = parseCsvFlag(value).map((entry) => entry.toLowerCase());
   if (entries.length === 0) {
     throw new UserError(
       `--${flag} needs at least one value.`,
