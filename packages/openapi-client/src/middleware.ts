@@ -26,6 +26,43 @@ function looksLikeJson(contentType: string): boolean {
   );
 }
 
+/**
+ * Property names whose string values are secrets: API keys, zone passwords,
+ * tokens, credentials, cookies, and any Authorization-style header.
+ */
+const SECRET_KEY_RE =
+  /^(.*key|.*password|.*secret|.*token|.*credentials?|.*authorization.*|.*cookie)$/i;
+
+const REDACTED = "[redacted]";
+
+/**
+ * Copy a parsed body with every secret-looking string value replaced.
+ *
+ * Verbose mode dumps request and response bodies, and those bodies carry real
+ * credentials: a video library answers with its ApiKey, a storage zone with its
+ * password, and a Stream fetch request with the origin's Authorization header.
+ * Redacting is structural (by property name) so it holds for shapes this code
+ * has never seen.
+ */
+export function redactSecrets(value: unknown, depth = 0): unknown {
+  // Deeply nested or cyclic bodies are not worth walking; bail to a marker.
+  if (depth > 8) return REDACTED;
+  if (Array.isArray(value)) {
+    return value.map((entry) => redactSecrets(entry, depth + 1));
+  }
+  if (value === null || typeof value !== "object") return value;
+
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry === "string" && SECRET_KEY_RE.test(key)) {
+      out[key] = REDACTED;
+      continue;
+    }
+    out[key] = redactSecrets(entry, depth + 1);
+  }
+  return out;
+}
+
 const STATUS_MESSAGES: Record<number, string> = {
   401: "Unauthorized. Check your API key.",
   403: "Forbidden. You don't have permission for this action.",
@@ -52,6 +89,11 @@ const extractors: Array<
   // ApiErrorData (Core / Compute)
   (b) =>
     b?.Message ? { message: b.Message, field: b.Field ?? undefined } : null,
+
+  // StatusModel (Stream): { success, message, statusCode } — lowercase, so the
+  // Core extractor above misses it and the message would be lost.
+  (b) =>
+    typeof b?.message === "string" && b.message ? { message: b.message } : null,
 ];
 
 /**
@@ -71,21 +113,6 @@ const extractors: Array<
  * a failed request throws before it reaches handler code.
  */
 
-const SECRET_KEY = /password|secret|token|accesskey|apikey|credential/i;
-
-function redact(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redact);
-  if (value === null || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [
-      key,
-      SECRET_KEY.test(key) && typeof child !== "object"
-        ? "[redacted]"
-        : redact(child),
-    ]),
-  );
-}
-
 export function authMiddleware(options: ClientOptions): Middleware {
   const {
     apiKey,
@@ -103,11 +130,24 @@ export function authMiddleware(options: ClientOptions): Middleware {
       if (debug) {
         debug(`→ ${request.method} ${request.url}`);
         if (request.body) {
-          const cloned = request.clone();
-          try {
-            const body = await cloned.json();
-            debug(`→ Body: ${JSON.stringify(redact(body), null, 2)}`);
-          } catch {}
+          const contentType = request.headers.get("content-type") ?? "";
+          if (looksLikeJson(contentType)) {
+            const cloned = request.clone();
+            try {
+              const body = await cloned.json();
+              debug(`→ Body: ${JSON.stringify(redactSecrets(body), null, 2)}`);
+            } catch {}
+          } else {
+            // Never read a non-JSON request body: a binary upload (e.g. a video
+            // sent as application/octet-stream) would be buffered into memory in
+            // full just to be logged. Describe it from the headers instead.
+            const length = request.headers.get("content-length");
+            debug(
+              `→ Body (${contentType || "no content-type"}): ${
+                length ? `${length} bytes, not logged` : "not logged"
+              }`,
+            );
+          }
         }
       }
 
@@ -121,7 +161,7 @@ export function authMiddleware(options: ClientOptions): Middleware {
         if (looksLikeJson(contentType)) {
           try {
             const body = await cloned.json();
-            debug(`← Body: ${JSON.stringify(redact(body), null, 2)}`);
+            debug(`← Body: ${JSON.stringify(redactSecrets(body), null, 2)}`);
           } catch {}
         } else {
           // Non-JSON body - surface the raw text (truncated) so the

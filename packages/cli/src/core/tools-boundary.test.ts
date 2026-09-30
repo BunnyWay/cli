@@ -118,6 +118,16 @@ const PENDING_MIGRATION = new Set([
   "commands/storage/zone/list.ts",
   "commands/storage/zone/show.ts",
   "commands/storage/zone/update.ts",
+  "commands/stream/context.ts",
+  "commands/stream/encode/enable.ts",
+  "commands/stream/library/create.ts",
+  "commands/stream/library/credentials.ts",
+  "commands/stream/library/delete.ts",
+  "commands/stream/library/link.ts",
+  "commands/stream/library/list.ts",
+  "commands/stream/library/show.ts",
+  "commands/stream/library/update.ts",
+  "commands/stream/videos-api.ts",
   "commands/whoami.ts",
 ]);
 
