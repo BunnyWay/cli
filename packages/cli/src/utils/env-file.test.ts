@@ -1,8 +1,13 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseEnvFile } from "./env-file.ts";
+import {
+  parseEnvFile,
+  readEnvValue,
+  removeEnvValue,
+  writeEnvValue,
+} from "./env-file.ts";
 
 function writeEnv(lines: string[]): string {
   const envPath = join(mkdtempSync(join(tmpdir(), "bunny-env-")), ".env");
@@ -59,4 +64,73 @@ test("a quoted value spans lines, and an unclosed one is reported not truncated"
     ],
     unterminated: ["BROKEN"],
   });
+});
+
+test("an empty value reads as unset, and a repeated key takes the last value", () => {
+  const envPath = writeEnv([
+    "BUNNY_DATABASE_URL=",
+    "BUNNY_DATABASE_AUTH_TOKEN=",
+    "DUP=first",
+    "DUP=second",
+  ]);
+  const originalCwd = process.cwd();
+  process.chdir(join(envPath, ".."));
+  try {
+    expect(readEnvValue("BUNNY_DATABASE_URL")).toBeUndefined();
+    expect(readEnvValue("DUP")?.value).toBe("second");
+  } finally {
+    process.chdir(originalCwd);
+  }
+});
+
+test("write and remove skip a key-shaped line inside another quoted value", () => {
+  const envPath = writeEnv([
+    "export TOKEN=old",
+    'NOTE="line one',
+    'TOKEN=keep"',
+    "",
+  ]);
+
+  writeEnvValue("TOKEN", "new", envPath);
+  expect(readFileSync(envPath, "utf-8")).toBe(
+    'export TOKEN=new\nNOTE="line one\nTOKEN=keep"\n',
+  );
+
+  removeEnvValue("TOKEN", envPath);
+  expect(readFileSync(envPath, "utf-8")).toBe('NOTE="line one\nTOKEN=keep"\n');
+});
+
+test("an unclosed quote blocks a strict read, and a new key is written above it", () => {
+  const envPath = writeEnv(["A=1", 'NOTE="open', "TOKEN=hidden"]);
+  const originalCwd = process.cwd();
+  process.chdir(join(envPath, ".."));
+  try {
+    expect(readEnvValue("TOKEN")).toBeUndefined();
+    expect(() => readEnvValue("TOKEN", { strict: true })).toThrow(
+      "Unclosed quote",
+    );
+
+    writeEnvValue("TOKEN", "new", envPath);
+    expect(readEnvValue("TOKEN")?.value).toBe("new");
+  } finally {
+    process.chdir(originalCwd);
+  }
+});
+
+test("mixed line endings edit the right line", () => {
+  const envPath = writeEnv(["A=1\nB=2\r\nTOKEN=old\r\nC=3\r\n"]);
+  writeEnvValue("TOKEN", "new", envPath);
+  expect(readFileSync(envPath, "utf-8")).toBe(
+    "A=1\nB=2\r\nTOKEN=new\r\nC=3\r\n",
+  );
+  removeEnvValue("TOKEN", envPath);
+  expect(readFileSync(envPath, "utf-8")).toBe("A=1\nB=2\r\nC=3\r\n");
+
+  writeFileSync(envPath, "URL=x\r\nTOKEN=old");
+  removeEnvValue("TOKEN", envPath);
+  expect(readFileSync(envPath, "utf-8")).toBe("URL=x");
+
+  writeFileSync(envPath, "TOKEN=old\nOTHER=value\r");
+  removeEnvValue("TOKEN", envPath);
+  expect(readFileSync(envPath, "utf-8")).toBe("OTHER=value\r");
 });
