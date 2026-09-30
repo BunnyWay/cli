@@ -40,5 +40,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "@bunny.net/framework-detector": "workspace:*"
   }
 }
