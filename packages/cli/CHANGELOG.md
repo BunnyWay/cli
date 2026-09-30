@@ -1,5 +1,13 @@
 # @bunny.net/cli
 
+## 0.18.1
+
+### Patch Changes
+
+- [#237](https://github.com/BunnyWay/cli/pull/237) [`0f0bd10`](https://github.com/BunnyWay/cli/commit/0f0bd10a067cee1b493024da834c9aa33f0b2140) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites` detects Blazor WebAssembly projects and never downloads a framework CLI that isn't installed
+
+- [#86](https://github.com/BunnyWay/cli/pull/86) [`7eb2a74`](https://github.com/BunnyWay/cli/commit/7eb2a7409b8cbc626970b08568f7e63641ccc340) Thanks [@burstw0w](https://github.com/burstw0w)! - Add an experimental, hidden `bunny pz` command for managing pull zones
+
 ## 0.18.0
 
 ### Minor Changes
