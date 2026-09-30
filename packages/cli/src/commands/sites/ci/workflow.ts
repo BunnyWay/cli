@@ -123,7 +123,7 @@ function buildSteps(
       return [
         "      - uses: actions/setup-dotnet@v6",
         "        with:",
-        '          dotnet-version: "8.0.x"',
+        `          dotnet-version: "${preset.dotnetVersion ?? "10.0.x"}"`,
         runStep(build, preset.build),
       ];
     case "none":

@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { access, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 export type PackageManager = "bun" | "pnpm" | "yarn" | "npm";
@@ -14,6 +14,8 @@ export interface FrameworkPreset {
   build?: string;
   /** Serves index.html for client-side routes unless `sites.spa` overrides. */
   spa?: boolean;
+  /** SDK channel for the dotnet toolchain's setup step, e.g. `9.0.x`. */
+  dotnetVersion?: string;
 }
 
 // Static must stay last: the interactive prompt defaults to it.
@@ -73,7 +75,7 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     label: "Nuxt (static generate)",
     dir: ".output/public",
     toolchain: "js",
-    build: "nuxi generate",
+    build: "nuxt generate",
   },
   {
     id: "preact",
@@ -176,13 +178,15 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     toolchain: "zola",
     build: "zola build",
   },
-  // Blazor WebAssembly publishes to bin/Release/net<ver>/publish/wwwroot; bump the version if needed.
+  // bin/ keeps the output gitignored; the LTS SDK builds older targets, and detection pins the project's own.
   {
     id: "blazor",
     label: "Blazor WebAssembly",
-    dir: "bin/Release/net8.0/publish/wwwroot",
+    dir: "bin/publish/wwwroot",
     toolchain: "dotnet",
-    build: "dotnet publish -c Release",
+    build: "dotnet publish -c Release -o bin/publish",
+    spa: true,
+    dotnetVersion: "10.0.x",
   },
   {
     id: "static",
@@ -196,12 +200,12 @@ export function findPreset(id: string): FrameworkPreset | undefined {
   return FRAMEWORK_PRESETS.find((p) => p.id === id);
 }
 
-// Runner for a project-local binary; shared by the local build and the emitted CI workflow.
+// Runner for a project-local binary; shared by the local build and the emitted CI workflow. Never falls back to a registry download or a shared cache.
 const PM_EXEC: Record<PackageManager, string> = {
-  bun: "bunx",
+  bun: "bun run",
   pnpm: "pnpm exec",
   yarn: "yarn",
-  npm: "npx",
+  npm: "npx --no-install",
 };
 
 /** The build command to run locally for a preset, or null for the static (no-build) preset. */
@@ -216,7 +220,7 @@ export function presetBuildCommand(
   return preset.build ?? null;
 }
 
-// Ordered most-specific first (meta-frameworks depend on vite, so vite goes last); Blazor is selectable via --framework but not auto-detected.
+// Ordered most-specific first (meta-frameworks depend on vite, so vite goes last).
 const JS_DETECTORS: Array<[dependency: string, presetId: string]> = [
   ["@analogjs/platform", "analog"],
   ["astro", "astro"],
@@ -273,6 +277,45 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+// Standalone Blazor WebAssembly only: server-hosted Blazor apps use a different SDK and aren't static.
+async function detectBlazor(
+  root: string,
+): Promise<FrameworkPreset | undefined> {
+  const preset = findPreset("blazor");
+  if (!preset) return undefined;
+  const entries = await readdir(root).catch(() => [] as string[]);
+  for (const name of entries.filter((e) => e.endsWith(".csproj"))) {
+    const csproj = await readText(join(root, name));
+    if (!csproj?.includes("Microsoft.NET.Sdk.BlazorWebAssembly")) continue;
+    // Multi-target projects must name one framework to publish, so pick the newest.
+    const plural = csproj.match(/<TargetFrameworks>([^<]+)</)?.[1];
+    const tfms = (
+      plural ??
+      csproj.match(/<TargetFramework>([^<]+)</)?.[1] ??
+      ""
+    )
+      .split(";")
+      .map((t) => t.trim())
+      .map((tfm) => ({ tfm, v: tfm.match(/^net(\d+)\.(\d+)(-[\w.]+)?$/) }))
+      .filter((t) => t.v)
+      .sort(
+        (a, b) =>
+          Number(b.v?.[1]) - Number(a.v?.[1]) ||
+          Number(b.v?.[2]) - Number(a.v?.[2]),
+      );
+    const newest = tfms[0];
+    const framework = plural && newest ? ` -f ${newest.tfm}` : "";
+    // These values reach a shell, so a filename outside a safe charset is left for dotnet to find.
+    const project = /^[\w.-]+$/.test(name) ? ` ${name}` : "";
+    return {
+      ...preset,
+      build: `dotnet publish${project} -c Release${framework} -o bin/publish`,
+      ...(newest?.v && { dotnetVersion: `${newest.v[1]}.${newest.v[2]}.x` }),
+    };
+  }
+  return undefined;
+}
+
 export async function detectFramework(
   root: string,
 ): Promise<FrameworkPreset | undefined> {
@@ -286,6 +329,9 @@ export async function detectFramework(
       if (deps[dependency]) return findPreset(presetId);
     }
   }
+
+  const blazor = await detectBlazor(root);
+  if (blazor) return blazor;
 
   const gemfile = await readText(join(root, "Gemfile"));
   if (
