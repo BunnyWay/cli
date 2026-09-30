@@ -144,7 +144,9 @@ async function resolvePreset(
         `Known frameworks: ${FRAMEWORK_PRESETS.map((p) => p.id).join(", ")}.`,
       );
     }
-    return preset;
+    // Detection tailors some presets to the project (Blazor's SDK and .csproj), so reuse it when it agrees.
+    const detected = await detectFramework(root);
+    return detected?.id === preset.id ? detected : preset;
   }
 
   const detected = await detectFramework(root);

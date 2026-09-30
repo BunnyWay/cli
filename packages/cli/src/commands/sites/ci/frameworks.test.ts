@@ -67,7 +67,7 @@ test("presetBuildCommand: package.json build, runner exec for overrides, direct 
   const cmd = (id: string, pm: "npm" | "pnpm" | "bun") =>
     presetBuildCommand(findPreset(id) as never, pm);
   expect(cmd("vite", "pnpm")).toBe("pnpm run build");
-  expect(cmd("nuxt", "bun")).toBe("bunx nuxi generate");
+  expect(cmd("nuxt", "bun")).toBe("bun run nuxt generate");
   expect(cmd("hugo", "npm")).toBe("hugo --minify");
   expect(cmd("static", "npm")).toBeNull();
 });
@@ -78,4 +78,21 @@ test("detectPackageManager reads the lockfile", async () => {
     "pnpm",
   );
   expect(await detectPackageManager(tempRepo({}))).toBe("npm");
+});
+
+test("detectFramework finds Blazor WebAssembly, names its .csproj, and takes the newest target's SDK", async () => {
+  const dir = tempRepo({
+    "App.csproj": `<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly"><PropertyGroup><TargetFrameworks>net9.0; net10.0</TargetFrameworks></PropertyGroup></Project>`,
+    "Api.csproj": `<Project Sdk="Microsoft.NET.Sdk.Web" />`,
+  });
+  const preset = await detectFramework(dir);
+  expect(preset?.build).toBe(
+    "dotnet publish App.csproj -c Release -f net10.0 -o bin/publish",
+  );
+  expect(preset?.dotnetVersion).toBe("10.0.x");
+
+  const server = tempRepo({
+    "App.csproj": `<Project Sdk="Microsoft.NET.Sdk.Web" />`,
+  });
+  expect(await detectFramework(server)).toBeUndefined();
 });
