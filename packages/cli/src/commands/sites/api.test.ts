@@ -1007,7 +1007,7 @@ function importFixture(calls: Call[]) {
   });
 }
 
-test("importSite leaves serving untouched until the first publish applies routing and caching", async () => {
+test("importSite blocks the site paths but leaves routing and caching to the first publish", async () => {
   store.set("index.html", "<h1>old</h1>");
   const calls: Call[] = [];
   const coreClient = importFixture(calls);
@@ -1024,7 +1024,7 @@ test("importSite leaves serving untouched until the first publish applies routin
   const rules = (
     await coreClient.GET("/pullzone/{id}", { params: { path: { id: 30 } } })
   ).data?.EdgeRules?.map((r) => r.Description);
-  expect(rules).toEqual([STATE_RULE_DESC]);
+  expect(rules).toEqual([GATE_RULE_DESC, STATE_RULE_DESC]);
   const cacheWrites = () =>
     calls.filter(
       (c) =>
@@ -1048,82 +1048,4 @@ test("planSiteImport refuses a zone already using a reserved root path", async (
       name: "my-site",
     }),
   ).rejects.toThrow('"deploys" directory');
-});
-
-test("a first publish that fails on the rules restores the old cache settings and never switches routing", async () => {
-  const coreClient = importFixture([]);
-  const plan = await planSiteImport({
-    coreClient,
-    storageZone: ZONE,
-    name: "my-site",
-  });
-  const state = await importSite({ coreClient, plan, name: "my-site" });
-  await coreClient.POST("/pullzone/{id}", {
-    params: { path: { id: 30 } },
-    body: { CacheControlMaxAgeOverride: -1 },
-  });
-  const originalPost = coreClient.POST;
-  let upserts = 0;
-  coreClient.POST = (async (path: string, options: unknown) => {
-    if (
-      path === "/pullzone/{pullZoneId}/edgerules/addOrUpdate" &&
-      ++upserts === 2
-    ) {
-      throw new Error("edge rule rejected");
-    }
-    return originalPost(path as never, options as never);
-  }) as typeof coreClient.POST;
-
-  await expect(
-    promoteDeploy({ coreClient, state, deployId: "abc12345" }),
-  ).rejects.toThrow("edge rule rejected");
-
-  const { data } = await coreClient.GET("/pullzone/{id}", {
-    params: { path: { id: 30 } },
-  });
-  expect(data?.CacheControlMaxAgeOverride).toBe(-1);
-  expect(data?.EdgeRules?.map((r) => r.Description)).not.toContain(
-    REWRITE_RULE_DESC,
-  );
-});
-
-test("once routing switches, a failed 404 settings update still purges and lets the publish be recorded", async () => {
-  const calls: Call[] = [];
-  const coreClient = importFixture(calls);
-  const plan = await planSiteImport({
-    coreClient,
-    storageZone: ZONE,
-    name: "my-site",
-  });
-  const state = await importSite({ coreClient, plan, name: "my-site" });
-  const originalPost = coreClient.POST;
-  coreClient.POST = (async (path: string, options: unknown) => {
-    if (path === "/storagezone/{id}") throw new Error("storage API down");
-    return originalPost(path as never, options as never);
-  }) as typeof coreClient.POST;
-
-  await promoteDeploy({
-    coreClient,
-    state: {
-      ...state,
-      deploys: [
-        {
-          id: "abc12345",
-          createdAt: "2026-01-01T00:00:00.000Z",
-          source: "content",
-          contentHash: "abc12345",
-          files: 1,
-          bytes: 1,
-          notFound: "spa",
-        },
-      ],
-    },
-    deployId: "abc12345",
-  });
-
-  expect(
-    calls.filter((c) => c.path === "/pullzone/{id}/purgeCache"),
-  ).toHaveLength(2);
-  expect(process.exitCode).toBe(1);
-  process.exitCode = 0;
 });

@@ -338,40 +338,6 @@ export async function applySiteCacheSettings(
   });
 }
 
-// Apply the site cache settings and return a restore for the zone's previous ones, so a failed first publish leaves an imported site as it was.
-async function swapSiteCacheSettings(
-  coreClient: CoreClient,
-  pullZoneId: number,
-): Promise<() => Promise<void>> {
-  const { data } = await coreClient.GET("/pullzone/{id}", {
-    params: { path: { id: pullZoneId } },
-  });
-  const originalSettings = {
-    CacheControlMaxAgeOverride: data?.CacheControlMaxAgeOverride,
-    CacheControlPublicMaxAgeOverride: data?.CacheControlPublicMaxAgeOverride,
-  };
-  await applySiteCacheSettings(coreClient, pullZoneId);
-  return async () => {
-    await coreClient.POST("/pullzone/{id}", {
-      params: { path: { id: pullZoneId } },
-      body: originalSettings,
-    });
-  };
-}
-
-// Block direct `deploys/` requests before a first upload; an imported zone only gets this rule then, since blocking it at import could hide nested paths the old site serves.
-export async function ensureDeployGate(
-  coreClient: CoreClient,
-  state: RemoteSiteState,
-  storageZone: StorageZoneModel,
-): Promise<void> {
-  const gate = siteRules(
-    { Id: state.storageZoneId, Name: storageZone.Name ?? "" },
-    PLACEHOLDER_DEPLOY,
-  ).find((rule) => rule.Description === GATE_RULE_DESC);
-  if (gate) await upsertEdgeRule(coreClient, state.pullZoneId, gate);
-}
-
 // The API's "no middleware script" sentinel on update. `null` is accepted and silently ignored, and `-1` is rejected as a missing script, so neither clears the field.
 const NO_MIDDLEWARE_SCRIPT = 0;
 
@@ -492,16 +458,10 @@ async function ensureSiteRules(opts: {
     throw new UserError("The site's storage zone is missing its ID or name.");
   }
   const existing = await fetchEdgeRules(coreClient, pullZoneId);
-  const rules = siteRules(
+  for (const rule of siteRules(
     { Id: storageZoneId, Name: storageZoneName },
     deployId,
-  );
-  // The rewrite rule goes last, so a failure partway through never leaves routing switched.
-  const isRewrite = (rule: EdgeRule) => rule.Description === REWRITE_RULE_DESC;
-  for (const rule of [
-    ...rules.filter((r) => !isRewrite(r)),
-    ...rules.filter(isRewrite),
-  ]) {
+  )) {
     await upsertEdgeRule(coreClient, pullZoneId, rule, existing);
   }
 }
@@ -778,7 +738,7 @@ export async function planSiteImport(opts: {
   };
 }
 
-// Mark the zone as a site: only the state rule and state land now, so the existing site keeps serving untouched until the first deploy brings the other rules and cache settings.
+// Mark the zone as a site: the block rules and state land now; routing and cache settings wait for the first deploy, so the existing site keeps serving.
 export async function importSite(opts: {
   coreClient: CoreClient;
   plan: SiteImportPlan;
@@ -803,13 +763,12 @@ export async function importSite(opts: {
       "Run `bunny sites list` to see it.",
     );
   }
-  // Only the state rule lands now: `deploys/` doesn't exist until the first deploy, and blocking it early could hide nested paths the live site still serves.
-  const stateRule = siteRules(
+  const blockRules = siteRules(
     { Id: state.storageZoneId, Name: plan.storageZone.Name ?? "" },
     PLACEHOLDER_DEPLOY,
-  ).find((rule) => rule.Description === STATE_RULE_DESC);
-  if (stateRule) {
-    await upsertEdgeRule(coreClient, state.pullZoneId, stateRule);
+  ).filter((rule) => rule.ActionType === EdgeRuleAction.BlockRequest);
+  for (const rule of blockRules) {
+    await upsertEdgeRule(coreClient, state.pullZoneId, rule);
   }
   await writeRemoteState(siteFiles.connect(plan.storageZone), state);
   return state;
@@ -923,46 +882,20 @@ export async function promoteDeploy(opts: {
       "Re-run the command; the pull zone may still be provisioning.",
     );
   }
-  // A first publish swaps in the site cache settings before routing changes, and puts the old ones back if the rules fail (routing only switches on the last one).
-  const restoreCache = state.current
-    ? undefined
-    : await swapSiteCacheSettings(coreClient, state.pullZoneId);
-  try {
-    await ensureSiteRules({
-      coreClient,
-      pullZoneId: state.pullZoneId,
-      storageZone,
-      deployId,
-    });
-  } catch (err) {
-    await restoreCache?.().catch((restoreErr) => {
-      logger.warn(
-        `Couldn't restore pull zone ${state.pullZoneId}'s cache settings; it keeps the site's 30-day edge cache: ${errorMessage(restoreErr)}`,
-      );
-    });
-    throw err;
+  // An imported zone keeps its own cache settings until it first goes live.
+  if (!state.current) {
+    await applySiteCacheSettings(coreClient, state.pullZoneId);
   }
-  // Routing has switched, so the publish must finish and be recorded; a later step failing warns and fails the exit code instead of aborting.
-  const afterSwitch = async (step: string, fn: () => Promise<unknown>) => {
-    try {
-      await fn();
-      return true;
-    } catch (err) {
-      logger.warn(
-        `${deployId} is live, but couldn't ${step}: ${errorMessage(err)}`,
-      );
-      logger.dim("  The next deploy or publish reapplies it.");
-      process.exitCode = 1;
-      return false;
-    }
-  };
-  await afterSwitch("update the 404 settings", () =>
-    ensureNotFoundSettings(coreClient, storageZone, state, deployId),
-  );
-  if (await afterSwitch("purge the cache", purge)) {
-    await waitForEdgePropagation(host, deployId);
-    await afterSwitch("purge the cache", purge);
-  }
+  await ensureSiteRules({
+    coreClient,
+    pullZoneId: state.pullZoneId,
+    storageZone,
+    deployId,
+  });
+  await ensureNotFoundSettings(coreClient, storageZone, state, deployId);
+  await purge();
+  await waitForEdgePropagation(host, deployId);
+  await purge();
 }
 
 // Refuse to replace version-1 state that changed since it was read. `writeRemoteState`'s own conflict merge can't cover this: it reconciles against the current format, and the file being replaced is the older one, so it would abort as unparseable rather than merge.

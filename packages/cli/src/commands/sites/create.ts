@@ -69,7 +69,7 @@ async function attachDomainToCreatedSite(opts: {
   }
 }
 
-// Adopt an existing storage zone and its pull zone as a site, keeping its hostnames; nothing it serves changes until the first deploy.
+// Adopt an existing storage zone and its pull zone as a site, keeping its hostnames; routing and caching only change on the first deploy.
 async function importExistingZone(opts: {
   coreClient: CoreClient;
   args: CreateArgs & { output: OutputFormat };
@@ -140,7 +140,7 @@ async function importExistingZone(opts: {
     );
     logger.log();
     logger.dim(
-      "  Nothing changes for visitors until the first deploy, which switches the pull zone to sites routing and caching (30-day edge cache, browsers revalidate HTML).",
+      "  Requests under /_bunny/ and /deploys/ (at any depth) are blocked from now. Everything else is unchanged until the first deploy, which switches the pull zone to sites routing and caching (30-day edge cache, browsers revalidate HTML).",
     );
     logger.log();
   }
