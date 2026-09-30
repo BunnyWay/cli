@@ -7,6 +7,7 @@ import {
   configExists,
   configPath,
   readBunnyConfig,
+  SCHEMA_REF,
 } from "@/core/bunny-config.ts";
 import { UserError } from "@/core/errors.ts";
 import { syncJsonc } from "@/core/jsonc.ts";
@@ -15,9 +16,6 @@ import { loadManifest } from "@/core/manifest.ts";
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 
 type Application = components["schemas"]["Application"];
-
-// The `$schema` reference written into `bunny.jsonc`; resolves in a consumer's node_modules for editor validation.
-const SCHEMA_REF = "./node_modules/@bunny.net/config/generated/schema.json";
 
 // Re-export types and conversion functions for convenience
 export type {

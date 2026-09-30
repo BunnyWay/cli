@@ -6,21 +6,12 @@ import {
 } from "@/commands/storage/constants.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { saveManifest } from "@/core/manifest.ts";
 import { prompts, withSpinner } from "@/core/ui.ts";
-import {
-  type CreateSiteResult,
-  createSite,
-  type SiteContext,
-  siteContextFromZone,
-} from "./api.ts";
-import {
-  isValidSiteName,
-  SITES_MANIFEST,
-  type SiteManifest,
-} from "./constants.ts";
+import { type CreateSiteResult, createSite, type SiteContext } from "./api.ts";
+import { isValidSiteName } from "./constants.ts";
+import { saveSiteLink } from "./interactive.ts";
 
-export const SITE_NAME_RULES =
+const SITE_NAME_RULES =
   "Use 3-47 lowercase letters, digits, and dashes (no leading/trailing dash).";
 
 /** Best-effort site name from the current directory, or undefined if it can't be one. */
@@ -107,21 +98,8 @@ export async function createLinkedSite(opts: {
   region?: string;
   tier?: ZoneTierChoice;
 }): Promise<SiteContext> {
-  const result = await createSiteWithProgress(opts);
-
-  saveManifest<SiteManifest>(SITES_MANIFEST, {
-    id: result.state.storageZoneId,
-    name: opts.name,
-  });
-
-  const context = await siteContextFromZone(result.storageZone);
-  if (!context) {
-    throw new UserError(
-      `Created site "${opts.name}" but couldn't load its state.`,
-      "Re-run the command, or `bunny sites link` to retry.",
-    );
-  }
-
+  const site = await createSiteWithProgress(opts);
+  saveSiteLink(site.state);
   logger.success(`Created site "${opts.name}".`);
-  return context;
+  return site;
 }

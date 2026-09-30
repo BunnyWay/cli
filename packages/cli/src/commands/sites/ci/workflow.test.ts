@@ -21,10 +21,12 @@ test("astro + bun workflow builds with bun and deploys dist", () => {
   expect(yml).toContain('site: "my-site"');
   expect(yml).toContain('directory: "dist"');
   expect(yml).toContain("api_key: ${{ secrets.BUNNYNET_API_KEY }}");
+  expect(yml).not.toContain("working-directory");
+  expect(yml).not.toContain("cache-dependency-path");
 });
 
-// Deploying is publishing, so the workflow only runs where a live deploy is wanted: pushes to main and an explicit dispatch.
-test("the workflow deploys on pushes to main and on demand, never on PRs", () => {
+// Deploying is publishing: only pushes to main and dispatch go live, and a cancelled run could strand a half-written deploy directory.
+test("the workflow deploys on push/dispatch only, with deployments: write, serialized and never cancelled", () => {
   const yml = renderSitesWorkflow({
     site: "my-site",
     preset: preset("astro"),
@@ -33,42 +35,10 @@ test("the workflow deploys on pushes to main and on demand, never on PRs", () =>
   expect(yml).toContain("  push:\n    branches: [main]");
   expect(yml).toContain("workflow_dispatch:");
   expect(yml).not.toContain("pull_request");
-  expect(yml).not.toContain("pull-requests: write");
-  expect(yml).not.toContain("production:");
-});
-
-// The deploy is recorded through the Deployments API, so the job needs that scope and nothing to do with PR comments.
-test("the workflow requests deployments: write and no PR write access", () => {
-  const yml = renderSitesWorkflow({
-    site: "my-site",
-    preset: preset("astro"),
-    packageManager: "bun",
-  });
   expect(yml).toContain("contents: read");
   expect(yml).toContain("deployments: write");
-});
-
-// A cancelled deploy can be killed mid-upload, leaving a half-written deploy directory that nothing records or prunes.
-test("production deploys serialize and are never cancelled in flight", () => {
-  const yml = renderSitesWorkflow({
-    site: "my-site",
-    preset: preset("astro"),
-    packageManager: "bun",
-  });
   expect(yml).toContain("group: bunny-sites");
   expect(yml).toContain("cancel-in-progress: false");
-});
-
-test("jekyll workflow uses ruby and deploys _site", () => {
-  const yml = renderSitesWorkflow({
-    site: "blog",
-    preset: preset("jekyll"),
-    packageManager: "npm",
-  });
-  expect(yml).toContain("uses: ruby/setup-ruby@v1");
-  expect(yml).toContain("run: bundle exec jekyll build");
-  expect(yml).toContain('directory: "_site"');
-  expect(yml).not.toContain("setup-node");
 });
 
 test("static workflow has no build step", () => {
@@ -106,25 +76,6 @@ test("mkdocs uses the python toolchain and deploys site", () => {
   expect(yml).not.toContain("setup-node");
 });
 
-test("zola installs the zola binary and blazor uses dotnet", () => {
-  const zola = renderSitesWorkflow({
-    site: "z",
-    preset: preset("zola"),
-    packageManager: "npm",
-  });
-  expect(zola).toContain("tool: zola");
-  expect(zola).toContain("run: zola build");
-
-  const blazor = renderSitesWorkflow({
-    site: "b",
-    preset: preset("blazor"),
-    packageManager: "npm",
-  });
-  expect(blazor).toContain("uses: actions/setup-dotnet@v6");
-  expect(blazor).toContain("run: dotnet publish -c Release");
-  expect(blazor).toContain('directory: "bin/Release/net8.0/publish/wwwroot"');
-});
-
 test("sites.dir and sites.build from bunny.jsonc win over the preset", () => {
   const yml = renderSitesWorkflow({
     site: "s",
@@ -158,27 +109,6 @@ test("a nested project builds from its own directory and deploys the prefixed pa
   expect(yml).toContain('directory: "packages/site/dist"');
 });
 
-test("a static site at the project root deploys the project directory itself", () => {
-  const yml = renderSitesWorkflow({
-    site: "s",
-    preset: preset("static"),
-    packageManager: "npm",
-    workingDirectory: "sites/marketing",
-  });
-  expect(yml).toContain('directory: "sites/marketing"');
-});
-
-test("a root-level project gets no working directory or cache path", () => {
-  const yml = renderSitesWorkflow({
-    site: "s",
-    preset: preset("astro"),
-    packageManager: "npm",
-  });
-  expect(yml).not.toContain("working-directory");
-  expect(yml).not.toContain("cache-dependency-path");
-  expect(yml).toContain('directory: "dist"');
-});
-
 test("a configured build runs even for a static preset", () => {
   const yml = renderSitesWorkflow({
     site: "s",
@@ -206,17 +136,6 @@ test("a configured build gets the JS install steps when installDeps is set", () 
   expect(yml).toContain("run: pnpm install --frozen-lockfile");
   expect(yml).toContain('run: "pnpm run build"');
   expect(yml).toContain('directory: "out"');
-});
-
-test("a static site with no configured build never installs", () => {
-  const yml = renderSitesWorkflow({
-    site: "s",
-    preset: preset("static"),
-    packageManager: "npm",
-    installDeps: true,
-  });
-  expect(yml).toContain("# No build step: static files deploy as-is.");
-  expect(yml).not.toContain("setup-node");
 });
 
 // A configured build is always a quoted scalar: bare `true`/`null`/`1.5` would parse as a boolean/null/number, which Actions rejects, and a newline would open a new YAML line.

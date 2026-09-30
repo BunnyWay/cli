@@ -20,39 +20,96 @@ export function splitPair(entry: string): [string, string] {
   return [key, entry.slice(eq + 1)];
 }
 
-// Double-quoted values read to the closing quote, unescaping `\"`/`\\` (a `#` inside stays literal); single quotes are verbatim; unquoted values drop a whitespace-delimited inline `# comment`.
-function parseValue(raw: string): string {
-  const value = raw.trim();
-  if (value.startsWith('"')) {
-    let out = "";
-    for (let i = 1; i < value.length; i++) {
-      const ch = value[i];
-      if (ch === "\\" && i + 1 < value.length) out += value[++i];
-      else if (ch === '"') return out;
-      else out += ch;
-    }
-    return out; // unterminated quote: take what we have
-  }
-  if (value.startsWith("'")) {
-    const end = value.indexOf("'", 1);
-    return end === -1 ? value.slice(1) : value.slice(1, end);
-  }
-  const comment = value.search(/\s#/);
-  return (comment === -1 ? value : value.slice(0, comment)).trimEnd();
+export interface DotenvEntry {
+  key: string;
+  value: string;
 }
 
-/** Parse a dotenv file: KEY=VALUE lines, `#` comments, optional `export`, optional quotes; invalid lines are skipped. */
-export function parseDotenv(text: string): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
+export interface DotenvParse {
+  entries: DotenvEntry[];
+  unterminated: string[];
+}
+
+const ESCAPES: Record<string, string> = {
+  n: "\n",
+  r: "\r",
+  t: "\t",
+  "\\": "\\",
+  '"': '"',
+};
+
+function expandEscapes(value: string): string {
+  return value.replace(/\\(.)/g, (whole, ch: string) => ESCAPES[ch] ?? whole);
+}
+
+function stripComment(value: string): string {
+  const comment = value.search(/(^|\s)#/);
+  return (comment >= 0 ? value.slice(0, comment) : value).trim();
+}
+
+function closingQuote(body: string, quote: string): number {
+  for (let i = 0; i < body.length; i++) {
+    if (quote === '"' && body[i] === "\\") {
+      i++;
+      continue;
+    }
+    if (body[i] === quote) return i;
+  }
+  return -1;
+}
+
+/**
+ * Parse dotenv text into its entries, in file order.
+ * Skips comments and blank lines, tolerates `export ` prefixes, strips one
+ * layer of matching quotes, and expands escapes in double quotes. A quoted
+ * value may span lines; one that never closes is reported in `unterminated`
+ * rather than truncated, and one closed by a later line's quote swallows the
+ * keys between.
+ */
+export function parseDotenvEntries(text: string): DotenvParse {
+  const entries: DotenvEntry[] = [];
+  const unterminated: string[] = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = (lines[i] ?? "").trim();
     if (!line || line.startsWith("#")) continue;
-    const body = line.startsWith("export ") ? line.slice(7).trim() : line;
+
+    const body = line.replace(/^export\s+/, "");
     const eq = body.indexOf("=");
     if (eq === -1) continue;
     const key = body.slice(0, eq).trim();
     if (!ENV_KEY_PATTERN.test(key)) continue;
-    env[key] = parseValue(body.slice(eq + 1));
+
+    const rest = body.slice(eq + 1).trimStart();
+    const quote = rest[0] === '"' || rest[0] === "'" ? rest[0] : undefined;
+    if (!quote) {
+      entries.push({ key, value: stripComment(rest) });
+      continue;
+    }
+
+    let quoted = rest.slice(1);
+    let closed = closingQuote(quoted, quote);
+    while (closed < 0 && i + 1 < lines.length) {
+      i++;
+      quoted += `\n${lines[i] ?? ""}`;
+      closed = closingQuote(quoted, quote);
+    }
+    if (closed < 0) {
+      unterminated.push(key);
+      continue;
+    }
+
+    const raw = quoted.slice(0, closed);
+    entries.push({ key, value: quote === '"' ? expandEscapes(raw) : raw });
+  }
+  return { entries, unterminated };
+}
+
+/** Parse dotenv text into a map; later keys win, and an unclosed quote drops its key. */
+export function parseDotenv(text: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const { key, value } of parseDotenvEntries(text).entries) {
+    env[key] = value;
   }
   return env;
 }
@@ -68,7 +125,14 @@ export async function collectEnv(
     if (!(await file.exists())) {
       throw new UserError(`Env file not found: ${envFile}`);
     }
-    Object.assign(env, parseDotenv(await file.text()));
+    const { entries, unterminated } = parseDotenvEntries(await file.text());
+    if (unterminated.length > 0) {
+      throw new UserError(
+        `Unclosed quote in ${envFile}: ${unterminated.join(", ")}.`,
+        "Close the quote so the value is not sent truncated.",
+      );
+    }
+    for (const { key, value } of entries) env[key] = value;
   }
   for (const entry of entries) {
     const [key, value] = splitPair(entry);

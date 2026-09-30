@@ -1,18 +1,10 @@
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
-
-/** Anything outside this set changes meaning once the hint is pasted back into a shell. */
-const SHELL_SAFE = /^[\w@%+=:,./-]+$/;
-
-function shellQuote(value: string): string {
-  if (value === "") return "''";
-  if (SHELL_SAFE.test(value)) return value;
-  return `'${value.replace(/'/g, "'\\''")}'`;
-}
+import { shellQuoteIfNeeded } from "@/core/shell.ts";
 
 /** Replays what the user typed against the new command path. */
 export function rewriteCpCommand(args: readonly string[]): string {
-  return `bunny sandbox files cp ${args.map(shellQuote).join(" ")}`.trimEnd();
+  return `bunny sandbox files cp ${args.map(shellQuoteIfNeeded).join(" ")}`.trimEnd();
 }
 
 /** The old `bunny sandbox cp` path: without it yargs answers a stray `cp` with "Did you mean ls?". */

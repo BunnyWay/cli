@@ -41,11 +41,10 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
     });
     const { state } = site;
 
-    // Hostnames are informational; a fetch failure shouldn't hide the site (null, not [], so a failed read never reads as "no hostnames").
-    const fetched = await withSpinner("Fetching hostnames...", () =>
-      fetchPullZoneHostnames(client, state.pullZoneId).catch(() => null),
+    // Hostnames are informational; a fetch failure shouldn't hide the site.
+    const hostnames = await withSpinner("Fetching hostnames...", () =>
+      fetchPullZoneHostnames(client, state.pullZoneId).catch(() => []),
     );
-    const hostnames = fetched ?? [];
 
     if (output === "json") {
       logger.log(
@@ -73,6 +72,15 @@ export const sitesShowCommand = defineCommand<ShowArgs>({
           {
             key: "Deployed",
             value: current ? formatDateTime(current.createdAt) : "-",
+          },
+          {
+            key: "Not found",
+            value:
+              current?.notFound === "spa"
+                ? "index.html (client-side routing)"
+                : current?.notFound === "404"
+                  ? "404.html"
+                  : "storage 404 page",
           },
           { key: "Previous deploy", value: state.previous ?? "-" },
           { key: "Deploys", value: String(state.deploys.length) },

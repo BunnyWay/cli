@@ -276,6 +276,28 @@ bunny apps volumes list
 bunny apps volumes remove <volume-id> --force
 ```
 
+## `bunny apps registries`
+
+Manage the container registries bunny.net pulls private images from. Running `bunny apps registries` without a subcommand lists them.
+
+```bash
+bunny apps registries
+bunny apps registries list
+bunny apps registries add --name "GitHub" --server ghcr.io --username myorg --password $TOKEN
+bunny apps registries add --name "Docker Hub" --type dockerHub --username myorg --password $TOKEN
+bunny apps registries update <registry-id> --name "GitHub (myorg)"
+bunny apps registries update <registry-id> --username myorg --password $TOKEN   # rotate credentials
+bunny apps registries remove <registry-id>
+```
+
+`ghcr.io` and `docker.io` need a matching registry type; `--server` derives it, or pass `--type gitHub|dockerHub` directly. Omit both for a generic registry. `--output json` returns the normalized registry (`id`, `name`, `hostname`, `username`, `createdAt`, `lastUpdatedAt`) rather than the raw API model.
+
+The `Source` column says where a registry comes from:
+
+- **Connected** is one you added, with your own credentials.
+- **Public** is a shared credential-free pull-through that bunny.net offers for `docker.io` and `ghcr.io`.
+- **bunny.net** is the platform's own registry (`registry.bunny.net`), available to every account. It is what `bunny registry push` pushes to. It cannot be updated or removed, and needs no credentials of yours.
+
 ## `bunny apps regions`
 
 View available regions and app region settings.

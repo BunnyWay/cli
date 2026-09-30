@@ -1,5 +1,5 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import type { CoreClient, StorageZoneModel } from "@/commands/storage/api.ts";
+import type { CoreClient } from "@/commands/storage/api.ts";
 import {
   ZONE_TIER_CHOICES,
   type ZoneTierChoice,
@@ -13,9 +13,8 @@ import { errorMessage } from "@/core/errors.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import { normalizeHostname } from "@/core/hostnames/index.ts";
 import { logger } from "@/core/logger.ts";
-import { saveManifest } from "@/core/manifest.ts";
 import { confirm, isInteractive, prompts } from "@/core/ui.ts";
-import { siteContextFromZone } from "./api.ts";
+import type { SiteContext } from "./api.ts";
 import {
   gitTopLevel,
   hasGitHubOrigin,
@@ -24,8 +23,8 @@ import {
   scaffoldSitesWorkflow,
 } from "./ci/scaffold.ts";
 import { loadSiteConfig } from "./config.ts";
-import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 import { setupSiteDomain } from "./domains/index.ts";
+import { saveSiteLink } from "./interactive.ts";
 import { createSiteWithProgress, promptSiteName } from "./provision.ts";
 
 interface CreateArgs {
@@ -39,18 +38,16 @@ interface CreateArgs {
 // Attach a custom production domain to a just-created site; never throws (the site already exists and the domain can be retried via `sites domains add`).
 async function attachDomainToCreatedSite(opts: {
   coreClient: CoreClient;
-  storageZone: StorageZoneModel;
+  site: SiteContext;
   domain: string;
   interactive: boolean;
   verbose: boolean;
   json?: boolean;
 }): Promise<{ error?: string }> {
-  const site = await siteContextFromZone(opts.storageZone);
-  if (!site) return {};
   try {
     await setupSiteDomain({
       coreClient: opts.coreClient,
-      site,
+      site: opts.site,
       domain: opts.domain,
       interactive: opts.interactive,
       verbose: opts.verbose,
@@ -145,10 +142,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
     });
 
     if (args.link !== false) {
-      saveManifest<SiteManifest>(SITES_MANIFEST, {
-        id: result.state.storageZoneId,
-        name,
-      });
+      saveSiteLink(result.state);
     }
 
     if (output === "json") {
@@ -156,7 +150,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       const attach = domain
         ? await attachDomainToCreatedSite({
             coreClient,
-            storageZone: result.storageZone,
+            site: result,
             domain,
             interactive: false,
             verbose,
@@ -218,7 +212,7 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
       logger.log();
       const { error: domainError } = await attachDomainToCreatedSite({
         coreClient,
-        storageZone: result.storageZone,
+        site: result,
         domain: chosenDomain,
         interactive,
         verbose,

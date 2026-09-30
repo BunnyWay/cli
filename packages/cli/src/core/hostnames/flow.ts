@@ -4,7 +4,9 @@ import { confirm, spinner, withSpinner } from "@/core/ui.ts";
 import {
   type BunnyDnsMatch,
   findBunnyDnsZone,
+  findDelegatedZoneCandidate,
   offerBunnyDnsRecord,
+  offerBunnyDnsZone,
 } from "./bunny-dns.ts";
 import {
   addHostname,
@@ -323,8 +325,14 @@ export async function offerBunnyDnsThenSsl(opts: {
   }) => void | Promise<void>;
 }): Promise<boolean | null> {
   let match: BunnyDnsMatch | null;
+  let zoneCandidate: string | null = null;
   try {
     match = await findBunnyDnsZone(opts.coreClient, opts.hostname);
+    if (!match) {
+      zoneCandidate = await withSpinner("Checking nameservers...", () =>
+        findDelegatedZoneCandidate(opts.hostname),
+      );
+    }
   } catch (err) {
     // Detecting the zone failed (API unreachable, etc.) — fall back to manual DNS.
     if (opts.verbose) {
@@ -332,6 +340,14 @@ export async function offerBunnyDnsThenSsl(opts: {
       logger.dim(`  Bunny DNS check skipped: ${message}`);
     }
     return null;
+  }
+  // Outside the try on purpose: a failed zone write must surface, not fall back to manual DNS.
+  if (!match && zoneCandidate) {
+    match = await offerBunnyDnsZone({
+      client: opts.coreClient,
+      hostname: opts.hostname,
+      domain: zoneCandidate,
+    });
   }
   if (!match) return null;
 

@@ -28,10 +28,10 @@ function looksLikeJson(contentType: string): boolean {
 
 /**
  * Property names whose string values are secrets: API keys, zone passwords,
- * tokens, cookies, and any Authorization-style header.
+ * tokens, credentials, cookies, and any Authorization-style header.
  */
 const SECRET_KEY_RE =
-  /^(.*key|.*password|.*secret|.*token|.*authorization.*|.*cookie)$/i;
+  /^(.*key|.*password|.*secret|.*token|.*credentials?|.*authorization.*|.*cookie)$/i;
 
 const REDACTED = "[redacted]";
 
@@ -112,6 +112,7 @@ const extractors: Array<
  * Command handlers never need to check `response.ok` or parse error bodies —
  * a failed request throws before it reaches handler code.
  */
+
 export function authMiddleware(options: ClientOptions): Middleware {
   const {
     apiKey,

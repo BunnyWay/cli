@@ -3,11 +3,11 @@ import type { components } from "@bunny.net/openapi-client/generated/database.d.
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
-import { UserError } from "@/core/errors.ts";
+import { errorMessage, UserError } from "@/core/errors.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, saveManifest } from "@/core/manifest.ts";
-import { confirm, prompts, spinner } from "@/core/ui.ts";
+import { confirm, isInteractive, prompts, spinner } from "@/core/ui.ts";
 import { readEnvValue, writeEnvValue } from "@/utils/env-file.ts";
 import { fetchRegionConfig, generateToken } from "./api.ts";
 import {
@@ -17,7 +17,23 @@ import {
   ENV_DATABASE_AUTH_TOKEN,
   ENV_DATABASE_URL,
 } from "./constants.ts";
+import { resolveCredentials } from "./credentials.ts";
+import { connectForMigrations } from "./migrations/client.ts";
+import { ARG_DIR } from "./migrations/constants.ts";
+import {
+  applyMigration,
+  ensureMigrationsTable,
+  resolveCreateMigrationsDir,
+} from "./migrations/engine.ts";
 import { groupedRegionChoices } from "./region-choices.ts";
+import {
+  assertNoExistingMigrations,
+  type DatabaseTemplate,
+  requireTemplate,
+  TEMPLATE_NONE,
+  templateChoices,
+  writeTemplateMigration,
+} from "./templates.ts";
 
 type PossibleRegion = components["schemas"]["PossibleRegion"];
 
@@ -41,25 +57,60 @@ function validateDbName(name: string): string | null {
   return null;
 }
 
+/** Ask how regions should be chosen; `--mode` answers this without prompting. */
+async function promptRegionMode(): Promise<RegionMode | undefined> {
+  const { value } = await prompts({
+    type: "select",
+    name: "value",
+    message: "Region selection:",
+    choices: [
+      {
+        title: "Automatic",
+        description:
+          "Regions selected based on your location and performance needs",
+        value: "auto" as const,
+      },
+      {
+        title: "Single region",
+        description: "Deploy to a single region with no replication",
+        value: "single" as const,
+      },
+      {
+        title: "Manual",
+        description: "Select primary and replication regions",
+        value: "manual" as const,
+      },
+    ],
+  });
+  return value;
+}
+
 const COMMAND = "create";
 const DESCRIPTION = "Create a new database.";
 
 const ARG_NAME = "name";
+const ARG_MODE = "mode";
+const REGION_MODES = ["auto", "single", "manual"] as const;
+type RegionMode = (typeof REGION_MODES)[number];
 const ARG_PRIMARY = "primary";
 const ARG_REPLICAS = "replicas";
 const ARG_STORAGE_REGION = "storage-region";
 const ARG_LINK = "link";
 const ARG_TOKEN = "token";
 const ARG_SAVE_ENV = "save-env";
+const ARG_TEMPLATE = "template";
 
 interface CreateArgs {
   [ARG_NAME]?: string;
+  [ARG_MODE]?: RegionMode;
   [ARG_PRIMARY]?: string;
   [ARG_REPLICAS]?: string;
   [ARG_STORAGE_REGION]?: string;
   [ARG_LINK]?: boolean;
   [ARG_TOKEN]?: boolean;
   [ARG_SAVE_ENV]?: boolean;
+  [ARG_TEMPLATE]?: string;
+  [ARG_DIR]?: string;
 }
 
 /**
@@ -95,6 +146,14 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       "Non-interactive with explicit regions",
     ],
     [
+      "$0 db create --name my-app --mode auto",
+      "Let bunny pick the regions instead of asking",
+    ],
+    [
+      "$0 db create --name my-app --template blog",
+      "Start from a schema template, applied as the first migration",
+    ],
+    [
       "$0 db create --name my-app --primary FR --output json",
       "JSON output for scripting",
     ],
@@ -105,6 +164,12 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       .option(ARG_NAME, {
         type: "string",
         describe: "Database name",
+      })
+      .option(ARG_MODE, {
+        type: "string",
+        choices: REGION_MODES,
+        describe:
+          "Region selection mode (skips the prompt): auto, single, or manual",
       })
       .option(ARG_PRIMARY, {
         type: "string",
@@ -132,10 +197,39 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         type: "boolean",
         describe:
           "Save BUNNY_DATABASE_URL and BUNNY_DATABASE_AUTH_TOKEN to .env (skips prompt). No effect without --token.",
+      })
+      .option(ARG_TEMPLATE, {
+        type: "string",
+        describe: `Schema template to start from, e.g. blog (skips prompt). Use ${TEMPLATE_NONE} for an empty database.`,
+      })
+      .option(ARG_DIR, {
+        type: "string",
+        describe:
+          "Directory the template's migration is written to (default: migrations)",
       }),
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
+
+    if (args.primary && args[ARG_MODE]) {
+      throw new UserError(
+        "--primary names the regions, so --mode has nothing left to choose.",
+        "Drop --mode, or drop --primary and --replicas.",
+      );
+    }
+    if (args.replicas && !args.primary) {
+      throw new UserError(
+        "--replicas needs --primary to say what it replicates.",
+        "Pass --primary FR --replicas UK, or drop --replicas and let --mode pick.",
+      );
+    }
+    if (!args.primary && !args[ARG_MODE] && !isInteractive(output)) {
+      throw new UserError(
+        "No regions given and nowhere to ask.",
+        "Pass --primary (and --replicas), or --mode auto to let bunny pick.",
+      );
+    }
+
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createDbClient(clientOptions(config, verbose));
 
@@ -153,6 +247,28 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     if (!name) throw new UserError("Database name is required.");
     const nameError = validateDbName(name);
     if (nameError) throw new UserError(nameError);
+
+    const interactive = isInteractive(output);
+
+    // Step 2: Schema. Resolved before creation, so a bad choice leaves no database behind.
+    const templateArg = args[ARG_TEMPLATE];
+    let template: DatabaseTemplate | undefined;
+
+    if (templateArg && templateArg !== TEMPLATE_NONE) {
+      template = requireTemplate(templateArg);
+    } else if (!templateArg && interactive) {
+      const { value } = await prompts({
+        type: "select",
+        name: "value",
+        message: "Schema:",
+        choices: templateChoices(),
+      });
+      if (!value) throw new UserError("Schema selection is required.");
+      if (value !== TEMPLATE_NONE) template = requireTemplate(value);
+    }
+
+    const migrationsDir = resolveCreateMigrationsDir(args[ARG_DIR]);
+    if (template) assertNoExistingMigrations(migrationsDir);
 
     // Fetch available regions from config
     const configSpin = spinner("Fetching available regions...");
@@ -179,33 +295,10 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         ? (args.replicas.split(",").map((s) => s.trim()) as PossibleRegion[])
         : [];
     } else {
-      // Interactive path: ask about region mode
-      const { value: regionMode } = await prompts({
-        type: "select",
-        name: "value",
-        message: "Region selection:",
-        choices: [
-          {
-            title: "Automatic",
-            description:
-              "Regions selected based on your location and performance needs",
-            value: "automatic" as const,
-          },
-          {
-            title: "Single region",
-            description: "Deploy to a single region with no replication",
-            value: "single" as const,
-          },
-          {
-            title: "Manual",
-            description: "Select primary and replication regions",
-            value: "manual" as const,
-          },
-        ],
-      });
+      const regionMode = args[ARG_MODE] ?? (await promptRegionMode());
       if (!regionMode) throw new UserError("Region selection is required.");
 
-      if (regionMode === "automatic") {
+      if (regionMode === "auto") {
         const optSpin = spinner("Detecting optimal regions...");
         optSpin.start();
 
@@ -254,24 +347,40 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         }
         optSpin.stop();
 
-        const choices = groupedRegionChoices(
-          availablePrimary,
-          preselected ? new Set([preselected]) : undefined,
-        );
-        const { value: location } = await prompts({
-          type: "select",
-          name: "value",
-          message: "Database location:",
-          choices,
-          initial: preselected
-            ? choices.findIndex((c) => c.value === preselected)
-            : 0,
-        });
-        if (!location) throw new UserError("Location is required.");
+        let location = preselected;
+        if (interactive) {
+          const choices = groupedRegionChoices(
+            availablePrimary,
+            preselected ? new Set([preselected]) : undefined,
+          );
+          const { value: picked } = await prompts({
+            type: "select",
+            name: "value",
+            message: "Database location:",
+            choices,
+            initial: preselected
+              ? choices.findIndex((c) => c.value === preselected)
+              : 0,
+          });
+          if (!picked) throw new UserError("Location is required.");
+          location = picked;
+        }
+        if (!location) {
+          throw new UserError(
+            "Could not detect a region to deploy the database to.",
+            "Pass the region explicitly, e.g. --primary FR.",
+          );
+        }
 
         primaryRegions = [location];
         replicasRegions = [];
       } else {
+        if (!interactive) {
+          throw new UserError(
+            "--mode manual needs a terminal to pick regions in.",
+            "Pass --primary (and --replicas), or use --mode auto.",
+          );
+        }
         // Manual: multi-select primary and replicas
         const { value: selectedPrimary } = await prompts({
           type: "multiselect",
@@ -336,9 +445,10 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     createSpin.stop();
 
     const db = dbDetails?.db;
-    const isInteractive = output !== "json";
+    // Tables and hints are for humans; --output json stays machine-clean even in a terminal.
+    const textOutput = output !== "json";
 
-    if (isInteractive) {
+    if (textOutput) {
       const entries = [
         { key: "ID", value: data.db_id },
         { key: "Name", value: db?.name ?? name ?? "" },
@@ -363,7 +473,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     let shouldLink: boolean;
     if (linkArg !== undefined) {
       shouldLink = linkArg;
-    } else if (isInteractive) {
+    } else if (textOutput) {
       shouldLink = await confirm(linkPrompt, { force: false, optional: true });
     } else {
       shouldLink = false;
@@ -374,9 +484,51 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         id: data.db_id,
         name: db?.name ?? name,
       });
-      if (isInteractive) {
+      if (textOutput) {
         logger.success(`Linked .bunny/database.json → ${data.db_id}.`);
         logger.log();
+      }
+    }
+
+    // The template lands as the first migration, so the schema is versioned in the project and recorded in the journal.
+    let appliedMigration: string | null = null;
+
+    if (template) {
+      const migration = writeTemplateMigration(template, migrationsDir);
+
+      const { url, token: migrationToken } = await resolveCredentials({
+        databaseId: data.db_id,
+        profile,
+        apiKey,
+        verbose,
+      });
+
+      const migrationClient = connectForMigrations({
+        url,
+        authToken: migrationToken,
+      });
+
+      const applySpin = spinner(`Applying ${migration.name}...`);
+      if (textOutput) applySpin.start();
+
+      try {
+        await ensureMigrationsTable(migrationClient);
+        const { statements } = await applyMigration(migrationClient, migration);
+        applySpin.stop();
+        appliedMigration = migration.name;
+
+        if (textOutput) {
+          logger.success(
+            `Applied ${migration.displayPath} (${statements} statement${statements === 1 ? "" : "s"}).`,
+          );
+          logger.log();
+        }
+      } catch (err: unknown) {
+        applySpin.stop();
+        throw new UserError(
+          `Could not apply ${migration.displayPath}: ${errorMessage(err)}`,
+          "The database was created and the migration written. Run `bunny db migrations apply` to retry.",
+        );
       }
     }
 
@@ -385,7 +537,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
     let shouldCreateToken: boolean;
     if (tokenArg !== undefined) {
       shouldCreateToken = tokenArg;
-    } else if (isInteractive) {
+    } else if (textOutput) {
       shouldCreateToken = await confirm("Create an auth token?", {
         force: false,
         optional: true,
@@ -411,7 +563,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
       token = tokenData?.token ?? null;
 
       if (token) {
-        if (isInteractive) {
+        if (textOutput) {
           const tokenEntries = [
             { key: "Token", value: token },
             { key: "Access", value: "full-access" },
@@ -430,7 +582,7 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
         const saveEnvArg = args[ARG_SAVE_ENV];
         if (saveEnvArg !== undefined) {
           shouldWrite = saveEnvArg;
-        } else if (isInteractive) {
+        } else if (textOutput) {
           if (existingToken) {
             shouldWrite = await confirm(
               `${ENV_DATABASE_AUTH_TOKEN} already exists in ${existingToken.envPath} — overwrite?`,
@@ -452,18 +604,18 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
 
           if (db?.url && !readEnvValue(ENV_DATABASE_URL)) {
             writeEnvValue(ENV_DATABASE_URL, db.url, envPath);
-            if (isInteractive) {
+            if (textOutput) {
               logger.success(
                 `Saved ${ENV_DATABASE_URL} and ${ENV_DATABASE_AUTH_TOKEN} to .env`,
               );
             }
-          } else if (isInteractive) {
+          } else if (textOutput) {
             logger.success(`Saved ${ENV_DATABASE_AUTH_TOKEN} to .env`);
           }
           savedToEnv = true;
         }
       }
-    } else if (isInteractive) {
+    } else if (textOutput) {
       logger.dim(`  Get started:  bunny db quickstart ${data.db_id}`);
       logger.dim(`  Open shell:   bunny db shell ${data.db_id}`);
     }
@@ -476,6 +628,8 @@ export const dbCreateCommand = defineCommand<CreateArgs>({
             name: db?.name ?? name,
             url: db?.url ?? null,
             linked: shouldLink,
+            template: template?.id ?? null,
+            migration: appliedMigration,
             token,
             saved_to_env: savedToEnv,
           },

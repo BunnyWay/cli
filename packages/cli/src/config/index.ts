@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { findConfigFile, getConfigWritePath } from "./paths.ts";
 import {
@@ -14,6 +15,8 @@ export interface ResolvedConfig {
   apiUrl?: string;
   profile: string;
 }
+
+let warnedAboutEnvTypo = false;
 
 export function resolveConfig(
   profile: string,
@@ -43,6 +46,13 @@ export function resolveConfig(
     };
   }
 
+  if (process.env.BUNNY_API_KEY && !warnedAboutEnvTypo) {
+    warnedAboutEnvTypo = true;
+    logger.warn(
+      "BUNNY_API_KEY is set, but the CLI reads BUNNYNET_API_KEY. Rename the variable to use that key.",
+    );
+  }
+
   const file = loadConfigFile();
   if (file?.profiles[profile]) {
     const p = file.profiles[profile];
@@ -57,7 +67,7 @@ export function resolveConfig(
     return { apiKey: "", apiUrl: envApiUrl, profile };
   }
 
-  throw new Error(`Profile "${profile}" not found`);
+  throw profileNotFound(profile);
 }
 
 export function loadConfigFile(): ConfigFile | null {
@@ -91,7 +101,7 @@ export function setProfile(profile: string, apiKey: string): void {
 
 export function deleteProfile(profile: string): void {
   const existing = loadConfigFile();
-  if (!existing) throw new Error("No config file found");
+  if (!existing?.profiles[profile]) throw profileNotFound(profile);
 
   delete existing.profiles[profile];
   saveConfigFile(existing);
@@ -100,6 +110,17 @@ export function deleteProfile(profile: string): void {
 export function profileExists(profile: string): boolean {
   const file = loadConfigFile();
   return !!file?.profiles[profile];
+}
+
+export function profileNotFound(profile: string): UserError {
+  return new UserError(
+    `Profile "${profile}" not found.`,
+    'Run "bunny config profile list" to see your profiles.',
+  );
+}
+
+export function requireProfile(profile: string): void {
+  if (!profileExists(profile)) throw profileNotFound(profile);
 }
 
 export function getSandbox(name: string): SandboxRecord | null {

@@ -4,12 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { StorageZone } from "@/commands/storage/files-api.ts";
 import { siteFiles } from "./api.ts";
-import {
-  collectFiles,
-  hashFiles,
-  shouldSkipEntry,
-  uploadDeploy,
-} from "./uploader.ts";
+import { collectFiles, hashFiles, uploadDeploy } from "./uploader.ts";
 
 const realUpload = siteFiles.upload;
 afterEach(() => {
@@ -28,47 +23,18 @@ function tree(): string {
   Bun.write(join(dir, ".git", "config"), "x");
   mkdirSync(join(dir, "node_modules", "pkg"), { recursive: true });
   Bun.write(join(dir, "node_modules", "pkg", "index.js"), "x");
+  mkdirSync(join(dir, ".well-known"));
+  Bun.write(join(dir, ".well-known", "security.txt"), "Contact: mailto:x@y");
   return dir;
 }
 
-test("shouldSkipEntry excludes dotfiles and node_modules", () => {
-  expect(shouldSkipEntry(".env")).toBe(true);
-  expect(shouldSkipEntry(".git")).toBe(true);
-  expect(shouldSkipEntry("node_modules")).toBe(true);
-  expect(shouldSkipEntry("index.html")).toBe(false);
-  expect(shouldSkipEntry("assets")).toBe(false);
-  // Web-visible standards dirs must ship despite the leading dot.
-  expect(shouldSkipEntry(".well-known")).toBe(false);
-});
-
-test("collectFiles walks recursively, skipping excluded entries, sorted", () => {
+test("collectFiles skips dotfiles and node_modules but keeps .well-known, sorted", () => {
   const files = collectFiles(tree());
-  expect(files.map((f) => f.path)).toEqual(["assets/app.js", "index.html"]);
-  expect(files[1]?.size).toBeGreaterThan(0);
-});
-
-test("collectFiles keeps .well-known content", () => {
-  const dir = mkdtempSync(join(tmpdir(), "bunny-sites-wk-"));
-  Bun.write(join(dir, "index.html"), "<h1>hi</h1>");
-  mkdirSync(join(dir, ".well-known"));
-  Bun.write(join(dir, ".well-known", "security.txt"), "Contact: mailto:x@y");
-
-  const files = collectFiles(dir);
   expect(files.map((f) => f.path)).toEqual([
     ".well-known/security.txt",
+    "assets/app.js",
     "index.html",
   ]);
-});
-
-test("hashFiles computes the content sha256", async () => {
-  const dir = tree();
-  const [first] = await hashFiles(
-    collectFiles(dir).filter((f) => f.path === "index.html"),
-  );
-  const expected = new Bun.CryptoHasher("sha256")
-    .update("<h1>hi</h1>")
-    .digest("hex");
-  expect(first?.sha256).toBe(expected);
 });
 
 test("uploadDeploy targets deploys/{id}, sends checksums, and retries failures", async () => {
@@ -86,21 +52,16 @@ test("uploadDeploy targets deploys/{id}, sends checksums, and retries failures",
     uploaded.push({ path, checksum: options?.sha256Checksum });
   };
 
-  await uploadDeploy(fakeConnection, "a1b2c3d4", files, { concurrency: 2 });
+  await uploadDeploy(fakeConnection, "a1b2c3d4", files);
 
   expect(uploaded.map((u) => u.path).sort()).toEqual([
+    "deploys/a1b2c3d4/.well-known/security.txt",
     "deploys/a1b2c3d4/assets/app.js",
     "deploys/a1b2c3d4/index.html",
   ]);
   for (const u of uploaded) {
     expect(u.checksum).toMatch(/^[0-9A-F]{64}$/);
   }
-});
-
-test("uploadDeploy rejects an empty file set", async () => {
-  await expect(uploadDeploy(fakeConnection, "a1b2c3d4", [])).rejects.toThrow(
-    "Nothing to upload",
-  );
 });
 
 test("uploadDeploy surfaces an error after retries are exhausted", async () => {

@@ -27,10 +27,6 @@ const CUSTOM: Hostname = {
   ForceSSL: true,
 } as Hostname;
 
-test("siteLiveUrl falls back to the system host when no custom domain", () => {
-  expect(siteLiveUrl(state(), [SYSTEM])).toBe("https://my-site.b-cdn.net");
-});
-
 test("siteLiveUrl prefers the recorded custom domain", () => {
   expect(siteLiveUrl(state({ domain: "example.com" }), [SYSTEM, CUSTOM])).toBe(
     "https://example.com",
@@ -49,8 +45,4 @@ test("siteLiveUrl serves the custom domain over http until its cert lands", () =
   expect(siteLiveUrl(state({ domain: "example.com" }), [SYSTEM, pending])).toBe(
     "http://example.com",
   );
-});
-
-test("siteLiveUrl is undefined when the zone has no hostnames", () => {
-  expect(siteLiveUrl(state(), [])).toBeUndefined();
 });

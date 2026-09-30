@@ -4,6 +4,10 @@ import { parse as parseJsonc } from "jsonc-parser";
 
 export const CONFIG_FILENAME = "bunny.jsonc";
 
+// The `$schema` reference written into a fresh `bunny.jsonc`; resolves in a consumer's node_modules for editor validation.
+export const SCHEMA_REF =
+  "./node_modules/@bunny.net/config/generated/schema.json";
+
 // Walk up from cwd to the directory holding `bunny.jsonc`, or null when none exists.
 export function findConfigRoot(): string | null {
   let dir = resolve(process.cwd());

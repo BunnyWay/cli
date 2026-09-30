@@ -1,6 +1,6 @@
 import { resolveConfig } from "@/config/index.ts";
 import { defineCommand } from "@/core/define-command.ts";
-import { UserError } from "@/core/errors.ts";
+import { ApiError, UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { VERSION } from "@/core/version.ts";
 
@@ -10,6 +10,16 @@ const COMMAND = "api <method> [path]";
 const DESCRIPTION = "Make a raw API request to bunny.net.";
 
 const VALID_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+
+// A non-JSON error body is usually an HTML error page, so keep the hint to one readable line.
+function previewBody(text: string): string | undefined {
+  if (!text) return undefined;
+  if (/<!doctype html|<html[\s>]/i.test(text)) {
+    return "The API returned an HTML page instead of JSON. Check the path.";
+  }
+  const line = text.replace(/\s+/g, " ").trim();
+  return line.length > 300 ? `${line.slice(0, 300)}...` : line;
+}
 
 interface ApiArgs {
   method: string;
@@ -153,6 +163,9 @@ export const apiCommand = defineCommand<ApiArgs>({
       logger.debug(`← ${res.status} ${res.statusText}`, true);
     }
 
+    // Route through ApiError so the shared 401 guidance applies here too.
+    if (res.status === 401) throw new ApiError("Unauthorized.", 401);
+
     const text = await res.text();
 
     // Try to parse and pretty-print JSON
@@ -162,10 +175,12 @@ export const apiCommand = defineCommand<ApiArgs>({
     } catch {
       // Not JSON — output raw
       if (!res.ok) {
-        throw new UserError(
-          `${res.status} ${res.statusText}`,
-          text || undefined,
+        const error = new ApiError(
+          `${res.status} ${res.statusText}`.trim(),
+          res.status,
         );
+        error.hint = previewBody(text);
+        throw error;
       }
       if (text) await writeStdout(`${text}\n`);
       return;

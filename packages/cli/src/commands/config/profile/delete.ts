@@ -1,15 +1,53 @@
-import { deleteProfile } from "@/config/index.ts";
+import { deleteProfile, requireProfile } from "@/config/index.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
+import { confirm, requireConfirmable } from "@/core/ui.ts";
 
-export const profileDeleteCommand = defineCommand({
+interface DeleteArgs {
+  name: string;
+  force: boolean;
+}
+
+export const profileDeleteCommand = defineCommand<DeleteArgs>({
   command: "delete <name>",
+  aliases: ["rm"],
   describe: "Delete a configuration profile.",
 
-  handler: async (args) => {
-    const name = (args as any).name as string;
+  builder: (yargs) =>
+    yargs
+      .positional("name", {
+        type: "string",
+        demandOption: true,
+        describe: "Profile name",
+      })
+      .option("force", {
+        type: "boolean",
+        default: false,
+        describe: "Skip confirmation",
+      }),
+
+  preRun: async ({ name }) => requireProfile(name),
+
+  handler: async ({ name, force, output }) => {
+    requireConfirmable(output, {
+      force,
+      message: `Deleting profile "${name}" requires confirmation.`,
+      hint: "Re-run with --force to delete without a prompt.",
+    });
+    const ok = await confirm(
+      `Delete profile "${name}" and its stored API key?`,
+      { force },
+    );
+    if (!ok) {
+      logger.log("Cancelled.");
+      process.exit(1);
+    }
 
     deleteProfile(name);
+    if (output === "json") {
+      logger.log(JSON.stringify({ profile: name, deleted: true }));
+      return;
+    }
     logger.success(`Profile "${name}" deleted.`);
   },
 });

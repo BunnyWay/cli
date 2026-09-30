@@ -7,13 +7,15 @@ let stdinEnded = false;
 let eofWarned = false;
 
 // Destroying stdin stops the library's poll; the escape code re-shows the cursor in case a prompt already hid it.
-function abortUnanswerablePrompt(): null {
+function abortUnanswerablePrompt(reason: "not-a-terminal" | "ended"): null {
   process.stdin.destroy();
   if (!eofWarned) {
     eofWarned = true;
     process.stdout.write(process.stdout.isTTY ? "\x1b[?25h\n" : "\n");
     logger.warn(
-      "Can't prompt: stdin is not an interactive terminal. Pass values as flags, or --force to skip confirmations.",
+      reason === "ended"
+        ? "Can't prompt: stdin ended while waiting for an answer. Pass values as flags, or --force to skip confirmations."
+        : "Can't prompt: stdin is not an interactive terminal. Pass values as flags, or --force to skip confirmations.",
     );
   }
   return null;
@@ -37,7 +39,9 @@ async function promptOrEof<T extends object>(
       process.stdin.readableEnded ||
       process.stdin.destroyed)
   ) {
-    return abortUnanswerablePrompt();
+    return abortUnanswerablePrompt(
+      process.stdin.isTTY ? "ended" : "not-a-terminal",
+    );
   }
   let onEnd = () => {};
   const eof = new Promise<null>((resolve) => {
@@ -50,7 +54,7 @@ async function promptOrEof<T extends object>(
   });
   try {
     const result = await Promise.race([run(), eof]);
-    return result === null ? abortUnanswerablePrompt() : result;
+    return result === null ? abortUnanswerablePrompt("ended") : result;
   } finally {
     process.stdin.off("end", onEnd);
   }

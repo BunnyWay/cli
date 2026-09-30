@@ -222,6 +222,9 @@
         },
         "build": {
           "type": "string"
+        },
+        "spa": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false

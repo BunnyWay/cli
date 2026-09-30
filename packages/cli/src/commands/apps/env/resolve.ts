@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { BunnyAppConfig } from "@/commands/apps/config.ts";
-import { parseDotenv } from "./parse.ts";
+import { parseDotenv } from "@/core/env.ts";
 
 /**
  * Resolution rule for `env` values in `bunny.jsonc`:

@@ -28,7 +28,7 @@ describe("BUNNY_CLI_SKILL", () => {
 
   test("documents the storage namespace and the database client", () => {
     const storage = BUNNY_CLI_SKILL.files["references/storage.md"] as string;
-    expect(storage).toContain("bunny storage zones add");
+    expect(storage).toContain("bunny storage zones create");
     expect(storage).toContain("bunny storage files upload");
 
     const client = BUNNY_CLI_SKILL.files[

@@ -3,9 +3,7 @@ import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
-import { saveManifest } from "@/core/manifest.ts";
-import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
-import { selectSite } from "./interactive.ts";
+import { saveSiteLink, selectSite } from "./interactive.ts";
 
 interface LinkArgs {
   site?: string;
@@ -36,10 +34,7 @@ export const sitesLinkCommand = defineCommand<LinkArgs>({
       output,
     });
 
-    saveManifest<SiteManifest>(SITES_MANIFEST, {
-      id: site.state.storageZoneId,
-      name: site.state.name,
-    });
+    saveSiteLink(site.state);
 
     if (output === "json") {
       logger.log(

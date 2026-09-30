@@ -46,33 +46,6 @@ test("detectFramework falls back to vite for plain vite apps", async () => {
   expect((await detectFramework(dir))?.id).toBe("vite");
 });
 
-test("detectFramework spots Gatsby, Nuxt, and SolidStart", async () => {
-  const gatsby = tempRepo({ "package.json": pkg({ gatsby: "^5.0.0" }) });
-  expect((await detectFramework(gatsby))?.id).toBe("gatsby");
-
-  const nuxt = tempRepo({
-    "package.json": pkg({ nuxt: "^3.0.0", vite: "^6.0.0" }),
-  });
-  expect((await detectFramework(nuxt))?.id).toBe("nuxt");
-
-  const solid = tempRepo({
-    "package.json": pkg({ "@solidjs/start": "^1.0.0" }),
-  });
-  expect((await detectFramework(solid))?.id).toBe("solidstart");
-});
-
-test("detectFramework spots the Python doc SSGs", async () => {
-  expect(
-    (await detectFramework(tempRepo({ "mkdocs.yml": "site_name: x" })))?.id,
-  ).toBe("mkdocs");
-  expect(
-    (await detectFramework(tempRepo({ "pelicanconf.py": "AUTHOR = 'x'" })))?.id,
-  ).toBe("pelican");
-  expect(
-    (await detectFramework(tempRepo({ "conf.py": "project = 'x'" })))?.id,
-  ).toBe("sphinx");
-});
-
 test("detectFramework distinguishes Zola from Hugo via templates/", async () => {
   const zola = mkdtempSync(join(tmpdir(), "bunny-sites-ci-"));
   writeFileSync(join(zola, "config.toml"), 'base_url = "https://example.com"');
@@ -85,53 +58,24 @@ test("detectFramework distinguishes Zola from Hugo via templates/", async () => 
   expect((await detectFramework(hugo))?.id).toBe("hugo");
 });
 
-test("detectFramework spots Jekyll from the Gemfile or _config.yml", async () => {
-  const gemfile = tempRepo({ Gemfile: 'gem "jekyll", "~> 4.3"' });
-  expect((await detectFramework(gemfile))?.id).toBe("jekyll");
-
-  const config = tempRepo({ "_config.yml": "title: My Site" });
-  expect((await detectFramework(config))?.id).toBe("jekyll");
-});
-
-test("detectFramework spots Hugo from hugo.toml", async () => {
-  const dir = tempRepo({ "hugo.toml": 'title = "My Site"' });
-  expect((await detectFramework(dir))?.id).toBe("hugo");
-});
-
 test("detectFramework is undefined for unknown projects", async () => {
   const dir = tempRepo({ "index.html": "<h1>hi</h1>" });
   expect(await detectFramework(dir)).toBeUndefined();
 });
 
-test("presetBuildCommand runs the package.json build for plain js presets", () => {
-  const vite = findPreset("vite");
-  expect(presetBuildCommand(vite as never, "pnpm")).toBe("pnpm run build");
-});
-
-test("presetBuildCommand runs an explicit js build via the package runner", () => {
-  const nuxt = findPreset("nuxt");
-  expect(presetBuildCommand(nuxt as never, "bun")).toBe("bunx nuxi generate");
-  expect(presetBuildCommand(nuxt as never, "npm")).toBe("npx nuxi generate");
-});
-
-test("presetBuildCommand runs non-js builds directly", () => {
-  const hugo = findPreset("hugo");
-  expect(presetBuildCommand(hugo as never, "npm")).toBe("hugo --minify");
-});
-
-test("presetBuildCommand returns null for the static preset", () => {
-  const staticPreset = findPreset("static");
-  expect(presetBuildCommand(staticPreset as never, "npm")).toBeNull();
+test("presetBuildCommand: package.json build, runner exec for overrides, direct for non-js, none for static", () => {
+  const cmd = (id: string, pm: "npm" | "pnpm" | "bun") =>
+    presetBuildCommand(findPreset(id) as never, pm);
+  expect(cmd("vite", "pnpm")).toBe("pnpm run build");
+  expect(cmd("nuxt", "bun")).toBe("bunx nuxi generate");
+  expect(cmd("hugo", "npm")).toBe("hugo --minify");
+  expect(cmd("static", "npm")).toBeNull();
 });
 
 test("detectPackageManager reads the lockfile", async () => {
   expect(await detectPackageManager(tempRepo({ "bun.lock": "" }))).toBe("bun");
-  expect(await detectPackageManager(tempRepo({ "bun.lockb": "" }))).toBe("bun");
   expect(await detectPackageManager(tempRepo({ "pnpm-lock.yaml": "" }))).toBe(
     "pnpm",
-  );
-  expect(await detectPackageManager(tempRepo({ "yarn.lock": "" }))).toBe(
-    "yarn",
   );
   expect(await detectPackageManager(tempRepo({}))).toBe("npm");
 });

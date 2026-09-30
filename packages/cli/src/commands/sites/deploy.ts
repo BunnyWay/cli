@@ -20,7 +20,7 @@ import {
   deleteDeployFiles,
   fetchSystemHostname,
   promoteDeploy,
-  readRemoteState,
+  rereadRemoteState,
   writeRemoteState,
 } from "./api.ts";
 import {
@@ -29,13 +29,15 @@ import {
   resolveRequestedBuild,
   runBuildCommand,
 } from "./build.ts";
-import { loadSiteConfig } from "./config.ts";
+import { detectFramework } from "./ci/frameworks.ts";
+import { loadSiteConfig, saveSiteConfig } from "./config.ts";
 import {
   type DeployRecord,
   deployIdError,
   findDeploy,
   markCurrent,
-  type RemoteSiteState,
+  type NotFoundMode,
+  productionUrl,
 } from "./constants.ts";
 import { type DeployIdentity, resolveDeployIdentity } from "./deploy-id.ts";
 import { deleteBlocker } from "./deployments/delete.ts";
@@ -55,10 +57,42 @@ interface DeployArgs extends SiteSelectorArgs {
   env?: string[];
   "env-file"?: string;
   force?: boolean;
+  spa?: boolean;
   "deploy-id"?: string;
 }
 
-export interface DeployTarget {
+export function resolveNotFoundMode(
+  paths: string[],
+  opts: { configured?: boolean; detected?: boolean },
+): NotFoundMode | undefined {
+  const hasIndex = paths.includes("index.html");
+  if (opts.configured) {
+    if (!hasIndex) {
+      throw new UserError(
+        "`sites.spa` is enabled but the deploy directory has no index.html at its root.",
+        "Client-side routing serves the root index.html for unknown paths; check `sites.dir` or the build output.",
+      );
+    }
+    return "spa";
+  }
+  // A built 404.html is a deliberate not-found page, so it beats the framework heuristic; `sites.spa: true` still forces the fallback.
+  const has404 = paths.includes("404.html");
+  if (opts.configured === undefined && opts.detected && hasIndex && !has404)
+    return "spa";
+  return has404 ? "404" : undefined;
+}
+
+// Static generators emit an HTML file per page, so a lone root index.html with scripts is the client-routed signature.
+export function looksLikeSpa(paths: string[]): boolean {
+  const html = paths.filter((p) => /\.html?$/i.test(p));
+  return (
+    html.length === 1 &&
+    html[0] === "index.html" &&
+    paths.some((p) => /\.m?js$/i.test(p))
+  );
+}
+
+interface DeployTarget {
   /** The ID this deploy will live under in storage. */
   deployId: string;
   /** True when these exact bytes are already uploaded under `deployId`. */
@@ -156,15 +190,6 @@ const DOMAIN_HINT =
 const DEPLOY_ID_HINT =
   "IDs become storage paths, so they take letters, digits, and -, _ or . (e.g. 20260827-1433-r42).";
 
-// A site's live URL: the custom domain when it has one, else its b-cdn.net host. Always https (b-cdn.net hosts carry bunny's certificate).
-export function productionUrl(
-  state: RemoteSiteState,
-  systemHost?: string,
-): string | undefined {
-  const host = state.domain ?? systemHost;
-  return host ? `https://${host}` : undefined;
-}
-
 // A CLI path arg is cwd-relative; `sites.dir` and the detected output dir are relative to the bunny.jsonc root, where the build runs.
 export function resolveDeployDir(
   argDir: string | undefined,
@@ -227,6 +252,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           type: "string",
           describe:
             "Identify this deploy yourself (e.g. a release or catalog ID) instead of using the git sha or content hash; used exactly as given",
+        })
+        .option("spa", {
+          type: "boolean",
+          describe:
+            "Serve index.html for client-side routes (--no-spa serves the 404 page instead); overrides sites.spa and framework detection, and skips the prompt",
         }),
     ),
 
@@ -272,6 +302,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const firstDeploy = state.deploys.length === 0;
 
     let etag = site.etag;
+
+    const preset = await detectFramework(root);
 
     let autoDir: string | undefined;
     if (requestedBuild) {
@@ -322,6 +354,34 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       );
     }
     const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
+
+    let configuredSpa = args.spa ?? siteConfig?.config.spa;
+    const detectedPreset = configuredSpa === undefined ? preset : undefined;
+    // Saved so it is asked once; an undetected toolchain would otherwise 404 on refresh.
+    const paths = files.map((f) => f.path);
+    if (
+      configuredSpa === undefined &&
+      !detectedPreset?.spa &&
+      isInteractive(output) &&
+      looksLikeSpa(paths)
+    ) {
+      configuredSpa = await confirm(
+        "This looks like a single-page app. Serve index.html for client-side routes so deep links survive a refresh?",
+        { initial: true, optional: true },
+      );
+      const savedTo = saveSiteConfig({ spa: configuredSpa });
+      logger.dim(`  Saved sites.spa: ${configuredSpa} to ${savedTo}`);
+    }
+    const notFound = resolveNotFoundMode(paths, {
+      configured: configuredSpa,
+      detected: detectedPreset?.spa,
+    });
+    const notFoundNote =
+      notFound === "spa"
+        ? `Client-side routing: unknown paths serve index.html${detectedPreset ? ` (detected ${detectedPreset.label}; set sites.spa in bunny.jsonc to override)` : ""}.`
+        : notFound === "404"
+          ? "Not-found page: 404.html."
+          : undefined;
 
     const customId = args["deploy-id"]?.trim();
     // An explicitly supplied empty ID (e.g. --deploy-id "$UNSET_VAR" in CI) must error, not silently fall back to the derived ID.
@@ -384,6 +444,15 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const { deployId, skipUpload } = target;
     const alreadyLive = state.current === deployId;
 
+    // The mode comes from config, not content, so it must still land when the bytes alias onto an existing record.
+    const aliased = skipUpload
+      ? state.deploys.find((d) => d.id === deployId)
+      : undefined;
+    if (aliased && aliased.notFound !== notFound) {
+      aliased.notFound = notFound;
+      etag = await writeRemoteState(connection, state, etag);
+    }
+
     // The production URL prefers the custom domain; only fetch the system host when there is none.
     const systemHost = state.domain
       ? undefined
@@ -424,13 +493,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       const existing = state.deploys.find((d) => d.id === deployId);
       if (existing && existing.contentHash !== identity.contentHash) {
         // Revalidate on fresh state right before anything destructive: the confirmation window is long enough for a concurrent publish to have made this ID live.
-        const fresh = await readRemoteState(connection);
-        if (!fresh) {
-          throw new UserError(
-            "Couldn't re-read the site state.",
-            "Retry the deploy; nothing was replaced.",
-          );
-        }
+        const fresh = await rereadRemoteState(
+          connection,
+          "Retry the deploy; nothing was replaced.",
+        );
         const blocker = deleteBlocker(fresh.state, deployId);
         if (blocker) {
           throw new UserError(
@@ -460,6 +526,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       const record: DeployRecord = {
         id: deployId,
         createdAt: new Date().toISOString(),
+        notFound,
         source: identity.source,
         gitSha: identity.gitSha,
         dirty: identity.dirty,
@@ -510,6 +577,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       );
     }
     if (production) logger.info(`Production: ${production}`);
+    if (notFoundNote) logger.info(notFoundNote);
 
     // Domainless sites: the first deploy offers a custom production domain, later ones just hint.
     if (!state.domain) {

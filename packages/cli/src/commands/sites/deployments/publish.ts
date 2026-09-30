@@ -1,7 +1,7 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import {
   promoteDeploy,
-  readRemoteState,
+  rereadRemoteState,
   writeRemoteState,
 } from "@/commands/sites/api.ts";
 import { findDeploy, markCurrent } from "@/commands/sites/constants.ts";
@@ -134,14 +134,10 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
 
     await withSpinner("Publishing...", async () => {
       // Revalidate on fresh state right before promoting: the confirmation window is long enough for a concurrent replace to have dropped this deploy's record and started rewriting its files.
-      const fresh = await readRemoteState(connection);
-      if (!fresh) {
-        throw new UserError(
-          "Couldn't re-read the site state.",
-          "Retry the publish; nothing was changed.",
-        );
-      }
-      const { state: latest, etag: latestEtag } = fresh;
+      const { state: latest, etag: latestEtag } = await rereadRemoteState(
+        connection,
+        "Retry the publish; nothing was changed.",
+      );
       if (!latest.deploys.some((d) => d.id === targetId)) {
         throw new UserError(
           `Deploy ${targetId} is gone from ${latest.name} (a concurrent replace or delete?) and can't be published.`,

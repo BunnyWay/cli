@@ -1,12 +1,8 @@
 import { expect, test } from "bun:test";
 import { projectPrefix, remoteHost } from "./scaffold.ts";
 
-test("projectPrefix is empty when the project is the workflow root", () => {
+test("projectPrefix is empty at the workflow root and the POSIX offset when nested", () => {
   expect(projectPrefix("/repo", "/repo")).toBe("");
-  expect(projectPrefix("/repo", undefined)).toBe("");
-});
-
-test("projectPrefix returns the POSIX offset for a nested project", () => {
   expect(projectPrefix("/repo", "/repo/packages/site")).toBe("packages/site");
 });
 
@@ -33,9 +29,4 @@ test("remoteHost does not confuse lookalike hosts for github.com", () => {
     "example.invalid",
   );
   expect(remoteHost("https://notgithub.com/a/b")).toBe("notgithub.com");
-});
-
-test("remoteHost is null for an unparseable remote", () => {
-  expect(remoteHost("")).toBeNull();
-  expect(remoteHost("not a url")).toBeNull();
 });

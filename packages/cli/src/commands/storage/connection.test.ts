@@ -62,8 +62,27 @@ test("secrets render in full or masked, and .env carries the real value", () => 
   expect(conn.env).toEqual([
     { key: "BUNNY_STORAGE_ZONE", value: "my-zone" },
     { key: "BUNNY_STORAGE_PASSWORD", value: "rw-pass" },
-    { key: "BUNNY_STORAGE_REGION", value: "NY" },
+    { key: "BUNNY_STORAGE_REGION", value: "ny" },
   ]);
+});
+
+test(".env carries the pull zone URL when the zone is served on the web", () => {
+  const served: StorageZoneModel = {
+    ...ZONE,
+    PullZones: [
+      { Hostnames: [{ Value: "my-zone.b-cdn.net", IsSystemHostname: true }] },
+    ],
+  };
+  expect(storageConnection(served, "http").env).toContainEqual({
+    key: "BUNNY_STORAGE_CDN_URL",
+    value: "https://my-zone.b-cdn.net",
+  });
+  expect(
+    storageConnection(ZONE, "http", { cdnUrl: "https://cdn.example.com" }).env,
+  ).toContainEqual({
+    key: "BUNNY_STORAGE_CDN_URL",
+    value: "https://cdn.example.com",
+  });
 });
 
 test("s3 is only offered when enabled, and a missing password errors", () => {
