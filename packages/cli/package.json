@@ -29,7 +29,8 @@
     "yaml": "^2.9.0",
     "yargs": "^18.2.0",
     "zod": "^4.3.6",
-    "@bunny.net/database-client": "workspace:*"
+    "@bunny.net/database-client": "workspace:*",
+    "@bunny.net/framework-detector": "workspace:*"
   },
   "optionalDependencies": {
     "@bunny.net/cli-linux-x64": "0.18.0",

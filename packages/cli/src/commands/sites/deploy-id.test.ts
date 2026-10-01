@@ -27,6 +27,21 @@ test("contentHashId ignores file order and hash case, but tracks content and pat
   ).not.toBe(base);
 });
 
+test("contentHashId orders paths by code unit, not by locale", () => {
+  const lines = ["B.html\0aa\n", "a-b.html\0bb\n", "a.html\0cc\n"].join("");
+  const expected = new Bun.CryptoHasher("sha256")
+    .update(lines)
+    .digest("hex")
+    .slice(0, 12);
+  expect(
+    contentHashId([
+      { path: "a.html", sha256: "cc" },
+      { path: "B.html", sha256: "aa" },
+      { path: "a-b.html", sha256: "bb" },
+    ]),
+  ).toBe(expected);
+});
+
 async function run(cwd: string, args: string[]): Promise<void> {
   const proc = Bun.spawn(["git", ...args], {
     cwd,
