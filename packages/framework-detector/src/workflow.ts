@@ -141,7 +141,7 @@ export function workflowPath(prefix: string | undefined, path: string): string {
   return path === "." ? prefix : `${prefix.replace(/\/$/, "")}/${path}`;
 }
 
-// Render the GitHub Actions workflow via the BunnyWay/actions deploy-site action: pushes to main go live, and `workflow_dispatch` redeploys on demand. `dir`/`build` carry `sites.dir`/`sites.build` from bunny.jsonc, `workingDirectory` is where that config lives relative to the workflow root, and `installDeps` adds the JS setup/install steps to a configured build the preset wouldn't have installed for, so CI builds and deploys exactly what `sites deploy` does.
+// Render the GitHub Actions workflow via the BunnyWay/actions deploy-site action: pushes to `branch` (main by default) go live, and `workflow_dispatch` redeploys on demand. `dir`/`build` carry `sites.dir`/`sites.build` from bunny.jsonc, `workingDirectory` is where that config lives relative to the workflow root, and `installDeps` adds the JS setup/install steps to a configured build the preset wouldn't have installed for, so CI builds and deploys exactly what `sites deploy` does.
 export function renderSitesWorkflow(opts: {
   site: string;
   preset: FrameworkPreset;

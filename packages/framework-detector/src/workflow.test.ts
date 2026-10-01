@@ -24,10 +24,11 @@ test("a branch with YAML flow syntax stays one branch", () => {
     packageManager: "npm",
     branch: "release,prod]",
   });
-  // Bun parses YAML 1.1, where the `on` key reads as the boolean true.
+  // Older Bun parses YAML 1.1, where the `on` key reads as the boolean true.
   const workflow = Bun.YAML.parse(yml) as Record<
     string,
     { push?: { branches: string[] } }
   >;
-  expect(workflow.true?.push?.branches).toEqual(["release,prod]"]);
+  const on = workflow.on ?? workflow.true;
+  expect(on?.push?.branches).toEqual(["release,prod]"]);
 });
