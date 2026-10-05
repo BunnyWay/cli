@@ -19,6 +19,7 @@ import {
   streamImportRun,
 } from "@bunny.net/tools/stream";
 import type { Argv } from "yargs";
+import { deleteImportCredentials } from "@/config/index.ts";
 import { bunny } from "@/core/colors.ts";
 import { DONE, defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
@@ -28,8 +29,10 @@ import type { OutputFormat } from "@/core/types.ts";
 import { confirm, requireConfirmable } from "@/core/ui.ts";
 import {
   cliImportError,
+  offerToSaveCredentials,
   promptSourceCredentials,
   resolveImportSource,
+  withSavedCredentials,
   withToolSpinner,
 } from "../import-setup.ts";
 import { resolveLibraryInteractive } from "../interactive.ts";
@@ -342,15 +345,18 @@ export const streamImportRunCommand = defineToolCommand({
       assertFolderSupported(requireSource(args.source), args.folder);
   },
 
-  prepare: async (args, ctx) => {
+  prepare: async (args, baseCtx) => {
     const { output } = args;
-    const library = await resolveLibraryInteractive(ctx, args.library, {
+    const library = await resolveLibraryInteractive(baseCtx, args.library, {
       output,
       offerLink: !args.dryRun,
     });
+    const saved = withSavedCredentials(baseCtx, args.profile);
+    const ctx = saved.ctx;
     const plugin = await resolveImportSource(ctx, args.source, output);
     if (!args.source) assertFolderSupported(plugin, args.folder);
-    const env = await promptSourceCredentials(
+    const usedSaved = saved.used.get(plugin.id) ?? {};
+    const entered = await promptSourceCredentials(
       ctx,
       plugin,
       {
@@ -372,14 +378,24 @@ export const streamImportRunCommand = defineToolCommand({
     };
     const dryRun = Boolean(args.dryRun);
     // The CLI is not a model context, so its lists go up to the tool's maximum.
+    // The run's context is built from the base one, so saved values travel in `env` alongside what was typed.
+    const env = { ...usedSaved, ...entered };
     const plan = await withToolSpinner(
-      extendToolContext(ctx, { env }),
+      extendToolContext(baseCtx, { env }),
       "Resolving video library...",
       (stepCtx) =>
         streamImportPlan.invoke(stepCtx, { ...target, limit: MAX_PLAN_LIMIT }),
     ).catch((error) => {
+      // Saved values the source rejects are dropped, so the next run prompts instead of failing the same way.
+      if (Object.keys(usedSaved).length > 0 && error instanceof UserError) {
+        deleteImportCredentials(args.profile, plugin.id);
+        logger.warn(
+          `Removed the saved ${plugin.label} credentials. Run again to enter new ones.`,
+        );
+      }
       throw cliImportError(error) ?? error;
     });
+    await offerToSaveCredentials(plugin, entered, args.profile);
     const { summary } = plan;
     if (plan.folderFromSavedRun)
       logger.info(`Resuming the import of folder ${plan.folder}.`);

@@ -9,14 +9,16 @@ import { extendToolContext, type ToolContext } from "@bunny.net/tools";
 import {
   requireSource,
   SOURCE_IDS,
+  SOURCES,
   StateHomeError,
   streamImportSources,
 } from "@bunny.net/tools/stream";
+import { getImportCredentials, setImportCredentials } from "@/config/index.ts";
 import { bunny } from "@/core/colors.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
-import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
+import { confirm, isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 
 /** Reword an import tool error whose hint names the tool context's env; undefined leaves the error as it is. */
 export function cliImportError(error: unknown): Error | undefined {
@@ -39,6 +41,66 @@ export function withToolSpinner<T>(
         },
       }),
     ),
+  );
+}
+
+export interface SavedCredentials {
+  /** The tool context with saved values filling the variables the environment leaves unset. */
+  ctx: ToolContext;
+  /** Per source, the saved values that were actually used. */
+  used: Map<string, Record<string, string>>;
+}
+
+/** Layer the profile's saved import credentials under the real environment, which always wins. */
+export function withSavedCredentials(
+  ctx: ToolContext,
+  profile: string,
+): SavedCredentials {
+  const env: Record<string, string> = {};
+  const used = new Map<string, Record<string, string>>();
+  for (const plugin of SOURCES) {
+    const filled: Record<string, string> = {};
+    for (const [name, value] of Object.entries(
+      getImportCredentials(profile, plugin.id),
+    )) {
+      if (!ctx.env[name]) filled[name] = value;
+    }
+    if (Object.keys(filled).length === 0) continue;
+    Object.assign(env, filled);
+    used.set(plugin.id, filled);
+  }
+
+  return { ctx: extendToolContext(ctx, { env }), used };
+}
+
+/** After the source accepted them, offer to keep what was typed so later runs (and `--resume`) skip the prompts. */
+export async function offerToSaveCredentials(
+  plugin: SourcePlugin,
+  entered: Record<string, string>,
+  profile: string,
+): Promise<void> {
+  if (Object.keys(entered).length === 0) return;
+  const save = await confirm(
+    `Save ${plugin.label} credentials for next time?`,
+    {
+      initial: true,
+      optional: true,
+    },
+  );
+  if (!save) {
+    const required = plugin.credentials.filter((f) => f.required);
+    logger.dim(
+      `Set ${required.map((f) => f.env).join(", ")} to skip these prompts next time.`,
+    );
+
+    return;
+  }
+  setImportCredentials(profile, plugin.id, {
+    ...getImportCredentials(profile, plugin.id),
+    ...entered,
+  });
+  logger.success(
+    `Saved ${plugin.label} credentials to the "${profile}" profile.`,
   );
 }
 
@@ -126,10 +188,6 @@ async function promptMissing(
   for (const field of toPrompt) {
     entered[field.env] = await promptCredential(field);
   }
-  const required = plugin.credentials.filter((f) => f.required);
-  logger.dim(
-    `Set ${required.map((f) => f.env).join(", ")} to skip these prompts next time.`,
-  );
 
   return entered;
 }
