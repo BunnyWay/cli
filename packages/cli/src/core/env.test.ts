@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collectEnv, parseDotenv, splitPair } from "./env.ts";
@@ -60,13 +60,13 @@ describe("parseDotenv", () => {
 describe("collectEnv", () => {
   test("entries override the env file", async () => {
     const envFile = join(mkdtempSync(join(tmpdir(), "bunny-env-")), ".env");
-    writeFileSync(envFile, "A=1\nB=2\n");
+    await Bun.write(envFile, "A=1\nB=2\n");
     expect(await collectEnv(["A=3"], envFile)).toEqual({ A: "3", B: "2" });
   });
 
   test("an unclosed quote in the env file is an error, not a truncated value", async () => {
     const envFile = join(mkdtempSync(join(tmpdir(), "bunny-env-")), ".env");
-    writeFileSync(envFile, 'OK=1\nBROKEN="never closed\n');
+    await Bun.write(envFile, 'OK=1\nBROKEN="never closed\n');
     await expect(collectEnv([], envFile)).rejects.toThrow("Unclosed quote in");
   });
 });
