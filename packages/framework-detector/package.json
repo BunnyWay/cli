@@ -1,0 +1,52 @@
+{
+  "name": "@bunny.net/framework-detector",
+  "version": "0.0.0",
+  "description": "Detect a project's web framework and package manager, with build presets and a GitHub Actions workflow for bunny.net Sites. Dependency-free: runs on disk, against a GitHub repository, or in the browser.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BunnyWay/cli.git",
+    "directory": "packages/framework-detector"
+  },
+  "homepage": "https://github.com/BunnyWay/cli/tree/main/packages/framework-detector#readme",
+  "bugs": "https://github.com/BunnyWay/cli/issues",
+  "keywords": [
+    "bunny",
+    "bunny.net",
+    "bunny-sites",
+    "framework-detection",
+    "static-site",
+    "github-actions",
+    "typescript"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "typecheck": "bun run tsc --noEmit"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "devDependencies": {
+    "typescript": "^5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

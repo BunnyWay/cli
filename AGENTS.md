@@ -595,7 +595,7 @@ On macOS, `bun build --compile` leaves an invalid signature: ad-hoc on arm64, an
 
 ### Publishing libraries
 
-The published libraries (`openapi-client`, `sandbox`, `database-client`, and the database packages) share one pattern: `exports`/`main`/`types` point at `dist/`, while **in-repo tooling resolves them from source** through the root `tsconfig.json` `paths` mapping. `bun run`, `bun build --compile`, `bun test`, and `tsc` all honour `paths` over the package `exports`, so the dev loop needs no prebuild step and only publishing needs `dist/`. Published consumers never see the repo tsconfig and fall back to `exports`.
+The published libraries (`openapi-client`, `sandbox`, `database-client`, `framework-detector`, and the database packages) share one pattern: `exports`/`main`/`types` point at `dist/`, while **in-repo tooling resolves them from source** through the root `tsconfig.json` `paths` mapping. `bun run`, `bun build --compile`, `bun test`, and `tsc` all honour `paths` over the package `exports`, so the dev loop needs no prebuild step and only publishing needs `dist/`. Published consumers never see the repo tsconfig and fall back to `exports`.
 
 Per-package deviations, each with a reason:
 
@@ -604,6 +604,7 @@ Per-package deviations, each with a reason:
 - **`tools`** follows the `sandbox` pattern exactly: `workspace:*` on `openapi-client`, `paths: {}` in `tsconfig.build.json`, openapi-client built first, `bun publish`. It also imports the per-API type entrypoint `@bunny.net/openapi-client/magic-containers`, which resolves through openapi-client's `exports` once that `dist/` exists.
 - **`stream-import` and the `stream-import-<source>` adapters** follow the `sandbox` pattern: the engine takes `workspace:*` on `openapi-client` and each adapter takes `workspace:^` on the engine, `paths: {}` in `tsconfig.build.json`, dependencies built first, `bun publish`. The engine never imports an adapter; `packages/tools/src/stream/import/sources.ts` is the only registry (the CLI reaches the adapters through `@bunny.net/tools/stream`, not directly), so a host that drives the engine itself can bring its own adapter without loading the others (the S3 adapter alone carries the AWS SDK).
 - **`database-client`** is the simplest case: zero dependencies, so `npm publish` works, and no declaration transformer. `tsconfig.build.json` sets `include: ["src"]` to keep `examples/` out of the program. Because the program is scoped to `src`, the package cannot import its own `package.json`, which is why its default `User-Agent` is versionless.
+- **`framework-detector`** follows `database-client`: zero dependencies, `npm publish`, `include: ["src"]`. It is pure (no disk or network) so the dashboard and the Sites control plane can run it in a browser or an Edge Script; the CLI's `sites/ci/frameworks.ts` builds its `ProjectSnapshot` from disk.
 
 Publish jobs for independently versioned packages are gated on a version bump detected via `npm view`. Only the CLI and its platform packages are in a `fixed` group.
 

@@ -41,6 +41,7 @@ jobs:
       cli-version: ${{ steps.check-cli.outputs.version }}
       database-client-version: ${{ steps.check-database-client.outputs.version }}
       database-shell-version: ${{ steps.check-database-shell.outputs.version }}
+      framework-detector-version: ${{ steps.check-framework-detector.outputs.version }}
       openapi-client-version: ${{ steps.check-openapi-client.outputs.version }}
       sandbox-version: ${{ steps.check-sandbox.outputs.version }}
       stream-import-version: ${{ steps.check-stream-import.outputs.version }}
@@ -119,6 +120,17 @@ jobs:
         run: |
           VERSION=$(node -p "require('./packages/database-client/package.json').version")
           PUBLISHED=$(npm view @bunny.net/database-client version 2>/dev/null || echo "0.0.0")
+          if [ "$VERSION" != "$PUBLISHED" ]; then
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "New version detected: $VERSION (published: $PUBLISHED)"
+          else
+            echo "No version change: $VERSION"
+          fi
+      - name: Check framework-detector version
+        id: check-framework-detector
+        run: |
+          VERSION=$(node -p "require('./packages/framework-detector/package.json').version")
+          PUBLISHED=$(npm view @bunny.net/framework-detector version 2>/dev/null || echo "0.0.0")
           if [ "$VERSION" != "$PUBLISHED" ]; then
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "New version detected: $VERSION (published: $PUBLISHED)"
@@ -472,6 +484,33 @@ jobs:
       - name: Publish @bunny.net/database-client
         run: |
           cd packages/database-client
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-framework-detector:
+    name: Publish framework-detector
+    runs-on: ubuntu-latest
+    needs: version
+    if: needs.version.outputs.framework-detector-version
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .tool-versions
+      - run: bun install
+
+      - name: Build package
+        run: bun run --filter @bunny.net/framework-detector build
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish @bunny.net/framework-detector
+        run: |
+          cd packages/framework-detector
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
