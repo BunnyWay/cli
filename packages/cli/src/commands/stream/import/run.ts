@@ -15,10 +15,20 @@ import {
   requireSource,
   SOURCE_IDS,
   SOURCES,
+  SourceCredentialsError,
   streamImportPlan,
   streamImportRun,
 } from "@bunny.net/tools/stream";
 import type { Argv } from "yargs";
+import {
+  cliImportError,
+  offerToSaveCredentials,
+  promptSourceCredentials,
+  resolveImportSource,
+  withSavedCredentials,
+  withToolSpinner,
+} from "@/commands/stream/import-setup.ts";
+import { resolveLibraryInteractive } from "@/commands/stream/interactive.ts";
 import { deleteImportCredentials } from "@/config/index.ts";
 import { bunny } from "@/core/colors.ts";
 import { DONE, defineToolCommand } from "@/core/define-tool-command.ts";
@@ -27,15 +37,6 @@ import { formatBytes, formatDuration, formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { confirm, requireConfirmable } from "@/core/ui.ts";
-import {
-  cliImportError,
-  offerToSaveCredentials,
-  promptSourceCredentials,
-  resolveImportSource,
-  withSavedCredentials,
-  withToolSpinner,
-} from "../import-setup.ts";
-import { resolveLibraryInteractive } from "../interactive.ts";
 
 interface ImportArgs {
   library?: string;
@@ -386,8 +387,11 @@ export const streamImportRunCommand = defineToolCommand({
       (stepCtx) =>
         streamImportPlan.invoke(stepCtx, { ...target, limit: MAX_PLAN_LIMIT }),
     ).catch((error) => {
-      // Saved values the source rejects are dropped, so the next run prompts instead of failing the same way.
-      if (Object.keys(usedSaved).length > 0 && error instanceof UserError) {
+      // Saved values the source rejects are dropped, so the next run prompts instead of failing the same way; timeouts and outages keep them.
+      if (
+        Object.keys(usedSaved).length > 0 &&
+        error instanceof SourceCredentialsError
+      ) {
         deleteImportCredentials(args.profile, plugin.id);
         logger.warn(
           `Removed the saved ${plugin.label} credentials. Run again to enter new ones.`,

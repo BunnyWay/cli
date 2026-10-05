@@ -3,7 +3,11 @@ import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SourceAdapter } from "@bunny.net/stream-import";
+import {
+  type SourceAdapter,
+  TransientHttpError,
+  UserError,
+} from "@bunny.net/stream-import";
 import { muxSource } from "@bunny.net/stream-import-mux";
 import {
   type CoreClient,
@@ -13,6 +17,7 @@ import {
 import { inputJsonSchema } from "../../schema.ts";
 import {
   importStatePath,
+  SourceCredentialsError,
   streamImportPlan,
   streamImportRun,
   streamImportSources,
@@ -190,4 +195,28 @@ test("an abort during the library lookup returns a paused run instead of throwin
     queued: 0,
     statePath: null,
   });
+});
+
+test("only a source turning the credentials down is a SourceCredentialsError; a timeout is not", async () => {
+  const rejectWith = (error: Error) =>
+    spyOn(muxSource, "createAdapter").mockImplementation(() => ({
+      ...fakeAdapter([]),
+      validateCredentials: async () => {
+        throw error;
+      },
+    }));
+  const input = { library: "7", source: "mux" };
+  const ctx = context({ MUX_TOKEN_ID: "id", MUX_TOKEN_SECRET: "secret" });
+
+  const denied = rejectWith(new UserError("Invalid Mux credentials."));
+  await expect(streamImportPlan.invoke(ctx, input)).rejects.toBeInstanceOf(
+    SourceCredentialsError,
+  );
+  denied.mockRestore();
+
+  const slow = rejectWith(new TransientHttpError("Mux request timed out."));
+  const error = await streamImportPlan.invoke(ctx, input).catch((e) => e);
+  expect(error).toBeInstanceOf(TransientHttpError);
+  expect(error).not.toBeInstanceOf(SourceCredentialsError);
+  slow.mockRestore();
 });

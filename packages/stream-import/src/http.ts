@@ -18,6 +18,9 @@ const MAX_BACKOFF_MS = 30_000;
 /** Transient upstream failures, retried only for idempotent requests. */
 const RETRYABLE_STATUS = new Set([500, 502, 503, 504]);
 
+/** A timeout or exhausted rate limit: the request may succeed later, so it says nothing about the credentials. */
+export class TransientHttpError extends UserError {}
+
 export class HttpError extends Error {
   constructor(
     message: string,
@@ -180,7 +183,7 @@ export function createHttp(options: HttpOptions): Http {
       } catch (error) {
         if (caller?.aborted) throw caller.reason ?? error;
         if (isTimeout(error)) {
-          throw new UserError(
+          throw new TransientHttpError(
             `${options.label} request timed out after ${Math.round(options.timeout / 1000)} seconds.`,
             "Raise the limit with --request-timeout.",
           );
@@ -220,7 +223,7 @@ export function createHttp(options: HttpOptions): Http {
 
       const body = await parseBody(response);
       if (response.status === 429) {
-        throw new UserError(
+        throw new TransientHttpError(
           `${options.label} rate limit exceeded after ${MAX_RATE_LIMIT_RETRIES} retries.`,
         );
       }

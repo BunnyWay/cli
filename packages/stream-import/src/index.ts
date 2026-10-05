@@ -31,7 +31,12 @@ export {
   resolveSourceConfig,
 } from "./credentials.ts";
 export type { Http, HttpOptions, Query, RequestOptions } from "./http.ts";
-export { createHttp, HttpError, isHttpError } from "./http.ts";
+export {
+  createHttp,
+  HttpError,
+  isHttpError,
+  TransientHttpError,
+} from "./http.ts";
 export type {
   MigrationOptions,
   MigrationPhase,

@@ -11,6 +11,7 @@ import {
   readMigrationState,
   resolveSourceConfig,
   type SourcePlugin,
+  TransientHttpError,
 } from "@bunny.net/stream-import";
 import type { ToolContext } from "../../context.ts";
 import { openStreamLibrary } from "../connect.ts";
@@ -87,6 +88,16 @@ function sourceOverrides(target: ImportTarget) {
 }
 
 // The engine words these for a terminal; a tool names its input fields and its env instead.
+/** The source refused the credentials or settings it was given, as opposed to a timeout, rate limit, or outage. */
+export class SourceCredentialsError extends UserError {}
+
+function isRejection(error: unknown): boolean {
+  if (error instanceof TransientHttpError) return false;
+  if (error instanceof UserError) return true;
+  const status = (error as { status?: number } | null)?.status;
+  return status === 401 || status === 403;
+}
+
 function hostNeutral<T>(fn: () => T, hint: string, message?: string): T {
   try {
     return fn();
@@ -151,7 +162,13 @@ export async function openImport(
     allowAmbientCredentials: ctx.allowAmbientCredentials,
   });
   ctx.progress(`Checking ${plugin.label} credentials...`);
-  await adapter.validateCredentials();
+  try {
+    await adapter.validateCredentials();
+  } catch (error) {
+    if (!isRejection(error)) throw error;
+    const { message, hint } = error as { message: string; hint?: string };
+    throw new SourceCredentialsError(message, hint);
+  }
 
   const session: ImportSession = {
     plugin,

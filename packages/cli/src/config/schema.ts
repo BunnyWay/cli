@@ -15,10 +15,6 @@ export const ConfigFileSchema = z.object({
   log_level: z.string().optional(),
   profiles: z.record(z.string(), ProfileSchema).default({}),
   sandboxes: z.record(z.string(), SandboxRecordSchema).default({}),
-  /** Saved `stream import` source credentials, by profile, then source id, then environment variable name. */
-  stream_import: z
-    .record(z.string(), z.record(z.string(), z.record(z.string(), z.string())))
-    .optional(),
 });
 
 export type Profile = z.infer<typeof ProfileSchema>;

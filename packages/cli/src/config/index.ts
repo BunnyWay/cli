@@ -1,8 +1,13 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { z } from "zod";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { findConfigFile, getConfigWritePath } from "./paths.ts";
+import {
+  findConfigFile,
+  getConfigWritePath,
+  getImportCredentialsPath,
+} from "./paths.ts";
 import {
   type ConfigFile,
   ConfigFileSchema,
@@ -140,11 +145,36 @@ export function deleteSandbox(name: string): void {
   saveConfigFile(existing);
 }
 
+// Profile, then source id, then environment variable name.
+const ImportCredentialsSchema = z.record(
+  z.string(),
+  z.record(z.string(), z.record(z.string(), z.string())),
+);
+type ImportCredentials = z.infer<typeof ImportCredentialsSchema>;
+
+function loadImportCredentials(): ImportCredentials {
+  try {
+    return ImportCredentialsSchema.parse(
+      JSON.parse(readFileSync(getImportCredentialsPath(), "utf-8")),
+    );
+  } catch {
+    return {};
+  }
+}
+
+// Owner-only on every write, so a file created looser (or by an older version) is tightened too.
+function saveImportCredentials(data: ImportCredentials): void {
+  const target = getImportCredentialsPath();
+  mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+  writeFileSync(target, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
+  chmodSync(target, 0o600);
+}
+
 export function getImportCredentials(
   profile: string,
   source: string,
 ): Record<string, string> {
-  return loadConfigFile()?.stream_import?.[profile]?.[source] ?? {};
+  return loadImportCredentials()[profile]?.[source] ?? {};
 }
 
 export function setImportCredentials(
@@ -152,17 +182,14 @@ export function setImportCredentials(
   source: string,
   values: Record<string, string>,
 ): void {
-  const existing = loadConfigFile() ?? { profiles: {}, sandboxes: {} };
-  const byProfile = existing.stream_import ?? {};
-  byProfile[profile] = { ...byProfile[profile], [source]: values };
-  existing.stream_import = byProfile;
-  saveConfigFile(existing);
+  const all = loadImportCredentials();
+  all[profile] = { ...all[profile], [source]: values };
+  saveImportCredentials(all);
 }
 
 export function deleteImportCredentials(profile: string, source: string): void {
-  const existing = loadConfigFile();
-  const saved = existing?.stream_import?.[profile];
-  if (!existing || !saved?.[source]) return;
-  delete saved[source];
-  saveConfigFile(existing);
+  const all = loadImportCredentials();
+  if (!all[profile]?.[source]) return;
+  delete all[profile][source];
+  saveImportCredentials(all);
 }

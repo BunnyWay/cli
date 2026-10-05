@@ -49,6 +49,7 @@ import {
 } from "./state.ts";
 
 export * from "./model.ts";
+export { SourceCredentialsError } from "./session.ts";
 export { findSource, requireSource, SOURCE_IDS, SOURCES } from "./sources.ts";
 export {
   findSavedImportSource,

@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createToolContext } from "@bunny.net/tools";
@@ -38,4 +44,10 @@ test("saved credentials fill only what the environment leaves unset, per profile
   });
 
   expect(withSavedCredentials(ctx, "default").used.size).toBe(0);
+
+  const file = join(dir, "bunnynet", "stream-import-credentials.json");
+  expect(statSync(file).mode & 0o777).toBe(0o600);
+  expect(readFileSync(join(dir, "bunnynet.json"), "utf-8")).not.toContain(
+    "saved-token",
+  );
 });
