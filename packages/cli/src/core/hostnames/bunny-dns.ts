@@ -194,7 +194,6 @@ async function repointPullZoneRecord(
     }
     await putPullZoneRecord(client, zoneId, name, pullZoneId);
     await assertRoutesHere(client, match, hostname, pullZoneId);
-    // The new route is verified, so a failed cleanup warns rather than stopping before SSL.
     await client
       .DELETE("/dnszone/{zoneId}/records/{id}", {
         params: { path: { zoneId, id: existing.Id } },
@@ -202,17 +201,22 @@ async function repointPullZoneRecord(
       .catch((err: unknown) => {
         deleteError = err;
       });
+    // A lost DELETE response is fine; only an old record that is still listed fails the repoint.
+    if (deleteError !== undefined) {
+      const { data } = await client.GET("/dnszone/{id}", {
+        params: { path: { id: zoneId } },
+      });
+      if (!(data?.Records ?? []).some((r) => r.Id === existing.Id)) return;
+    }
   } finally {
     spin.stop();
   }
   if (deleteError !== undefined) {
     const reason =
       deleteError instanceof Error ? deleteError.message : String(deleteError);
-    logger.warn(
-      `Couldn't confirm the old ${recordTypeLabel(existing.Type)} record for ${hostname} was removed: ${reason}`,
-    );
-    logger.dim(
-      `  If it's still listed, remove it with: bunny dns records remove ${match.zoneDomain} ${existing.Id} --force`,
+    throw new UserError(
+      `Added a PullZone record for ${hostname}, but couldn't remove the old ${recordTypeLabel(existing.Type)} record: ${reason}`,
+      `Remove it with: bunny dns records remove ${match.zoneDomain} ${existing.Id} --force`,
     );
   }
 }

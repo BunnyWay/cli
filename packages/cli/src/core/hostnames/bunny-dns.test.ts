@@ -235,6 +235,28 @@ describe("offerBunnyDnsRecord", () => {
     expect(records).toEqual([original]);
   });
 
+  test("throws when the old record is still listed after a failed delete", async () => {
+    prompts.inject([true]);
+    const records: Rec[] = [
+      { Id: 99, Type: 0, Name: "shop", Value: "192.0.2.4" },
+    ];
+    const client = {
+      ...recordingClient(records),
+      DELETE: async () => {
+        throw new Error("DELETE failed");
+      },
+    } as unknown as CoreClient;
+
+    await expect(
+      offerBunnyDnsRecord({
+        client,
+        hostname: "shop.example.com",
+        pullZoneId: 12345,
+        match: match(records[0] ?? null),
+      }),
+    ).rejects.toThrow(/couldn't remove the old A record: DELETE failed/);
+  });
+
   test("throws when the zone doesn't route here after a write the API accepted", async () => {
     prompts.inject([true]);
     const records: Rec[] = [{ Id: 99, Type: 7, Name: "shop", LinkName: "1" }];
