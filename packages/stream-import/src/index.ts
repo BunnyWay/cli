@@ -13,7 +13,11 @@ export type {
   BunnyStatusModel,
   BunnyVideo,
 } from "./bunny-types.ts";
-export { BunnyVideoStatus, videoStatusText } from "./bunny-types.ts";
+export {
+  BunnyVideoStatus,
+  isFailedVideoStatus,
+  videoStatusText,
+} from "./bunny-types.ts";
 export * from "./constants.ts";
 export type * from "./contracts.ts";
 export type {
@@ -34,11 +38,13 @@ export type { Http, HttpOptions, Query, RequestOptions } from "./http.ts";
 export { createHttp, HttpError, isHttpError } from "./http.ts";
 export type {
   MigrationOptions,
+  MigrationPhase,
   MigrationServiceOptions,
   MigrationSummary,
   SummaryVideo,
 } from "./migration.ts";
 export { MigrationService, runPool } from "./migration.ts";
+export { refreshMigrationState, settledStatus } from "./progress.ts";
 export {
   isHttpsUrl,
   isValidBunnyGuid,

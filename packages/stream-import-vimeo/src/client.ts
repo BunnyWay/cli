@@ -118,7 +118,7 @@ export class VimeoClient {
     );
   }
 
-  /** Best available source: a real download link if the account tier allows one, otherwise the highest-resolution streaming file. */
+  /** Best available source: the original download link, otherwise the highest-resolution MP4; both need a paid Vimeo plan. */
   async getVideoDownloadLink(videoId: string): Promise<VimeoDownload | null> {
     const video = await this.getVideo(videoId);
 

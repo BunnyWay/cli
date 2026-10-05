@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { BunnyStream } from "./bunny-stream.ts";
+import type { BunnyVideo } from "./bunny-types.ts";
 import type {
   Logger,
   MigrationState,
@@ -70,7 +71,6 @@ function fakeBunny(overrides: Record<string, unknown> = {}): BunnyStream {
       videoId: "bunny-1",
     })),
     setVideoMetadata: mock(async () => {}),
-    waitForVideoProcessing: mock(async () => ({ success: true })),
     ...overrides,
   } as unknown as BunnyStream;
 }
@@ -87,6 +87,7 @@ function service(opts: {
     logger: silentLogger,
     libraryId: "12345",
     label: "Vimeo",
+    pollIntervalMs: 1,
   });
 }
 
@@ -127,7 +128,7 @@ describe("getSummary", () => {
 });
 
 describe("runMigration", () => {
-  test("fetches, tags with the dedup property plus sanitized metadata, and completes", async () => {
+  test("fetches, tags with the dedup property plus sanitized metadata, and returns with it queued", async () => {
     const bunny = fakeBunny();
     const state = await service({
       adapter: fakeAdapter({
@@ -148,11 +149,55 @@ describe("runMigration", () => {
       description: "Summer trip",
       tags: ["beach", "2024"],
     });
-    expect(state.status).toBe("completed");
+    expect(state.status).toBe("in_progress");
     expect(state.videoMigrations[0]).toMatchObject({
-      status: "completed",
+      status: "processing",
       bunnyVideoId: "bunny-1",
     });
+  });
+
+  test("re-imports a video whose Bunny copy failed, and adopts one still encoding", async () => {
+    const tagged = (guid: string, value: string, status: number) => ({
+      guid,
+      status,
+      encodeProgress: 30,
+      metaTags: [{ property: "vimeoId", value }],
+    });
+    const bunny = fakeBunny({
+      listVideos: mock(async () => [
+        tagged("broken", "111", 5),
+        tagged("busy", "222", 3),
+      ]),
+    });
+    const svc = service({
+      adapter: fakeAdapter({
+        listContent: async () =>
+          content({
+            uncategorizedVideos: [
+              { sourceId: "111", displayName: "Broken", folderId: null },
+              { sourceId: "222", displayName: "Busy", folderId: null },
+            ],
+          }),
+      }),
+      bunny,
+    });
+
+    const summary = await svc.getSummary();
+    expect(summary).toMatchObject({
+      newVideos: 1,
+      failedOnBunny: 1,
+      alreadyMigrated: 1,
+      processingOnBunny: 1,
+    });
+
+    const state = await svc.runMigration();
+    expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
+    expect(
+      state.videoMigrations.map((m) => [m.bunnyVideoId, m.status]),
+    ).toEqual([
+      ["bunny-1", "processing"],
+      ["busy", "processing"],
+    ]);
   });
 
   test("skips a video the dedup index already knows about", async () => {
@@ -255,14 +300,14 @@ describe("runMigration", () => {
 
     expect(state.status).toBe("failed");
     expect(state.videoMigrations.map((m) => m.status)).toEqual([
-      "completed",
+      "processing",
       "failed",
     ]);
   });
 
-  test("fails a video that exceeds the per-video timeout without swallowing it", async () => {
+  test("fails a video whose handoff exceeds the per-video timeout without swallowing it", async () => {
     const bunny = fakeBunny({
-      waitForVideoProcessing: mock(() => new Promise(() => {})),
+      setVideoMetadata: mock(() => new Promise(() => {})),
     });
 
     const state = await service({
@@ -319,8 +364,8 @@ describe("resume", () => {
         sourceFolderId: null,
         bunnyVideoId: null,
         bunnyCollectionId: null,
-        status: "pending",
-        error: null,
+        status: "failed",
+        error: "Bunny could not fetch the file from the source",
         startedAt: null,
         completedAt: null,
         encodeProgress: 0,
@@ -338,7 +383,7 @@ describe("resume", () => {
       ],
     });
 
-  test("resumes a failed run and only works the outstanding videos", async () => {
+  test("resumes a failed run, retrying the failed video and leaving the finished one", async () => {
     const bunny = fakeBunny();
     const { store } = memoryStore(savedState());
 
@@ -353,7 +398,9 @@ describe("resume", () => {
   });
 
   test("re-asserts the dedup tag on a video interrupted mid-processing instead of re-fetching", async () => {
-    const bunny = fakeBunny();
+    const bunny = fakeBunny({
+      listVideos: mock(async () => [{ guid: "orphan-guid", status: 3 }]),
+    });
     const { store } = memoryStore(
       savedState({
         videoMigrations: [
@@ -407,27 +454,72 @@ describe("resume", () => {
   });
 });
 
-describe("state persistence", () => {
-  test("writes status transitions through but coalesces encode-progress writes", async () => {
+describe("wait", () => {
+  test("polls the library until Bunny finishes, coalescing progress writes", async () => {
     const { store, saves } = memoryStore();
-    const bunny = fakeBunny({
-      waitForVideoProcessing: mock(async (_id, onProgress) => {
-        for (let i = 0; i < 50; i++) onProgress?.(i * 2, 3);
-        return { success: true };
-      }),
-    });
+    const encoding = (progress: number, status: number): BunnyVideo[] =>
+      [{ guid: "bunny-1", status, encodeProgress: progress }] as BunnyVideo[];
+    const listVideos = mock(async (): Promise<BunnyVideo[]> => [])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(encoding(50, 3))
+      .mockResolvedValueOnce(encoding(100, 4));
+    const phases: string[] = [];
 
-    await service({
+    const state = await service({
       adapter: fakeAdapter({ listContent: async () => oneVideo() }),
-      bunny,
+      bunny: fakeBunny({ listVideos }),
       store,
-    }).runMigration();
+    }).runMigration({ wait: true, onProgress: (_s, p) => phases.push(p) });
 
+    expect(state.status).toBe("completed");
+    expect(listVideos).toHaveBeenCalledTimes(3);
+    expect(phases).toContain("encode");
     const statuses = saves.map((s) => s.videoMigrations[0]?.status);
     expect(statuses).toContain("fetching");
-    expect(statuses).toContain("processing");
     expect(statuses.at(-1)).toBe("completed");
-    expect(saves.length).toBeLessThan(20);
+  });
+
+  test("a plain re-run keeps tracking videos the last run left processing", async () => {
+    const queued: MigrationState = {
+      id: "migration-1",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      source: "vimeo",
+      bunnyLibraryId: "12345",
+      folderMappings: [],
+      videoMigrations: [
+        {
+          sourceVideoId: "111",
+          videoName: "Holiday",
+          sourceFolderId: null,
+          bunnyVideoId: "untagged",
+          bunnyCollectionId: null,
+          status: "processing",
+          error: null,
+          startedAt: "2026-01-01T00:00:00.000Z",
+          completedAt: null,
+          encodeProgress: 0,
+        },
+      ],
+      status: "in_progress",
+    };
+    const bunny = fakeBunny({
+      listVideos: mock(async () => [{ guid: "untagged", status: 3 }]),
+    });
+
+    const state = await service({
+      adapter: fakeAdapter({ listContent: async () => oneVideo() }),
+      bunny,
+      store: memoryStore(queued).store,
+    }).runMigration();
+
+    expect(state.id).not.toBe("migration-1");
+    expect(bunny.fetchVideoFromUrl).not.toHaveBeenCalled();
+    expect(bunny.setVideoMetadata).toHaveBeenCalledWith("untagged", {
+      sourceId: "111",
+      sourceIdProperty: "vimeoId",
+    });
+    expect(state.videoMigrations[0]?.status).toBe("processing");
   });
 });
 

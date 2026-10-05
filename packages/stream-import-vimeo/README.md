@@ -36,6 +36,6 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 | ------------ | -------------------- |
 | Access token | `VIMEO_ACCESS_TOKEN` |
 
-Create the token at developer.vimeo.com/apps with the `public`, `private`, and `video_files` scopes. Download links are only exposed on a Standard plan or above; on lower tiers the adapter falls back to the highest-resolution streaming file.
+Create the token at developer.vimeo.com/apps with the `public`, `private`, and `video_files` scopes. Vimeo only exposes video files on a Standard plan or above (or a legacy Plus, PRO, Business, or Premium plan). The adapter prefers the original download link and falls back to the highest-resolution MP4, and both need one of those plans.
 
 Vimeo projects become Stream collections. The dedup metaTag is `vimeoId`, holding the numeric video ID. Download URLs are checked against the Vimeo CDN host allowlist before they reach bunny.net.

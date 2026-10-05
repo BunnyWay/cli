@@ -21,7 +21,7 @@ export const cloudflareSource: SourcePlugin<CloudflareConfig> = {
       env: "CLOUDFLARE_API_TOKEN",
       secret: true,
       required: true,
-      hint: "https://dash.cloudflare.com/profile/api-tokens (permission: Stream:Read)",
+      hint: "https://dash.cloudflare.com/profile/api-tokens (permission: Stream:Edit)",
     },
     {
       key: "accountId",

@@ -42,7 +42,7 @@ export class CloudflareStreamClient {
       if (isHttpError(error, 401) || isHttpError(error, 403)) {
         throw new UserError(
           "Invalid Cloudflare API token or account ID.",
-          "The token needs the Stream:Read permission (https://dash.cloudflare.com/profile/api-tokens).",
+          "The token needs the Stream:Edit permission (https://dash.cloudflare.com/profile/api-tokens).",
         );
       }
       throw error;

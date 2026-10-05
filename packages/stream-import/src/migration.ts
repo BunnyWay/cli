@@ -9,8 +9,12 @@
 
 import type { BunnyStream } from "./bunny-stream.ts";
 import type { BunnyVideo } from "./bunny-types.ts";
-import { BunnyVideoStatus } from "./bunny-types.ts";
-import { DEFAULT_CONCURRENCY, DEFAULT_MIGRATION_TIMEOUT } from "./constants.ts";
+import { BunnyVideoStatus, isFailedVideoStatus } from "./bunny-types.ts";
+import {
+  DEFAULT_CONCURRENCY,
+  DEFAULT_MIGRATION_TIMEOUT,
+  DEFAULT_PROCESSING_TIMEOUT,
+} from "./constants.ts";
 import type {
   Logger,
   MigrationState,
@@ -20,6 +24,7 @@ import type {
   StateStore,
   VideoMigration,
 } from "./contracts.ts";
+import { refreshMigrationState, settledStatus } from "./progress.ts";
 import {
   isHttpsUrl,
   safeErrorMessage,
@@ -31,12 +36,24 @@ import { buildSourceIndex } from "./source-index.ts";
 /** How long encode-progress updates accumulate before hitting disk; status transitions still write through immediately. */
 const PROGRESS_SAVE_DEBOUNCE_MS = 2_000;
 
+/** How often a `wait` run lists the library to see what Bunny has finished. */
+const ENCODE_POLL_INTERVAL_MS = 10_000;
+
+/** `handoff` while videos are being queued on Bunny; `encode` while a `wait` run watches Bunny encode them. */
+export type MigrationPhase = "handoff" | "encode";
+
 export interface MigrationOptions {
   folderId?: string;
+  /** How many videos are handed to Bunny at once; encoding is Bunny's and not bounded by this. */
   concurrency?: number;
   resume?: boolean;
+  /** Stay until Bunny has encoded every queued video; by default the run returns once they are all queued. */
+  wait?: boolean;
+  /** With `wait`: stop waiting on a video still encoding this long after it was queued. It stays `processing`. */
+  processingTimeoutMs?: number;
+  /** Per-video timeout for the handoff (download link, fetch request, dedup tag). */
   migrationTimeoutMs?: number;
-  onProgress?: (state: MigrationState) => void;
+  onProgress?: (state: MigrationState, phase: MigrationPhase) => void;
 }
 
 export interface SummaryVideo {
@@ -48,6 +65,10 @@ export interface MigrationSummary {
   totalFolders: number;
   totalVideos: number;
   alreadyMigrated: number;
+  /** Of `alreadyMigrated`, how many Bunny is still fetching or encoding. */
+  processingOnBunny: number;
+  /** Of `newVideos`, how many have a Bunny copy that failed; they are imported again. */
+  failedOnBunny: number;
   newVideos: number;
   /** Bytes across every discovered video, for sources that report size. */
   totalSize: number;
@@ -66,6 +87,8 @@ export interface MigrationServiceOptions {
   libraryId: string;
   /** Human-readable source name, from the plugin descriptor. */
   label?: string;
+  /** Override the `wait` poll interval; tests use it. */
+  pollIntervalMs?: number;
 }
 
 export class MigrationService {
@@ -75,9 +98,15 @@ export class MigrationService {
   private readonly logger: Logger;
   private readonly libraryId: string;
   private readonly label: string;
+  private readonly pollIntervalMs: number;
 
   private state: MigrationState | null = null;
+  /** Tagged Bunny videos that count as imported: finished or still on their way. */
   private sourceIndex = new Map<string, BunnyVideo>();
+  /** Tagged Bunny videos that failed, which do not stop a re-import. */
+  private failedIndex = new Map<string, BunnyVideo>();
+  /** Every video ID in the library, to tell an untagged copy from a deleted one. */
+  private libraryGuids = new Set<string>();
 
   /** Discovery result, cached so the run does not re-walk the source after the summary. */
   private discovery: {
@@ -101,6 +130,7 @@ export class MigrationService {
     this.logger = options.logger;
     this.libraryId = options.libraryId;
     this.label = options.label ?? options.adapter.id;
+    this.pollIntervalMs = options.pollIntervalMs ?? ENCODE_POLL_INTERVAL_MS;
   }
 
   // ── Discovery ──────────────────────────────────────────────────────
@@ -120,7 +150,17 @@ export class MigrationService {
   private async loadSourceIndex(): Promise<Map<string, BunnyVideo>> {
     if (this.indexLoaded) return this.sourceIndex;
     const bunnyVideos = await this.bunny.listVideos();
-    this.sourceIndex = buildSourceIndex(bunnyVideos, this.adapter.dedupTag);
+    const failed = bunnyVideos.filter((v) => isFailedVideoStatus(v.status));
+    this.sourceIndex = buildSourceIndex(
+      bunnyVideos.filter((v) => !isFailedVideoStatus(v.status)),
+      this.adapter.dedupTag,
+    );
+    this.failedIndex = buildSourceIndex(failed, this.adapter.dedupTag);
+    this.libraryGuids = new Set(
+      bunnyVideos.flatMap((v) =>
+        v.guid && !isFailedVideoStatus(v.status) ? [v.guid] : [],
+      ),
+    );
     this.indexLoaded = true;
 
     return this.sourceIndex;
@@ -147,20 +187,29 @@ export class MigrationService {
     const migratedVideosList: SummaryVideo[] = [];
     let totalSize = 0;
     let totalDuration = 0;
+    let processingOnBunny = 0;
+    let failedOnBunny = 0;
 
     for (const { video, folderName } of entries) {
       totalSize += video.size ?? 0;
       totalDuration += video.duration ?? 0;
-      const target = index.has(video.sourceId)
-        ? migratedVideosList
-        : newVideosList;
-      target.push({ name: video.displayName, folder: folderName });
+      const existing = index.get(video.sourceId);
+      const summaryVideo = { name: video.displayName, folder: folderName };
+      if (existing) {
+        migratedVideosList.push(summaryVideo);
+        if (existing.status !== BunnyVideoStatus.Finished) processingOnBunny++;
+      } else {
+        newVideosList.push(summaryVideo);
+        if (this.failedIndex.has(video.sourceId)) failedOnBunny++;
+      }
     }
 
     return {
       totalFolders: folders.length,
       totalVideos: entries.length,
       alreadyMigrated: migratedVideosList.length,
+      processingOnBunny,
+      failedOnBunny,
       newVideos: newVideosList.length,
       totalSize,
       totalDuration,
@@ -204,24 +253,23 @@ export class MigrationService {
       this.prepareEntries(state, targetVideos, targetUncategorized);
 
       const outstanding = state.videoMigrations.filter(
-        (m) =>
-          m.status === "pending" ||
-          m.status === "fetching" ||
-          m.status === "processing",
+        (m) => m.status !== "completed",
       );
       this.logger.info(
-        `Importing ${outstanding.length} videos (concurrency: ${concurrency})`,
+        `Handing ${outstanding.length} videos to Bunny (concurrency: ${concurrency})`,
       );
 
       const timeout = options.migrationTimeoutMs ?? DEFAULT_MIGRATION_TIMEOUT;
+      options.onProgress?.(state, "handoff");
       await runPool(outstanding, concurrency, async (migration) => {
-        await this.migrateVideoWithTimeout(migration, timeout);
-        options.onProgress?.(state);
+        await this.handOffWithTimeout(migration, timeout);
+        options.onProgress?.(state, "handoff");
       });
 
-      const failed = state.videoMigrations.filter((m) => m.status === "failed");
-      // A partially failed run stays resumable, so it is not marked completed.
-      state.status = failed.length === 0 ? "completed" : "failed";
+      if (options.wait) await this.waitForEncoding(state, options);
+
+      // A partially failed run stays resumable, so it is not marked completed; neither is one Bunny is still encoding.
+      state.status = settledStatus(state);
       this.flush();
 
       return state;
@@ -236,7 +284,17 @@ export class MigrationService {
     }
   }
 
+  /** Entries a previous run queued that Bunny is still processing carry over, so their progress stays tracked and an untagged one gets its tag. */
   private newState(): MigrationState {
+    const saved = this.store.load();
+    const carried =
+      saved?.source === this.adapter.id &&
+      saved.bunnyLibraryId === this.libraryId
+        ? saved.videoMigrations.filter(
+            (m) => m.status === "processing" && m.bunnyVideoId,
+          )
+        : [];
+
     return {
       id: `migration-${Date.now()}`,
       startedAt: new Date().toISOString(),
@@ -244,7 +302,7 @@ export class MigrationService {
       source: this.adapter.id,
       bunnyLibraryId: this.libraryId,
       folderMappings: [],
-      videoMigrations: [],
+      videoMigrations: carried,
       status: "in_progress",
     };
   }
@@ -348,7 +406,7 @@ export class MigrationService {
 
   // ── One video ──────────────────────────────────────────────────────
 
-  private async migrateVideoWithTimeout(
+  private async handOffWithTimeout(
     migration: VideoMigration,
     timeoutMs: number,
   ): Promise<void> {
@@ -366,9 +424,9 @@ export class MigrationService {
     });
 
     try {
-      await Promise.race([this.migrateVideo(migration), deadline]);
+      await Promise.race([this.handOff(migration), deadline]);
     } catch (error) {
-      // `migrateVideo` handles its own failures, so anything arriving here is the timeout or a genuine escape.
+      // `handOff` handles its own failures, so anything arriving here is the timeout or a genuine escape.
       migration.status = "failed";
       migration.error = safeErrorMessage(error, "Import failed");
       this.logger.error(
@@ -381,22 +439,24 @@ export class MigrationService {
     }
   }
 
-  private async migrateVideo(migration: VideoMigration): Promise<void> {
+  /** Queue one video on Bunny and tag it; it is left `processing`, and encoding is followed by `waitForEncoding` or `refreshMigrationState`. */
+  private async handOff(migration: VideoMigration): Promise<void> {
     try {
       const existing = this.sourceIndex.get(migration.sourceVideoId);
       if (existing?.guid) {
-        migration.bunnyVideoId = existing.guid;
-        migration.status = "completed";
-        migration.completedAt = new Date().toISOString();
-        this.logger.info(`Already imported: ${stripAnsi(migration.videoName)}`);
+        this.adopt(migration, existing);
         this.flush();
 
         return;
       }
 
-      // A resumed entry that already has a Bunny video skips straight to re-asserting its metaTag, closing the orphan window between "fetch started" and "dedup tag written".
+      // An entry whose Bunny video still exists skips straight to re-asserting its metaTag, closing the orphan window between "fetch started" and "dedup tag written"; a failed or deleted copy is fetched again.
       let videoId: string;
-      if (migration.status === "processing" && migration.bunnyVideoId) {
+      if (
+        migration.status === "processing" &&
+        migration.bunnyVideoId &&
+        this.libraryGuids.has(migration.bunnyVideoId)
+      ) {
         this.logger.info(`Resuming: ${stripAnsi(migration.videoName)}`);
         videoId = migration.bunnyVideoId;
       } else {
@@ -404,23 +464,7 @@ export class MigrationService {
       }
 
       await this.tagVideo(migration, videoId);
-
-      const processed = await this.bunny.waitForVideoProcessing(
-        videoId,
-        (progress, status) => {
-          migration.encodeProgress = progress;
-          if (status === BunnyVideoStatus.Finished)
-            migration.status = "completed";
-          this.scheduleSave();
-        },
-      );
-
-      if (!processed.success)
-        throw new Error(processed.error ?? "Processing failed");
-
-      migration.status = "completed";
-      migration.completedAt = new Date().toISOString();
-      this.logger.success(`Completed: ${stripAnsi(migration.videoName)}`);
+      this.logger.success(`Queued: ${stripAnsi(migration.videoName)}`);
     } catch (error) {
       migration.status = "failed";
       migration.error = safeErrorMessage(error, "Import failed");
@@ -430,6 +474,62 @@ export class MigrationService {
     }
 
     this.flush();
+  }
+
+  /** Link an entry to the tagged Bunny video that already exists for it, finished or still processing. */
+  private adopt(migration: VideoMigration, video: BunnyVideo): void {
+    migration.bunnyVideoId = video.guid ?? null;
+    migration.error = null;
+    if (video.status === BunnyVideoStatus.Finished) {
+      migration.status = "completed";
+      migration.encodeProgress = 100;
+      migration.completedAt ??= new Date().toISOString();
+      this.logger.info(`Already imported: ${stripAnsi(migration.videoName)}`);
+
+      return;
+    }
+    migration.status = "processing";
+    migration.encodeProgress = video.encodeProgress ?? 0;
+    migration.startedAt ??= new Date().toISOString();
+    this.logger.info(
+      `Already queued on Bunny: ${stripAnsi(migration.videoName)}`,
+    );
+  }
+
+  /** Poll the library until every queued video is encoded, failed, or past the processing timeout. */
+  private async waitForEncoding(
+    state: MigrationState,
+    options: MigrationOptions,
+  ): Promise<void> {
+    const timeoutMs = options.processingTimeoutMs ?? DEFAULT_PROCESSING_TIMEOUT;
+    const waiting = () =>
+      state.videoMigrations.filter(
+        (m) =>
+          m.status === "processing" &&
+          Date.now() - Date.parse(m.startedAt ?? state.startedAt) < timeoutMs,
+      );
+    if (waiting().length === 0) return;
+
+    this.logger.info("Waiting for Bunny to encode the queued videos");
+    options.onProgress?.(state, "encode");
+    while (waiting().length > 0) {
+      await new Promise((r) => setTimeout(r, this.pollIntervalMs));
+      const before = new Map(
+        state.videoMigrations.map((m) => [m, m.status] as const),
+      );
+      await refreshMigrationState(state, this.bunny);
+      for (const [migration, status] of before) {
+        if (migration.status === status) continue;
+        if (migration.status === "completed")
+          this.logger.success(`Encoded: ${stripAnsi(migration.videoName)}`);
+        else if (migration.status === "failed")
+          this.logger.error(
+            `Failed: ${stripAnsi(migration.videoName)} - ${migration.error}`,
+          );
+      }
+      options.onProgress?.(state, "encode");
+      this.scheduleSave();
+    }
   }
 
   private async startFetch(migration: VideoMigration): Promise<string> {

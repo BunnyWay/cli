@@ -3,6 +3,7 @@ import { streamCaptionNamespace } from "./caption/index.ts";
 import { streamCollectionNamespace } from "./collection/index.ts";
 import { streamEncodeNamespace } from "./encode/index.ts";
 import { streamImportCommand } from "./import.ts";
+import { streamImportStatusCommand } from "./import-status.ts";
 import { streamLibraryNamespace } from "./library/index.ts";
 import { streamSmartCommand } from "./smart.ts";
 import { streamTranscribeCommand } from "./transcribe.ts";
@@ -16,5 +17,9 @@ export const streamNamespace = defineNamespace("stream", false, [
   streamEncodeNamespace,
   streamTranscribeCommand,
   streamSmartCommand,
-  streamImportCommand,
+  defineNamespace(
+    "import",
+    "Import videos into a Stream library from Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove.",
+    [streamImportCommand, streamImportStatusCommand],
+  ),
 ]);

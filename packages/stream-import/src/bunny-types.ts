@@ -44,3 +44,11 @@ export function videoStatusText(status: number | undefined): string {
       return "Unknown";
   }
 }
+
+/** Bunny gave up on the video: the fetch or the encode failed, and it will not recover on its own. */
+export function isFailedVideoStatus(status: number | undefined): boolean {
+  return (
+    status === BunnyVideoStatus.Error ||
+    status === BunnyVideoStatus.UploadFailed
+  );
+}

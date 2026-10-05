@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   type CredentialField,
   describeSource,
+  type Env,
   type Logger as ImportLogger,
   missingCredentials,
   parseSourceConfig,
@@ -10,6 +11,7 @@ import {
   type SourceConfigValues,
   type SourcePlugin,
 } from "@bunny.net/stream-import";
+import { getImportCredentials } from "@/config/index.ts";
 import { bunny } from "@/core/colors.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
@@ -24,30 +26,54 @@ export function importStatePath(source: string, libraryId: number): string {
   return join(base, "bunnynet", "stream-import", `${source}-${libraryId}.json`);
 }
 
-/** The engine's logger contract over the CLI logger; `debug` closes over --verbose. */
+/** The engine's logger contract over the CLI logger: per-video lines only with --verbose, since the command renders progress and results itself. */
 export function importLogger(verbose: boolean): ImportLogger {
+  const debug = (msg: string) => logger.debug(msg, verbose);
+
   return {
-    log: (msg) => logger.log(msg),
-    info: (msg) => logger.info(msg),
-    success: (msg) => logger.success(msg),
+    log: debug,
+    info: debug,
+    success: debug,
     warn: (msg) => logger.warn(msg),
-    error: (msg) => logger.error(msg),
-    dim: (msg) => logger.dim(msg),
-    debug: (msg) => logger.debug(msg, verbose),
+    error: debug,
+    dim: debug,
+    debug,
   };
+}
+
+/** The environment with a profile's saved credentials filling whatever it leaves unset, and whether they filled anything. */
+function credentialEnv(
+  plugin: SourcePlugin,
+  profile: string,
+): { env: Env; fromSaved: boolean } {
+  const env: Env = { ...process.env };
+  const saved = getImportCredentials(profile, plugin.id) ?? {};
+  let fromSaved = false;
+  for (const field of plugin.credentials) {
+    const value = saved[field.key];
+    const names = [field.env, ...(field.fallbackEnv ?? [])];
+    if (value === undefined || names.some((name) => env[name])) continue;
+    env[field.env] = String(value);
+    fromSaved = true;
+  }
+
+  return { env, fromSaved };
 }
 
 /**
  * Settle which platform the videos come from: `--source` wins, then the only
- * source whose credentials are all in the environment, then a picker.
+ * source whose credentials are all set (environment or saved), then a picker.
  */
 export async function resolveImportSource(
   requested: string | undefined,
+  profile: string,
   output: OutputFormat,
 ): Promise<SourcePlugin> {
   if (requested) return requireSource(requested);
 
-  const statuses = SOURCES.map((plugin) => describeSource(plugin));
+  const statuses = SOURCES.map((plugin) =>
+    describeSource(plugin, credentialEnv(plugin, profile).env),
+  );
   const ready = statuses.filter((s) => s.readiness === "ready");
   if (ready.length === 1 && ready[0]) {
     logger.info(
@@ -81,22 +107,36 @@ export async function resolveImportSource(
   return requireSource(id);
 }
 
+export interface SourceCredentials<C> {
+  config: C;
+  /** Values typed at the prompt this run, by field key; empty when nothing was asked. */
+  entered: SourceConfigValues;
+  /** Whether any value came from the profile's saved credentials. */
+  fromSaved: boolean;
+}
+
 /**
- * Resolve a source's credentials from flags and the environment, prompting for
- * whatever is still unset when the terminal allows it. Unattended runs fail
- * naming the environment variables instead.
+ * Resolve a source's credentials from flags, the environment, then the
+ * profile's saved values, prompting for whatever is still unset when the
+ * terminal allows it. Unattended runs fail naming the environment variables.
  */
 export async function resolveSourceCredentials<C>(
   plugin: SourcePlugin<C>,
   overrides: Record<string, string | number | undefined>,
+  profile: string,
   output: OutputFormat,
-): Promise<C> {
-  const resolved = resolveSourceConfig(plugin, { overrides });
+): Promise<SourceCredentials<C>> {
+  const { env, fromSaved } = credentialEnv(plugin, profile);
+  const resolved = resolveSourceConfig(plugin, { env, overrides });
   if (
     missingCredentials(plugin, resolved).length === 0 ||
     !isInteractive(output)
   ) {
-    return parseSourceConfig(plugin, resolved);
+    return {
+      config: parseSourceConfig(plugin, resolved),
+      entered: {},
+      fromSaved,
+    };
   }
 
   logger.log(bunny.bold(`${plugin.label} credentials`));
@@ -107,14 +147,18 @@ export async function resolveSourceCredentials<C>(
     const value = await promptCredential(field, resolved[field.key]);
     if (value !== undefined) entered[field.key] = value;
   }
-  logger.dim(
-    `Set ${plugin.credentials.map((f) => f.env).join(", ")} to skip these prompts next time.`,
-  );
 
-  return parseSourceConfig(
-    plugin,
-    resolveSourceConfig(plugin, { overrides: { ...overrides, ...entered } }),
-  );
+  return {
+    config: parseSourceConfig(
+      plugin,
+      resolveSourceConfig(plugin, {
+        env,
+        overrides: { ...overrides, ...entered },
+      }),
+    ),
+    entered,
+    fromSaved,
+  };
 }
 
 async function promptCredential(

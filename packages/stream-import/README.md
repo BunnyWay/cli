@@ -60,19 +60,22 @@ const service = new MigrationService({
 });
 
 const summary = await service.getSummary(); // what would happen
-const state = await service.runMigration({ concurrency: 3 }); // do it
+const state = await service.runMigration({ concurrency: 3 }); // queue everything on bunny.net
+
+// Later: what has bunny.net finished? Updates `state` in place.
+await refreshMigrationState(state, bunny);
 ```
 
-`getSummary()` walks the source once and reports how many videos are new versus already imported; `runMigration()` reuses that discovery, so calling both costs one pass.
+`getSummary()` walks the source once and reports how many videos are new versus already imported (and, of those, how many bunny.net is still processing or failed); `runMigration()` reuses that discovery, so calling both costs one pass.
 
 ## How an import works
 
 1. **Discover.** The adapter lists folders and videos. Folders become Stream collections with the same name (matched case-insensitively, created when missing). Sources without folders put everything in the library root.
-2. **De-duplicate.** Existing Stream videos are indexed by a per-source metaTag (`vimeoId`, `s3Source`, and so on). A video whose tag is already present is skipped, so re-running an import is safe.
-3. **Fetch.** For each new video the adapter resolves a download URL, the engine checks it against the adapter's host allowlist (HTTPS only by default), and bunny.net is asked to fetch it. The metaTag is written immediately after, and a resumed run re-asserts it for any video interrupted between those two steps.
-4. **Wait.** The engine polls until bunny.net finishes encoding, fails, or the processing timeout elapses, working `concurrency` videos at a time.
+2. **De-duplicate.** Existing Stream videos are indexed by a per-source metaTag (`vimeoId`, `s3Source`, and so on). A video whose tag is already present is skipped, so re-running an import is safe. A tagged copy that bunny.net failed to fetch or encode does not count, so the next run imports it again.
+3. **Hand off.** For each new video the adapter resolves a download URL, the engine checks it against the adapter's host allowlist (HTTPS only by default), and bunny.net is asked to fetch it. The metaTag is written immediately after, and a later run re-asserts it for any video interrupted between those two steps. `concurrency` bounds this step only, and the run returns once every video is queued, leaving them `processing`.
+4. **Wait (optional).** With `wait: true`, the run stays and lists the library on an interval until every queued video is encoded, failed, or past `processingTimeoutMs`. Without it, `refreshMigrationState(state, bunny)` does the same reconciliation once, whenever the host asks.
 
-State is persisted through the `StateStore` after every status transition, so an interrupted run resumes with `runMigration({ resume: true })`. A run with failures is marked `failed` rather than `completed` for the same reason. `createFileStateStore(path)` is the file-backed implementation; it validates what it reads and creates the file owner-only.
+State is persisted through the `StateStore` after every status transition, so an interrupted run resumes with `runMigration({ resume: true })`, which retries failed videos too. A run is only marked `completed` once every video is encoded; one with failures is `failed`, so it stays resumable. A fresh (non-resume) run carries over the videos the previous run left processing, so their progress stays tracked. `createFileStateStore(path)` is the file-backed implementation; it validates what it reads and creates the file owner-only.
 
 ## Sources
 
@@ -80,11 +83,11 @@ Each source is a `SourcePlugin` describing its credentials, whether it has folde
 
 | Source            | Package                               | Folders              | Dedup tag      | Credentials (environment variables)                                                                                                                                  |
 | ----------------- | ------------------------------------- | -------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vimeo             | `@bunny.net/stream-import-vimeo`      | Projects             | `vimeoId`      | `VIMEO_ACCESS_TOKEN` (scopes `public`, `private`, `video_files`; downloads need a Standard plan or above)                                                            |
+| Vimeo             | `@bunny.net/stream-import-vimeo`      | Projects             | `vimeoId`      | `VIMEO_ACCESS_TOKEN` (scopes `public`, `private`, `video_files`; video files need a Standard plan or above)                                                          |
 | AWS S3            | `@bunny.net/stream-import-s3`         | First-level prefixes | `s3Source`     | `S3_BUCKET`, `AWS_REGION` (or `AWS_DEFAULT_REGION`), optional `S3_PREFIX`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `S3_PRESIGNED_URL_TTL` |
 | Wistia            | `@bunny.net/stream-import-wistia`     | Projects             | `wistiaId`     | `WISTIA_ACCESS_TOKEN`                                                                                                                                                |
 | Mux               | `@bunny.net/stream-import-mux`        | none                 | `muxAssetId`   | `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`                                                                                                                                   |
-| Cloudflare Stream | `@bunny.net/stream-import-cloudflare` | none                 | `cfStreamId`   | `CLOUDFLARE_API_TOKEN` (Stream:Read), `CLOUDFLARE_ACCOUNT_ID`                                                                                                        |
+| Cloudflare Stream | `@bunny.net/stream-import-cloudflare` | none                 | `cfStreamId`   | `CLOUDFLARE_API_TOKEN` (Stream:Edit), `CLOUDFLARE_ACCOUNT_ID`                                                                                                        |
 | JW Player         | `@bunny.net/stream-import-jwplayer`   | none                 | `jwPlayerId`   | `JWPLAYER_API_KEY` (v2), `JWPLAYER_SITE_ID`                                                                                                                          |
 | Brightcove        | `@bunny.net/stream-import-brightcove` | Folders              | `brightcoveId` | `BRIGHTCOVE_CLIENT_ID`, `BRIGHTCOVE_CLIENT_SECRET` (CMS video read), `BRIGHTCOVE_ACCOUNT_ID`                                                                         |
 

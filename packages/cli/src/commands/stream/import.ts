@@ -6,9 +6,12 @@ import {
   DEFAULT_CONCURRENCY,
   DEFAULT_PROCESSING_TIMEOUT,
   DEFAULT_REQUEST_TIMEOUT,
+  type MigrationPhase,
   MigrationService,
   type MigrationState,
   type MigrationSummary,
+  type SourceConfigValues,
+  type SourcePlugin,
   stripAnsi,
 } from "@bunny.net/stream-import";
 import type { Argv, CommandModule } from "yargs";
@@ -18,15 +21,20 @@ import {
   connectStreamLibrary,
   formatDuration,
 } from "@/commands/stream/videos-api.ts";
-import { resolveConfig } from "@/config/index.ts";
+import {
+  deleteImportCredentials,
+  getImportCredentials,
+  resolveConfig,
+  setImportCredentials,
+} from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { bunny } from "@/core/colors.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
-import { formatBytes, formatKeyValue, progressBar } from "@/core/format.ts";
+import { formatBytes, formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
-import { confirm, withSpinner } from "@/core/ui.ts";
+import { confirm, spinner, withSpinner } from "@/core/ui.ts";
 import { VERSION } from "@/core/version.ts";
 import {
   importLogger,
@@ -43,6 +51,7 @@ interface ImportArgs {
   folder?: string;
   dryRun?: boolean;
   resume?: boolean;
+  wait?: boolean;
   force?: boolean;
   concurrency: number;
   bucket?: string;
@@ -71,6 +80,10 @@ function libraryJson(library: VideoLibraryModel) {
   return { id: library.Id, name: library.Name };
 }
 
+export function importStatusCommand(libraryId: number, source: string): string {
+  return `bunny stream import status --library ${libraryId} --source ${source}`;
+}
+
 function renderSummary(
   library: VideoLibraryModel,
   sourceLabel: string,
@@ -84,8 +97,18 @@ function renderSummary(
       value: `${sourceLabel}: ${summary.totalVideos} videos in ${summary.totalFolders} folders`,
     },
     { key: "Already imported", value: String(summary.alreadyMigrated) },
-    { key: "To import", value: String(summary.newVideos) },
   ];
+  if (summary.processingOnBunny > 0)
+    entries.push({
+      key: "Processing on Bunny",
+      value: String(summary.processingOnBunny),
+    });
+  if (summary.failedOnBunny > 0)
+    entries.push({
+      key: "Failed on Bunny",
+      value: `${summary.failedOnBunny} (will be imported again)`,
+    });
+  entries.push({ key: "To import", value: String(summary.newVideos) });
   if (summary.totalDuration > 0)
     entries.push({
       key: "Duration",
@@ -121,36 +144,118 @@ function renderPlan(summary: MigrationSummary): void {
   }
 }
 
+function counts(state: MigrationState) {
+  const by = (status: string) =>
+    state.videoMigrations.filter((m) => m.status === status);
+
+  return {
+    completed: by("completed").length,
+    processing: by("processing").length,
+    failed: by("failed"),
+  };
+}
+
+/** The one progress line: videos handed over during the handoff, then encode progress while waiting. */
+function progressText(state: MigrationState, phase: MigrationPhase): string {
+  const all = state.videoMigrations;
+  if (phase === "handoff") {
+    const done = all.filter(
+      (m) => m.status !== "pending" && m.status !== "fetching",
+    ).length;
+
+    return `Handing videos to Bunny: ${done}/${all.length}`;
+  }
+  const tracked = all.filter((m) => m.bunnyVideoId);
+  const { completed, failed } = counts(state);
+  const average = tracked.length
+    ? Math.round(
+        tracked.reduce((sum, m) => sum + m.encodeProgress, 0) / tracked.length,
+      )
+    : 0;
+  const tail = failed.length > 0 ? `, ${failed.length} failed` : "";
+
+  return `Encoding: ${completed}/${tracked.length} finished, ${average}% average${tail}`;
+}
+
 function renderResult(
   state: MigrationState,
+  library: VideoLibraryModel,
   elapsedMs: number,
   output: OutputFormat,
-  resumeCommand: string,
+  opts: {
+    waited: boolean;
+    libraryId: number;
+    source: string;
+    resumeCommand: string;
+  },
 ): void {
-  const completed = state.videoMigrations.filter(
-    (m) => m.status === "completed",
-  );
-  const failed = state.videoMigrations.filter((m) => m.status === "failed");
+  const { completed, processing, failed } = counts(state);
+  const status = importStatusCommand(opts.libraryId, opts.source);
 
-  logger.log("");
-  logger.log(bunny.bold("Import complete"));
-  logger.log(
-    formatKeyValue(
-      [
-        { key: "Completed", value: String(completed.length) },
-        { key: "Failed", value: String(failed.length) },
-        { key: "Elapsed", value: formatDuration(elapsedMs / 1000) },
-      ],
-      output,
-    ),
-  );
+  if (opts.waited) {
+    logger.log(bunny.bold("Import complete"));
+    logger.log(
+      formatKeyValue(
+        [
+          { key: "Completed", value: String(completed) },
+          ...(processing > 0
+            ? [{ key: "Still processing", value: String(processing) }]
+            : []),
+          { key: "Failed", value: String(failed.length) },
+          { key: "Elapsed", value: formatDuration(elapsedMs / 1000) },
+        ],
+        output,
+      ),
+    );
+    if (processing > 0)
+      logger.info(
+        `Stopped waiting on ${processing} videos still processing. Check them with ${bunny(status)}`,
+      );
+  } else if (processing > 0) {
+    logger.success(
+      `Queued ${processing} videos into ${library.Name}. Bunny is fetching and encoding them now.`,
+    );
+    logger.info(`Check progress with ${bunny(status)}`);
+  } else if (failed.length === 0) {
+    logger.success(`Imported ${completed} videos into ${library.Name}.`);
+  }
 
   if (failed.length > 0) {
     logger.log("");
     for (const m of failed)
       logger.error(`${stripAnsi(m.videoName)}: ${m.error}`);
-    logger.info(`Resume with ${bunny(resumeCommand)}`);
+    logger.info(`Resume with ${bunny(opts.resumeCommand)}`);
   }
+}
+
+/** After a successful credential check, offer to keep what was typed so the next run (or `--resume`) skips the prompt. */
+async function offerToSaveCredentials(
+  plugin: SourcePlugin,
+  entered: SourceConfigValues,
+  profile: string,
+): Promise<void> {
+  if (Object.keys(entered).length === 0) return;
+  const save = await confirm(
+    `Save ${plugin.label} credentials for next time?`,
+    {
+      initial: true,
+      optional: true,
+    },
+  );
+  if (!save) {
+    logger.dim(
+      `Set ${plugin.credentials.map((f) => f.env).join(", ")} to skip these prompts next time.`,
+    );
+
+    return;
+  }
+  setImportCredentials(profile, plugin.id, {
+    ...getImportCredentials(profile, plugin.id),
+    ...entered,
+  });
+  logger.success(
+    `Saved ${plugin.label} credentials to the "${profile}" profile.`,
+  );
 }
 
 /**
@@ -167,9 +272,11 @@ export function defineStreamImportCommand(opts: {
   const libraryExample = opts.libraryPositional ? "my-library" : "--lib 12345";
 
   return defineCommand<ImportArgs>({
-    command: opts.libraryPositional ? "import [library]" : "import",
-    describe:
-      "Import videos into a Stream library from Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove.",
+    // Under `bunny stream import` this is the namespace's default command, next to `status`.
+    command: opts.libraryPositional ? "import [library]" : "$0",
+    describe: opts.libraryPositional
+      ? "Import videos into a Stream library from Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove."
+      : (false as never),
     examples: [
       [
         `$0 ${mount} --source vimeo`,
@@ -182,6 +289,10 @@ export function defineStreamImportCommand(opts: {
       [
         `$0 ${mount} ${libraryExample} --source s3 --bucket my-videos --prefix 2024/ --force`,
         "Unattended S3 import; credentials from the environment",
+      ],
+      [
+        `$0 ${mount} ${libraryExample} --source vimeo --wait`,
+        "Stay until Bunny has encoded every video",
       ],
       [`$0 ${mount} --source vimeo --resume`, "Continue an interrupted import"],
     ],
@@ -221,6 +332,11 @@ export function defineStreamImportCommand(opts: {
           type: "boolean",
           describe: "Continue the saved import for this source and library",
         })
+        .option("wait", {
+          type: "boolean",
+          describe:
+            "Stay until Bunny has encoded every video (default: return once they are queued)",
+        })
         .option("force", {
           alias: "f",
           type: "boolean",
@@ -230,7 +346,7 @@ export function defineStreamImportCommand(opts: {
           alias: "c",
           type: "number",
           default: DEFAULT_CONCURRENCY,
-          describe: "Videos to import in parallel (1-20)",
+          describe: "Videos to hand to Bunny in parallel (1-20)",
         })
         .option("bucket", { type: "string", describe: "S3 bucket override" })
         .option("prefix", { type: "string", describe: "S3 prefix override" })
@@ -245,11 +361,12 @@ export function defineStreamImportCommand(opts: {
         .option("processing-timeout", {
           type: "number",
           describe:
-            "How long to wait for bunny.net to encode one video, minutes (1-1440)",
+            "With --wait: how long to wait for Bunny to encode one video, minutes (1-1440)",
         })
         .option("migration-timeout", {
           type: "number",
-          describe: "Overall timeout per video, minutes (1-1440)",
+          describe:
+            "Timeout per video for the handoff to Bunny, minutes (1-1440)",
         }) as Argv<ImportArgs>;
     },
 
@@ -276,30 +393,46 @@ export function defineStreamImportCommand(opts: {
       );
       const libraryId = library.Id as number;
 
-      const plugin = await resolveImportSource(args.source, output);
+      const plugin = await resolveImportSource(
+        args.source,
+        args.profile,
+        output,
+      );
       assertFolderSupported(plugin, args.folder);
 
       const requestTimeout = args.requestTimeout
         ? args.requestTimeout * 1000
         : DEFAULT_REQUEST_TIMEOUT;
-      const sourceConfig = await resolveSourceCredentials(
+      const credentials = await resolveSourceCredentials(
         plugin,
         {
           bucket: args.bucket,
           prefix: args.prefix,
           presignedUrlTtl: args.urlTtl,
         },
+        args.profile,
         output,
       );
       const engineLog = importLogger(verbose);
-      const adapter = plugin.createAdapter(sourceConfig, {
+      const adapter = plugin.createAdapter(credentials.config, {
         userAgent: `bunny-cli/${VERSION}`,
         requestTimeout,
         logger: engineLog,
       });
-      await withSpinner(`Checking ${plugin.label} credentials...`, () =>
-        adapter.validateCredentials(),
-      );
+      try {
+        await withSpinner(`Checking ${plugin.label} credentials...`, () =>
+          adapter.validateCredentials(),
+        );
+      } catch (error) {
+        if (credentials.fromSaved && error instanceof UserError) {
+          deleteImportCredentials(args.profile, plugin.id);
+          logger.warn(
+            `Removed the saved ${plugin.label} credentials. Run again to enter new ones.`,
+          );
+        }
+        throw error;
+      }
+      await offerToSaveCredentials(plugin, credentials.entered, args.profile);
 
       const service = new MigrationService({
         adapter,
@@ -307,9 +440,7 @@ export function defineStreamImportCommand(opts: {
           client: connectStreamLibrary(library, { config, verbose }),
           libraryId,
           requestTimeout,
-          processingTimeout: args.processingTimeout
-            ? args.processingTimeout * 60_000
-            : DEFAULT_PROCESSING_TIMEOUT,
+          processingTimeout: DEFAULT_PROCESSING_TIMEOUT,
           logger: engineLog,
         }),
         store: createFileStateStore(importStatePath(plugin.id, libraryId), {
@@ -333,15 +464,38 @@ export function defineStreamImportCommand(opts: {
       if (output !== "json")
         renderSummary(library, plugin.label, summary, output);
 
-      if (summary.totalVideos === 0 || summary.newVideos === 0) {
-        if (output === "json") {
+      if (summary.totalVideos === 0) {
+        if (output === "json")
           logger.log(JSON.stringify({ ...base, imported: 0 }, null, 2));
+        else logger.warn(`No videos found at ${plugin.label}.`);
+
+        return;
+      }
+
+      // Nothing to hand over: it is all done, or Bunny is still working and only --wait has a reason to stay.
+      if (
+        summary.newVideos === 0 &&
+        !(args.wait && summary.processingOnBunny > 0)
+      ) {
+        if (output === "json") {
+          logger.log(
+            JSON.stringify(
+              { ...base, imported: 0, processing: summary.processingOnBunny },
+              null,
+              2,
+            ),
+          );
 
           return;
         }
-        if (summary.totalVideos === 0)
-          logger.warn(`No videos found at ${plugin.label}.`);
-        else logger.success("Everything is already imported.");
+        if (summary.processingOnBunny > 0) {
+          logger.info(
+            `Nothing new to import; ${summary.processingOnBunny} videos are still processing on Bunny.`,
+          );
+          logger.info(
+            `Check progress with ${bunny(importStatusCommand(libraryId, plugin.id))}, or re-run with --wait.`,
+          );
+        } else logger.success("Everything is already imported.");
 
         return;
       }
@@ -359,34 +513,46 @@ export function defineStreamImportCommand(opts: {
         return;
       }
 
-      const proceed = await confirm(
-        `Import ${summary.newVideos} videos into ${library.Name}?`,
-        { force: args.force, initial: true },
-      );
-      if (!proceed) {
-        logger.info("Cancelled.");
+      if (summary.newVideos > 0) {
+        const proceed = await confirm(
+          `Import ${summary.newVideos} videos into ${library.Name}?`,
+          { force: args.force, initial: true },
+        );
+        if (!proceed) {
+          logger.info("Cancelled.");
 
-        return;
+          return;
+        }
       }
 
       const startedAt = Date.now();
-      const state = await service.runMigration({
-        folderId: args.folder,
-        concurrency: args.concurrency,
-        resume: args.resume,
-        migrationTimeoutMs: args.migrationTimeout
-          ? args.migrationTimeout * 60_000
-          : undefined,
-        onProgress: (s) => {
-          if (output === "json") return;
-          const done = s.videoMigrations.filter(
-            (m) => m.status === "completed",
-          ).length;
-          logger.dim(progressBar(done / Math.max(s.videoMigrations.length, 1)));
-        },
-      });
+      // Engine lines go to --verbose; without it, one spinner line carries the progress.
+      const spin =
+        output === "json" || verbose
+          ? undefined
+          : spinner("Handing videos to Bunny...").start();
+      let state: MigrationState;
+      try {
+        state = await service.runMigration({
+          folderId: args.folder,
+          concurrency: args.concurrency,
+          resume: args.resume,
+          wait: args.wait,
+          processingTimeoutMs: args.processingTimeout
+            ? args.processingTimeout * 60_000
+            : undefined,
+          migrationTimeoutMs: args.migrationTimeout
+            ? args.migrationTimeout * 60_000
+            : undefined,
+          onProgress: (s, phase) => {
+            if (spin) spin.text = progressText(s, phase);
+          },
+        });
+      } finally {
+        spin?.stop();
+      }
 
-      const failed = state.videoMigrations.filter((m) => m.status === "failed");
+      const { completed, processing, failed } = counts(state);
       if (output === "json") {
         logger.log(
           JSON.stringify(
@@ -394,9 +560,9 @@ export function defineStreamImportCommand(opts: {
               library: base.library,
               source: plugin.id,
               status: state.status,
-              completed: state.videoMigrations.filter(
-                (m) => m.status === "completed",
-              ).length,
+              waited: Boolean(args.wait),
+              completed,
+              processing,
               failed: failed.map((m) => ({
                 video: m.videoName,
                 error: m.error,
@@ -409,12 +575,12 @@ export function defineStreamImportCommand(opts: {
           ),
         );
       } else {
-        renderResult(
-          state,
-          Date.now() - startedAt,
-          output,
-          `bunny ${mount} ${opts.libraryPositional ? libraryId : `--lib ${libraryId}`} --source ${plugin.id} --resume`,
-        );
+        renderResult(state, library, Date.now() - startedAt, output, {
+          waited: Boolean(args.wait),
+          libraryId,
+          source: plugin.id,
+          resumeCommand: `bunny ${mount} ${opts.libraryPositional ? libraryId : `--library ${libraryId}`} --source ${plugin.id}${args.folder ? ` --folder ${args.folder}` : ""} --resume`,
+        });
       }
       if (failed.length > 0) process.exitCode = 1;
     },

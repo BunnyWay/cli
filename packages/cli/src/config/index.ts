@@ -118,3 +118,32 @@ export function deleteSandbox(name: string): void {
   delete existing.sandboxes[name];
   saveConfigFile(existing);
 }
+
+export type ImportCredentials = Record<string, string | number>;
+
+export function getImportCredentials(
+  profile: string,
+  source: string,
+): ImportCredentials | null {
+  return loadConfigFile()?.stream_import?.[profile]?.[source] ?? null;
+}
+
+export function setImportCredentials(
+  profile: string,
+  source: string,
+  values: ImportCredentials,
+): void {
+  const existing = loadConfigFile() ?? { profiles: {}, sandboxes: {} };
+  const byProfile = existing.stream_import ?? {};
+  byProfile[profile] = { ...byProfile[profile], [source]: values };
+  existing.stream_import = byProfile;
+  saveConfigFile(existing);
+}
+
+export function deleteImportCredentials(profile: string, source: string): void {
+  const existing = loadConfigFile();
+  const saved = existing?.stream_import?.[profile];
+  if (!existing || !saved?.[source]) return;
+  delete saved[source];
+  saveConfigFile(existing);
+}
