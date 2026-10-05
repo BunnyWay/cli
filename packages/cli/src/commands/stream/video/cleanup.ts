@@ -5,12 +5,19 @@ import {
 import {
   type CleanupResolutionsQuery,
   cleanupVideoResolutions,
+  fetchVideoResolutions,
 } from "@/commands/stream/videos-api.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
+import {
+  type CleanupPlan,
+  cleanupItemLabel,
+  cleanupPlan,
+  informativeMessage,
+} from "./cleanup-plan.ts";
 
 interface CleanupArgs {
   video?: string;
@@ -87,6 +94,21 @@ function cleanupSummary(query: CleanupResolutionsQuery): string[] {
   if (query.deleteOriginal) parts.push("the original file");
   if (query.outputs) parts.push(`outputs: ${query.outputs}`);
   return parts;
+}
+
+/** `HLS 240p, 360p; MP4 720p; Original file`, for the confirmation prompt. */
+function planSummary(plan: CleanupPlan): string {
+  const groups = new Map<string, string[]>();
+  for (const item of plan.items) {
+    const key =
+      item.kind === "original" ? "Original file" : item.kind.toUpperCase();
+    const list = groups.get(key) ?? [];
+    if (item.resolution) list.push(item.resolution);
+    groups.set(key, list);
+  }
+  return [...groups]
+    .map(([key, list]) => (list.length ? `${key} ${list.join(", ")}` : key))
+    .join("; ");
 }
 
 export const streamVideoCleanupCommand = defineCommand<CleanupArgs>({
@@ -170,6 +192,40 @@ export const streamVideoCleanupCommand = defineCommand<CleanupArgs>({
     });
 
     const summary = cleanupSummary(query);
+
+    // The endpoint's dry run only returns a status message, so the list of what
+    // would go comes from the video's resolutions info.
+    const info = await withSpinner("Reading the video's resolutions...", () =>
+      fetchVideoResolutions(client, libraryId, video.guid),
+    );
+    const plan = cleanupPlan(info, query);
+
+    if (!args.dryRun && plan.items.length === 0) {
+      if (output === "json") {
+        logger.log(
+          JSON.stringify(
+            {
+              id: video.guid,
+              title: video.title,
+              dryRun: false,
+              ...query,
+              plan,
+              deleted: false,
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+      logger.log(
+        `Nothing to delete from ${video.title} for ${summary.join(", ")}.`,
+      );
+      if (plan.notPresent.length)
+        logger.dim(`Not on this video: ${plan.notPresent.join(", ")}.`);
+      return;
+    }
+
     if (!args.dryRun) {
       requireConfirmable(output, {
         force,
@@ -177,7 +233,7 @@ export const streamVideoCleanupCommand = defineCommand<CleanupArgs>({
         hint: "Re-run with --force, or add --dry-run to preview instead.",
       });
       const confirmed = await confirm(
-        `Delete ${summary.join(", ")} from ${video.title}? This cannot be undone.`,
+        `Delete ${planSummary(plan)} from ${video.title}? This cannot be undone.`,
         { force },
       );
       if (!confirmed) {
@@ -199,6 +255,7 @@ export const streamVideoCleanupCommand = defineCommand<CleanupArgs>({
             title: video.title,
             dryRun: Boolean(args.dryRun),
             ...query,
+            plan,
             ...status,
           },
           null,
@@ -214,11 +271,28 @@ export const streamVideoCleanupCommand = defineCommand<CleanupArgs>({
           { key: "Video", value: `${video.title} (${video.guid})` },
           { key: "Selection", value: summary.join(", ") },
           { key: "Dry run", value: args.dryRun ? "yes" : "no" },
-          { key: "Result", value: status.message ?? "ok" },
         ],
         output,
       ),
     );
+
+    const verb = args.dryRun ? "Would delete" : "Deleted";
+    if (plan.items.length === 0) {
+      logger.log("Nothing matches the selection, so nothing would be deleted.");
+    } else {
+      logger.log(`${verb} (${plan.items.length}):`);
+      for (const item of plan.items) {
+        logger.log(
+          `  ${cleanupItemLabel(item)}${item.path ? `  ${item.path}` : ""}`,
+        );
+      }
+    }
+    if (plan.notPresent.length) {
+      logger.dim(`Not on this video: ${plan.notPresent.join(", ")}.`);
+    }
+    const message = informativeMessage(status.message);
+    if (message) logger.dim(`API: ${message}`);
+
     if (args.dryRun) {
       logger.dim("Nothing was deleted. Re-run without --dry-run to apply.");
     } else {
