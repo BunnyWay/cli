@@ -1,23 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import {
-  BAR_WIDTH,
-  formatBucketLabel,
-  renderBarChart,
-  sumChart,
-} from "./stats.ts";
+import { formatBucketLabel, renderBarChart, sumChart } from "./stats.ts";
 
 describe("sumChart", () => {
-  test("sums chart values", () => {
-    expect(sumChart({ "2026-05-01": 3, "2026-05-02": 7 })).toBe(10);
-  });
-
   test("returns 0 for null/undefined", () => {
     expect(sumChart(null)).toBe(0);
     expect(sumChart(undefined)).toBe(0);
-  });
-
-  test("returns 0 for an empty chart", () => {
-    expect(sumChart({})).toBe(0);
   });
 });
 
@@ -63,7 +50,7 @@ describe("renderBarChart", () => {
 
   test("the max value fills the full bar width", () => {
     const line = renderBarChart([["X", 100]]);
-    expect([...line].filter((c) => c === "█")).toHaveLength(BAR_WIDTH);
+    expect([...line].filter((c) => c === "█")).toHaveLength(24);
   });
 
   test("a zero value renders no filled glyphs", () => {

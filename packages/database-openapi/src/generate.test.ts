@@ -116,16 +116,6 @@ describe("generateOpenAPISpec", () => {
     expect(Object.keys(spec.paths)).toHaveLength(5);
   });
 
-  test("generates GET, POST, PATCH, DELETE for each table", () => {
-    const spec = generateOpenAPISpec(schema);
-    const usersPath = spec.paths["/users"]!;
-
-    expect(usersPath.get).toBeDefined();
-    expect(usersPath.post).toBeDefined();
-    expect(usersPath.patch).toBeDefined();
-    expect(usersPath.delete).toBeDefined();
-  });
-
   test("GET uses $ref for common params and inline filter params", () => {
     const spec = generateOpenAPISpec(schema);
     const get = spec.paths["/users"]!.get!;

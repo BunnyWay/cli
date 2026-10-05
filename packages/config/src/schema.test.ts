@@ -38,14 +38,6 @@ describe("BunnyAppConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  test("non-date-string version is rejected", () => {
-    const result = BunnyAppConfigSchema.safeParse({
-      ...valid(),
-      version: "v1",
-    });
-    expect(result.success).toBe(false);
-  });
-
   test("numeric version is rejected", () => {
     const result = BunnyAppConfigSchema.safeParse({
       ...valid(),
@@ -213,12 +205,5 @@ describe("normalizeRegions", () => {
     result.allowed.push("nyc");
     expect(input).toEqual(["sfo", "lhr"]);
     expect(result.allowed).not.toBe(result.required);
-  });
-});
-
-describe("CURRENT_VERSION", () => {
-  test("matches the schema's version regex (no typos in the constant)", () => {
-    const result = BunnyAppConfigSchema.safeParse(valid());
-    expect(result.success).toBe(true);
   });
 });

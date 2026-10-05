@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import {
-  containerPortsInConfig,
-  endpointContainerPorts,
   endpointRequestToConfig,
   filterNewEndpointSuggestions,
   filterNewEnvSuggestions,
@@ -21,40 +19,22 @@ const cdn = (...ports: Array<[number, number]>): EndpointRequest => ({
   },
 });
 
-describe("endpointContainerPorts", () => {
-  test("extracts container ports from a CDN endpoint", () => {
-    expect(endpointContainerPorts(cdn([443, 8080], [80, 8080]))).toEqual([
-      8080, 8080,
-    ]);
-  });
-
-  test("returns [] for an endpoint with no portMappings", () => {
-    expect(endpointContainerPorts({ displayName: "weird" })).toEqual([]);
-  });
-});
-
-describe("containerPortsInConfig", () => {
-  test("collects container ports across all endpoints", () => {
-    const ports = containerPortsInConfig({
-      endpoints: [
-        { type: "cdn", ports: [{ public: 443, container: 8080 }] },
-        { type: "anycast", ports: [{ public: 9090, container: 9090 }] },
-      ],
-    });
-    expect([...ports]).toEqual([8080, 9090]);
-  });
-
-  test("returns empty Set when no endpoints", () => {
-    expect(containerPortsInConfig({}).size).toBe(0);
-  });
-});
-
 describe("filterNewEndpointSuggestions", () => {
   test("drops suggestions whose container port is already configured", () => {
+    const anycast: EndpointRequest = {
+      displayName: "anycast",
+      anycast: {
+        type: "iPv4",
+        portMappings: [{ exposedPort: 7070, containerPort: 7070 }],
+      },
+    };
     const out = filterNewEndpointSuggestions(
-      [cdn([443, 8080]), cdn([443, 9090])],
+      [cdn([443, 8080]), cdn([443, 9090]), anycast],
       {
-        endpoints: [{ type: "cdn", ports: [{ public: 443, container: 8080 }] }],
+        endpoints: [
+          { type: "cdn", ports: [{ public: 443, container: 8080 }] },
+          { type: "anycast", ports: [{ public: 7070, container: 7070 }] },
+        ],
       },
     );
     expect(out).toHaveLength(1);

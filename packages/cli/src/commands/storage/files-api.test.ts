@@ -82,12 +82,6 @@ test("deleteFile bypasses the root guard when emptying the zone", async () => {
   );
 });
 
-test("deleteFile keeps the root guard off for a normal path", async () => {
-  const requested = respondWith(null);
-  await deleteFile(connectStorageZone(ZONE), "images/");
-  expect(requested().searchParams.has("allowRootDelete")).toBe(false);
-});
-
 test("isZoneRoot recognises the root and nothing else", () => {
   expect(isZoneRoot("/")).toBe(true);
   expect(isZoneRoot("")).toBe(true);

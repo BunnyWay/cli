@@ -1,34 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
-  csvEscape,
   formatDuration,
   formatKeyValue,
   formatTable,
   formatTimeAgo,
   maskSecret,
 } from "./format.ts";
-
-describe("csvEscape", () => {
-  test("plain string unchanged", () => {
-    expect(csvEscape("hello")).toBe("hello");
-  });
-
-  test("wraps value with commas", () => {
-    expect(csvEscape("hello,world")).toBe('"hello,world"');
-  });
-
-  test("escapes double quotes", () => {
-    expect(csvEscape('say "hi"')).toBe('"say ""hi"""');
-  });
-
-  test("wraps value with newlines", () => {
-    expect(csvEscape("line1\nline2")).toBe('"line1\nline2"');
-  });
-
-  test("empty string unchanged", () => {
-    expect(csvEscape("")).toBe("");
-  });
-});
 
 describe("formatTable", () => {
   const headers = ["ID", "Name"];
@@ -46,9 +23,13 @@ describe("formatTable", () => {
     expect(lines.length).toBe(3);
   });
 
-  test("csv escapes values with commas", () => {
-    const result = formatTable(["Col"], [["a,b"]], "csv");
-    expect(result).toBe('Col\n"a,b"');
+  test("csv escapes commas, quotes, and newlines", () => {
+    const result = formatTable(
+      ["Col"],
+      [["a,b"], ['say "hi"'], ["x\ny"]],
+      "csv",
+    );
+    expect(result).toBe('Col\n"a,b"\n"say ""hi"""\n"x\ny"');
   });
 
   test("markdown format", () => {
@@ -93,12 +74,6 @@ describe("formatTable", () => {
   test("empty rows", () => {
     const result = formatTable(headers, [], "csv");
     expect(result).toBe("ID,Name");
-  });
-
-  test("handles null/undefined values in rows", () => {
-    const result = formatTable(["Col"], [[""], [""]], "csv");
-    const lines = result.split("\n");
-    expect(lines.length).toBe(3);
   });
 });
 

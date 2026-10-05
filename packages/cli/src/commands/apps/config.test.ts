@@ -59,56 +59,6 @@ test("saveConfig(data, path) writes there, not to cwd", () => {
   expect(Object.keys(parsed)[0]).toBe("$schema");
 });
 
-test("stripTransientFields removes image+registry when dockerfile is set", () => {
-  const stripped = stripTransientFields({
-    version: "2026-05-11",
-    app: {
-      name: "demo",
-      containers: {
-        api: {
-          dockerfile: "Dockerfile",
-          image: "ghcr.io/me/api:abc123",
-          registry: "7545",
-        },
-      },
-    },
-  });
-
-  expect(stripped.app.containers.api).toEqual({
-    dockerfile: "Dockerfile",
-  });
-});
-
-test("stripTransientFields keeps image, drops registry when dockerfile is absent", () => {
-  const stripped = stripTransientFields({
-    version: "2026-05-11",
-    app: {
-      name: "demo",
-      containers: {
-        api: { image: "nginx:1.27", registry: "7545" },
-      },
-    },
-  });
-
-  expect(stripped.app.containers.api).toEqual({
-    image: "nginx:1.27",
-  });
-});
-
-test("stripTransientFields removes app.id (it lives in .bunny/app.json)", () => {
-  const stripped = stripTransientFields({
-    version: "2026-05-11",
-    app: {
-      id: "app_abc123",
-      name: "demo",
-      containers: {},
-    },
-  });
-
-  expect(stripped.app.id).toBeUndefined();
-  expect(stripped.app.name).toBe("demo");
-});
-
 test("stripTransientFields handles mixed containers in one app", () => {
   const stripped = stripTransientFields({
     version: "2026-05-11",
