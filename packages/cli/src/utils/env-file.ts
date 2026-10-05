@@ -46,7 +46,7 @@ export function readEnvValue(
     if (existsSync(envPath)) {
       const content = readFileSync(envPath, "utf-8");
       const regex = new RegExp(
-        `^${escapeRegExp(key)}\\s*=\\s*["']?(.+?)["']?\\s*$`,
+        `^${escapeRegExp(key)}[ \\t]*=[ \\t]*["']?(.+?)["']?\\s*$`,
         "m",
       );
       const match = content.match(regex);
