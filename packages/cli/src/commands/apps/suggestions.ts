@@ -80,9 +80,7 @@ export function endpointRequestToConfig(
  * list. Used to filter API-suggested endpoints down to "ports the user
  * hasn't already configured" so we don't double-prompt.
  */
-export function containerPortsInConfig(
-  container: ContainerConfig,
-): Set<number> {
+function containerPortsInConfig(container: ContainerConfig): Set<number> {
   const ports = new Set<number>();
   for (const ep of container.endpoints ?? []) {
     for (const p of ep.ports ?? []) {
@@ -93,7 +91,7 @@ export function containerPortsInConfig(
 }
 
 /** Container ports a suggested EndpointRequest targets. */
-export function endpointContainerPorts(ep: EndpointRequest): number[] {
+function endpointContainerPorts(ep: EndpointRequest): number[] {
   if (ep.cdn) {
     return (ep.cdn.portMappings ?? []).map((p) => p.containerPort);
   }

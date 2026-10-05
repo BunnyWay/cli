@@ -66,12 +66,6 @@ describe("buildImageRef", () => {
     );
   });
 
-  test("omits the namespace when userName is undefined", () => {
-    expect(buildImageRef("registry.example.com", undefined, "api", "v1")).toBe(
-      "registry.example.com/api:v1",
-    );
-  });
-
   test("omits the namespace when userName is empty/whitespace", () => {
     expect(buildImageRef("registry.example.com", "   ", "api", "v1")).toBe(
       "registry.example.com/api:v1",

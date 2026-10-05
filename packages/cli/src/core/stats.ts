@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import { bunny } from "./colors.ts";
 
-export const BAR_WIDTH = 24;
+const BAR_WIDTH = 24;
 
 /** Sum the values of a date-keyed chart map. */
 export function sumChart(

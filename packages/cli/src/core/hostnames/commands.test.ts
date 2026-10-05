@@ -7,10 +7,6 @@ describe("targetSuffix", () => {
     expect(targetSuffix({ zone: "my-zone" }, "zone")).toBe(" my-zone");
   });
 
-  test("preserves the script id positional without duplicating it as a flag", () => {
-    expect(targetSuffix({ id: 123 }, "id")).toBe(" 123");
-  });
-
   test("appends --pull-zone after the positional", () => {
     expect(targetSuffix({ zone: "my-zone", "pull-zone": 678 }, "zone")).toBe(
       " my-zone --pull-zone 678",

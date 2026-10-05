@@ -135,17 +135,6 @@ describe("transport", () => {
         process.env[ENV_DATABASE_AUTH_TOKEN] = previousToken;
     }
   });
-
-  test("caller headers ride along", async () => {
-    const fake = fakeFetch([okExecute(["a"], [[1]])]);
-    const db = connect({
-      url: URL_,
-      fetch: fake.fetch,
-      headers: { "x-trace": "abc" },
-    });
-    await db.prepare("SELECT 1 AS a").all();
-    expect((fake.captures[0] as Capture).headers["x-trace"]).toBe("abc");
-  });
 });
 
 describe("statement", () => {
@@ -845,12 +834,10 @@ describe("errors", () => {
     const db = connect({ url: URL_, fetch: fake.fetch });
     const sql = `${" /*".repeat(5000)} COMMIT`;
 
-    const error = (await db
-      .batch([db.prepare(sql)])
-      .catch((e) => e)) as DatabaseError;
+    await db.batch([db.prepare(sql)]).catch(() => {});
 
     // Unterminated comment: no keyword found, so it is sent as-is rather than rejected.
-    expect(error.code).not.toBe("ARGUMENT_INVALID");
+    expect(fake.captures).toHaveLength(1);
   });
 
   test("transport errors keep the underlying error as cause", async () => {

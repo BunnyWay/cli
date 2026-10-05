@@ -34,7 +34,7 @@ export function isProjectSkillInstalled(cwd: string, name: string): boolean {
 }
 
 /** True when the project shows Claude Code usage, adding .claude/skills to the project install. */
-export function usesClaude(cwd: string): boolean {
+function usesClaude(cwd: string): boolean {
   return existsSync(join(cwd, ".claude")) || existsSync(join(cwd, "CLAUDE.md"));
 }
 

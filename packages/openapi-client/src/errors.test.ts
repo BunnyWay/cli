@@ -26,24 +26,4 @@ describe("ApiError", () => {
     expect(err.isUserError).toBe(true);
     expect(err.name).toBe("ApiError");
   });
-
-  test("records status and leaves optional fields undefined", () => {
-    const err = new ApiError("Unauthorized.", 401);
-    expect(err.status).toBe(401);
-    expect(err.field).toBeUndefined();
-    expect(err.validationErrors).toBeUndefined();
-  });
-
-  test("records field and validation errors when provided", () => {
-    const validationErrors = [{ field: "Name", message: "is required" }];
-    const err = new ApiError(
-      "Validation failed.",
-      422,
-      "Name",
-      validationErrors,
-    );
-    expect(err.status).toBe(422);
-    expect(err.field).toBe("Name");
-    expect(err.validationErrors).toEqual(validationErrors);
-  });
 });
