@@ -5,6 +5,8 @@ import { streamLibraryCredentialsCommand } from "./credentials.ts";
 import { streamLibraryDeleteCommand } from "./delete.ts";
 import { streamLibraryLinkCommand } from "./link.ts";
 import { streamLibraryListCommand } from "./list.ts";
+import { streamLibraryPlayerNamespace } from "./player/index.ts";
+import { streamLibrarySecurityNamespace } from "./security/index.ts";
 import { streamLibraryShowCommand } from "./show.ts";
 import { streamLibraryUnlinkCommand } from "./unlink.ts";
 import { streamLibraryUpdateCommand } from "./update.ts";
@@ -18,6 +20,8 @@ const subcommands: CommandModule[] = [
   streamLibraryLinkCommand,
   streamLibraryUnlinkCommand,
   streamLibraryDeleteCommand,
+  streamLibraryPlayerNamespace,
+  streamLibrarySecurityNamespace,
 ];
 
 export const streamLibraryNamespace = defineNamespace(

@@ -3,10 +3,11 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { withSpinner } from "@/core/ui.ts";
 import { resolveVideoInteractive, streamLibraryContext } from "./context.ts";
+import { hasCaptions, offerTranscription } from "./smart-transcribe.ts";
 import {
   type SmartGenerateModel,
   smartGenerateVideo,
-  type VideoModel,
+  transcribeVideo,
 } from "./videos-api.ts";
 
 interface SmartArgs {
@@ -17,6 +18,7 @@ interface SmartArgs {
   chapters?: boolean;
   moments?: boolean;
   sourceLanguage?: string;
+  transcribe?: boolean;
   force?: boolean;
 }
 
@@ -45,21 +47,6 @@ export function smartGenerateBody(args: SmartArgs): SmartGenerateModel {
   return body;
 }
 
-/**
- * Refuse a video the API would refuse anyway, and name the way out.
- *
- * Sending the request would only come back as "Video has no captions", so the
- * transcribe pointer is more useful than the round trip.
- */
-export function requireTranscript(video: VideoModel): void {
-  // Smart generation reads an existing transcript and never makes one, even on a transcribing library.
-  if ((video.captions ?? []).length > 0) return;
-  throw new UserError(
-    `${video.title} has no captions, and smart generation needs a transcript.`,
-    `Transcribe it first: bunny stream transcribe ${video.guid} (or add captions with "bunny stream caption add").`,
-  );
-}
-
 export const streamSmartCommand = defineCommand<SmartArgs>({
   command: "smart [video]",
   describe:
@@ -72,6 +59,10 @@ export const streamSmartCommand = defineCommand<SmartArgs>({
     [
       "$0 stream smart 1a2b3c4d-... --chapters --moments",
       "Generate chapters and moments",
+    ],
+    [
+      "$0 stream smart 1a2b3c4d-... --chapters --transcribe",
+      "Transcribe a captionless video first (billed per output language-minute)",
     ],
     [
       "$0 stream smart 1a2b3c4d-... --title --force",
@@ -98,6 +89,12 @@ export const streamSmartCommand = defineCommand<SmartArgs>({
         type: "string",
         describe: "Language spoken in the video, as an ISO 639-1 code",
       })
+      .option("transcribe", {
+        type: "boolean",
+        default: false,
+        describe:
+          "If the video has no captions, transcribe it first without asking (paid; required to do so unattended)",
+      })
       .option("force", {
         alias: "f",
         type: "boolean",
@@ -107,12 +104,21 @@ export const streamSmartCommand = defineCommand<SmartArgs>({
       }),
 
   handler: async (args) => {
-    const { video: ref, lib, force, profile, output, verbose, apiKey } = args;
+    const {
+      video: ref,
+      lib,
+      force,
+      transcribe,
+      profile,
+      output,
+      verbose,
+      apiKey,
+    } = args;
     const body = smartGenerateBody(args);
 
     // --force is picker-only here: both resolutions error instead of prompting,
     // like the delete commands, so a paid run never targets a guessed video.
-    const { client, libraryId } = await streamLibraryContext({
+    const { client, library, libraryId } = await streamLibraryContext({
       lib,
       profile,
       output,
@@ -127,7 +133,47 @@ export const streamSmartCommand = defineCommand<SmartArgs>({
       force,
     });
 
-    requireTranscript(video);
+    // No transcript: offer to transcribe first instead of refusing. The same
+    // generate flags ride on the transcribe request, so one call does both.
+    if (!hasCaptions(video)) {
+      const settings = await offerTranscription(video, library, body, {
+        output,
+        transcribe,
+      });
+      if (!settings) {
+        logger.info(
+          `Nothing was sent. Add captions you already have with "bunny stream caption add", then re-run.`,
+        );
+        return;
+      }
+
+      const status = await withSpinner("Queueing transcription...", () =>
+        transcribeVideo(client, libraryId, video.guid, settings),
+      );
+
+      if (output === "json") {
+        logger.log(
+          JSON.stringify(
+            {
+              id: video.guid,
+              title: video.title,
+              queued: true,
+              transcribing: true,
+              ...settings,
+              ...status,
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+
+      logger.success(
+        `Queued transcription for ${video.title}; the requested fields are generated from the new transcript.`,
+      );
+      return;
+    }
 
     const status = await withSpinner("Queueing smart generation...", () =>
       smartGenerateVideo(client, libraryId, video.guid, body),

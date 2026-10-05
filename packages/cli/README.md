@@ -1110,7 +1110,7 @@ Every deploy publishes: the files land in an immutable `deploys/<id>/` directory
 
 > **Experimental**: hidden from `--help` and the landing page while it stabilizes.
 
-Manage bunny.net Stream through four resource groups: **`bunny stream library`** (the library itself: create, list, inspect, update, delete; aliases `libraries`, `lib`), **`bunny stream video`** (the videos inside one library; alias `videos`), **`bunny stream collection`** (groups of videos within a library; alias `collections`), and **`bunny stream caption`** (caption files on one video; alias `captions`). Three paid operations live alongside them: **`bunny stream encode`**, **`bunny stream transcribe`**, and **`bunny stream smart`**. Library management uses the account API key on the core API; each library also carries its own Stream API key for the video-level API, which the CLI never prints unless you ask for it with `credentials`. Video commands use that per-library key, resolved automatically from the library, so there is nothing extra to configure.
+Manage bunny.net Stream through four resource groups: **`bunny stream library`** (the library itself: create, list, inspect, update, delete, plus its **`player`** and **`security`** settings; aliases `libraries`, `lib`), **`bunny stream video`** (the videos inside one library; alias `videos`), **`bunny stream collection`** (groups of videos within a library; alias `collections`), and **`bunny stream caption`** (caption files on one video; alias `captions`). Three paid operations live alongside them: **`bunny stream encode`**, **`bunny stream transcribe`**, and **`bunny stream smart`**. Library management uses the account API key on the core API; each library also carries its own Stream API key for the video-level API, which the CLI never prints unless you ask for it with `credentials`. Video commands use that per-library key, resolved automatically from the library, so there is nothing extra to configure.
 
 `library` commands take the library as an optional positional (name or numeric ID); every other stream command takes it as the `--lib`/`--library` flag, since their positional is the video GUID, the collection ID, or a local file path. When the library is omitted it resolves from the directory's linked library (`bunny stream library link`, stored in `.bunny/stream.json`), then an interactive picker, which offers to link the directory to the picked library (destructive commands never offer it). Non-interactive runs (`--output json`, no TTY, or `--force`) error with a hint instead of prompting: pass a library or link the directory. A `video` or `collection` command with no ID behaves the same way, offering a picker interactively and erroring otherwise. `caption` is the exception: both of its commands take the video GUID as a required positional, because a language argument follows it.
 
@@ -1121,14 +1121,28 @@ There is deliberately no `video create`: a video is added either by uploading a 
 bunny stream library list                          # ID, name, videos, storage, traffic, replication regions
 bunny stream library create my-library             # interactive: prompts for the name when omitted
 bunny stream library create --name my-library      # the name also takes a flag
-bunny stream library create my-library --replication-regions NY,SG   # replicate the underlying storage (create-time only)
+bunny stream library create my-library             # stored in DE (the fixed main region) and replicated to SG, LA, NY by default
+bunny stream library create my-library --replication-regions NY,SG   # DE + NY, SG instead; pass DE alone for no replication
 bunny stream library create my-library --encoding-tier premium --codecs x264,vp9   # premium encoding with extra codecs
 bunny stream library show my-library               # details; API keys are never printed here, in any output format
 bunny stream library update my-library             # interactive: edit name, resolutions, transcribing
 bunny stream library update my-library --resolutions 720p,1080p      # set just the enabled resolutions
 bunny stream library update my-library --transcribing --transcribing-languages en,de
+bunny stream library update my-library --keep-original --mp4-fallback --content-tagging   # encoding settings
+bunny stream library update my-library --add-replication-regions SYD   # add-only: regions can't be removed later
 bunny stream library credentials my-library        # library ID + API key, masked by default
 bunny stream library credentials my-library --show-secret --read-only   # reveal the read-only key
+bunny stream library credentials my-library --rotate   # reset the API key (confirms first), then show the new one
+
+# Player and security settings (per library)
+bunny stream library player show my-library
+bunny stream library player update my-library --color "#FF7755" --speeds 0.5,1.0,1.15,2.0 --heatmap
+bunny stream library player update my-library --no-controls   # every player control off
+bunny stream library player reset my-library       # back to the dashboard defaults; confirms first
+bunny stream library security show my-library      # domains, tokens, direct play, DRM; token key masked
+bunny stream library security update my-library --embed-token --block-direct-access --allow-referrer example.com
+bunny stream library security update my-library --drm-basic   # MediaCage Basic DRM
+bunny stream library security reset-token my-library   # rotate the token key; signed URLs stop working
 bunny stream library delete my-library             # confirms with the video count; --force skips it
 
 # Link the working directory to a library so video commands can omit it
@@ -1153,6 +1167,7 @@ bunny stream video thumbnail 1a2b3c4d-... --file ./thumb.jpg   # or --url for bu
 bunny stream video resolutions 1a2b3c4d-...        # what is configured, encoded, and stored
 bunny stream video cleanup 1a2b3c4d-... --non-configured --dry-run   # preview a rendition cleanup
 bunny stream video stats 1a2b3c4d-...              # views and watch time (--heatmap, --play-data)
+bunny stream video embed 1a2b3c4d-... --expires 1h   # player embed URL, signed when embed tokens are on
 bunny stream video delete 1a2b3c4d-...             # confirms first; --force skips it
 
 # Collections group a library's videos
@@ -1170,7 +1185,7 @@ bunny stream caption delete 1a2b3c4d-... en        # confirms first; --force ski
 bunny stream encode enable --codecs x264,vp9       # switch the library to premium encoding
 bunny stream encode reencode 1a2b3c4d-...          # re-encode one video with the current settings
 bunny stream transcribe 1a2b3c4d-... --languages en,de   # $0.10 per language-minute
-bunny stream smart 1a2b3c4d-... --title --chapters # needs an existing transcript or captions
+bunny stream smart 1a2b3c4d-... --title --chapters # offers to transcribe first if the video has no captions
 ```
 
 Deleting a library deletes all of its videos, and deleting the linked library also removes the stale `.bunny/stream.json`. `--force` is required for non-interactive deletes, cleanups, and unlinks; without it, a run that cannot prompt exits with an error instead of hanging. On destructive and paid commands `--force` also disables the pickers, so it can never act on something you did not name.
@@ -1189,25 +1204,58 @@ A video moves in or out of a collection with `video update --collection <id>` (a
 
 `caption add` reads a local `.vtt` or `.srt`, sends it inline, and reports what the API's validator says: a rejected file lists what is wrong, and an accepted file with non-breaking issues prints them as warnings. These are captions you wrote yourself, unrelated to the paid transcription below.
 
-Three commands cost money and say so before they run. `stream encode enable` switches a library to the premium encoding tier, billed per output codec per minute of encoded video, and `stream encode reencode` regenerates every output for one video at the same rate. `stream transcribe` is billed at $0.10 per language-minute of audio. `stream smart` generates a title, description, chapters, or moments from the transcript, and needs at least one of those flags. It reads an existing transcript and never makes one: a video with no captions is refused before the request goes out, with a pointer to `stream transcribe` (or `stream caption add`, if you have the captions already). Note that `--force` on `stream transcribe` is the API's own force flag, which re-runs and overrides the library defaults, rather than a confirmation skip; on `stream smart` it only disables the pickers. Neither command has a confirmation to skip.
+Three commands cost money and say so before they run. `stream encode enable` switches a library to the premium encoding tier, billed per output codec per minute of encoded video, and `stream encode reencode` regenerates every output for one video at the same rate. `stream transcribe` is billed at $0.10 per output language-minute of audio; the source-language transcript is free. `stream smart` generates a title, description, chapters, or moments from the transcript, and needs at least one of those flags. When the video has no captions yet, `smart` never transcribes silently: it shows the estimated cost (video minutes × the library's output languages × $0.10) and asks whether to transcribe first. Saying yes sends one transcribe request carrying the same generate flags, so the fields come from the new transcript; saying no sends nothing, and `stream caption add` covers captions you already have. Unattended runs can't answer the prompt, so they stop with the cost unless `--transcribe` approves it up front. Note that `--force` on `stream transcribe` is the API's own force flag, which re-runs and overrides the library defaults, rather than a confirmation skip; on `stream smart` it only disables the pickers and never approves a transcription.
 
 Every command that operates inside a library accepts `--lib <library-id>` (alias `--library`) and falls back to the linked directory, so none of the tables below repeat it.
 
 Library flags (`bunny stream library ...`):
 
-| Flag                                                                                                      | Commands                     | Description                                                                                |
-| --------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------ |
-| `--name`                                                                                                  | `create`, `update`           | Library name; on `create` it is interchangeable with the positional                        |
-| `--replication-regions`                                                                                   | `create`                     | Storage replication region codes, comma-separated or repeated; fixed after creation        |
-| `--encoding-tier` (`free` \| `premium`)                                                                   | `create`, `update`           | Encoding tier; premium adds JIT encoding and extra codecs                                  |
-| `--jit` / `--no-jit`                                                                                      | `create`, `update`           | Just-in-time encoding                                                                      |
-| `--codecs`                                                                                                | `create`, `update`           | Output codecs, comma-separated: `x264`, `vp9`, `hevc`, `av1` (all but `x264` need premium) |
-| `--resolutions`                                                                                           | `create`, `update`           | Enabled resolutions, comma-separated: `240p` through `2160p`                               |
-| `--transcribing` / `--no-transcribing`                                                                    | `create`, `update`           | Automatic audio transcribing (billed per use)                                              |
-| `--transcribing-languages`                                                                                | `create`, `update`           | Caption languages to transcribe to, comma-separated (e.g. `en,de`)                         |
-| `--transcribing-title`, `--transcribing-description`, `--transcribing-chapters`, `--transcribing-moments` | `create`, `update`           | Generate each field from the transcript                                                    |
-| `--read-only`, `--show-secret`                                                                            | `credentials`                | Use the read-only key; reveal the key (masked by default)                                  |
-| `--force`, `-f`                                                                                           | `update`, `unlink`, `delete` | Skip the prompts (required when there is no TTY to answer them)                            |
+| Flag                                                                                                      | Commands                                             | Description                                                                                      |
+| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `--name`                                                                                                  | `create`, `update`                                   | Library name; on `create` it is interchangeable with the positional                              |
+| `--replication-regions`                                                                                   | `create`                                             | Regions besides DE, the fixed main region; default `SG,LA,NY`; `DE` alone means none             |
+| `--add-replication-regions`                                                                               | `update`                                             | Add regions later; add-only, since regions can't be removed                                      |
+| `--mp4-fallback`, `--early-play`, `--keep-original`, `--multi-audio` (and `--no-` forms)                  | `create`, `update`                                   | Encoding settings; `--early-play` needs originals and exposes them                               |
+| `--content-tagging` / `--no-content-tagging`                                                              | `update`                                             | Machine-learning content tagging (not accepted at create time)                                   |
+| `--player-version` (`1` \| `2`)                                                                           | `create`                                             | Player to start with: 1 = legacy, 2 = current                                                    |
+| `--encoding-tier` (`free` \| `premium`)                                                                   | `create`, `update`                                   | Encoding tier; premium adds JIT encoding and extra codecs                                        |
+| `--jit` / `--no-jit`                                                                                      | `create`, `update`                                   | Just-in-time encoding                                                                            |
+| `--codecs`                                                                                                | `create`, `update`                                   | Output codecs, comma-separated: `x264`, `vp9`, `hevc`, `av1` (all but `x264` need premium)       |
+| `--resolutions`                                                                                           | `create`, `update`                                   | Enabled resolutions, comma-separated: `240p` through `2160p`                                     |
+| `--transcribing` / `--no-transcribing`                                                                    | `create`, `update`                                   | Automatic audio transcribing (billed per use)                                                    |
+| `--transcribing-languages`                                                                                | `create`, `update`                                   | Output caption languages, comma-separated (e.g. `en,de`); checked against the live language list |
+| `--transcribing-title`, `--transcribing-description`, `--transcribing-chapters`, `--transcribing-moments` | `create`, `update`                                   | Generate each field from the transcript                                                          |
+| `--read-only`, `--show-secret`                                                                            | `credentials`                                        | Use the read-only key; reveal the key (masked by default)                                        |
+| `--rotate`                                                                                                | `credentials`                                        | Reset the key (or the read-only key with `--read-only`), then show the new one                   |
+| `--force`, `-f`                                                                                           | `update`, `unlink`, `delete`, `credentials --rotate` | Skip the prompts (required when there is no TTY to answer them)                                  |
+
+Player flags (`bunny stream library player update`):
+
+| Flag                                                                               | Description                                                                                                |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `--language`                                                                       | Player UI language (ISO 639-1), checked against the live language list                                     |
+| `--font`, `--color`                                                                | Font family and primary control colour (hex)                                                               |
+| `--caption-color`, `--caption-background`, `--caption-size`                        | Captions appearance                                                                                        |
+| `--controls`                                                                       | Controls to show, comma-separated; alone it restores the defaults; `--no-controls` turns every control off |
+| `--speeds`                                                                         | Playback speeds, comma-separated: presets 0.25–4 or custom values like 1.15                                |
+| `--custom-html`                                                                    | File with custom HTML/CSS for the player head                                                              |
+| `--heatmap`, `--remember-position`, `--compact-controls`, `--captions-in-playlist` | On/off toggles (with `--no-` forms)                                                                        |
+| `--legacy-player` / `--no-legacy-player`, `--player-version`                       | Legacy (1) or current (2) player                                                                           |
+
+`player reset` restores the dashboard defaults: `en`, Rubik, `#FF7755`, white captions on black at 20, the default controls and speeds. It confirms first; `--force` skips that.
+
+Security flags (`bunny stream library security update`):
+
+| Flag                                            | Description                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------ |
+| `--direct-play`                                 | Allow playback from the direct video URL                                 |
+| `--allow-referrer`, `--remove-allowed-referrer` | Allowed domains (repeatable; wildcards like `*.example.com`)             |
+| `--block-referrer`, `--remove-blocked-referrer` | Blocked domains (repeatable)                                             |
+| `--block-direct-access`                         | Block requests with no `Referer` header                                  |
+| `--embed-token`, `--cdn-token`, `--token-ip`    | Embed view tokens, CDN tokens, and binding CDN tokens to the viewer's IP |
+| `--drm-basic`                                   | MediaCage Basic DRM; libraries on Enterprise DRM are refused             |
+
+All boolean flags take `--no-` forms. `security update` sends the settings in one request, then each domain change on its own; changes already in place are skipped, and if one fails the command stops, reports what landed, and exits non-zero, so re-running the same command is safe. CDN token state and the token key are read from the library's linked Pull Zone. `video embed` signs with that key when embed tokens are on.
 
 Video flags (`bunny stream video ...`):
 
@@ -1237,15 +1285,16 @@ Collection and caption flags:
 
 Paid command flags:
 
-| Flag                                                                                      | Commands        | Description                                                                   |
-| ----------------------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------- |
-| `--jit`, `--codecs`, `--resolutions`                                                      | `encode enable` | Applied in the same request that switches the library to premium              |
-| `--languages`, `--source-language`                                                        | `transcribe`    | Target languages (comma-separated) and the language spoken in the video       |
-| `--generate-title`, `--generate-description`, `--generate-chapters`, `--generate-moments` | `transcribe`    | Also generate each field from the new transcript                              |
-| `--title`, `--description`, `--chapters`, `--moments`                                     | `smart`         | What to generate; at least one is required                                    |
-| `--source-language`                                                                       | `smart`         | Language spoken in the video, as an ISO 639-1 code                            |
-| `--force`, `-f`                                                                           | `transcribe`    | The API's force flag: re-run and override the library's transcribing defaults |
-| `--force`, `-f`                                                                           | `smart`         | Disable the library and video pickers, so nothing is guessed                  |
+| Flag                                                                                      | Commands        | Description                                                                              |
+| ----------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------- |
+| `--jit`, `--codecs`, `--resolutions`                                                      | `encode enable` | Applied in the same request that switches the library to premium                         |
+| `--languages`, `--source-language`                                                        | `transcribe`    | Target languages (comma-separated) and the language spoken in the video                  |
+| `--generate-title`, `--generate-description`, `--generate-chapters`, `--generate-moments` | `transcribe`    | Also generate each field from the new transcript                                         |
+| `--title`, `--description`, `--chapters`, `--moments`                                     | `smart`         | What to generate; at least one is required                                               |
+| `--source-language`                                                                       | `smart`         | Language spoken in the video, as an ISO 639-1 code                                       |
+| `--transcribe`                                                                            | `smart`         | Transcribe a captionless video first without asking (paid); required to do so unattended |
+| `--force`, `-f`                                                                           | `transcribe`    | The API's force flag: re-run and override the library's transcribing defaults            |
+| `--force`, `-f`                                                                           | `smart`         | Disable the library and video pickers, so nothing is guessed                             |
 
 ### `bunny sandbox`
 
