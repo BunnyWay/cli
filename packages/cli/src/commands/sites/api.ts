@@ -372,36 +372,13 @@ async function fetchMiddlewareScriptId(
   return id == null || id === NO_MIDDLEWARE_SCRIPT ? null : id;
 }
 
-// The four rules that serve a site; bodies are always rebuilt in full from these so a hand-edited rule heals on the next upsert.
+// The rules that serve a site, rewrite last so a failed upsert never switches routing early; bodies are always rebuilt in full from these so a hand-edited rule heals on the next upsert.
 function siteRules(
   storageZone: { Id: number; Name: string },
   deployId: string,
 ): Array<EdgeRule & { Description: string }> {
   const deploysPattern = `*/${DEPLOYS_DIR}/*`;
   return [
-    {
-      Description: REWRITE_RULE_DESC,
-      Enabled: true,
-      ActionType: EdgeRuleAction.OriginStorage,
-      ActionParameter1: String(storageZone.Id),
-      ActionParameter2: storageZone.Name,
-      ActionParameter3: `/${deployPrefix(deployId)}/`,
-      ExtraActions: [
-        {
-          ActionType: EdgeRuleAction.SetResponseHeader,
-          ActionParameter1: DEPLOY_HEADER,
-          ActionParameter2: deployId,
-        },
-      ],
-      TriggerMatchingType: EdgeRuleMatch.Any,
-      Triggers: [
-        {
-          Type: EdgeRuleTriggerType.Url,
-          PatternMatches: [deploysPattern],
-          PatternMatchingType: EdgeRuleMatch.None,
-        },
-      ],
-    },
     {
       Description: GATE_RULE_DESC,
       Enabled: true,
@@ -442,6 +419,29 @@ function siteRules(
         },
       ],
     })),
+    {
+      Description: REWRITE_RULE_DESC,
+      Enabled: true,
+      ActionType: EdgeRuleAction.OriginStorage,
+      ActionParameter1: String(storageZone.Id),
+      ActionParameter2: storageZone.Name,
+      ActionParameter3: `/${deployPrefix(deployId)}/`,
+      ExtraActions: [
+        {
+          ActionType: EdgeRuleAction.SetResponseHeader,
+          ActionParameter1: DEPLOY_HEADER,
+          ActionParameter2: deployId,
+        },
+      ],
+      TriggerMatchingType: EdgeRuleMatch.Any,
+      Triggers: [
+        {
+          Type: EdgeRuleTriggerType.Url,
+          PatternMatches: [deploysPattern],
+          PatternMatchingType: EdgeRuleMatch.None,
+        },
+      ],
+    },
   ];
 }
 
