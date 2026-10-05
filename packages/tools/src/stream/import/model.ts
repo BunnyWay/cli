@@ -32,6 +32,10 @@ const SummaryVideoSchema = z.object({
   folder: z.string().nullable(),
 });
 
+const UnsupportedVideoSchema = SummaryVideoSchema.extend({
+  reason: z.string(),
+});
+
 /** The engine's discovery summary, key for key. */
 export const ImportSummarySchema = z.object({
   totalFolders: z.number(),
@@ -47,7 +51,9 @@ export const ImportSummarySchema = z.object({
   newVideosList: z.array(SummaryVideoSchema),
   migratedVideosList: z.array(SummaryVideoSchema),
   processingList: z.array(SummaryVideoSchema),
-  tooLongList: z.array(SummaryVideoSchema),
+  stalledOnBunny: z.number(),
+  unsupportedList: z.array(UnsupportedVideoSchema),
+  failedForGoodList: z.array(UnsupportedVideoSchema),
 });
 
 export const ImportPlanSchema = z.object({
@@ -81,6 +87,8 @@ export const ImportRunSchema = z.object({
       name: z.string(),
       sourceId: z.string(),
       error: z.string().nullable(),
+      /** False when a resume will not retry it: a retry cannot fix it, or it has failed too often. */
+      retryable: z.boolean(),
     }),
   ),
   collections: z.array(

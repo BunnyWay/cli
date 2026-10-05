@@ -11,6 +11,7 @@ import {
   DEFAULT_REQUEST_TIMEOUT,
   DEFAULT_STALLED_AFTER_MS,
   describeSource,
+  MAX_IMPORT_ATTEMPTS,
   MAX_PRESIGNED_URL_TTL_SECONDS,
   MIN_PRESIGNED_URL_TTL_SECONDS,
   type MigrationState,
@@ -110,6 +111,24 @@ const target = {
     .max(MAX_PRESIGNED_URL_TTL_SECONDS)
     .optional()
     .describe("S3 only: pre-signed URL lifetime in seconds."),
+  includeTs: z
+    .boolean()
+    .optional()
+    .describe(
+      "S3 only: treat `.ts` keys as videos. Off by default because HLS buckets hold thousands of `.ts` segments.",
+    ),
+  cleanFailed: z
+    .boolean()
+    .optional()
+    .describe(
+      "Delete a video's failed Bunny copies before importing it again, and retry failures that would otherwise be given up on (over Bunny's limits, a corrupt original, or 3 failed attempts).",
+    ),
+  retryStalled: z
+    .boolean()
+    .optional()
+    .describe(
+      "Delete and import again videos Bunny has held at zero bytes past the stall threshold (see `stream.import.status`).",
+    ),
   requestTimeout: z
     .number()
     .int()
@@ -199,13 +218,17 @@ export const streamImportPlan = defineTool({
   run: async (ctx, input): Promise<ImportPlan> => {
     const session = await openImport(ctx, input);
     ctx.progress(`Discovering ${session.plugin.label} content...`);
-    const summary = await session.service.getSummary(session.folder);
+    const summary = await session.service.getSummary(session.folder, {
+      cleanFailed: input.cleanFailed,
+      retryStalled: input.retryStalled,
+    });
     const limit = input.limit ?? DEFAULT_PLAN_LIMIT;
     const lists = [
       summary.newVideosList,
       summary.migratedVideosList,
       summary.processingList,
-      summary.tooLongList,
+      summary.unsupportedList,
+      summary.failedForGoodList,
     ];
     return {
       library: session.library,
@@ -218,7 +241,8 @@ export const streamImportPlan = defineTool({
         newVideosList: summary.newVideosList.slice(0, limit),
         migratedVideosList: summary.migratedVideosList.slice(0, limit),
         processingList: summary.processingList.slice(0, limit),
-        tooLongList: summary.tooLongList.slice(0, limit),
+        unsupportedList: summary.unsupportedList.slice(0, limit),
+        failedForGoodList: summary.failedForGoodList.slice(0, limit),
       },
     };
   },
@@ -242,6 +266,7 @@ export const streamImportList = defineTool({
       .describe("Also list videos; implied by `folder`."),
     bucket: target.bucket,
     prefix: target.prefix,
+    includeTs: target.includeTs,
     requestTimeout: target.requestTimeout,
     limit: z
       .number()
@@ -310,7 +335,7 @@ export const streamImportRun = defineTool({
   name: "stream.import.run",
   title: "Import videos",
   description:
-    "Hand every not-yet-imported video from a source to a Stream library, tag it so a re-run skips it, and return once all are queued; Bunny then fetches and encodes them. Discovers the source afresh, so it may differ from an earlier plan. Resumable and idempotent; an aborted call returns with status `paused`. Progress is journaled locally; poll `stream.import.status` rather than setting `wait`.",
+    "Hand every not-yet-imported video from a source to a Stream library, tag it so a re-run skips it, and return once all are queued; Bunny then fetches and encodes them. Discovers the source afresh, so it may differ from an earlier plan. Resumable and idempotent; an aborted call returns with status `paused`. Progress is journaled locally; poll `stream.import.status` rather than setting `wait`. A resume skips failures a retry cannot fix or that failed 3 times. Deletes nothing unless `cleanFailed` or `retryStalled` is set, and then only copies Bunny failed or holds stuck at zero bytes.",
   schema: z.strictObject({
     ...target,
     concurrency: z
@@ -382,6 +407,8 @@ export const streamImportRun = defineTool({
         concurrency: input.concurrency ?? DEFAULT_CONCURRENCY,
         resume: input.resume,
         wait: input.wait,
+        cleanFailed: input.cleanFailed,
+        retryStalled: input.retryStalled,
         // With `wait` the per-video timer also covers the encode, so it never undercuts the processing timeout.
         migrationTimeoutMs: input.wait
           ? Math.max(videoTimeoutMs, processingTimeoutMs)
@@ -453,6 +480,9 @@ export const streamImportRun = defineTool({
         name: m.videoName,
         sourceId: m.sourceVideoId,
         error: m.error,
+        retryable:
+          Boolean(input.cleanFailed) ||
+          (!m.permanent && (m.attempts ?? 0) < MAX_IMPORT_ATTEMPTS),
       })),
       collections: state.folderMappings,
       warnings,

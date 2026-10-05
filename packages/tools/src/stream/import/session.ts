@@ -29,6 +29,7 @@ export interface ImportTarget {
   bucket?: string;
   prefix?: string;
   urlTtl?: number;
+  includeTs?: boolean;
   requestTimeout?: number;
 }
 
@@ -85,6 +86,7 @@ function sourceOverrides(target: SourceTarget) {
     bucket: target.bucket,
     prefix: target.prefix,
     presignedUrlTtl: target.urlTtl,
+    includeTs: target.includeTs ? "true" : undefined,
   };
 }
 
@@ -113,6 +115,7 @@ export interface SourceTarget {
   bucket?: string;
   prefix?: string;
   urlTtl?: number;
+  includeTs?: boolean;
   requestTimeout?: number;
 }
 

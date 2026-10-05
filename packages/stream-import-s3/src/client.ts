@@ -24,6 +24,7 @@ import { validateS3BucketName, validateS3Key } from "./validate.ts";
 export class S3SourceClient {
   private readonly client: S3Client;
   private readonly defaultTtl: number;
+  private readonly includeTs: boolean;
 
   constructor(config: S3Config, ctx: SourceContext) {
     // The schema has already rejected a half-set pair; the ambient chain is used only when the host opts in.
@@ -46,6 +47,7 @@ export class S3SourceClient {
       forcePathStyle: Boolean(config.endpoint),
     });
 
+    this.includeTs = Boolean(config.includeTs);
     this.defaultTtl = clampTtl(
       config.presignedUrlTtl ?? DEFAULT_PRESIGNED_URL_TTL_SECONDS,
     );
@@ -75,7 +77,7 @@ export class S3SourceClient {
       }),
     );
     const count = (response.Contents ?? []).filter((o) =>
-      isVideoKey(o.Key),
+      isVideoKey(o.Key, this.includeTs),
     ).length;
 
     return {
@@ -106,7 +108,7 @@ export class S3SourceClient {
       );
 
       for (const item of response.Contents ?? []) {
-        if (isVideoKey(item.Key)) objects.push(toS3Object(item, bucket));
+        if (isVideoKey(item.Key, this.includeTs)) objects.push(toS3Object(item, bucket));
       }
       token = response.NextContinuationToken;
     } while (token);
@@ -152,7 +154,7 @@ export class S3SourceClient {
       }
 
       for (const item of response.Contents ?? []) {
-        if (isVideoKey(item.Key))
+        if (isVideoKey(item.Key, this.includeTs))
           uncategorizedVideos.push(toS3Object(item, bucket));
       }
 

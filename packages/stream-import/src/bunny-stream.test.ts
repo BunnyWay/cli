@@ -90,11 +90,11 @@ describe("pagination", () => {
   test("falls back to the page-size heuristic when the envelope omits counters", async () => {
     fetchMock
       .mockResolvedValueOnce(
-        json({ items: range(100).map((n) => ({ guid: `v${n}` })) }),
+        json({ items: range(1000).map((n) => ({ guid: `v${n}` })) }),
       )
       .mockResolvedValueOnce(json({ items: [{ guid: "tail" }] }));
 
-    expect(await makeClient().listVideos()).toHaveLength(101);
+    expect(await makeClient().listVideos()).toHaveLength(1001);
   });
 });
 

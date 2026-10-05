@@ -69,5 +69,7 @@ function toSourceVideo(video: CfStreamVideo): SourceVideo {
     folderId: null,
     size: video.size || undefined,
     duration: video.duration || undefined,
+    width: video.input?.width || undefined,
+    height: video.input?.height || undefined,
   };
 }

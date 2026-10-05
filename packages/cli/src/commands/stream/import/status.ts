@@ -94,7 +94,7 @@ export const streamImportStatusCommand = defineToolCommand({
     );
     if (result.stalled > 0) {
       logger.warn(
-        `${result.stalled} videos have been processing with no data for over ${result.stalledAfterMinutes} minutes. If that persists, Bunny's fetch may have failed silently: delete them in the dashboard and re-run the import.`,
+        `${result.stalled} videos have been processing with no data for over ${result.stalledAfterMinutes} minutes. If that persists, Bunny's fetch may have failed silently: re-run the import with --retry-stalled to delete and fetch them again.`,
       );
     }
     const failed = videos.filter((r) => r.status === "failed");

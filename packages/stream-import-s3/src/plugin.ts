@@ -34,6 +34,7 @@ export const s3ConfigSchema = z
       .min(MIN_PRESIGNED_URL_TTL_SECONDS)
       .max(MAX_PRESIGNED_URL_TTL_SECONDS)
       .optional(),
+    includeTs: z.stringbool().optional(),
   })
   // A lone key would silently hand the import to whatever the ambient chain resolves, so the pair is all or nothing.
   .superRefine((config, ctx) => {
@@ -131,6 +132,14 @@ export const s3Source: SourcePlugin<S3Config> = {
       required: false,
       type: "number",
       default: DEFAULT_PRESIGNED_URL_TTL_SECONDS,
+    },
+    {
+      key: "includeTs",
+      label: "Import .ts files",
+      env: "S3_INCLUDE_TS",
+      secret: false,
+      required: false,
+      hint: "Off by default: HLS buckets hold thousands of .ts segments",
     },
   ],
   configSchema: s3ConfigSchema,

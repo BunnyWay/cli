@@ -111,5 +111,7 @@ function toSourceVideo(
     // Undefined rather than 0 when Vimeo reports no download size, so the summary can tell "no videos" from "size unknown".
     size: video.download?.[0]?.size,
     duration: video.duration || undefined,
+    width: video.width || undefined,
+    height: video.height || undefined,
   };
 }

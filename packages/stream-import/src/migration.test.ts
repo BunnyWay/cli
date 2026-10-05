@@ -254,6 +254,65 @@ describe("runMigration", () => {
     expect(state.videoMigrations[1]?.bunnyVideoId).toBe("bunny-1");
   });
 
+  test("a copy Bunny rejected for good is not fetched again unless cleanFailed deletes it first", async () => {
+    const rejected = [
+      {
+        guid: "dead",
+        status: 5,
+        metaTags: [{ property: "vimeoId", value: "111" }],
+        transcodingMessages: [
+          { level: 3, issueCode: 7, message: "Original file is corrupted" },
+        ],
+      },
+    ];
+    const kept = fakeBunny({ listVideos: mock(async () => rejected) });
+    const state = await service({
+      adapter: fakeAdapter({ listContent: async () => oneVideo() }),
+      bunny: kept,
+    }).runMigration();
+    expect(kept.fetchVideoFromUrl).not.toHaveBeenCalled();
+    expect(state.videoMigrations[0]).toMatchObject({
+      status: "failed",
+      permanent: true,
+      error: expect.stringContaining("Original file is corrupted"),
+    });
+
+    const deleteVideo = mock(async () => {});
+    const cleaned = fakeBunny({
+      listVideos: mock(async () => rejected),
+      deleteVideo,
+    });
+    await service({
+      adapter: fakeAdapter({ listContent: async () => oneVideo() }),
+      bunny: cleaned,
+    }).runMigration({ cleanFailed: true });
+    expect(deleteVideo).toHaveBeenCalledWith("dead", expect.anything());
+    expect(cleaned.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
+  });
+
+  test("retryStalled deletes a copy stuck at zero bytes and fetches it again", async () => {
+    const deleteVideo = mock(async () => {});
+    const bunny = fakeBunny({
+      listVideos: mock(async () => [
+        {
+          guid: "stuck",
+          status: 1,
+          storageSize: 0,
+          dateUploaded: "2026-01-01T00:00:00",
+          metaTags: [{ property: "vimeoId", value: "111" }],
+        },
+      ]),
+      deleteVideo,
+    });
+    await service({
+      adapter: fakeAdapter({ listContent: async () => oneVideo() }),
+      bunny,
+    }).runMigration({ retryStalled: true });
+
+    expect(deleteVideo).toHaveBeenCalledWith("stuck", undefined);
+    expect(bunny.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
+  });
+
   test("maps folders to collections and scopes to one folder when asked", async () => {
     const bunny = fakeBunny();
     const state = await service({
@@ -521,6 +580,29 @@ describe("resume", () => {
         { sourceId: "222", displayName: "Work", folderId: null },
       ],
     });
+
+  test("a resume gives up on a video that failed three times; cleanFailed retries it", async () => {
+    const saved = savedState();
+    const work = saved.videoMigrations[1];
+    if (!work) throw new Error("fixture");
+    Object.assign(work, { status: "failed", error: "boom", attempts: 3 });
+
+    const skipped = fakeBunny();
+    await service({
+      adapter: fakeAdapter({ listContent: async () => twoVideos() }),
+      bunny: skipped,
+      store: memoryStore(saved).store,
+    }).runMigration({ resume: true });
+    expect(skipped.fetchVideoFromUrl).not.toHaveBeenCalled();
+
+    const retried = fakeBunny();
+    await service({
+      adapter: fakeAdapter({ listContent: async () => twoVideos() }),
+      bunny: retried,
+      store: memoryStore(saved).store,
+    }).runMigration({ resume: true, cleanFailed: true });
+    expect(retried.fetchVideoFromUrl).toHaveBeenCalledTimes(1);
+  });
 
   test("resumes a failed run and only works the outstanding videos", async () => {
     const bunny = fakeBunny();

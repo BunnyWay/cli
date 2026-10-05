@@ -59,6 +59,7 @@ export type { BunnyVideoHealth } from "./source-index.ts";
 export {
   buildSourceIndex,
   failureReason,
+  isPermanentFailure,
   videoHealth,
 } from "./source-index.ts";
 export { assertFolderSupported } from "./source-plugin.ts";
@@ -72,5 +73,9 @@ export {
   validateMigrationState,
 } from "./state.ts";
 export type { RefreshedMigration, RefreshOptions } from "./status.ts";
-export { DEFAULT_STALLED_AFTER_MS, refreshMigrationState } from "./status.ts";
+export {
+  DEFAULT_STALLED_AFTER_MS,
+  isStalled,
+  refreshMigrationState,
+} from "./status.ts";
 export { parseBunnyDate } from "./time.ts";

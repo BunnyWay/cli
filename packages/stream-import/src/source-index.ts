@@ -33,6 +33,21 @@ export function failureReason(video: BunnyVideo): string {
   return messages.length > 0 ? `${generic}: ${messages.join("; ")}` : generic;
 }
 
+/** IncompatibleResolution, InvalidFramerate, VideoExceededMaxDuration, AudioExceededMaxDuration, OriginalCorrupted: the same file fails again. */
+const PERMANENT_ISSUE_CODES = new Set([3, 4, 5, 6, 7]);
+
+/** Bunny failed the video for a reason fetching the same file again cannot fix. */
+export function isPermanentFailure(video: BunnyVideo): boolean {
+  return (
+    videoHealth(video) === "failed" &&
+    (video.transcodingMessages ?? []).some(
+      (m) =>
+        m.level === TRANSCODING_ERROR_LEVEL &&
+        PERMANENT_ISSUE_CODES.has(m.issueCode as number),
+    )
+  );
+}
+
 const HEALTH_RANK: Record<BunnyVideoHealth, number> = {
   finished: 0,
   processing: 1,

@@ -12,7 +12,10 @@ import type { BunnyVideo } from "./bunny-types.ts";
 import {
   DEFAULT_CONCURRENCY,
   DEFAULT_MIGRATION_TIMEOUT,
+  MAX_IMPORT_ATTEMPTS,
   MAX_VIDEO_DURATION_SECONDS,
+  MAX_VIDEO_LONG_EDGE,
+  MAX_VIDEO_SHORT_EDGE,
 } from "./constants.ts";
 import type {
   Logger,
@@ -29,7 +32,13 @@ import {
   sanitizeMetadata,
   stripAnsi,
 } from "./sanitize.ts";
-import { buildSourceIndex, videoHealth } from "./source-index.ts";
+import {
+  buildSourceIndex,
+  failureReason,
+  isPermanentFailure,
+  videoHealth,
+} from "./source-index.ts";
+import { isStalled } from "./status.ts";
 import { parseBunnyDate } from "./time.ts";
 
 /** How long encode-progress updates accumulate before hitting disk; status transitions still write through immediately. */
@@ -46,6 +55,10 @@ export interface MigrationOptions {
   wait?: boolean;
   /** Ceiling for one unit of work on one video: the queue step, or the encode wait when `wait` is on. */
   migrationTimeoutMs?: number;
+  /** Delete a video's failed Bunny copies before fetching it again, and retry failures that would otherwise be given up on. */
+  cleanFailed?: boolean;
+  /** Delete and fetch again videos stuck at zero bytes past the stall threshold. */
+  retryStalled?: boolean;
   /** Pauses the run: no new videos start, in-flight ones are abandoned for the next resume, and the state comes back `paused` instead of throwing. */
   signal?: AbortSignal;
   onProgress?: (
@@ -86,8 +99,21 @@ export interface MigrationSummary {
   newVideosList: SummaryVideo[];
   migratedVideosList: SummaryVideo[];
   processingList: SummaryVideo[];
-  /** Of `newVideosList`, the ones the source reports as longer than Bunny accepts; they will fail. */
-  tooLongList: SummaryVideo[];
+  /** Of `processingOnBunny`, or of `newVideos` with `retryStalled`, the ones stuck at zero bytes. */
+  stalledOnBunny: number;
+  /** Of `newVideosList`, the ones the source reports as beyond Bunny's limits; they are queued but will fail. */
+  unsupportedList: UnsupportedVideo[];
+  /** Tagged videos Bunny failed for a reason a retry cannot fix; skipped unless `cleanFailed`. */
+  failedForGoodList: UnsupportedVideo[];
+}
+
+export interface UnsupportedVideo extends SummaryVideo {
+  reason: string;
+}
+
+export interface SummaryOptions {
+  cleanFailed?: boolean;
+  retryStalled?: boolean;
 }
 
 export interface MigrationServiceOptions {
@@ -117,6 +143,9 @@ export class MigrationService {
   private knownGuids = new Set<string>();
   /** Library videos without this source's dedup tag, the candidates for a fetch whose response was lost. */
   private untagged: BunnyVideo[] = [];
+  /** Failed tagged copies by dedup value, every one of them, for `cleanFailed` to delete. */
+  private deadCopies = new Map<string, string[]>();
+  private cleanFailed = false;
 
   /** Discovery result, cached so the run does not re-walk the source after the summary. */
   private discovery: {
@@ -169,12 +198,26 @@ export class MigrationService {
     this.untagged = bunnyVideos.filter(
       (v) => !v.metaTags?.some((t) => t.property === this.adapter.dedupTag),
     );
+    this.deadCopies = new Map();
+    for (const video of bunnyVideos) {
+      const tag = video.metaTags?.find(
+        (t) => t.property === this.adapter.dedupTag,
+      )?.value;
+      if (!tag || !video.guid || videoHealth(video) !== "failed") continue;
+      this.deadCopies.set(tag, [
+        ...(this.deadCopies.get(tag) ?? []),
+        video.guid,
+      ]);
+    }
     this.indexLoaded = true;
 
     return this.sourceIndex;
   }
 
-  async getSummary(folderId?: string): Promise<MigrationSummary> {
+  async getSummary(
+    folderId?: string,
+    options: SummaryOptions = {},
+  ): Promise<MigrationSummary> {
     const { folders, videos, uncategorizedVideos } =
       await this.discover(folderId);
     const index = await this.loadSourceIndex();
@@ -194,8 +237,11 @@ export class MigrationService {
     const newVideosList: SummaryVideo[] = [];
     const migratedVideosList: SummaryVideo[] = [];
     const processingList: SummaryVideo[] = [];
-    const tooLongList: SummaryVideo[] = [];
+    const unsupportedList: UnsupportedVideo[] = [];
+    const failedForGoodList: UnsupportedVideo[] = [];
     let failedOnBunny = 0;
+    let stalledOnBunny = 0;
+    const now = Date.now();
     let totalSize = 0;
     let totalDuration = 0;
 
@@ -205,13 +251,18 @@ export class MigrationService {
       const row = { name: video.displayName, folder: folderName };
       const existing = index.get(this.dedupKey(video.sourceId));
       const health = existing ? videoHealth(existing) : undefined;
+      const stalled = existing ? isStalled(existing, now) : false;
+      if (stalled) stalledOnBunny++;
       if (health === "finished") migratedVideosList.push(row);
-      else if (health === "processing") processingList.push(row);
+      else if (health === "processing" && !(stalled && options.retryStalled))
+        processingList.push(row);
+      else if (existing && isPermanentFailure(existing) && !options.cleanFailed)
+        failedForGoodList.push({ ...row, reason: failureReason(existing) });
       else {
         if (health === "failed") failedOnBunny++;
         newVideosList.push(row);
-        if ((video.duration ?? 0) > MAX_VIDEO_DURATION_SECONDS)
-          tooLongList.push(row);
+        const reason = unsupportedReason(video);
+        if (reason) unsupportedList.push({ ...row, reason });
       }
     }
 
@@ -229,7 +280,9 @@ export class MigrationService {
       newVideosList,
       migratedVideosList,
       processingList,
-      tooLongList,
+      stalledOnBunny,
+      unsupportedList,
+      failedForGoodList,
     };
   }
 
@@ -237,6 +290,7 @@ export class MigrationService {
 
   async runMigration(options: MigrationOptions = {}): Promise<MigrationState> {
     const { folderId, resume = false, wait = false, signal } = options;
+    this.cleanFailed = Boolean(options.cleanFailed);
     const concurrency = Math.max(
       1,
       Math.floor(positiveOr(options.concurrency, DEFAULT_CONCURRENCY)),
@@ -301,7 +355,11 @@ export class MigrationService {
       this.state = state;
       await this.createCollections(state, targetFolders);
       this.prepareEntries(state, targetVideos, targetUncategorized);
-      this.reconcileWithBunny(state);
+      await this.reconcileWithBunny(
+        state,
+        Boolean(options.retryStalled),
+        signal,
+      );
 
       // Phase 1: hand every video to Bunny and tag it. This is the import.
       const toQueue = state.videoMigrations.filter(
@@ -372,6 +430,7 @@ export class MigrationService {
         if (!gone || signal?.aborted) continue;
         m.status = "failed";
         m.error = "No longer listed at the source";
+        m.permanent = true;
       }
       state.status = signal?.aborted
         ? "paused"
@@ -544,13 +603,42 @@ export class MigrationService {
     const failed = state.videoMigrations.filter(
       (m) => m.status === "failed" && inScope(m),
     );
-    if (failed.length === 0) return;
-    for (const m of failed) {
+    const givenUp = failed.filter((m) => this.givenUp(m));
+    if (givenUp.length > 0)
+      this.logger.warn(
+        `Not retrying ${givenUp.length} videos that cannot succeed or failed ${MAX_IMPORT_ATTEMPTS} times; a fresh import or \`cleanFailed\` tries them again.`,
+      );
+    const retry = failed.filter((m) => !this.givenUp(m));
+    if (retry.length === 0) return;
+    for (const m of retry) {
       m.status = m.bunnyVideoId ? "processing" : "pending";
       m.error = null;
       m.completedAt = null;
     }
-    this.logger.info(`Retrying ${failed.length} failed videos`);
+    this.logger.info(`Retrying ${retry.length} failed videos`);
+  }
+
+  /** A failed entry a resume leaves alone: one a retry cannot fix, or one that keeps failing. */
+  private givenUp(m: VideoMigration): boolean {
+    return (
+      !this.cleanFailed &&
+      (Boolean(m.permanent) || (m.attempts ?? 0) >= MAX_IMPORT_ATTEMPTS)
+    );
+  }
+
+  /** Delete every failed tagged copy of this entry's video, so a re-fetch does not leave another dead one beside it. */
+  private async deleteDeadCopies(
+    migration: VideoMigration,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const key = this.dedupKey(migration.sourceVideoId);
+    for (const guid of this.deadCopies.get(key) ?? []) {
+      await this.bunny.deleteVideo(guid, signal);
+      this.logger.debug(
+        `Deleted failed copy of ${stripAnsi(migration.videoName)} (${guid})`,
+      );
+    }
+    this.deadCopies.delete(key);
   }
 
   private async createCollections(
@@ -620,9 +708,15 @@ export class MigrationService {
   }
 
   /** Line every entry up with what Bunny already holds under its tag, so the queue only touches what Bunny lacks. */
-  private reconcileWithBunny(state: MigrationState): void {
+  private async reconcileWithBunny(
+    state: MigrationState,
+    retryStalled: boolean,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const now = Date.now();
     for (const m of state.videoMigrations) {
-      if (m.status === "completed") continue;
+      // A failed entry still failed here is one the resume gave up on.
+      if (m.status === "completed" || m.status === "failed") continue;
       const existing = this.sourceIndex.get(this.dedupKey(m.sourceVideoId));
       if (!existing?.guid) continue;
       switch (videoHealth(existing)) {
@@ -634,6 +728,15 @@ export class MigrationService {
           this.logger.debug(`Already imported: ${stripAnsi(m.videoName)}`);
           break;
         case "processing":
+          if (retryStalled && isStalled(existing, now)) {
+            await this.bunny.deleteVideo(existing.guid, signal);
+            m.bunnyVideoId = null;
+            m.status = "pending";
+            this.logger.warn(
+              `${stripAnsi(m.videoName)} was stuck on Bunny; deleted it to import again`,
+            );
+            break;
+          }
           m.bunnyVideoId = existing.guid;
           m.status = "processing";
           m.encodeProgress = existing.encodeProgress ?? m.encodeProgress;
@@ -642,7 +745,14 @@ export class MigrationService {
           );
           break;
         case "failed":
-          // The dead copy stays in the library; a fresh fetch gets a new video and the index will prefer it next time.
+          if (isPermanentFailure(existing) && !this.cleanFailed) {
+            m.bunnyVideoId = existing.guid;
+            m.status = "failed";
+            m.permanent = true;
+            m.error = failureReason(existing);
+            break;
+          }
+          // Without `cleanFailed` the dead copy stays in the library; a fresh fetch gets a new video and the index will prefer it next time.
           m.bunnyVideoId = null;
           m.status = "pending";
           this.logger.warn(
@@ -736,6 +846,7 @@ export class MigrationService {
         this.logger.debug(`Resuming: ${stripAnsi(migration.videoName)}`);
         videoId = migration.bunnyVideoId;
       } else {
+        if (this.cleanFailed) await this.deleteDeadCopies(migration, signal);
         videoId = await this.startFetch(migration, signal, runSignal);
       }
 
@@ -786,8 +897,11 @@ export class MigrationService {
       );
       if (signal.aborted) return;
 
-      if (!processed.success)
+      if (!processed.success) {
+        if (processed.video && isPermanentFailure(processed.video))
+          migration.permanent = true;
         throw new Error(processed.error ?? "Processing failed");
+      }
 
       migration.status = "completed";
       migration.encodeProgress = 100;
@@ -811,6 +925,7 @@ export class MigrationService {
     runSignal?: AbortSignal,
   ): Promise<string> {
     migration.status = "fetching";
+    migration.attempts = (migration.attempts ?? 0) + 1;
     migration.startedAt = new Date().toISOString();
     migration.error = null;
     this.flush();
@@ -925,6 +1040,21 @@ export class MigrationService {
   getState(): MigrationState | null {
     return this.state ?? this.store.load();
   }
+}
+
+/** Why the source's own metadata says Bunny will reject a video, or null when it reports nothing over the limits. */
+function unsupportedReason(video: SourceVideo): string | null {
+  if ((video.duration ?? 0) > MAX_VIDEO_DURATION_SECONDS)
+    return "Longer than Bunny's 72 hour limit";
+  const { width, height } = video;
+  if (
+    width &&
+    height &&
+    (Math.max(width, height) > MAX_VIDEO_LONG_EDGE ||
+      Math.min(width, height) > MAX_VIDEO_SHORT_EDGE)
+  )
+    return `${width}x${height} is above Bunny's 2160p limit`;
+  return null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────

@@ -31,4 +31,6 @@ export interface S3Config {
   /** For S3-compatible providers. */
   endpoint?: string;
   presignedUrlTtl?: number;
+  /** Treat `.ts` keys as videos; off by default because an HLS bucket holds thousands of `.ts` segments. */
+  includeTs?: boolean;
 }

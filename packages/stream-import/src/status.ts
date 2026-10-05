@@ -7,7 +7,11 @@
 import type { BunnyStream } from "./bunny-stream.ts";
 import type { BunnyVideo } from "./bunny-types.ts";
 import type { MigrationState } from "./contracts.ts";
-import { failureReason, videoHealth } from "./source-index.ts";
+import {
+  failureReason,
+  isPermanentFailure,
+  videoHealth,
+} from "./source-index.ts";
 import { parseBunnyDate } from "./time.ts";
 
 /** Bunny gives no "stuck" signal, so this long at zero bytes is the best proxy for a fetch that silently died. */
@@ -23,7 +27,7 @@ export interface RefreshedMigration {
   state: MigrationState;
   /** The live Bunny record for every entry that has one, by GUID. */
   videos: Map<string, BunnyVideo>;
-  /** GUIDs still processing with no bytes after `stalledAfterMs`. A hint for the host, never grounds to re-import. */
+  /** GUIDs still processing with no bytes after `stalledAfterMs`. A hint for the host; only an opt-in `retryStalled` run re-imports them. */
   stalled: Set<string>;
 }
 
@@ -64,19 +68,13 @@ export async function refreshMigrationState(
       case "failed":
         entry.status = "failed";
         entry.error ??= failureReason(video);
+        entry.permanent ||= isPermanentFailure(video);
         break;
       default: {
         if (entry.status === "completed") break;
         entry.status = "processing";
-        // Bunny's own creation time is the reference: an entry adopted from the index has no local startedAt.
-        const since = video.dateUploaded ?? entry.startedAt;
-        if (
-          since &&
-          (video.storageSize ?? 0) === 0 &&
-          now - parseBunnyDate(since) > stalledAfterMs
-        ) {
+        if (isStalled(video, now, stalledAfterMs, entry.startedAt))
           stalled.add(entry.bunnyVideoId);
-        }
       }
     }
   }
@@ -90,4 +88,21 @@ export async function refreshMigrationState(
   state.updatedAt = new Date().toISOString();
 
   return { state, videos, stalled };
+}
+
+/** Still processing with no bytes this long after Bunny created it, the best proxy for a fetch that silently died. */
+export function isStalled(
+  video: BunnyVideo,
+  now: number,
+  stalledAfterMs = DEFAULT_STALLED_AFTER_MS,
+  fallbackSince?: string | null,
+): boolean {
+  // Bunny's own creation time is the reference: an entry adopted from the index has no local startedAt.
+  const since = video.dateUploaded ?? fallbackSince;
+  return (
+    videoHealth(video) === "processing" &&
+    Boolean(since) &&
+    (video.storageSize ?? 0) === 0 &&
+    now - parseBunnyDate(since) > stalledAfterMs
+  );
 }

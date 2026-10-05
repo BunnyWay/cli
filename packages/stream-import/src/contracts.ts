@@ -44,6 +44,9 @@ export interface SourceVideo {
   size?: number;
   /** Duration in seconds. Undefined when the source does not report one. */
   duration?: number;
+  /** Source resolution in pixels, for sources that report it when listing. */
+  width?: number;
+  height?: number;
 }
 
 export interface SourceContent {
@@ -182,6 +185,10 @@ export interface VideoMigration {
   tags?: string[];
   /** Set while a fetch request's outcome is unknown (timed out, connection lost), so the next run can find the video Bunny may have created. */
   pendingFetch?: { title: string; at: string };
+  /** Fetches started for this entry, so a resume can stop retrying one that keeps failing. */
+  attempts?: number;
+  /** Failed in a way a retry cannot fix (over Bunny's limits, a corrupt original, gone from the source). */
+  permanent?: boolean;
 }
 
 export interface MigrationState {

@@ -21,6 +21,7 @@ interface ListArgs {
   videos?: boolean;
   bucket?: string;
   prefix?: string;
+  includeTs?: boolean;
   requestTimeout?: number;
 }
 
@@ -99,6 +100,10 @@ export const streamImportListCommand = defineToolCommand({
       })
       .option("bucket", { type: "string", describe: "S3 bucket override" })
       .option("prefix", { type: "string", describe: "S3 prefix override" })
+      .option("include-ts", {
+        type: "boolean",
+        describe: "S3: list .ts files too",
+      })
       .option("request-timeout", {
         type: "number",
         describe: "Seconds before one HTTP request gives up (1-3600)",
@@ -118,6 +123,7 @@ export const streamImportListCommand = defineToolCommand({
           videos: args.videos,
           bucket: args.bucket,
           prefix: args.prefix,
+          includeTs: args.includeTs,
           requestTimeout: args.requestTimeout,
           limit: MAX_PLAN_LIMIT,
         }),

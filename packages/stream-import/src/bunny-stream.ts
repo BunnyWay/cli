@@ -26,7 +26,8 @@ import { sleep } from "./time.ts";
 
 export type StreamClient = ReturnType<typeof createStreamClient>;
 
-const PAGE_SIZE = 100;
+/** The listing endpoints' documented ceiling, so a large library takes a tenth of the requests the default page would. */
+const PAGE_SIZE = 1_000;
 const PROCESSING_POLL_INTERVAL_MS = 5_000;
 /** Consecutive failed polls tolerated while waiting, so one transient error does not fail an encode that is still running. */
 const MAX_CONSECUTIVE_POLL_ERRORS = 3;
@@ -241,6 +242,18 @@ export class BunnyStream {
       body: update,
       signal,
     });
+  }
+
+  /** Delete a video; one that is already gone counts as deleted. */
+  async deleteVideo(videoId: string, signal?: AbortSignal): Promise<void> {
+    try {
+      await this.stream.DELETE("/library/{libraryId}/videos/{videoId}", {
+        params: { path: { ...this.path, videoId } },
+        signal,
+      });
+    } catch (error) {
+      if (!isApiErrorWithStatus(error, 404)) throw error;
+    }
   }
 
   /** Ask Bunny to pull the video from `url`; errors are returned, not thrown, so one bad video fails only its own entry. */

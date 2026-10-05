@@ -11,6 +11,12 @@ export const MAX_RATE_LIMIT_RETRIES = 5;
 
 /** Bunny Stream rejects sources longer than this. */
 export const MAX_VIDEO_DURATION_SECONDS = 72 * 3_600;
+/** Bunny Stream's resolution ceiling, 2160p: 3840x2160 landscape or 2160x3840 portrait. */
+export const MAX_VIDEO_LONG_EDGE = 3_840;
+export const MAX_VIDEO_SHORT_EDGE = 2_160;
+
+/** A resume stops retrying a video after this many fetches; a fresh run or `cleanFailed` tries it again. */
+export const MAX_IMPORT_ATTEMPTS = 3;
 
 export const VIDEO_EXTENSIONS = [
   ".mp4",

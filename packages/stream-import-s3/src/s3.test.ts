@@ -45,6 +45,8 @@ describe("keys", () => {
   test("only keys with a video extension count, and names drop the path and extension", () => {
     expect(isVideoKey("a/b/clip.mp4")).toBe(true);
     expect(isVideoKey("CLIP.MOV")).toBe(true);
+    expect(isVideoKey("hls/segment0.ts")).toBe(false);
+    expect(isVideoKey("hls/segment0.ts", true)).toBe(true);
     expect(isVideoKey("notes.txt")).toBe(false);
     expect(isVideoKey("videos/")).toBe(false);
     expect(isVideoKey("v1.0/clip")).toBe(false);

@@ -4,13 +4,20 @@ import {
 } from "@bunny.net/stream-import";
 
 /** S3 has no media-type concept, so extension matching is the only client-side filter available. */
-export function isVideoKey(key: string | undefined): boolean {
+export function isVideoKey(
+  key: string | undefined,
+  includeTs = false,
+): boolean {
   if (!key || key.endsWith("/")) return false;
   const dot = key.lastIndexOf(".");
   const slash = key.lastIndexOf("/");
   if (dot < 0 || dot < slash) return false;
 
-  return VIDEO_EXTENSIONS.includes(key.slice(dot).toLowerCase());
+  const extension = key.slice(dot).toLowerCase();
+
+  return (
+    VIDEO_EXTENSIONS.includes(extension) || (includeTs && extension === ".ts")
+  );
 }
 
 /** `videos/2024/promo-final.mp4` -> `promo-final` */

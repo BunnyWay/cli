@@ -45,6 +45,9 @@ interface ImportArgs {
   bucket?: string;
   prefix?: string;
   urlTtl?: number;
+  includeTs?: boolean;
+  cleanFailed?: boolean;
+  retryStalled?: boolean;
   requestTimeout?: number;
   processingTimeout?: number;
   videoTimeout?: number;
@@ -109,11 +112,17 @@ function statusCommand(libraryId: number, source: string): string {
   return `bunny stream import status --library ${libraryId} --source ${source}`;
 }
 
-function resumeCommand(result: ImportRun, library?: string): string {
+// Carries --include-ts, since a resume without it would rediscover the bucket without the .ts files and fail their entries.
+function resumeCommand(
+  result: ImportRun,
+  library?: string,
+  includeTs?: boolean,
+): string {
   const id = result.library?.id ?? library;
   const flag = id === undefined ? "" : ` --library ${id}`;
   const folder = result.folder ? ` --folder ${result.folder}` : "";
-  return `bunny stream import${flag} --source ${result.source}${folder} --resume`;
+  const ts = includeTs ? " --include-ts" : "";
+  return `bunny stream import${flag} --source ${result.source}${folder}${ts} --resume`;
 }
 
 // Titles and spacing are for people; csv and markdown output stays pure table.
@@ -145,6 +154,16 @@ function renderSummary(
       key: "Failed on Bunny",
       value: `${summary.failedOnBunny} (will be imported again)`,
     });
+  if (summary.failedForGoodList.length > 0)
+    entries.push({
+      key: "Cannot import",
+      value: `${summary.failedForGoodList.length} (Bunny rejected them; --clean-failed tries again)`,
+    });
+  if (summary.stalledOnBunny > 0)
+    entries.push({
+      key: "Stalled on Bunny",
+      value: String(summary.stalledOnBunny),
+    });
   entries.push({ key: "To import", value: String(summary.newVideos) });
   if (summary.totalDuration > 0)
     entries.push({
@@ -158,12 +177,12 @@ function renderSummary(
     logger.log(bunny.bold(`${sourceLabel} to Bunny Stream`));
   logger.log(formatKeyValue(entries, output));
   if (decorated(output)) logger.log("");
-  if (summary.tooLongList.length > 0) {
+  if (summary.unsupportedList.length > 0) {
     logger.warn(
-      `${summary.tooLongList.length} videos are longer than Bunny's 72 hour limit and will fail:`,
+      `${summary.unsupportedList.length} videos are beyond Bunny's limits and will fail:`,
     );
-    for (const video of summary.tooLongList)
-      logger.warn(`  - ${stripAnsi(video.name)}`);
+    for (const video of summary.unsupportedList)
+      logger.warn(`  - ${stripAnsi(video.name)}: ${video.reason}`);
     if (decorated(output)) logger.log("");
   }
 }
@@ -199,6 +218,7 @@ function renderResult(
   result: ImportRun,
   output: OutputFormat,
   libraryArg?: string,
+  includeTs?: boolean,
 ): void {
   const { library, failed } = result;
   const libraryName = library?.name ?? "the library";
@@ -235,8 +255,15 @@ function renderResult(
     logger.log("");
     for (const m of failed) logger.error(`${stripAnsi(m.name)}: ${m.error}`);
   }
-  if (failed.length > 0 || result.status === "paused")
-    logger.info(`Resume with ${bunny(resumeCommand(result, libraryArg))}`);
+  const givenUp = failed.filter((f) => !f.retryable).length;
+  if (givenUp > 0)
+    logger.info(
+      `${givenUp} cannot be retried as they are: Bunny rejected them or they failed 3 times. Add --clean-failed to delete their copies and try again.`,
+    );
+  if (failed.length > givenUp || result.status === "paused")
+    logger.info(
+      `Resume with ${bunny(resumeCommand(result, libraryArg, includeTs))}`,
+    );
 }
 
 export const streamImportRunCommand = defineToolCommand({
@@ -319,6 +346,21 @@ export const streamImportRunCommand = defineToolCommand({
         type: "number",
         describe: `S3 pre-signed URL lifetime in seconds (${MIN_PRESIGNED_URL_TTL_SECONDS}-${MAX_PRESIGNED_URL_TTL_SECONDS})`,
       })
+      .option("include-ts", {
+        type: "boolean",
+        describe:
+          "S3: import .ts files too (off by default: HLS buckets hold thousands of segments)",
+      })
+      .option("clean-failed", {
+        type: "boolean",
+        describe:
+          "Delete failed Bunny copies before importing again, and retry videos Bunny rejected",
+      })
+      .option("retry-stalled", {
+        type: "boolean",
+        describe:
+          "Delete and import again videos stuck at zero bytes on Bunny (see `status`)",
+      })
       .option("request-timeout", {
         type: "number",
         default: DEFAULT_REQUEST_TIMEOUT / 1000,
@@ -368,6 +410,9 @@ export const streamImportRunCommand = defineToolCommand({
       bucket: args.bucket,
       prefix: args.prefix,
       urlTtl: args.urlTtl,
+      includeTs: args.includeTs,
+      cleanFailed: args.cleanFailed,
+      retryStalled: args.retryStalled,
       requestTimeout: args.requestTimeout,
     });
     const dryRun = Boolean(args.dryRun);
@@ -436,6 +481,10 @@ export const streamImportRunCommand = defineToolCommand({
         logger.info(
           `Check progress with ${bunny(statusCommand(library.id, plugin.id))}, or re-run with --wait.`,
         );
+      } else if (summary.failedForGoodList.length > 0) {
+        logger.info(
+          `Nothing new to import; Bunny rejected ${summary.failedForGoodList.length} videos. Re-run with --clean-failed to delete their copies and try again.`,
+        );
       } else logger.success("Everything is already imported.");
 
       return DONE;
@@ -472,8 +521,12 @@ export const streamImportRunCommand = defineToolCommand({
                 message: `Importing ${summary.newVideos} videos needs a confirmation prompt.`,
                 hint: "Re-run with --force to import without a prompt, or --dry-run to only show the plan.",
               });
+              const deleting =
+                args.cleanFailed || args.retryStalled
+                  ? ", deleting their failed or stuck Bunny copies first"
+                  : "";
               return confirm(
-                `Import ${summary.newVideos} videos into ${library.name}?`,
+                `Import ${summary.newVideos} videos into ${library.name}${deleting}?`,
                 { force: args.force },
               );
             }
@@ -488,12 +541,12 @@ export const streamImportRunCommand = defineToolCommand({
   },
 
   again: async (result, args, input) => {
-    if (result.failed.length === 0 || args.force || !isInteractive(args.output))
+    const retryable = result.failed.filter((f) => f.retryable).length;
+    if (retryable === 0 || args.force || !isInteractive(args.output))
       return undefined;
-    const retry = await confirm(
-      `${result.failed.length} videos failed. Retry them now?`,
-      { optional: true },
-    );
+    const retry = await confirm(`${retryable} videos failed. Retry them now?`, {
+      optional: true,
+    });
     return retry
       ? { ...input, resume: true, expectedCount: undefined }
       : undefined;
@@ -506,6 +559,6 @@ export const streamImportRunCommand = defineToolCommand({
     ...result,
   }),
 
-  render: (result, { output, library }) =>
-    renderResult(result, output, library),
+  render: (result, { output, library, includeTs }) =>
+    renderResult(result, output, library, includeTs),
 });

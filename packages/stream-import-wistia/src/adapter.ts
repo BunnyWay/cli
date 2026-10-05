@@ -97,11 +97,14 @@ function toSourceVideo(
   media: WistiaMedia,
   folderId: string | null,
 ): SourceVideo {
+  const original = media.assets?.find((a) => a.type === "OriginalFile");
   return {
     sourceId: media.hashed_id,
     displayName: media.name,
     folderId,
     size: media.assets?.[0]?.fileSize,
     duration: media.duration || undefined,
+    width: original?.width || undefined,
+    height: original?.height || undefined,
   };
 }
