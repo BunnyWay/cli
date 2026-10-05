@@ -588,7 +588,7 @@ On macOS, `bun build --compile` leaves an invalid signature: ad-hoc on arm64, an
 
 ### Publishing libraries
 
-The published libraries (`openapi-client`, `sandbox`, `database-client`, and the database packages) share one pattern: `exports`/`main`/`types` point at `dist/`, while **in-repo tooling resolves them from source** through the root `tsconfig.json` `paths` mapping. `bun run`, `bun build --compile`, `bun test`, and `tsc` all honour `paths` over the package `exports`, so the dev loop needs no prebuild step and only publishing needs `dist/`. Published consumers never see the repo tsconfig and fall back to `exports`.
+The published libraries (`openapi-client`, `sandbox`, `database-client`, `framework-detector`, and the database packages) share one pattern: `exports`/`main`/`types` point at `dist/`, while **in-repo tooling resolves them from source** through the root `tsconfig.json` `paths` mapping. `bun run`, `bun build --compile`, `bun test`, and `tsc` all honour `paths` over the package `exports`, so the dev loop needs no prebuild step and only publishing needs `dist/`. Published consumers never see the repo tsconfig and fall back to `exports`.
 
 Per-package deviations, each with a reason:
 
@@ -596,6 +596,7 @@ Per-package deviations, each with a reason:
 - **`sandbox`** depends on `openapi-client` with `workspace:*`, so its release job uses `bun publish`, which rewrites that spec to the local version in the tarball. `npm publish` would ship the unresolvable `workspace:*` verbatim. Its `tsconfig.build.json` overrides `paths` to `{}` so openapi-client resolves via `dist/` instead of source, which would otherwise violate `rootDir`; the job therefore builds openapi-client first.
 - **`tools`** follows the `sandbox` pattern exactly: `workspace:*` on `openapi-client`, `paths: {}` in `tsconfig.build.json`, openapi-client built first, `bun publish`. It also imports the per-API type entrypoint `@bunny.net/openapi-client/magic-containers`, which resolves through openapi-client's `exports` once that `dist/` exists.
 - **`database-client`** is the simplest case: zero dependencies, so `npm publish` works, and no declaration transformer. `tsconfig.build.json` sets `include: ["src"]` to keep `examples/` out of the program. Because the program is scoped to `src`, the package cannot import its own `package.json`, which is why its default `User-Agent` is versionless.
+- **`framework-detector`** follows `database-client`: zero dependencies, `npm publish`, `include: ["src"]`. It is pure (no disk or network) so the dashboard and the Sites control plane can run it in a browser or an Edge Script; the CLI's `sites/ci/frameworks.ts` builds its `ProjectSnapshot` from disk.
 
 Publish jobs for independently versioned packages are gated on a version bump detected via `npm view`. Only the CLI and its platform packages are in a `fixed` group.
 

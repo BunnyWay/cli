@@ -22,6 +22,9 @@
       "@templates/*": ["./templates/*"],
       "@skills/*": ["./skills/*"],
       "@bunny.net/database-client": ["./packages/database-client/src/index.ts"],
+      "@bunny.net/framework-detector": [
+        "./packages/framework-detector/src/index.ts"
+      ],
       "@bunny.net/openapi-client": ["./packages/openapi-client/src/index.ts"],
       "@bunny.net/openapi-client/generated/*": [
         "./packages/openapi-client/src/generated/*"
