@@ -1,4 +1,5 @@
 import { defineNamespace } from "@/core/define-namespace.ts";
+import { streamImportListCommand } from "./list.ts";
 import { streamImportRunCommand } from "./run.ts";
 import { streamImportStatusCommand } from "./status.ts";
 
@@ -6,5 +7,5 @@ import { streamImportStatusCommand } from "./status.ts";
 export const streamImportNamespace = defineNamespace(
   "import",
   "Import videos into a Stream library from Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove.",
-  [streamImportRunCommand, streamImportStatusCommand],
+  [streamImportRunCommand, streamImportListCommand, streamImportStatusCommand],
 );

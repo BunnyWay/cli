@@ -4,10 +4,11 @@ import {
   DEFAULT_MIGRATION_TIMEOUT,
   DEFAULT_PROCESSING_TIMEOUT,
   DEFAULT_REQUEST_TIMEOUT,
+  MAX_PRESIGNED_URL_TTL_SECONDS,
+  MIN_PRESIGNED_URL_TTL_SECONDS,
   type SourcePlugin,
   stripAnsi,
 } from "@bunny.net/stream-import";
-import { extendToolContext } from "@bunny.net/tools";
 import {
   type ImportPlan,
   type ImportRun,
@@ -15,28 +16,22 @@ import {
   requireSource,
   SOURCE_IDS,
   SOURCES,
-  SourceCredentialsError,
   streamImportPlan,
   streamImportRun,
 } from "@bunny.net/tools/stream";
 import type { Argv } from "yargs";
 import {
   cliImportError,
-  offerToSaveCredentials,
-  promptSourceCredentials,
-  resolveImportSource,
-  withSavedCredentials,
-  withToolSpinner,
+  withImportSource,
 } from "@/commands/stream/import-setup.ts";
 import { resolveLibraryInteractive } from "@/commands/stream/interactive.ts";
-import { deleteImportCredentials } from "@/config/index.ts";
 import { bunny } from "@/core/colors.ts";
 import { DONE, defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { formatBytes, formatDuration, formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
-import { confirm, requireConfirmable } from "@/core/ui.ts";
+import { confirm, isInteractive, requireConfirmable } from "@/core/ui.ts";
 
 interface ImportArgs {
   library?: string;
@@ -163,6 +158,14 @@ function renderSummary(
     logger.log(bunny.bold(`${sourceLabel} to Bunny Stream`));
   logger.log(formatKeyValue(entries, output));
   if (decorated(output)) logger.log("");
+  if (summary.tooLongList.length > 0) {
+    logger.warn(
+      `${summary.tooLongList.length} videos are longer than Bunny's 72 hour limit and will fail:`,
+    );
+    for (const video of summary.tooLongList)
+      logger.warn(`  - ${stripAnsi(video.name)}`);
+    if (decorated(output)) logger.log("");
+  }
 }
 
 /** The dry-run plan: every video that would be imported, grouped by the collection it would land in. */
@@ -314,7 +317,7 @@ export const streamImportRunCommand = defineToolCommand({
       .option("prefix", { type: "string", describe: "S3 prefix override" })
       .option("url-ttl", {
         type: "number",
-        describe: "S3 pre-signed URL lifetime in seconds (60-604800)",
+        describe: `S3 pre-signed URL lifetime in seconds (${MIN_PRESIGNED_URL_TTL_SECONDS}-${MAX_PRESIGNED_URL_TTL_SECONDS})`,
       })
       .option("request-timeout", {
         type: "number",
@@ -340,7 +343,12 @@ export const streamImportRunCommand = defineToolCommand({
     assertRange(args.requestTimeout, 1, 3600, "--request-timeout");
     assertRange(args.videoTimeout, 60, 86400, "--video-timeout");
     assertRange(args.processingTimeout, 60, 86400, "--processing-timeout");
-    assertRange(args.urlTtl, 60, 604800, "--url-ttl");
+    assertRange(
+      args.urlTtl,
+      MIN_PRESIGNED_URL_TTL_SECONDS,
+      MAX_PRESIGNED_URL_TTL_SECONDS,
+      "--url-ttl",
+    );
     // An argument error should not wait on a library lookup or a credential check.
     if (args.source)
       assertFolderSupported(requireSource(args.source), args.folder);
@@ -352,54 +360,34 @@ export const streamImportRunCommand = defineToolCommand({
       output,
       offerLink: !args.dryRun,
     });
-    const saved = withSavedCredentials(baseCtx, args.profile);
-    const ctx = saved.ctx;
-    const plugin = await resolveImportSource(ctx, args.source, output);
-    if (!args.source) assertFolderSupported(plugin, args.folder);
-    const usedSaved = saved.used.get(plugin.id) ?? {};
-    const entered = await promptSourceCredentials(
-      ctx,
-      plugin,
-      {
-        bucket: args.bucket,
-        prefix: args.prefix,
-        presignedUrlTtl: args.urlTtl,
-      },
-      output,
-    );
-    const target = {
+    const targetFor = (source: string) => ({
       library: String(library.id),
-      source: plugin.id,
+      source,
       folder: args.folder,
       resume: args.resume,
       bucket: args.bucket,
       prefix: args.prefix,
       urlTtl: args.urlTtl,
       requestTimeout: args.requestTimeout,
-    };
+    });
     const dryRun = Boolean(args.dryRun);
     // The CLI is not a model context, so its lists go up to the tool's maximum.
-    // The run's context is built from the base one, so saved values travel in `env` alongside what was typed.
-    const env = { ...usedSaved, ...entered };
-    const plan = await withToolSpinner(
-      extendToolContext(baseCtx, { env }),
+    const {
+      plugin,
+      env,
+      result: plan,
+    } = await withImportSource(
+      baseCtx,
+      args,
+      output,
       "Resolving video library...",
-      (stepCtx) =>
-        streamImportPlan.invoke(stepCtx, { ...target, limit: MAX_PLAN_LIMIT }),
-    ).catch((error) => {
-      // Saved values the source rejects are dropped, so the next run prompts instead of failing the same way; timeouts and outages keep them.
-      if (
-        Object.keys(usedSaved).length > 0 &&
-        error instanceof SourceCredentialsError
-      ) {
-        deleteImportCredentials(args.profile, plugin.id);
-        logger.warn(
-          `Removed the saved ${plugin.label} credentials. Run again to enter new ones.`,
-        );
-      }
-      throw cliImportError(error) ?? error;
-    });
-    await offerToSaveCredentials(plugin, entered, args.profile);
+      (stepCtx, plugin) =>
+        streamImportPlan.invoke(stepCtx, {
+          ...targetFor(plugin.id),
+          limit: MAX_PLAN_LIMIT,
+        }),
+    );
+    const target = targetFor(plugin.id);
     const { summary } = plan;
     if (plan.folderFromSavedRun)
       logger.info(`Resuming the import of folder ${plan.folder}.`);
@@ -493,9 +481,22 @@ export const streamImportRunCommand = defineToolCommand({
     };
   },
 
+  // Set on every pass, so a retry that clears the failures also clears the exit code.
   after: (result) => {
-    if (result.status === "paused") process.exitCode = 130;
-    else if (result.failed.length > 0) process.exitCode = 1;
+    process.exitCode =
+      result.status === "paused" ? 130 : result.failed.length > 0 ? 1 : 0;
+  },
+
+  again: async (result, args, input) => {
+    if (result.failed.length === 0 || args.force || !isInteractive(args.output))
+      return undefined;
+    const retry = await confirm(
+      `${result.failed.length} videos failed. Retry them now?`,
+      { optional: true },
+    );
+    return retry
+      ? { ...input, resume: true, expectedCount: undefined }
+      : undefined;
   },
 
   onError: cliImportError,

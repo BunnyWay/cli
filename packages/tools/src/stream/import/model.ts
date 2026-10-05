@@ -47,6 +47,7 @@ export const ImportSummarySchema = z.object({
   newVideosList: z.array(SummaryVideoSchema),
   migratedVideosList: z.array(SummaryVideoSchema),
   processingList: z.array(SummaryVideoSchema),
+  tooLongList: z.array(SummaryVideoSchema),
 });
 
 export const ImportPlanSchema = z.object({
@@ -127,3 +128,31 @@ export const ImportStatusSchema = z.object({
 });
 
 export type ImportStatus = z.infer<typeof ImportStatusSchema>;
+
+/** A source's folders and, when asked for, its videos: what `folder` takes, before anything is imported. */
+export const ImportListingSchema = z.object({
+  source: z.string(),
+  supportsFolders: z.boolean(),
+  folders: z.array(
+    z.object({ id: z.string(), name: z.string(), videoCount: z.number() }),
+  ),
+  /** Videos outside any folder. */
+  uncategorized: z.number(),
+  /** Null unless videos were asked for. */
+  videos: z
+    .array(
+      z.object({
+        sourceId: z.string(),
+        name: z.string(),
+        folderId: z.string().nullable(),
+        folder: z.string().nullable(),
+        size: z.number().nullable(),
+        duration: z.number().nullable(),
+      }),
+    )
+    .nullable(),
+  /** True when `videos` was cut to the input `limit`. */
+  truncated: z.boolean(),
+});
+
+export type ImportListing = z.infer<typeof ImportListingSchema>;

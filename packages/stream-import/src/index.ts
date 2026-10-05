@@ -56,7 +56,11 @@ export {
   trimTrailingSlashes,
 } from "./sanitize.ts";
 export type { BunnyVideoHealth } from "./source-index.ts";
-export { buildSourceIndex, videoHealth } from "./source-index.ts";
+export {
+  buildSourceIndex,
+  failureReason,
+  videoHealth,
+} from "./source-index.ts";
 export { assertFolderSupported } from "./source-plugin.ts";
 export type { FileStateStoreOptions, StateLock } from "./state.ts";
 export {

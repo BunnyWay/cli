@@ -1,6 +1,7 @@
 /**
  * openapi-fetch middleware that retries 429s from the Stream API using the
- * server's `Retry-After`.
+ * server's `Retry-After`, and 5xx on GETs with exponential back-off. Other
+ * methods are not retried on 5xx: a POST may already have taken effect.
  *
  * openapi-fetch runs `onResponse` in reverse registration order, so this has to
  * be registered after `authMiddleware` to see the 429 before auth turns it into
@@ -21,6 +22,7 @@ import { sleep } from "./time.ts";
 /** Cap a hostile `Retry-After` so a bad header cannot park the process for hours. */
 const MAX_RETRY_AFTER_SECONDS = 300;
 const DEFAULT_RETRY_AFTER_SECONDS = 30;
+const SERVER_ERROR_BASE_DELAY_SECONDS = 1;
 
 export interface RateLimitOptions {
   maxRetries: number;
@@ -52,7 +54,9 @@ export function createRateLimitMiddleware({
     },
 
     async onResponse({ request, response, id }) {
-      if (response.status !== 429) {
+      const retryable = (r: Response) =>
+        r.status === 429 || (request.method === "GET" && r.status >= 500);
+      if (!retryable(response)) {
         replayable.delete(id);
 
         return undefined;
@@ -64,23 +68,30 @@ export function createRateLimitMiddleware({
       let attempt = 0;
 
       try {
-        while (current.status === 429 && attempt < maxRetries) {
+        while (retryable(current) && attempt < maxRetries) {
           attempt++;
-          const header = Number.parseInt(
-            current.headers.get("retry-after") ?? "",
-            10,
-          );
-          const retryAfter = Math.min(
-            Math.max(
-              Number.isNaN(header) ? DEFAULT_RETRY_AFTER_SECONDS : header,
-              1,
-            ),
-            MAX_RETRY_AFTER_SECONDS,
-          );
-
-          logger.warn(
-            `Bunny rate limit hit. Waiting ${retryAfter}s (attempt ${attempt}/${maxRetries})...`,
-          );
+          let retryAfter: number;
+          if (current.status === 429) {
+            const header = Number.parseInt(
+              current.headers.get("retry-after") ?? "",
+              10,
+            );
+            retryAfter = Math.min(
+              Math.max(
+                Number.isNaN(header) ? DEFAULT_RETRY_AFTER_SECONDS : header,
+                1,
+              ),
+              MAX_RETRY_AFTER_SECONDS,
+            );
+            logger.warn(
+              `Bunny rate limit hit. Waiting ${retryAfter}s (attempt ${attempt}/${maxRetries})...`,
+            );
+          } else {
+            retryAfter = SERVER_ERROR_BASE_DELAY_SECONDS * 2 ** (attempt - 1);
+            logger.warn(
+              `Bunny returned ${current.status}. Retrying in ${retryAfter}s (attempt ${attempt}/${maxRetries})...`,
+            );
+          }
           await wait(retryAfter * 1000, template.signal);
 
           template.signal.throwIfAborted();

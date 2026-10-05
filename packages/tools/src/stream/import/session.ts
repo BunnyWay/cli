@@ -10,6 +10,7 @@ import {
   parseSourceConfig,
   readMigrationState,
   resolveSourceConfig,
+  type SourceAdapter,
   type SourcePlugin,
   TransientHttpError,
 } from "@bunny.net/stream-import";
@@ -79,7 +80,7 @@ export function seconds(value: number | undefined, fallbackMs: number): number {
   return value === undefined ? fallbackMs : value * 1000;
 }
 
-function sourceOverrides(target: ImportTarget) {
+function sourceOverrides(target: SourceTarget) {
   return {
     bucket: target.bucket,
     prefix: target.prefix,
@@ -107,44 +108,33 @@ function hostNeutral<T>(fn: () => T, hint: string, message?: string): T {
   }
 }
 
-/** Resolve the library, source config, and scope, then build the engine; every call opens fresh so no state is shared between tool calls. */
-export async function openImport(
+export interface SourceTarget {
+  source: string;
+  bucket?: string;
+  prefix?: string;
+  urlTtl?: number;
+  requestTimeout?: number;
+}
+
+export interface OpenedSource {
+  plugin: SourcePlugin;
+  adapter: SourceAdapter;
+  requestTimeout: number;
+  sink: EngineSink;
+  logger: Logger;
+}
+
+/** Build the source adapter from the host env and check its credentials; needs no library. */
+export async function openSource(
   ctx: ToolContext,
-  target: ImportTarget,
-  opts: {
-    processingTimeoutMs?: number;
-    /** Filled as each step resolves, so a caller that is aborted midway knows how far it got. */
-    opened?: OpenedImport;
-  } = {},
-): Promise<ImportSession> {
-  const processingTimeoutMs =
-    opts.processingTimeoutMs ?? DEFAULT_PROCESSING_TIMEOUT;
+  target: SourceTarget,
+): Promise<OpenedSource> {
   const plugin = requireSource(target.source);
   // Credentials come from the host env, never from input, so they stay out of any model's context.
   const resolved = resolveSourceConfig(plugin, {
     env: ctx.env,
     overrides: sourceOverrides(target),
   });
-
-  ctx.progress("Resolving video library...");
-  const { library, accountId, client } = await openStreamLibrary(
-    ctx,
-    target.library,
-  );
-  if (opts.opened) opts.opened.library = library;
-  const statePath = importStatePath(plugin.id, library.id, accountId, ctx.env);
-  if (opts.opened) opts.opened.statePath = statePath;
-  // A resume without a folder keeps the saved scope; rediscovering the whole source would append every other folder to the run.
-  const savedFolder = target.resume
-    ? (readMigrationState(statePath)?.sourceFolderId ?? undefined)
-    : undefined;
-  const folder = target.folder ?? savedFolder;
-  hostNeutral(
-    () => assertFolderSupported(plugin, folder),
-    "Omit `folder` to import everything.",
-    `${plugin.label} has no folders, so \`folder\` cannot be used.`,
-  );
-
   const config = hostNeutral(
     () => parseSourceConfig(plugin, resolved),
     "Set the environment variables above in the tool context's env.",
@@ -169,6 +159,46 @@ export async function openImport(
     const { message, hint } = error as { message: string; hint?: string };
     throw new SourceCredentialsError(message, hint);
   }
+
+  return { plugin, adapter, requestTimeout, sink, logger };
+}
+
+/** Resolve the library, source config, and scope, then build the engine; every call opens fresh so no state is shared between tool calls. */
+export async function openImport(
+  ctx: ToolContext,
+  target: ImportTarget,
+  opts: {
+    processingTimeoutMs?: number;
+    /** Filled as each step resolves, so a caller that is aborted midway knows how far it got. */
+    opened?: OpenedImport;
+  } = {},
+): Promise<ImportSession> {
+  const processingTimeoutMs =
+    opts.processingTimeoutMs ?? DEFAULT_PROCESSING_TIMEOUT;
+  const plugin = requireSource(target.source);
+  ctx.progress("Resolving video library...");
+  const { library, accountId, client } = await openStreamLibrary(
+    ctx,
+    target.library,
+  );
+  if (opts.opened) opts.opened.library = library;
+  const statePath = importStatePath(plugin.id, library.id, accountId, ctx.env);
+  if (opts.opened) opts.opened.statePath = statePath;
+  // A resume without a folder keeps the saved scope; rediscovering the whole source would append every other folder to the run.
+  const savedFolder = target.resume
+    ? (readMigrationState(statePath)?.sourceFolderId ?? undefined)
+    : undefined;
+  const folder = target.folder ?? savedFolder;
+  hostNeutral(
+    () => assertFolderSupported(plugin, folder),
+    "Omit `folder` to import everything.",
+    `${plugin.label} has no folders, so \`folder\` cannot be used.`,
+  );
+
+  const { adapter, requestTimeout, sink, logger } = await openSource(
+    ctx,
+    target,
+  );
 
   const session: ImportSession = {
     plugin,

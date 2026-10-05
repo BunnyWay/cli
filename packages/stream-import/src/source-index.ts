@@ -7,6 +7,7 @@ export type BunnyVideoHealth = "finished" | "processing" | "failed";
 export function videoHealth(video: BunnyVideo): BunnyVideoHealth {
   switch (video.status) {
     case BunnyVideoStatus.Finished:
+    case BunnyVideoStatus.JitPlaylistsCreated:
       return "finished";
     case BunnyVideoStatus.Error:
     case BunnyVideoStatus.UploadFailed:
@@ -14,6 +15,22 @@ export function videoHealth(video: BunnyVideo): BunnyVideoHealth {
     default:
       return "processing";
   }
+}
+
+/** `Severity.Error` in the Stream spec: the video will most likely not play. */
+const TRANSCODING_ERROR_LEVEL = 3;
+
+/** Why Bunny gave up on a video, with its own error-level transcoding messages when it gave any. */
+export function failureReason(video: BunnyVideo): string {
+  const generic =
+    video.status === BunnyVideoStatus.UploadFailed
+      ? "Bunny could not fetch the file from the source"
+      : "Bunny could not encode the video";
+  const messages = (video.transcodingMessages ?? [])
+    .filter((m) => m.level === TRANSCODING_ERROR_LEVEL && m.message)
+    .map((m) => m.message);
+
+  return messages.length > 0 ? `${generic}: ${messages.join("; ")}` : generic;
 }
 
 const HEALTH_RANK: Record<BunnyVideoHealth, number> = {

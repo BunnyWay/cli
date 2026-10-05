@@ -7,7 +7,7 @@
 import type { BunnyStream } from "./bunny-stream.ts";
 import type { BunnyVideo } from "./bunny-types.ts";
 import type { MigrationState } from "./contracts.ts";
-import { videoHealth } from "./source-index.ts";
+import { failureReason, videoHealth } from "./source-index.ts";
 import { parseBunnyDate } from "./time.ts";
 
 /** Bunny gives no "stuck" signal, so this long at zero bytes is the best proxy for a fetch that silently died. */
@@ -63,7 +63,7 @@ export async function refreshMigrationState(
         break;
       case "failed":
         entry.status = "failed";
-        entry.error ??= "Bunny could not fetch or encode the video";
+        entry.error ??= failureReason(video);
         break;
       default: {
         if (entry.status === "completed") break;

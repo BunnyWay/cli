@@ -61,6 +61,12 @@ interface ToolCommandDef<A, Schema extends z.ZodObject, Result> {
   json?: (result: Result, args: A & GlobalArgs) => unknown;
   /** Render for humans. `--output json` prints the tool result instead and skips this. */
   render: (result: Result, args: A & GlobalArgs) => void;
+  /** After printing, offer to run the tool again, e.g. to retry failures; return the next input, or undefined to stop. */
+  again?: (
+    result: Result,
+    args: A & GlobalArgs,
+    input: z.input<Schema>,
+  ) => Promise<z.input<Schema> | undefined>;
 }
 
 /**
@@ -126,38 +132,43 @@ export function defineToolCommand<A, Schema extends z.ZodObject, Result>(
         return;
       }
 
-      const exitNow = () => process.exit(130);
-      const interrupt = () => {
-        controller.abort();
-        process.once("SIGINT", exitNow);
-      };
-      if (def.interruptible) process.once("SIGINT", interrupt);
-      spin.start();
-      let result: Result;
-      try {
-        const runCtx = prepared.env
-          ? extendToolContext(ctx, { env: prepared.env })
-          : ctx;
-        result = await def.tool.invoke(runCtx, prepared.input);
-      } catch (error) {
-        throw def.onError?.(error, args) ?? error;
-      } finally {
-        spin.stop();
-        process.off("SIGINT", interrupt);
-        process.off("SIGINT", exitNow);
+      const runCtx = prepared.env
+        ? extendToolContext(ctx, { env: prepared.env })
+        : ctx;
+      let input: z.input<Schema> | undefined = prepared.input;
+      while (input !== undefined) {
+        const exitNow = () => process.exit(130);
+        const interrupt = () => {
+          controller.abort();
+          process.once("SIGINT", exitNow);
+        };
+        if (def.interruptible) process.once("SIGINT", interrupt);
+        spin.start();
+        let result: Result;
+        try {
+          result = await def.tool.invoke(runCtx, input);
+        } catch (error) {
+          throw def.onError?.(error, args) ?? error;
+        } finally {
+          spin.stop();
+          process.off("SIGINT", interrupt);
+          process.off("SIGINT", exitNow);
+        }
+
+        await def.after?.(result, args);
+
+        if (!def.emit?.(result, args)) {
+          if (args.output === "json") {
+            const payload = def.json ? def.json(result, args) : result;
+            logger.log(JSON.stringify(payload, null, 2));
+          } else def.render(result, args);
+        }
+
+        // An interrupted run is never offered again.
+        input = controller.signal.aborted
+          ? undefined
+          : await def.again?.(result, args, input);
       }
-
-      await def.after?.(result, args);
-
-      if (def.emit?.(result, args)) return;
-
-      if (args.output === "json") {
-        const payload = def.json ? def.json(result, args) : result;
-        logger.log(JSON.stringify(payload, null, 2));
-        return;
-      }
-
-      def.render(result, args);
     },
   });
 }

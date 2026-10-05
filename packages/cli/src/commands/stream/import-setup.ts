@@ -1,4 +1,5 @@
 import {
+  assertFolderSupported,
   type CredentialField,
   missingCredentials,
   parseSourceConfig,
@@ -10,10 +11,15 @@ import {
   requireSource,
   SOURCE_IDS,
   SOURCES,
+  SourceCredentialsError,
   StateHomeError,
   streamImportSources,
 } from "@bunny.net/tools/stream";
-import { getImportCredentials, setImportCredentials } from "@/config/index.ts";
+import {
+  deleteImportCredentials,
+  getImportCredentials,
+  setImportCredentials,
+} from "@/config/index.ts";
 import { bunny } from "@/core/colors.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
@@ -208,4 +214,55 @@ async function promptCredential(field: CredentialField): Promise<string> {
   if (trimmed) return trimmed;
   if (field.default !== undefined) return String(field.default);
   throw new UserError(`${field.label} is required.`);
+}
+
+export interface ImportSourceArgs {
+  profile: string;
+  source?: string;
+  folder?: string;
+  bucket?: string;
+  prefix?: string;
+  urlTtl?: number;
+}
+
+/** Settle the source and its credentials, then run one tool call with them; saved credentials the source rejects are dropped, and typed ones offered for saving once it accepts them. */
+export async function withImportSource<T>(
+  baseCtx: ToolContext,
+  args: ImportSourceArgs,
+  output: OutputFormat,
+  spinnerText: string,
+  fn: (ctx: ToolContext, plugin: SourcePlugin) => Promise<T>,
+): Promise<{ plugin: SourcePlugin; env: Record<string, string>; result: T }> {
+  const saved = withSavedCredentials(baseCtx, args.profile);
+  const plugin = await resolveImportSource(saved.ctx, args.source, output);
+  if (!args.source) assertFolderSupported(plugin, args.folder);
+  const usedSaved = saved.used.get(plugin.id) ?? {};
+  const entered = await promptSourceCredentials(
+    saved.ctx,
+    plugin,
+    { bucket: args.bucket, prefix: args.prefix, presignedUrlTtl: args.urlTtl },
+    output,
+  );
+  // Saved values travel in `env` alongside what was typed, layered over the base context.
+  const env = { ...usedSaved, ...entered };
+  const result = await withToolSpinner(
+    extendToolContext(baseCtx, { env }),
+    spinnerText,
+    (ctx) => fn(ctx, plugin),
+  ).catch((error) => {
+    // Timeouts and outages keep saved values; only a rejection drops them, so the next run prompts instead of failing the same way.
+    if (
+      Object.keys(usedSaved).length > 0 &&
+      error instanceof SourceCredentialsError
+    ) {
+      deleteImportCredentials(args.profile, plugin.id);
+      logger.warn(
+        `Removed the saved ${plugin.label} credentials. Run again to enter new ones.`,
+      );
+    }
+    throw cliImportError(error) ?? error;
+  });
+  await offerToSaveCredentials(plugin, entered, args.profile);
+
+  return { plugin, env, result };
 }

@@ -12,16 +12,16 @@ import {
   type createStreamClient,
   UserError,
 } from "@bunny.net/openapi-client";
-import {
-  type BunnyCollection,
-  type BunnyMetaTag,
-  type BunnyStatusModel,
-  type BunnyVideo,
-  BunnyVideoStatus,
+import type {
+  BunnyCollection,
+  BunnyMetaTag,
+  BunnyStatusModel,
+  BunnyVideo,
 } from "./bunny-types.ts";
 import { MAX_RATE_LIMIT_RETRIES } from "./constants.ts";
 import type { Logger } from "./contracts.ts";
 import { createRateLimitMiddleware } from "./rate-limit.ts";
+import { failureReason, videoHealth } from "./source-index.ts";
 import { sleep } from "./time.ts";
 
 export type StreamClient = ReturnType<typeof createStreamClient>;
@@ -322,8 +322,21 @@ export class BunnyStream {
       metaTags.push({ property: "keywords", value: metadata.tags.join(", ") });
     }
 
-    if (metaTags.length > 0)
-      await this.updateVideo(videoId, { metaTags }, signal);
+    if (metaTags.length === 0) return;
+
+    // Update replaces the whole array, so tags already on the video are kept unless we set the same property.
+    const ours = new Set(metaTags.map((t) => t.property));
+    const existing = (await this.getVideo(videoId, signal))?.metaTags ?? [];
+    await this.updateVideo(
+      videoId,
+      {
+        metaTags: [
+          ...existing.filter((t) => !ours.has(t.property)),
+          ...metaTags,
+        ],
+      },
+      signal,
+    );
   }
 
   /** Polls until the encoder finishes, errors, or the processing timeout hits. */
@@ -352,13 +365,11 @@ export class BunnyStream {
 
       onProgress?.(video.encodeProgress ?? 0, video.status);
 
-      switch (video.status) {
-        case BunnyVideoStatus.Finished:
+      switch (videoHealth(video)) {
+        case "finished":
           return { success: true, video };
-        case BunnyVideoStatus.Error:
-          return { success: false, error: "Video encoding failed", video };
-        case BunnyVideoStatus.UploadFailed:
-          return { success: false, error: "Video upload failed", video };
+        case "failed":
+          return { success: false, error: failureReason(video), video };
         default:
           await sleep(this.pollInterval, signal);
       }

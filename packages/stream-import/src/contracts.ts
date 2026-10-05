@@ -72,6 +72,9 @@ export interface SourceAdapter {
   /** The Bunny metaTag property used to dedup videos from this source. */
   readonly dedupTag: string;
 
+  /** The metaTag value written for `sourceId`; metaTags are public in embeds, so sources with sensitive IDs hash them. Defaults to `sourceId`. */
+  dedupValue?(sourceId: string): string;
+
   /** Throws `UserError` when the credentials are unusable. */
   validateCredentials(): Promise<void>;
 

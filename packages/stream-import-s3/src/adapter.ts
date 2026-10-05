@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type {
   DownloadInfo,
   SourceAdapter,
@@ -31,6 +32,11 @@ export class S3SourceAdapter implements SourceAdapter {
     this.prefix = config.prefix ?? "";
     this.urlTtlSeconds = config.presignedUrlTtl;
     this.endpoint = config.endpoint;
+  }
+
+  /** Bucket and key names would otherwise show up as `<meta>` tags in public embeds. */
+  dedupValue(sourceId: string): string {
+    return createHash("sha256").update(sourceId).digest("hex");
   }
 
   validateCredentials(): Promise<void> {

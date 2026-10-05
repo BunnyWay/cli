@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createStreamClient } from "@bunny.net/openapi-client";
 import { BunnyStream } from "./bunny-stream.ts";
+import { MAX_RATE_LIMIT_RETRIES } from "./constants.ts";
 import type { Logger } from "./contracts.ts";
 
 const silentLogger: Logger = {
@@ -104,10 +105,49 @@ describe("errors", () => {
     );
     await expect(makeClient().getVideo("abc")).resolves.toBeNull();
 
-    fetchMock.mockResolvedValueOnce(
+    fetchMock.mockImplementation(async () =>
       json({ message: "Boom", statusCode: 500 }, { status: 500 }),
     );
     await expect(makeClient().getVideo("abc")).rejects.toThrow("Boom");
+  });
+
+  test("retries a GET on 5xx but never a POST", async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(null, { status: 502 }))
+      .mockResolvedValueOnce(page([1], 1, 1));
+    expect(await makeClient().listVideos()).toHaveLength(1);
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(json({ message: "Boom" }, { status: 500 }));
+    await expect(makeClient().createCollection("x")).rejects.toThrow("Boom");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+test("setVideoMetadata keeps the video's other metaTags", async () => {
+  fetchMock
+    .mockResolvedValueOnce(
+      json({
+        guid: "v1",
+        metaTags: [
+          { property: "owner", value: "marketing" },
+          { property: "vimeoId", value: "old" },
+        ],
+      }),
+    )
+    .mockResolvedValueOnce(json({ success: true }));
+
+  await makeClient().setVideoMetadata("v1", {
+    sourceId: "42",
+    sourceIdProperty: "vimeoId",
+  });
+
+  const update = fetchMock.mock.calls[1]?.[0] as Request;
+  await expect(update.clone().json()).resolves.toEqual({
+    metaTags: [
+      { property: "owner", value: "marketing" },
+      { property: "vimeoId", value: "42" },
+    ],
   });
 });
 
@@ -120,6 +160,7 @@ test("waitForVideoProcessing rides out transient poll errors but fails after mor
     processingTimeout: 30_000,
     logger: silentLogger,
     pollIntervalMs: 0,
+    retryWait: async () => {},
   });
   fetchMock
     .mockResolvedValueOnce(boom())
@@ -135,7 +176,8 @@ test("waitForVideoProcessing rides out transient poll errors but fails after mor
   fetchMock.mockReset();
   fetchMock.mockImplementation(async () => boom());
   await expect(client.waitForVideoProcessing("v")).rejects.toThrow("Boom");
-  expect(fetchMock).toHaveBeenCalledTimes(4);
+  // Four polls, each retried by the middleware before the poll counts it as an error.
+  expect(fetchMock).toHaveBeenCalledTimes(4 * (MAX_RATE_LIMIT_RETRIES + 1));
 });
 
 describe("rate limiting", () => {

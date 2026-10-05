@@ -13,7 +13,7 @@ export type BunnyCollection = components["schemas"]["CollectionModel"];
 export type BunnyMetaTag = components["schemas"]["MetaTagModel"];
 export type BunnyStatusModel = components["schemas"]["StatusModel"];
 
-/** Values 0-6 are the ones the encoder reports for a fetched video. */
+/** Values 7-8 are only reported on libraries with JIT encoding. */
 export enum BunnyVideoStatus {
   Created = 0,
   Uploaded = 1,
@@ -22,6 +22,8 @@ export enum BunnyVideoStatus {
   Finished = 4,
   Error = 5,
   UploadFailed = 6,
+  JitSegmenting = 7,
+  JitPlaylistsCreated = 8,
 }
 
 export function videoStatusText(status: number | undefined): string {
@@ -40,6 +42,10 @@ export function videoStatusText(status: number | undefined): string {
       return "Error";
     case BunnyVideoStatus.UploadFailed:
       return "Upload Failed";
+    case BunnyVideoStatus.JitSegmenting:
+      return "JIT Segmenting";
+    case BunnyVideoStatus.JitPlaylistsCreated:
+      return "JIT Ready";
     default:
       return "Unknown";
   }

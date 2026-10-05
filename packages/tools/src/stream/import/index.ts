@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { UserError } from "@bunny.net/openapi-client";
 import {
   acquireStateLock,
+  assertFolderSupported,
   BunnyStream,
   createFileStateStore,
   DEFAULT_CONCURRENCY,
@@ -10,6 +11,8 @@ import {
   DEFAULT_REQUEST_TIMEOUT,
   DEFAULT_STALLED_AFTER_MS,
   describeSource,
+  MAX_PRESIGNED_URL_TTL_SECONDS,
+  MIN_PRESIGNED_URL_TTL_SECONDS,
   type MigrationState,
   readMigrationState,
   refreshMigrationState,
@@ -20,6 +23,8 @@ import type { Tool } from "../../define-tool.ts";
 import { defineTool } from "../../define-tool.ts";
 import { openStreamLibrary } from "../connect.ts";
 import {
+  type ImportListing,
+  ImportListingSchema,
   type ImportPlan,
   ImportPlanSchema,
   type ImportRun,
@@ -34,6 +39,7 @@ import {
   type ImportSession,
   type OpenedImport,
   openImport,
+  openSource,
   seconds,
 } from "./session.ts";
 import {
@@ -100,8 +106,8 @@ const target = {
   urlTtl: z
     .number()
     .int()
-    .min(60)
-    .max(604800)
+    .min(MIN_PRESIGNED_URL_TTL_SECONDS)
+    .max(MAX_PRESIGNED_URL_TTL_SECONDS)
     .optional()
     .describe("S3 only: pre-signed URL lifetime in seconds."),
   requestTimeout: z
@@ -199,6 +205,7 @@ export const streamImportPlan = defineTool({
       summary.newVideosList,
       summary.migratedVideosList,
       summary.processingList,
+      summary.tooLongList,
     ];
     return {
       library: session.library,
@@ -211,7 +218,74 @@ export const streamImportPlan = defineTool({
         newVideosList: summary.newVideosList.slice(0, limit),
         migratedVideosList: summary.migratedVideosList.slice(0, limit),
         processingList: summary.processingList.slice(0, limit),
+        tooLongList: summary.tooLongList.slice(0, limit),
       },
+    };
+  },
+});
+
+export const streamImportList = defineTool({
+  name: "stream.import.list",
+  title: "Browse an import source",
+  description:
+    "List a source's folders, with the IDs `folder` takes, and optionally its videos, before importing. Needs no library and changes nothing; fails naming the environment variables a source still needs.",
+  schema: z.strictObject({
+    source,
+    folder: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("List the videos in this source folder only."),
+    videos: z
+      .boolean()
+      .optional()
+      .describe("Also list videos; implied by `folder`."),
+    bucket: target.bucket,
+    prefix: target.prefix,
+    requestTimeout: target.requestTimeout,
+    limit: z
+      .number()
+      .int()
+      .min(0)
+      .max(MAX_PLAN_LIMIT)
+      .optional()
+      .describe(
+        `Most videos to return (default ${DEFAULT_PLAN_LIMIT}); folder counts always cover every video.`,
+      ),
+  }),
+  kind: "read",
+  resultSchema: ImportListingSchema,
+  examples: [[{ source: "vimeo" }, "List Vimeo folders"]],
+  run: async (ctx, input): Promise<ImportListing> => {
+    const { plugin, adapter } = await openSource(ctx, input);
+    assertFolderSupported(plugin, input.folder);
+    ctx.progress(`Listing ${plugin.label} content...`);
+    const content = await adapter.listContent(
+      input.folder ? { folderId: input.folder } : undefined,
+    );
+    const names = new Map(content.folders.map((f) => [f.id, f.name]));
+    const all = [
+      ...[...content.videos.values()].flat(),
+      ...content.uncategorizedVideos,
+    ];
+    const limit = input.limit ?? DEFAULT_PLAN_LIMIT;
+    const listVideos = Boolean(input.videos || input.folder);
+    return {
+      source: plugin.id,
+      supportsFolders: plugin.supportsFolders,
+      folders: content.folders,
+      uncategorized: content.uncategorizedVideos.length,
+      videos: listVideos
+        ? all.slice(0, limit).map((v) => ({
+            sourceId: v.sourceId,
+            name: v.displayName,
+            folderId: v.folderId,
+            folder: v.folderId ? (names.get(v.folderId) ?? null) : null,
+            size: v.size ?? null,
+            duration: v.duration ?? null,
+          }))
+        : null,
+      truncated: listVideos && all.length > limit,
     };
   },
 });
@@ -500,6 +574,7 @@ export const streamImportStatus = defineTool({
 
 export const streamImportTools: Tool[] = [
   streamImportSources,
+  streamImportList,
   streamImportPlan,
   streamImportRun,
   streamImportStatus,

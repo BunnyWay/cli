@@ -9,7 +9,11 @@
 
 import type { BunnyStream } from "./bunny-stream.ts";
 import type { BunnyVideo } from "./bunny-types.ts";
-import { DEFAULT_CONCURRENCY, DEFAULT_MIGRATION_TIMEOUT } from "./constants.ts";
+import {
+  DEFAULT_CONCURRENCY,
+  DEFAULT_MIGRATION_TIMEOUT,
+  MAX_VIDEO_DURATION_SECONDS,
+} from "./constants.ts";
 import type {
   Logger,
   MigrationState,
@@ -82,6 +86,8 @@ export interface MigrationSummary {
   newVideosList: SummaryVideo[];
   migratedVideosList: SummaryVideo[];
   processingList: SummaryVideo[];
+  /** Of `newVideosList`, the ones the source reports as longer than Bunny accepts; they will fail. */
+  tooLongList: SummaryVideo[];
 }
 
 export interface MigrationServiceOptions {
@@ -135,6 +141,10 @@ export class MigrationService {
     this.label = options.label ?? options.adapter.id;
   }
 
+  private dedupKey(sourceId: string): string {
+    return this.adapter.dedupValue?.(sourceId) ?? sourceId;
+  }
+
   // ── Discovery ──────────────────────────────────────────────────────
 
   private async discover(folderId?: string): Promise<SourceContent> {
@@ -184,6 +194,7 @@ export class MigrationService {
     const newVideosList: SummaryVideo[] = [];
     const migratedVideosList: SummaryVideo[] = [];
     const processingList: SummaryVideo[] = [];
+    const tooLongList: SummaryVideo[] = [];
     let failedOnBunny = 0;
     let totalSize = 0;
     let totalDuration = 0;
@@ -192,13 +203,15 @@ export class MigrationService {
       totalSize += video.size ?? 0;
       totalDuration += video.duration ?? 0;
       const row = { name: video.displayName, folder: folderName };
-      const existing = index.get(video.sourceId);
+      const existing = index.get(this.dedupKey(video.sourceId));
       const health = existing ? videoHealth(existing) : undefined;
       if (health === "finished") migratedVideosList.push(row);
       else if (health === "processing") processingList.push(row);
       else {
         if (health === "failed") failedOnBunny++;
         newVideosList.push(row);
+        if ((video.duration ?? 0) > MAX_VIDEO_DURATION_SECONDS)
+          tooLongList.push(row);
       }
     }
 
@@ -216,6 +229,7 @@ export class MigrationService {
       newVideosList,
       migratedVideosList,
       processingList,
+      tooLongList,
     };
   }
 
@@ -432,7 +446,10 @@ export class MigrationService {
         entry.bunnyVideoId ?? this.findLostFetch(entry, claimed, ambiguous);
       if (!guid) continue;
       // Tagged already, or replaced by a tagged copy: the index handles it. Gone from Bunny: fetch again.
-      if (this.isTagged(guid) || this.sourceIndex.has(entry.sourceVideoId))
+      if (
+        this.isTagged(guid) ||
+        this.sourceIndex.has(this.dedupKey(entry.sourceVideoId))
+      )
         continue;
       if (!this.knownGuids.has(guid)) continue;
       claimed.add(guid);
@@ -606,7 +623,7 @@ export class MigrationService {
   private reconcileWithBunny(state: MigrationState): void {
     for (const m of state.videoMigrations) {
       if (m.status === "completed") continue;
-      const existing = this.sourceIndex.get(m.sourceVideoId);
+      const existing = this.sourceIndex.get(this.dedupKey(m.sourceVideoId));
       if (!existing?.guid) continue;
       switch (videoHealth(existing)) {
         case "finished":
@@ -856,7 +873,7 @@ export class MigrationService {
     await this.bunny.setVideoMetadata(
       videoId,
       {
-        sourceId: migration.sourceVideoId,
+        sourceId: this.dedupKey(migration.sourceVideoId),
         sourceIdProperty: this.adapter.dedupTag,
         ...this.discoveredMetadata(migration),
       },
