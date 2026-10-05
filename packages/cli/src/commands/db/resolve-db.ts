@@ -25,7 +25,7 @@ export interface ResolvedDb {
  * Returns the URL value or `undefined` if not found.
  */
 export function findDbUrlFromEnv(): string | undefined {
-  return readEnvValue(ENV_DATABASE_URL, { strict: true })?.value;
+  return readEnvValue(ENV_DATABASE_URL)?.value;
 }
 
 /**
