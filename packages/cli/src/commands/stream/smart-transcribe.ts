@@ -1,6 +1,7 @@
 import { UserError } from "@/core/errors.ts";
 import { confirm, isInteractive } from "@/core/ui.ts";
 import type { VideoLibraryModel } from "./api.ts";
+import { spokenLanguage } from "./smart-source.ts";
 import {
   estimateTranscription,
   formatTranscriptionEstimate,
@@ -34,7 +35,9 @@ export function transcribeSettingsForSmart(
   if (body.generateDescription) settings.generateDescription = true;
   if (body.generateChapters) settings.generateChapters = true;
   if (body.generateMoments) settings.generateMoments = true;
-  if (body.sourceLanguage) settings.sourceLanguage = body.sourceLanguage;
+  // On a captionless video --source-language is the spoken language, so `en-auto` means `en`.
+  const spoken = spokenLanguage(body.sourceLanguage ?? undefined);
+  if (spoken) settings.sourceLanguage = spoken;
   return settings;
 }
 
@@ -82,7 +85,7 @@ export async function offerTranscription(
   const estimate = smartTranscriptionEstimate(
     video,
     library,
-    body.sourceLanguage,
+    spokenLanguage(body.sourceLanguage ?? undefined),
   );
   if (!isInteractive(opts.output)) throw captionlessError(video, estimate);
 

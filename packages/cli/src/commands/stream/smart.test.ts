@@ -112,3 +112,13 @@ test("smartTranscriptionEstimate counts a known source language once", () => {
     cost: { min: 2.4, max: 2.4 },
   });
 });
+
+// `--source-language en-auto` on a captionless video transcribes English.
+test("transcribeSettingsForSmart turns an -auto track into the spoken language", () => {
+  expect(
+    transcribeSettingsForSmart({
+      generateTitle: true,
+      sourceLanguage: "en-auto",
+    }),
+  ).toEqual({ generateTitle: true, sourceLanguage: "en" });
+});

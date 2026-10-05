@@ -1,8 +1,13 @@
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { withSpinner } from "@/core/ui.ts";
+import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 import { resolveVideoInteractive, streamLibraryContext } from "./context.ts";
+import {
+  AUTO_CAPTION_HINT,
+  captionLanguages,
+  resolveSmartSource,
+} from "./smart-source.ts";
 import { hasCaptions, offerTranscription } from "./smart-transcribe.ts";
 import {
   type SmartGenerateModel,
@@ -87,7 +92,8 @@ export const streamSmartCommand = defineCommand<SmartArgs>({
       .option("moments", { type: "boolean", describe: "Generate moments" })
       .option("source-language", {
         type: "string",
-        describe: "Language spoken in the video, as an ISO 639-1 code",
+        describe:
+          "Caption track to generate from, e.g. en. Auto-generated captions are labelled <code>-auto (e.g. en-auto); en falls back to en-auto when that's the only English track. Omitted: the -auto transcript is used, or you're asked when there are several. With no captions, the spoken language to transcribe",
       })
       .option("transcribe", {
         type: "boolean",
@@ -173,6 +179,40 @@ export const streamSmartCommand = defineCommand<SmartArgs>({
         `Queued transcription for ${video.title}; the requested fields are generated from the new transcript.`,
       );
       return;
+    }
+
+    // The API matches sourceLanguage against caption codes exactly and otherwise
+    // takes the first track, so pick the track here: `en` → `en-auto` when that's
+    // all there is, and the -auto transcript (or a choice) when nothing was named.
+    const source = resolveSmartSource(
+      captionLanguages(video),
+      args.sourceLanguage,
+    );
+    if ("choose" in source) {
+      if (force || !isInteractive(output)) {
+        throw new UserError(
+          `${video.title} has captions in several languages: ${source.choose.join(", ")}.`,
+          `Pick the transcript to use with --source-language, e.g. --source-language ${source.choose[0]}. ${AUTO_CAPTION_HINT}`,
+        );
+      }
+      const { language } = await prompts({
+        type: "select",
+        name: "language",
+        message: "Captions to generate from:",
+        choices: source.choose.map((code) => ({ title: code, value: code })),
+      });
+      if (!language) {
+        logger.log("Cancelled.");
+        return;
+      }
+      body.sourceLanguage = language;
+    } else {
+      body.sourceLanguage = source.language;
+      if (output !== "json" && source.reason === "matched") {
+        logger.dim(
+          `No ${args.sourceLanguage?.trim()} captions; using ${source.language} instead.`,
+        );
+      }
     }
 
     const status = await withSpinner("Queueing smart generation...", () =>
