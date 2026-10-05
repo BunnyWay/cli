@@ -200,17 +200,27 @@ export function librarySettingsFromFlags(
 /**
  * One-line warnings for encoding flags with side effects, mirroring the
  * dashboard's notes. Printed by `library create` and `library update`.
+ *
+ * `keepsOriginals` is whether the library already keeps original files (from
+ * `library update`), so Early-Play only asks for `--keep-original` when the
+ * originals aren't already there or being turned on in the same run.
  */
-export function librarySettingsWarnings(args: LibrarySettingsArgs): string[] {
-  const warnings: string[] = [];
-  if (args.earlyPlay === true) {
-    warnings.push(
-      "Early-Play publicly exposes the original video files, and needs --keep-original.",
-    );
-  }
+export function librarySettingsWarnings(
+  args: LibrarySettingsArgs,
+  keepsOriginals = false,
+): string[] {
   if (args.earlyPlay === true && args.keepOriginal === false) {
     throw new UserError(
       "--early-play needs the original files, so it can't be combined with --no-keep-original.",
+    );
+  }
+  const warnings: string[] = [];
+  if (args.earlyPlay === true) {
+    const originals = args.keepOriginal === true || keepsOriginals;
+    warnings.push(
+      originals
+        ? "Early-Play publicly exposes the original video files."
+        : "Early-Play publicly exposes the original video files, and only works when originals are kept: add --keep-original.",
     );
   }
   if (args.keepOriginal === false) {

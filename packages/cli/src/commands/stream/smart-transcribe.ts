@@ -38,14 +38,16 @@ export function transcribeSettingsForSmart(
   return settings;
 }
 
-/** What transcribing this video now would cost, from the library's default output languages. */
+/** What transcribing this video now would cost: the source transcript plus the library's default languages. */
 export function smartTranscriptionEstimate(
   video: VideoModel,
   library: Pick<VideoLibraryModel, "TranscribingCaptionLanguages">,
+  sourceLanguage?: string | null,
 ): TranscriptionEstimate {
   return estimateTranscription(
     video.length,
     outputLanguages(undefined, library.TranscribingCaptionLanguages),
+    sourceLanguage,
   );
 }
 
@@ -77,7 +79,11 @@ export async function offerTranscription(
   const settings = transcribeSettingsForSmart(body);
   if (opts.transcribe) return settings;
 
-  const estimate = smartTranscriptionEstimate(video, library);
+  const estimate = smartTranscriptionEstimate(
+    video,
+    library,
+    body.sourceLanguage,
+  );
   if (!isInteractive(opts.output)) throw captionlessError(video, estimate);
 
   const approved = await confirm(

@@ -40,13 +40,22 @@ test("librarySettingsFromFlags maps the encoding toggles", () => {
 });
 
 test("librarySettingsWarnings flags Early-Play exposure and refuses it without originals", () => {
-  expect(librarySettingsWarnings({ earlyPlay: true })[0]).toContain(
-    "publicly exposes",
-  );
+  expect(librarySettingsWarnings({ earlyPlay: true })).toEqual([
+    "Early-Play publicly exposes the original video files, and only works when originals are kept: add --keep-original.",
+  ]);
   expect(librarySettingsWarnings({ keepOriginal: false })[0]).toContain(
     "encode reencode",
   );
   expect(() =>
     librarySettingsWarnings({ earlyPlay: true, keepOriginal: false }),
   ).toThrow("can't be combined with --no-keep-original");
+});
+
+// Asking for --keep-original when it was passed, or is already on, is wrong advice.
+test("librarySettingsWarnings drops the --keep-original advice when originals are kept", () => {
+  const exposure = ["Early-Play publicly exposes the original video files."];
+  expect(
+    librarySettingsWarnings({ earlyPlay: true, keepOriginal: true }),
+  ).toEqual(exposure);
+  expect(librarySettingsWarnings({ earlyPlay: true }, true)).toEqual(exposure);
 });

@@ -49,12 +49,13 @@ test("transcribeSettingsForSmart carries the generate flags and source language"
   });
 });
 
-// The estimate bills the library's default output languages; the source transcript is free.
-test("smartTranscriptionEstimate uses the library's output languages", () => {
+// The estimate bills the library's default languages plus the auto-detected source transcript.
+test("smartTranscriptionEstimate uses the library's languages and bills the source", () => {
   expect(smartTranscriptionEstimate(VIDEO, LIBRARY)).toEqual({
     minutes: 12,
     languages: ["de", "fr"],
-    cost: 2.4,
+    sourceDetected: true,
+    cost: { min: 2.4, max: 3.6 },
   });
 });
 
@@ -68,7 +69,7 @@ test("captionlessError names the cost and the --transcribe opt-in", () => {
     "clip.mp4 has no captions, and smart generation needs a transcript.",
   );
   expect(error.message).toContain(
-    "About $2.40 for 2 output languages (de, fr)",
+    "About $2.40–$3.60 for de, fr plus the auto-detected source language",
   );
   expect(error.hint).toContain("--transcribe");
 });
@@ -94,4 +95,20 @@ test("offerTranscription returns the transcribe settings with --transcribe", asy
       { output: "json", transcribe: true },
     ),
   ).toEqual({ generateTitle: true });
+});
+
+// A known spoken language is billed once, even when it is also a library default.
+test("smartTranscriptionEstimate counts a known source language once", () => {
+  expect(
+    smartTranscriptionEstimate(
+      VIDEO,
+      { TranscribingCaptionLanguages: ["en", "de"] },
+      "en",
+    ),
+  ).toEqual({
+    minutes: 12,
+    languages: ["en", "de"],
+    sourceDetected: false,
+    cost: { min: 2.4, max: 2.4 },
+  });
 });

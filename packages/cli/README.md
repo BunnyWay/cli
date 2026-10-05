@@ -1174,7 +1174,7 @@ bunny stream video delete 1a2b3c4d-...             # confirms first; --force ski
 bunny stream collection list                       # ID, name, videos, size
 bunny stream collection create --name Tutorials    # the name also takes a positional
 bunny stream collection show 8a7b6c5d-...
-bunny stream collection rename 8a7b6c5d-... --name Guides
+bunny stream collection rename 8a7b6c5d-... Guides
 bunny stream collection delete 8a7b6c5d-...        # deletes the videos inside it too; confirms first
 
 # Caption files on one video (manual captions, not the paid transcription)
@@ -1204,7 +1204,7 @@ A video moves in or out of a collection with `video update --collection <id>` (a
 
 `caption add` reads a local `.vtt` or `.srt`, sends it inline, and reports what the API's validator says: a rejected file lists what is wrong, and an accepted file with non-breaking issues prints them as warnings. These are captions you wrote yourself, unrelated to the paid transcription below.
 
-Three commands cost money and say so before they run. `stream encode enable` switches a library to the premium encoding tier, billed per output codec per minute of encoded video, and `stream encode reencode` regenerates every output for one video at the same rate. `stream transcribe` is billed at $0.10 per output language-minute of audio; the source-language transcript is free. `stream smart` generates a title, description, chapters, or moments from the transcript, and needs at least one of those flags. When the video has no captions yet, `smart` never transcribes silently: it shows the estimated cost (video minutes × the library's output languages × $0.10) and asks whether to transcribe first. Saying yes sends one transcribe request carrying the same generate flags, so the fields come from the new transcript; saying no sends nothing, and `stream caption add` covers captions you already have. Unattended runs can't answer the prompt, so they stop with the cost unless `--transcribe` approves it up front. Note that `--force` on `stream transcribe` is the API's own force flag, which re-runs and overrides the library defaults, rather than a confirmation skip; on `stream smart` it only disables the pickers and never approves a transcription.
+Three commands cost money and say so before they run. `stream encode enable` switches a library to the premium encoding tier, billed per output codec per minute of encoded video, and `stream encode reencode` regenerates every output for one video at the same rate. `stream transcribe` is billed at $0.10 per language-minute of audio, counting the source-language transcript and each target language once. Before it runs, it prints an estimate: exact with `--source-language`, and a range without it, because the auto-detected spoken language adds one more language unless it matches a target. If the library transcribes automatically, `stream encode reencode` and a fresh upload both trigger a transcription on their own, and both commands warn you not to run `stream transcribe` on top, which would bill it twice. `stream smart` generates a title, description, chapters, or moments from the transcript, and needs at least one of those flags. When the video has no captions yet, `smart` never transcribes silently: it shows the estimated cost (video minutes × the source language plus the library's default languages × $0.10) and asks whether to transcribe first. Saying yes sends one transcribe request carrying the same generate flags, so the fields come from the new transcript; saying no sends nothing, and `stream caption add` covers captions you already have. Unattended runs can't answer the prompt, so they stop with the cost unless `--transcribe` approves it up front. Note that `--force` on `stream transcribe` is the API's own force flag, which re-runs and overrides the library defaults, rather than a confirmation skip; on `stream smart` it only disables the pickers and never approves a transcription.
 
 Every command that operates inside a library accepts `--lib <library-id>` (alias `--library`) and falls back to the linked directory, so none of the tables below repeat it.
 
@@ -1278,7 +1278,7 @@ Collection and caption flags:
 
 | Flag                | Commands                                 | Description                                                                  |
 | ------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
-| `--name`            | `collection create`, `collection rename` | Collection name; on `create` it is interchangeable with the positional       |
+| `--name`            | `collection create`, `collection rename` | Collection name; interchangeable with the name positional on both commands   |
 | `--search`          | `collection list`                        | Only list collections matching this search term                              |
 | `--file`, `--label` | `caption add`                            | Caption file to upload (`.vtt` or `.srt`), and the label shown in the player |
 | `--force`, `-f`     | `collection delete`, `caption delete`    | Skip the prompts (required when there is no TTY to answer them)              |

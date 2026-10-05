@@ -103,7 +103,7 @@ bun ny stream video embed 1a2b3c4d-...    # print the player embed URL, signed w
 bun ny stream video cleanup 1a2b3c4d-... --non-configured --dry-run   # preview deleting renditions the library no longer configures
 bun ny stream collection list             # list a library's collections (create/show/rename/delete too; videos join one with --collection, and deleting a collection deletes the videos inside it)
 bun ny stream caption add 1a2b3c4d-... en --file ./captions.vtt   # upload your own caption file for one language
-bun ny stream transcribe 1a2b3c4d-... --languages en,de   # paid: transcribe the audio into captions ($0.10 per output language-minute; the source transcript is free)
+bun ny stream transcribe 1a2b3c4d-... --languages en,de   # paid: transcribe the audio into captions ($0.10 per language-minute, counting the source-language transcript and each target language)
 bun ny stream smart 1a2b3c4d-... --title --chapters   # paid: generate a title and chapters from the transcript (offers to transcribe first if the video has no captions)
 ```
 

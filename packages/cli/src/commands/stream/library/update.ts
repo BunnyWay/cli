@@ -221,7 +221,8 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
       : undefined;
     if (fromFlags && args.contentTagging !== undefined)
       fromFlags.EnableContentTagging = args.contentTagging;
-    const warnings = hasFlags ? librarySettingsWarnings(args) : [];
+    // Rejects contradictory flags before any network call; the warnings are printed later.
+    if (hasFlags) librarySettingsWarnings(args);
     const addRegions = args.addReplicationRegions
       ?.flatMap((value) => parseCsvFlag(value))
       .filter(Boolean);
@@ -240,6 +241,11 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
       force: args.force,
       offerLink: true,
     });
+
+    // Checked against the library's current state, so Early-Play advice is accurate.
+    const warnings = hasFlags
+      ? librarySettingsWarnings(args, lib.KeepOriginalFiles ?? false)
+      : [];
 
     // Flags take full precedence over the editor: a partial set of flags is a partial update.
     const settings: VideoLibraryUpdateModel =

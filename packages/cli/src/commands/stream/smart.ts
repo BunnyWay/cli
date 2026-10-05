@@ -62,7 +62,7 @@ export const streamSmartCommand = defineCommand<SmartArgs>({
     ],
     [
       "$0 stream smart 1a2b3c4d-... --chapters --transcribe",
-      "Transcribe a captionless video first (billed per output language-minute)",
+      "Transcribe a captionless video first (billed per language-minute)",
     ],
     [
       "$0 stream smart 1a2b3c4d-... --title --force",

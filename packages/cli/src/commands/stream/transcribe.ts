@@ -6,6 +6,8 @@ import { resolveVideoInteractive, streamLibraryContext } from "./context.ts";
 import { parseCsvFlag } from "./library/flags.ts";
 import { checkTranscribingLanguages } from "./library/language-check.ts";
 import {
+  autoTranscriptionPending,
+  DOUBLE_BILLING_NOTE,
   estimateTranscription,
   formatTranscriptionEstimate,
   outputLanguages,
@@ -25,7 +27,7 @@ interface TranscribeArgs {
 }
 
 export const TRANSCRIBE_BILLING_NOTE =
-  "Transcription is billed at $0.10 per output language-minute of audio; the source-language transcript is free.";
+  "Transcription is billed at $0.10 per language-minute of audio, for the source-language transcript and for each target language.";
 
 /**
  * The transcribe body: only the settings that were asked for.
@@ -145,6 +147,14 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
       force,
     });
 
+    // Right after an upload or re-encode, a transcribing library is about to do this itself.
+    if (output !== "json" && autoTranscriptionPending(library, video)) {
+      logger.warn(
+        `This library transcribes automatically once encoding finishes, and ${video.title} is still encoding, so it will be transcribed anyway.`,
+      );
+      logger.warn(DOUBLE_BILLING_NOTE);
+    }
+
     // Text runs see the cost before the request; json output stays machine-clean.
     if (output !== "json") {
       const estimate = estimateTranscription(
@@ -153,6 +163,7 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
           settings.targetLanguages,
           library.TranscribingCaptionLanguages,
         ),
+        settings.sourceLanguage,
       );
       logger.warn(
         `${TRANSCRIBE_BILLING_NOTE} ${formatTranscriptionEstimate(estimate)}`,

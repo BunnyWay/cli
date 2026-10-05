@@ -3,6 +3,7 @@ import {
   streamLibraryContext,
 } from "@/commands/stream/context.ts";
 import {
+  DOUBLE_BILLING_NOTE,
   estimateTranscription,
   formatTranscriptionEstimate,
   outputLanguages,
@@ -61,20 +62,23 @@ export const streamEncodeReencodeCommand = defineCommand<ReencodeArgs>({
       );
     }
 
+    // A transcribing library transcribes again after the re-encode, billed separately.
+    const autoTranscribe = library.EnableTranscribing ?? false;
+
     // Re-encoding regenerates every rendition, so it is billed like a new encode.
     if (output !== "json") {
       logger.warn(
         "Re-encoding regenerates every output and is billed like the original encode (Premium Encoding rates apply on the premium tier).",
       );
-      // A transcribing library re-queues and re-bills transcription too.
-      if (library.EnableTranscribing) {
+      if (autoTranscribe) {
         const estimate = estimateTranscription(
           video.length,
           outputLanguages(undefined, library.TranscribingCaptionLanguages),
         );
         logger.warn(
-          `Transcribing is on for this library, so it runs again: ${formatTranscriptionEstimate(estimate)}`,
+          `Transcribing is on for this library, so re-encoding also transcribes this video again once encoding finishes, billed separately. ${formatTranscriptionEstimate(estimate)}`,
         );
+        logger.warn(DOUBLE_BILLING_NOTE);
       }
     }
 
@@ -83,7 +87,13 @@ export const streamEncodeReencodeCommand = defineCommand<ReencodeArgs>({
     );
 
     if (output === "json") {
-      logger.log(JSON.stringify(updated, null, 2));
+      logger.log(
+        JSON.stringify(
+          { ...updated, transcriptionQueued: autoTranscribe },
+          null,
+          2,
+        ),
+      );
       return;
     }
 

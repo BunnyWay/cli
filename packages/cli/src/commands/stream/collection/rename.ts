@@ -3,6 +3,7 @@ import {
   renameCollection,
 } from "@/commands/stream/collection-api.ts";
 import { streamLibraryContext } from "@/commands/stream/context.ts";
+import { nameArg } from "@/commands/stream/name-arg.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
@@ -11,6 +12,7 @@ import { resolveCollectionInteractive } from "./interactive.ts";
 
 interface CollectionRenameArgs {
   collection?: string;
+  newName?: string;
   lib?: string;
   name?: string;
 }
@@ -32,7 +34,7 @@ export async function nextCollectionName(
   if (!interactive) {
     throw new UserError(
       "Nothing to rename.",
-      "Pass --name to set the new collection name.",
+      "Pass the new name: bunny stream collection rename <collection> <new-name> (or --name).",
     );
   }
 
@@ -47,12 +49,16 @@ export async function nextCollectionName(
 
 export const streamCollectionRenameCommand =
   defineCommand<CollectionRenameArgs>({
-    command: "rename [collection]",
+    command: "rename [collection] [new-name]",
     describe: "Rename a collection.",
     examples: [
       [
-        "$0 stream collection rename 8a7b6c5d-... --name Tutorials",
+        "$0 stream collection rename 8a7b6c5d-... Tutorials",
         "Rename a collection",
+      ],
+      [
+        "$0 stream collection rename 8a7b6c5d-... --name Tutorials",
+        "Same, with the flag",
       ],
       ["$0 stream collection rename", "Pick a collection, then edit its name"],
     ],
@@ -60,6 +66,11 @@ export const streamCollectionRenameCommand =
     builder: (yargs) =>
       yargs
         .positional("collection", { type: "string", describe: "Collection ID" })
+        .positional("new-name", {
+          type: "string",
+          describe:
+            "New collection name (or use --name; prompts if both are omitted)",
+        })
         .option("lib", {
           alias: "library",
           type: "string",
@@ -72,13 +83,17 @@ export const streamCollectionRenameCommand =
 
     handler: async ({
       collection: ref,
+      newName,
       lib,
-      name,
+      name: nameFlag,
       profile,
       output,
       verbose,
       apiKey,
     }) => {
+      // Same rule as `collection create`: the argument or --name, and both only if they agree.
+      const name = nameArg(newName, nameFlag);
+
       const { client, libraryId } = await streamLibraryContext({
         lib,
         profile,
