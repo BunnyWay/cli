@@ -108,7 +108,8 @@ export class S3SourceClient {
       );
 
       for (const item of response.Contents ?? []) {
-        if (isVideoKey(item.Key, this.includeTs)) objects.push(toS3Object(item, bucket));
+        if (isVideoKey(item.Key, this.includeTs))
+          objects.push(toS3Object(item, bucket));
       }
       token = response.NextContinuationToken;
     } while (token);
