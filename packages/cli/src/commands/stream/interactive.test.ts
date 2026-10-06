@@ -122,9 +122,13 @@ function fakeToolContext(calls: string[]) {
 test("the tools-layer resolver honours the same link and names --library when unattended", async () => {
   writeStreamManifest(LIBRARIES[0] as VideoLibraryModel);
   const calls: string[] = [];
-  expect((await resolveStreamLibrary(fakeToolContext(calls), undefined)).id).toBe(1);
+  expect(
+    (await resolveStreamLibrary(fakeToolContext(calls), undefined)).id,
+  ).toBe(1);
   expect(calls).not.toContain("/videolibrary");
-  expect((await resolveStreamLibrary(fakeToolContext([]), "marketing")).id).toBe(2);
+  expect(
+    (await resolveStreamLibrary(fakeToolContext([]), "marketing")).id,
+  ).toBe(2);
 
   await rm(join(dir, ".bunny"), { recursive: true, force: true });
   const error = await resolveStreamLibrary(fakeToolContext([]), undefined, {
