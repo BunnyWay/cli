@@ -24,7 +24,6 @@ import {
   cliImportError,
   withImportSource,
 } from "@/commands/stream/import-setup.ts";
-import { resolveLibraryInteractive } from "@/commands/stream/interactive.ts";
 import { bunny } from "@/core/colors.ts";
 import { DONE, defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
@@ -32,6 +31,7 @@ import { formatBytes, formatDuration, formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { confirm, isInteractive, requireConfirmable } from "@/core/ui.ts";
+import { resolveImportLibrary } from "./library.ts";
 
 interface ImportArgs {
   library?: string;
@@ -398,7 +398,7 @@ export const streamImportRunCommand = defineToolCommand({
 
   prepare: async (args, baseCtx) => {
     const { output } = args;
-    const library = await resolveLibraryInteractive(baseCtx, args.library, {
+    const library = await resolveImportLibrary(baseCtx, args.library, {
       output,
       offerLink: !args.dryRun,
     });
