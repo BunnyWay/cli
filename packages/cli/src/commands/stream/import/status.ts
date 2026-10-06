@@ -7,7 +7,7 @@ import {
 } from "@bunny.net/tools/stream";
 import type { Argv } from "yargs";
 import { cliImportError } from "@/commands/stream/import-setup.ts";
-import { resolveLibraryInteractive } from "@/commands/stream/interactive.ts";
+import { resolveStreamLibrary } from "@/commands/stream/interactive.ts";
 import { bunny } from "@/core/colors.ts";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
@@ -49,7 +49,7 @@ export const streamImportStatusCommand = defineToolCommand({
       }) as Argv<StatusArgs>,
 
   prepare: async (args, ctx) => {
-    const library = await resolveLibraryInteractive(ctx, args.library, {
+    const library = await resolveStreamLibrary(ctx, args.library, {
       output: args.output,
       offerLink: true,
     });

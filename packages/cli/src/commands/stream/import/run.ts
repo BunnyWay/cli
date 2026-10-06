@@ -24,7 +24,7 @@ import {
   cliImportError,
   withImportSource,
 } from "@/commands/stream/import-setup.ts";
-import { resolveLibraryInteractive } from "@/commands/stream/interactive.ts";
+import { resolveStreamLibrary } from "@/commands/stream/interactive.ts";
 import { bunny } from "@/core/colors.ts";
 import { DONE, defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
@@ -398,7 +398,7 @@ export const streamImportRunCommand = defineToolCommand({
 
   prepare: async (args, baseCtx) => {
     const { output } = args;
-    const library = await resolveLibraryInteractive(baseCtx, args.library, {
+    const library = await resolveStreamLibrary(baseCtx, args.library, {
       output,
       offerLink: !args.dryRun,
     });

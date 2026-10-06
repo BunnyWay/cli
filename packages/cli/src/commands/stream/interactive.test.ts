@@ -2,33 +2,43 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type CoreClient, createToolContext } from "@bunny.net/tools";
+import {
+  createToolContext,
+  type CoreClient as ToolCoreClient,
+} from "@bunny.net/tools";
+import type { CoreClient, VideoLibraryModel } from "./api.ts";
 import {
   resolveLibraryInteractive,
+  resolveStreamLibrary,
   writeStreamManifest,
 } from "./interactive.ts";
+import { withTTY } from "./test-tty.ts";
 
-const LIBRARIES = [
-  { Id: 1, Name: "Alpha", ApiKey: "k1" },
-  { Id: 2, Name: "marketing", ApiKey: "k2" },
+const LIBRARIES: VideoLibraryModel[] = [
+  { Id: 1, Name: "Alpha", VideoCount: 3 },
+  { Id: 2, Name: "marketing", VideoCount: 0 },
 ];
 
-function fakeContext(calls: string[]) {
-  const core = {
+function fakeCoreClient(calls: string[]): CoreClient {
+  return {
     GET: async (path: string, options?: any) => {
       calls.push(path);
-      if (path === "/user") return { data: { AccountId: "acct" } };
-      if (path === "/videolibrary/{id}")
-        return { data: LIBRARIES.find((l) => l.Id === options.params.path.id) };
-      const search = options.params.query.search.toLowerCase();
+      if (path === "/videolibrary/{id}") {
+        return {
+          data: LIBRARIES.find((lib) => lib.Id === options?.params?.path?.id),
+        };
+      }
+      const search = (options?.params?.query?.search ?? "") as string;
       return {
         data: {
-          Items: LIBRARIES.filter((l) => l.Name.toLowerCase().includes(search)),
+          Items: LIBRARIES.filter((lib) =>
+            (lib.Name ?? "").toLowerCase().includes(search.toLowerCase()),
+          ),
+          HasMoreItems: false,
         },
       };
     },
   } as unknown as CoreClient;
-  return createToolContext({ clients: { core } });
 }
 
 let dir = "";
@@ -45,21 +55,79 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-// `bun test` has no TTY, so these take the unattended path, where only a ref or the manifest can name the library.
-test("an explicit reference wins over the linked library, which resolves unattended", async () => {
-  writeStreamManifest({ id: 1, name: "Alpha", videoCount: 0 });
-  const calls: string[] = [];
-
-  const linked = await resolveLibraryInteractive(fakeContext(calls), undefined);
-  const named = await resolveLibraryInteractive(fakeContext([]), "marketing");
-
-  expect(linked.id).toBe(1);
-  expect(calls).not.toContain("/videolibrary");
-  expect(named.id).toBe(2);
+// `bun test` has no TTY, so only the manifest can stand in for an explicit reference here.
+test("a linked library resolves without a reference, even unattended", async () => {
+  writeStreamManifest(LIBRARIES[0] as VideoLibraryModel);
+  const lib = await resolveLibraryInteractive(fakeCoreClient([]), undefined);
+  expect(lib.Id).toBe(1);
 });
 
-test("with nothing to go on, unattended runs name the --library flag", async () => {
-  const error = await resolveLibraryInteractive(fakeContext([]), undefined, {
+test("an explicit reference wins over the linked library", async () => {
+  writeStreamManifest(LIBRARIES[0] as VideoLibraryModel);
+  const lib = await resolveLibraryInteractive(fakeCoreClient([]), "marketing");
+  expect(lib.Id).toBe(2);
+});
+
+test("ignoreManifest skips the linked library so linking can re-pick", async () => {
+  writeStreamManifest(LIBRARIES[0] as VideoLibraryModel);
+  const calls: string[] = [];
+
+  await expect(
+    resolveLibraryInteractive(fakeCoreClient(calls), undefined, {
+      ignoreManifest: true,
+    }),
+  ).rejects.toThrow("A library is required.");
+  expect(calls).toEqual([]);
+});
+
+// --force must not let a destructive command delete a library nobody named.
+test("force refuses to pick a library even in a terminal", async () => {
+  const calls: string[] = [];
+  const client = {
+    GET: async (path: string) => {
+      calls.push(path);
+      return { data: { Items: [], HasMoreItems: false } };
+    },
+  } as unknown as CoreClient;
+
+  await withTTY(() =>
+    expect(
+      resolveLibraryInteractive(client, undefined, { force: true }),
+    ).rejects.toThrow("A library is required."),
+  );
+  expect(calls).toEqual([]);
+});
+
+function fakeToolContext(calls: string[]) {
+  const core = {
+    GET: async (path: string, options?: any) => {
+      calls.push(path);
+      if (path === "/videolibrary/{id}")
+        return {
+          data: LIBRARIES.find((l) => l.Id === options.params.path.id),
+        };
+      const search = options.params.query.search.toLowerCase();
+      return {
+        data: {
+          Items: LIBRARIES.filter((l) =>
+            (l.Name ?? "").toLowerCase().includes(search),
+          ),
+        },
+      };
+    },
+  } as unknown as ToolCoreClient;
+  return createToolContext({ clients: { core } });
+}
+
+test("the tools-layer resolver honours the same link and names --library when unattended", async () => {
+  writeStreamManifest(LIBRARIES[0] as VideoLibraryModel);
+  const calls: string[] = [];
+  expect((await resolveStreamLibrary(fakeToolContext(calls), undefined)).id).toBe(1);
+  expect(calls).not.toContain("/videolibrary");
+  expect((await resolveStreamLibrary(fakeToolContext([]), "marketing")).id).toBe(2);
+
+  await rm(join(dir, ".bunny"), { recursive: true, force: true });
+  const error = await resolveStreamLibrary(fakeToolContext([]), undefined, {
     output: "json",
   }).catch((err) => err);
   expect(error.hint).toContain("--library");

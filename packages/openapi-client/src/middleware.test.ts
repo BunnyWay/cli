@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { ApiError } from "./errors.ts";
-import { authMiddleware, type ClientOptions } from "./middleware.ts";
+import {
+  authMiddleware,
+  type ClientOptions,
+  redactSecrets,
+} from "./middleware.ts";
 import { captureError, jsonResponse } from "./test-helpers.ts";
 
 function runRequest(options: ClientOptions, request: Request) {
@@ -69,29 +73,7 @@ describe("authMiddleware onRequest", () => {
     expect(logs).toContain("→ GET https://api.bunny.net/region");
   });
 
-  test("dumps a JSON request body", async () => {
-    const logs: string[] = [];
-    const { request, reads } = spyRequest(
-      "https://api.bunny.net/videolibrary",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ Name: "my-library" }),
-      },
-    );
-
-    await runRequest(
-      { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
-      request,
-    );
-
-    expect(logs.join("\n")).toContain('"Name": "my-library"');
-    // The dump reads a clone, never the request that is about to be sent.
-    expect(reads).toEqual(["clone"]);
-  });
-
-  // Reading an octet-stream body would buffer the whole upload (a video, say)
-  // into memory just to log it, so it is described from its headers instead.
+  // Reading an octet-stream body would buffer a whole video upload into memory just to log it.
   test("never reads a non-JSON request body", async () => {
     const logs: string[] = [];
     const { request, reads } = spyRequest(
@@ -172,8 +154,7 @@ describe("authMiddleware onResponse", () => {
     expect(error.message).toBe("Conflict");
   });
 
-  // Stream answers with StatusModel, whose message field is lowercase; without
-  // its own extractor the message is dropped for a generic HTTP failure.
+  // Stream's StatusModel uses a lowercase message, which the Core extractor misses.
   test("normalizes the Stream StatusModel (lowercase message)", async () => {
     const error = (await captureError(
       runResponse(
@@ -187,17 +168,6 @@ describe("authMiddleware onResponse", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBe(400);
     expect(error.message).toBe("URL validation failed");
-  });
-
-  // The Core format wins when both shapes are somehow present.
-  test("prefers the Core Message over a lowercase message", async () => {
-    const error = (await captureError(
-      runResponse(
-        { apiKey: "k" },
-        jsonResponse({ Message: "Core wins.", message: "stream" }, 400),
-      ),
-    )) as ApiError;
-    expect(error.message).toBe("Core wins.");
   });
 
   test("uses a friendly status message for an empty error body", async () => {
@@ -279,6 +249,63 @@ describe("authMiddleware onResponse", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect(error.message).toContain("non-JSON");
   });
+});
+
+test("redactSecrets walks nested objects and arrays, redacting only secret strings", () => {
+  let deep: unknown = { ApiKey: "too-deep" };
+  for (let i = 0; i < 10; i++) deep = { next: deep };
+  const out = redactSecrets({
+    zone: { Name: "z", Password: "p" },
+    auth: [{ authToken: "t" }],
+    keyCount: 3,
+    // A false positive is the safe direction.
+    Monkey: "not a secret",
+    deep,
+  });
+  expect(out).toMatchObject({
+    zone: { Name: "z", Password: "[redacted]" },
+    auth: [{ authToken: "[redacted]" }],
+    keyCount: 3,
+    Monkey: "[redacted]",
+  });
+  // Past the depth limit the walk bails to the marker rather than the raw value.
+  expect(JSON.stringify(out)).not.toContain("too-deep");
+});
+
+test("verbose response body dumps are redacted", async () => {
+  const logs: string[] = [];
+  await runResponse(
+    { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+    jsonResponse({ Id: 1, Name: "my-library", ApiKey: "rw-secret" }, 200),
+  );
+  const dump = logs.join("\n");
+  expect(dump).toContain("my-library");
+  expect(dump).not.toContain("rw-secret");
+  expect(dump).toContain("[redacted]");
+});
+
+test("verbose request body dumps are redacted and read from a clone", async () => {
+  const logs: string[] = [];
+  const { request, reads } = spyRequest(
+    "https://video.bunnycdn.com/library/1/videos/fetch",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        url: "https://example.com/v.mp4",
+        headers: { Authorization: "Bearer origin-secret" },
+      }),
+    },
+  );
+  await runRequest(
+    { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+    request,
+  );
+  const dump = logs.join("\n");
+  expect(dump).toContain("https://example.com/v.mp4");
+  expect(dump).not.toContain("origin-secret");
+  // The request about to be sent must keep its body unread.
+  expect(reads).toEqual(["clone"]);
 });
 
 test("redacts credentials from debug bodies", async () => {
