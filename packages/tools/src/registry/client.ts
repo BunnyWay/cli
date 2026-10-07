@@ -77,7 +77,7 @@ export async function fetchNamespace(
   if (error || !data?.AccountId) {
     throw new UserError(
       "Could not resolve the registry namespace.",
-      'Your API key may be invalid or expired. Run "bunny login" to re-authenticate.',
+      "The bunny.net API key may be invalid or expired; authenticate again.",
     );
   }
   return data.AccountId.toLowerCase();
@@ -114,7 +114,7 @@ export function createRegistryClient(options: {
       if (res.status === 401 || res.status === 403) {
         throw new UserError(
           "Registry authentication failed.",
-          'Check that your API token is valid ("bunny whoami").',
+          "Check that the bunny.net API key is valid.",
         );
       }
       if (!res.ok) {

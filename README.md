@@ -4,18 +4,20 @@ Monorepo for the [bunny.net](https://bunny.net) CLI and supporting packages.
 
 ## Packages
 
-| Package                                                            | Name                              | Description                                                                         |
-| ------------------------------------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------- |
-| [`packages/cli/`](packages/cli/)                                   | `@bunny.net/cli`                  | Command-line interface for bunny.net                                                |
-| [`packages/openapi-client/`](packages/openapi-client/)             | `@bunny.net/openapi-client`       | Standalone, type-safe OpenAPI client for bunny.net                                  |
-| [`packages/sandbox/`](packages/sandbox/)                           | `@bunny.net/sandbox`              | Standalone sandbox SDK over Magic Containers and SSH                                |
-| [`packages/config/`](packages/config/)                             | `@bunny.net/config`               | Shared Zod schemas, types, and JSON Schema for `bunny.jsonc` (app + sites)          |
-| [`packages/database-client/`](packages/database-client/)           | `@bunny.net/database-client`      | Standalone `fetch`-only SQL client for server-side code (Edge Scripting, Bun, Node) |
-| [`packages/database-shell/`](packages/database-shell/)             | `@bunny.net/database-shell`       | Standalone interactive SQL shell for Bunny Database                                 |
-| [`packages/database-openapi/`](packages/database-openapi/)         | `@bunny.net/database-openapi`     | Generate OpenAPI 3.0 specs from a database schema                                   |
-| [`packages/database-rest/`](packages/database-rest/)               | `@bunny.net/database-rest`        | PostgREST-like REST API handler (database-agnostic)                                 |
-| [`packages/database-adapter/`](packages/database-adapter/)         | `@bunny.net/database-adapter`     | Bunny Database adapter for database-rest                                            |
-| [`packages/scriptable-dns-types/`](packages/scriptable-dns-types/) | `@bunny.net/scriptable-dns-types` | Ambient TypeScript types for the Scriptable DNS runtime                             |
+| Package                                                            | Name                              | Description                                                                             |
+| ------------------------------------------------------------------ | --------------------------------- | --------------------------------------------------------------------------------------- |
+| [`packages/cli/`](packages/cli/)                                   | `@bunny.net/cli`                  | Command-line interface for bunny.net                                                    |
+| [`packages/openapi-client/`](packages/openapi-client/)             | `@bunny.net/openapi-client`       | Standalone, type-safe OpenAPI client for bunny.net                                      |
+| [`packages/sandbox/`](packages/sandbox/)                           | `@bunny.net/sandbox`              | Standalone sandbox SDK over Magic Containers and SSH                                    |
+| [`packages/stream-import/`](packages/stream-import/)               | `@bunny.net/stream-import`        | Headless engine for importing video libraries into Stream                               |
+| `packages/stream-import-<source>/`                                 | `@bunny.net/stream-import-<src>`  | Stream import source adapters: vimeo, s3, wistia, mux, cloudflare, jwplayer, brightcove |
+| [`packages/config/`](packages/config/)                             | `@bunny.net/config`               | Shared Zod schemas, types, and JSON Schema for `bunny.jsonc` (app + sites)              |
+| [`packages/database-client/`](packages/database-client/)           | `@bunny.net/database-client`      | Standalone `fetch`-only SQL client for server-side code (Edge Scripting, Bun, Node)     |
+| [`packages/database-shell/`](packages/database-shell/)             | `@bunny.net/database-shell`       | Standalone interactive SQL shell for Bunny Database                                     |
+| [`packages/database-openapi/`](packages/database-openapi/)         | `@bunny.net/database-openapi`     | Generate OpenAPI 3.0 specs from a database schema                                       |
+| [`packages/database-rest/`](packages/database-rest/)               | `@bunny.net/database-rest`        | PostgREST-like REST API handler (database-agnostic)                                     |
+| [`packages/database-adapter/`](packages/database-adapter/)         | `@bunny.net/database-adapter`     | Bunny Database adapter for database-rest                                                |
+| [`packages/scriptable-dns-types/`](packages/scriptable-dns-types/) | `@bunny.net/scriptable-dns-types` | Ambient TypeScript types for the Scriptable DNS runtime                                 |
 
 See each package's README for usage and API documentation.
 
@@ -83,6 +85,28 @@ bun ny sites domains add example.com        # attach a custom production domain
 bun ny sites ssl --no-force-ssl             # stop forcing HTTPS on the site's b-cdn.net system host
 bun ny sites open                           # open the site's live URL in the browser
 bun ny sites ci init                        # add a GitHub Actions workflow (push to main goes live)
+bun ny stream library list                # list Stream video libraries (videos, storage, traffic, replication regions)
+bun ny stream library create my-library   # create a video library in DE, replicated to SG, LA and NY by default (omit the name to be prompted; --name also works)
+bun ny stream library create my-library --replication-regions NY,SG   # replicate to New York and Singapore instead (DE is always the main region; DE alone means no replication)
+bun ny stream library show my-library     # show one library (accepts a name or ID; omit it to use the linked library, or to pick interactively when nothing is linked). API keys are never printed here, in any output format
+bun ny stream library update my-library --resolutions 720p,1080p   # edit library settings; omit the flags to edit interactively (encoding tier, codecs, transcribing all have flags)
+bun ny stream library credentials my-library --show-secret   # deliberately retrieve a library's Stream API key (--read-only for the read-only key; masked without --show-secret)
+bun ny stream library player update my-library --color "#FF7755" --heatmap   # player settings (show/update/reset)
+bun ny stream library security update my-library --embed-token --allow-referrer example.com   # security settings (show/update/reset-token)
+bun ny stream library delete my-library   # delete a library and all of its videos (--force skips the confirmation, and is required non-interactively)
+bun ny stream library link my-library     # link the directory to a library so video commands can omit it (bun ny stream library unlink removes the link)
+bun ny stream video upload ./video.mp4    # upload a local video to the linked library (--title sets the title; files over 2 GB upload resumably via TUS, retried and resumed automatically)
+bun ny stream video fetch https://example.com/video.mp4 --lib 12345   # let bunny.net fetch the video server side (--header "Name: value" for an origin that needs auth)
+bun ny stream video list                  # list the videos in the linked library (ID, title, status, size, length, views, upload date)
+bun ny stream video show 1a2b3c4d-...     # show one video by GUID, including its Direct Play URL
+bun ny stream video thumbnail 1a2b3c4d-... --file ./thumb.jpg   # set a thumbnail (--url has bunny.net download one instead)
+bun ny stream video stats 1a2b3c4d-...    # views and watch time for one video (--heatmap, --play-data for the other views)
+bun ny stream video embed 1a2b3c4d-...    # print the player embed URL, signed when the library requires embed view tokens
+bun ny stream video cleanup 1a2b3c4d-... --non-configured --dry-run   # preview deleting renditions the library no longer configures
+bun ny stream collection list             # list a library's collections (create/show/rename/delete too; videos join one with --collection, and deleting a collection deletes the videos inside it)
+bun ny stream caption add 1a2b3c4d-... en --file ./captions.vtt   # upload your own caption file for one language
+bun ny stream transcribe 1a2b3c4d-... --languages en,de   # paid: transcribe the audio into captions ($0.10 per language-minute, counting the source-language transcript and each target language)
+bun ny stream smart 1a2b3c4d-... --title --chapters   # paid: generate a title and chapters from the transcript (offers to transcribe first if the video has no captions)
 ```
 
 Every deploy is published as the live site. Deploys are immutable under their own ID, so `bun ny sites deployments publish` rolls back to any earlier one without re-uploading. Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`) so a deploy needs no flags: `bun ny sites deploy --build`. `bun ny sites ci init` writes the same `build` and `dir` into the generated workflow. See [`examples/sites/`](examples/sites/) for ready-to-copy configs (Vite, Astro, Next.js static export, Hugo, plain HTML, and a combined app + site file).

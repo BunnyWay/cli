@@ -26,6 +26,65 @@ function looksLikeJson(contentType: string): boolean {
   );
 }
 
+/**
+ * Property names whose string values are secrets: API keys, zone passwords,
+ * tokens, credentials, cookies, and any Authorization-style header.
+ */
+const SECRET_KEY_RE =
+  /^(.*key|.*password|.*secret|.*token|.*credentials?|.*authorization.*|.*cookie)$/i;
+
+const REDACTED = "[redacted]";
+const URL_SCHEME = /https?:\/\//i;
+
+// A URL's query string is where pre-signed credentials live (X-Amz-Signature, bearer params), so it goes wholesale, as does any userinfo.
+function redactUrl(token: string): string {
+  const scheme = token.search(URL_SCHEME);
+  if (scheme === -1) return token;
+  const host = token.indexOf("//", scheme) + 2;
+  let end = host;
+  while (end < token.length && !"/?#".includes(token.charAt(end))) end++;
+  const at = token.lastIndexOf("@", end - 1);
+  const authority =
+    at >= host ? `${REDACTED}${token.slice(at, end)}` : token.slice(host, end);
+  let rest = token.slice(end);
+  const query = rest.indexOf("?");
+  const hash = rest.indexOf("#");
+  if (query !== -1 && (hash === -1 || query < hash)) {
+    rest = `${rest.slice(0, query)}?${REDACTED}${hash === -1 ? "" : rest.slice(hash)}`;
+  }
+
+  return `${token.slice(0, host)}${authority}${rest}`;
+}
+
+/**
+ * Copy a parsed body with every secret-looking string value replaced.
+ *
+ * Verbose mode dumps request and response bodies, and those bodies carry real
+ * credentials: a video library answers with its ApiKey, a storage zone with its
+ * password, and a Stream fetch request with the origin's Authorization header.
+ * Redacting is structural (by property name) so it holds for shapes this code
+ * has never seen.
+ */
+export function redactSecrets(value: unknown, depth = 0): unknown {
+  // Deeply nested or cyclic bodies are not worth walking; bail to a marker.
+  if (depth > 8) return REDACTED;
+  if (Array.isArray(value)) {
+    return value.map((entry) => redactSecrets(entry, depth + 1));
+  }
+  if (typeof value === "string") return value.replace(/\S+/g, redactUrl);
+  if (value === null || typeof value !== "object") return value;
+
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry === "string" && SECRET_KEY_RE.test(key)) {
+      out[key] = REDACTED;
+      continue;
+    }
+    out[key] = redactSecrets(entry, depth + 1);
+  }
+  return out;
+}
+
 const STATUS_MESSAGES: Record<number, string> = {
   401: "Unauthorized. Check your API key.",
   403: "Forbidden. You don't have permission for this action.",
@@ -36,7 +95,7 @@ const STATUS_MESSAGES: Record<number, string> = {
 
 /**
  * Extract a normalized error from a parsed response body.
- * Each entry handles one API error format — first match wins.
+ * Each entry handles one API error format; first match wins.
  */
 const extractors: Array<
   (
@@ -52,6 +111,10 @@ const extractors: Array<
   // ApiErrorData (Core / Compute)
   (b) =>
     b?.Message ? { message: b.Message, field: b.Field ?? undefined } : null,
+
+  // StatusModel (Stream): lowercase `message`, which the Core extractor above misses.
+  (b) =>
+    typeof b?.message === "string" && b.message ? { message: b.message } : null,
 ];
 
 /**
@@ -67,24 +130,9 @@ const extractors: Array<
  * - **Magic Containers** use RFC 7807 (`{ title, status, detail, errors[] }`).
  *   All error status codes have a JSON body.
  *
- * Command handlers never need to check `response.ok` or parse error bodies —
+ * Command handlers never need to check `response.ok` or parse error bodies:
  * a failed request throws before it reaches handler code.
  */
-
-const SECRET_KEY = /password|secret|token|accesskey|apikey|credential/i;
-
-function redact(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redact);
-  if (value === null || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [
-      key,
-      SECRET_KEY.test(key) && typeof child !== "object"
-        ? "[redacted]"
-        : redact(child),
-    ]),
-  );
-}
 
 export function authMiddleware(options: ClientOptions): Middleware {
   const {
@@ -101,13 +149,24 @@ export function authMiddleware(options: ClientOptions): Middleware {
       request.headers.set("User-Agent", userAgent);
 
       if (debug) {
-        debug(`→ ${request.method} ${request.url}`);
+        debug(`→ ${request.method} ${redactSecrets(request.url)}`);
         if (request.body) {
-          const cloned = request.clone();
-          try {
-            const body = await cloned.json();
-            debug(`→ Body: ${JSON.stringify(redact(body), null, 2)}`);
-          } catch {}
+          const contentType = request.headers.get("content-type") ?? "";
+          if (looksLikeJson(contentType)) {
+            const cloned = request.clone();
+            try {
+              const body = await cloned.json();
+              debug(`→ Body: ${JSON.stringify(redactSecrets(body), null, 2)}`);
+            } catch {}
+          } else {
+            // Never read a non-JSON body: a binary upload would be buffered in full just to be logged.
+            const length = request.headers.get("content-length");
+            debug(
+              `→ Body (${contentType || "no content-type"}): ${
+                length ? `${length} bytes, not logged` : "not logged"
+              }`,
+            );
+          }
         }
       }
 
@@ -121,7 +180,7 @@ export function authMiddleware(options: ClientOptions): Middleware {
         if (looksLikeJson(contentType)) {
           try {
             const body = await cloned.json();
-            debug(`← Body: ${JSON.stringify(redact(body), null, 2)}`);
+            debug(`← Body: ${JSON.stringify(redactSecrets(body), null, 2)}`);
           } catch {}
         } else {
           // Non-JSON body - surface the raw text (truncated) so the
@@ -138,7 +197,7 @@ export function authMiddleware(options: ClientOptions): Middleware {
       // default). Callers that fetch downloads opt out via parseAs: "text"
       // (etc.), so a non-JSON body is expected there and passes through. A
       // non-JSON body on a JSON call is almost always a CDN / proxy / captive
-      // portal serving an HTML error page with a 200 status — surface that as
+      // portal serving an HTML error page with a 200 status; surface that as
       // a clear ApiError instead of letting openapi-fetch crash on JSON.parse.
       if (response.ok) {
         const parseAs = options?.parseAs ?? "json";

@@ -31,7 +31,10 @@ export function defineNamespace(
     builder: (yargs) => {
       yRef = yargs;
       for (const sub of subcommands) yargs.command(sub);
-      groupHelpOptions(yargs);
+      // A default (`$0`) subcommand groups its own flags ahead of the globals itself; grouping here first would push them below.
+      if (!subcommands.some((sub) => hasDefaultCommand(sub))) {
+        groupHelpOptions(yargs);
+      }
       return yargs;
     },
     handler: async () => {
@@ -46,4 +49,10 @@ export function defineNamespace(
       }
     },
   };
+}
+
+function hasDefaultCommand(sub: CommandModule): boolean {
+  const names = Array.isArray(sub.command) ? sub.command : [sub.command];
+
+  return names.includes("$0");
 }

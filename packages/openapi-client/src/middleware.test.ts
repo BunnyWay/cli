@@ -1,11 +1,38 @@
 import { describe, expect, test } from "bun:test";
 import { ApiError } from "./errors.ts";
-import { authMiddleware, type ClientOptions } from "./middleware.ts";
+import {
+  authMiddleware,
+  type ClientOptions,
+  redactSecrets,
+} from "./middleware.ts";
 import { captureError, jsonResponse } from "./test-helpers.ts";
 
 function runRequest(options: ClientOptions, request: Request) {
   const mw = authMiddleware(options);
   return mw.onRequest!({ request } as never) as Promise<Request>;
+}
+
+/**
+ * A request that records every attempt to clone or consume its body, so a test
+ * can prove the middleware left a large binary upload untouched.
+ */
+function spyRequest(url: string, init: RequestInit) {
+  const request = new Request(url, init);
+  const reads: string[] = [];
+  const spied = ["clone", "json", "text", "arrayBuffer", "blob"] as const;
+  for (const name of spied) {
+    const original = Request.prototype[name] as (
+      this: Request,
+      ...args: unknown[]
+    ) => unknown;
+    Object.defineProperty(request, name, {
+      value: (...args: unknown[]) => {
+        reads.push(name);
+        return original.apply(request, args);
+      },
+    });
+  }
+  return { request, reads };
 }
 
 function runResponse(
@@ -44,6 +71,32 @@ describe("authMiddleware onRequest", () => {
       new Request("https://api.bunny.net/region", { method: "GET" }),
     );
     expect(logs).toContain("→ GET https://api.bunny.net/region");
+  });
+
+  // Reading an octet-stream body would buffer a whole video upload into memory just to log it.
+  test("never reads a non-JSON request body", async () => {
+    const logs: string[] = [];
+    const { request, reads } = spyRequest(
+      "https://video.bunnycdn.com/library/1/videos/abc",
+      {
+        method: "PUT",
+        headers: {
+          "content-type": "application/octet-stream",
+          "content-length": "12",
+        },
+        body: new Blob(["binary-bytes"]),
+      },
+    );
+
+    await runRequest(
+      { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+      request,
+    );
+
+    expect(reads).toEqual([]);
+    expect(logs).toContain(
+      "→ Body (application/octet-stream): 12 bytes, not logged",
+    );
   });
 
   test("does not log when onDebug is set but verbose is false", async () => {
@@ -99,6 +152,22 @@ describe("authMiddleware onResponse", () => {
       runResponse({ apiKey: "k" }, jsonResponse({ title: "Conflict" }, 409)),
     )) as ApiError;
     expect(error.message).toBe("Conflict");
+  });
+
+  // Stream's StatusModel uses a lowercase message, which the Core extractor misses.
+  test("normalizes the Stream StatusModel (lowercase message)", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        jsonResponse(
+          { success: false, message: "URL validation failed", statusCode: 400 },
+          400,
+        ),
+      ),
+    )) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(400);
+    expect(error.message).toBe("URL validation failed");
   });
 
   test("uses a friendly status message for an empty error body", async () => {
@@ -182,21 +251,91 @@ describe("authMiddleware onResponse", () => {
   });
 });
 
+test("redactSecrets walks nested objects and arrays, redacting only secret strings", () => {
+  let deep: unknown = { ApiKey: "too-deep" };
+  for (let i = 0; i < 10; i++) deep = { next: deep };
+  const out = redactSecrets({
+    zone: { Name: "z", Password: "p" },
+    auth: [{ authToken: "t" }],
+    keyCount: 3,
+    // A false positive is the safe direction.
+    Monkey: "not a secret",
+    deep,
+  });
+  expect(out).toMatchObject({
+    zone: { Name: "z", Password: "[redacted]" },
+    auth: [{ authToken: "[redacted]" }],
+    keyCount: 3,
+    Monkey: "[redacted]",
+  });
+  // Past the depth limit the walk bails to the marker rather than the raw value.
+  expect(JSON.stringify(out)).not.toContain("too-deep");
+});
+
+test("verbose response body dumps are redacted", async () => {
+  const logs: string[] = [];
+  await runResponse(
+    { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+    jsonResponse({ Id: 1, Name: "my-library", ApiKey: "rw-secret" }, 200),
+  );
+  const dump = logs.join("\n");
+  expect(dump).toContain("my-library");
+  expect(dump).not.toContain("rw-secret");
+  expect(dump).toContain("[redacted]");
+});
+
+test("verbose request body dumps are redacted and read from a clone", async () => {
+  const logs: string[] = [];
+  const { request, reads } = spyRequest(
+    "https://video.bunnycdn.com/library/1/videos/fetch",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        url: "https://example.com/v.mp4",
+        headers: { Authorization: "Bearer origin-secret" },
+      }),
+    },
+  );
+  await runRequest(
+    { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
+    request,
+  );
+  const dump = logs.join("\n");
+  expect(dump).toContain("https://example.com/v.mp4");
+  expect(dump).not.toContain("origin-secret");
+  // The request about to be sent must keep its body unread.
+  expect(reads).toEqual(["clone"]);
+});
+
 test("redacts credentials from debug bodies", async () => {
   const logs: string[] = [];
   await runRequest(
     { apiKey: "k", verbose: true, onDebug: (m) => logs.push(m) },
-    new Request("https://api.bunny.net/registries", {
+    new Request("https://api.bunny.net/registries?token=urltok", {
       method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         displayName: "ghcr",
         passwordCredentials: { userName: "notrab", password: "ghp_secret" },
+        url: "https://bucket.s3.amazonaws.com/clip.mp4?X-Amz-Signature=sig123",
+        note: "pull from https://u:pw123@git.example.com/r.git?sig=qsig#top",
+        headers: { Authorization: "Bearer bearer123", "X-Api-Key": "xkey123" },
       }),
     }),
   );
 
   const traced = logs.join("\n");
   expect(traced).not.toContain("ghp_secret");
-  expect(traced).toContain("[redacted]");
+  expect(traced).not.toContain("sig123");
+  expect(traced).not.toContain("bearer123");
+  expect(traced).not.toContain("xkey123");
+  expect(traced).not.toMatch(/urltok|pw123|qsig/);
+  expect(traced).toContain(
+    "pull from https://[redacted]@git.example.com/r.git?[redacted]#top",
+  );
+  expect(traced).toContain(
+    "https://bucket.s3.amazonaws.com/clip.mp4?[redacted]",
+  );
   expect(traced).toContain("notrab");
 });

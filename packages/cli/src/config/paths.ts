@@ -30,3 +30,9 @@ export function getConfigWritePath(): string {
   const [first = join(homedir(), ".bunnynet.json")] = getConfigCandidates();
   return findConfigFile() ?? first;
 }
+
+/** Saved `stream import` source credentials, kept apart from the shared config so only the owner can read them. */
+export function getImportCredentialsPath(): string {
+  const base = process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
+  return join(base, "bunnynet", "stream-import-credentials.json");
+}
