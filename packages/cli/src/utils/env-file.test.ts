@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseEnvFile } from "./env-file.ts";
+import { parseEnvFile, readEnvValue } from "./env-file.ts";
 
 function writeEnv(lines: string[]): string {
   const envPath = join(mkdtempSync(join(tmpdir(), "bunny-env-")), ".env");
@@ -59,4 +59,18 @@ test("a quoted value spans lines, and an unclosed one is reported not truncated"
     ],
     unterminated: ["BROKEN"],
   });
+});
+
+test("an empty value reads as unset instead of taking the next line", () => {
+  const envPath = writeEnv([
+    "BUNNY_DATABASE_URL=",
+    "BUNNY_DATABASE_AUTH_TOKEN=x",
+  ]);
+  const originalCwd = process.cwd();
+  process.chdir(join(envPath, ".."));
+  try {
+    expect(readEnvValue("BUNNY_DATABASE_URL")).toBeUndefined();
+  } finally {
+    process.chdir(originalCwd);
+  }
 });

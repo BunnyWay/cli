@@ -23,9 +23,16 @@ const { findBunnyDnsZone, offerBunnyDnsRecord } = await import(
 );
 const { offerBunnyDnsThenSsl } = await import("./flow.ts");
 type CoreClient = import("./client.ts").CoreClient;
+type BunnyDnsMatch = import("./bunny-dns.ts").BunnyDnsMatch;
 
 type Zone = { Id: number; Domain: string };
-type Rec = { Id?: number; Type?: number; Name?: string; Value?: string };
+type Rec = {
+  Id?: number;
+  Type?: number;
+  Name?: string;
+  Value?: string;
+  LinkName?: string;
+};
 
 beforeEach(() => {
   delegationStatus = "bunny";
@@ -49,6 +56,41 @@ function fakeClient(
     },
   } as unknown as CoreClient;
 }
+
+/** A single-zone client whose writes behave like the API: PUT adds, DELETE removes, POST ignores Type changes. */
+function recordingClient(records: Rec[], failFirstPut = false): CoreClient {
+  let puts = 0;
+  return {
+    ...fakeClient([{ Id: 7, Domain: "example.com" }], { 7: records }),
+    PUT: async (_: string, opts: { body: Rec & { PullZoneId?: number } }) => {
+      if (failFirstPut && puts++ === 0) throw new Error("PUT failed");
+      const { PullZoneId, ...rec } = opts.body;
+      records.push({
+        Id: 500,
+        ...rec,
+        ...(PullZoneId && { LinkName: String(PullZoneId) }),
+      });
+      return {};
+    },
+    DELETE: async (_: string, opts: { params: { path: { id: number } } }) => {
+      records.splice(
+        records.findIndex((r) => r.Id === opts.params.path.id),
+        1,
+      );
+      return {};
+    },
+    POST: async () => ({}),
+  } as unknown as CoreClient;
+}
+
+const match = (existing: Rec | null): BunnyDnsMatch => ({
+  zoneId: 7,
+  zoneDomain: "example.com",
+  recordName: "shop",
+  existing: existing as BunnyDnsMatch["existing"],
+  delegated: true,
+  nameservers: ["kiki.bunny.net", "coco.bunny.net"],
+});
 
 describe("findBunnyDnsZone", () => {
   test("returns null when no zone owns the hostname", async () => {
@@ -90,10 +132,14 @@ describe("findBunnyDnsZone", () => {
 
   test("surfaces the record already sitting at that name", async () => {
     const client = fakeClient([{ Id: 7, Domain: "example.com" }], {
-      7: [{ Id: 99, Type: 7, Name: "shop", Value: "12345" }],
+      7: [{ Id: 99, Type: 7, Name: "shop", LinkName: "12345" }],
     });
     const match = await findBunnyDnsZone(client, "shop.example.com");
-    expect(match?.existing).toMatchObject({ Id: 99, Type: 7, Value: "12345" });
+    expect(match?.existing).toMatchObject({
+      Id: 99,
+      Type: 7,
+      LinkName: "12345",
+    });
   });
 
   test("leaves existing null when no record matches the name", async () => {
@@ -101,6 +147,14 @@ describe("findBunnyDnsZone", () => {
       7: [{ Id: 99, Type: 0, Name: "www", Value: "192.0.2.4" }],
     });
     const match = await findBunnyDnsZone(client, "shop.example.com");
+    expect(match?.existing).toBeNull();
+  });
+
+  test("ignores non-routing records like MX at the same name", async () => {
+    const client = fakeClient([{ Id: 7, Domain: "example.com" }], {
+      7: [{ Id: 99, Type: 4, Name: "", Value: "mail.example.com" }],
+    });
+    const match = await findBunnyDnsZone(client, "example.com");
     expect(match?.existing).toBeNull();
   });
 
@@ -146,6 +200,75 @@ describe("offerBunnyDnsRecord", () => {
       }),
     ).rejects.toThrow(/has no ID/);
   });
+
+  test("replaces a record of another type, since the update endpoint ignores Type changes", async () => {
+    prompts.inject([true]);
+    const records: Rec[] = [
+      { Id: 99, Type: 0, Name: "shop", Value: "192.0.2.4" },
+    ];
+    const result = await offerBunnyDnsRecord({
+      client: recordingClient(records),
+      hostname: "shop.example.com",
+      pullZoneId: 12345,
+      match: match(records[0] ?? null),
+    });
+    expect(result).toBe("updated");
+    expect(records).toEqual([
+      { Id: 500, Type: 7, Name: "shop", LinkName: "12345" },
+    ]);
+  });
+
+  test("leaves the original record in place when adding the replacement fails", async () => {
+    prompts.inject([true]);
+    const original = { Id: 99, Type: 0, Name: "shop", Value: "192.0.2.4" };
+    const records: Rec[] = [original];
+    const client = recordingClient(records, true);
+
+    await expect(
+      offerBunnyDnsRecord({
+        client,
+        hostname: "shop.example.com",
+        pullZoneId: 12345,
+        match: match(original),
+      }),
+    ).rejects.toThrow("PUT failed");
+    expect(records).toEqual([original]);
+  });
+
+  test("throws when the old record is still listed after a failed delete", async () => {
+    prompts.inject([true]);
+    const records: Rec[] = [
+      { Id: 99, Type: 0, Name: "shop", Value: "192.0.2.4" },
+    ];
+    const client = {
+      ...recordingClient(records),
+      DELETE: async () => {
+        throw new Error("DELETE failed");
+      },
+    } as unknown as CoreClient;
+
+    await expect(
+      offerBunnyDnsRecord({
+        client,
+        hostname: "shop.example.com",
+        pullZoneId: 12345,
+        match: match(records[0] ?? null),
+      }),
+    ).rejects.toThrow(/couldn't remove the old A record: DELETE failed/);
+  });
+
+  test("throws when the zone doesn't route here after a write the API accepted", async () => {
+    prompts.inject([true]);
+    const records: Rec[] = [{ Id: 99, Type: 7, Name: "shop", LinkName: "1" }];
+    await expect(
+      offerBunnyDnsRecord({
+        client: recordingClient(records),
+        hostname: "shop.example.com",
+        pullZoneId: 12345,
+        match: match(records[0] ?? null),
+      }),
+    ).rejects.toThrow(/still doesn't point/);
+  });
 });
 
 describe("offerBunnyDnsThenSsl", () => {
@@ -175,27 +298,8 @@ describe("offerBunnyDnsThenSsl", () => {
     // rather than entering offerDnsWaitAndSsl, which would poll for the full 10 minutes.
     prompts.inject([true]);
     delegationStatus = "other";
-    let putCalled = false;
-    const client = {
-      GET: async (path: string) => {
-        if (path === "/dnszone") {
-          return {
-            data: {
-              Items: [{ Id: 7, Domain: "example.com" }],
-              HasMoreItems: false,
-            },
-          };
-        }
-        if (path === "/dnszone/{id}") {
-          return { data: { Records: [] } };
-        }
-        throw new Error(`unexpected GET ${path}`);
-      },
-      PUT: async () => {
-        putCalled = true;
-        return {};
-      },
-    } as unknown as CoreClient;
+    const records: Rec[] = [];
+    const client = recordingClient(records);
 
     const issued = await offerBunnyDnsThenSsl({
       coreClient: client,
@@ -207,7 +311,7 @@ describe("offerBunnyDnsThenSsl", () => {
       verbose: false,
     });
 
-    expect(putCalled).toBe(true); // the record was added
+    expect(records).toHaveLength(1); // the record was added
     expect(issued).toBe(false); // but no certificate / poll — short-circuited on delegation
   });
 
