@@ -1031,7 +1031,7 @@ bunny scripts docs
 
 ### `bunny sites`
 
-> **Experimental**: hidden from `--help` and the landing page while it stabilizes.
+> **Preview**: `bunny sites` is in public preview; commands and flags may still change.
 
 Host static sites on bunny.net. Each site is two resources provisioned and wired together for you: a **storage zone** holding the files and a **pull zone** serving them over the CDN, with edge rules that route requests to the deploy that should answer them. Zones are named `sites-<name>-<suffix>` (the prefix groups them in the dashboard; the suffix is because zone names are global across bunny.net) while commands take the clean site name.
 

@@ -36,6 +36,7 @@ const commands: CommandModule[] = [
   scriptsNamespace,
   sandboxNamespace,
   storageNamespace,
+  sitesNamespace,
   configNamespace,
   skillsNamespace,
   docsCommand,
@@ -47,7 +48,6 @@ const commands: CommandModule[] = [
 const experimentalCommands: CommandModule[] = [
   appsNamespace,
   registryNamespace,
-  sitesNamespace,
   streamNamespace,
   authNamespace,
   pzNamespace,
@@ -184,7 +184,7 @@ export const cli = instance
         ["Create an edge script", "bunny scripts init"],
         ["Add a domain to manage DNS", "bunny dns zones create example.com"],
         ["Create a dev sandbox", "bunny sandbox create my-sandbox"],
-        // ["Deploy a static site", "bunny sites deploy"],
+        ["Deploy a static site", "bunny sites deploy"],
         // ["Deploy an app", "bunny apps deploy"],
       ];
 
