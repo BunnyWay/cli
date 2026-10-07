@@ -2,9 +2,16 @@ import { ApiError, UserError } from "@bunny.net/openapi-client";
 import { z } from "zod";
 import { defineTool } from "../define-tool.ts";
 
-// The API wants UTC; accept any offset and convert, so `+02:00` means what it says.
+// The API wants UTC in its documented `...T00:00:00Z` form; convert any offset, so `+02:00` means what it says.
 const toUtc = (value?: string) =>
-  value ? new Date(value).toISOString() : undefined;
+  value ? new Date(value).toISOString().replace(/\.000Z$/, "Z") : undefined;
+
+// A bare date means midnight UTC.
+const time = (description: string) =>
+  z
+    .union([z.iso.datetime({ offset: true }), z.iso.date()])
+    .optional()
+    .describe(description);
 
 const commaList = (description: string) =>
   z.array(z.string().min(1)).optional().describe(description);
@@ -44,14 +51,10 @@ export const pullZonesLogs = defineTool({
       .int()
       .positive()
       .describe("Pull zone ID, e.g. `12345`."),
-    from: z.iso
-      .datetime({ offset: true })
-      .optional()
-      .describe("Inclusive start, ISO 8601. Defaults to 24 hours before `to`."),
-    to: z.iso
-      .datetime({ offset: true })
-      .optional()
-      .describe("Exclusive end, ISO 8601. Defaults to now."),
+    from: time(
+      "Inclusive start, ISO 8601 date or time. Defaults to 24 hours before `to`.",
+    ),
+    to: time("Exclusive end, ISO 8601 date or time. Defaults to now."),
     status: commaList("HTTP status codes or classes, e.g. `404`, `5xx`."),
     cacheStatus: commaList("Cache statuses, e.g. `HIT`, `MISS`."),
     country: commaList("ISO 3166 alpha-2 country codes, e.g. `DE`."),

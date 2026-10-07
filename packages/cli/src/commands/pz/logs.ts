@@ -51,11 +51,11 @@ export const pzLogsCommand = defineToolCommand({
       })
       .option("from", {
         type: "string",
-        describe: "Start time, ISO 8601 (default: 24h before --to)",
+        describe: "Start, ISO 8601 date or time (default: 24h before --to)",
       })
       .option("to", {
         type: "string",
-        describe: "End time, ISO 8601 (default: now)",
+        describe: "End, ISO 8601 date or time (default: now)",
       })
       .option("status", {
         type: "string",
