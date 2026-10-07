@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { StorageZone } from "@/commands/storage/files-api.ts";
@@ -34,6 +34,26 @@ test("collectFiles skips dotfiles and node_modules but keeps .well-known, sorted
     ".well-known/security.txt",
     "assets/app.js",
     "index.html",
+  ]);
+});
+
+test("collectFiles follows symlinked files and dirs without looping", () => {
+  const dir = mkdtempSync(join(tmpdir(), "bunny-sites-links-"));
+  mkdirSync(join(dir, "shared"));
+  writeFileSync(join(dir, "shared", "logo.svg"), "<svg/>");
+  symlinkSync(join(dir, "shared"), join(dir, "img"));
+  symlinkSync(join(dir, "shared", "logo.svg"), join(dir, "favicon.svg"));
+  symlinkSync(dir, join(dir, "shared", "loop"));
+  // Links out of the deploy dir, or onto an excluded dotfile inside it, never ship.
+  const outside = mkdtempSync(join(tmpdir(), "bunny-sites-secret-"));
+  writeFileSync(join(outside, ".env"), "SECRET=1");
+  symlinkSync(join(outside, ".env"), join(dir, "config.txt"));
+  writeFileSync(join(dir, ".env"), "SECRET=1");
+  symlinkSync(join(dir, ".env"), join(dir, "env.txt"));
+  expect(collectFiles(dir).map((f) => f.path)).toEqual([
+    "favicon.svg",
+    "img/logo.svg",
+    "shared/logo.svg",
   ]);
 });
 

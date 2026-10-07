@@ -20,6 +20,7 @@ import {
   fetchSystemHostname,
   migrateSite,
   siteFiles,
+  UNCONFIRMED_PUBLISH_WARNING,
   type ZoneState,
 } from "./api.ts";
 import {
@@ -126,6 +127,7 @@ export const sitesMigrateCommand = defineCommand<MigrateArgs>({
     );
 
     logger.success(`Migrated "${name}" to the edge-rule architecture.`);
+    if (!result.confirmed) logger.warn(UNCONFIRMED_PUBLISH_WARNING);
     if (result.scriptError) {
       logger.warn(
         `Couldn't delete edge script ${result.detachedScriptId}: ${result.scriptError}`,

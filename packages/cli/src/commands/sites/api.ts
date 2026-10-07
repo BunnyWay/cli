@@ -814,21 +814,23 @@ export const promoteVerification = {
     new Promise((resolve) => setTimeout(resolve, ms)),
 };
 
-// Wait until the edge serves the promoted deploy, identified by the rewrite rule's response header.
+// Wait until the edge serves the promoted deploy, identified by the rewrite rule's response header; false when the deadline passed unconfirmed.
 async function waitForEdgePropagation(
   host: string,
   deployId: string,
-): Promise<void> {
+): Promise<boolean> {
   const start = Date.now();
   const deadline = start + PROPAGATION_DEADLINE_MS;
   let attempt = 0;
-  while (Date.now() < deadline) {
+  let confirmed = false;
+  while (!confirmed && Date.now() < deadline) {
     try {
       // A unique query per attempt keeps each probe out of the CDN cache so a stale entry can't mask a propagated rule.
       const { deploy } = await promoteVerification.probe(
         `https://${host}/?__bunny_promote=${deployId}-${attempt++}`,
       );
-      if (deploy === deployId) break;
+      confirmed = deploy === deployId;
+      if (confirmed) break;
     } catch {
       // Edge briefly unreachable (DNS/warmup); keep trying until the deadline.
     }
@@ -839,7 +841,11 @@ async function waitForEdgePropagation(
   if (elapsed < SETTLE_FLOOR_MS) {
     await promoteVerification.wait(SETTLE_FLOOR_MS - elapsed);
   }
+  return confirmed;
 }
+
+export const UNCONFIRMED_PUBLISH_WARNING =
+  "The edge hasn't confirmed the new deploy yet; it can take a minute to show everywhere.";
 
 async function ensureNotFoundSettings(
   coreClient: CoreClient,
@@ -864,7 +870,7 @@ export async function promoteDeploy(opts: {
   coreClient: CoreClient;
   state: RemoteSiteState;
   deployId: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const { coreClient, state, deployId } = opts;
   const purge = () =>
     coreClient.POST("/pullzone/{id}/purgeCache", {
@@ -894,8 +900,9 @@ export async function promoteDeploy(opts: {
   });
   await ensureNotFoundSettings(coreClient, storageZone, state, deployId);
   await purge();
-  await waitForEdgePropagation(host, deployId);
+  const confirmed = await waitForEdgePropagation(host, deployId);
   await purge();
+  return confirmed;
 }
 
 // Refuse to replace version-1 state that changed since it was read. `writeRemoteState`'s own conflict merge can't cover this: it reconciles against the current format, and the file being replaced is the older one, so it would abort as unparseable rather than merge.
@@ -935,6 +942,8 @@ export interface MigrateResult {
   detachedScriptId: number | null;
   deletedScriptId: number | null;
   scriptError?: string;
+  /** False when the edge didn't confirm the republished deploy in time. */
+  confirmed: boolean;
 }
 export async function migrateSite(opts: {
   coreClient: CoreClient;
@@ -968,9 +977,14 @@ export async function migrateSite(opts: {
   });
   await applySiteCacheSettings(coreClient, state.pullZoneId);
 
+  let confirmed = true;
   if (state.current) {
     step("Publishing the current deploy...");
-    await promoteDeploy({ coreClient, state, deployId: state.current });
+    confirmed = await promoteDeploy({
+      coreClient,
+      state,
+      deployId: state.current,
+    });
   }
 
   // Committed only once every fallible remote step is done: while the file still reads as version 1, a failed run above is fully resumable.
@@ -997,7 +1011,7 @@ export async function migrateSite(opts: {
     }
   }
 
-  return { state, detachedScriptId, deletedScriptId, scriptError };
+  return { state, detachedScriptId, deletedScriptId, scriptError, confirmed };
 }
 
 interface TeardownResult {
