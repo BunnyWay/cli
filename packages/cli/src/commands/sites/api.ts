@@ -257,11 +257,15 @@ async function fetchPullZones(
 }
 
 // Discover sites: every storage-backed pull zone gets the per-zone `_bunny/site.json` read (concurrency-capped). A candidate is only a site when the state names it as the site's own pull zone, so another zone pointed at the same storage origin is never mistaken for one.
-export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
+export async function fetchSites(
+  client: CoreClient,
+  opts: { strict?: boolean } = {},
+): Promise<SiteSummary[]> {
   const candidates = (await fetchPullZones(client)).filter(
     (pz: PullZone) => pz.StorageZoneId != null,
   );
 
+  let unreadable = 0;
   const summaries = await mapWithConcurrency(
     candidates,
     8,
@@ -272,10 +276,17 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
         if (!context || context.state.pullZoneId !== pz.Id) return null;
         return { ...context, systemHostname: systemHostname(pz.Hostnames) };
       } catch {
+        unreadable++;
         return null;
       }
     },
   );
+  if (unreadable > 0) {
+    const message = `Couldn't read ${unreadable} storage zone${unreadable === 1 ? "" : "s"}, so some sites may be missing`;
+    // A uniqueness check can't trust a partial list.
+    if (opts.strict) throw new UserError(`${message}.`, "Re-run to retry.");
+    logger.warn(`${message}; re-run to retry.`);
+  }
 
   return summaries
     .filter((s): s is SiteSummary => s !== null)
@@ -520,6 +531,14 @@ export async function createSite(
     }
     reused.storageZone = true;
   } else {
+    // An imported site keeps its original zone names, so the name-pattern scan above can't see it.
+    const sites = await fetchSites(coreClient, { strict: true });
+    if (sites.some((s) => s.state.name === name)) {
+      throw new UserError(
+        `Site "${name}" already exists.`,
+        `Run \`bunny sites link ${name}\` to use it from this directory.`,
+      );
+    }
     // The suffix keeps the globally-unique name from colliding with other accounts; retry fresh suffixes on the off chance one still does.
     for (let attempt = 0; !storageZone && attempt < 3; attempt++) {
       const zoneName = suffixedResourceName(name);
@@ -717,7 +736,7 @@ export async function planSiteImport(opts: {
     );
   }
 
-  const taken = (await fetchSites(coreClient)).some(
+  const taken = (await fetchSites(coreClient, { strict: true })).some(
     (site) => site.state.name === name,
   );
   if (taken) {
@@ -814,21 +833,23 @@ export const promoteVerification = {
     new Promise((resolve) => setTimeout(resolve, ms)),
 };
 
-// Wait until the edge serves the promoted deploy, identified by the rewrite rule's response header.
+// Wait until the edge serves the promoted deploy, identified by the rewrite rule's response header; false when the deadline passed unconfirmed.
 async function waitForEdgePropagation(
   host: string,
   deployId: string,
-): Promise<void> {
+): Promise<boolean> {
   const start = Date.now();
   const deadline = start + PROPAGATION_DEADLINE_MS;
   let attempt = 0;
-  while (Date.now() < deadline) {
+  let confirmed = false;
+  while (!confirmed && Date.now() < deadline) {
     try {
       // A unique query per attempt keeps each probe out of the CDN cache so a stale entry can't mask a propagated rule.
       const { deploy } = await promoteVerification.probe(
         `https://${host}/?__bunny_promote=${deployId}-${attempt++}`,
       );
-      if (deploy === deployId) break;
+      confirmed = deploy === deployId;
+      if (confirmed) break;
     } catch {
       // Edge briefly unreachable (DNS/warmup); keep trying until the deadline.
     }
@@ -839,7 +860,11 @@ async function waitForEdgePropagation(
   if (elapsed < SETTLE_FLOOR_MS) {
     await promoteVerification.wait(SETTLE_FLOOR_MS - elapsed);
   }
+  return confirmed;
 }
+
+export const UNCONFIRMED_PUBLISH_WARNING =
+  "The edge hasn't confirmed the new deploy yet; it can take a minute to show everywhere.";
 
 async function ensureNotFoundSettings(
   coreClient: CoreClient,
@@ -864,7 +889,7 @@ export async function promoteDeploy(opts: {
   coreClient: CoreClient;
   state: RemoteSiteState;
   deployId: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const { coreClient, state, deployId } = opts;
   const purge = () =>
     coreClient.POST("/pullzone/{id}/purgeCache", {
@@ -894,8 +919,9 @@ export async function promoteDeploy(opts: {
   });
   await ensureNotFoundSettings(coreClient, storageZone, state, deployId);
   await purge();
-  await waitForEdgePropagation(host, deployId);
+  const confirmed = await waitForEdgePropagation(host, deployId);
   await purge();
+  return confirmed;
 }
 
 // Refuse to replace version-1 state that changed since it was read. `writeRemoteState`'s own conflict merge can't cover this: it reconciles against the current format, and the file being replaced is the older one, so it would abort as unparseable rather than merge.
@@ -935,6 +961,8 @@ export interface MigrateResult {
   detachedScriptId: number | null;
   deletedScriptId: number | null;
   scriptError?: string;
+  /** False when the edge didn't confirm the republished deploy in time. */
+  confirmed: boolean;
 }
 export async function migrateSite(opts: {
   coreClient: CoreClient;
@@ -968,9 +996,14 @@ export async function migrateSite(opts: {
   });
   await applySiteCacheSettings(coreClient, state.pullZoneId);
 
+  let confirmed = true;
   if (state.current) {
     step("Publishing the current deploy...");
-    await promoteDeploy({ coreClient, state, deployId: state.current });
+    confirmed = await promoteDeploy({
+      coreClient,
+      state,
+      deployId: state.current,
+    });
   }
 
   // Committed only once every fallible remote step is done: while the file still reads as version 1, a failed run above is fully resumable.
@@ -997,7 +1030,7 @@ export async function migrateSite(opts: {
     }
   }
 
-  return { state, detachedScriptId, deletedScriptId, scriptError };
+  return { state, detachedScriptId, deletedScriptId, scriptError, confirmed };
 }
 
 interface TeardownResult {
@@ -1031,11 +1064,18 @@ export async function deleteSiteResources(opts: {
     }
   };
 
-  await attempt("pull zone", state.pullZoneId, () =>
-    coreClient.DELETE("/pullzone/{id}", {
-      params: { path: { id: state.pullZoneId } },
-    }),
-  );
+  await attempt("pull zone", state.pullZoneId, async () => {
+    try {
+      await coreClient.DELETE("/pullzone/{id}", {
+        params: { path: { id: state.pullZoneId } },
+      });
+    } catch (err) {
+      // Already gone (a re-run after a partial delete) is the goal.
+      if (!(err instanceof ApiError && err.status === 404)) throw err;
+    }
+  });
+  // The storage zone's site marker is the only way back to a pull zone that failed to delete, so keep both for the re-run.
+  if (!results.every((r) => r.deleted)) return results;
   if (opts.keepStorage) {
     // The zone survives, so remove its site marker, else list/link/show rediscover a "site" whose pull zone is gone. But only once everything else deleted: the marker is what makes a re-run able to find and retry the failures.
     if (opts.connection && results.every((r) => r.deleted)) {

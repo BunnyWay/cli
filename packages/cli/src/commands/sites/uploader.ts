@@ -1,7 +1,9 @@
-import { readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, realpathSync, statSync } from "node:fs";
+import { isAbsolute, join, relative, sep } from "node:path";
 import type { StorageZone } from "@/commands/storage/files-api.ts";
 import { mapWithConcurrency } from "@/core/concurrency.ts";
+import { errorMessage, UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
 import { siteFiles } from "./api.ts";
 import { deployPrefix } from "./constants.ts";
 
@@ -31,15 +33,47 @@ function shouldSkipEntry(name: string): boolean {
 /** Recursively collect the files to deploy, sorted by path for determinism. */
 export function collectFiles(dir: string): LocalFile[] {
   const files: LocalFile[] = [];
+  // Real paths of the directories on the current walk, so a symlink back up the tree can't loop.
+  const ancestors = new Set<string>();
+  const rootReal = realpathSync(dir);
+
+  // A link may only resolve to deployable content inside the deploy dir, so `config -> ../.env` can't publish a private file.
+  const linkStaysInside = (entryAbs: string): boolean => {
+    let target: string;
+    try {
+      target = realpathSync(entryAbs);
+    } catch {
+      return true; // Dangling: statSync below finds nothing and it's skipped.
+    }
+    const rel = relative(rootReal, target);
+    return (
+      !rel.startsWith("..") &&
+      !isAbsolute(rel) &&
+      !rel.split(sep).some((part) => part && shouldSkipEntry(part))
+    );
+  };
 
   const walk = (abs: string, rel: string) => {
+    const real = realpathSync(abs);
+    if (ancestors.has(real)) return;
+    ancestors.add(real);
     for (const entry of readdirSync(abs, { withFileTypes: true })) {
       if (shouldSkipEntry(entry.name)) continue;
       const entryAbs = join(abs, entry.name);
       const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) {
+      if (entry.isSymbolicLink() && !linkStaysInside(entryAbs)) {
+        logger.warn(
+          `Skipped ${entryRel}: it links outside the deploy directory or to an excluded path.`,
+        );
+        continue;
+      }
+      // statSync follows symlinks, so linked files and dirs ship as their targets.
+      const stat = entry.isSymbolicLink()
+        ? statSync(entryAbs, { throwIfNoEntry: false })
+        : entry;
+      if (stat?.isDirectory()) {
         walk(entryAbs, entryRel);
-      } else if (entry.isFile()) {
+      } else if (stat?.isFile()) {
         files.push({
           path: entryRel,
           absPath: entryAbs,
@@ -48,6 +82,7 @@ export function collectFiles(dir: string): LocalFile[] {
       }
       // Sockets, FIFOs, and dangling symlinks are silently skipped.
     }
+    ancestors.delete(real);
   };
 
   walk(dir, "");
@@ -105,7 +140,12 @@ export async function uploadDeploy(
         Bun.file(file.absPath).stream(),
         { sha256Checksum: file.sha256.toUpperCase() },
       ),
-    );
+    ).catch((err) => {
+      throw new UserError(
+        `Uploading ${file.path} failed: ${errorMessage(err)}`,
+        "Re-run the deploy; nothing goes live until every file is uploaded.",
+      );
+    });
     done++;
     opts?.onFileUploaded?.(done, files.length, file);
   });

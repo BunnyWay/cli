@@ -4,7 +4,7 @@ import {
   SSD_PRIMARY_REGION,
   type ZoneTierChoice,
 } from "@/commands/storage/constants.ts";
-import { UserError } from "@/core/errors.ts";
+import { ApiError, UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, withSpinner } from "@/core/ui.ts";
 import { type CreateSiteResult, createSite, type SiteContext } from "./api.ts";
@@ -89,7 +89,13 @@ export async function createSiteWithProgress(opts: {
         spin.text = message;
       },
     }),
-  );
+  ).catch((err) => {
+    // A create that fails partway leaves zones a re-run picks up; the hint says so without hiding the API error's status or the credential hint.
+    if (err instanceof ApiError && !err.hint) {
+      err.hint = `Re-run \`bunny sites create ${opts.name}\` to resume where it stopped.`;
+    }
+    throw err;
+  });
 }
 
 export async function createLinkedSite(opts: {

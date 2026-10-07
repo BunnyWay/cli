@@ -1,7 +1,8 @@
 import { existsSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "@/config/index.ts";
+import { CONFIG_FILENAME } from "@/core/bunny-config.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { collectEnv } from "@/core/env.ts";
@@ -21,6 +22,7 @@ import {
   fetchSystemHostname,
   promoteDeploy,
   rereadRemoteState,
+  UNCONFIRMED_PUBLISH_WARNING,
   writeRemoteState,
 } from "./api.ts";
 import {
@@ -143,8 +145,17 @@ export function resolveDeployTarget(opts: {
           ? d.id === customId && d.contentHash === identity.contentHash
           : d.contentHash === identity.contentHash,
       );
+  // A rebuild at an already-deployed git sha with different bytes (new env, non-deterministic build) lands under its content hash instead.
+  const heldElsewhere = (id: string) =>
+    deploys.some((d) => d.id === id && d.contentHash !== identity.contentHash);
+  // Only when the hash ID is free: falling back onto another deploy's ID would quietly replace it.
+  const shaTaken =
+    identity.source === "git" &&
+    heldElsewhere(identity.id) &&
+    !heldElsewhere(identity.contentHash);
   // A skipped deploy reuses the already-uploaded deploy's id; that's where its files live.
-  const deployId = alreadyUploaded?.id ?? identity.id;
+  const deployId =
+    alreadyUploaded?.id ?? (shaTaken ? identity.contentHash : identity.id);
   const skipUpload = alreadyUploaded !== undefined;
 
   if (customId && !skipUpload) {
@@ -262,7 +273,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
-    const siteConfig = loadSiteConfig();
+    // CI deploys a nested project's output from the repo root, so fall back to the bunny.jsonc above the deploy directory.
+    const siteConfig =
+      loadSiteConfig() ?? (args.dir ? loadSiteConfig(args.dir) : null);
     const root = siteConfig?.root ?? process.cwd();
     const explicitDir = args.dir ?? siteConfig?.config.dir;
 
@@ -291,6 +304,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       site: args.site,
       link: args.link,
       output,
+      configName: siteConfig?.config.name,
       offerCreate: async () => {
         const name = await promptSiteName(undefined, true);
         return createLinkedSite({ coreClient, name });
@@ -369,7 +383,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         "This looks like a single-page app. Serve index.html for client-side routes so deep links survive a refresh?",
         { initial: true, optional: true },
       );
-      const savedTo = saveSiteConfig({ spa: configuredSpa });
+      const savedTo = saveSiteConfig(
+        { spa: configuredSpa },
+        siteConfig ? join(siteConfig.root, CONFIG_FILENAME) : undefined,
+      );
       logger.dim(`  Saved sites.spa: ${configuredSpa} to ${savedTo}`);
     }
     const notFound = resolveNotFoundMode(paths, {
@@ -460,9 +477,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const production = productionUrl(state, systemHost);
 
     if (skipUpload && alreadyLive) {
-      await withSpinner("Checking routing...", () =>
+      const confirmed = await withSpinner("Checking routing...", () =>
         promoteDeploy({ coreClient, state, deployId }),
       );
+      if (!confirmed) logger.warn(UNCONFIRMED_PUBLISH_WARNING);
       if (output === "json") {
         logger.log(
           JSON.stringify(
@@ -541,12 +559,14 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       etag = await writeRemoteState(connection, state, etag);
     }
 
+    let confirmed = true;
     await withSpinner("Publishing to production...", async () => {
-      await promoteDeploy({ coreClient, state, deployId });
+      confirmed = await promoteDeploy({ coreClient, state, deployId });
       markCurrent(state, deployId);
       etag = await writeRemoteState(connection, state, etag, {
         promotedTo: deployId,
       });
+      if (!confirmed) logger.warn(UNCONFIRMED_PUBLISH_WARNING);
     });
 
     if (output === "json") {

@@ -39,21 +39,21 @@ This is the rule that shapes every other command here:
 - Deploys stay immutable under their own ID, so `deployments publish <id>` rolls back to any earlier one by retargeting the edge rule; no files move and nothing is re-uploaded.
 - Custom domains are vanity hostnames on the site's pull zone; without one the site serves at `https://sites-<name>-<suffix>.b-cdn.net`.
 
-Content is root-served, so root-absolute assets work as-is. Single-page apps get `index.html` for extensionless misses when the detected framework is client-routed (Vite, CRA, React Router, Angular, Vue CLI, Ember, Preact) and the output has no root `404.html`; `sites.spa` in `bunny.jsonc` or `--spa`/`--no-spa` on the deploy decides explicitly, and otherwise a root `404.html` is the not-found page. The mode is recorded per deploy and follows rollbacks. Deploys are not individually addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served. To review a change before it goes live, build and serve it locally, or deploy it to a separate site.
+Content is root-served, so root-absolute assets work as-is. Single-page apps get `index.html` for extensionless misses when the detected framework is client-routed (Vite, CRA, React Router, Angular, Vue CLI, Ember, Preact, Blazor WebAssembly) and the output has no root `404.html`; `sites.spa` in `bunny.jsonc` or `--spa`/`--no-spa` on the deploy decides explicitly, and otherwise a root `404.html` is the not-found page. The mode is recorded per deploy and follows rollbacks. Deploys are not individually addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served. To review a change before it goes live, build and serve it locally, or deploy it to a separate site.
 
 ## Deploy IDs
 
-- The deploy ID is the **git short-sha** when the working tree is clean, otherwise a 12-char **content hash**. Re-deploying identical content is a no-op (`--force` overrides).
+- The deploy ID is the **git short-sha** when the working tree is clean, otherwise a 12-char **content hash**; a clean tree whose sha is already deployed with different bytes (a changed build env, a non-deterministic build) also falls back to the content hash. Re-deploying identical content is a no-op (`--force` overrides).
 - `--deploy-id <id>` sets the ID yourself, so a deploy can carry the same identifier as whatever produced it (a release tag, a catalog build, a timestamped artifact) and `deployments list` needs no cross-referencing. The ID is used **exactly as given**, case included: it exists to match your identifier, and it never appears in a client-facing URL (the edge rule builds the origin path from it server-side). IDs become storage paths, so they take letters, digits and `-`, `_` or `.`, 4 to 64 characters, starting and ending alphanumeric: `20260827-1433-r42`, `Catalog_V3`, `v1.2.3`.
   - Deploy IDs are therefore **case-sensitive**. `publish`/`delete` match exactly and suggest a case variant when one exists, and deploying an ID that differs from an existing one only in case is refused (not even with `--force`), since two storage paths differing only by case are indistinguishable to anything that folds case.
   - An explicit ID is an assertion about identity, so it is never aliased onto an earlier deploy that happens to share content: each release keeps its own ID and rollback target even when the bytes are unchanged.
   - Reusing an ID for **different** content asks before replacing, because rolling back to that ID would then serve the new files instead of the originals (`--force` skips the prompt for CI). A replacement clears the old files first, so nothing stale survives. The **live deploy and the rollback target are never replaceable in place** (not even with `--force`): that would empty and rewrite the files being served. Deploy under a new ID, or publish another deploy first.
   - The git sha is still recorded alongside a custom ID when the deploy came from a repo, so provenance is not lost; `deployments list` shows it as `custom (git abc12345)`.
-- Dotfiles and `node_modules` are never uploaded.
+- Dotfiles and `node_modules` are never uploaded, except `.well-known/`. Symlinked files and directories upload as their targets when those resolve inside the deploy directory; a link pointing outside it (or onto an excluded dotfile) is skipped with a warning.
 
 ---
 
-## `bunny sites create`; Provision a site
+## `bunny sites create`: Provision a site
 
 ```bash
 bunny sites create                         # uses `sites.name` from bunny.jsonc, else prompts (directory-name suggestion), then a custom domain
@@ -64,18 +64,20 @@ bunny sites create my-site --domain example.com
 bunny sites create my-site --no-link       # don't write .bunny/site.json
 ```
 
-| Flag       | Description                                                                                        |
-| ---------- | -------------------------------------------------------------------------------------------------- |
-| `--region` | Main storage region code (default `DE`)                                                            |
-| `--tier`   | Storage tier: `hdd` (Standard) or `ssd` (Edge, always `DE`); create-time only                      |
-| `--domain` | Attach a custom production domain after provisioning; interactive runs prompt for one when omitted |
-| `--link`   | Link this directory (default true; `--no-link` to skip)                                            |
+| Flag            | Description                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------- |
+| `--region`      | Main storage region code (default `DE`)                                                             |
+| `--tier`        | Storage tier: `hdd` (Standard) or `ssd` (Edge, always `DE`); create-time only                       |
+| `--domain`      | Attach a custom production domain after provisioning; interactive runs prompt for one when omitted  |
+| `--link`        | Link this directory (default true; `--no-link` to skip)                                             |
+| `--from-zone`   | Import an existing storage zone (name or ID) and its pull zone as the site instead of creating them |
+| `--force`, `-f` | Skip the import confirmation (only with `--from-zone`)                                              |
 
-Site names are 3-47 lowercase letters, digits, and dashes. The storage zone, pull zone, and b-cdn.net subdomain become `sites-<name>-xxxxxx` (a `sites-` prefix marking them in the dashboard, plus a shared random suffix since zone names are global across bunny.net); commands still take the clean site name. Creation is idempotent; a failed create re-runs cleanly, reusing whatever was already provisioned.
+Site names are 3-47 lowercase letters, digits, and dashes. The storage zone, pull zone, and b-cdn.net subdomain become `sites-<name>-xxxxxx` (a `sites-` prefix marking them in the dashboard, plus a shared random suffix since zone names are global across bunny.net); commands still take the clean site name. Creation is idempotent; a failed create re-runs cleanly (the error says so), reusing whatever was already provisioned. A name already used by any site, including an imported one, is refused.
 
 ---
 
-## `bunny sites deploy`; Deploy a directory
+## `bunny sites deploy`: Deploy a directory
 
 ```bash
 bunny sites deploy ./dist                  # deploy and publish as the live site
@@ -83,15 +85,17 @@ bunny sites deploy --build                 # run `sites.build` from bunny.jsonc 
 bunny sites deploy ./out --build "npm run build" --env VITE_FLAG=1
 ```
 
-| Flag         | Description                                                          |
-| ------------ | -------------------------------------------------------------------- |
-| `[dir]`      | Directory to deploy (default: `sites.dir` in bunny.jsonc, then cwd)  |
-| `--build`    | Run a build first (bare flag: `sites.build`, else a detected build)  |
-| `--env`      | Build-time env override `KEY=VALUE` (repeatable; requires `--build`) |
-| `--env-file` | Dotenv file of build-time overrides (requires `--build`)             |
-| `--force`    | Deploy even when content is unchanged                                |
-| `--site`     | Target site (name or storage zone ID)                                |
-| `--link`     | Link this directory to the deployed site (`--no-link` never links)   |
+| Flag                | Description                                                                                                                 |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `[dir]`             | Directory to deploy (default: `sites.dir` in bunny.jsonc, then the detected framework's output dir when building, then cwd) |
+| `--build`           | Run a build first (bare flag: `sites.build`, else a detected build)                                                         |
+| `--env`             | Build-time env override `KEY=VALUE` (repeatable; requires `--build`)                                                        |
+| `--env-file`        | Dotenv file of build-time overrides (requires `--build`)                                                                    |
+| `--force`           | Deploy even when content is unchanged                                                                                       |
+| `--site`            | Target site (name or storage zone ID)                                                                                       |
+| `--link`            | Link this directory to the deployed site (`--no-link` never links)                                                          |
+| `--deploy-id`       | Your own deploy ID (release tag, catalog build); see Deploy IDs                                                             |
+| `--spa`, `--no-spa` | Serve `index.html` for client-side routes, or the 404 page; beats `sites.spa` and detection                                 |
 
 With `--build`, the build runs in your shell environment plus the `--env`/`--env-file` overrides; there is no remote env store; put build-time values in your local `.env` or CI secrets. Redeploying content that is already uploaded skips the upload and just republishes it; when it is already live, the deploy is a no-op unless you pass `--force`.
 
@@ -103,14 +107,14 @@ Interactive `deploy` adds two conveniences (both skipped under `--output json`):
 
 ---
 
-## `bunny sites deployments`; List, publish, prune, delete
+## `bunny sites deployments`: List, publish, prune, delete
 
 ```bash
 bunny sites deployments list
 bunny sites deployments publish a1b2c3d4    # confirm prompt; --force to skip
 bunny sites deployments publish --previous  # instant rollback
 bunny sites deployments prune --keep 10     # never prunes current/previous
-bunny sites deployments prune my-site       # or --site my-site
+bunny sites deployments prune my-site       # target a site other than the linked one
 bunny sites deployments delete a1b2c3d4 --force   # delete one deploy
 ```
 
@@ -120,7 +124,7 @@ bunny sites deployments delete a1b2c3d4 --force   # delete one deploy
 
 ---
 
-## `bunny sites domains`; Custom domains
+## `bunny sites domains`: Custom domains
 
 ```bash
 bunny sites domains add example.com --wait  # wait for DNS, then issue SSL
@@ -133,7 +137,7 @@ A custom domain is the site's production URL and nothing more. The first added d
 
 ---
 
-## `bunny sites ci init`; GitHub Actions deployments
+## `bunny sites ci init`: GitHub Actions deployments
 
 ```bash
 bunny sites ci init                         # detect the framework, write .github/workflows/bunny-sites.yml
@@ -141,7 +145,7 @@ bunny sites ci init --framework astro       # skip detection (astro, vite, react
 bunny sites ci init --site my-site --force  # overwrite an existing workflow
 ```
 
-Writes a workflow using the `BunnyWay/actions/deploy-site` action with the site name baked in: pushes to `main` go live, plus `workflow_dispatch` for on-demand redeploys. Deploys serialize and are never cancelled in flight, since cancelling mid-upload would leave a half-written deploy directory behind. `sites.dir` and `sites.build` from `bunny.jsonc` override the preset's deploy directory and build command, so CI builds and deploys exactly what a local `sites deploy` does. The workflow is written at the git root; when `bunny.jsonc` lives below it (a monorepo package), the job gets `defaults.run.working-directory` and the deploy directory is prefixed, so those paths still mean what they do locally. Framework detection reads `package.json` dependencies, `Gemfile`, or Hugo config; the lockfile picks the package manager for the install steps. The job requests `contents: read` and `deployments: write`, so the run is recorded in the repository's Environments. After writing, the CLI offers to run `gh secret set BUNNYNET_API_KEY` (or prints the manual steps). `sites create` offers the same scaffold on GitHub repos; declining prints the workflow instead.
+Writes a workflow using the `BunnyWay/actions/deploy-site` action with the site name baked in: pushes to the repository's default branch go live, plus `workflow_dispatch` for on-demand redeploys. Deploys serialize and are never cancelled in flight, since cancelling mid-upload would leave a half-written deploy directory behind. `sites.dir` and `sites.build` from `bunny.jsonc` override the preset's deploy directory and build command, so CI builds and deploys exactly what a local `sites deploy` does. The workflow is written at the git root; when `bunny.jsonc` lives below it (a monorepo package), the job gets `defaults.run.working-directory` and the deploy directory is prefixed, so those paths still mean what they do locally; `sites deploy` itself falls back to the `bunny.jsonc` above the deploy directory when none is found from the working directory, so the nested project's `spa` and framework detection still apply. Framework detection reads `package.json` dependencies, a Blazor WebAssembly `.csproj`, `Gemfile`, or a Hugo, Python, or Zola config; the lockfile picks the package manager for the install steps (a nested project without one uses the repo root's; with no lockfile at all the workflow does a plain, uncached install), and Python sites install `requirements.txt` when present, else the generator itself. The job requests `contents: read` and `deployments: write`, so the run is recorded in the repository's Environments. The workflow pins the action's `cli_version` to the generating CLI's minor line, so CI deploys the same way. After writing, the CLI offers to store the `BUNNYNET_API_KEY` repository secret (or prints the manual steps). `sites create` offers the same scaffold on GitHub repos; declining prints the workflow instead.
 
 ---
 
@@ -167,13 +171,14 @@ An optional `sites` block configures the deploy defaults (validated on its own, 
     "name": "my-site", // resolves the site when nothing is linked
     "dir": "./dist", // default deploy directory
     "build": "npm run build", // command for `deploy --build`
+    "spa": true, // serve index.html for client-side routes (omit to detect)
   },
 }
 ```
 
 ## CI / agents
 
-- Pass `--force` on anything with a confirmation (publish, prune, remove, delete); without a TTY they error with a hint rather than waiting on a prompt.
+- Pass `--force` on anything with a confirmation (publish, prune, remove, delete, `create --from-zone`); without a TTY they error with a hint rather than waiting on a prompt.
 - Pass the site explicitly (or commit `bunny.jsonc` with `sites.name`); the interactive picker is disabled under `--output json` and by `--force`, so `sites delete --force` with nothing linked errors instead of prompting.
-- `--output json` on every command emits machine-readable results. `deploy` prints `{ id, production, unchanged, live }`, where `production` is `null` on a site whose hostname couldn't be read.
+- `--output json` on every command emits machine-readable results. `deploy` prints `{ site, id, source, files, bytes, production, unchanged, live }`, where `production` is `null` on a site whose hostname couldn't be read.
 - The first-deploy custom-domain prompt never runs under `--output json` or without a TTY, so CI deploys are unaffected.

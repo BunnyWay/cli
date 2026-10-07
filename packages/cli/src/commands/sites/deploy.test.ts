@@ -135,16 +135,27 @@ test("replacing the live or rollback deploy's content is refused, even with --fo
     reason: "rollback",
   });
 
-  // Same git sha over different bytes lands on the same ID without --deploy-id.
-  const gitLive = deploy("aaaa1111", "hash1", "git");
+  // Same git sha over different bytes falls back to the content hash instead of colliding with the live deploy.
   expect(
     resolveDeployTarget({
-      deploys: [gitLive],
+      deploys: [deploy("aaaa1111", "hash1", "git")],
       identity: identity("aaaa1111", "hash2", "git"),
       force: false,
       current: "aaaa1111",
-    }).conflict,
-  ).toEqual({ record: gitLive, reason: "live" });
+    }),
+  ).toEqual({ deployId: "hash2", skipUpload: false });
+  // ...unless another deploy already holds the hash as its ID, which the fallback must not quietly replace.
+  expect(
+    resolveDeployTarget({
+      deploys: [
+        deploy("aaaa1111", "hash1", "git"),
+        deploy("hash2", "other", "custom"),
+      ],
+      identity: identity("aaaa1111", "hash2", "git"),
+      force: false,
+      current: "aaaa1111",
+    }).deployId,
+  ).toBe("aaaa1111");
 });
 
 // --force's "redeploy unchanged content" path: every write is byte-identical, so in-place is safe.
