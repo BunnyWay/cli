@@ -82,21 +82,13 @@ interface JsInstallSettings {
   pnpmVersion?: string;
 }
 
-// A nested workspace member without a lockfile of its own installs from the monorepo root's; a standalone nested app does not.
-export async function jsInstallSettings(
+async function jsInstallSettings(
   root: string,
   projectRoot: string,
 ): Promise<JsInstallSettings> {
-  const rootIsWorkspace =
-    existsSync(join(root, "pnpm-workspace.yaml")) ||
-    (await readPackageJson(root))?.workspaces !== undefined;
-  const candidates =
-    projectRoot === root || rootIsWorkspace
-      ? [projectRoot, root]
-      : [projectRoot];
-  const lockDir = candidates.find((dir) =>
-    LOCKFILES.some((name) => existsSync(join(dir, name))),
-  );
+  const lockDir = LOCKFILES.some((name) => existsSync(join(projectRoot, name)))
+    ? projectRoot
+    : undefined;
   const packageManager = await detectPackageManager(lockDir ?? projectRoot);
   return {
     packageManager,
