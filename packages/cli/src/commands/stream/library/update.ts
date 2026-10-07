@@ -1,4 +1,5 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
+import { streamLibrariesAddRegions } from "@bunny.net/tools/stream";
 import type promptsLib from "prompts";
 import {
   toSafeVideoLibrary,
@@ -11,26 +12,36 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
+import { toolContext } from "@/core/tool-context.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 import {
   hasLibrarySettingsFlags,
-  type LibrarySettings,
   type LibrarySettingsArgs,
   librarySettingsFromFlags,
+  librarySettingsWarnings,
+  parseCsvFlag,
   RESOLUTION_CHOICES,
   withLibrarySettingsOptions,
 } from "./flags.ts";
+import { checkTranscribingLanguages } from "./language-check.ts";
 
 interface LibraryUpdateArgs extends LibrarySettingsArgs {
   library?: string;
   force?: boolean;
+  contentTagging?: boolean;
+  addReplicationRegions?: string[];
 }
 
 const FLAG_HINT =
-  "Pass at least one of --name, --encoding-tier, --jit/--no-jit, --codecs, --resolutions, --transcribing/--no-transcribing, --transcribing-languages, --transcribing-title, --transcribing-description, --transcribing-chapters, --transcribing-moments.";
+  "Pass at least one of --name, --encoding-tier, --jit/--no-jit, --codecs, --resolutions, --mp4-fallback, --early-play, --keep-original, --multi-audio, --content-tagging, --transcribing/--no-transcribing, --transcribing-languages, --transcribing-title, --transcribing-description, --transcribing-chapters, --transcribing-moments, --add-replication-regions.";
 
 function hasAnyFlag(args: LibraryUpdateArgs): boolean {
-  return args.name !== undefined || hasLibrarySettingsFlags(args);
+  return (
+    args.name !== undefined ||
+    args.contentTagging !== undefined ||
+    args.addReplicationRegions !== undefined ||
+    hasLibrarySettingsFlags(args)
+  );
 }
 
 /**
@@ -41,7 +52,7 @@ function hasAnyFlag(args: LibraryUpdateArgs): boolean {
  */
 async function promptSettings(
   library: VideoLibraryModel,
-): Promise<LibrarySettings> {
+): Promise<VideoLibraryUpdateModel> {
   const current = (library.EnabledResolutions ?? "")
     .split(",")
     .map((entry) => entry.trim())
@@ -66,6 +77,30 @@ async function promptSettings(
     },
     {
       type: "toggle",
+      name: "keepOriginal",
+      message: "Keep original files (needed for Early-Play and re-encoding)?",
+      initial: library.KeepOriginalFiles ?? false,
+      active: "yes",
+      inactive: "no",
+    },
+    {
+      type: "toggle",
+      name: "mp4Fallback",
+      message: "MP4 fallback for players without HLS (adds storage)?",
+      initial: library.EnableMP4Fallback ?? false,
+      active: "yes",
+      inactive: "no",
+    },
+    {
+      type: "toggle",
+      name: "contentTagging",
+      message: "Content tagging?",
+      initial: library.EnableContentTagging ?? false,
+      active: "yes",
+      inactive: "no",
+    },
+    {
+      type: "toggle",
       name: "transcribing",
       message: "Automatic transcribing (billed per use)?",
       initial: library.EnableTranscribing ?? false,
@@ -84,7 +119,7 @@ async function promptSettings(
   });
   if (cancelled) throw new UserError("Update cancelled.");
 
-  const settings: LibrarySettings = {};
+  const settings: VideoLibraryUpdateModel = {};
   const name = (answers.name as string | undefined)?.trim();
   if (name && name !== library.Name) settings.Name = name;
   // At least one resolution must stay enabled, so an empty pick is left alone.
@@ -99,6 +134,18 @@ async function promptSettings(
     answers.transcribing !== (library.EnableTranscribing ?? false)
   )
     settings.EnableTranscribing = answers.transcribing;
+  const toggles = [
+    ["keepOriginal", "KeepOriginalFiles"],
+    ["mp4Fallback", "EnableMP4Fallback"],
+    ["contentTagging", "EnableContentTagging"],
+  ] as const;
+  for (const [answer, field] of toggles) {
+    if (
+      answers[answer] !== undefined &&
+      answers[answer] !== (library[field] ?? false)
+    )
+      settings[field] = answers[answer];
+  }
   return settings;
 }
 
@@ -119,6 +166,14 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
       "$0 stream library update my-library --transcribing --transcribing-languages en,de",
       "Enable transcribing into two languages",
     ],
+    [
+      "$0 stream library update my-library --add-replication-regions SYD",
+      "Also replicate to Sydney (regions can't be removed later)",
+    ],
+    [
+      "$0 stream library update my-library --content-tagging",
+      "Turn on content tagging",
+    ],
   ],
 
   builder: (yargs) =>
@@ -131,6 +186,17 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
         .option("name", {
           type: "string",
           describe: "New library name",
+        })
+        .option("content-tagging", {
+          type: "boolean",
+          describe:
+            "Auto-categorise uploads with machine learning (update only; not accepted at create time)",
+        })
+        .option("add-replication-regions", {
+          type: "string",
+          array: true,
+          describe:
+            "Add replication regions (comma-separated or repeated). Add-only: regions can't be removed later",
         }),
     ).option("force", {
       alias: "f",
@@ -150,7 +216,22 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
     }
 
     // Parse and validate the flags before any network call.
-    const fromFlags = hasFlags ? librarySettingsFromFlags(args) : undefined;
+    const fromFlags: VideoLibraryUpdateModel | undefined = hasFlags
+      ? librarySettingsFromFlags(args)
+      : undefined;
+    if (fromFlags && args.contentTagging !== undefined)
+      fromFlags.EnableContentTagging = args.contentTagging;
+    // Rejects contradictory flags before any network call; the warnings are printed later.
+    if (hasFlags) librarySettingsWarnings(args);
+    const addRegions = args.addReplicationRegions
+      ?.flatMap((value) => parseCsvFlag(value))
+      .filter(Boolean);
+    if (args.addReplicationRegions !== undefined && !addRegions?.length) {
+      throw new UserError(
+        "--add-replication-regions needs at least one region code.",
+        "For example: --add-replication-regions SYD.",
+      );
+    }
 
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
@@ -161,27 +242,60 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
       offerLink: true,
     });
 
+    // Checked against the library's current state, so Early-Play advice is accurate.
+    const warnings = hasFlags
+      ? librarySettingsWarnings(args, lib.KeepOriginalFiles ?? false)
+      : [];
+
     // Flags take full precedence over the editor: a partial set of flags is a partial update.
     const settings: VideoLibraryUpdateModel =
       fromFlags ?? (await promptSettings(lib));
+    await checkTranscribingLanguages(
+      config,
+      settings.TranscribingCaptionLanguages,
+      verbose,
+    );
 
-    if (Object.keys(settings).length === 0) {
+    if (Object.keys(settings).length === 0 && !addRegions?.length) {
       logger.log("No changes requested.");
       return;
     }
 
-    const updated = await withSpinner("Updating video library...", async () => {
-      const { data } = await client.POST("/videolibrary/{id}", {
-        params: { path: { id: lib.Id as number } },
-        body: settings,
-      });
-      return data;
-    });
+    const updated =
+      Object.keys(settings).length > 0
+        ? await withSpinner("Updating video library...", async () => {
+            const { data } = await client.POST("/videolibrary/{id}", {
+              params: { path: { id: lib.Id as number } },
+              body: settings,
+            });
+            return data;
+          })
+        : undefined;
+
+    // Regions live on the library's storage zone, so they go through the stream tools.
+    const regions = addRegions?.length
+      ? await withSpinner("Adding replication regions...", () =>
+          streamLibrariesAddRegions.invoke(toolContext(config, { verbose }), {
+            library: lib.Id as number,
+            regions: addRegions,
+          }),
+        )
+      : undefined;
 
     if (output === "json") {
       logger.log(
         JSON.stringify(
-          updated ? toSafeVideoLibrary(updated) : { Id: lib.Id, ...settings },
+          {
+            ...(updated
+              ? toSafeVideoLibrary(updated)
+              : { Id: lib.Id, ...settings }),
+            ...(regions
+              ? {
+                  ReplicationRegions: regions.regions,
+                  AddedRegions: regions.added,
+                }
+              : {}),
+          },
           null,
           2,
         ),
@@ -189,7 +303,21 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
       return;
     }
 
-    logger.success(`Updated video library ${updated?.Name ?? lib.Name}.`);
-    logger.dim(`Changed: ${Object.keys(settings).join(", ")}.`);
+    if (Object.keys(settings).length > 0) {
+      logger.success(`Updated video library ${updated?.Name ?? lib.Name}.`);
+      logger.dim(`Changed: ${Object.keys(settings).join(", ")}.`);
+    }
+    if (regions) {
+      if (regions.added.length > 0) {
+        logger.success(
+          `Added ${regions.added.join(", ")}; now replicated to ${regions.regions.join(", ")}.`,
+        );
+      } else {
+        logger.log(
+          `Already replicated to ${regions.regions.join(", ")}; nothing added.`,
+        );
+      }
+    }
+    for (const warning of warnings) logger.warn(warning);
   },
 });

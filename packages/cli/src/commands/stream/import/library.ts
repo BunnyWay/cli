@@ -1,8 +1,8 @@
 import type { ToolContext } from "@bunny.net/tools";
 import {
   type StreamLibrary,
-  streamLibrariesGet,
   streamLibrariesList,
+  streamLibrariesResolve,
 } from "@bunny.net/tools/stream";
 import {
   STREAM_MANIFEST,
@@ -35,7 +35,7 @@ export async function resolveImportLibrary(
 ): Promise<StreamLibrary> {
   if (ref) {
     return withSpinner("Resolving video library...", () =>
-      streamLibrariesGet.invoke(ctx, { library: ref }),
+      streamLibrariesResolve.invoke(ctx, { library: ref }),
     );
   }
 
@@ -44,7 +44,7 @@ export async function resolveImportLibrary(
   if (manifest.id) {
     const linkedId = manifest.id;
     return withSpinner("Loading linked video library...", () =>
-      streamLibrariesGet.invoke(ctx, { library: String(linkedId) }),
+      streamLibrariesResolve.invoke(ctx, { library: String(linkedId) }),
     );
   }
 

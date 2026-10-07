@@ -21,6 +21,7 @@ test("cleanupQuery rejects an undocumented --outputs value", () => {
 });
 
 const CLEANUP_PATH = "/library/4321/videos/video-guid/resolutions/cleanup";
+const RESOLUTIONS_PATH = "/library/4321/videos/video-guid/resolutions";
 const originalFetch = globalThis.fetch;
 const originalExit = process.exit;
 let seen: string[] = [];
@@ -36,6 +37,19 @@ beforeEach(() => {
       return Response.json({ Id: 4321, Name: "lib", ApiKey: "library-key" });
     }
     if (pathname === CLEANUP_PATH) return Response.json({ success: true });
+    if (pathname === RESOLUTIONS_PATH) {
+      return Response.json({
+        success: true,
+        data: {
+          configuredResolutions: ["720p"],
+          playlistResolutions: [
+            { resolution: "240p", path: "/v/240p" },
+            { resolution: "720p", path: "/v/720p" },
+          ],
+          hasOriginal: true,
+        },
+      });
+    }
     return Response.json({ guid: "video-guid", title: "clip.mp4" });
   }) as unknown as typeof fetch;
   process.exit = ((code?: number) => {
@@ -68,6 +82,52 @@ const run = (args: Record<string, unknown>) =>
 test("a dry run skips the confirmation gate, even unattended", async () => {
   await run({ dryRun: true });
   expect(seen).toContain(`POST ${CLEANUP_PATH}`);
+});
+
+/** Run with stdout captured, since `logger.log` writes there rather than to console.log. */
+async function captured(args: Record<string, unknown>): Promise<string> {
+  const out: string[] = [];
+  const write = spyOn(process.stdout, "write").mockImplementation(((
+    chunk: string,
+  ) => {
+    out.push(String(chunk));
+    return true;
+  }) as never);
+  try {
+    await run(args);
+  } finally {
+    write.mockRestore();
+  }
+  return out.join("");
+}
+
+// The dry run has to say what would go, not just "OK".
+test("a dry run lists what would be deleted", async () => {
+  const json = JSON.parse(
+    await captured({ dryRun: true, all: false, nonConfigured: true }),
+  );
+  expect(json.plan).toEqual({
+    items: [{ kind: "hls", resolution: "240p", path: "/v/240p" }],
+    notPresent: [],
+  });
+
+  const text = await captured({
+    dryRun: true,
+    all: false,
+    nonConfigured: true,
+    output: "text",
+  });
+  expect(text).toContain("Would delete (1):");
+  expect(text).toContain("HLS 240p  /v/240p");
+});
+
+// A real run with nothing to delete says so instead of calling the endpoint.
+test("a cleanup that matches nothing deletes nothing", async () => {
+  const json = JSON.parse(
+    await captured({ all: false, resolutions: "144p", force: true }),
+  );
+  expect(seen).not.toContain(`POST ${CLEANUP_PATH}`);
+  expect(json.plan.notPresent).toEqual(["144p"]);
 });
 
 test("an unattended cleanup without --force refuses before deleting", async () => {
