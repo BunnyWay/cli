@@ -34,6 +34,7 @@ Each client is scoped to a specific bunny.net API domain:
 | Core API         | `createCoreClient()`         | `https://api.bunny.net`                |
 | Edge Scripting   | `createComputeClient()`      | `https://api.bunny.net`                |
 | Database         | `createDbClient()`           | `https://api.bunny.net/database`       |
+| CDN Logging      | `createLoggingClient()`      | `https://logging.bunnycdn.com`         |
 | Magic Containers | `createMcClient()`           | `https://api.bunny.net/mc`             |
 | Origin Errors    | `createOriginErrorsClient()` | `https://cdn-origin-logging.bunny.net` |
 | Shield           | `createShieldClient()`       | `https://api.bunny.net`                |
@@ -93,6 +94,7 @@ type DnsZone = components["schemas"]["DnsZoneModel"];
 | `@bunny.net/openapi-client/core`             | `createCoreClient`, core spec types, DNS scan types  |
 | `@bunny.net/openapi-client/compute`          | `createComputeClient`, compute spec types            |
 | `@bunny.net/openapi-client/database`         | `createDbClient`, database spec types                |
+| `@bunny.net/openapi-client/logging`          | `createLoggingClient`, hand-authored logging types   |
 | `@bunny.net/openapi-client/magic-containers` | `createMcClient`, Magic Containers spec types        |
 | `@bunny.net/openapi-client/origin-errors`    | `createOriginErrorsClient`, origin-errors spec types |
 | `@bunny.net/openapi-client/shield`           | `createShieldClient`, shield spec types              |

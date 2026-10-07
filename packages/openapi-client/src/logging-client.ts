@@ -1,5 +1,5 @@
 import createClient from "openapi-fetch";
-import type { paths } from "./logging.ts";
+import type { paths } from "./logging-types.ts";
 import { authMiddleware, type ClientOptions } from "./middleware.ts";
 
 const LOGGING_BASE_URL = "https://logging.bunnycdn.com";

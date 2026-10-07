@@ -52,6 +52,10 @@
       "types": "./dist/database.d.ts",
       "import": "./dist/database.js"
     },
+    "./logging": {
+      "types": "./dist/logging.d.ts",
+      "import": "./dist/logging.js"
+    },
     "./magic-containers": {
       "types": "./dist/magic-containers.d.ts",
       "import": "./dist/magic-containers.js"

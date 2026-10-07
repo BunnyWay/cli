@@ -38,11 +38,17 @@ test("pullzones.logs joins list filters and returns the next offset", async () =
 
   const logs = await pullZonesLogs.invoke(ctx, {
     pullZone: 7,
+    from: "2026-08-08T02:00:00+02:00",
     status: ["4xx", "5xx"],
     limit: 1,
   });
 
-  expect(query).toMatchObject({ status: "4xx,5xx", limit: 1, order: "desc" });
+  expect(query).toMatchObject({
+    from: "2026-08-08T00:00:00.000Z",
+    status: "4xx,5xx",
+    limit: 1,
+    order: "desc",
+  });
   expect(logs).toMatchObject({ from: "f", to: "t", nextOffset: 1 });
   expect(logs.entries).toHaveLength(1);
 });

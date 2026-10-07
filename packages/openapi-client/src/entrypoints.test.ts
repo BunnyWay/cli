@@ -4,6 +4,7 @@ import type { components } from "./core.ts";
 import { createCoreClient, DnsRecordScanStatus } from "./core.ts";
 import { createDbClient } from "./database.ts";
 import * as root from "./index.ts";
+import { createLoggingClient } from "./logging.ts";
 import { createMcClient } from "./magic-containers.ts";
 import { createOriginErrorsClient } from "./origin-errors.ts";
 import { createShieldClient } from "./shield.ts";
@@ -24,6 +25,7 @@ describe("per-API entrypoints", () => {
     expect(createCoreClient).toBe(root.createCoreClient);
     expect(createComputeClient).toBe(root.createComputeClient);
     expect(createDbClient).toBe(root.createDbClient);
+    expect(createLoggingClient).toBe(root.createLoggingClient);
     expect(createMcClient).toBe(root.createMcClient);
     expect(createOriginErrorsClient).toBe(root.createOriginErrorsClient);
     expect(createShieldClient).toBe(root.createShieldClient);

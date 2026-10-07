@@ -2,6 +2,10 @@ import { ApiError, UserError } from "@bunny.net/openapi-client";
 import { z } from "zod";
 import { defineTool } from "../define-tool.ts";
 
+// The API wants UTC; accept any offset and convert, so `+02:00` means what it says.
+const toUtc = (value?: string) =>
+  value ? new Date(value).toISOString() : undefined;
+
 const commaList = (description: string) =>
   z.array(z.string().min(1)).optional().describe(description);
 
@@ -70,6 +74,8 @@ export const pullZonesLogs = defineTool({
     order: z.enum(["asc", "desc"]).default("desc").describe("By timestamp."),
   }),
   kind: "read",
+  // Zones with extended logging return the decrypted Authorization header of each request.
+  sensitive: true,
   resultSchema: PullZoneLogsSchema,
   examples: [
     [{ pullZone: 12345 }, "Latest requests from the last 24 hours"],
@@ -86,8 +92,8 @@ export const pullZonesLogs = defineTool({
           params: {
             path: { pullZoneId: input.pullZone },
             query: {
-              from: input.from,
-              to: input.to,
+              from: toUtc(input.from),
+              to: toUtc(input.to),
               status: join(input.status),
               cacheStatus: join(input.cacheStatus),
               country: join(input.country),
