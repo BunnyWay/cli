@@ -4,6 +4,7 @@ import { UserError } from "@/core/errors.ts";
 import { runGit } from "@/core/git.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, prompts } from "@/core/ui.ts";
+import { VERSION } from "@/core/version.ts";
 import {
   detectFramework,
   detectPackageManager,
@@ -23,6 +24,19 @@ import {
 export async function gitTopLevel(cwd: string): Promise<string | null> {
   return runGit(cwd, ["rev-parse", "--show-toplevel"]);
 }
+
+/** The remote's default branch (from `origin/HEAD`), or main when it isn't known locally; never the checked-out branch, which may be a feature branch. */
+export async function defaultBranch(root: string): Promise<string> {
+  const ref = await runGit(root, [
+    "symbolic-ref",
+    "--short",
+    "refs/remotes/origin/HEAD",
+  ]);
+  return ref?.replace(/^origin\//, "") || "main";
+}
+
+// The action runs this CLI's minor line, so CI deploys sites the same way the local command does.
+const CLI_VERSION_RANGE = VERSION.split(".").slice(0, 2).join(".");
 
 /** The host of a git remote URL, handling both scp-style (`git@host:path`) and URL forms; null when neither parses. */
 export function remoteHost(url: string): string | null {
@@ -49,6 +63,8 @@ interface ScaffoldResult {
   packageManager: PackageManager;
   /** Directory the workflow deploys, relative to the repo root: `sites.dir` when configured, else the preset's, prefixed when the project sits below the root. */
   dir: string;
+  /** The branch whose pushes go live. */
+  branch: string;
 }
 
 // Lockfiles that decide the package manager; a nested project may carry its own, in which case setup-node needs to be pointed at it.
@@ -59,6 +75,63 @@ const LOCKFILES = [
   "yarn.lock",
   "package-lock.json",
 ];
+
+interface JsInstallSettings {
+  packageManager: PackageManager;
+  lockfile: boolean;
+  pnpmVersion?: string;
+}
+
+// A nested workspace member without a lockfile of its own installs from the monorepo root's; a standalone nested app does not.
+export async function jsInstallSettings(
+  root: string,
+  projectRoot: string,
+): Promise<JsInstallSettings> {
+  const rootIsWorkspace =
+    existsSync(join(root, "pnpm-workspace.yaml")) ||
+    (await readPackageJson(root))?.workspaces !== undefined;
+  const candidates =
+    projectRoot === root || rootIsWorkspace
+      ? [projectRoot, root]
+      : [projectRoot];
+  const lockDir = candidates.find((dir) =>
+    LOCKFILES.some((name) => existsSync(join(dir, name))),
+  );
+  const packageManager = await detectPackageManager(lockDir ?? projectRoot);
+  return {
+    packageManager,
+    lockfile: lockDir !== undefined,
+    pnpmVersion:
+      packageManager === "pnpm"
+        ? await pnpmVersion(root, projectRoot, lockDir)
+        : undefined,
+  };
+}
+
+// pnpm/action-setup reads only the root package.json's `packageManager`; without one it needs an explicit version, taken from the project's own field or the lockfile format.
+async function pnpmVersion(
+  root: string,
+  projectRoot: string,
+  lockDir: string | undefined,
+): Promise<string | undefined> {
+  const pinned = (dir: string) =>
+    readPackageJson(dir).then((pkg) => {
+      const field = pkg?.packageManager;
+      return typeof field === "string" && field.startsWith("pnpm@")
+        ? field.slice("pnpm@".length).split("+")[0]
+        : undefined;
+    });
+  if (await pinned(root)) return undefined;
+  const own = await pinned(projectRoot);
+  if (own) return own;
+  const lock = lockDir
+    ? await Bun.file(join(lockDir, "pnpm-lock.yaml"))
+        .text()
+        .catch(() => "")
+    : "";
+  const format = lock.match(/^lockfileVersion:\s*['"]?(\d+)/m)?.[1];
+  return format === "5" ? "7" : format === "6" ? "8" : "10";
+}
 
 // The git top level and the bunny.jsonc directory can reach the same place by different paths (macOS /tmp -> /private/tmp), which would read as "outside the repo".
 function realOrSelf(path: string): string {
@@ -190,16 +263,24 @@ export async function scaffoldSitesWorkflow(opts: {
     opts.interactive,
     settings.dir,
   );
-  const packageManager = await detectPackageManager(settings.projectRoot);
+  const { packageManager, lockfile, pnpmVersion } = await jsInstallSettings(
+    opts.root,
+    settings.projectRoot,
+  );
+  const branch = await defaultBranch(opts.root);
   const content = renderSitesWorkflow({
     site: opts.site,
     preset,
     packageManager,
+    lockfile,
+    pnpmVersion,
     dir: settings.dir,
     build: settings.build,
     workingDirectory: settings.prefix || undefined,
     cacheDependencyPath: settings.cacheDependencyPath,
     installDeps: await needsJsInstall(preset, settings),
+    branch,
+    cliVersion: CLI_VERSION_RANGE,
   });
 
   const target = join(opts.root, SITES_WORKFLOW_PATH);
@@ -227,6 +308,7 @@ export async function scaffoldSitesWorkflow(opts: {
     preset,
     packageManager,
     dir: workflowPath(settings.prefix, settings.dir ?? preset.dir),
+    branch,
   };
 }
 
@@ -245,7 +327,10 @@ export async function printWorkflowInstructions(
   const preset =
     (await detectFramework(settings.projectRoot)) ?? findPreset("static");
   if (!preset) return;
-  const packageManager = await detectPackageManager(settings.projectRoot);
+  const { packageManager, lockfile, pnpmVersion } = await jsInstallSettings(
+    root,
+    settings.projectRoot,
+  );
   logger.log();
   logger.log(`To deploy from GitHub later, add ${SITES_WORKFLOW_PATH}:`);
   logger.log();
@@ -254,11 +339,15 @@ export async function printWorkflowInstructions(
       site,
       preset,
       packageManager,
+      lockfile,
+      pnpmVersion,
       dir: settings.dir,
       build: settings.build,
       workingDirectory: settings.prefix || undefined,
       cacheDependencyPath: settings.cacheDependencyPath,
       installDeps: await needsJsInstall(preset, settings),
+      branch: await defaultBranch(root),
+      cliVersion: CLI_VERSION_RANGE,
     }),
   );
   printSecretHint();
