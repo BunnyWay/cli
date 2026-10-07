@@ -1,8 +1,17 @@
+import { resolveConfig } from "@/config/index.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
 import { withSpinner } from "@/core/ui.ts";
 import { resolveVideoInteractive, streamLibraryContext } from "./context.ts";
 import { parseCsvFlag } from "./library/flags.ts";
+import { checkTranscribingLanguages } from "./library/language-check.ts";
+import {
+  autoTranscriptionPending,
+  DOUBLE_BILLING_NOTE,
+  estimateTranscription,
+  formatTranscriptionEstimate,
+  outputLanguages,
+} from "./transcription-cost.ts";
 import { type TranscribeSettings, transcribeVideo } from "./videos-api.ts";
 
 interface TranscribeArgs {
@@ -18,7 +27,7 @@ interface TranscribeArgs {
 }
 
 export const TRANSCRIBE_BILLING_NOTE =
-  "Transcription is billed at $0.10 per language-minute of audio.";
+  "Transcription is billed at $0.10 per language-minute of audio, for the source-language transcript and for each target language.";
 
 /**
  * The transcribe body: only the settings that were asked for.
@@ -114,9 +123,16 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
     const { video: ref, lib, force, profile, output, verbose, apiKey } = args;
     const settings = transcribeSettings(args);
 
+    // Check requested output languages against the live list before anything is billed.
+    await checkTranscribingLanguages(
+      resolveConfig(profile, apiKey, verbose),
+      settings.targetLanguages,
+      verbose,
+    );
+
     // --force re-runs a billed transcription, so it must not also pick targets:
     // both resolutions error instead of prompting.
-    const { client, libraryId } = await streamLibraryContext({
+    const { client, library, libraryId } = await streamLibraryContext({
       lib,
       profile,
       output,
@@ -131,8 +147,28 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
       force,
     });
 
+    // Right after an upload or re-encode, a transcribing library is about to do this itself.
+    if (output !== "json" && autoTranscriptionPending(library, video)) {
+      logger.warn(
+        `This library transcribes automatically once encoding finishes, and ${video.title} is still encoding, so it will be transcribed anyway.`,
+      );
+      logger.warn(DOUBLE_BILLING_NOTE);
+    }
+
     // Text runs see the cost before the request; json output stays machine-clean.
-    if (output !== "json") logger.warn(TRANSCRIBE_BILLING_NOTE);
+    if (output !== "json") {
+      const estimate = estimateTranscription(
+        video.length,
+        outputLanguages(
+          settings.targetLanguages,
+          library.TranscribingCaptionLanguages,
+        ),
+        settings.sourceLanguage,
+      );
+      logger.warn(
+        `${TRANSCRIBE_BILLING_NOTE} ${formatTranscriptionEstimate(estimate)}`,
+      );
+    }
 
     const status = await withSpinner("Queueing transcription...", () =>
       transcribeVideo(client, libraryId, video.guid, settings, { force }),

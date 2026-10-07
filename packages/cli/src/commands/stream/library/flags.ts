@@ -20,6 +20,10 @@ export interface LibrarySettingsArgs {
   transcribingDescription?: boolean;
   transcribingChapters?: boolean;
   transcribingMoments?: boolean;
+  mp4Fallback?: boolean;
+  earlyPlay?: boolean;
+  keepOriginal?: boolean;
+  multiAudio?: boolean;
 }
 
 /**
@@ -41,6 +45,10 @@ export type LibrarySettings = Pick<
   | "EnableTranscribingDescriptionGeneration"
   | "EnableTranscribingChaptersGeneration"
   | "EnableTranscribingMomentsGeneration"
+  | "EnableMP4Fallback"
+  | "AllowEarlyPlay"
+  | "KeepOriginalFiles"
+  | "EnableMultiAudioTrackSupport"
 >;
 
 // EncodingTier is an integer enum in the core spec: 0 = Free, 1 = Premium.
@@ -115,7 +123,11 @@ export function hasLibrarySettingsFlags(args: LibrarySettingsArgs): boolean {
     args.transcribingTitle !== undefined ||
     args.transcribingDescription !== undefined ||
     args.transcribingChapters !== undefined ||
-    args.transcribingMoments !== undefined
+    args.transcribingMoments !== undefined ||
+    args.mp4Fallback !== undefined ||
+    args.earlyPlay !== undefined ||
+    args.keepOriginal !== undefined ||
+    args.multiAudio !== undefined
   );
 }
 
@@ -174,7 +186,49 @@ export function librarySettingsFromFlags(
   if (args.transcribingMoments !== undefined)
     settings.EnableTranscribingMomentsGeneration = args.transcribingMoments;
 
+  if (args.mp4Fallback !== undefined)
+    settings.EnableMP4Fallback = args.mp4Fallback;
+  if (args.earlyPlay !== undefined) settings.AllowEarlyPlay = args.earlyPlay;
+  if (args.keepOriginal !== undefined)
+    settings.KeepOriginalFiles = args.keepOriginal;
+  if (args.multiAudio !== undefined)
+    settings.EnableMultiAudioTrackSupport = args.multiAudio;
+
   return settings;
+}
+
+/**
+ * One-line warnings for encoding flags with side effects, mirroring the
+ * dashboard's notes. Printed by `library create` and `library update`.
+ *
+ * `keepsOriginals` is whether the library already keeps original files (from
+ * `library update`), so Early-Play only asks for `--keep-original` when the
+ * originals aren't already there or being turned on in the same run.
+ */
+export function librarySettingsWarnings(
+  args: LibrarySettingsArgs,
+  keepsOriginals = false,
+): string[] {
+  if (args.earlyPlay === true && args.keepOriginal === false) {
+    throw new UserError(
+      "--early-play needs the original files, so it can't be combined with --no-keep-original.",
+    );
+  }
+  const warnings: string[] = [];
+  if (args.earlyPlay === true) {
+    const originals = args.keepOriginal === true || keepsOriginals;
+    warnings.push(
+      originals
+        ? "Early-Play publicly exposes the original video files."
+        : "Early-Play publicly exposes the original video files, and only works when originals are kept: add --keep-original.",
+    );
+  }
+  if (args.keepOriginal === false) {
+    warnings.push(
+      "Without original files, Early-Play and `bunny stream encode reencode` stop working for new uploads.",
+    );
+  }
+  return warnings;
 }
 
 /** Register the shared encoding/transcribing flags on a command's builder. */
@@ -222,5 +276,25 @@ export function withLibrarySettingsOptions(yargs: Argv): Argv {
     .option("transcribing-moments", {
       type: "boolean",
       describe: "Generate moments from the transcript",
+    })
+    .option("mp4-fallback", {
+      type: "boolean",
+      describe:
+        "Also encode MP4 files (up to 1080p) for players without HLS; adds storage",
+    })
+    .option("early-play", {
+      type: "boolean",
+      describe:
+        "Play from the original file before encoding finishes (needs --keep-original; exposes originals)",
+    })
+    .option("keep-original", {
+      type: "boolean",
+      describe:
+        "Store the uploaded original next to the encoded files; adds storage",
+    })
+    .option("multi-audio", {
+      type: "boolean",
+      describe:
+        "Encode every audio track separately and offer them in the player",
     });
 }

@@ -52,8 +52,14 @@ export function optionKeys(y: Argv): string[] {
 // Own flags are grouped first so they lead the help text; the inherited globals follow under their own heading.
 export function groupHelpOptions(y: Argv, command = ""): void {
   const positionals = positionalNames(command);
+  // An alias such as `--library` for `--lib` is a key of its own to yargs;
+  // grouping it too would print the option twice.
+  const aliases = new Set(Object.values(optionsOf(y).alias).flat());
   const own = optionKeys(y).filter(
-    (k) => !GLOBAL_OPTION_KEYS.includes(k) && !positionals.includes(k),
+    (k) =>
+      !GLOBAL_OPTION_KEYS.includes(k) &&
+      !positionals.includes(k) &&
+      !aliases.has(k),
   );
   if (own.length > 0) y.group(own, "Options:");
   y.group(GLOBAL_OPTION_KEYS, "Global Options:");
@@ -63,6 +69,7 @@ export function groupHelpOptions(y: Argv, command = ""): void {
 function optionsOf(y: Argv): {
   key: Record<string, unknown>;
   number: string[];
+  alias: Record<string, string[]>;
 } {
   return (
     y as unknown as { getOptions(): ReturnType<typeof optionsOf> }

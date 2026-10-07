@@ -1,5 +1,11 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import {
+  allRegions,
+  DEFAULT_REPLICATION_REGIONS,
+  parseReplicationRegions,
+  REGION_CODES,
+} from "@bunny.net/tools/stream";
+import {
   toSafeVideoLibrary,
   type VideoLibraryCreateModel,
   type VideoLibraryModel,
@@ -14,12 +20,15 @@ import { isInteractive, prompts, spinner } from "@/core/ui.ts";
 import {
   type LibrarySettingsArgs,
   librarySettingsFromFlags,
+  librarySettingsWarnings,
   withLibrarySettingsOptions,
 } from "./flags.ts";
+import { checkTranscribingLanguages } from "./language-check.ts";
 
 interface LibraryCreateArgs extends LibrarySettingsArgs {
   libraryName?: string;
   replicationRegions?: string[];
+  playerVersion?: number;
 }
 
 export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
@@ -32,7 +41,11 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     ["$0 stream library create", "Interactive: prompts for the name"],
     [
       "$0 stream library create my-library --replication-regions NY,SG",
-      "Create a library replicated to New York and Singapore",
+      "Replicate to New York and Singapore only (plus DE, the main region)",
+    ],
+    [
+      "$0 stream library create internal --replication-regions DE",
+      "Keep everything in DE, with no replication",
     ],
     [
       "$0 stream library create my-library --encoding-tier premium --codecs x264,vp9",
@@ -58,8 +71,12 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
         .option("replication-regions", {
           type: "string",
           array: true,
-          describe:
-            "Replication region codes for the underlying storage zone, set at creation time (comma-separated or repeated)",
+          describe: `Replication regions besides DE, the fixed main region (comma-separated or repeated; default ${DEFAULT_REPLICATION_REGIONS.join(",")}; codes ${REGION_CODES.join(", ")}). Pass DE alone for no replication`,
+        })
+        .option("player-version", {
+          type: "number",
+          choices: [1, 2],
+          describe: "Player to use: 1 = legacy, 2 = current",
         }),
     ),
 
@@ -92,11 +109,13 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     }
     const name = nameInput;
 
-    // Accept both `--replication-regions NY,SG` and repeated flags.
-    const regions = (replicationRegions ?? [])
-      .flatMap((value) => value.split(","))
-      .map((value) => value.trim().toUpperCase())
-      .filter(Boolean);
+    // Accept both `--replication-regions NY,SG` and repeated flags. Omitted means
+    // the default set; DE is the fixed main region, so it is never sent.
+    const regions =
+      replicationRegions === undefined
+        ? [...DEFAULT_REPLICATION_REGIONS]
+        : parseReplicationRegions(replicationRegions);
+    const warnings = librarySettingsWarnings(args);
 
     // The encoding/transcribing flags are shared with `library update`; Name is
     // set explicitly here because create takes it from the positional too.
@@ -104,7 +123,14 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
       ...librarySettingsFromFlags({ ...args, name: undefined }),
       Name: name,
     };
-    if (regions.length) body.ReplicationRegions = regions;
+    body.ReplicationRegions = regions;
+    if (args.playerVersion !== undefined)
+      body.PlayerVersion = args.playerVersion;
+    await checkTranscribingLanguages(
+      config,
+      body.TranscribingCaptionLanguages,
+      verbose,
+    );
 
     const spin = spinner("Creating video library...");
     spin.start();
@@ -129,10 +155,12 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
       return;
     }
 
+    const where = `replicated to ${allRegions(regions).join(", ")}`;
     logger.success(
       created?.Id
-        ? `Created video library ${name} (ID: ${created.Id}).`
-        : `Created video library ${name}.`,
+        ? `Created video library ${name} (ID: ${created.Id}), ${where}.`
+        : `Created video library ${name}, ${where}.`,
     );
+    for (const warning of warnings) logger.warn(warning);
   },
 });

@@ -3,10 +3,17 @@ import {
   streamLibraryContext,
 } from "@/commands/stream/context.ts";
 import {
+  DOUBLE_BILLING_NOTE,
+  estimateTranscription,
+  formatTranscriptionEstimate,
+  outputLanguages,
+} from "@/commands/stream/transcription-cost.ts";
+import {
   reencodeVideo,
   videoStatusLabel,
 } from "@/commands/stream/videos-api.ts";
 import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { withSpinner } from "@/core/ui.ts";
@@ -34,7 +41,7 @@ export const streamEncodeReencodeCommand = defineCommand<ReencodeArgs>({
       }),
 
   handler: async ({ video: ref, lib, profile, output, verbose, apiKey }) => {
-    const { client, libraryId } = await streamLibraryContext({
+    const { client, library, libraryId } = await streamLibraryContext({
       lib,
       profile,
       output,
@@ -47,11 +54,32 @@ export const streamEncodeReencodeCommand = defineCommand<ReencodeArgs>({
       output,
     });
 
+    // Re-encoding works from the stored original; without it the API answers 400.
+    if (video.hasOriginal === false) {
+      throw new UserError(
+        `${video.title} has no stored original file, so it can't be re-encoded.`,
+        "Upload the video again; turn on --keep-original (bunny stream library update) to keep originals for new uploads.",
+      );
+    }
+
+    // A transcribing library transcribes again after the re-encode, billed separately.
+    const autoTranscribe = library.EnableTranscribing ?? false;
+
     // Re-encoding regenerates every rendition, so it is billed like a new encode.
     if (output !== "json") {
       logger.warn(
-        "Re-encoding regenerates every output and is billed like the original encode.",
+        "Re-encoding regenerates every output and is billed like the original encode (Premium Encoding rates apply on the premium tier).",
       );
+      if (autoTranscribe) {
+        const estimate = estimateTranscription(
+          video.length,
+          outputLanguages(undefined, library.TranscribingCaptionLanguages),
+        );
+        logger.warn(
+          `Transcribing is on for this library, so re-encoding also transcribes this video again once encoding finishes, billed separately. ${formatTranscriptionEstimate(estimate)}`,
+        );
+        logger.warn(DOUBLE_BILLING_NOTE);
+      }
     }
 
     const updated = await withSpinner("Queueing re-encode...", () =>
@@ -59,7 +87,13 @@ export const streamEncodeReencodeCommand = defineCommand<ReencodeArgs>({
     );
 
     if (output === "json") {
-      logger.log(JSON.stringify(updated, null, 2));
+      logger.log(
+        JSON.stringify(
+          { ...updated, transcriptionQueued: autoTranscribe },
+          null,
+          2,
+        ),
+      );
       return;
     }
 

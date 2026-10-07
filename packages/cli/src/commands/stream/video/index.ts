@@ -2,6 +2,7 @@ import type { CommandModule } from "yargs";
 import { defineNamespace } from "@/core/define-namespace.ts";
 import { streamVideoCleanupCommand } from "./cleanup.ts";
 import { streamVideoDeleteCommand } from "./delete.ts";
+import { streamVideoEmbedCommand } from "./embed.ts";
 import { streamVideoFetchCommand } from "./fetch.ts";
 import { streamVideoListCommand } from "./list.ts";
 import { streamVideoResolutionsCommand } from "./resolutions.ts";
@@ -21,6 +22,7 @@ const subcommands: CommandModule[] = [
   streamVideoResolutionsCommand,
   streamVideoCleanupCommand,
   streamVideoStatsCommand,
+  streamVideoEmbedCommand,
   streamVideoDeleteCommand,
 ];
 
