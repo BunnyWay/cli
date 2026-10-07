@@ -83,6 +83,11 @@ export const sitesOpenCommand = defineCommand<OpenArgs>({
       return;
     }
 
+    if (!state.current) {
+      logger.dim(
+        "  Nothing is published yet, so this URL serves a 404: run `bunny sites deploy`.",
+      );
+    }
     logger.info(`Opening ${url}`);
     openBrowser(url);
   },

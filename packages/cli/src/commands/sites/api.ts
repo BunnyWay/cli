@@ -257,11 +257,15 @@ async function fetchPullZones(
 }
 
 // Discover sites: every storage-backed pull zone gets the per-zone `_bunny/site.json` read (concurrency-capped). A candidate is only a site when the state names it as the site's own pull zone, so another zone pointed at the same storage origin is never mistaken for one.
-export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
+export async function fetchSites(
+  client: CoreClient,
+  opts: { strict?: boolean } = {},
+): Promise<SiteSummary[]> {
   const candidates = (await fetchPullZones(client)).filter(
     (pz: PullZone) => pz.StorageZoneId != null,
   );
 
+  let unreadable = 0;
   const summaries = await mapWithConcurrency(
     candidates,
     8,
@@ -272,10 +276,17 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
         if (!context || context.state.pullZoneId !== pz.Id) return null;
         return { ...context, systemHostname: systemHostname(pz.Hostnames) };
       } catch {
+        unreadable++;
         return null;
       }
     },
   );
+  if (unreadable > 0) {
+    const message = `Couldn't read ${unreadable} storage zone${unreadable === 1 ? "" : "s"}, so some sites may be missing`;
+    // A uniqueness check can't trust a partial list.
+    if (opts.strict) throw new UserError(`${message}.`, "Re-run to retry.");
+    logger.warn(`${message}; re-run to retry.`);
+  }
 
   return summaries
     .filter((s): s is SiteSummary => s !== null)
@@ -520,6 +531,14 @@ export async function createSite(
     }
     reused.storageZone = true;
   } else {
+    // An imported site keeps its original zone names, so the name-pattern scan above can't see it.
+    const sites = await fetchSites(coreClient, { strict: true });
+    if (sites.some((s) => s.state.name === name)) {
+      throw new UserError(
+        `Site "${name}" already exists.`,
+        `Run \`bunny sites link ${name}\` to use it from this directory.`,
+      );
+    }
     // The suffix keeps the globally-unique name from colliding with other accounts; retry fresh suffixes on the off chance one still does.
     for (let attempt = 0; !storageZone && attempt < 3; attempt++) {
       const zoneName = suffixedResourceName(name);
@@ -717,7 +736,7 @@ export async function planSiteImport(opts: {
     );
   }
 
-  const taken = (await fetchSites(coreClient)).some(
+  const taken = (await fetchSites(coreClient, { strict: true })).some(
     (site) => site.state.name === name,
   );
   if (taken) {
@@ -1031,11 +1050,18 @@ export async function deleteSiteResources(opts: {
     }
   };
 
-  await attempt("pull zone", state.pullZoneId, () =>
-    coreClient.DELETE("/pullzone/{id}", {
-      params: { path: { id: state.pullZoneId } },
-    }),
-  );
+  await attempt("pull zone", state.pullZoneId, async () => {
+    try {
+      await coreClient.DELETE("/pullzone/{id}", {
+        params: { path: { id: state.pullZoneId } },
+      });
+    } catch (err) {
+      // Already gone (a re-run after a partial delete) is the goal.
+      if (!(err instanceof ApiError && err.status === 404)) throw err;
+    }
+  });
+  // The storage zone's site marker is the only way back to a pull zone that failed to delete, so keep both for the re-run.
+  if (!results.every((r) => r.deleted)) return results;
   if (opts.keepStorage) {
     // The zone survives, so remove its site marker, else list/link/show rediscover a "site" whose pull zone is gone. But only once everything else deleted: the marker is what makes a re-run able to find and retry the failures.
     if (opts.connection && results.every((r) => r.deleted)) {
