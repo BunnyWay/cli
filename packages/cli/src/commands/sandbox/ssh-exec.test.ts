@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { sandboxKnownHostsPath } from "@bunny.net/sandbox/known-hosts";
 import type { SandboxRecord } from "@/config/schema.ts";
-import { sshArgs } from "./ssh-exec.ts";
+import { envPrefix, sshArgs } from "./ssh-exec.ts";
 
 const record: SandboxRecord = {
   app_id: "app-1",
@@ -31,5 +31,19 @@ describe("sshArgs host-key verification", () => {
     expect(args).toContain("8023");
     expect(args).toContain("root@sandbox.example.net");
     expect(joined).not.toContain("secret-token");
+  });
+});
+
+describe("envPrefix", () => {
+  test("builds a shell-quoted assignment prefix", () => {
+    expect(envPrefix({ A: "1", B: "two words" })).toBe("A='1' B='two words' ");
+  });
+
+  test("escapes single quotes in values", () => {
+    expect(envPrefix({ A: "it's" })).toBe("A='it'\\''s' ");
+  });
+
+  test("is empty when there are no vars", () => {
+    expect(envPrefix({})).toBe("");
   });
 });

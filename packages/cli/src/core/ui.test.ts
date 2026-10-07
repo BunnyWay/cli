@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import promptsLib from "prompts";
-import { confirm, requireConfirmable } from "./ui.ts";
+import { confirm, requireConfirmable, spinner, trackedSpinners } from "./ui.ts";
 
 // Pins the injection escape hatch: this runner has no TTY, so if the wrapper's probe of the library's injected-answers state ever breaks, this fails instead of every inject-driven test silently getting cancelled prompts.
 test("prompts.inject() bypasses the terminal requirement", async () => {
@@ -123,4 +123,12 @@ test("requireConfirmable passes with --force", async () => {
       requireConfirmable("json", { ...OPTS, force: true }),
     ).not.toThrow();
   });
+});
+
+test("a stopped spinner leaves the redraw set, including via succeed", () => {
+  const spin = spinner("Working...").start();
+  spinner("Never started");
+  expect(trackedSpinners()).toBe(1);
+  spin.succeed("Done");
+  expect(trackedSpinners()).toBe(0);
 });

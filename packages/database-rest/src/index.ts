@@ -15,7 +15,6 @@ export {
   parseOrder,
   parseQueryParams,
   parseSelect,
-  parseTableFromPath,
 } from "./parser.ts";
 export {
   buildCountQuery,

@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { CoreClient } from "../context.ts";
 import type { Tool } from "../define-tool.ts";
 import { defineTool } from "../define-tool.ts";
+import { streamImportTools } from "./import/index.ts";
 import {
   allRegions,
   assertLanguages,
@@ -35,6 +36,7 @@ import {
   type VideoLibraryUpdateModel,
 } from "./model.ts";
 
+export * from "./import/index.ts";
 export * from "./model.ts";
 
 const libraryId = z
@@ -571,4 +573,5 @@ export const streamTools: Tool[] = [
   streamSecurityUpdate,
   streamSecurityResetToken,
   streamSecurityTokenKey,
+  ...streamImportTools,
 ];

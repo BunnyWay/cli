@@ -17,9 +17,12 @@ export interface DeployIdentity {
 }
 
 // Deterministic content hash: a digest over sorted `path + sha256` pairs, truncated to 12 hex chars (48 bits); same content yields the same hash regardless of file order.
+// Sorted by UTF-16 code unit, not localeCompare, so every machine and the dashboard agree whatever their locale.
 export function contentHashId(files: HashedFile[]): string {
   const hasher = new Bun.CryptoHasher("sha256");
-  const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
+  const sorted = [...files].sort((a, b) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+  );
   for (const file of sorted) {
     hasher.update(`${file.path}\0${file.sha256.toLowerCase()}\n`);
   }

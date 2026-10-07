@@ -4,7 +4,6 @@ import {
   parseOrder,
   parseQueryParams,
   parseSelect,
-  parseTableFromPath,
 } from "./parser.ts";
 
 describe("parseSelect", () => {
@@ -228,23 +227,5 @@ describe("parseQueryParams", () => {
     const result = parseQueryParams(url);
 
     expect(result.filters).toEqual([]);
-  });
-});
-
-describe("parseTableFromPath", () => {
-  test("extracts table name from simple path", () => {
-    expect(parseTableFromPath("/users")).toBe("users");
-  });
-
-  test("extracts table name from nested path", () => {
-    expect(parseTableFromPath("/api/users")).toBe("users");
-  });
-
-  test("returns null for root path", () => {
-    expect(parseTableFromPath("/")).toBeNull();
-  });
-
-  test("returns null for empty path", () => {
-    expect(parseTableFromPath("")).toBeNull();
   });
 });

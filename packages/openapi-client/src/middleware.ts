@@ -34,6 +34,27 @@ const SECRET_KEY_RE =
   /^(.*key|.*password|.*secret|.*token|.*credentials?|.*authorization.*|.*cookie)$/i;
 
 const REDACTED = "[redacted]";
+const URL_SCHEME = /https?:\/\//i;
+
+// A URL's query string is where pre-signed credentials live (X-Amz-Signature, bearer params), so it goes wholesale, as does any userinfo.
+function redactUrl(token: string): string {
+  const scheme = token.search(URL_SCHEME);
+  if (scheme === -1) return token;
+  const host = token.indexOf("//", scheme) + 2;
+  let end = host;
+  while (end < token.length && !"/?#".includes(token.charAt(end))) end++;
+  const at = token.lastIndexOf("@", end - 1);
+  const authority =
+    at >= host ? `${REDACTED}${token.slice(at, end)}` : token.slice(host, end);
+  let rest = token.slice(end);
+  const query = rest.indexOf("?");
+  const hash = rest.indexOf("#");
+  if (query !== -1 && (hash === -1 || query < hash)) {
+    rest = `${rest.slice(0, query)}?${REDACTED}${hash === -1 ? "" : rest.slice(hash)}`;
+  }
+
+  return `${token.slice(0, host)}${authority}${rest}`;
+}
 
 /**
  * Copy a parsed body with every secret-looking string value replaced.
@@ -50,6 +71,7 @@ export function redactSecrets(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) {
     return value.map((entry) => redactSecrets(entry, depth + 1));
   }
+  if (typeof value === "string") return value.replace(/\S+/g, redactUrl);
   if (value === null || typeof value !== "object") return value;
 
   const out: Record<string, unknown> = {};
@@ -73,7 +95,7 @@ const STATUS_MESSAGES: Record<number, string> = {
 
 /**
  * Extract a normalized error from a parsed response body.
- * Each entry handles one API error format — first match wins.
+ * Each entry handles one API error format; first match wins.
  */
 const extractors: Array<
   (
@@ -90,8 +112,7 @@ const extractors: Array<
   (b) =>
     b?.Message ? { message: b.Message, field: b.Field ?? undefined } : null,
 
-  // StatusModel (Stream): { success, message, statusCode } — lowercase, so the
-  // Core extractor above misses it and the message would be lost.
+  // StatusModel (Stream): lowercase `message`, which the Core extractor above misses.
   (b) =>
     typeof b?.message === "string" && b.message ? { message: b.message } : null,
 ];
@@ -109,7 +130,7 @@ const extractors: Array<
  * - **Magic Containers** use RFC 7807 (`{ title, status, detail, errors[] }`).
  *   All error status codes have a JSON body.
  *
- * Command handlers never need to check `response.ok` or parse error bodies —
+ * Command handlers never need to check `response.ok` or parse error bodies:
  * a failed request throws before it reaches handler code.
  */
 
@@ -128,7 +149,7 @@ export function authMiddleware(options: ClientOptions): Middleware {
       request.headers.set("User-Agent", userAgent);
 
       if (debug) {
-        debug(`→ ${request.method} ${request.url}`);
+        debug(`→ ${request.method} ${redactSecrets(request.url)}`);
         if (request.body) {
           const contentType = request.headers.get("content-type") ?? "";
           if (looksLikeJson(contentType)) {
@@ -138,9 +159,7 @@ export function authMiddleware(options: ClientOptions): Middleware {
               debug(`→ Body: ${JSON.stringify(redactSecrets(body), null, 2)}`);
             } catch {}
           } else {
-            // Never read a non-JSON request body: a binary upload (e.g. a video
-            // sent as application/octet-stream) would be buffered into memory in
-            // full just to be logged. Describe it from the headers instead.
+            // Never read a non-JSON body: a binary upload would be buffered in full just to be logged.
             const length = request.headers.get("content-length");
             debug(
               `→ Body (${contentType || "no content-type"}): ${
@@ -178,7 +197,7 @@ export function authMiddleware(options: ClientOptions): Middleware {
       // default). Callers that fetch downloads opt out via parseAs: "text"
       // (etc.), so a non-JSON body is expected there and passes through. A
       // non-JSON body on a JSON call is almost always a CDN / proxy / captive
-      // portal serving an HTML error page with a 200 status — surface that as
+      // portal serving an HTML error page with a 200 status; surface that as
       // a clear ApiError instead of letting openapi-fetch crash on JSON.parse.
       if (response.ok) {
         const parseAs = options?.parseAs ?? "json";

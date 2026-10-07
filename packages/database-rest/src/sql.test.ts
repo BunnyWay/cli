@@ -147,8 +147,8 @@ describe("buildSelectQuery", () => {
       order: [],
     };
 
-    const result = buildSelectQuery("user table", query);
-    expect(result.sql).toBe('SELECT * FROM "user table"');
+    const result = buildSelectQuery('user"table', query);
+    expect(result.sql).toBe('SELECT * FROM "user""table"');
   });
 
   test("builds full query with all clauses", () => {

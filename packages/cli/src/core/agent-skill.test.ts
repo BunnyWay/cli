@@ -24,7 +24,6 @@ import {
   removeMarkedBlock,
   removeProjectSkill,
   upsertMarkedBlock,
-  usesClaude,
 } from "./agent-skill.ts";
 
 const SKILL: ProjectSkill = {
@@ -333,13 +332,5 @@ describe("isProjectSkillInstalled", () => {
     installProjectSkill(cwd, SKILL);
     expect(isProjectSkillInstalled(cwd, "bunny-test")).toBe(true);
     expect(isProjectSkillInstalled(cwd, "bunny-other")).toBe(false);
-  });
-});
-
-describe("usesClaude", () => {
-  test("false in a bare project, true with .claude/", () => {
-    expect(usesClaude(cwd)).toBe(false);
-    mkdirSync(join(cwd, ".claude"));
-    expect(usesClaude(cwd)).toBe(true);
   });
 });
