@@ -13,18 +13,22 @@ import { sitesShowCommand } from "./show.ts";
 import { sitesSslCommand } from "./ssl.ts";
 import { sitesUnlinkCommand } from "./unlink.ts";
 
-export const sitesNamespace = defineNamespace("sites", false, [
-  sitesCreateCommand,
-  sitesListCommand,
-  sitesShowCommand,
-  sitesOpenCommand,
-  sitesDeployCommand,
-  sitesDeploymentsNamespace,
-  ...sitesDomainsCommands,
-  sitesSslCommand,
-  sitesCiNamespace,
-  sitesLinkCommand,
-  sitesUnlinkCommand,
-  sitesDeleteCommand,
-  sitesMigrateCommand,
-]);
+export const sitesNamespace = defineNamespace(
+  "sites",
+  "Host static sites (preview).",
+  [
+    sitesCreateCommand,
+    sitesListCommand,
+    sitesShowCommand,
+    sitesOpenCommand,
+    sitesDeployCommand,
+    sitesDeploymentsNamespace,
+    ...sitesDomainsCommands,
+    sitesSslCommand,
+    sitesCiNamespace,
+    sitesLinkCommand,
+    sitesUnlinkCommand,
+    sitesDeleteCommand,
+    sitesMigrateCommand,
+  ],
+);
