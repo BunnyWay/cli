@@ -2,6 +2,7 @@ import type { Argv, CommandModule } from "yargs";
 import { profileExists } from "@/config/index.ts";
 import { UserError, unauthorizedError } from "./errors.ts";
 import { logger } from "./logger.ts";
+import { programStatus } from "./program-status.ts";
 import type { GlobalArgs } from "./types.ts";
 
 interface CommandDef<A = Record<string, never>> {
@@ -36,6 +37,15 @@ export const GLOBAL_OPTION_KEYS = [
   "help",
   "version",
 ];
+
+/**
+ * The invoked command path, e.g. `bunny db create`, for the terminal status label.
+ * `argv._` holds the command words only: yargs moves declared positionals such as
+ * `<url>` or `<keys..>` onto their own keys, so a value the user typed never appears here.
+ */
+export function commandLabel(argv: { _?: unknown[] }): string {
+  return ["bunny", ...(argv._ ?? []).map(String)].join(" ");
+}
 
 // Positional names declared in a command string such as `add [domain] [values..]`.
 function positionalNames(command: string): string[] {
@@ -146,10 +156,13 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
     builder: wrappedBuilder as any,
     handler: async (argv) => {
       const args = argv as unknown as A & GlobalArgs;
+      const label = commandLabel(argv);
+      programStatus.working(label);
       try {
         if (def.preRun) await def.preRun(args);
         await def.handler(args);
         if (def.postRun) await def.postRun(args);
+        programStatus.done(label);
       } catch (err: any) {
         const isUser = err?.isUserError;
         const isApi = err?.name === "ApiError";
@@ -167,6 +180,10 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
           err?.message ??
           "An unexpected error occurred.";
         const hint = rejected?.hint ?? err?.hint;
+        // Only a UserError's wording is ours; an unexpected error's message may quote anything, so the terminal record gets the same generic line the screen does.
+        programStatus.error(
+          `${label}: ${isUser ? message : "An unexpected error occurred."}`,
+        );
 
         if (args.output === "json") {
           const payload: Record<string, unknown> = { error: message };

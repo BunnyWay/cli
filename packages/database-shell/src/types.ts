@@ -31,6 +31,10 @@ export interface ShellOptions {
   databaseId?: string;
   /** Override the directory where views are stored. Defaults to ~/.config/bunny/views/<databaseId>/. */
   viewsDir?: string;
+  /** Called each time the shell shows its prompt and waits for input, e.g. to report an idle state to the terminal. */
+  onIdle?: () => void;
+  /** Called each time the shell starts running a statement or dot-command. */
+  onBusy?: () => void;
 }
 
 /** Options for non-interactive query/file execution. */

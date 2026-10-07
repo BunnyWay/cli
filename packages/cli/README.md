@@ -1678,14 +1678,19 @@ After `bunny login` succeeds, it prints the exact line for your shell (zsh, bash
 | `csv`      | Comma-separated values with proper escaping                  |
 | `markdown` | GitHub-flavored pipe tables                                  |
 
+### Terminal status
+
+The CLI reports what it is doing to the terminal with the program status protocol ([OSC 7501](https://www.superlogical.com/rex/docs/build/program-status)). Terminals that implement it, such as Ghostty and Rex, can show in a tab or sidebar that `bunny` is working, waiting for you to answer a prompt or finish a browser login, or has finished or failed, including upload progress for `bunny stream video upload`. Terminals that do not know the protocol ignore it. Set `BUNNYNET_NO_PROGRAM_STATUS` to turn it off.
+
 ## Environment Variables
 
-| Variable                 | Description                                                     |
-| ------------------------ | --------------------------------------------------------------- |
-| `BUNNYNET_API_KEY`       | API key (overrides profile-based key)                           |
-| `BUNNYNET_API_URL`       | API base URL (default: `https://api.bunny.net`)                 |
-| `BUNNYNET_DASHBOARD_URL` | Dashboard URL for auth flow (default: `https://dash.bunny.net`) |
-| `NO_COLOR`               | Disable colored output ([no-color.org](https://no-color.org))   |
+| Variable                     | Description                                                     |
+| ---------------------------- | --------------------------------------------------------------- |
+| `BUNNYNET_API_KEY`           | API key (overrides profile-based key)                           |
+| `BUNNYNET_API_URL`           | API base URL (default: `https://api.bunny.net`)                 |
+| `BUNNYNET_DASHBOARD_URL`     | Dashboard URL for auth flow (default: `https://dash.bunny.net`) |
+| `BUNNYNET_NO_PROGRAM_STATUS` | Disable terminal status reports (OSC 7501)                      |
+| `NO_COLOR`                   | Disable colored output ([no-color.org](https://no-color.org))   |
 
 ## License
 
