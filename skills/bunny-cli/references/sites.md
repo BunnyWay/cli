@@ -180,5 +180,5 @@ An optional `sites` block configures the deploy defaults (validated on its own, 
 
 - Pass `--force` on anything with a confirmation (publish, prune, remove, delete, `create --from-zone`); without a TTY they error with a hint rather than waiting on a prompt.
 - Pass the site explicitly (or commit `bunny.jsonc` with `sites.name`); the interactive picker is disabled under `--output json` and by `--force`, so `sites delete --force` with nothing linked errors instead of prompting.
-- `--output json` on every command emits machine-readable results. `deploy` prints `{ site, id, source, files, bytes, production, unchanged, live }`, where `production` is `null` on a site whose hostname couldn't be read.
+- `--output json` on every command emits machine-readable results. `deploy` prints `{ id, production, unchanged, live }`, where `production` is `null` on a site whose hostname couldn't be read.
 - The first-deploy custom-domain prompt never runs under `--output json` or without a TTY, so CI deploys are unaffected.
