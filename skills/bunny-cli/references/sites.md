@@ -49,7 +49,7 @@ Content is root-served, so root-absolute assets work as-is. Single-page apps get
   - An explicit ID is an assertion about identity, so it is never aliased onto an earlier deploy that happens to share content: each release keeps its own ID and rollback target even when the bytes are unchanged.
   - Reusing an ID for **different** content asks before replacing, because rolling back to that ID would then serve the new files instead of the originals (`--force` skips the prompt for CI). A replacement clears the old files first, so nothing stale survives. The **live deploy and the rollback target are never replaceable in place** (not even with `--force`): that would empty and rewrite the files being served. Deploy under a new ID, or publish another deploy first.
   - The git sha is still recorded alongside a custom ID when the deploy came from a repo, so provenance is not lost; `deployments list` shows it as `custom (git abc12345)`.
-- Dotfiles and `node_modules` are never uploaded, except `.well-known/`. Symlinked files and directories upload as their targets when those resolve inside the deploy directory; a link pointing outside it (or onto an excluded dotfile) is skipped with a warning.
+- Dotfiles and `node_modules` are never uploaded, except `.well-known/`. Symlinks are skipped with a warning.
 
 ---
 

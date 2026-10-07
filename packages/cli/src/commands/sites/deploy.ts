@@ -274,9 +274,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
     // CI deploys a nested project's output from the repo root, so fall back to the bunny.jsonc above the deploy directory.
-    const cwdConfig = loadSiteConfig();
     const siteConfig =
-      cwdConfig ?? (args.dir ? loadSiteConfig(args.dir) : null);
+      loadSiteConfig() ?? (args.dir ? loadSiteConfig(args.dir) : null);
     const root = siteConfig?.root ?? process.cwd();
     const explicitDir = args.dir ?? siteConfig?.config.dir;
 
@@ -302,8 +301,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
     // No `force` here: deploy's --force only redeploys unchanged content, so the picker stays.
     const { site, offerLink } = await selectSite(coreClient, {
-      // Site selection reads bunny.jsonc from cwd, so a nested config's name is passed in explicitly.
-      site: args.site ?? (cwdConfig ? undefined : siteConfig?.config.name),
+      site: args.site,
       link: args.link,
       output,
       offerCreate: async () => {
