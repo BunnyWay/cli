@@ -170,6 +170,28 @@ describe("authMiddleware onResponse", () => {
     expect(error.message).toBe("URL validation failed");
   });
 
+  test("normalizes the Logging API error envelope, keeping its details", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        jsonResponse(
+          {
+            error: {
+              code: "invalid_request",
+              message: "One or more query parameters are invalid.",
+              details: ["limit must be between 1 and 10000."],
+            },
+          },
+          400,
+        ),
+      ),
+    )) as ApiError;
+    expect(error.status).toBe(400);
+    expect(error.message).toBe(
+      "One or more query parameters are invalid. limit must be between 1 and 10000.",
+    );
+  });
+
   test("uses a friendly status message for an empty error body", async () => {
     const error = (await captureError(
       runResponse({ apiKey: "k" }, new Response(null, { status: 401 })),

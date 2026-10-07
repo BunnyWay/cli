@@ -2,6 +2,7 @@ import {
   type ClientOptions,
   createCoreClient,
   createDbClient,
+  createLoggingClient,
   createMcClient,
   createStreamClient,
   UserError,
@@ -13,6 +14,7 @@ import {
 
 export type CoreClient = ReturnType<typeof createCoreClient>;
 export type DbClient = ReturnType<typeof createDbClient>;
+export type LoggingClient = ReturnType<typeof createLoggingClient>;
 export type McClient = ReturnType<typeof createMcClient>;
 export type StreamClient = ReturnType<typeof createStreamClient>;
 
@@ -20,6 +22,8 @@ export type StreamClient = ReturnType<typeof createStreamClient>;
 export interface ToolClients {
   readonly core: CoreClient;
   readonly db: DbClient;
+  /** CDN request logs. Its own host, so `apiUrl` does not apply. */
+  readonly logging: LoggingClient;
   readonly mc: McClient;
   /** The OCI registry. Not generated from a spec, so it is hand-rolled in `registry/client.ts`. */
   readonly registry: RegistryClient;
@@ -110,6 +114,11 @@ export function createToolContext(
     },
     get db() {
       return lazy("db", createDbClient);
+    },
+    get logging() {
+      return lazy("logging", (opts) =>
+        createLoggingClient({ ...opts, baseUrl: undefined }),
+      );
     },
     get mc() {
       return lazy("mc", createMcClient);

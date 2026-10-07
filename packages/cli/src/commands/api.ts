@@ -6,6 +6,33 @@ import { VERSION } from "@/core/version.ts";
 
 const BASE_URL = "https://api.bunny.net";
 
+// Hosts that take the account API key. A full URL to any other host is refused so the key never leaves bunny.net.
+const ACCOUNT_KEY_HOSTS = new Set([
+  "api.bunny.net",
+  "logging.bunnycdn.com",
+  "cdn-origin-logging.bunny.net",
+]);
+
+/** A path is appended to the API base URL; a full URL is used as-is if it points at a host that takes the account key. */
+export function resolveRequestUrl(path: string, baseUrl: string): string {
+  if (!/^https?:\/\//i.test(path)) {
+    return `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+  }
+  let url: URL;
+  try {
+    url = new URL(path);
+  } catch {
+    throw new UserError(`Invalid URL: ${path}`);
+  }
+  if (url.protocol !== "https:" || !ACCOUNT_KEY_HOSTS.has(url.hostname)) {
+    throw new UserError(
+      `Refusing to send your API key to ${url.origin}.`,
+      `Full URLs must use https and one of: ${[...ACCOUNT_KEY_HOSTS].join(", ")}.`,
+    );
+  }
+  return url.toString();
+}
+
 const COMMAND = "api <method> [path]";
 const DESCRIPTION = "Make a raw API request to bunny.net.";
 
@@ -47,6 +74,9 @@ interface ApiArgs {
  * # Delete a resource
  * bunny api DELETE /dnszone/12345
  *
+ * # Call an API on another bunny.net host with a full URL
+ * bunny api GET https://logging.bunnycdn.com/v2/pullzones/12345/logs
+ *
  * # Pipe body from stdin
  * echo '{"name":"test"}' | bunny api POST /database/v2/databases
  * ```
@@ -57,6 +87,10 @@ export const apiCommand = defineCommand<ApiArgs>({
   examples: [
     ["$0 api GET /pullzone", "List pull zones"],
     ["$0 api GET /database/v2/databases", "List databases"],
+    [
+      "$0 api GET https://logging.bunnycdn.com/v2/pullzones/12345/logs",
+      "Full URL for another bunny.net API host",
+    ],
     [
       '$0 api POST /database/v2/databases --body \'{"name":"test"}\'',
       "Create with JSON body",
@@ -72,7 +106,8 @@ export const apiCommand = defineCommand<ApiArgs>({
       })
       .positional("path", {
         type: "string",
-        describe: "API endpoint path (e.g. /pullzone)",
+        describe:
+          "API endpoint path (e.g. /pullzone), or a full URL on a bunny.net API host",
       })
       .option("body", {
         alias: "b",
@@ -112,8 +147,7 @@ export const apiCommand = defineCommand<ApiArgs>({
       );
     }
 
-    const baseUrl = config.apiUrl ?? BASE_URL;
-    const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+    const url = resolveRequestUrl(path, config.apiUrl ?? BASE_URL);
 
     // Body: --body flag, or read from stdin if not a TTY
     let requestBody: string | undefined = bodyFlag;

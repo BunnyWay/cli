@@ -115,6 +115,14 @@ const extractors: Array<
   // StatusModel (Stream): lowercase `message`, which the Core extractor above misses.
   (b) =>
     typeof b?.message === "string" && b.message ? { message: b.message } : null,
+
+  // Logging API: `{ error: { code, message, details[] } }`; the details say which parameter failed.
+  (b) =>
+    typeof b?.error?.message === "string" && b.error.message
+      ? {
+          message: [b.error.message, ...(b.error.details ?? [])].join(" "),
+        }
+      : null,
 ];
 
 /**

@@ -3,6 +3,7 @@ import { pzCreateCommand } from "./create.ts";
 import { pzDeleteCommand } from "./delete.ts";
 import { pzLinkCommand } from "./link.ts";
 import { pzListCommand } from "./list.ts";
+import { pzLogsCommand } from "./logs.ts";
 import { pzPurgeCommand } from "./purge.ts";
 import { pzShowCommand } from "./show.ts";
 import { pzUnlinkCommand } from "./unlink.ts";
@@ -16,6 +17,7 @@ export const pzNamespace = defineNamespace("pz", false, [
   pzCreateCommand,
   pzDeleteCommand,
   pzLinkCommand,
+  pzLogsCommand,
   pzPurgeCommand,
   pzShowCommand,
   pzUnlinkCommand,

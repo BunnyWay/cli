@@ -8,6 +8,8 @@ export type {
 } from "./dns.ts";
 export { DnsRecordScanStatus } from "./dns.ts";
 export { ApiError, UserError } from "./errors.ts";
+export type { LogEntry, LogsQuery, LogsResponse } from "./logging.ts";
+export { createLoggingClient } from "./logging-client.ts";
 export { createMcClient } from "./mc-client.ts";
 export { authMiddleware, type ClientOptions } from "./middleware.ts";
 export { createOriginErrorsClient } from "./origin-errors-client.ts";

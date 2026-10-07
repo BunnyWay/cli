@@ -3,7 +3,15 @@ import { z } from "zod";
 import type { CoreClient } from "../context.ts";
 import type { Tool } from "../define-tool.ts";
 import { defineTool } from "../define-tool.ts";
+import { pullZonesLogs } from "./logs.ts";
 import { type PullZone, PullZoneSchema, toPullZone } from "./model.ts";
+
+export {
+  LogEntrySchema,
+  type PullZoneLogs,
+  PullZoneLogsSchema,
+  pullZonesLogs,
+} from "./logs.ts";
 
 export type { PullZone, PullZoneModel } from "./model.ts";
 export { PullZoneSchema, toPullZone } from "./model.ts";
@@ -153,4 +161,5 @@ export const pullZonesTools: Tool[] = [
   pullZonesCreate,
   pullZonesDelete,
   pullZonesPurge,
+  pullZonesLogs,
 ];

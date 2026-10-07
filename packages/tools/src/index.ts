@@ -3,6 +3,7 @@ export { getTool, listTools, requireTool, runTool, tools } from "./catalog.ts";
 export type {
   CoreClient,
   DbClient,
+  LoggingClient,
   McClient,
   StreamClient,
   ToolClients,

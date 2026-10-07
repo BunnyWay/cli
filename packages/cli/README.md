@@ -1633,13 +1633,16 @@ echo '{"name":"test"}' | bunny api POST /database/v2/databases
 
 # Show request/response details
 bunny api GET /pullzone --verbose
+
+# Call an API on another bunny.net host with a full URL
+bunny api GET "https://logging.bunnycdn.com/v2/pullzones/12345/logs?status=5xx"
 ```
 
 | Flag     | Alias | Description       |
 | -------- | ----- | ----------------- |
 | `--body` | `-b`  | JSON request body |
 
-The method is case-insensitive (`get` and `GET` both work). Paths are relative to `https://api.bunny.net` — use `/database/...` for the Database API and `/mc/...` for Magic Containers.
+The method is case-insensitive (`get` and `GET` both work). Paths are relative to `https://api.bunny.net` — use `/database/...` for the Database API and `/mc/...` for Magic Containers. For APIs on their own host, pass a full `https://` URL instead; it is accepted for `api.bunny.net`, `logging.bunnycdn.com` (CDN logs) and `cdn-origin-logging.bunny.net` (origin errors), and refused anywhere else so your API key stays on bunny.net.
 
 ### `bunny completion`
 
