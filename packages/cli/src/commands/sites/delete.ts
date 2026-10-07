@@ -127,7 +127,7 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     }
     if (failures.length > 0) {
       logger.dim(
-        `  Re-run \`bunny sites delete ${state.storageZoneId}\` to retry the failed deletions.`,
+        `  Re-run \`bunny sites delete ${state.storageZoneId}${args["keep-storage"] ? " --keep-storage" : ""}\` to retry the failed deletions.`,
       );
       process.exit(1);
     }

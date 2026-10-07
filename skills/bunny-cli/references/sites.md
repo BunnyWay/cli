@@ -71,7 +71,7 @@ bunny sites create my-site --no-link       # don't write .bunny/site.json
 | `--domain` | Attach a custom production domain after provisioning; interactive runs prompt for one when omitted |
 | `--link`   | Link this directory (default true; `--no-link` to skip)                                            |
 
-Site names are 3-47 lowercase letters, digits, and dashes. The storage zone, pull zone, and b-cdn.net subdomain become `sites-<name>-xxxxxx` (a `sites-` prefix marking them in the dashboard, plus a shared random suffix since zone names are global across bunny.net); commands still take the clean site name. Creation is idempotent; a failed create re-runs cleanly (the error says so), reusing whatever was already provisioned. A name already used by any site, including an imported one, is refused.
+Site names are 3-47 lowercase letters, digits, and dashes. The storage zone, pull zone, and b-cdn.net subdomain become `sites-<name>-xxxxxx` (a `sites-` prefix marking them in the dashboard, plus a shared random suffix since zone names are global across bunny.net); commands still take the clean site name. Creation is idempotent; a failed create re-runs cleanly, reusing whatever was already provisioned. A name already used by any site, including an imported one, is refused.
 
 ---
 

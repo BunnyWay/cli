@@ -257,10 +257,7 @@ async function fetchPullZones(
 }
 
 // Discover sites: every storage-backed pull zone gets the per-zone `_bunny/site.json` read (concurrency-capped). A candidate is only a site when the state names it as the site's own pull zone, so another zone pointed at the same storage origin is never mistaken for one.
-export async function fetchSites(
-  client: CoreClient,
-  opts: { strict?: boolean } = {},
-): Promise<SiteSummary[]> {
+export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
   const candidates = (await fetchPullZones(client)).filter(
     (pz: PullZone) => pz.StorageZoneId != null,
   );
@@ -282,10 +279,9 @@ export async function fetchSites(
     },
   );
   if (unreadable > 0) {
-    const message = `Couldn't read ${unreadable} storage zone${unreadable === 1 ? "" : "s"}, so some sites may be missing`;
-    // A uniqueness check can't trust a partial list.
-    if (opts.strict) throw new UserError(`${message}.`, "Re-run to retry.");
-    logger.warn(`${message}; re-run to retry.`);
+    logger.warn(
+      `Couldn't read ${unreadable} storage zone${unreadable === 1 ? "" : "s"}, so some sites may be missing; re-run to retry.`,
+    );
   }
 
   return summaries
@@ -503,6 +499,13 @@ export async function createSite(
   // 1. Storage zone; the site's identity.
   // A stateless name-pattern match is a half-finished create to resume; one carrying this site's state already is the site.
   step("Creating storage zone...");
+  // An imported site keeps its original zone names, so the name-pattern scan below can't see it.
+  if ((await fetchSites(coreClient)).some((s) => s.state.name === name)) {
+    throw new UserError(
+      `Site "${name}" already exists.`,
+      `Run \`bunny sites link ${name}\` to use it from this directory.`,
+    );
+  }
   let storageZone: StorageZoneModel | undefined;
   for (const zone of await findSiteStorageZones(coreClient, name)) {
     const existing = await siteContextFromZone(zone);
@@ -531,14 +534,6 @@ export async function createSite(
     }
     reused.storageZone = true;
   } else {
-    // An imported site keeps its original zone names, so the name-pattern scan above can't see it.
-    const sites = await fetchSites(coreClient, { strict: true });
-    if (sites.some((s) => s.state.name === name)) {
-      throw new UserError(
-        `Site "${name}" already exists.`,
-        `Run \`bunny sites link ${name}\` to use it from this directory.`,
-      );
-    }
     // The suffix keeps the globally-unique name from colliding with other accounts; retry fresh suffixes on the off chance one still does.
     for (let attempt = 0; !storageZone && attempt < 3; attempt++) {
       const zoneName = suffixedResourceName(name);
@@ -736,7 +731,7 @@ export async function planSiteImport(opts: {
     );
   }
 
-  const taken = (await fetchSites(coreClient, { strict: true })).some(
+  const taken = (await fetchSites(coreClient)).some(
     (site) => site.state.name === name,
   );
   if (taken) {

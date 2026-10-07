@@ -3,7 +3,6 @@ import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
-import { isInteractive } from "@/core/ui.ts";
 import { saveSiteLink, selectSite } from "./interactive.ts";
 
 interface LinkArgs {
@@ -33,7 +32,6 @@ export const sitesLinkCommand = defineCommand<LinkArgs>({
       site: ref,
       link: false,
       output,
-      pick: isInteractive(output),
     });
 
     saveSiteLink(site.state);

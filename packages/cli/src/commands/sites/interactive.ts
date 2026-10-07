@@ -122,8 +122,6 @@ export async function selectSite(
     output: OutputFormat;
     force?: boolean;
     offerCreate?: () => Promise<SiteContext>;
-    /** Go straight to the picker, ignoring the linked site and bunny.jsonc (`sites link` switching sites). */
-    pick?: boolean;
   },
 ): Promise<SelectedSite> {
   const noLink = async () => {};
@@ -142,7 +140,7 @@ export async function selectSite(
   }
 
   const manifest = loadManifest<SiteManifest>(SITES_MANIFEST);
-  if (manifest.id && !args.pick) {
+  if (manifest.id) {
     const id = manifest.id;
     const context = await withSpinner("Loading linked site...", async () =>
       siteContextFromZone(await fetchStorageZone(client, id)),
@@ -156,7 +154,7 @@ export async function selectSite(
     return { site: context, offerLink: noLink };
   }
 
-  const configured = args.pick ? undefined : loadSiteConfig()?.config.name;
+  const configured = loadSiteConfig()?.config.name;
   if (configured) {
     const site = await withSpinner(
       `Resolving site "${configured}" from bunny.jsonc...`,
