@@ -4,6 +4,7 @@ import type { PrintMode, ShellLogger } from "@bunny.net/database-shell";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
+import { programStatus } from "@/core/program-status.ts";
 import {
   ARG_DATABASE_ID,
   databaseUserAgent,
@@ -188,6 +189,8 @@ export const dbShellCommand = defineCommand<{
         logger: log,
         databaseId: resolvedDbId,
         viewsDir: viewsDirArg ? resolve(viewsDirArg) : undefined,
+        onIdle: () => programStatus.idle("SQL shell"),
+        onBusy: () => programStatus.working("Running SQL"),
       });
     } catch (err: unknown) {
       throw new UserError(

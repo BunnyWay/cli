@@ -24,6 +24,7 @@ import { whoamiCommand } from "./commands/whoami.ts";
 import { bunny } from "./core/colors.ts";
 import { groupHelpOptions, optionKeys } from "./core/define-command.ts";
 import { logger } from "./core/logger.ts";
+import { programStatus } from "./core/program-status.ts";
 import { suggest } from "./core/suggest.ts";
 import { VERSION } from "./core/version.ts";
 
@@ -214,6 +215,7 @@ export const cli = instance
       message = unknown ? `Unknown command: ${unknown}` : "Unknown command.";
     }
     const usage = `Run \`${["bunny", ...path, "--help"].join(" ")}\` for usage.`;
+    programStatus.error(`${["bunny", ...path].join(" ")}: ${message}`);
     if (parser.parsed?.argv.output === "json") {
       const hint = [suggestion, usage].filter(Boolean).join(" ");
       // Wait for the write to flush: exiting first can truncate piped JSON.
