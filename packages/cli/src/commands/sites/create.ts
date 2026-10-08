@@ -13,6 +13,7 @@ import { errorMessage, UserError } from "@/core/errors.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import { normalizeHostname } from "@/core/hostnames/index.ts";
 import { logger } from "@/core/logger.ts";
+import { toolContext } from "@/core/tool-context.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import {
   confirm,
@@ -33,6 +34,7 @@ import { loadSiteConfig } from "./config.ts";
 import { isValidSiteName } from "./constants.ts";
 import { setupSiteDomain } from "./domains/index.ts";
 import { saveSiteLink } from "./interactive.ts";
+import { offerOptimizerOnCreate } from "./optimizer/sync.ts";
 import { createSiteWithProgress, promptSiteName } from "./provision.ts";
 
 interface CreateArgs {
@@ -380,6 +382,16 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
           `  Retry later: bunny sites domains add ${chosenDomain} ${name}`,
         );
       }
+    }
+
+    // Optimizer is billed, so it's only offered, defaulting to no; an answer is saved so deploys keep the zone in line with it.
+    if (interactive && siteConfig?.optimizer === undefined) {
+      logger.log();
+      await offerOptimizerOnCreate({
+        ctx: toolContext(config, { verbose }),
+        pullZone: result.state.pullZoneId,
+        site: name,
+      });
     }
 
     // GitHub deployments: offer the workflow scaffold when this is a GitHub repo.

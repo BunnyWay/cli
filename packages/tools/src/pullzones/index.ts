@@ -4,9 +4,21 @@ import type { CoreClient } from "../context.ts";
 import type { Tool } from "../define-tool.ts";
 import { defineTool } from "../define-tool.ts";
 import { type PullZone, PullZoneSchema, toPullZone } from "./model.ts";
+import { pullZonesOptimizerGet, pullZonesOptimizerSet } from "./optimizer.ts";
 
 export type { PullZone, PullZoneModel } from "./model.ts";
 export { PullZoneSchema, toPullZone } from "./model.ts";
+export {
+  OPTIMIZER_MONTHLY_PRICE,
+  OPTIMIZER_QUERY_PARAMETERS,
+  type OptimizerStatus,
+  OptimizerStatusSchema,
+  type OptimizerUpdate,
+  OptimizerUpdateSchema,
+  pullZonesOptimizerGet,
+  pullZonesOptimizerSet,
+  toOptimizerStatus,
+} from "./optimizer.ts";
 
 const pullZoneRef = z
   .number()
@@ -153,4 +165,6 @@ export const pullZonesTools: Tool[] = [
   pullZonesCreate,
   pullZonesDelete,
   pullZonesPurge,
+  pullZonesOptimizerGet,
+  pullZonesOptimizerSet,
 ];
