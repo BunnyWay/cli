@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/stream-import",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Headless engine for importing video libraries into bunny.net Stream: discovery, de-duplication, collection mapping, fetch, and resumable state. Source adapters ship as @bunny.net/stream-import-<source>.",
   "license": "MIT",
   "repository": {
