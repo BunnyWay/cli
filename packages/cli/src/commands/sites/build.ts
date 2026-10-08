@@ -75,7 +75,8 @@ export async function runBuildCommand(
     cwd,
     env: { ...process.env, ...env },
     stdin: "ignore",
-    stdout: "inherit",
+    // Build logs go to stderr so `--output json` keeps stdout to the JSON payload.
+    stdout: 2,
     stderr: "inherit",
   });
   const code = await proc.exited;

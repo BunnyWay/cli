@@ -8,9 +8,9 @@ export const CONFIG_FILENAME = "bunny.jsonc";
 export const SCHEMA_REF =
   "./node_modules/@bunny.net/config/generated/schema.json";
 
-// Walk up from cwd to the directory holding `bunny.jsonc`, or null when none exists.
-export function findConfigRoot(): string | null {
-  let dir = resolve(process.cwd());
+// Walk up from `from` (default cwd) to the directory holding `bunny.jsonc`, or null when none exists.
+export function findConfigRoot(from = process.cwd()): string | null {
+  let dir = resolve(from);
   while (true) {
     if (existsSync(join(dir, CONFIG_FILENAME))) return dir;
     const parent = dirname(dir);

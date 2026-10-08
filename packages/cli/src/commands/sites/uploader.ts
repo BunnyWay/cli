@@ -2,6 +2,8 @@ import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { StorageZone } from "@/commands/storage/files-api.ts";
 import { mapWithConcurrency } from "@/core/concurrency.ts";
+import { errorMessage, UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
 import { siteFiles } from "./api.ts";
 import { deployPrefix } from "./constants.ts";
 
@@ -37,6 +39,10 @@ export function collectFiles(dir: string): LocalFile[] {
       if (shouldSkipEntry(entry.name)) continue;
       const entryAbs = join(abs, entry.name);
       const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) {
+        logger.warn(`Skipped ${entryRel}: symlinks aren't deployed.`);
+        continue;
+      }
       if (entry.isDirectory()) {
         walk(entryAbs, entryRel);
       } else if (entry.isFile()) {
@@ -46,7 +52,7 @@ export function collectFiles(dir: string): LocalFile[] {
           size: statSync(entryAbs).size,
         });
       }
-      // Sockets, FIFOs, and dangling symlinks are silently skipped.
+      // Sockets and FIFOs are silently skipped.
     }
   };
 
@@ -105,7 +111,12 @@ export async function uploadDeploy(
         Bun.file(file.absPath).stream(),
         { sha256Checksum: file.sha256.toUpperCase() },
       ),
-    );
+    ).catch((err) => {
+      throw new UserError(
+        `Uploading ${file.path} failed: ${errorMessage(err)}`,
+        "Re-run the deploy; nothing goes live until every file is uploaded.",
+      );
+    });
     done++;
     opts?.onFileUploaded?.(done, files.length, file);
   });
