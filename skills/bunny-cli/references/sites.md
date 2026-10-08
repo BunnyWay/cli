@@ -39,7 +39,7 @@ This is the rule that shapes every other command here:
 - Deploys stay immutable under their own ID, so `deployments publish <id>` rolls back to any earlier one by retargeting the edge rule; no files move and nothing is re-uploaded.
 - Custom domains are vanity hostnames on the site's pull zone; without one the site serves at `https://sites-<name>-<suffix>.b-cdn.net`.
 
-Content is root-served, so root-absolute assets work as-is. Single-page apps get `index.html` for extensionless misses when the detected framework is client-routed (Vite, CRA, React Router, Angular, Vue CLI, Ember, Preact) and the output has no root `404.html`; `sites.spa` in `bunny.jsonc` or `--spa`/`--no-spa` on the deploy decides explicitly, and otherwise a root `404.html` is the not-found page. The mode is recorded per deploy and follows rollbacks. Deploys are not individually addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served. To review a change before it goes live, build and serve it locally, or deploy it to a separate site.
+Content is root-served, so root-absolute assets work as-is. Single-page apps get `index.html` for extensionless misses when the detected framework is client-routed (Vite, CRA, React Router, Angular, Vue CLI, Ember, Preact, Blazor WebAssembly) and the output has no root `404.html`; `sites.spa` in `bunny.jsonc` or `--spa`/`--no-spa` on the deploy decides explicitly, and otherwise a root `404.html` is the not-found page. The mode is recorded per deploy and follows rollbacks. Deploys are not individually addressable: `/deploys/<id>/` URLs are internal to the storage layout and are not publicly served. To review a change before it goes live, build and serve it locally, or deploy it to a separate site.
 
 ## Deploy IDs
 
@@ -53,7 +53,7 @@ Content is root-served, so root-absolute assets work as-is. Single-page apps get
 
 ---
 
-## `bunny sites create`; Provision a site
+## `bunny sites create`: Provision a site
 
 ```bash
 bunny sites create                         # uses `sites.name` from bunny.jsonc, else prompts (directory-name suggestion), then a custom domain
@@ -64,18 +64,20 @@ bunny sites create my-site --domain example.com
 bunny sites create my-site --no-link       # don't write .bunny/site.json
 ```
 
-| Flag       | Description                                                                                        |
-| ---------- | -------------------------------------------------------------------------------------------------- |
-| `--region` | Main storage region code (default `DE`)                                                            |
-| `--tier`   | Storage tier: `hdd` (Standard) or `ssd` (Edge, always `DE`); create-time only                      |
-| `--domain` | Attach a custom production domain after provisioning; interactive runs prompt for one when omitted |
-| `--link`   | Link this directory (default true; `--no-link` to skip)                                            |
+| Flag            | Description                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------- |
+| `--region`      | Main storage region code (default `DE`)                                                             |
+| `--tier`        | Storage tier: `hdd` (Standard) or `ssd` (Edge, always `DE`); create-time only                       |
+| `--domain`      | Attach a custom production domain after provisioning; interactive runs prompt for one when omitted  |
+| `--link`        | Link this directory (default true; `--no-link` to skip)                                             |
+| `--from-zone`   | Import an existing storage zone (name or ID) and its pull zone as the site instead of creating them |
+| `--force`, `-f` | Skip the import confirmation (only with `--from-zone`)                                              |
 
 Site names are 3-47 lowercase letters, digits, and dashes. The storage zone, pull zone, and b-cdn.net subdomain become `sites-<name>-xxxxxx` (a `sites-` prefix marking them in the dashboard, plus a shared random suffix since zone names are global across bunny.net); commands still take the clean site name. Creation is idempotent; a failed create re-runs cleanly, reusing whatever was already provisioned.
 
 ---
 
-## `bunny sites deploy`; Deploy a directory
+## `bunny sites deploy`: Deploy a directory
 
 ```bash
 bunny sites deploy ./dist                  # deploy and publish as the live site
@@ -83,15 +85,17 @@ bunny sites deploy --build                 # run `sites.build` from bunny.jsonc 
 bunny sites deploy ./out --build "npm run build" --env VITE_FLAG=1
 ```
 
-| Flag         | Description                                                          |
-| ------------ | -------------------------------------------------------------------- |
-| `[dir]`      | Directory to deploy (default: `sites.dir` in bunny.jsonc, then cwd)  |
-| `--build`    | Run a build first (bare flag: `sites.build`, else a detected build)  |
-| `--env`      | Build-time env override `KEY=VALUE` (repeatable; requires `--build`) |
-| `--env-file` | Dotenv file of build-time overrides (requires `--build`)             |
-| `--force`    | Deploy even when content is unchanged                                |
-| `--site`     | Target site (name or storage zone ID)                                |
-| `--link`     | Link this directory to the deployed site (`--no-link` never links)   |
+| Flag                | Description                                                                                                                 |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `[dir]`             | Directory to deploy (default: `sites.dir` in bunny.jsonc, then the detected framework's output dir when building, then cwd) |
+| `--build`           | Run a build first (bare flag: `sites.build`, else a detected build)                                                         |
+| `--env`             | Build-time env override `KEY=VALUE` (repeatable; requires `--build`)                                                        |
+| `--env-file`        | Dotenv file of build-time overrides (requires `--build`)                                                                    |
+| `--force`           | Deploy even when content is unchanged                                                                                       |
+| `--site`            | Target site (name or storage zone ID)                                                                                       |
+| `--link`            | Link this directory to the deployed site (`--no-link` never links)                                                          |
+| `--deploy-id`       | Your own deploy ID (release tag, catalog build); see Deploy IDs                                                             |
+| `--spa`, `--no-spa` | Serve `index.html` for client-side routes, or the 404 page; beats `sites.spa` and detection                                 |
 
 With `--build`, the build runs in your shell environment plus the `--env`/`--env-file` overrides; there is no remote env store; put build-time values in your local `.env` or CI secrets. Redeploying content that is already uploaded skips the upload and just republishes it; when it is already live, the deploy is a no-op unless you pass `--force`.
 
@@ -103,14 +107,14 @@ Interactive `deploy` adds two conveniences (both skipped under `--output json`):
 
 ---
 
-## `bunny sites deployments`; List, publish, prune, delete
+## `bunny sites deployments`: List, publish, prune, delete
 
 ```bash
 bunny sites deployments list
 bunny sites deployments publish a1b2c3d4    # confirm prompt; --force to skip
 bunny sites deployments publish --previous  # instant rollback
 bunny sites deployments prune --keep 10     # never prunes current/previous
-bunny sites deployments prune my-site       # or --site my-site
+bunny sites deployments prune my-site       # target a site other than the linked one
 bunny sites deployments delete a1b2c3d4 --force   # delete one deploy
 ```
 
@@ -120,7 +124,7 @@ bunny sites deployments delete a1b2c3d4 --force   # delete one deploy
 
 ---
 
-## `bunny sites domains`; Custom domains
+## `bunny sites domains`: Custom domains
 
 ```bash
 bunny sites domains add example.com --wait  # wait for DNS, then issue SSL
@@ -133,7 +137,7 @@ A custom domain is the site's production URL and nothing more. The first added d
 
 ---
 
-## `bunny sites ci init`; GitHub Actions deployments
+## `bunny sites ci init`: GitHub Actions deployments
 
 ```bash
 bunny sites ci init                         # detect the framework, write .github/workflows/bunny-sites.yml
@@ -167,13 +171,14 @@ An optional `sites` block configures the deploy defaults (validated on its own, 
     "name": "my-site", // resolves the site when nothing is linked
     "dir": "./dist", // default deploy directory
     "build": "npm run build", // command for `deploy --build`
+    "spa": true, // serve index.html for client-side routes (omit to detect)
   },
 }
 ```
 
 ## CI / agents
 
-- Pass `--force` on anything with a confirmation (publish, prune, remove, delete); without a TTY they error with a hint rather than waiting on a prompt.
+- Pass `--force` on anything with a confirmation (publish, prune, remove, delete, `create --from-zone`); without a TTY they error with a hint rather than waiting on a prompt.
 - Pass the site explicitly (or commit `bunny.jsonc` with `sites.name`); the interactive picker is disabled under `--output json` and by `--force`, so `sites delete --force` with nothing linked errors instead of prompting.
 - `--output json` on every command emits machine-readable results. `deploy` prints `{ id, production, unchanged, live }`, where `production` is `null` on a site whose hostname couldn't be read.
 - The first-deploy custom-domain prompt never runs under `--output json` or without a TTY, so CI deploys are unaffected.

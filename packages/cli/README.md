@@ -1037,13 +1037,14 @@ Host static sites on bunny.net. Each site is two resources provisioned and wired
 
 Deploys are immutable: every `sites deploy` uploads to its own `deploys/<id>/` directory and then goes live. Publishing retargets the pull zone's rewrite rule and purges the cache, so going live and rolling back to any earlier deploy are instant and move no files. HTML is served with `max-age=0` so browsers pick up new deploys immediately, while static assets get a one-day browser cache. Deploy IDs are the git short SHA when the working tree is clean and a content hash otherwise, which makes redeploying identical content a no-op.
 
-Commands take the site as an optional positional (`[site]`), except `deploy`, `ci init`, and `deployments publish`, which use `--site`. Either accepts the site name or its storage zone ID. When omitted, the site resolves from the directory's linked site (`.bunny/site.json`, written by `sites link` or by `create`/`deploy`), then `sites.name` in `bunny.jsonc`, then an interactive picker that offers to link. Non-interactive runs (`--output json`, no TTY, or `--force` on a destructive command) error instead of prompting.
+Commands take the site as an optional positional (`[site]`), except `deploy`, `ci init`, `deployments publish`, and `deployments delete`, which use `--site`. Either accepts the site name or its storage zone ID. When omitted, the site resolves from the directory's linked site (`.bunny/site.json`, written by `sites link` or by `create`/`deploy`), then `sites.name` in `bunny.jsonc`, then an interactive picker that offers to link. Non-interactive runs (`--output json`, no TTY, or `--force` on a destructive command) error instead of prompting.
 
 ```bash
 # Provision a site
 bunny sites create                                    # interactive: prompts for a name (directory-name suggestion)
 bunny sites create my-site                            # served at sites-my-site-<suffix>.b-cdn.net
 bunny sites create my-site --region NY                # store the files in New York (default: DE)
+bunny sites create my-site --tier ssd                 # Edge (SSD) storage tier; DE only, fixed at creation
 bunny sites create my-site --domain example.com       # also attach a custom production domain
 bunny sites create my-site --from-zone my-zone        # import an existing storage zone + pull zone, keeping its hostnames
 
@@ -1055,11 +1056,12 @@ bunny sites deploy --build "npm run build" --env API_URL=https://api.example.com
 bunny sites deploy ./dist --site my-site --force      # target a site explicitly; redeploy unchanged content
 bunny sites deploy ./catalog --deploy-id 20260827-1433-r42   # your own release ID instead of the git sha / content hash
 
-# Deploys: list, publish (roll back), prune
+# Deploys: list, publish (roll back), prune, delete
 bunny sites deployments list                          # ● Live / ○ Previous markers, created, source, files, size
 bunny sites deployments publish a1b2c3d4              # promote a past deploy (alias: promote)
 bunny sites deployments publish --previous            # instant rollback
 bunny sites deployments prune --keep 10               # delete old deploys (default keeps 5; never live/previous)
+bunny sites deployments delete a1b2c3d4 --force       # delete one deploy (never the live or rollback deploy)
 
 # Custom production domains
 bunny sites domains list
@@ -1091,24 +1093,26 @@ Preconfigure the `sites` block in `bunny.jsonc` (`name`, `build`, `dir`, `spa`) 
 
 Every deploy publishes: the files land in an immutable `deploys/<id>/` directory and the rewrite rule is pointed at it, so `deployments publish` rolls back to any earlier deploy by moving that pointer, with no files moving and nothing re-uploaded. The ID is the git short-sha when the tree is clean, a content hash otherwise, or whatever `--deploy-id` supplies (letters, digits, `-`, `_`, `.`; 4-64 chars; case-sensitive): a custom ID never aliases onto another deploy's content, and reusing one for different content asks before replacing (`--force` skips the prompt); a replacement clears the old files first, so nothing stale survives. The live deploy and the rollback target are never replaced in place; deploy those under a new ID. Content is root-served, so absolute asset paths work as-is. Direct `/deploys/<id>/` URLs are blocked at the edge. Site state lives at `_bunny/site.json` inside the storage zone (also blocked at the edge); `.bunny/site.json` is only a local pointer, so a fresh clone can `sites link` and pick up where the last machine left off.
 
-| Flag                                   | Commands                                                                         | Description                                                                                                             |
-| -------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `--region`, `--domain`                 | `create`                                                                         | Main storage region code (default `DE`); custom production domain to attach                                             |
-| `--from-zone`                          | `create`                                                                         | Import an existing storage zone (name or ID) and its pull zone instead of creating them                                 |
-| `--site`                               | `deploy`, `ci init`, `deployments publish`                                       | Site name or storage zone ID (defaults to the linked site)                                                              |
-| `--build [cmd]`, `--env`, `--env-file` | `deploy`                                                                         | Build before deploying (bare flag uses the configured or detected build); build-time env overrides                      |
-| `--force`                              | `deploy`                                                                         | Deploy even when the content is unchanged, and replace an existing `--deploy-id` without asking                         |
-| `--deploy-id`                          | `deploy`                                                                         | Identify the deploy yourself (release tag, catalog ID); case-sensitive, used exactly as given                           |
-| `--spa`, `--no-spa`                    | `deploy`                                                                         | Serve `index.html` for client-side routes, or the 404 page; beats `sites.spa` and framework detection, skips the prompt |
-| `--previous`                           | `deployments publish`                                                            | Publish the previous deploy (instant rollback)                                                                          |
-| `--keep`                               | `deployments prune`                                                              | Number of recent deploys to keep (default 5; live and previous are always kept)                                         |
-| `--ssl`, `--wait`, `--force-ssl`       | `domains add`                                                                    | Issue SSL now; wait up to 10 minutes for DNS then issue it; `--no-force-ssl` keeps HTTP working                         |
-| `--force-ssl`                          | `ssl`                                                                            | Force HTTP→HTTPS on the system host; `--no-force-ssl` allows plain HTTP                                                 |
-| `--framework`                          | `ci init`                                                                        | Framework preset for the workflow's build steps (default: detected)                                                     |
-| `--print`                              | `open`                                                                           | Print the URL instead of opening a browser                                                                              |
-| `--link`                               | `create`, `deploy`, `show`, `ci init`, `deployments`                             | Link the directory to the site; `--no-link` never links                                                                 |
-| `--keep-storage`                       | `delete`                                                                         | Delete the pull zone but keep the storage zone and its deploy files                                                     |
-| `--force`, `-f`                        | `create --from-zone`, `deployments publish`, `prune`, `domains remove`, `delete` | Skip the confirmation prompts                                                                                           |
+| Flag                                   | Commands                                                                                 | Description                                                                                                             |
+| -------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `--region`, `--domain`                 | `create`                                                                                 | Main storage region code (default `DE`); custom production domain to attach                                             |
+| `--tier`                               | `create`                                                                                 | Storage tier, `hdd` or `ssd` (`ssd` is `DE` only); fixed once the site exists                                           |
+| `--from-zone`                          | `create`                                                                                 | Import an existing storage zone (name or ID) and its pull zone instead of creating them                                 |
+| `--site`                               | `deploy`, `ci init`, `deployments publish`, `deployments delete`                         | Site name or storage zone ID (defaults to the linked site)                                                              |
+| `--build [cmd]`, `--env`, `--env-file` | `deploy`                                                                                 | Build before deploying (bare flag uses the configured or detected build); build-time env overrides                      |
+| `--force`                              | `deploy`                                                                                 | Deploy even when the content is unchanged, and replace an existing `--deploy-id` without asking                         |
+| `--deploy-id`                          | `deploy`                                                                                 | Identify the deploy yourself (release tag, catalog ID); case-sensitive, used exactly as given                           |
+| `--spa`, `--no-spa`                    | `deploy`                                                                                 | Serve `index.html` for client-side routes, or the 404 page; beats `sites.spa` and framework detection, skips the prompt |
+| `--previous`                           | `deployments publish`                                                                    | Publish the previous deploy (instant rollback)                                                                          |
+| `--keep`                               | `deployments prune`                                                                      | Number of recent deploys to keep (default 5; live and previous are always kept)                                         |
+| `--ssl`, `--wait`, `--force-ssl`       | `domains add`                                                                            | Issue SSL now; wait up to 10 minutes for DNS then issue it; `--no-force-ssl` keeps HTTP working                         |
+| `--force-ssl`                          | `ssl`                                                                                    | Force HTTP→HTTPS on the system host; `--no-force-ssl` allows plain HTTP                                                 |
+| `--framework`                          | `ci init`                                                                                | Framework preset for the workflow's build steps (default: detected)                                                     |
+| `--force`                              | `ci init`                                                                                | Overwrite an existing workflow file                                                                                     |
+| `--print`                              | `open`                                                                                   | Print the URL instead of opening a browser                                                                              |
+| `--link`                               | `create`, `deploy`, `show`, `ci init`, `deployments list`, `deployments publish`         | Link the directory to the site; `--no-link` never links                                                                 |
+| `--keep-storage`                       | `delete`                                                                                 | Delete the pull zone but keep the storage zone and its deploy files                                                     |
+| `--force`, `-f`                        | `create --from-zone`, `deployments publish`/`prune`/`delete`, `domains remove`, `delete` | Skip the confirmation prompts                                                                                           |
 
 ### `bunny stream`
 
