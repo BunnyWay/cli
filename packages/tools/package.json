@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/tools",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "bunny.net operations defined once: typed tools with Zod schemas, shared by the CLI and any future tool host.",
   "private": true,
   "license": "MIT",
