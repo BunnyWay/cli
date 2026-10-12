@@ -1,6 +1,6 @@
 # Set up bunny.net
 
-bunny.net is a global edge platform: CDN, DNS, Edge Storage, Edge Scripts, static sites, Bunny Database, Stream video, and cloud sandboxes. You manage all of it through the `bunny` CLI. Install the CLI, sign the user in, install the bunny.net agent skill, then check that it works.
+bunny.net is a global edge platform: CDN, Load Balancer, DNS, Edge Storage, Edge Scripts (Functions), Magic Containers, static sites, Bunny Database, and Stream video. You manage it through the `bunny` CLI. Install the CLI, sign the user in, install the bunny.net agent skill, then check that it works.
 
 You need a shell to do this. If you can't run commands (for example in a chat app), tell the user to run the setup from a coding agent or terminal instead, and stop.
 
@@ -81,7 +81,7 @@ Then suggest a first step. If the user named a product when they sent you here, 
 
 - **Bunny Database**: `bunny db list`, or offer to create one with `bunny db create`.
 - **Static sites**: offer to deploy the current project with `bunny sites deploy`.
-- **Edge Scripts**: `bunny scripts list`, or offer to start one with `bunny scripts init`.
+- **Edge Scripts (Functions)**: `bunny scripts list`, or offer to start one with `bunny scripts init`.
 - **Edge Storage**: `bunny storage zones list`.
 - **DNS**: `bunny dns zone list`.
 - **Stream**: `bunny stream library list`. To move videos in from another platform, use `bunny stream import`.
