@@ -10,6 +10,7 @@ import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { errorMessage, UserError } from "@/core/errors.ts";
+import { examplesUrl } from "@/core/examples.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import { normalizeHostname } from "@/core/hostnames/index.ts";
 import { logger } from "@/core/logger.ts";
@@ -421,5 +422,6 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
 
     logger.log();
     logger.dim("  Deploy your site:  bunny sites deploy <dir>");
+    logger.dim(`  Examples:          ${examplesUrl("sites")}`);
   },
 });

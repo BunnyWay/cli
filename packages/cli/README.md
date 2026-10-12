@@ -1122,6 +1122,8 @@ Manage bunny.net Stream through four resource groups: **`bunny stream library`**
 
 `library` commands take the library as an optional positional (name or numeric ID); every other stream command takes it as the `--lib`/`--library` flag, since their positional is the video GUID, the collection ID, or a local file path. When the library is omitted it resolves from the directory's linked library (`bunny stream library link`, stored in `.bunny/stream.json`), then an interactive picker, which offers to link the directory to the picked library (destructive commands never offer it). Non-interactive runs (`--output json`, no TTY, or `--force`) error with a hint instead of prompting: pass a library or link the directory. A `video` or `collection` command with no ID behaves the same way, offering a picker interactively and erroring otherwise. `caption` is the exception: both of its commands take the video GUID as a required positional, because a language argument follows it.
 
+After creating a library, `library create` offers to link the directory, to save `BUNNY_STREAM_LIBRARY_ID` and `BUNNY_STREAM_API_KEY` to `.env` (the names the [Stream examples](https://github.com/BunnyWay/examples/tree/main/stream) read), and to add videos straight away by importing from another platform or uploading a file. `--link`/`--no-link` and `--save-env`/`--no-save-env` answer the first two without prompting; non-interactive runs skip anything not set by a flag.
+
 There is deliberately no `video create`: a video is added either by uploading a local file with `video upload`, or by handing bunny.net a URL to download with `video fetch`.
 
 ```bash
@@ -1132,6 +1134,7 @@ bunny stream library create --name my-library      # the name also takes a flag
 bunny stream library create my-library             # stored in DE (the fixed main region) and replicated to SG, LA, NY by default
 bunny stream library create my-library --replication-regions NY,SG   # DE + NY, SG instead; pass DE alone for no replication
 bunny stream library create my-library --encoding-tier premium --codecs x264,vp9   # premium encoding with extra codecs
+bunny stream library create my-library --link --save-env   # link this directory and write BUNNY_STREAM_LIBRARY_ID and BUNNY_STREAM_API_KEY to .env
 bunny stream library show my-library               # details; API keys are never printed here, in any output format
 bunny stream library update my-library             # interactive: edit name, resolutions, transcribing
 bunny stream library update my-library --resolutions 720p,1080p      # set just the enabled resolutions

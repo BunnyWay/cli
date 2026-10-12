@@ -18,6 +18,14 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { isInteractive, prompts, spinner } from "@/core/ui.ts";
 import {
+  ENV_STREAM_API_KEY,
+  ENV_STREAM_LIBRARY_ID,
+  offerAddVideos,
+  offerLink,
+  offerSaveEnv,
+  printNextSteps,
+} from "./create-next-steps.ts";
+import {
   type LibrarySettingsArgs,
   librarySettingsFromFlags,
   librarySettingsWarnings,
@@ -29,6 +37,8 @@ interface LibraryCreateArgs extends LibrarySettingsArgs {
   libraryName?: string;
   replicationRegions?: string[];
   playerVersion?: number;
+  link?: boolean;
+  saveEnv?: boolean;
 }
 
 export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
@@ -55,6 +65,10 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
       "$0 stream library create my-library --transcribing --transcribing-languages en,de",
       "Create with transcribing enabled",
     ],
+    [
+      "$0 stream library create my-library --link --save-env",
+      "Link this directory and save the library ID and API key to .env",
+    ],
   ],
 
   builder: (yargs) =>
@@ -77,6 +91,15 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
           type: "number",
           choices: [1, 2],
           describe: "Player to use: 1 = legacy, 2 = current",
+        })
+        .option("link", {
+          type: "boolean",
+          describe:
+            "Link this directory to the new library (skips prompt). Use --no-link to skip without prompting.",
+        })
+        .option("save-env", {
+          type: "boolean",
+          describe: `Save ${ENV_STREAM_LIBRARY_ID} and ${ENV_STREAM_API_KEY} to .env (skips prompt). Use --no-save-env to skip without prompting.`,
         }),
     ),
 
@@ -143,11 +166,23 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     }
 
     if (output === "json") {
-      // The create response carries the new library's keys; read them back on
-      // purpose with `bunny stream library credentials`.
+      // No prompts here: only the flags link or save. The create response carries
+      // the new library's keys; read them back on purpose with `bunny stream library credentials`.
+      const linked = created
+        ? await offerLink(created, args.link, output)
+        : false;
+      const savedToEnv = created
+        ? await offerSaveEnv(created, args.saveEnv, output)
+        : false;
       logger.log(
         JSON.stringify(
-          created ? toSafeVideoLibrary(created) : { Name: name },
+          created
+            ? {
+                ...toSafeVideoLibrary(created),
+                Linked: linked,
+                SavedToEnv: savedToEnv,
+              }
+            : { Name: name },
           null,
           2,
         ),
@@ -162,5 +197,12 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
         : `Created video library ${name}, ${where}.`,
     );
     for (const warning of warnings) logger.warn(warning);
+    if (!created?.Id) return;
+
+    await offerLink(created, args.link, output);
+    await offerSaveEnv(created, args.saveEnv, output);
+    if (isInteractive(output))
+      await offerAddVideos(created, { profile, output, verbose, apiKey });
+    printNextSteps(created);
   },
 });
