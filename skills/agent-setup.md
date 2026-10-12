@@ -1,6 +1,6 @@
 # Set up bunny.net
 
-bunny.net is a global edge platform: CDN, Load Balancer, DNS, Edge Storage, Edge Scripts (Functions), Magic Containers, static sites, Bunny Database, and Stream video. You manage it through the `bunny` CLI. Install the CLI, sign the user in, install the bunny.net agent skill, then check that it works.
+bunny.net is a global edge platform: CDN, Load Balancer, DNS, Edge Storage, Edge Scripts (Functions), Magic Containers, static sites, Bunny Database, and Stream video. You manage it through the `bunny` CLI, which works with root bunny.net accounts only, not sub-user accounts. Install the CLI, sign the user in, install the bunny.net agent skill, then check that it works.
 
 You need a shell to do this. If you can't run commands (for example in a chat app), tell the user to run the setup from a coding agent or terminal instead, and stop.
 
@@ -30,6 +30,8 @@ Then run `bunny --version` to confirm it's on the `PATH`. If the shell can't fin
 ## 2. Sign in
 
 If `bunny whoami` already shows an account, skip this step.
+
+The user must sign in with a root bunny.net account. Sub-user accounts can't use the CLI. If the user only has a sub-user login, tell them and stop: the account owner needs to run the setup instead.
 
 Otherwise run:
 
