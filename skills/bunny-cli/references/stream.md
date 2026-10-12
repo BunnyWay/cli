@@ -1,110 +1,167 @@
-# Stream Import Commands
+# Stream Commands
 
 > **Experimental.** `bunny stream` is hidden from `--help` while it stabilizes. Flags and JSON shapes may still change.
 
-`bunny stream import` moves an existing video library into a Bunny Stream library from **Vimeo**, **AWS S3** (or an S3-compatible provider), **Wistia**, **Mux**, **Cloudflare Stream**, **JW Player**, or **Brightcove**. Bunny fetches every file straight from the source by URL, so nothing is downloaded to the local machine. The command hands each video to Bunny, tags it, and returns once they are all queued; encoding then happens on Bunny's side.
+All Stream commands live under `bunny stream`, split into resource groups:
+
+- **`bunny stream library`** (aliases `libraries`, `lib`) manages the video library itself, plus its `player` and `security` settings, with the account API key.
+- **`bunny stream video`** (alias `videos`) manages the videos inside one library.
+- **`bunny stream collection`** (alias `collections`) manages groups of videos within a library.
+- **`bunny stream caption`** (alias `captions`) manages caption files on one video.
+- **`bunny stream encode`**, **`bunny stream transcribe`**, and **`bunny stream smart`** are paid operations.
+- **`bunny stream import`** moves a library in from another platform; see `stream-import.md`.
+
+Each library carries its own Stream API key for the video-level API. Video commands resolve it from the library automatically, so there is nothing extra to configure; the key is never printed unless you ask for it with `library credentials`.
 
 ## Resolving the library
 
-`--library` (alias `--lib`) takes a library name or numeric ID. When omitted, it resolves in this order:
+`library` commands take the library as an optional positional (name or numeric ID). Every other stream command takes it as `--lib` (alias `--library`), because its positional is a video GUID, a collection ID, or a local file path. When omitted, the library resolves in this order:
 
-1. `--library`
-2. `.bunny/stream.json` (the directory's linked library)
-3. Interactive picker, which offers to link the directory (never on `--dry-run`)
+1. Explicit name or ID
+2. `.bunny/stream.json` (written by `bunny stream library link`)
+3. Interactive picker, which offers to link the directory (never on destructive commands)
 
-The library's own Stream API key is read from the account automatically; nothing extra to configure, and it is never printed.
-
-## Source credentials
-
-Credentials come only from environment variables (or the interactive prompt), never from flags. Set them before running unattended:
-
-| Source       | Variables                                                                                                                                                                        |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vimeo`      | `VIMEO_ACCESS_TOKEN` (scopes `public`, `private`, `video_files`; downloads need a paid plan)                                                                                     |
-| `s3`         | `S3_BUCKET`, `AWS_REGION` (default `us-east-1`); optional `S3_PREFIX`, `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `S3_PRESIGNED_URL_TTL`, `S3_ENDPOINT` |
-| `wistia`     | `WISTIA_ACCESS_TOKEN`                                                                                                                                                            |
-| `mux`        | `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`                                                                                                                                               |
-| `cloudflare` | `CLOUDFLARE_API_TOKEN` (Stream:Edit), `CLOUDFLARE_ACCOUNT_ID`                                                                                                                    |
-| `jwplayer`   | `JWPLAYER_API_KEY` (v2), `JWPLAYER_SITE_ID`                                                                                                                                      |
-| `brightcove` | `BRIGHTCOVE_CLIENT_ID`, `BRIGHTCOVE_CLIENT_SECRET` (CMS video read), `BRIGHTCOVE_ACCOUNT_ID`                                                                                     |
-
-`bunny stream import --help` lists the same variables. With `--source` omitted, the command picks the one source whose variables are all set, otherwise it prompts (or fails when unattended). For S3, leaving both AWS keys unset uses the default AWS credential chain (profile, SSO, instance role); setting only one is an error.
+Non-interactive runs (`--output json`, no TTY, or `--force`) error instead of prompting: pass a library or link the directory first. A `video` or `collection` command with no ID behaves the same way. `caption` commands always need the video GUID as a positional.
 
 ## Typical workflows
 
 ```bash
-# 1. Look before importing: folders, video counts, what is already in Bunny
-bunny stream import --library 12345 --source vimeo --dry-run
+# New library, linked to this directory
+bunny stream library create my-library
+bunny stream library link my-library
 
-# 2. Import (confirms first; --force skips the prompt and is required without a TTY)
-bunny stream import --library 12345 --source vimeo --force
+# Upload a local file, or have bunny.net fetch a URL server-side
+bunny stream video upload ./video.mp4 --title "Launch demo"
+bunny stream video fetch https://example.com/video.mp4 --header "Authorization: Bearer abc"
 
-# 3. Check how far Bunny has got with encoding
-bunny stream import status --library 12345 --source vimeo
+# Find it, check it, embed it
+bunny stream video list --search launch
+bunny stream video show 1a2b3c4d-...
+bunny stream video embed 1a2b3c4d-... --expires 1h
 
-# One folder only (Vimeo/Wistia projects, Brightcove folders, S3 prefixes)
-bunny stream import --library 12345 --source vimeo --folder 987654 --force
-
-# S3, unattended, overriding the bucket and prefix for this run
-bunny stream import --library 12345 --source s3 --bucket my-videos --prefix 2024/ --force
-
-# Continue an interrupted or partly failed run
-bunny stream import --library 12345 --source vimeo --resume --force
+# Organise with collections
+bunny stream collection create --name Tutorials
+bunny stream video update 1a2b3c4d-... --collection 8a7b6c5d-...
 ```
 
 ---
 
-## `bunny stream import`: Import a video library
-
-| Flag                                | Description                                                                                  |
-| ----------------------------------- | -------------------------------------------------------------------------------------------- |
-| `--library`, `--lib`                | Destination library name or ID (defaults to the linked library)                              |
-| `--source`, `-s`                    | `vimeo`, `s3`, `wistia`, `mux`, `cloudflare`, `jwplayer`, `brightcove`                       |
-| `--folder`                          | One source folder only (not for Mux, Cloudflare Stream, or JW Player, which have no folders) |
-| `--dry-run`                         | Print the plan; writes nothing (no state file, no link, nothing in the library)              |
-| `--resume`                          | Continue the saved import for this source and library                                        |
-| `--wait`                            | Stay until Bunny has encoded every video (default: return once they are queued)              |
-| `--force`, `-f`                     | Skip the confirmation (which defaults to No)                                                 |
-| `--concurrency`, `-c`               | Videos handed to Bunny in parallel, 1 to 20 (default 3)                                      |
-| `--bucket`, `--prefix`, `--url-ttl` | S3 overrides for one run                                                                     |
-| `--request-timeout`                 | Seconds per HTTP request (default 30)                                                        |
-| `--video-timeout`                   | Seconds per video hand-off, or per encode wait with `--wait` (default 5400)                  |
-| `--processing-timeout`              | With `--wait`, seconds per encode (default 3600); raises `--video-timeout` when larger       |
-
-**Re-running is safe.** Every imported video carries a per-source metaTag (`vimeoId`, `s3Source`, `wistiaId`, `muxAssetId`, `cfStreamId`, `jwPlayerId`, `brightcoveId`). A re-run skips tagged videos Bunny has finished, leaves ones still encoding alone, and imports again only the ones Bunny failed on. Source folders become Stream collections of the same name.
-
-**Progress** is saved to `$XDG_STATE_HOME/bunnynet/stream-import/<account>/<source>-<library>.json` (default `~/.local/state/...`). `--resume` retries failed videos, works outstanding ones, and keeps the `--folder` scope the run started with. Two imports cannot share one state file; the second fails while the first is running.
-
-**Ctrl-C** stops queuing new videos, lets a hand-off already sent to Bunny finish so it is recorded, prints the `--resume` command, and exits 130. A second Ctrl-C exits at once.
-
-**Exit codes:** 0 when everything was queued (or finished with `--wait`), 1 when any video failed (they are listed), 130 when paused.
-
-### JSON output
-
-Every `--output json` document carries an `outcome`:
-
-- `no_videos`, `nothing_new`, `dry_run`: stopped before importing. Shape `{ outcome, library, source, folder, dryRun, truncated, summary }`; `summary` holds the counts and name lists (capped at 10000; `truncated` says when).
-- `imported`, `paused`: shape `{ outcome, library, source, folder, dryRun, status, waited, queued, completed, processing, failed, collections, warnings, statePath, elapsedMs }`, each `failed` entry `{ name, sourceId, error }`. On `paused`, `library` and `statePath` may be null if it stopped before reaching them.
-
-Declining the confirmation prints nothing.
-
----
-
-## `bunny stream import status`: Check a queued import
+## `bunny stream library`: Libraries
 
 ```bash
-bunny stream import status --library 12345
-bunny stream import status --library 12345 --source s3 --output json
+bunny stream library list                          # ID, name, videos, storage, traffic, replication regions
+bunny stream library create my-library             # stored in DE, replicated to SG, LA, NY by default
+bunny stream library create my-library --replication-regions NY,SG   # DE alone means no replication
+bunny stream library create my-library --encoding-tier premium --codecs x264,vp9
+bunny stream library show my-library               # API keys are never printed here
+bunny stream library update my-library --resolutions 720p,1080p
+bunny stream library update my-library --transcribing --transcribing-languages en,de
+bunny stream library update my-library --add-replication-regions SYD   # add-only
+bunny stream library credentials my-library        # library ID + API key, masked
+bunny stream library credentials my-library --show-secret --read-only
+bunny stream library credentials my-library --rotate   # reset the key (confirms first)
+bunny stream library link my-library
+bunny stream library unlink
+bunny stream library delete my-library             # deletes every video in it; confirms with the count
 ```
 
-Reads the saved run (pass `--source` when more than one platform was imported into the library), asks Bunny for the current state of every video it queued, and prints Bunny's status, encode percentage, size, and when each was queued. A video still processing with no data after 30 minutes is marked `(stalled?)`: delete it in the dashboard and re-run the import. Exits 1 when any video failed, so it works as a poll in scripts. JSON: `{ library, source, status, completed, processing, failed, stalled, stalledAfterMinutes, saved, videos }`.
+`update` sends only the flags you pass. With no flags it opens an interactive editor (name, resolutions, transcribing); unattended runs need at least one flag.
+
+Run `bunny stream library <command> --help` for every flag. The ones with consequences:
+
+- `--codecs` other than `x264`, and `--jit`, need `--encoding-tier premium` (billed per codec per minute).
+- `--early-play` needs `--keep-original` and exposes the originals.
+- `--transcribing` bills per use on every new upload and re-encode.
+- `--add-replication-regions` is add-only: regions can never be removed.
+- `--content-tagging` is accepted on `update` only.
+- `--force` is required for `update`, `unlink`, `delete`, and `credentials --rotate` without a TTY.
+
+### Player and security
+
+```bash
+bunny stream library player show my-library
+bunny stream library player update my-library --color "#FF7755" --speeds 0.5,1.0,1.15,2.0 --heatmap
+bunny stream library player update my-library --no-controls
+bunny stream library player reset my-library       # dashboard defaults; confirms first
+bunny stream library security show my-library      # token key masked
+bunny stream library security update my-library --embed-token --block-direct-access --allow-referrer example.com
+bunny stream library security update my-library --drm-basic
+bunny stream library security reset-token my-library   # signed URLs stop working
+```
+
+Run `player update --help` and `security update --help` for the full flag lists; every boolean takes a `--no-` form. `security update` applies domain changes one at a time and skips ones already in place, so re-running a partly failed update is safe.
+
+---
+
+## `bunny stream video`: Videos
+
+```bash
+bunny stream video upload ./video.mp4 --lib 12345 --title "Launch demo"
+bunny stream video upload ./video.mp4 --collection 8a7b6c5d-...
+bunny stream video fetch https://example.com/video.mp4 --lib 12345
+bunny stream video list --collection 8a7b6c5d-...
+bunny stream video show 1a2b3c4d-...               # includes caption languages and the Direct Play URL
+bunny stream video update 1a2b3c4d-... --title "Launch demo"
+bunny stream video update 1a2b3c4d-... --chapters '[{"title":"Intro","start":0,"end":30}]'
+bunny stream video update 1a2b3c4d-... --collection ""   # remove from its collection
+bunny stream video thumbnail 1a2b3c4d-... --file ./thumb.jpg   # or --url
+bunny stream video resolutions 1a2b3c4d-...        # configured, encoded, and stored
+bunny stream video cleanup 1a2b3c4d-... --non-configured --dry-run
+bunny stream video stats 1a2b3c4d-... --from 2026-01-01 --to 2026-01-31
+bunny stream video embed 1a2b3c4d-... --expires 30m   # signed when embed tokens are on
+bunny stream video delete 1a2b3c4d-...
+```
+
+There is no `video create`: add a video with `upload` (local file) or `fetch` (bunny.net downloads a URL).
+
+- **`upload`** creates the entry, then sends the bytes. Files over 2 GB switch to resumable TUS uploads automatically. If the byte upload fails, an entry that never received bytes is deleted; one that may hold the upload is kept with a warning naming its GUID. Encoding continues after the command returns, so the status is usually `Uploaded` or `Processing`.
+- **`fetch`** returns once the fetch is queued and reports no video ID; the video shows up in `video list` once fetched.
+- **`cleanup`** deletes renditions, MP4 fallbacks, or the original, and requires at least one selector (`--resolutions`, `--non-configured`, `--all`, `--original`, `--mp4`, `--outputs hls|mp4|all`). `--dry-run` lists what would go and skips the confirmation.
+
+Run `bunny stream video <command> --help` for every flag. `--force` is required for `delete` and `cleanup` without a TTY.
+
+---
+
+## `bunny stream collection` and `bunny stream caption`
+
+```bash
+bunny stream collection list --search tut
+bunny stream collection create --name Tutorials
+bunny stream collection show 8a7b6c5d-...
+bunny stream collection rename 8a7b6c5d-... Guides
+bunny stream collection delete 8a7b6c5d-...        # deletes the videos inside it too
+
+bunny stream caption add 1a2b3c4d-... en --file ./captions.vtt --label "English"
+bunny stream caption delete 1a2b3c4d-... en
+```
+
+Deleting a collection deletes every video in it. Move videos out first with `video update --collection ""`. `caption add` takes a local `.vtt` or `.srt` and reports the API validator's errors and warnings.
+
+---
+
+## Paid commands: `encode`, `transcribe`, `smart`
+
+```bash
+bunny stream encode enable --codecs x264,vp9       # switch the library to premium encoding
+bunny stream encode reencode 1a2b3c4d-...          # re-encode one video with current settings
+bunny stream transcribe 1a2b3c4d-... --languages en,de --source-language en
+bunny stream smart 1a2b3c4d-... --title --chapters # generate fields from the transcript
+```
+
+All three state the cost before running.
+
+- **`encode enable`** bills per output codec per minute; `--jit`, `--codecs`, `--resolutions` apply in the same request. `encode reencode` bills at the same rate.
+- **`transcribe`** costs $0.10 per language-minute (source transcript plus each target). The estimate is exact with `--source-language`, a range without. `--generate-title`, `--generate-description`, `--generate-chapters`, `--generate-moments` also generate fields. **`--force` here is the API's force flag** (re-run and override library defaults), not a confirmation skip.
+- **`smart`** needs at least one of `--title`, `--description`, `--chapters`, `--moments`. `--source-language` picks the caption track (auto-generated tracks are `<code>-auto`; `en` falls back to `en-auto`). On a video with no captions it shows the transcription cost and asks first; unattended runs stop unless `--transcribe` approves it. `--force` only disables pickers.
 
 ---
 
 ## Anti-patterns
 
-- **Passing credentials as flags or pasting them into commands.** They are read from environment variables only; export them (or use a `.env` the shell loads) instead.
-- **Importing without a dry run.** Run `--dry-run` first to see the folder and video counts and what is already in Bunny.
-- **Holding the command open with `--wait` in automation.** Queue with `--force`, then poll `bunny stream import status` until it exits 0; encodes can take hours.
-- **Deleting the state file to "start fresh".** It is how a resume recovers videos Bunny created but never tagged; deleting it can create duplicates.
-- **Treating `(stalled?)` as success.** Bunny gives no signal for a fetch that died silently; the stalled video needs deleting and re-importing.
+- **Deleting a collection to "ungroup" videos.** It deletes the videos too; clear `--collection` on each video first.
+- **Running `stream transcribe` on a library that transcribes automatically.** A fresh upload or `encode reencode` already triggers transcription; transcribing again bills twice.
+- **Using `--force` on `transcribe` to skip a prompt.** It re-runs the transcription and overrides library defaults.
+- **Expecting `video fetch` to return a video ID.** Poll `video list` instead.
+- **Running `video cleanup` without `--dry-run` first.** A deleted original is gone, and re-creating renditions means a paid re-encode.
+- **Expecting to remove replication regions.** `--add-replication-regions` is add-only, permanently.
+- **Rotating keys casually.** `credentials --rotate` and `security reset-token` break existing integrations and signed URLs.
