@@ -23,7 +23,6 @@ With `name`, `build`, and `dir` set, the entire deploy is one command:
 
 ```bash
 bun ny sites deploy --build            # runs `build`, uploads `dir`, publishes it live
-bun ny sites deploy --build            # same, published as the live site
 ```
 
 No `--site`, no build command, no directory argument. Without the config you'd

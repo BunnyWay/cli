@@ -262,6 +262,7 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
     (pz: PullZone) => pz.StorageZoneId != null,
   );
 
+  let unreadable = 0;
   const summaries = await mapWithConcurrency(
     candidates,
     8,
@@ -272,10 +273,16 @@ export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
         if (!context || context.state.pullZoneId !== pz.Id) return null;
         return { ...context, systemHostname: systemHostname(pz.Hostnames) };
       } catch {
+        unreadable++;
         return null;
       }
     },
   );
+  if (unreadable > 0) {
+    logger.warn(
+      `Couldn't read ${unreadable} storage zone${unreadable === 1 ? "" : "s"}, so some sites may be missing; re-run to retry.`,
+    );
+  }
 
   return summaries
     .filter((s): s is SiteSummary => s !== null)
@@ -492,6 +499,13 @@ export async function createSite(
   // 1. Storage zone; the site's identity.
   // A stateless name-pattern match is a half-finished create to resume; one carrying this site's state already is the site.
   step("Creating storage zone...");
+  // An imported site keeps its original zone names, so the name-pattern scan below can't see it.
+  if ((await fetchSites(coreClient)).some((s) => s.state.name === name)) {
+    throw new UserError(
+      `Site "${name}" already exists.`,
+      `Run \`bunny sites link ${name}\` to use it from this directory.`,
+    );
+  }
   let storageZone: StorageZoneModel | undefined;
   for (const zone of await findSiteStorageZones(coreClient, name)) {
     const existing = await siteContextFromZone(zone);
@@ -1031,11 +1045,18 @@ export async function deleteSiteResources(opts: {
     }
   };
 
-  await attempt("pull zone", state.pullZoneId, () =>
-    coreClient.DELETE("/pullzone/{id}", {
-      params: { path: { id: state.pullZoneId } },
-    }),
-  );
+  await attempt("pull zone", state.pullZoneId, async () => {
+    try {
+      await coreClient.DELETE("/pullzone/{id}", {
+        params: { path: { id: state.pullZoneId } },
+      });
+    } catch (err) {
+      // Already gone (a re-run after a partial delete) is the goal.
+      if (!(err instanceof ApiError && err.status === 404)) throw err;
+    }
+  });
+  // The storage zone's site marker is the only way back to a pull zone that failed to delete, so keep both for the re-run.
+  if (!results.every((r) => r.deleted)) return results;
   if (opts.keepStorage) {
     // The zone survives, so remove its site marker, else list/link/show rediscover a "site" whose pull zone is gone. But only once everything else deleted: the marker is what makes a re-run able to find and retry the failures.
     if (opts.connection && results.every((r) => r.deleted)) {

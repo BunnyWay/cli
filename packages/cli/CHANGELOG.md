@@ -1,5 +1,31 @@
 # @bunny.net/cli
 
+## 0.19.0
+
+### Minor Changes
+
+- [#243](https://github.com/BunnyWay/cli/pull/243) [`eb4e0fc`](https://github.com/BunnyWay/cli/commit/eb4e0fc1c59d481d1b04d109332065f755752edf) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites` is now in public preview and listed in `bunny --help`: create a static site, deploy any folder or framework build with instant rollbacks, attach custom domains with SSL, and deploy from GitHub with `bunny sites ci init`
+
+- [#203](https://github.com/BunnyWay/cli/pull/203) [`7814b1f`](https://github.com/BunnyWay/cli/commit/7814b1f6ade634182245acf3146588f59c97f698) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - `bunny stream import` moves a video library into Bunny Stream from Vimeo, AWS S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove: it hands every video to Bunny and returns, `--wait` stays for encoding, `bunny stream import status` shows Bunny's progress, and `bunny stream import list` browses the source; with a dry run, resumable state, and de-duplication. The engine ships as `@bunny.net/stream-import` and each source adapter as `@bunny.net/stream-import-<source>`; `@bunny.net/openapi-client` verbose logs now redact the Authorization header and URL query strings, skip binary bodies, and surface Stream error messages.
+
+### Patch Changes
+
+- [#237](https://github.com/BunnyWay/cli/pull/237) [`0f0bd10`](https://github.com/BunnyWay/cli/commit/0f0bd10a067cee1b493024da834c9aa33f0b2140) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites` detects Blazor WebAssembly projects and never downloads a framework CLI that isn't installed
+
+- [#239](https://github.com/BunnyWay/cli/pull/239) [`e646f1d`](https://github.com/BunnyWay/cli/commit/e646f1d3bab2df52338b5123d3fe0bc2da284e2e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix custom domain setup silently failing to point a Bunny DNS name at a pull zone when another record already sits at that name
+
+- [#236](https://github.com/BunnyWay/cli/pull/236) [`c9ab1eb`](https://github.com/BunnyWay/cli/commit/c9ab1eb5f465bdf9d472c0a256b6154095d2740c) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix reading an empty `.env` value (like `BUNNY_DATABASE_URL=`) as the next line's contents
+
+- [#86](https://github.com/BunnyWay/cli/pull/86) [`7eb2a74`](https://github.com/BunnyWay/cli/commit/7eb2a7409b8cbc626970b08568f7e63641ccc340) Thanks [@burstw0w](https://github.com/burstw0w)! - Add an experimental, hidden `bunny pz` command for managing pull zones
+
+- [#241](https://github.com/BunnyWay/cli/pull/241) [`9a743f5`](https://github.com/BunnyWay/cli/commit/9a743f54b3ac0beef06dd129680870f13cdf5595) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Publish `@bunny.net/framework-detector`: the framework presets, framework and package manager detection, and the GitHub Actions workflow behind `bunny sites`, as a dependency-free package the dashboard and the Sites control plane share with the CLI. `bunny sites deploy` now hashes content the same way on every machine and in the dashboard, whatever the locale; a site's next content deploy after upgrading gets a new content hash once, so an unchanged folder is published again rather than skipped.
+
+- [#249](https://github.com/BunnyWay/cli/pull/249) [`b7b028f`](https://github.com/BunnyWay/cli/commit/b7b028f95a04b5eee3e2bc2a76648e15cee0880a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Correct the `bunny sites` command reference and agent skill: `deployments delete`, `--tier`, `ci init --force`, and which commands take `--site` and `--link`
+
+- [#233](https://github.com/BunnyWay/cli/pull/233) [`f228638`](https://github.com/BunnyWay/cli/commit/f22863899b2e2ad369c27eb67bab929617e6931b) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites create --from-zone` imports an existing storage zone and its pull zone as a site, keeping its hostnames and serving it unchanged until the first deploy
+
+- [#248](https://github.com/BunnyWay/cli/pull/248) [`20063dd`](https://github.com/BunnyWay/cli/commit/20063dddcdd018a8c5d7b8dc80b9fa629791b227) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites delete` can be re-run after a partial failure, `create` refuses a name an imported site already uses, and `list` warns when it couldn't read every zone
+
 ## 0.18.0
 
 ### Minor Changes
