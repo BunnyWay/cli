@@ -7,10 +7,10 @@ import {
 import { errorMessage } from "@/core/errors.ts";
 import { formatBytes } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import { formatPrice } from "@/core/optimizer/index.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { confirm, isInteractive, withSpinner } from "@/core/ui.ts";
 import { saveSiteConfig } from "../config.ts";
-import { formatPrice } from "./shared.ts";
 
 /**
  * Bring the site's pull zone in line with `sites.optimizer` before a deploy publishes (the publish purges, so no separate purge here).

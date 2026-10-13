@@ -1119,6 +1119,24 @@ Every deploy publishes: the files land in an immutable `deploys/<id>/` directory
 | `--keep-storage`                       | `delete`                                                                         | Delete the pull zone but keep the storage zone and its deploy files                                                     |
 | `--force`, `-f`                        | `create --from-zone`, `deployments publish`, `prune`, `domains remove`, `delete` | Skip the confirmation prompts                                                                                           |
 
+### `bunny optimizer`
+
+Turn Bunny Optimizer on or off for any pull zone: images are served as WebP and sized for each device ($9.50/month per pull zone). Turning it on also enables the Dynamic Image API (`?width=`, `?quality=`, ...), keys the cache on those parameters only, turns minification off, and purges the cache.
+
+The pull zone is an optional positional (ID or name). When omitted it resolves from the directory's linked pull zone (`.bunny/pullzone.json`), then a linked site, then an interactive picker that offers to link the directory. For a site, `bunny sites optimizer` does the same by site name and keeps `sites.optimizer` in `bunny.jsonc` in step.
+
+```bash
+bunny optimizer status                                # linked pull zone or site
+bunny optimizer status 12345 --output json
+bunny optimizer enable my-zone                        # shows the price, confirms, configures the pull zone, purges
+bunny optimizer enable 12345 --yes                    # accept the price non-interactively
+bunny optimizer disable
+```
+
+| Flag           | Commands | Description                                                                    |
+| -------------- | -------- | ------------------------------------------------------------------------------ |
+| `--yes`, `-y`  | `enable` | Accept the Optimizer price without the confirmation prompt (alias of `--force`) |
+
 ### `bunny stream`
 
 > **Experimental**: hidden from `--help` and the landing page while it stabilizes.

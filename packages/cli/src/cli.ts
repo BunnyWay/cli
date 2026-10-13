@@ -12,6 +12,7 @@ import { dbNamespace } from "./commands/db/index.ts";
 import { dnsNamespace } from "./commands/dns/index.ts";
 import { docsCommand } from "./commands/docs.ts";
 import { openCommand } from "./commands/open.ts";
+import { optimizerNamespace } from "./commands/optimizer/index.ts";
 import { pzNamespace } from "./commands/pz/index.ts";
 import { registryNamespace } from "./commands/registry/index.ts";
 import { sandboxNamespace } from "./commands/sandbox/index.ts";
@@ -37,6 +38,7 @@ const commands: CommandModule[] = [
   sandboxNamespace,
   storageNamespace,
   sitesNamespace,
+  optimizerNamespace,
   configNamespace,
   skillsNamespace,
   docsCommand,

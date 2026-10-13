@@ -13,7 +13,7 @@ import { fetchSites, type SiteContext, siteContextFromZone } from "./api.ts";
 import { loadSiteConfig } from "./config.ts";
 import { SITES_MANIFEST, type SiteManifest } from "./constants.ts";
 
-const ARG_SITE_DESCRIPTION =
+export const ARG_SITE_DESCRIPTION =
   "Site name or storage zone ID (uses the linked site if omitted)";
 const ARG_LINK_DESCRIPTION =
   "Link this directory to the site (prompted when picking one; --no-link never links)";
