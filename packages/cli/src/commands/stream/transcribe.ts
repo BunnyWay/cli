@@ -17,7 +17,7 @@ import { type TranscribeSettings, transcribeVideo } from "./videos-api.ts";
 interface TranscribeArgs {
   video?: string;
   lib?: string;
-  languages?: string;
+  targetLanguages?: string;
   sourceLanguage?: string;
   generateTitle?: boolean;
   generateDescription?: boolean;
@@ -38,8 +38,8 @@ export const TRANSCRIBE_BILLING_NOTE =
 export function transcribeSettings(args: TranscribeArgs): TranscribeSettings {
   const settings: TranscribeSettings = {};
 
-  if (args.languages !== undefined) {
-    const languages = parseCsvFlag(args.languages);
+  if (args.targetLanguages !== undefined) {
+    const languages = parseCsvFlag(args.targetLanguages);
     if (languages.length > 0) settings.targetLanguages = languages;
   }
   const source = args.sourceLanguage?.trim();
@@ -66,7 +66,7 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
       "Transcribe with the library defaults",
     ],
     [
-      "$0 stream transcribe 1a2b3c4d-... --languages en,de",
+      "$0 stream transcribe 1a2b3c4d-... --target-languages en,de",
       "Transcribe into two languages",
     ],
     [
@@ -87,7 +87,7 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
         type: "string",
         describe: "Video library ID (defaults to the linked library)",
       })
-      .option("languages", {
+      .option("target-languages", {
         type: "string",
         describe:
           "Target languages, comma-separated ISO 639-1 codes (e.g. en,de)",

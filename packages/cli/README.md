@@ -1195,7 +1195,7 @@ bunny stream caption delete 1a2b3c4d-... en        # confirms first; --force ski
 # Paid operations
 bunny stream encode enable --codecs x264,vp9       # switch the library to premium encoding
 bunny stream encode reencode 1a2b3c4d-...          # re-encode one video with the current settings
-bunny stream transcribe 1a2b3c4d-... --languages en,de   # $0.10 per language-minute
+bunny stream transcribe 1a2b3c4d-... --target-languages en,de   # $0.10 per language-minute
 bunny stream smart 1a2b3c4d-... --title --chapters # offers to transcribe first if the video has no captions
 ```
 
@@ -1299,7 +1299,7 @@ Paid command flags:
 | Flag                                                                                      | Commands        | Description                                                                                              |
 | ----------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------- |
 | `--jit`, `--codecs`, `--resolutions`                                                      | `encode enable` | Applied in the same request that switches the library to premium                                         |
-| `--languages`, `--source-language`                                                        | `transcribe`    | Target languages (comma-separated) and the language spoken in the video                                  |
+| `--target-languages`, `--source-language`                                                 | `transcribe`    | Target languages (comma-separated) and the language spoken in the video                                  |
 | `--generate-title`, `--generate-description`, `--generate-chapters`, `--generate-moments` | `transcribe`    | Also generate each field from the new transcript                                                         |
 | `--title`, `--description`, `--chapters`, `--moments`                                     | `smart`         | What to generate; at least one is required                                                               |
 | `--source-language`                                                                       | `smart`         | Caption track to read, e.g. `en`; auto-generated tracks are `<code>-auto` (`en` falls back to `en-auto`) |
