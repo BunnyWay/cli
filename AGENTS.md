@@ -550,6 +550,8 @@ Scripts, apps, and sites are each backed by a pull zone, which has a large setti
 - **A root `bunny pullzone`** (planned) is the canonical full surface for zones not backing anything, targeted by `--id`.
 - **Each setting area is a mountable factory** like `createHostnamesCommands` in `core/hostnames/`, taking `{ commandPath, target, targetPositional, resolve(args), hiddenAliases }`. The resolver is the only per-surface difference: `--id` at the root, the linked manifest for scripts, the CDN endpoint for apps. `targetPositional` appends an optional trailing positional so each mount matches its namespace's convention.
 - Canonical term is `pullzone` (matching the dashboard and API); `pz` is a hidden alias.
+- **Separately billed CDN products get a root command** (`bunny optimizer`) as well as an owner mount, so they work on any pull zone. Root mounts resolve through `resolvePullZoneTarget` in `commands/pz/target.ts`: an explicit ID or name, then the first linked `PullZoneSource` (each owner exports one, e.g. `sitePullZoneSource`), then a picker that offers `pz link`.
+- **Owner policy travels with the target**, not the mount: a site target carries minify-off and the `sites.optimizer` sync, so `bunny optimizer` in a site directory behaves like `bunny sites optimizer`. Tools stay owner-neutral and only ever add to a zone's existing settings (Optimizer adds its image parameters to the cache key; it never narrows it).
 
 ---
 

@@ -17,6 +17,10 @@ export const PullZoneSchema = z.object({
 
 export type PullZone = z.infer<typeof PullZoneSchema>;
 
+function positiveOrNull(id: number | null | undefined): number | null {
+  return id && id > 0 ? id : null;
+}
+
 export function toPullZone(zone: PullZoneModel): PullZone {
   return {
     id: zone.Id ?? 0,
@@ -26,8 +30,9 @@ export function toPullZone(zone: PullZoneModel): PullZone {
     hostnames: (zone.Hostnames ?? []).flatMap((h) =>
       h.Value ? [h.Value] : [],
     ),
-    storageZoneId: zone.StorageZoneId || null,
-    edgeScriptId: zone.EdgeScriptId || null,
+    // The API reports "none" as -1.
+    storageZoneId: positiveOrNull(zone.StorageZoneId),
+    edgeScriptId: positiveOrNull(zone.EdgeScriptId),
     zoneSecurity: zone.ZoneSecurityEnabled ?? false,
   };
 }

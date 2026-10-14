@@ -225,6 +225,9 @@
         },
         "spa": {
           "type": "boolean"
+        },
+        "optimizer": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false

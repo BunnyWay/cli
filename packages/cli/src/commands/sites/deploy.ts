@@ -9,6 +9,7 @@ import { errorMessage, UserError } from "@/core/errors.ts";
 import { formatBytes } from "@/core/format.ts";
 import { normalizeHostname } from "@/core/hostnames/index.ts";
 import { logger } from "@/core/logger.ts";
+import { toolContext } from "@/core/tool-context.ts";
 import {
   confirm,
   isInteractive,
@@ -48,6 +49,7 @@ import {
   siteLinkOption,
   siteOptionBuilder,
 } from "./interactive.ts";
+import { offerOptimizer, syncOptimizer } from "./optimizer/sync.ts";
 import { createLinkedSite, promptSiteName } from "./provision.ts";
 import { collectFiles, hashFiles, uploadDeploy } from "./uploader.ts";
 
@@ -459,6 +461,19 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       : await fetchSystemHostname(coreClient, state.pullZoneId);
     const production = productionUrl(state, systemHost);
 
+    // Before publishing, so the publish's purge also drops files cached under the old settings.
+    const tools = toolContext(config, { verbose });
+    const optimizer = siteConfig?.config.optimizer;
+    if (optimizer !== undefined) {
+      await syncOptimizer({
+        ctx: tools,
+        pullZone: state.pullZoneId,
+        site: state.name,
+        enabled: optimizer,
+        output,
+      });
+    }
+
     if (skipUpload && alreadyLive) {
       await withSpinner("Checking routing...", () =>
         promoteDeploy({ coreClient, state, deployId }),
@@ -578,6 +593,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
     if (production) logger.info(`Production: ${production}`);
     if (notFoundNote) logger.info(notFoundNote);
+
+    if (optimizer === undefined && isInteractive(output)) {
+      await offerOptimizer({ ctx: tools, pullZone: state.pullZoneId, files });
+    }
 
     // Domainless sites: the first deploy offers a custom production domain, later ones just hint.
     if (!state.domain) {

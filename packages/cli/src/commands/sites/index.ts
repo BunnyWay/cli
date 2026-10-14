@@ -9,6 +9,7 @@ import { sitesLinkCommand } from "./link.ts";
 import { sitesListCommand } from "./list.ts";
 import { sitesMigrateCommand } from "./migrate.ts";
 import { sitesOpenCommand } from "./open.ts";
+import { sitesOptimizerNamespace } from "./optimizer/index.ts";
 import { sitesShowCommand } from "./show.ts";
 import { sitesSslCommand } from "./ssl.ts";
 import { sitesUnlinkCommand } from "./unlink.ts";
@@ -25,6 +26,7 @@ export const sitesNamespace = defineNamespace(
     sitesDeploymentsNamespace,
     ...sitesDomainsCommands,
     sitesSslCommand,
+    sitesOptimizerNamespace,
     sitesCiNamespace,
     sitesLinkCommand,
     sitesUnlinkCommand,
