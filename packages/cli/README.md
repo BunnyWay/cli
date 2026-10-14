@@ -1116,7 +1116,7 @@ Every deploy publishes: the files land in an immutable `deploys/<id>/` directory
 
 ### `bunny stream`
 
-> **Experimental**: hidden from `--help` and the landing page while it stabilizes.
+> **Preview**: `bunny stream` is in public preview; commands and flags may still change.
 
 Manage bunny.net Stream through four resource groups: **`bunny stream libraries`** (the library itself: create, list, inspect, update, delete, plus its **`player`** and **`security`** settings; aliases `library`, `lib`), **`bunny stream videos`** (the videos inside one library, including the paid `encode`, `transcribe`, and `smart`; alias `video`), **`bunny stream collections`** (groups of videos within a library; alias `collection`), and **`bunny stream captions`** (caption files on one video; alias `caption`). **`bunny stream link`** and **`unlink`** mirror `libraries link` and `unlink`, and **`bunny stream regions`** lists the region codes a library can replicate to. Library management uses the account API key on the core API; each library also carries its own Stream API key for the video-level API, which the CLI never prints unless you ask for it with `credentials`. Video commands use that per-library key, resolved automatically from the library, so there is nothing extra to configure. **`bunny stream import`** moves an existing video library in from another platform; see [below](#bunny-stream-import).
 
