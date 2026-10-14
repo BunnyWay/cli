@@ -10,7 +10,6 @@ import {
   type VideoLibraryCreateModel,
   type VideoLibraryModel,
 } from "@/commands/stream/api.ts";
-import { nameArg } from "@/commands/stream/name-arg.ts";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
@@ -34,7 +33,6 @@ import {
 import { checkTranscribingLanguages } from "./language-check.ts";
 
 interface LibraryCreateArgs extends LibrarySettingsArgs {
-  libraryName?: string;
   replicationRegions?: string[];
   playerVersion?: number;
   link?: boolean;
@@ -42,31 +40,30 @@ interface LibraryCreateArgs extends LibrarySettingsArgs {
 }
 
 export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
-  command: "create [library-name]",
+  command: "create [name]",
   aliases: ["add"],
   describe: "Create a new Stream video library.",
   examples: [
-    ["$0 stream library create my-library", "Create a video library"],
-    ["$0 stream library create --name my-library", "Same, as a flag"],
-    ["$0 stream library create", "Interactive: prompts for the name"],
+    ["$0 stream libraries create my-library", "Create a video library"],
+    ["$0 stream libraries create", "Interactive: prompts for the name"],
     [
-      "$0 stream library create my-library --replication-regions NY,SG",
+      "$0 stream libraries create my-library --replication-regions NY,SG",
       "Replicate to New York and Singapore only (plus DE, the main region)",
     ],
     [
-      "$0 stream library create internal --replication-regions DE",
+      "$0 stream libraries create internal --replication-regions DE",
       "Keep everything in DE, with no replication",
     ],
     [
-      "$0 stream library create my-library --encoding-tier premium --codecs x264,vp9",
+      "$0 stream libraries create my-library --encoding-tier premium --codecs x264,vp9",
       "Create with premium encoding and extra codecs",
     ],
     [
-      "$0 stream library create my-library --transcribing --transcribing-languages en,de",
+      "$0 stream libraries create my-library --transcribing --transcribing-languages en,de",
       "Create with transcribing enabled",
     ],
     [
-      "$0 stream library create my-library --link --save-env",
+      "$0 stream libraries create my-library --link --save-env",
       "Link this directory and save the library ID and API key to .env",
     ],
   ],
@@ -74,11 +71,7 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
   builder: (yargs) =>
     withLibrarySettingsOptions(
       yargs
-        .positional("library-name", {
-          type: "string",
-          describe: "Name for the new video library",
-        })
-        .option("name", {
+        .positional("name", {
           type: "string",
           describe: "Name for the new video library",
         })
@@ -104,18 +97,11 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     ),
 
   handler: async (args) => {
-    const {
-      libraryName,
-      replicationRegions,
-      profile,
-      output,
-      verbose,
-      apiKey,
-    } = args;
+    const { replicationRegions, profile, output, verbose, apiKey } = args;
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    let nameInput = nameArg(libraryName, args.name);
+    let nameInput = args.name?.trim() || undefined;
     if (!nameInput && isInteractive(output)) {
       const { value } = await prompts({
         type: "text",
@@ -127,7 +113,7 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     if (!nameInput) {
       throw new UserError(
         "A library name is required.",
-        "Pass the name: bunny stream library create my-library",
+        "Pass the name: bunny stream libraries create my-library",
       );
     }
     const name = nameInput;
@@ -167,7 +153,7 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
 
     if (output === "json") {
       // No prompts here: only the flags link or save. The create response carries
-      // the new library's keys; read them back on purpose with `bunny stream library credentials`.
+      // the new library's keys; read them back on purpose with `bunny stream libraries credentials`.
       const linked = created
         ? await offerLink(created, args.link, output)
         : false;

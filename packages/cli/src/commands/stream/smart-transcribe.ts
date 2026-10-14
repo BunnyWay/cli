@@ -61,7 +61,7 @@ export function captionlessError(
 ): UserError {
   return new UserError(
     `${video.title} has no captions, and smart generation needs a transcript. ${formatTranscriptionEstimate(estimate)}`,
-    `Re-run with --transcribe to transcribe it first, or add captions with "bunny stream caption add".`,
+    `Re-run with --transcribe to transcribe it first, or add captions with "bunny stream captions add".`,
   );
 }
 

@@ -3,12 +3,15 @@ import { defineNamespace } from "@/core/define-namespace.ts";
 import { streamVideoCleanupCommand } from "./cleanup.ts";
 import { streamVideoDeleteCommand } from "./delete.ts";
 import { streamVideoEmbedCommand } from "./embed.ts";
+import { streamVideoEncodeCommand } from "./encode.ts";
 import { streamVideoFetchCommand } from "./fetch.ts";
 import { streamVideoListCommand } from "./list.ts";
 import { streamVideoResolutionsCommand } from "./resolutions.ts";
 import { streamVideoShowCommand } from "./show.ts";
+import { streamVideoSmartCommand } from "./smart.ts";
 import { streamVideoStatsCommand } from "./stats.ts";
 import { streamVideoThumbnailCommand } from "./thumbnail.ts";
+import { streamVideoTranscribeCommand } from "./transcribe.ts";
 import { streamVideoUpdateCommand } from "./update.ts";
 import { streamVideoUploadCommand } from "./upload.ts";
 
@@ -23,12 +26,15 @@ const subcommands: CommandModule[] = [
   streamVideoCleanupCommand,
   streamVideoStatsCommand,
   streamVideoEmbedCommand,
+  streamVideoTranscribeCommand,
+  streamVideoSmartCommand,
+  streamVideoEncodeCommand,
   streamVideoDeleteCommand,
 ];
 
 export const streamVideoNamespace = defineNamespace(
-  "video",
+  "videos",
   "Manage the videos in a Stream video library.",
   subcommands,
-  ["videos"],
+  ["video"],
 );

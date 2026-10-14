@@ -116,15 +116,15 @@ export const streamVideoCleanupCommand = defineCommand<CleanupArgs>({
   describe: "Delete encoded resolutions or the original file of a video.",
   examples: [
     [
-      "$0 stream video cleanup 1a2b3c4d-... --non-configured --dry-run",
+      "$0 stream videos cleanup 1a2b3c4d-... --non-configured --dry-run",
       "Report what would be removed",
     ],
     [
-      "$0 stream video cleanup 1a2b3c4d-... --resolutions 240p,360p",
+      "$0 stream videos cleanup 1a2b3c4d-... --resolutions 240p,360p",
       "Delete specific resolutions",
     ],
     [
-      "$0 stream video cleanup 1a2b3c4d-... --original --force",
+      "$0 stream videos cleanup 1a2b3c4d-... --original --force",
       "Delete the stored original without confirming",
     ],
   ],

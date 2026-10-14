@@ -21,9 +21,9 @@ export const streamVideoEmbedCommand = defineCommand<VideoEmbedArgs>({
   describe:
     "Print a video's player embed URL, signed when the library requires embed view tokens.",
   examples: [
-    ["$0 stream video embed 1a2b3c4d-...", "Print the embed URL"],
+    ["$0 stream videos embed 1a2b3c4d-...", "Print the embed URL"],
     [
-      "$0 stream video embed 1a2b3c4d-... --expires 30m",
+      "$0 stream videos embed 1a2b3c4d-... --expires 30m",
       "Sign it for 30 minutes on a token-protected library",
     ],
   ],

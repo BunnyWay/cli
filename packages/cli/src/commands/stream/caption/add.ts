@@ -8,11 +8,12 @@ import {
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { withSpinner } from "@/core/ui.ts";
+import type { OutputFormat } from "@/core/types.ts";
+import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 
 interface CaptionAddArgs {
-  video: string;
-  lang: string;
+  video?: string;
+  lang?: string;
   lib?: string;
   label?: string;
   file: string;
@@ -56,33 +57,73 @@ export async function readCaptionFile(file: string): Promise<string> {
   return Buffer.from(await Bun.file(file).arrayBuffer()).toString("base64");
 }
 
+/** The label shown in the player's caption menu; the API rejects a caption without one, so it falls back to the language code. */
+export function captionLabel(
+  label: string | undefined,
+  srclang: string,
+): string {
+  return label?.trim() || srclang;
+}
+
+/** A missing language code with no way to ask for it. */
+export function languageRequired(usage: string): UserError {
+  return new UserError(
+    "A language code is required.",
+    `Pass it after the video: ${usage}`,
+  );
+}
+
+const ADD_USAGE = "bunny stream captions add <video> <lang> --file <path>";
+
+/** The caption language: the argument, else asked for when interactive. */
+export async function captionLanguageArg(
+  lang: string | undefined,
+  output: OutputFormat | undefined,
+): Promise<string> {
+  if (lang) return captionLanguage(lang);
+  if (!isInteractive(output)) throw languageRequired(ADD_USAGE);
+  const { value } = await prompts({
+    type: "text",
+    name: "value",
+    message: "Language code for the captions (e.g. en, de, pt-br):",
+  });
+  if (typeof value !== "string" || !value.trim()) {
+    throw new UserError("A language code is required.");
+  }
+  return captionLanguage(value);
+}
+
 export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
-  command: "add <video> <lang>",
+  command: "add [video] [lang]",
   aliases: ["upload"],
   describe: "Upload a caption file for one language.",
   examples: [
     [
-      "$0 stream caption add 1a2b3c4d-... en --file ./captions.vtt",
+      "$0 stream captions add 1a2b3c4d-... en --file ./captions.vtt",
       "Add English captions",
     ],
     [
-      '$0 stream caption add 1a2b3c4d-... de --file ./de.srt --label "Deutsch"',
+      "$0 stream captions add --file ./captions.vtt",
+      "Pick the video, then type the language",
+    ],
+    [
+      '$0 stream captions add 1a2b3c4d-... de --file ./de.srt --label "Deutsch"',
       "Set the label shown in the player",
     ],
-    ["$0 stream caption delete 1a2b3c4d-... en", "Remove a language again"],
+    ["$0 stream captions remove 1a2b3c4d-... en", "Remove a language again"],
   ],
 
   builder: (yargs) =>
     yargs
       .positional("video", {
         type: "string",
-        describe: "Video GUID (see `bunny stream video list`)",
-        demandOption: true,
+        describe:
+          "Video GUID (see `bunny stream videos list`; prompts if omitted)",
       })
       .positional("lang", {
         type: "string",
-        describe: "Language code for the captions (e.g. en, de, pt-br)",
-        demandOption: true,
+        describe:
+          "Language code for the captions (e.g. en, de, pt-br; prompts if omitted)",
       })
       .option("lib", {
         alias: "library",
@@ -96,7 +137,8 @@ export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
       })
       .option("label", {
         type: "string",
-        describe: "Label shown in the player's caption menu",
+        describe:
+          "Label shown in the player's caption menu (defaults to the language code)",
       }),
 
   handler: async ({
@@ -110,9 +152,10 @@ export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
     verbose,
     apiKey,
   }) => {
-    // Validate everything local before any network call.
-    const srclang = captionLanguage(lang);
+    // Validate everything local before any network call; a missing language is asked for after the video.
+    const given = lang ? captionLanguage(lang) : undefined;
     const base64 = await readCaptionFile(file);
+    if (!given && !isInteractive(output)) throw languageRequired(ADD_USAGE);
 
     const { client, libraryId } = await streamLibraryContext({
       lib,
@@ -126,10 +169,12 @@ export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
     const video = await resolveVideoInteractive(client, libraryId, ref, {
       output,
     });
+    const srclang = given ?? (await captionLanguageArg(lang, output));
+    const shownLabel = captionLabel(label, srclang);
 
     const result = await withSpinner(`Uploading ${srclang} captions...`, () =>
       addVideoCaption(client, libraryId, video.guid, srclang, {
-        label: label?.trim() || undefined,
+        label: shownLabel,
         base64,
       }),
     );
@@ -141,7 +186,7 @@ export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
             id: video.guid,
             title: video.title,
             srclang,
-            label: label?.trim() || undefined,
+            label: shownLabel,
             added: true,
             warnings: result.warnings,
           },

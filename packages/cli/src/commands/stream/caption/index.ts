@@ -1,16 +1,16 @@
 import type { CommandModule } from "yargs";
 import { defineNamespace } from "@/core/define-namespace.ts";
 import { streamCaptionAddCommand } from "./add.ts";
-import { streamCaptionDeleteCommand } from "./delete.ts";
+import { streamCaptionRemoveCommand } from "./remove.ts";
 
 const subcommands: CommandModule[] = [
   streamCaptionAddCommand,
-  streamCaptionDeleteCommand,
+  streamCaptionRemoveCommand,
 ];
 
 export const streamCaptionNamespace = defineNamespace(
-  "caption",
+  "captions",
   "Upload and remove caption files for a video.",
   subcommands,
-  ["captions"],
+  ["caption"],
 );

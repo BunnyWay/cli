@@ -1,18 +1,24 @@
-import { resolveConfig } from "@/config/index.ts";
-import { defineCommand } from "@/core/define-command.ts";
-import { logger } from "@/core/logger.ts";
-import { withSpinner } from "@/core/ui.ts";
-import { resolveVideoInteractive, streamLibraryContext } from "./context.ts";
-import { parseCsvFlag } from "./library/flags.ts";
-import { checkTranscribingLanguages } from "./library/language-check.ts";
+import {
+  resolveVideoInteractive,
+  streamLibraryContext,
+} from "@/commands/stream/context.ts";
+import { parseCsvFlag } from "@/commands/stream/library/flags.ts";
+import { checkTranscribingLanguages } from "@/commands/stream/library/language-check.ts";
 import {
   autoTranscriptionPending,
   DOUBLE_BILLING_NOTE,
   estimateTranscription,
   formatTranscriptionEstimate,
   outputLanguages,
-} from "./transcription-cost.ts";
-import { type TranscribeSettings, transcribeVideo } from "./videos-api.ts";
+} from "@/commands/stream/transcription-cost.ts";
+import {
+  type TranscribeSettings,
+  transcribeVideo,
+} from "@/commands/stream/videos-api.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { withSpinner } from "@/core/ui.ts";
 
 interface TranscribeArgs {
   video?: string;
@@ -57,24 +63,24 @@ export function transcribeSettings(args: TranscribeArgs): TranscribeSettings {
   return settings;
 }
 
-export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
+export const streamVideoTranscribeCommand = defineCommand<TranscribeArgs>({
   command: "transcribe [video]",
   describe: "Transcribe a video's audio into captions (paid).",
   examples: [
     [
-      "$0 stream transcribe 1a2b3c4d-...",
+      "$0 stream videos transcribe 1a2b3c4d-...",
       "Transcribe with the library defaults",
     ],
     [
-      "$0 stream transcribe 1a2b3c4d-... --target-languages en,de",
+      "$0 stream videos transcribe 1a2b3c4d-... --target-languages en,de",
       "Transcribe into two languages",
     ],
     [
-      "$0 stream transcribe 1a2b3c4d-... --source-language en --generate-title",
+      "$0 stream videos transcribe 1a2b3c4d-... --source-language en --generate-title",
       "Name the spoken language and generate a title",
     ],
     [
-      "$0 stream transcribe 1a2b3c4d-... --force",
+      "$0 stream videos transcribe 1a2b3c4d-... --force",
       "Re-run, overriding the library defaults",
     ],
   ],
@@ -194,7 +200,7 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
 
     logger.success(`Queued transcription for ${video.title}.`);
     logger.dim(
-      "Once it finishes, the Captions row of `bunny stream video show` lists the new languages.",
+      "Once it finishes, the Captions row of `bunny stream videos show` lists the new languages.",
     );
   },
 });

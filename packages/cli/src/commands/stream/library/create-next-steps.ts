@@ -137,10 +137,12 @@ export async function offerAddVideos(
 export function printNextSteps(library: VideoLibraryModel): void {
   const id = library.Id;
   logger.log();
-  logger.dim(`  Upload a video:  bunny stream video upload <file> --lib ${id}`);
+  logger.dim(
+    `  Upload a video:  bunny stream videos upload <file> --lib ${id}`,
+  );
   logger.dim(
     `  Import videos:   bunny stream import --library ${id} --source <platform>`,
   );
-  logger.dim(`  Credentials:     bunny stream library credentials ${id}`);
+  logger.dim(`  Credentials:     bunny stream libraries credentials ${id}`);
   logger.dim(`  Examples:        ${examplesUrl("stream")}`);
 }

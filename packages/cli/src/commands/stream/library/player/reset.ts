@@ -10,9 +10,9 @@ export const streamLibraryPlayerResetCommand = defineToolCommand({
   describe:
     "Reset a video library's player to the dashboard defaults (language, font, colours, captions, controls, speeds).",
   examples: [
-    ["$0 stream library player reset my-library", "Reset after confirming"],
+    ["$0 stream libraries player reset my-library", "Reset after confirming"],
     [
-      "$0 stream library player reset my-library --force",
+      "$0 stream libraries player reset my-library --force",
       "Reset without asking",
     ],
   ],

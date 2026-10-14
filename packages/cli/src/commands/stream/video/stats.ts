@@ -88,14 +88,14 @@ export const streamVideoStatsCommand = defineCommand<StatsArgs>({
   describe:
     "Show view statistics, the watch heatmap, or play data for a video.",
   examples: [
-    ["$0 stream video stats 1a2b3c4d-...", "Views and watch time"],
+    ["$0 stream videos stats 1a2b3c4d-...", "Views and watch time"],
     [
-      "$0 stream video stats 1a2b3c4d-... --from 2026-08-01 --to 2026-08-31",
+      "$0 stream videos stats 1a2b3c4d-... --from 2026-08-01 --to 2026-08-31",
       "Statistics for a date range",
     ],
-    ["$0 stream video stats 1a2b3c4d-... --heatmap", "Watch heatmap instead"],
+    ["$0 stream videos stats 1a2b3c4d-... --heatmap", "Watch heatmap instead"],
     [
-      "$0 stream video stats 1a2b3c4d-... --play-data",
+      "$0 stream videos stats 1a2b3c4d-... --play-data",
       "Player URLs and playback settings instead",
     ],
   ],

@@ -9,7 +9,7 @@ export const streamLibraryPlayerShowCommand = defineToolCommand({
   command: "show [library]",
   describe: "Show a video library's player settings.",
   examples: [
-    ["$0 stream library player show my-library", "Show player settings"],
+    ["$0 stream libraries player show my-library", "Show player settings"],
   ],
   progress: "Fetching player settings...",
 

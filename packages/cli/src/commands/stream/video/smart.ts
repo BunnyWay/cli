@@ -1,19 +1,25 @@
-import { defineCommand } from "@/core/define-command.ts";
-import { UserError } from "@/core/errors.ts";
-import { logger } from "@/core/logger.ts";
-import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
-import { resolveVideoInteractive, streamLibraryContext } from "./context.ts";
+import {
+  resolveVideoInteractive,
+  streamLibraryContext,
+} from "@/commands/stream/context.ts";
 import {
   AUTO_CAPTION_HINT,
   captionLanguages,
   resolveSmartSource,
-} from "./smart-source.ts";
-import { hasCaptions, offerTranscription } from "./smart-transcribe.ts";
+} from "@/commands/stream/smart-source.ts";
+import {
+  hasCaptions,
+  offerTranscription,
+} from "@/commands/stream/smart-transcribe.ts";
 import {
   type SmartGenerateModel,
   smartGenerateVideo,
   transcribeVideo,
-} from "./videos-api.ts";
+} from "@/commands/stream/videos-api.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
+import { logger } from "@/core/logger.ts";
+import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 
 interface SmartArgs {
   video?: string;
@@ -52,25 +58,25 @@ export function smartGenerateBody(args: SmartArgs): SmartGenerateModel {
   return body;
 }
 
-export const streamSmartCommand = defineCommand<SmartArgs>({
+export const streamVideoSmartCommand = defineCommand<SmartArgs>({
   command: "smart [video]",
   describe:
     "Generate a title, description, chapters, or moments from a video's transcript (paid).",
   examples: [
     [
-      "$0 stream smart 1a2b3c4d-... --title --description",
+      "$0 stream videos smart 1a2b3c4d-... --title --description",
       "Generate a title and description",
     ],
     [
-      "$0 stream smart 1a2b3c4d-... --chapters --moments",
+      "$0 stream videos smart 1a2b3c4d-... --chapters --moments",
       "Generate chapters and moments",
     ],
     [
-      "$0 stream smart 1a2b3c4d-... --chapters --transcribe",
+      "$0 stream videos smart 1a2b3c4d-... --chapters --transcribe",
       "Transcribe a captionless video first (billed per language-minute)",
     ],
     [
-      "$0 stream smart 1a2b3c4d-... --title --force",
+      "$0 stream videos smart 1a2b3c4d-... --title --force",
       "Never fall back to a picker; the library and video must be named",
     ],
   ],
@@ -148,7 +154,7 @@ export const streamSmartCommand = defineCommand<SmartArgs>({
       });
       if (!settings) {
         logger.info(
-          `Nothing was sent. Add captions you already have with "bunny stream caption add", then re-run.`,
+          `Nothing was sent. Add captions you already have with "bunny stream captions add", then re-run.`,
         );
         return;
       }
@@ -238,7 +244,7 @@ export const streamSmartCommand = defineCommand<SmartArgs>({
 
     logger.success(`Queued smart generation for ${video.title}.`);
     logger.dim(
-      "Results land on the video itself; `bunny stream video show --output json` carries the per-feature status while it runs.",
+      "Results land on the video itself; `bunny stream videos show --output json` carries the per-feature status while it runs.",
     );
   },
 });

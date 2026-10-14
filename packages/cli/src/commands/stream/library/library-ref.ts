@@ -40,7 +40,7 @@ export async function resolveLibraryRef(
     );
   }
 
-  // A library linked via `bunny stream library link` stands in for an explicit ref, even unattended.
+  // A library linked via `bunny stream libraries link` stands in for an explicit ref, even unattended.
   const manifest = loadManifest<StreamLibraryManifest>(STREAM_MANIFEST);
   if (manifest.id) {
     return spin("Loading linked video library...", () =>
@@ -51,7 +51,7 @@ export async function resolveLibraryRef(
   if (opts.force || !isInteractive(opts.output)) {
     throw new UserError(
       "A library is required.",
-      "Pass a library name or ID, or link one with `bunny stream library link`.",
+      "Pass a library name or ID, or link one with `bunny stream libraries link`.",
     );
   }
 
@@ -61,7 +61,7 @@ export async function resolveLibraryRef(
   if (libraries.length === 0) {
     throw new UserError(
       "No video libraries found.",
-      'Create one with "bunny stream library create <name>".',
+      'Create one with "bunny stream libraries create <name>".',
     );
   }
 

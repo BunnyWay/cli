@@ -180,7 +180,7 @@ export const streamLibrariesResolve = defineTool({
     if (!match) {
       throw new UserError(
         `No video library found for "${library}".`,
-        'Run "bunny stream library list" to see your libraries.',
+        'Run "bunny stream libraries list" to see your libraries.',
       );
     }
     return toLibrarySummary(match);
@@ -280,7 +280,7 @@ export const streamLibrariesRotateKey = defineTool({
     if (!apiKey) {
       throw new UserError(
         `The key was reset, but the new ${readOnly ? "read-only " : ""}key for video library ${library} could not be read.`,
-        "Run `bunny stream library credentials` to retrieve it.",
+        "Run `bunny stream libraries credentials` to retrieve it.",
       );
     }
     return { library, readOnly, apiKey };

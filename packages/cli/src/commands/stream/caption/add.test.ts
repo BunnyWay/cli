@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { captionLanguage, readCaptionFile } from "./add.ts";
+import { captionLabel, captionLanguage, readCaptionFile } from "./add.ts";
 
 let dir = "";
 
@@ -36,4 +36,11 @@ test("readCaptionFile rejects a file that is not a caption format", async () => 
   await expect(readCaptionFile(file)).rejects.toThrow(
     /does not look like a caption file/,
   );
+});
+
+// The API answers 400 to a caption without a label, so one is always sent.
+test("captionLabel falls back to the language code", () => {
+  expect(captionLabel(undefined, "en")).toBe("en");
+  expect(captionLabel("  ", "pt-br")).toBe("pt-br");
+  expect(captionLabel(" Deutsch ", "de")).toBe("Deutsch");
 });

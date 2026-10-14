@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import prompts from "prompts";
-import { nextCollectionName } from "./rename.ts";
+import { nextCollectionName } from "./update.ts";
 
 test("no --name and no way to prompt is an error", async () => {
   await expect(nextCollectionName("old", undefined, false)).rejects.toThrow(
-    "Nothing to rename.",
+    "Nothing to update.",
   );
 });
 
