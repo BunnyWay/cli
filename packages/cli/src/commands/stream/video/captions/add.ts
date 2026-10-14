@@ -73,7 +73,7 @@ export function languageRequired(usage: string): UserError {
   );
 }
 
-const ADD_USAGE = "bunny stream captions add <video> <lang> --file <path>";
+const ADD_USAGE = "bunny stream videos captions add <file> <video> <lang>";
 
 /** The caption language: the argument, else asked for when interactive. */
 export async function captionLanguageArg(
@@ -94,27 +94,35 @@ export async function captionLanguageArg(
 }
 
 export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
-  command: "add [video] [lang]",
+  command: "add <file> [video] [lang]",
   aliases: ["upload"],
   describe: "Upload a caption file for one language.",
   examples: [
     [
-      "$0 stream captions add 1a2b3c4d-... en --file ./captions.vtt",
+      "$0 stream videos captions add ./captions.vtt 1a2b3c4d-... en",
       "Add English captions",
     ],
     [
-      "$0 stream captions add --file ./captions.vtt",
+      "$0 stream videos captions add ./captions.vtt",
       "Pick the video, then type the language",
     ],
     [
-      '$0 stream captions add 1a2b3c4d-... de --file ./de.srt --label "Deutsch"',
+      '$0 stream videos captions add ./de.srt 1a2b3c4d-... de --label "Deutsch"',
       "Set the label shown in the player",
     ],
-    ["$0 stream captions remove 1a2b3c4d-... en", "Remove a language again"],
+    [
+      "$0 stream videos captions remove 1a2b3c4d-... en",
+      "Remove a language again",
+    ],
   ],
 
   builder: (yargs) =>
     yargs
+      .positional("file", {
+        type: "string",
+        describe: "Path to the .vtt or .srt caption file",
+        demandOption: true,
+      })
       .positional("video", {
         type: "string",
         describe:
@@ -129,11 +137,6 @@ export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
         alias: "library",
         type: "string",
         describe: "Video library ID (defaults to the linked library)",
-      })
-      .option("file", {
-        type: "string",
-        describe: "Path to the .vtt or .srt caption file",
-        demandOption: true,
       })
       .option("label", {
         type: "string",

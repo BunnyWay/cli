@@ -154,7 +154,7 @@ export const streamVideoSmartCommand = defineCommand<SmartArgs>({
       });
       if (!settings) {
         logger.info(
-          `Nothing was sent. Add captions you already have with "bunny stream captions add", then re-run.`,
+          `Nothing was sent. Add captions you already have with "bunny stream videos captions add", then re-run.`,
         );
         return;
       }

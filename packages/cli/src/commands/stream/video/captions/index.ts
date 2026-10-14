@@ -8,9 +8,17 @@ const subcommands: CommandModule[] = [
   streamCaptionRemoveCommand,
 ];
 
-export const streamCaptionNamespace = defineNamespace(
+export const streamVideoCaptionsNamespace = defineNamespace(
   "captions",
   "Upload and remove caption files for a video.",
+  subcommands,
+  ["caption"],
+);
+
+// Hidden: the old top-level `stream captions` / `stream caption`.
+export const streamCaptionsHiddenNamespace = defineNamespace(
+  "captions",
+  false,
   subcommands,
   ["caption"],
 );

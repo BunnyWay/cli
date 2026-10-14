@@ -24,7 +24,7 @@ interface CaptionRemoveArgs {
   force?: boolean;
 }
 
-const REMOVE_USAGE = "bunny stream captions remove <video> <lang>";
+const REMOVE_USAGE = "bunny stream videos captions remove <video> <lang>";
 
 /**
  * The caption language to remove: the argument, else picked from the video's
@@ -64,11 +64,14 @@ export const streamCaptionRemoveCommand = defineCommand<CaptionRemoveArgs>({
   describe: "Remove the captions for one language.",
   examples: [
     [
-      "$0 stream captions remove 1a2b3c4d-... en",
+      "$0 stream videos captions remove 1a2b3c4d-... en",
       "Remove the English captions",
     ],
-    ["$0 stream captions remove 1a2b3c4d-... en --force", "Skip confirmation"],
-    ["$0 stream captions remove", "Pick the video, then the language"],
+    [
+      "$0 stream videos captions remove 1a2b3c4d-... en --force",
+      "Skip confirmation",
+    ],
+    ["$0 stream videos captions remove", "Pick the video, then the language"],
   ],
 
   builder: (yargs) =>
