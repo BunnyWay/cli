@@ -259,7 +259,8 @@ async function fetchPullZones(
 // Discover sites: every storage-backed pull zone gets the per-zone `_bunny/site.json` read (concurrency-capped). A candidate is only a site when the state names it as the site's own pull zone, so another zone pointed at the same storage origin is never mistaken for one.
 export async function fetchSites(client: CoreClient): Promise<SiteSummary[]> {
   const candidates = (await fetchPullZones(client)).filter(
-    (pz: PullZone) => pz.StorageZoneId != null,
+    // The live API reports "no storage origin" as 0 (URL origin) or -1 (script/container origin), not null.
+    (pz: PullZone) => (pz.StorageZoneId ?? 0) > 0,
   );
 
   let unreadable = 0;

@@ -762,8 +762,9 @@ test("promoteDeploy keeps the storage zone's not-found settings on the live depl
 
 test("fetchSites keeps only storage pull zones whose state names them", async () => {
   store.set(REMOTE_STATE_PATH, JSON.stringify(fakeState()));
+  const calls: Call[] = [];
   const coreClient = fakeCoreClient({
-    calls: [],
+    calls,
     storageZones: [ZONE],
     pullZones: [
       // A real site.
@@ -775,12 +776,19 @@ test("fetchSites keeps only storage pull zones whose state names them", async ()
       },
       // A storage pull zone whose state points elsewhere.
       { Id: 32, Name: "other", StorageZoneId: 10 },
-      // No storage origin: never a candidate.
+      // No storage origin: never a candidate. The live API sends 0 (URL origin) or -1 (script origin).
       { Id: 33, Name: "url-origin" },
+      { Id: 34, Name: "url-origin-zero", StorageZoneId: 0 },
+      { Id: 35, Name: "script-origin", StorageZoneId: -1 },
     ],
   });
 
   const sites = await fetchSites(coreClient);
+  expect(
+    calls
+      .filter((c) => c.path === "/storagezone/{id}")
+      .map((c) => (c.params as { path: { id: number } }).path.id),
+  ).toEqual([10, 10]);
   expect(sites).toHaveLength(1);
   expect(sites[0]?.state.name).toBe("my-site");
   expect(sites[0]?.systemHostname).toBe("my-site.b-cdn.net");
