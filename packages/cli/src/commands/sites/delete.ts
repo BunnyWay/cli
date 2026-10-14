@@ -72,15 +72,18 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     });
     if (!force) {
       const hostnames = (
-        await fetchPullZoneHostnames(coreClient, state.pullZoneId).catch(
-          () => [],
+        await withSpinner("Loading site details...", () =>
+          fetchPullZoneHostnames(coreClient, state.pullZoneId).catch(() => []),
         )
       ).flatMap((h) => (h.Value ? [h.Value] : []));
       logger.log("This deletes:");
-      logger.log(
-        `  pull zone ${state.pullZoneId}${hostnames.length ? `, serving ${hostnames.join(", ")}` : ""}`,
-      );
-      if (!args["keep-storage"]) {
+      logger.log(`  pull zone ${state.pullZoneId}`);
+      for (const host of hostnames) logger.log(`    ${host}`);
+      if (args["keep-storage"]) {
+        logger.log(
+          `Keeps storage zone ${state.storageZoneId} (${site.storageZone.Name}) and its files.`,
+        );
+      } else {
         logger.log(
           `  storage zone ${state.storageZoneId} (${site.storageZone.Name}) and every file in it`,
         );
