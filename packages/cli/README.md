@@ -1125,9 +1125,9 @@ Every deploy publishes: the files land in an immutable `deploys/<id>/` directory
 
 ### `bunny optimizer`
 
-Turn Bunny Optimizer on or off for any pull zone: images are served as WebP and sized for each device ($9.50/month per pull zone). Turning it on also enables the Dynamic Image API (`?width=`, `?quality=`, ...), keys the cache on those parameters only, turns minification off, and purges the cache.
+Turn Bunny Optimizer on or off for any pull zone: images are served as WebP and sized for each device ($9.50/month per pull zone). Turning it on also enables the Dynamic Image API (`?width=`, `?quality=`, ...), adds those parameters to the cache key (other query parameters cache exactly as before), and purges the cache. Minification is left as it is; turning Optimizer off removes the image parameters from the cache key only when Optimizer added them.
 
-The pull zone is an optional positional (ID or name). When omitted it resolves from the directory's linked pull zone (`.bunny/pullzone.json`), then a linked site, then an interactive picker that offers to link the directory. For a site, `bunny sites optimizer` does the same by site name and keeps `sites.optimizer` in `bunny.jsonc` in step.
+The pull zone is an optional positional (ID or name). When omitted it resolves from the directory's linked pull zone (`.bunny/pullzone.json`), then a linked site, then an interactive picker that offers to link the directory. A site, whichever command reaches it, also gets minification turned off and `sites.optimizer` in `bunny.jsonc` kept in step; `bunny sites optimizer` takes a site name instead of a pull zone.
 
 ```bash
 bunny optimizer status                                # linked pull zone or site

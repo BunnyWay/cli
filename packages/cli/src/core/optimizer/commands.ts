@@ -12,30 +12,37 @@ import { logger } from "@/core/logger.ts";
 import type { GlobalArgs, OutputFormat } from "@/core/types.ts";
 import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
 
-/** The pull zone Optimizer acts on, named for output. */
+/** How the resource that owns a pull zone wants Optimizer run; it travels with the target so every command that reaches the resource applies it. */
+export interface OptimizerPolicy {
+  /** Set CSS/JS minification on enable; omitted leaves the zone's setting alone. */
+  minify?: boolean;
+  /** Runs after Optimizer is turned on or off, e.g. to keep a config file in line. */
+  onChanged?: (enabled: boolean, output: OutputFormat) => void;
+  /** Extra line printed after a successful enable. */
+  enableHint?: () => string | undefined;
+}
+
+/** The pull zone Optimizer acts on, named the way its owner is known. */
 export interface OptimizerTarget {
   pullZone: number;
   name: string;
+  /** What `name` names, e.g. "Site" or "Pull zone". */
+  label: string;
+  optimizer?: OptimizerPolicy;
 }
 
-export interface OptimizerMountOptions<T extends OptimizerTarget> {
+export interface OptimizerMountOptions {
   /** Command breadcrumb used in examples and hints, e.g. "sites optimizer". */
   commandPath: string;
   describe: string;
   /** Trailing positional that names the target, e.g. `site` or `pull-zone`. */
   positional: { name: string; describe: string };
-  /** Row label for the target in `status`, e.g. "Site". */
-  label: string;
   /** Resolve the positional (or the linked directory) to a pull zone. */
   resolve: (
     ref: string | undefined,
     args: GlobalArgs,
     ctx: ToolContext,
-  ) => Promise<T>;
-  /** Runs after Optimizer is turned on or off, e.g. to keep a config file in line. */
-  onChanged?: (target: T, enabled: boolean, output: OutputFormat) => void;
-  /** Extra line printed after a successful enable. */
-  enableHint?: (target: T) => string | undefined;
+  ) => Promise<OptimizerTarget>;
 }
 
 export function formatPrice(monthly: number): string {
@@ -75,11 +82,11 @@ export function renderOptimizerStatus(
 }
 
 /** The `optimizer` namespace (status, enable, disable), mounted wherever a pull zone can be resolved. */
-export function createOptimizerCommands<T extends OptimizerTarget>(
-  opts: OptimizerMountOptions<T>,
+export function createOptimizerCommands(
+  opts: OptimizerMountOptions,
 ): CommandModule {
   const { commandPath, positional } = opts;
-  const targets = new WeakMap<object, T>();
+  const targets = new WeakMap<object, OptimizerTarget>();
   const ref = (args: object) =>
     (args as Record<string, unknown>)[positional.name] as string | undefined;
   const resolve = async (args: GlobalArgs, ctx: ToolContext) => {
@@ -111,7 +118,7 @@ export function createOptimizerCommands<T extends OptimizerTarget>(
     },
     render: (result, args) => {
       renderOptimizerStatus(
-        opts.label,
+        targets.get(args)?.label ?? "Pull zone",
         nameOf(args, result.pullZone),
         result,
         args.output,
@@ -139,7 +146,7 @@ export function createOptimizerCommands<T extends OptimizerTarget>(
       [`$0 ${commandPath} enable --yes`, "Skip the price confirmation"],
     ],
     epilogue:
-      "Optimizer is billed monthly per pull zone. Turning it on also adds the Dynamic Image API (?width=, ?quality=, ...) for srcset loaders, keys the cache on those parameters only, turns minification off (frameworks already minify), and purges the cache.",
+      "Optimizer is billed monthly per pull zone. Turning it on also adds the Dynamic Image API (?width=, ?quality=, ...) for srcset loaders, adds those parameters to the cache key (other parameters cache as before), and purges the cache.",
     progress: "Turning on Bunny Optimizer...",
     builder: (yargs) =>
       withTarget(yargs).option("force", {
@@ -165,13 +172,16 @@ export function createOptimizerCommands<T extends OptimizerTarget>(
         } else {
           logger.info(`Bunny Optimizer is already on for ${target.name}.`);
         }
-        opts.onChanged?.(target, true, args.output);
+        target.optimizer?.onChanged?.(true, args.output);
         return DONE;
       }
+      const input = {
+        pullZone: target.pullZone,
+        enabled: true,
+        minify: target.optimizer?.minify,
+      };
       // Already paying: re-applying the settings needs no consent.
-      if (current.enabled) {
-        return { input: { pullZone: target.pullZone, enabled: true } };
-      }
+      if (current.enabled) return { input };
 
       const price = formatPrice(current.monthlyPrice);
       requireConfirmable(args.output, {
@@ -180,7 +190,7 @@ export function createOptimizerCommands<T extends OptimizerTarget>(
         hint: "Re-run with --yes to accept the price non-interactively.",
       });
       return {
-        input: { pullZone: target.pullZone, enabled: true },
+        input,
         confirm: () =>
           confirm(
             `Turn on Bunny Optimizer for ${target.name}? It costs ${price}.`,
@@ -189,8 +199,7 @@ export function createOptimizerCommands<T extends OptimizerTarget>(
       };
     },
     after: (_, args) => {
-      const target = targets.get(args);
-      if (target) opts.onChanged?.(target, true, args.output);
+      targets.get(args)?.optimizer?.onChanged?.(true, args.output);
     },
     render: (result, args) => {
       const name = nameOf(args, result.pullZone);
@@ -202,8 +211,7 @@ export function createOptimizerCommands<T extends OptimizerTarget>(
       logger.dim(
         "  Images are now served as WebP and sized for each device, with no code changes.",
       );
-      const target = targets.get(args);
-      const hint = target && opts.enableHint?.(target);
+      const hint = targets.get(args)?.optimizer?.enableHint?.();
       if (hint) logger.dim(`  ${hint}`);
     },
   });
@@ -222,8 +230,7 @@ export function createOptimizerCommands<T extends OptimizerTarget>(
       return { input: { pullZone: target.pullZone, enabled: false } };
     },
     after: (_, args) => {
-      const target = targets.get(args);
-      if (target) opts.onChanged?.(target, false, args.output);
+      targets.get(args)?.optimizer?.onChanged?.(false, args.output);
     },
     render: (result, args) => {
       const name = nameOf(args, result.pullZone);

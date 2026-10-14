@@ -11,6 +11,7 @@ import { formatPrice } from "@/core/optimizer/index.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { confirm, isInteractive, withSpinner } from "@/core/ui.ts";
 import { saveSiteConfig } from "../config.ts";
+import { SITE_OPTIMIZER_MINIFY } from "./shared.ts";
 
 /**
  * Bring the site's pull zone in line with `sites.optimizer` before a deploy publishes (the publish purges, so no separate purge here).
@@ -57,7 +58,12 @@ export async function syncOptimizer(opts: {
       ? "Turning on Bunny Optimizer..."
       : "Turning off Bunny Optimizer...",
     () =>
-      pullZonesOptimizerSet.invoke(ctx, { pullZone, enabled, purge: false }),
+      pullZonesOptimizerSet.invoke(ctx, {
+        pullZone,
+        enabled,
+        minify: SITE_OPTIMIZER_MINIFY,
+        purge: false,
+      }),
   );
   if (!quiet) {
     logger.success(
@@ -128,6 +134,7 @@ export async function offerOptimizerOnCreate(opts: {
       pullZonesOptimizerSet.invoke(opts.ctx, {
         pullZone: opts.pullZone,
         enabled: true,
+        minify: SITE_OPTIMIZER_MINIFY,
         purge: false,
       }),
     );
