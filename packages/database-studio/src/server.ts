@@ -2,13 +2,28 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
 import { createExecutor, introspect } from "@bunny.net/database-adapter";
 import type { Database } from "@bunny.net/database-client";
-import { createRestHandler, requireAuth } from "@bunny.net/database-rest";
+import {
+  createRestHandler,
+  encodeValue,
+  requireAuth,
+} from "@bunny.net/database-rest";
+import { loadCatalog } from "./catalog.ts";
 import { assets } from "./client-manifest.ts";
+import { queryErrorMessage, runReadOnlyQuery } from "./query.ts";
 
 export interface StudioOptions {
   client: Database;
+  /** Shown in the studio header so it's clear which database is open (e.g. its ID and host). */
+  label?: string;
+  /**
+   * True when the connection's token is known to be read-only (the CLI
+   * created it). Otherwise the SQL console relies on studio's own statement
+   * checks, and says so.
+   */
+  tokenReadOnly?: boolean;
   port?: number;
-  open?: boolean;
+  /** Opens the studio URL in a browser; omit to only print it. */
+  open?: (url: string) => void;
   dev?: boolean;
   logger?: {
     log(msg: string): void;
@@ -30,6 +45,20 @@ const isAllowedHost = (hostHeader: string | null): boolean => {
 };
 
 const AUTH_COOKIE = "bunny_studio_auth";
+
+/** Studio-only endpoints live outside `/api`, where every path segment is a table name. */
+const SCHEMA_PATH = "/studio-api/schema";
+const QUERY_PATH = "/studio-api/query";
+
+const jsonResponse = (
+  body: unknown,
+  status = 200,
+  headers?: Record<string, string>,
+): Response =>
+  new Response(JSON.stringify(body, encodeValue), {
+    status,
+    headers: { "Content-Type": "application/json", ...headers },
+  });
 
 const safeEqual = (a: string, b: string): boolean => {
   const ab = Buffer.from(a);
@@ -72,8 +101,10 @@ const handleAuth = async (
 export async function startStudio(options: StudioOptions): Promise<void> {
   const {
     client,
+    label,
+    tokenReadOnly = false,
     port = 4488,
-    open = true,
+    open,
     dev = false,
     logger = console,
   } = options;
@@ -97,6 +128,52 @@ export async function startStudio(options: StudioOptions): Promise<void> {
     }),
     { token: sessionToken, cookieName: AUTH_COOKIE },
   );
+  // The full introspection (defaults, key order, index columns), which the
+  // OpenAPI spec at /api/ only partly carries.
+  const tables = Object.values(schema.tables).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  const { ddl, views } = await loadCatalog(
+    client,
+    new Set(tables.map((t) => t.name)),
+  );
+  const handleSchema = requireAuth(
+    async () =>
+      jsonResponse({
+        label: label ?? null,
+        tokenReadOnly,
+        tables,
+        ddl,
+        views,
+      }),
+    { token: sessionToken, cookieName: AUTH_COOKIE },
+  );
+  const handleQuery = requireAuth(
+    async (req) => {
+      if (req.method !== "POST") {
+        return jsonResponse({ message: "Method not allowed" }, 405, {
+          Allow: "POST",
+        });
+      }
+      const body = (await req.json().catch(() => null)) as {
+        sql?: unknown;
+      } | null;
+      if (typeof body?.sql !== "string") {
+        return jsonResponse({ message: "Expected { sql: string }" }, 400);
+      }
+      try {
+        return jsonResponse(await runReadOnlyQuery(client, body.sql));
+      } catch (err) {
+        const message = queryErrorMessage(err);
+        if (message) return jsonResponse({ message }, 400);
+        logger.error(
+          `Query error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
+        );
+        return jsonResponse({ message: "Internal error" }, 500);
+      }
+    },
+    { token: sessionToken, cookieName: AUTH_COOKIE },
+  );
 
   let server: ReturnType<typeof Bun.serve>;
   try {
@@ -114,12 +191,26 @@ export async function startStudio(options: StudioOptions): Promise<void> {
         const url = new URL(req.url);
         const pathname = url.pathname;
 
+        if (pathname === SCHEMA_PATH) {
+          return await handleSchema(req);
+        }
+        if (pathname === QUERY_PATH) {
+          return await handleQuery(req);
+        }
+
         // API routes - delegate to REST handler
         if (pathname.startsWith("/api")) {
           // /api/auth is the handshake endpoint: public but only succeeds
           // with the correct session token.
           if (pathname === "/api/auth") {
             return await handleAuth(req, sessionToken);
+          }
+          // Studio is read-only: the REST handler also serves writes, so
+          // refuse them here rather than relying on the token's scope.
+          if (req.method !== "GET") {
+            return jsonResponse({ message: "Studio is read-only" }, 405, {
+              Allow: "GET",
+            });
           }
           try {
             return await handleRest(req);
@@ -197,13 +288,12 @@ export async function startStudio(options: StudioOptions): Promise<void> {
   }
 
   if (open) {
-    const proc = Bun.spawn(
-      process.platform === "darwin"
-        ? ["open", browserUrl]
-        : ["xdg-open", browserUrl],
-      { stdout: "ignore", stderr: "ignore" },
-    );
-    await proc.exited;
+    // Best effort: a missing opener (headless Linux) must not take the server down.
+    try {
+      open(browserUrl);
+    } catch {
+      logger.log("Couldn't open a browser. Open the URL above to continue.");
+    }
   }
 
   // Keep the process alive until interrupted

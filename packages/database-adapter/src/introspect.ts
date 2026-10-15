@@ -50,32 +50,43 @@ const getTables = async (client: AdapterClient): Promise<string[]> => {
   return result.rows.map((row) => row.name as string);
 };
 
+/** Columns in declaration order, plus the primary key in key order (PRAGMA `pk` is the 1-based position, 0 when not part of the key). */
 const getColumns = async (
   client: AdapterClient,
   tableName: string,
-): Promise<ColumnDefinition[]> => {
+): Promise<{ columns: ColumnDefinition[]; primaryKey: string[] }> => {
   const result = await query(
     client,
     `PRAGMA table_info("${tableName.replace(/"/g, '""')}")`,
   );
 
-  return result.rows.map((row) => ({
+  const columns = result.rows.map((row) => ({
     name: row.name as string,
     type: mapColumnType(row.type as string),
     nullable: row.notnull === 0,
-    primaryKey: row.pk === 1,
+    primaryKey: Number(row.pk) > 0,
     defaultValue: row.dflt_value as string | number | null,
   }));
+  const primaryKey = result.rows
+    .filter((row) => Number(row.pk) > 0)
+    .sort((a, b) => Number(a.pk) - Number(b.pk))
+    .map((row) => row.name as string);
+
+  return { columns, primaryKey };
 };
 
 const getForeignKeys = async (
   client: AdapterClient,
   tableName: string,
 ): Promise<ForeignKey[]> => {
-  const result = await query(
-    client,
-    `PRAGMA foreign_key_list("${tableName.replace(/"/g, '""')}")`,
-  );
+  // The SELECT form, not `PRAGMA foreign_key_list(...)`: libSQL servers
+  // classify that pragma as a write, so a read-only token can't run it.
+  const result = await client
+    .prepare(
+      'SELECT "from", "table", "to" FROM pragma_foreign_key_list(?) ORDER BY id, seq',
+    )
+    .bind(tableName)
+    .run();
 
   return result.rows.map((row) => ({
     column: row.from as string,
@@ -111,10 +122,9 @@ const introspectTable = async (
   client: AdapterClient,
   tableName: string,
 ): Promise<TableDefinition> => {
-  const columns = await getColumns(client, tableName);
+  const { columns, primaryKey } = await getColumns(client, tableName);
   const foreignKeys = await getForeignKeys(client, tableName);
   const indexes = await getIndexes(client, tableName);
-  const primaryKey = columns.filter((c) => c.primaryKey).map((c) => c.name);
 
   // Unique columns: single-column unique indexes, excluding the PK
   const pkSet = new Set(primaryKey);
@@ -152,7 +162,8 @@ const matchesPattern = (name: string, pattern: string): boolean => {
   return name === pattern;
 };
 
-const shouldInclude = (
+/** Whether introspection keeps a table or view named `name`, by the same rules as `exclude`/`include`. */
+export const shouldInclude = (
   name: string,
   exclude: string[],
   include?: string[],

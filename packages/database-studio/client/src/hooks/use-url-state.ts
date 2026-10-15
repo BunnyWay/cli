@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
 function getSearch() {
   return window.location.search;
@@ -15,8 +15,15 @@ export function useUrlParam(key: string): string | null {
   return new URLSearchParams(search).get(key);
 }
 
-/** Update URL search params without a page reload. */
-export function setUrlParams(updates: Record<string, string | null>) {
+/**
+ * Update URL search params without a page reload. `push` adds a history
+ * entry so Back returns to the previous view (used for navigation, not for
+ * every filter keystroke).
+ */
+export function setUrlParams(
+  updates: Record<string, string | null>,
+  { push = false }: { push?: boolean } = {},
+) {
   const params = new URLSearchParams(window.location.search);
   for (const [key, value] of Object.entries(updates)) {
     if (value === null || value === "") {
@@ -26,13 +33,26 @@ export function setUrlParams(updates: Record<string, string | null>) {
     }
   }
   const search = params.toString();
+  if (`?${search}` === window.location.search) return;
   const url = search ? `?${search}` : window.location.pathname;
-  window.history.replaceState(null, "", url);
+  if (push) {
+    window.history.pushState(null, "", url);
+  } else {
+    window.history.replaceState(null, "", url);
+  }
   // Notify subscribers
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-/** Hook that returns a setter for URL params. */
-export function useSetUrlParams() {
-  return useCallback(setUrlParams, []);
-}
+/** Params scoped to one table's view; cleared when switching tables. */
+export const TABLE_VIEW_PARAMS = {
+  view: null,
+  page: null,
+  sort: null,
+  order: null,
+  filters: null,
+  mode: null,
+} as const;
+
+/** The `table` param value for the SQL console; not a valid unquoted table name. */
+export const SQL_TAB = ":sql";
