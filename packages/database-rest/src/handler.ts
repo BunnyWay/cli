@@ -4,7 +4,7 @@ import type {
 } from "@bunny.net/database-openapi";
 import { generateOpenAPISpec } from "@bunny.net/database-openapi";
 import type { DatabaseExecutor } from "./executor.ts";
-import { parseQueryParams } from "./parser.ts";
+import { parseQueryParams, parseValue, QueryParseError } from "./parser.ts";
 import {
   buildCountQuery,
   buildDeleteQuery,
@@ -22,8 +22,19 @@ export interface RestHandlerOptions {
   onError?: (err: unknown) => void;
 }
 
+/**
+ * JSON has no 64-bit integer or binary type: integers beyond 2^53 arrive from
+ * the client as bigint (which JSON.stringify throws on) and BLOBs as
+ * Uint8Array. Send them as a decimal string and a base64 string.
+ */
+const encodeValue = (_key: string, value: unknown): unknown => {
+  if (typeof value === "bigint") return value.toString();
+  if (value instanceof Uint8Array) return Buffer.from(value).toString("base64");
+  return value;
+};
+
 const json = (data: unknown, status = 200, headers?: Record<string, string>) =>
-  new Response(JSON.stringify(data), {
+  new Response(JSON.stringify(data, encodeValue), {
     status,
     headers: { "Content-Type": "application/json", ...headers },
   });
@@ -70,14 +81,6 @@ const parseRoute = (
   }
 
   return null;
-};
-
-const parsePathValue = (raw: string): string | number => {
-  const num = Number(raw);
-  if (!Number.isNaN(num) && raw.trim() !== "") {
-    return num;
-  }
-  return raw;
 };
 
 export const createRestHandler = (
@@ -188,6 +191,9 @@ export const createRestHandler = (
           return errorResponse("Method not allowed", 405, "METHOD_NOT_ALLOWED");
       }
     } catch (err: unknown) {
+      if (err instanceof QueryParseError) {
+        return errorResponse(err.message, 400, "BAD_REQUEST");
+      }
       // The detail goes to the host's logger, not the response: a mounted handler must not leak schema names or file paths.
       try {
         options.onError?.(err);
@@ -333,9 +339,7 @@ const handleGetOne = async (
   const query = parseQueryParams(url);
   const selectQuery = buildSelectQuery(table, {
     select: query.select,
-    filters: [
-      { column: pkColumn, operator: "eq", value: parsePathValue(pkValue) },
-    ],
+    filters: [{ column: pkColumn, operator: "eq", value: parseValue(pkValue) }],
     order: [],
     limit: 1,
   });
@@ -371,7 +375,7 @@ const handlePatchOne = async (
   }
 
   const updateQuery = buildUpdateQuery(table, body as Record<string, unknown>, [
-    { column: pkColumn, operator: "eq", value: parsePathValue(pkValue) },
+    { column: pkColumn, operator: "eq", value: parseValue(pkValue) },
   ]);
   const result = await executor.execute(updateQuery.sql, updateQuery.args);
 
@@ -389,7 +393,7 @@ const handleDeleteOne = async (
   pkValue: string,
 ): Promise<Response> => {
   const deleteQuery = buildDeleteQuery(table, [
-    { column: pkColumn, operator: "eq", value: parsePathValue(pkValue) },
+    { column: pkColumn, operator: "eq", value: parseValue(pkValue) },
   ]);
   const result = await executor.execute(deleteQuery.sql, deleteQuery.args);
 

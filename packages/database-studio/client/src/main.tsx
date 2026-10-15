@@ -16,13 +16,15 @@ function exchangeToken(): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
     credentials: "same-origin",
-  }).finally(() => {
-    params.delete("token");
-    const qs = params.toString();
-    const newUrl =
-      window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
-    window.history.replaceState({}, "", newUrl);
-  });
+  })
+    .then(() => undefined)
+    .finally(() => {
+      params.delete("token");
+      const qs = params.toString();
+      const newUrl =
+        window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
+      window.history.replaceState({}, "", newUrl);
+    });
 }
 
 const rootEl = document.getElementById("root");

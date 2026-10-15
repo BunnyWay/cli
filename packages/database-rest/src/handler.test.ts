@@ -193,6 +193,73 @@ describe("GET /:table", () => {
     expect(body.data).toHaveLength(2);
   });
 
+  test("filter with not.is.null", async () => {
+    const res = await handler(req("GET", "/users?age=not.is.null"));
+    const body = await jsonBody(res);
+
+    expect(body.data.map((u: { name: string }) => u.name).sort()).toEqual([
+      "Alice",
+      "Bob",
+    ]);
+  });
+
+  test("filter with not.like", async () => {
+    const res = await handler(req("GET", "/users?name=not.like.A%25"));
+    const body = await jsonBody(res);
+
+    expect(body.data).toHaveLength(2);
+    expect(res.headers.get("X-Total-Count")).toBe("2");
+  });
+
+  test("or group matches either condition and counts the same rows", async () => {
+    const res = await handler(
+      req(
+        "GET",
+        `/users?or=${encodeURIComponent("(name.eq.Alice,age.is.null)")}`,
+      ),
+    );
+    const body = await jsonBody(res);
+
+    expect(body.data.map((u: { name: string }) => u.name).sort()).toEqual([
+      "Alice",
+      "Charlie",
+    ]);
+    expect(res.headers.get("X-Total-Count")).toBe("2");
+  });
+
+  test("or group values can be quoted to carry commas", async () => {
+    const res = await handler(
+      req(
+        "GET",
+        `/users?or=${encodeURIComponent('(name.eq."Bob, Jr",name.eq.Bob)')}`,
+      ),
+    );
+    const body = await jsonBody(res);
+
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].name).toBe("Bob");
+  });
+
+  test("or group values can escape quotes", async () => {
+    const res = await handler(
+      req(
+        "GET",
+        `/users?or=${encodeURIComponent('(name.eq."say \\"hi\\"",name.eq.Alice)')}`,
+      ),
+    );
+    const body = await jsonBody(res);
+
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].name).toBe("Alice");
+  });
+
+  test("malformed or group returns 400 instead of widening the match", async () => {
+    const res = await handler(
+      req("GET", `/users?or=${encodeURIComponent("(name.eq.Alice,bogus)")}`),
+    );
+    expect(res.status).toBe(400);
+  });
+
   test("order by column desc", async () => {
     const res = await handler(req("GET", "/users?order=name.desc"));
     const body = await jsonBody(res);
@@ -218,6 +285,45 @@ describe("GET /:table", () => {
 
     const body = await jsonBody(res);
     expect(body.code).toBe("NOT_FOUND");
+  });
+});
+
+describe("value encoding", () => {
+  test("sends bigint as a decimal string and bytes as base64", async () => {
+    const stub: DatabaseExecutor = {
+      execute: async () => ({
+        columns: ["id", "data"],
+        rows: [
+          {
+            id: 9007199254740993n,
+            data: new Uint8Array([1, 2, 255]),
+            count: 1,
+          },
+        ],
+      }),
+    };
+    const res = await createRestHandler(stub, schema)(req("GET", "/users"));
+    expect(res.status).toBe(200);
+
+    const body = await jsonBody(res);
+    expect(body.data[0].id).toBe("9007199254740993");
+    expect(body.data[0].data).toBe("AQL/");
+  });
+
+  test("filters on integers beyond 2^53 without rounding them", async () => {
+    const big = new Database(":memory:");
+    big.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)");
+    big.exec(
+      "INSERT INTO users VALUES (9007199254740992, 'rounded'), (9007199254740993, 'exact')",
+    );
+    const res = await createRestHandler(
+      createTestExecutor(big),
+      schema,
+    )(req("GET", "/users?select=name&id=eq.9007199254740993"));
+    const body = await jsonBody(res);
+    big.close();
+
+    expect(body.data).toEqual([{ name: "exact" }]);
   });
 });
 

@@ -1,130 +1,218 @@
-import type { TableSchema } from "@/api.ts";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { KeyRound } from "lucide-react";
+import type { OpenTable } from "@/App";
+import type { TableDefinition } from "@/api";
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mb-8">
+      <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {title}
+      </h3>
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-xs">{children}</table>
+      </div>
+    </section>
+  );
+}
+
+function Th({ children }: { children?: React.ReactNode }) {
+  return (
+    <th className="border-b bg-card px-3 py-2 text-left font-medium text-muted-foreground">
+      {children}
+    </th>
+  );
+}
+
+function Td({
+  children,
+  mono = false,
+}: {
+  children?: React.ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <td
+      className={`border-b px-3 py-2 align-top group-last:border-b-0 ${mono ? "font-mono" : ""}`}
+    >
+      {children}
+    </td>
+  );
+}
+
+function TableLink({
+  name,
+  onOpenTable,
+}: {
+  name: string;
+  onOpenTable: OpenTable;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenTable(name)}
+      className="font-mono text-primary hover:underline"
+    >
+      {name}
+    </button>
+  );
+}
+
+/** A sole INTEGER PRIMARY KEY aliases the rowid: SQLite reports it nullable, but it never is. */
+function isRowid(table: TableDefinition, column: string): boolean {
+  return (
+    table.primaryKey.length === 1 &&
+    table.primaryKey[0] === column &&
+    table.columns.find((c) => c.name === column)?.type === "INTEGER"
+  );
+}
 
 export function SchemaTab({
-  schema,
-  onSelectTable,
+  table,
+  tables,
+  onOpenTable,
 }: {
-  schema: TableSchema | null;
-  onSelectTable: (name: string) => void;
+  table: TableDefinition;
+  tables: TableDefinition[];
+  onOpenTable: OpenTable;
 }) {
-  if (!schema) return null;
+  const foreignKeys = new Map(table.foreignKeys.map((fk) => [fk.column, fk]));
+  const unique = new Set(table.uniqueColumns);
+  const incoming = tables.flatMap((t) =>
+    t.foreignKeys
+      .filter((fk) => fk.referencesTable === table.name)
+      .map((fk) => ({ table: t.name, ...fk })),
+  );
 
   return (
     <div className="flex-1 overflow-auto p-6">
-      <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-        Columns
-      </h3>
-      <Table className="mb-6">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-xs">Name</TableHead>
-            <TableHead className="text-xs">Type</TableHead>
-            <TableHead className="text-xs">Nullable</TableHead>
-            <TableHead className="text-xs">Default</TableHead>
-            <TableHead className="text-xs">PK</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {schema.columns.map((col) => (
-            <TableRow key={col.name}>
-              <TableCell className="font-mono text-xs">{col.name}</TableCell>
-              <TableCell>
-                <Badge variant="secondary" className="font-mono text-[10px]">
-                  {col.type || "ANY"}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-xs text-muted-foreground">
-                {col.notnull ? "NOT NULL" : "NULL"}
-              </TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">
-                {col.defaultValue ?? "-"}
-              </TableCell>
-              <TableCell className="text-xs">
-                {col.primaryKey ? (
-                  <Badge variant="outline" className="text-[10px]">
-                    PK
-                  </Badge>
-                ) : null}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <Section title={`Columns (${table.columns.length})`}>
+        <thead>
+          <tr>
+            <Th>Name</Th>
+            <Th>Type</Th>
+            <Th>Nullable</Th>
+            <Th>Default</Th>
+            <Th>Constraints</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {table.columns.map((col) => {
+            const fk = foreignKeys.get(col.name);
+            return (
+              <tr key={col.name} className="group">
+                <Td mono>
+                  <span className="inline-flex items-center gap-1.5">
+                    {col.primaryKey && (
+                      <KeyRound className="h-3 w-3 text-primary" />
+                    )}
+                    {col.name}
+                  </span>
+                </Td>
+                <Td mono>
+                  <span className="text-muted-foreground">{col.type}</span>
+                </Td>
+                <Td>
+                  {col.nullable && !isRowid(table, col.name) ? (
+                    <span className="text-muted-foreground">yes</span>
+                  ) : (
+                    "NOT NULL"
+                  )}
+                </Td>
+                <Td mono>
+                  {col.defaultValue === null ||
+                  col.defaultValue === undefined ? (
+                    <span className="text-muted-foreground/60">—</span>
+                  ) : (
+                    String(col.defaultValue)
+                  )}
+                </Td>
+                <Td>
+                  <span className="flex flex-wrap gap-1.5">
+                    {col.primaryKey && <Tag>PRIMARY KEY</Tag>}
+                    {unique.has(col.name) && <Tag>UNIQUE</Tag>}
+                    {fk && (
+                      <Tag>
+                        →{" "}
+                        <TableLink
+                          name={fk.referencesTable}
+                          onOpenTable={onOpenTable}
+                        />
+                        .{fk.referencesColumn}
+                      </Tag>
+                    )}
+                  </span>
+                </Td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </Section>
 
-      {schema.foreignKeys.length > 0 && (
-        <>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Foreign Keys
-          </h3>
-          <Table className="mb-6">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Column</TableHead>
-                <TableHead className="text-xs">References</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {schema.foreignKeys.map((fk) => (
-                <TableRow key={`${fk.from}->${fk.table}.${fk.to}`}>
-                  <TableCell className="font-mono text-xs">{fk.from}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    <Button
-                      variant="link"
-                      onClick={() => onSelectTable(fk.table)}
-                      className="h-auto p-0 font-mono text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:no-underline"
-                    >
-                      {fk.table}
-                    </Button>
-                    .{fk.to}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </>
+      {table.indexes.length > 0 && (
+        <Section title={`Indexes (${table.indexes.length})`}>
+          <thead>
+            <tr>
+              <Th>Name</Th>
+              <Th>Columns</Th>
+              <Th>Unique</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {table.indexes.map((idx) => (
+              <tr key={idx.name} className="group">
+                <Td mono>{idx.name}</Td>
+                <Td mono>{idx.columns.join(", ")}</Td>
+                <Td>
+                  {idx.unique ? (
+                    <Tag>UNIQUE</Tag>
+                  ) : (
+                    <span className="text-muted-foreground/60">—</span>
+                  )}
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Section>
       )}
 
-      {schema.indexes.length > 0 && (
-        <>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Indexes
-          </h3>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Name</TableHead>
-                <TableHead className="text-xs">Unique</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {schema.indexes.map((idx) => (
-                <TableRow key={idx.name}>
-                  <TableCell className="font-mono text-xs">
-                    {idx.name}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {idx.unique ? (
-                      <Badge variant="outline" className="text-[10px]">
-                        UNIQUE
-                      </Badge>
-                    ) : null}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </>
+      {incoming.length > 0 && (
+        <Section title={`Referenced by (${incoming.length})`}>
+          <thead>
+            <tr>
+              <Th>Table</Th>
+              <Th>Column</Th>
+              <Th>References</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {incoming.map((ref) => (
+              <tr key={`${ref.table}.${ref.column}`} className="group">
+                <Td>
+                  <TableLink name={ref.table} onOpenTable={onOpenTable} />
+                </Td>
+                <Td mono>{ref.column}</Td>
+                <Td mono>
+                  {table.name}.{ref.referencesColumn}
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Section>
       )}
     </div>
+  );
+}
+
+function Tag({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+      {children}
+    </span>
   );
 }

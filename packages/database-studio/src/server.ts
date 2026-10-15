@@ -7,6 +7,8 @@ import { assets } from "./client-manifest.ts";
 
 export interface StudioOptions {
   client: Database;
+  /** Shown in the studio header so it's clear which database is open (e.g. its ID and host). */
+  label?: string;
   port?: number;
   open?: boolean;
   dev?: boolean;
@@ -30,6 +32,37 @@ const isAllowedHost = (hostHeader: string | null): boolean => {
 };
 
 const AUTH_COOKIE = "bunny_studio_auth";
+
+/** Studio-only endpoints live outside `/api`, where every path segment is a table name. */
+const SCHEMA_PATH = "/studio-api/schema";
+
+const jsonResponse = (
+  body: unknown,
+  status = 200,
+  headers?: Record<string, string>,
+): Response =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...headers },
+  });
+
+const BROWSER_OPENERS: Record<string, (url: string) => string[]> = {
+  darwin: (url) => ["open", url],
+  linux: (url) => ["xdg-open", url],
+  win32: (url) => ["rundll32", "url.dll,FileProtocolHandler", url],
+};
+
+/** Best effort: a missing opener (headless Linux, unknown platform) must not take the server down. */
+const openBrowser = (url: string): boolean => {
+  const opener = BROWSER_OPENERS[process.platform];
+  if (!opener) return false;
+  try {
+    Bun.spawn(opener(url), { stdio: ["ignore", "ignore", "ignore"] });
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const safeEqual = (a: string, b: string): boolean => {
   const ab = Buffer.from(a);
@@ -72,6 +105,7 @@ const handleAuth = async (
 export async function startStudio(options: StudioOptions): Promise<void> {
   const {
     client,
+    label,
     port = 4488,
     open = true,
     dev = false,
@@ -97,6 +131,15 @@ export async function startStudio(options: StudioOptions): Promise<void> {
     }),
     { token: sessionToken, cookieName: AUTH_COOKIE },
   );
+  // The full introspection (defaults, key order, index columns), which the
+  // OpenAPI spec at /api/ only partly carries.
+  const tables = Object.values(schema.tables).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  const handleSchema = requireAuth(
+    async () => jsonResponse({ label: label ?? null, readOnly: true, tables }),
+    { token: sessionToken, cookieName: AUTH_COOKIE },
+  );
 
   let server: ReturnType<typeof Bun.serve>;
   try {
@@ -114,12 +157,23 @@ export async function startStudio(options: StudioOptions): Promise<void> {
         const url = new URL(req.url);
         const pathname = url.pathname;
 
+        if (pathname === SCHEMA_PATH) {
+          return await handleSchema(req);
+        }
+
         // API routes - delegate to REST handler
         if (pathname.startsWith("/api")) {
           // /api/auth is the handshake endpoint: public but only succeeds
           // with the correct session token.
           if (pathname === "/api/auth") {
             return await handleAuth(req, sessionToken);
+          }
+          // Studio is read-only: the REST handler also serves writes, so
+          // refuse them here rather than relying on the token's scope.
+          if (req.method !== "GET") {
+            return jsonResponse({ message: "Studio is read-only" }, 405, {
+              Allow: "GET",
+            });
           }
           try {
             return await handleRest(req);
@@ -196,14 +250,8 @@ export async function startStudio(options: StudioOptions): Promise<void> {
     logger.log("Press Ctrl+C to stop.");
   }
 
-  if (open) {
-    const proc = Bun.spawn(
-      process.platform === "darwin"
-        ? ["open", browserUrl]
-        : ["xdg-open", browserUrl],
-      { stdout: "ignore", stderr: "ignore" },
-    );
-    await proc.exited;
+  if (open && !openBrowser(browserUrl)) {
+    logger.log("Couldn't open a browser. Open the URL above to continue.");
   }
 
   // Keep the process alive until interrupted

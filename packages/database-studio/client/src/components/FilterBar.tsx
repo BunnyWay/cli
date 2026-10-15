@@ -1,9 +1,7 @@
-import { Plus, Trash2 } from "lucide-react";
-import { useEffect, useRef } from "react";
-import type { FilterCondition, FilterMode } from "@/api.ts";
+import { Plus, X } from "lucide-react";
+import { useState } from "react";
+import type { ColumnDefinition } from "@/api";
 import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -11,241 +9,202 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  type FilterCondition,
+  type FilterMode,
+  isComplete,
+  isNullary,
+  OPERATOR_IDS,
+  OPERATORS,
+  type OperatorId,
+} from "@/lib/filters";
+import { cn } from "@/lib/utils";
 
-const OPERATORS = [
-  { value: "=", label: "=" },
-  { value: "!=", label: "!=" },
-  { value: ">", label: ">" },
-  { value: "<", label: "<" },
-  { value: ">=", label: ">=" },
-  { value: "<=", label: "<=" },
-  { value: "LIKE", label: "LIKE" },
-  { value: "NOT LIKE", label: "NOT LIKE" },
-  { value: "IS NULL", label: "IS NULL" },
-  { value: "IS NOT NULL", label: "IS NOT NULL" },
-];
+interface Draft extends FilterCondition {
+  id: number;
+}
 
-export const NULLARY_OPERATORS = new Set(["IS NULL", "IS NOT NULL"]);
+let nextId = 0;
+const draft = (f: FilterCondition): Draft => ({ ...f, id: nextId++ });
 
-export interface FilterBarProps {
-  columns: { name: string; type: string }[];
-  appliedFilters: FilterCondition[];
-  filterRowCount: number;
-  onFilterRowCountChange: (count: number) => void;
-  filterMode: FilterMode;
-  onApply: (
-    refs: Map<
-      number,
-      { column: string; operator: string; valueRef: HTMLInputElement | null }
-    >,
-    mode?: FilterMode,
-  ) => void;
+/** A sensible first operator: text columns are usually searched, not matched exactly. */
+function defaultOperator(column?: ColumnDefinition): OperatorId {
+  return column?.type === "TEXT" ? "contains" : "eq";
 }
 
 export function FilterBar({
   columns,
-  appliedFilters,
-  filterRowCount,
-  onFilterRowCountChange,
-  filterMode,
+  applied,
+  mode,
   onApply,
-}: FilterBarProps) {
-  // Store refs for each filter row's select/input values
-  const rowRefs = useRef<
-    Map<
-      number,
-      { column: string; operator: string; valueRef: HTMLInputElement | null }
-    >
-  >(new Map());
+}: {
+  columns: ColumnDefinition[];
+  applied: FilterCondition[];
+  mode: FilterMode;
+  onApply: (filters: FilterCondition[], mode: FilterMode) => void;
+}) {
+  // Re-mounted (via key) whenever the applied filters change, so drafts start
+  // from what's in the URL.
+  const [drafts, setDrafts] = useState<Draft[]>(() =>
+    applied.length > 0
+      ? applied.map(draft)
+      : [
+          draft({
+            column: columns[0]?.name ?? "",
+            operator: defaultOperator(columns[0]),
+            value: "",
+          }),
+        ],
+  );
 
-  // Initialize refs from applied filters
-  useEffect(() => {
-    for (let i = 0; i < appliedFilters.length; i++) {
-      if (!rowRefs.current.has(i)) {
-        rowRefs.current.set(i, {
-          column: appliedFilters[i].column,
-          operator: appliedFilters[i].operator,
-          valueRef: null,
-        });
-      }
-    }
-  }, [appliedFilters]);
+  const strip = (ds: Draft[]): FilterCondition[] =>
+    ds.map(({ column, operator, value }) => ({ column, operator, value }));
+  const dirty =
+    JSON.stringify(strip(drafts).filter(isComplete)) !==
+    JSON.stringify(applied);
 
-  const count = Math.max(filterRowCount, 0);
-  const indices = Array.from({ length: count }, (_, i) => i);
-
-  function addRow() {
-    const newIndex = count;
-    rowRefs.current.set(newIndex, {
-      column: columns[0]?.name ?? "",
-      operator: "=",
-      valueRef: null,
-    });
-    onFilterRowCountChange(count + 1);
+  function update(id: number, patch: Partial<FilterCondition>) {
+    setDrafts((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)));
   }
 
-  function removeRow(index: number) {
-    rowRefs.current.delete(index);
-    const remaining = indices.filter((i) => i !== index);
-    const newRefs = new Map<
-      number,
-      { column: string; operator: string; valueRef: HTMLInputElement | null }
-    >();
-    remaining.forEach((oldIdx, newIdx) => {
-      const ref = rowRefs.current.get(oldIdx);
-      if (ref) newRefs.set(newIdx, ref);
-    });
-    rowRefs.current = newRefs;
-    onFilterRowCountChange(remaining.length);
-    onApply(newRefs);
+  function remove(id: number) {
+    const next = drafts.filter((d) => d.id !== id);
+    setDrafts(next);
+    onApply(strip(next), mode);
   }
 
-  function clearAll() {
-    rowRefs.current.clear();
-    onFilterRowCountChange(0);
-    onApply(new Map());
-  }
-
-  function apply() {
-    onApply(rowRefs.current);
+  function add() {
+    const column = columns[0];
+    setDrafts((ds) => [
+      ...ds,
+      draft({
+        column: column?.name ?? "",
+        operator: defaultOperator(column),
+        value: "",
+      }),
+    ]);
   }
 
   return (
-    <div className="shrink-0 border-b bg-card/50 px-4 py-2 space-y-2">
-      {indices.map((i) => {
-        const applied = appliedFilters[i];
-        const ref = rowRefs.current.get(i);
-        const defaultColumn =
-          ref?.column ?? applied?.column ?? columns[0]?.name ?? "";
-        const defaultOperator = ref?.operator ?? applied?.operator ?? "=";
-        const defaultValue = applied?.value ?? "";
-
-        if (!rowRefs.current.has(i)) {
-          rowRefs.current.set(i, {
-            column: defaultColumn,
-            operator: defaultOperator,
-            valueRef: null,
-          });
-        }
-
-        return (
-          <div key={i} className="flex items-center gap-2">
-            <Select
-              defaultValue={defaultColumn}
-              onValueChange={(value) => {
-                const r = rowRefs.current.get(i);
-                if (r) r.column = value;
-              }}
-            >
-              <SelectTrigger className="h-7 w-auto gap-1.5 font-mono text-xs [&>svg]:h-3 [&>svg]:w-3">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {columns.map((col) => (
-                  <SelectItem
-                    key={col.name}
-                    value={col.name}
-                    className="font-mono text-xs"
-                  >
-                    {col.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              defaultValue={defaultOperator}
-              onValueChange={(value) => {
-                const r = rowRefs.current.get(i);
-                if (r) r.operator = value;
-              }}
-            >
-              <SelectTrigger className="h-7 w-auto gap-1.5 font-mono text-xs [&>svg]:h-3 [&>svg]:w-3">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {OPERATORS.map((op) => (
-                  <SelectItem
-                    key={op.value}
-                    value={op.value}
-                    className="font-mono text-xs"
-                  >
-                    {op.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              ref={(el) => {
-                const r = rowRefs.current.get(i);
-                if (r) r.valueRef = el;
-              }}
-              defaultValue={defaultValue}
+    <div className="shrink-0 space-y-1.5 border-b bg-card/40 px-3 py-2">
+      {drafts.map((d, i) => (
+        <div key={d.id} className="flex items-center gap-1.5">
+          <span className="w-12 shrink-0 text-right text-[11px] text-muted-foreground">
+            {i === 0 ? (
+              "where"
+            ) : i === 1 ? (
+              <button
+                type="button"
+                onClick={() =>
+                  onApply(strip(drafts), mode === "and" ? "or" : "and")
+                }
+                title="Switch between matching all and any filters"
+                className="rounded border px-1 font-mono uppercase hover:bg-muted hover:text-foreground"
+              >
+                {mode}
+              </button>
+            ) : (
+              <span className="font-mono uppercase">{mode}</span>
+            )}
+          </span>
+          <Select
+            value={d.column}
+            onValueChange={(column) => {
+              const col = columns.find((c) => c.name === column);
+              update(d.id, {
+                column,
+                ...(d.value === "" && { operator: defaultOperator(col) }),
+              });
+            }}
+          >
+            <SelectTrigger className="h-7 w-44 gap-1.5 font-mono text-xs [&>svg]:h-3 [&>svg]:w-3">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {columns.map((col) => (
+                <SelectItem
+                  key={col.name}
+                  value={col.name}
+                  className="font-mono text-xs"
+                >
+                  {col.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={d.operator}
+            onValueChange={(operator) =>
+              update(d.id, { operator: operator as OperatorId })
+            }
+          >
+            <SelectTrigger className="h-7 w-36 gap-1.5 text-xs [&>svg]:h-3 [&>svg]:w-3">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {OPERATOR_IDS.map((op) => (
+                <SelectItem key={op} value={op} className="text-xs">
+                  {OPERATORS[op].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {!isNullary(d.operator) && (
+            <input
+              value={d.value}
+              onChange={(e) => update(d.id, { value: e.target.value })}
               onKeyDown={(e) => {
-                if (e.key === "Enter") apply();
+                if (e.key === "Enter") onApply(strip(drafts), mode);
               }}
-              placeholder="Value..."
-              className="h-7 w-40 font-mono text-xs"
+              placeholder={d.operator === "in" ? "a, b, c" : "value"}
+              aria-label="Filter value"
+              // biome-ignore lint/a11y/noAutofocus: a freshly added filter is about to be typed into
+              autoFocus={d.value === "" && i === drafts.length - 1}
+              className="h-7 w-56 rounded-md border bg-background px-2 font-mono text-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0"
-              onClick={() => removeRow(i)}
-            >
-              <Trash2 className="h-3 w-3 text-muted-foreground" />
-            </Button>
-          </div>
-        );
-      })}
-      <div className="flex items-center gap-2">
+          )}
+          <button
+            type="button"
+            onClick={() => remove(d.id)}
+            title="Remove filter"
+            aria-label="Remove filter"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ))}
+      <div className="flex items-center gap-1.5 pl-[3.375rem]">
         <Button
           variant="ghost"
           size="sm"
-          className="h-6 text-xs gap-1"
-          onClick={addRow}
+          className="h-6 gap-1 px-2 text-xs"
+          onClick={add}
         >
           <Plus className="h-3 w-3" />
           Add filter
         </Button>
-        {count > 0 && (
-          <>
-            {count > 1 && (
-              <ButtonGroup>
-                <Button
-                  variant={filterMode === "and" ? "secondary" : "outline"}
-                  size="sm"
-                  className="h-6 text-[10px] px-2"
-                  onClick={() => onApply(rowRefs.current, "and")}
-                >
-                  AND
-                </Button>
-                <Button
-                  variant={filterMode === "or" ? "secondary" : "outline"}
-                  size="sm"
-                  className="h-6 text-[10px] px-2"
-                  onClick={() => onApply(rowRefs.current, "or")}
-                >
-                  OR
-                </Button>
-              </ButtonGroup>
-            )}
-            <Button
-              variant="secondary"
-              size="sm"
-              className="h-6 text-xs"
-              onClick={apply}
-            >
-              Apply
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 text-xs text-muted-foreground"
-              onClick={clearAll}
-            >
-              Clear all
-            </Button>
-          </>
+        <Button
+          size="sm"
+          className={cn("h-6 px-2.5 text-xs", !dirty && "opacity-60")}
+          onClick={() => onApply(strip(drafts), mode)}
+        >
+          Apply
+        </Button>
+        {applied.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs text-muted-foreground"
+            onClick={() => onApply([], "and")}
+          >
+            Clear all
+          </Button>
+        )}
+        {dirty && (
+          <span className="text-[11px] text-muted-foreground">
+            Press Enter to apply
+          </span>
         )}
       </div>
     </div>

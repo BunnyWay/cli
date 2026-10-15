@@ -518,6 +518,7 @@ Everything database-related goes through `@bunny.net/database-client`. `db shell
 ### Other database rules
 
 - **Never leak error text through the REST surface.** `createRestHandler()` returns `{ message: "Internal error", code: "INTERNAL_ERROR" }` with a 500 and hands the real error to the optional `onError` hook, because a raw SQLite error would leak table names, column names, and file paths. `db studio` wires `onError` to its own logger, which is why failures print in the launching terminal rather than the browser.
+- **Studio is read-only at two layers.** `db studio` asks `resolveCredentials()` for a `read-only` token, and `startStudio()` answers anything but `GET` under `/api` with a 405, because a token from `--token` or `.env` may still be full-access. Adding writes means lifting both deliberately, not just one.
 - **Every CLI connection identifies itself** via `databaseUserAgent(command)` (`bunny-cli/<version> (db shell)` and so on). The CLI compiles the shell and studio from source into its binary, so those packages' own versions say nothing about the traffic. Standalone `bsql` keeps `bunny-database-shell/<version>`.
 - **Full-scan dot-commands** (`.count`, `.size`, `.dump`) require confirmation via `confirmReadQuota()`, since reads count against the quota.
 - **`db create` validates the name client-side** against `DB_NAME_MAX_LENGTH` (16) before any API call: longer names make the backend 500 instead of returning a validation error.

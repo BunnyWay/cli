@@ -16,7 +16,16 @@ export interface FilterCondition {
   column: string;
   operator: FilterOperator;
   value: string | number | boolean | null | (string | number)[];
+  /** Set by the `not.` prefix (`?name=not.like.a%25`); the condition is wrapped in `NOT (...)`. */
+  negate?: boolean;
 }
+
+/** One `or=(...)` parameter: matches rows where any condition holds. */
+export interface FilterGroup {
+  or: FilterCondition[];
+}
+
+export type Filter = FilterCondition | FilterGroup;
 
 export interface OrderClause {
   column: string;
@@ -26,11 +35,14 @@ export interface OrderClause {
 
 export interface ParsedQuery {
   select: string[];
-  filters: FilterCondition[];
+  filters: Filter[];
   order: OrderClause[];
   limit?: number;
   offset?: number;
 }
+
+/** Thrown for query parameters that can't be applied safely; the handler answers 400. */
+export class QueryParseError extends Error {}
 
 const FILTER_OPERATORS: Record<string, FilterOperator> = {
   eq: "eq",
@@ -45,7 +57,7 @@ const FILTER_OPERATORS: Record<string, FilterOperator> = {
   in: "in",
 };
 
-const RESERVED_PARAMS = new Set(["select", "order", "limit", "offset"]);
+const RESERVED_PARAMS = new Set(["select", "order", "limit", "offset", "or"]);
 
 export function parseSelect(selectParam: string | null): string[] {
   if (!selectParam || selectParam === "*") {
@@ -72,6 +84,12 @@ export function parseFilterValue(
 
   const operatorStr = value.substring(0, dotIndex);
   const rawValue = value.substring(dotIndex + 1);
+
+  if (operatorStr === "not") {
+    const inner = parseFilterValue(column, rawValue);
+    if (!inner || inner.negate || !rawValue.includes(".")) return null;
+    return { ...inner, negate: true };
+  }
 
   const operator = FILTER_OPERATORS[operatorStr];
   if (!operator) {
@@ -102,11 +120,7 @@ function parseInValues(raw: string): (string | number)[] {
     return [raw];
   }
 
-  return inner.split(",").map((v) => {
-    const trimmed = v.trim();
-    const num = Number(trimmed);
-    return Number.isNaN(num) ? trimmed : num;
-  });
+  return inner.split(",").map((v) => parseValue(v.trim()));
 }
 
 function parseIsValue(raw: string): boolean | null {
@@ -117,12 +131,73 @@ function parseIsValue(raw: string): boolean | null {
   return null;
 }
 
-function parseValue(raw: string): string | number {
+/**
+ * Numeric strings become numbers, except integers beyond 2^53, which a
+ * number can't hold exactly; those stay strings, and SQLite's INTEGER
+ * affinity still compares them as integers.
+ */
+export function parseValue(raw: string): string | number {
   const num = Number(raw);
-  if (!Number.isNaN(num) && raw.trim() !== "") {
-    return num;
+  if (Number.isNaN(num) || raw.trim() === "") return raw;
+  if (Number.isInteger(num) && !Number.isSafeInteger(num)) return raw;
+  return num;
+}
+
+/**
+ * Split on commas that sit outside parentheses and double quotes, so
+ * `a.in.(1,2),b.eq."x,y"` yields two parts. Inside quotes, a backslash escapes
+ * the next character.
+ */
+function splitTopLevel(input: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  let current = "";
+  for (const ch of input) {
+    if (escaped) escaped = false;
+    else if (quoted && ch === "\\") escaped = true;
+    else if (ch === '"') quoted = !quoted;
+    else if (!quoted && ch === "(") depth++;
+    else if (!quoted && ch === ")") depth--;
+    if (ch === "," && depth === 0 && !quoted) {
+      parts.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
   }
-  return raw;
+  parts.push(current);
+  return parts;
+}
+
+/**
+ * Parse an `or=(col.op.value,...)` parameter. Values may be wrapped in double
+ * quotes to carry commas or parentheses; inside quotes, a backslash escapes the
+ * next character. Returns null when any condition is malformed: dropping one
+ * branch of an OR would widen the match.
+ */
+export function parseOrGroup(raw: string): FilterGroup | null {
+  const match = raw.match(/^\((.*)\)$/s);
+  if (!match?.[1]) return null;
+
+  const conditions: FilterCondition[] = [];
+  for (const part of splitTopLevel(match[1])) {
+    const dotIndex = part.indexOf(".");
+    if (dotIndex <= 0) return null;
+    const column = part.substring(0, dotIndex).trim();
+    let rest = part.substring(dotIndex + 1);
+    // Unquote `op."value"` (and `not.op."value"`) so quoted values compare as written.
+    rest = rest.replace(
+      /^((?:not\.)?[a-z]+\.)"(.*)"$/s,
+      (_, prefix: string, value: string) =>
+        prefix + value.replace(/\\(.)/gs, "$1"),
+    );
+    const condition = parseFilterValue(column, rest);
+    if (!condition || !rest.includes(".")) return null;
+    conditions.push(condition);
+  }
+  return { or: conditions };
 }
 
 export function parseOrder(orderParam: string | null): OrderClause[] {
@@ -157,7 +232,15 @@ export function parseQueryParams(url: URL): ParsedQuery {
   const offsetParam = params.get("offset");
   const offset = offsetParam ? parseInt(offsetParam, 10) : undefined;
 
-  const filters: FilterCondition[] = [];
+  const filters: Filter[] = [];
+
+  for (const orParam of params.getAll("or")) {
+    const group = parseOrGroup(orParam);
+    if (!group) {
+      throw new QueryParseError(`Invalid or filter: ${orParam}`);
+    }
+    filters.push(group);
+  }
 
   for (const [key, value] of params.entries()) {
     if (RESERVED_PARAMS.has(key)) {

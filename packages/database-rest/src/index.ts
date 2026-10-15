@@ -4,7 +4,9 @@ export type { DatabaseExecutor, ExecuteResult } from "./executor.ts";
 export type { RestHandlerOptions } from "./handler.ts";
 export { createRestHandler } from "./handler.ts";
 export type {
+  Filter,
   FilterCondition,
+  FilterGroup,
   FilterOperator,
   OrderClause,
   ParsedQuery,
@@ -13,8 +15,10 @@ export type {
 export {
   parseFilterValue,
   parseOrder,
+  parseOrGroup,
   parseQueryParams,
   parseSelect,
+  QueryParseError,
 } from "./parser.ts";
 export {
   buildCountQuery,

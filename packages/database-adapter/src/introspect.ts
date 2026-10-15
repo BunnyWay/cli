@@ -50,22 +50,29 @@ const getTables = async (client: AdapterClient): Promise<string[]> => {
   return result.rows.map((row) => row.name as string);
 };
 
+/** Columns in declaration order, plus the primary key in key order (PRAGMA `pk` is the 1-based position, 0 when not part of the key). */
 const getColumns = async (
   client: AdapterClient,
   tableName: string,
-): Promise<ColumnDefinition[]> => {
+): Promise<{ columns: ColumnDefinition[]; primaryKey: string[] }> => {
   const result = await query(
     client,
     `PRAGMA table_info("${tableName.replace(/"/g, '""')}")`,
   );
 
-  return result.rows.map((row) => ({
+  const columns = result.rows.map((row) => ({
     name: row.name as string,
     type: mapColumnType(row.type as string),
     nullable: row.notnull === 0,
-    primaryKey: row.pk === 1,
+    primaryKey: Number(row.pk) > 0,
     defaultValue: row.dflt_value as string | number | null,
   }));
+  const primaryKey = result.rows
+    .filter((row) => Number(row.pk) > 0)
+    .sort((a, b) => Number(a.pk) - Number(b.pk))
+    .map((row) => row.name as string);
+
+  return { columns, primaryKey };
 };
 
 const getForeignKeys = async (
@@ -111,10 +118,9 @@ const introspectTable = async (
   client: AdapterClient,
   tableName: string,
 ): Promise<TableDefinition> => {
-  const columns = await getColumns(client, tableName);
+  const { columns, primaryKey } = await getColumns(client, tableName);
   const foreignKeys = await getForeignKeys(client, tableName);
   const indexes = await getIndexes(client, tableName);
-  const primaryKey = columns.filter((c) => c.primaryKey).map((c) => c.name);
 
   // Unique columns: single-column unique indexes, excluding the PK
   const pkSet = new Set(primaryKey);

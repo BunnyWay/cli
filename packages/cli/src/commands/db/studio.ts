@@ -6,10 +6,10 @@ import {
   databaseUserAgent,
   TOKEN_TTL_MINUTES,
 } from "./constants.ts";
-import { resolveCredentials } from "./credentials.ts";
+import { databaseTarget, resolveCredentials } from "./credentials.ts";
 
 const COMMAND = `studio [${ARG_DATABASE_ID}]`;
-const DESCRIPTION = "Open a visual database explorer in your browser.";
+const DESCRIPTION = "Open a read-only database explorer in your browser.";
 
 const ARG_PORT = "port";
 const ARG_URL = "url";
@@ -87,10 +87,11 @@ export const dbStudioCommand = defineCommand<{
   }) => {
     logger.warn("db studio will:");
     logger.log(
-      `  - Create a full-access token scoped to this database that expires in ${TOKEN_TTL_MINUTES} minutes.`,
+      `  - Create a read-only token scoped to this database that expires in ${TOKEN_TTL_MINUTES} minutes,`,
     );
+    logger.log("    unless --token or .env already provides one.");
     logger.log(
-      "  - Load that token into a browser tab running on http://localhost.",
+      "  - Serve a read-only explorer on http://localhost that only this browser session can use.",
     );
     logger.log(
       "  - Power the UI with additional reads (table previews, row counts, pagination),",
@@ -107,13 +108,14 @@ export const dbStudioCommand = defineCommand<{
     const { connect } = await import("@bunny.net/database-client");
     const { startStudio } = await import("@bunny.net/database-studio");
 
-    const { url, token } = await resolveCredentials({
+    const { url, token, databaseId } = await resolveCredentials({
       url: urlArg,
       token: tokenArg,
       databaseId: databaseIdArg,
       profile,
       apiKey,
       verbose,
+      authorization: "read-only",
     });
 
     const client = connect({
@@ -125,6 +127,7 @@ export const dbStudioCommand = defineCommand<{
     logger.log("");
     await startStudio({
       client,
+      label: databaseTarget(url, databaseId).label,
       port: port ?? 4488,
       open: !noOpen,
       dev,
