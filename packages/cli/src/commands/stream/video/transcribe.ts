@@ -29,7 +29,7 @@ interface TranscribeArgs {
   generateDescription?: boolean;
   generateChapters?: boolean;
   generateMoments?: boolean;
-  force?: boolean;
+  overwrite?: boolean;
 }
 
 export const TRANSCRIBE_BILLING_NOTE =
@@ -80,8 +80,8 @@ export const streamVideoTranscribeCommand = defineCommand<TranscribeArgs>({
       "Name the spoken language and generate a title",
     ],
     [
-      "$0 stream videos transcribe 1a2b3c4d-... --force",
-      "Re-run, overriding the library defaults",
+      "$0 stream videos transcribe 1a2b3c4d-... --overwrite",
+      "Overwrite the existing transcription, overriding the library defaults",
     ],
   ],
 
@@ -118,15 +118,22 @@ export const streamVideoTranscribeCommand = defineCommand<TranscribeArgs>({
         type: "boolean",
         describe: "Generate moments from the transcript",
       })
-      .option("force", {
-        alias: "f",
+      .option("overwrite", {
         type: "boolean",
         describe:
-          "Re-run and override the library's transcribing defaults (the API's force flag)",
+          "Overwrite the existing transcription and override the library's transcribing defaults (sent as the API's force flag)",
       }),
 
   handler: async (args) => {
-    const { video: ref, lib, force, profile, output, verbose, apiKey } = args;
+    const {
+      video: ref,
+      lib,
+      overwrite,
+      profile,
+      output,
+      verbose,
+      apiKey,
+    } = args;
     const settings = transcribeSettings(args);
 
     // Check requested output languages against the live list before anything is billed.
@@ -136,7 +143,7 @@ export const streamVideoTranscribeCommand = defineCommand<TranscribeArgs>({
       verbose,
     );
 
-    // --force re-runs a billed transcription, so it must not also pick targets:
+    // --overwrite re-runs a billed transcription, so it must not also pick targets:
     // both resolutions error instead of prompting.
     const { client, library, libraryId } = await streamLibraryContext({
       lib,
@@ -145,12 +152,12 @@ export const streamVideoTranscribeCommand = defineCommand<TranscribeArgs>({
       verbose,
       apiKey,
       offerLink: true,
-      force,
+      force: overwrite,
     });
 
     const video = await resolveVideoInteractive(client, libraryId, ref, {
       output,
-      force,
+      force: overwrite,
     });
 
     // Right after an upload or re-encode, a transcribing library is about to do this itself.
@@ -177,7 +184,9 @@ export const streamVideoTranscribeCommand = defineCommand<TranscribeArgs>({
     }
 
     const status = await withSpinner("Queueing transcription...", () =>
-      transcribeVideo(client, libraryId, video.guid, settings, { force }),
+      transcribeVideo(client, libraryId, video.guid, settings, {
+        force: overwrite,
+      }),
     );
 
     if (output === "json") {
@@ -187,7 +196,7 @@ export const streamVideoTranscribeCommand = defineCommand<TranscribeArgs>({
             id: video.guid,
             title: video.title,
             queued: true,
-            force: Boolean(force),
+            overwrite: Boolean(overwrite),
             ...settings,
             ...status,
           },
