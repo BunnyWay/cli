@@ -11,6 +11,12 @@ export interface StudioOptions {
   client: Database;
   /** Shown in the studio header so it's clear which database is open (e.g. its ID and host). */
   label?: string;
+  /**
+   * True when the connection's token is known to be read-only (the CLI
+   * created it). Otherwise the SQL console relies on studio's own statement
+   * checks, and says so.
+   */
+  tokenReadOnly?: boolean;
   port?: number;
   open?: boolean;
   dev?: boolean;
@@ -116,6 +122,7 @@ export async function startStudio(options: StudioOptions): Promise<void> {
   const {
     client,
     label,
+    tokenReadOnly = false,
     port = 4488,
     open = true,
     dev = false,
@@ -155,6 +162,7 @@ export async function startStudio(options: StudioOptions): Promise<void> {
       jsonResponse({
         label: label ?? null,
         readOnly: true,
+        tokenReadOnly,
         tables,
         ddl,
         views,

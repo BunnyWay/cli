@@ -79,10 +79,14 @@ const getForeignKeys = async (
   client: AdapterClient,
   tableName: string,
 ): Promise<ForeignKey[]> => {
-  const result = await query(
-    client,
-    `PRAGMA foreign_key_list("${tableName.replace(/"/g, '""')}")`,
-  );
+  // The SELECT form, not `PRAGMA foreign_key_list(...)`: libSQL servers
+  // classify that pragma as a write, so a read-only token can't run it.
+  const result = await client
+    .prepare(
+      'SELECT "from", "table", "to" FROM pragma_foreign_key_list(?) ORDER BY id, seq',
+    )
+    .bind(tableName)
+    .run();
 
   return result.rows.map((row) => ({
     column: row.from as string,

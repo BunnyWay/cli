@@ -108,15 +108,17 @@ export const dbStudioCommand = defineCommand<{
     const { connect } = await import("@bunny.net/database-client");
     const { startStudio } = await import("@bunny.net/database-studio");
 
-    const { url, token, databaseId } = await resolveCredentials({
-      url: urlArg,
-      token: tokenArg,
-      databaseId: databaseIdArg,
-      profile,
-      apiKey,
-      verbose,
-      authorization: "read-only",
-    });
+    const { url, token, databaseId, tokenGenerated } = await resolveCredentials(
+      {
+        url: urlArg,
+        token: tokenArg,
+        databaseId: databaseIdArg,
+        profile,
+        apiKey,
+        verbose,
+        authorization: "read-only",
+      },
+    );
 
     const client = connect({
       url,
@@ -128,6 +130,8 @@ export const dbStudioCommand = defineCommand<{
     await startStudio({
       client,
       label: databaseTarget(url, databaseId).label,
+      // Only a token created here is known to be read-only; one from --token or .env may be full-access.
+      tokenReadOnly: tokenGenerated,
       port: port ?? 4488,
       open: !noOpen,
       dev,

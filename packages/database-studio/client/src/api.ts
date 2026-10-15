@@ -22,6 +22,8 @@ export interface StudioSchema {
   /** Which database is open, e.g. `db_… (host)`. */
   label: string | null;
   readOnly: boolean;
+  /** The database token itself is read-only (studio created it), not just studio's checks. */
+  tokenReadOnly: boolean;
   tables: TableDefinition[];
   /** Each table's CREATE statements: the table, then its indexes and triggers. */
   ddl: Record<string, string[]>;

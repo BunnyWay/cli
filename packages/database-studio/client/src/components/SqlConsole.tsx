@@ -226,10 +226,16 @@ export function SqlConsole({
         </div>
         <span
           className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground"
-          title="Writes are refused by the server and by SQLite itself"
+          title={
+            schema.tokenReadOnly
+              ? "Studio rejects statements that write, and its database token is read-only, so the database refuses writes too."
+              : "Studio rejects statements that write. The token came from --token or .env and may allow writes, so that check is the only guard. Run without them to use a read-only token."
+          }
         >
           <Lock className="h-3 w-3" />
-          SELECT, WITH, EXPLAIN, PRAGMA, VALUES
+          {schema.tokenReadOnly
+            ? "Read-only token · SELECT, WITH, EXPLAIN, PRAGMA, VALUES"
+            : "Your token · writes blocked by studio · SELECT, WITH, EXPLAIN, PRAGMA, VALUES"}
         </span>
       </div>
 
