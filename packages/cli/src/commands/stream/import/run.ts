@@ -263,12 +263,17 @@ function renderResult(
     logger.log("");
     for (const m of failed) logger.error(`${stripAnsi(m.name)}: ${m.error}`);
   }
-  const givenUp = failed.filter((f) => !f.retryable).length;
+  const missing = failed.filter((f) => f.missingAtSource).length;
+  const givenUp = failed.filter((f) => !f.retryable).length - missing;
   if (givenUp > 0)
     logger.info(
       `${givenUp} cannot be retried as they are: Bunny rejected them or they failed 3 times. Add --clean-failed to delete their copies and try again.`,
     );
-  if (failed.length > givenUp || result.status === "paused")
+  if (missing > 0)
+    logger.info(
+      `${missing} are no longer listed at the source. Restore them there, then add --clean-failed to try again.`,
+    );
+  if (failed.length > givenUp + missing || result.status === "paused")
     logger.info(
       `Resume with ${bunny(resumeCommand(result, libraryArg, includeTs))}`,
     );

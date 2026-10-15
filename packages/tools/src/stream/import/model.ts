@@ -87,6 +87,8 @@ export const ImportRunSchema = z.object({
       name: z.string(),
       sourceId: z.string(),
       error: z.string().nullable(),
+      /** The source no longer lists it, so only restoring it there can bring it back. */
+      missingAtSource: z.boolean(),
       /** False when a resume will not retry it: a retry cannot fix it, or it has failed too often. */
       retryable: z.boolean(),
     }),
