@@ -187,9 +187,43 @@ function onBun(command: string[]): string[] {
   return command;
 }
 
+// Files a lone JS/TS server starts from, in order.
+const SCRIPT_ENTRIES = [
+  "server.ts",
+  "index.ts",
+  "main.ts",
+  "server.js",
+  "index.js",
+  "main.js",
+  "app.js",
+];
+
+/**
+ * A lone script with no package.json runs on Bun, which runs TypeScript
+ * as-is and installs the packages it imports when it starts.
+ */
+function detectScript(project: Project): DetectedApp | undefined {
+  const entry = SCRIPT_ENTRIES.find((e) => project.entries.includes(e));
+  if (!entry) return undefined;
+  return {
+    label: "Bun",
+    port: 3000,
+    ignore: ["node_modules"],
+    dockerfile: (port) =>
+      dockerfile("Bun", [
+        "FROM oven/bun:1",
+        "WORKDIR /app",
+        "COPY . .",
+        `ENV NODE_ENV=production PORT=${port}`,
+        `EXPOSE ${port}`,
+        `CMD ["bun", "${entry}"]`,
+      ]),
+  };
+}
+
 export function detectNode(project: Project): DetectedApp | undefined {
   const pkg = readJson(project, "package.json");
-  if (!pkg) return undefined;
+  if (!pkg) return detectScript(project);
 
   const deps = new Set([
     ...Object.keys(record(pkg.dependencies)),

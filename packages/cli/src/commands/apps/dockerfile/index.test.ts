@@ -3,8 +3,16 @@ import { type DetectedApp, detectAppFrom, dockerignore } from "./index.ts";
 
 /** A project root holding `files`; JSON values are serialised. */
 function detect(files: Record<string, unknown>): DetectedApp | undefined {
+  const list = (dir: string) => {
+    const prefix = dir ? `${dir}/` : "";
+    const names = Object.keys(files)
+      .filter((path) => path.startsWith(prefix))
+      .map((path) => path.slice(prefix.length).split("/")[0] ?? "");
+    return [...new Set(names)];
+  };
   return detectAppFrom({
-    entries: Object.keys(files).map((path) => path.split("/")[0] ?? path),
+    entries: list(""),
+    list,
     read: (path) => {
       const value = files[path];
       if (value === undefined) return null;
@@ -93,6 +101,12 @@ describe("node", () => {
       detect({ "package.json": { scripts: { test: "bun test" } } }),
     ).toBeUndefined();
   });
+
+  test("a lone script runs on bun", () => {
+    expect(render({ "index.ts": "Bun.serve({})" })).toContain(
+      'CMD ["bun", "index.ts"]',
+    );
+  });
 });
 
 describe("python", () => {
@@ -126,8 +140,24 @@ describe("python", () => {
 
   test("a package that merely starts with a framework name doesn't count", () => {
     expect(
-      detect({ "requirements.txt": "flask-cors\n", "app.py": "" }),
-    ).toBeUndefined();
+      detect({ "requirements.txt": "flask-cors\n", "app.py": "" })?.label,
+    ).toBe("Python");
+  });
+
+  test("a lone script installs the framework it imports", () => {
+    const dockerfile = render({
+      "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+    });
+    expect(dockerfile).toContain(
+      "RUN pip install --no-cache-dir fastapi uvicorn",
+    );
+    expect(dockerfile).toContain('"main:app"');
+  });
+
+  test("a lone script with no framework runs with python", () => {
+    expect(render({ "server.py": "import http.server" })).toContain(
+      'CMD ["python","server.py"]',
+    );
   });
 });
 
@@ -140,9 +170,13 @@ describe("go", () => {
     });
     expect(dockerfile).toContain("FROM golang:1.23 AS build");
     expect(dockerfile).toContain("COPY go.mod go.sum ./");
-    expect(dockerfile).toContain(
-      "RUN CGO_ENABLED=0 go build -o /server ./cmd/api",
-    );
+    expect(dockerfile).toContain("-o /server ./cmd/api");
+  });
+
+  test("a lone main.go gets a module", () => {
+    const dockerfile = render({ "main.go": "package main" });
+    expect(dockerfile).toContain("RUN go mod init app && go mod tidy");
+    expect(dockerfile).toContain("-o /server .");
   });
 
   test("no main package is not an app", () => {
@@ -163,7 +197,7 @@ describe("rust", () => {
   });
 });
 
-describe("rails", () => {
+describe("ruby", () => {
   test("wins over the package.json next to it", () => {
     const dockerfile = render({
       Gemfile: 'ruby "3.3.0"\ngem "rails", "~> 8.0"\ngem "propshaft"\n',
@@ -172,13 +206,25 @@ describe("rails", () => {
     });
     expect(dockerfile).toContain("FROM ruby:3.3-slim");
     expect(dockerfile).toContain("bin/rails assets:precompile");
-    expect(dockerfile).toContain('"-b", "0.0.0.0", "-p", "3000"');
+    expect(dockerfile).toContain('"-b","0.0.0.0","-p","3000"');
+  });
+
+  test("Sinatra starts config.ru with puma", () => {
+    const app = detect({
+      Gemfile: 'gem "sinatra"\ngem "puma"\n',
+      "config.ru": "run Sinatra::Application",
+    });
+    expect(app?.label).toBe("Sinatra");
+    expect(app?.dockerfile(9292)).toContain(
+      'CMD ["bundle","exec","puma","-b","tcp://0.0.0.0:9292"]',
+    );
   });
 });
 
-describe("laravel", () => {
-  test("builds Vite assets and serves with FrankenPHP", () => {
+describe("php", () => {
+  test("Laravel builds Vite assets and serves public/ with FrankenPHP", () => {
     const app = detect({
+      "public/index.php": "",
       "composer.json": {
         name: "acme/shop",
         require: { php: "^8.3", "laravel/framework": "^12.0" },
@@ -190,7 +236,64 @@ describe("laravel", () => {
     const dockerfile = app?.dockerfile(8080) ?? "";
     expect(dockerfile).toContain("AS assets\n");
     expect(dockerfile).toContain("FROM dunglas/frankenphp:1-php8.3");
-    expect(dockerfile).toContain("SERVER_NAME=:8080");
+    expect(dockerfile).toContain("ENV APP_ENV=production SERVER_NAME=:8080\n");
+  });
+
+  test("a lone index.php serves the project root without composer", () => {
+    const dockerfile = render({ "index.php": "<?php echo 'hi';" });
+    expect(dockerfile).toContain("ENV SERVER_NAME=:8080 SERVER_ROOT=/app");
+    expect(dockerfile).not.toContain("composer");
+  });
+});
+
+describe("dotnet", () => {
+  test("publishes a web project and runs its assembly", () => {
+    const dockerfile = render({
+      "Api.csproj":
+        '<Project Sdk="Microsoft.NET.Sdk.Web"><TargetFramework>net9.0</TargetFramework></Project>',
+      "global.json": "{}",
+    });
+    expect(dockerfile).toContain(
+      "FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build",
+    );
+    expect(dockerfile).toContain("COPY Api.csproj global.json ./");
+    expect(dockerfile).toContain("ENV ASPNETCORE_URLS=http://+:8080");
+    expect(dockerfile).toContain('CMD ["dotnet","Api.dll"]');
+  });
+
+  test("Blazor WebAssembly is a static site", () => {
+    expect(
+      detect({
+        "App.csproj": '<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly" />',
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe("java", () => {
+  test("Spring Boot with the Gradle wrapper skips the plain jar", () => {
+    const dockerfile = render({
+      "build.gradle.kts":
+        'plugins { id("org.springframework.boot") }\njava { toolchain { languageVersion = JavaLanguageVersion.of(17) } }',
+      gradlew: "",
+    });
+    expect(dockerfile).toContain("FROM eclipse-temurin:17-jdk AS build");
+    expect(dockerfile).toContain("grep -v -- -plain.jar");
+    expect(dockerfile).toContain("FROM eclipse-temurin:17-jre");
+  });
+
+  test("Maven without a wrapper builds on the Maven image", () => {
+    expect(
+      render({ "pom.xml": "<parent>org.springframework.boot</parent>" }),
+    ).toContain("FROM maven:3-eclipse-temurin-21 AS build");
+  });
+});
+
+describe("deno", () => {
+  test("runs the main module", () => {
+    expect(render({ "deno.json": "{}", "main.ts": "" })).toContain(
+      'CMD ["deno", "run", "--allow-all", "main.ts"]',
+    );
   });
 });
 

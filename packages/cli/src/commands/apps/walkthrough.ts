@@ -122,9 +122,9 @@ export async function runWalkthrough(
     if (detectedDockerfiles.length === 0 && !detectedApp) {
       // A site with no server to run belongs on Sites, not in a container.
       const site = await detectFramework(process.cwd());
-      if (site && site.id !== "static") {
+      if (site || existsSync(resolve(process.cwd(), "index.html"))) {
         logger.dim(
-          `This looks like a static ${site.label} site. \`bunny sites deploy\` hosts it without a container.`,
+          `This looks like a static${site ? ` ${site.label}` : ""} site. \`bunny sites deploy\` hosts it without a container.`,
         );
       }
     }

@@ -5,7 +5,10 @@ import {
   versionFrom,
 } from "./project.ts";
 
-/** The first of `files` that exists, as a Python module path (`app/main.py` → `app.main`). */
+// Scripts a plain Python app starts from, in order.
+const ENTRIES = ["main.py", "app.py", "server.py"];
+
+/** The first of `files` that exists, as a module path (`app/main.py` → `app.main`). */
 function moduleOf(project: Project, files: string[]): string | undefined {
   const file = files.find((f) => project.read(f) !== null);
   return file?.replace(/\.py$/, "").replaceAll("/", ".");
@@ -14,66 +17,94 @@ function moduleOf(project: Project, files: string[]): string | undefined {
 export function detectPython(project: Project): DetectedApp | undefined {
   const requirements = project.read("requirements.txt");
   const pyproject = project.read("pyproject.toml");
-  if (requirements === null && pyproject === null) return undefined;
+  const entry = ENTRIES.find((f) => project.entries.includes(f));
+  const manifest = requirements !== null || pyproject !== null;
+  if (!manifest && !entry) return undefined;
 
-  const deps = `${requirements ?? ""}\n${pyproject ?? ""}`.toLowerCase();
-  // A whole package name, so `flask` doesn't match `flask-cors`.
+  // Dependencies come from the manifest, or for a lone script from what it
+  // imports. Whole names only, so `flask` doesn't match `flask-cors`.
+  const deps = manifest
+    ? `${requirements ?? ""}\n${pyproject ?? ""}`.toLowerCase()
+    : [
+        ...(project.read(entry ?? "") ?? "").matchAll(
+          /^(?:from|import)\s+(\w+)/gm,
+        ),
+      ]
+        .map((m) => m[1])
+        .join("\n");
   const has = (name: string) =>
     new RegExp(`(?:^|[\\s"',[])${name}(?![\\w-])`, "m").test(deps);
 
-  let label: string;
-  let server: "gunicorn" | "uvicorn";
-  let target: string | undefined;
-  if (has("django")) {
+  let label = "Python";
+  let command: (port: number) => string[];
+  let packages: string[] = [];
+  const gunicorn = (target: string) => (port: number) => [
+    "gunicorn",
+    target,
+    "--bind",
+    `0.0.0.0:${port}`,
+  ];
+
+  const settings = project
+    .read("manage.py")
+    ?.match(/DJANGO_SETTINGS_MODULE["'],\s*["']([\w.]+)\.settings["']/)?.[1];
+  const fastapi =
+    has("fastapi") && moduleOf(project, [...ENTRIES, "app/main.py"]);
+  const flask =
+    has("flask") && moduleOf(project, ["app.py", "wsgi.py", "main.py"]);
+  if (has("django") && settings) {
     label = "Django";
-    server = "gunicorn";
-    // manage.py names the settings module, e.g. `mysite.settings`.
-    const settings = project
-      .read("manage.py")
-      ?.match(/DJANGO_SETTINGS_MODULE["'],\s*["']([\w.]+)\.settings["']/)?.[1];
-    target = settings && `${settings}.wsgi`;
-  } else if (has("fastapi")) {
+    command = gunicorn(`${settings}.wsgi`);
+    packages = ["django", "gunicorn"];
+  } else if (fastapi) {
     label = "FastAPI";
-    server = "uvicorn";
-    const module = moduleOf(project, ["main.py", "app.py", "app/main.py"]);
-    target = module && `${module}:app`;
-  } else if (has("flask")) {
+    command = (port) => [
+      "uvicorn",
+      `${fastapi}:app`,
+      "--host",
+      "0.0.0.0",
+      "--port",
+      String(port),
+    ];
+    packages = ["fastapi", "uvicorn"];
+  } else if (flask) {
     label = "Flask";
-    server = "gunicorn";
-    const module = moduleOf(project, ["app.py", "wsgi.py", "main.py"]);
-    target = module && `${module}:app`;
+    command = gunicorn(`${flask}:app`);
+    packages = ["flask", "gunicorn"];
+  } else if (entry) {
+    command = () => ["python", entry];
   } else {
     return undefined;
   }
-  if (!target) return undefined;
 
   const version = versionFrom(
     [project.read(".python-version")],
     /(3\.\d+)/,
     "3.13",
   );
-  const uv = project.entries.includes("uv.lock");
-  // Install dependencies (plus the server, when the project doesn't pin
-  // it) before copying the source so they cache. A bare pyproject.toml
+  // Install dependencies, plus any framework package the project doesn't
+  // list, before copying the source so they cache. A bare pyproject.toml
   // installs the project itself, so it needs the source first.
-  const extra = has(server) ? "" : ` ${server}`;
+  const missing = packages.filter((p) => !manifest || !has(p)).join(" ");
+  const uv = project.entries.includes("uv.lock");
   const install = uv
     ? [
         "COPY pyproject.toml uv.lock ./",
-        `RUN uv sync --frozen --no-dev --no-install-project${extra && ` && uv pip install${extra}`}`,
+        `RUN uv sync --frozen --no-dev --no-install-project${missing && ` && uv pip install ${missing}`}`,
         "COPY . .",
       ]
     : requirements !== null
       ? [
           "COPY requirements.txt ./",
-          `RUN pip install --no-cache-dir -r requirements.txt${extra}`,
+          `RUN pip install --no-cache-dir -r requirements.txt ${missing}`.trim(),
           "COPY . .",
         ]
-      : ["COPY . .", `RUN pip install --no-cache-dir .${extra}`];
-  const bind = (port: number) =>
-    server === "gunicorn"
-      ? ["gunicorn", target, "--bind", `0.0.0.0:${port}`]
-      : ["uvicorn", target, "--host", "0.0.0.0", "--port", String(port)];
+      : pyproject !== null
+        ? ["COPY . .", `RUN pip install --no-cache-dir . ${missing}`.trim()]
+        : [
+            ...(missing ? [`RUN pip install --no-cache-dir ${missing}`] : []),
+            "COPY . .",
+          ];
 
   return {
     label,
@@ -93,7 +124,7 @@ export function detectPython(project: Project): DetectedApp | undefined {
         ...install,
         `ENV PORT=${port}`,
         `EXPOSE ${port}`,
-        `CMD ${JSON.stringify(bind(port))}`,
+        `CMD ${JSON.stringify(command(port))}`,
       ]),
   };
 }

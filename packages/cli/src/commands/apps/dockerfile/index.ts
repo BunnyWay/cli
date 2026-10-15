@@ -1,11 +1,14 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { detectDeno } from "./deno.ts";
+import { detectDotnet } from "./dotnet.ts";
 import { detectGo } from "./go.ts";
-import { detectLaravel } from "./laravel.ts";
+import { detectJava } from "./java.ts";
 import { detectNode } from "./node.ts";
+import { detectPhp } from "./php.ts";
 import type { DetectedApp, Detector, Project } from "./project.ts";
 import { detectPython } from "./python.ts";
-import { detectRails } from "./rails.ts";
+import { detectRuby } from "./ruby.ts";
 import { detectRust } from "./rust.ts";
 
 /**
@@ -16,14 +19,18 @@ import { detectRust } from "./rust.ts";
 
 export type { DetectedApp, Project } from "./project.ts";
 
-// Laravel and Rails come before Node: they often carry a package.json for
-// their frontend assets.
+// Manifest-led stacks first. Node goes last: PHP, Ruby, Python and the
+// rest often carry a package.json for frontend assets, and a lone
+// index.js is the weakest signal.
 const DETECTORS: Detector[] = [
-  detectLaravel,
-  detectRails,
+  detectPhp,
+  detectRuby,
   detectPython,
   detectGo,
   detectRust,
+  detectDotnet,
+  detectJava,
+  detectDeno,
   detectNode,
 ];
 
@@ -36,14 +43,16 @@ export function detectAppFrom(project: Project): DetectedApp | undefined {
 }
 
 export function detectApp(root: string): DetectedApp | undefined {
-  let entries: string[];
-  try {
-    entries = readdirSync(root);
-  } catch {
-    return undefined;
-  }
+  const list = (path: string) => {
+    try {
+      return readdirSync(join(root, path));
+    } catch {
+      return [];
+    }
+  };
   return detectAppFrom({
-    entries,
+    entries: list(""),
+    list,
     read: (path) => {
       try {
         return readFileSync(join(root, path), "utf-8");

@@ -4,6 +4,8 @@ export interface Project {
   entries: readonly string[];
   /** Text of a file relative to the root, or null when it can't be read. */
   read(path: string): string | null;
+  /** Names in a directory relative to the root, or [] when it can't be read. */
+  list(path: string): string[];
 }
 
 /** A detected app and the Dockerfile that builds and runs it. */
