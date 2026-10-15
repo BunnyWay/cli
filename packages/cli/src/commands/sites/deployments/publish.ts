@@ -161,7 +161,12 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
     if (output === "json") {
       logger.log(
         JSON.stringify(
-          { site: state.name, id: targetId, published: true },
+          {
+            site: state.name,
+            id: targetId,
+            published: true,
+            live: promoteConfirmed,
+          },
           null,
           2,
         ),
@@ -169,7 +174,11 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       return;
     }
 
-    logger.success(`Deploy ${targetId} is now live.`);
+    logger.success(
+      promoteConfirmed
+        ? `Deploy ${targetId} is now live.`
+        : `Published deploy ${targetId}.`,
+    );
     if (state.domain) logger.info(`Production: https://${state.domain}`);
 
     await offerLink();

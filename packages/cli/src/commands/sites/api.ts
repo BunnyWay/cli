@@ -854,9 +854,9 @@ async function waitForEdgePropagation(
   let confirmed = false;
   while (Date.now() < deadline) {
     try {
-      // A unique query per attempt keeps each probe out of the CDN cache so a stale entry can't mask a propagated rule.
+      // A unique path per attempt keeps each probe out of the CDN cache (the zone ignores query strings) so a stale entry can't mask a propagated rule.
       const { deploy } = await promoteVerification.probe(
-        `https://${host}/?__bunny_promote=${deployId}-${attempt++}`,
+        `https://${host}/__bunny_promote/${deployId}-${attempt++}`,
       );
       if (deploy === deployId) {
         confirmed = true;

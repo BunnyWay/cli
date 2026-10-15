@@ -472,7 +472,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
               site: state.name,
               id: deployId,
               unchanged: true,
-              live: true,
+              live: confirmed,
               production: production ?? null,
             },
             null,
@@ -566,7 +566,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
             files: files.length,
             bytes: totalBytes,
             unchanged: skipUpload,
-            live: true,
+            live: promoteConfirmed,
             production: production ?? null,
           },
           null,
@@ -577,7 +577,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
 
     if (skipUpload) {
-      logger.success(`Deploy ${deployId} is now live.`);
+      logger.success(
+        promoteConfirmed
+          ? `Deploy ${deployId} is now live.`
+          : `Published deploy ${deployId}.`,
+      );
     } else {
       logger.success(
         `Deployed ${deployId} (${files.length} files, ${formatBytes(totalBytes)}).`,
