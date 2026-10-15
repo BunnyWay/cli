@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
-import { detectFrameworkFrom } from "@bunny.net/framework-detector";
+import { detectFramework } from "@/commands/sites/ci/frameworks.ts";
 import { parseDotenv } from "@/core/env.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
@@ -30,13 +30,10 @@ import {
   resolveRegistryForImage,
 } from "./docker.ts";
 import {
-  type AppPlan,
-  type AppSnapshot,
-  DOCKERIGNORE,
-  detectAppFrom,
-  readAppSnapshot,
-  renderDockerfile,
-} from "./dockerfile.ts";
+  type DetectedApp,
+  detectApp,
+  dockerignore,
+} from "./dockerfile/index.ts";
 import {
   confirmEndpointSuggestions,
   endpointRequestToConfig,
@@ -112,26 +109,24 @@ export async function runWalkthrough(
 
   let imageRef: string | undefined = input.positionalImage;
   let dockerfilePath: string | undefined = input.dockerfileFlag;
-  // Set when we write a Dockerfile for a detected framework; its port
-  // seeds the endpoint, since in --dry-run the file is never on disk.
-  let generated: AppPlan | undefined;
+  // Set when we generate a Dockerfile; its port seeds the endpoint, since
+  // in --dry-run the file is never on disk.
+  let generated: { app: DetectedApp; port: number } | undefined;
 
   if (!imageRef && !dockerfilePath) {
     const composeFile = findComposeFile(process.cwd());
     const detectedDockerfiles = findDockerfiles(process.cwd());
     // Only offer to generate when there's no Dockerfile to build already.
-    const snapshot =
-      detectedDockerfiles.length === 0
-        ? readAppSnapshot(process.cwd())
-        : undefined;
-    const detectedApp = snapshot ? detectAppFrom(snapshot) : undefined;
-    // A frontend with no server to run belongs on Sites, not in a container.
-    const staticFramework =
-      snapshot && !detectedApp ? detectFrameworkFrom(snapshot) : undefined;
-    if (staticFramework && staticFramework.id !== "static") {
-      logger.dim(
-        `This looks like a static ${staticFramework.label} site. \`bunny sites deploy\` hosts it without a container.`,
-      );
+    const detectedApp =
+      detectedDockerfiles.length === 0 ? detectApp(process.cwd()) : undefined;
+    if (detectedDockerfiles.length === 0 && !detectedApp) {
+      // A site with no server to run belongs on Sites, not in a container.
+      const site = await detectFramework(process.cwd());
+      if (site && site.id !== "static") {
+        logger.dim(
+          `This looks like a static ${site.label} site. \`bunny sites deploy\` hosts it without a container.`,
+        );
+      }
     }
 
     const composeServicesCount = composeFile
@@ -183,16 +178,12 @@ export async function runWalkthrough(
       return runComposeImport(client, composeFile, input);
     }
 
-    if (value === "generate" && detectedApp && snapshot) {
+    if (value === "generate" && detectedApp) {
       generated = {
-        ...detectedApp,
+        app: detectedApp,
         port: input.portOverride ?? detectedApp.port,
       };
-      dockerfilePath = writeGeneratedDockerfile(
-        generated,
-        snapshot,
-        input.dryRun,
-      );
+      dockerfilePath = writeGeneratedDockerfile(generated, input.dryRun);
     } else if (value === "dockerfile") {
       const selectedPaths = await chooseDockerfiles(detectedDockerfiles);
       if (selectedPaths.length === 0) {
@@ -238,7 +229,7 @@ export async function runWalkthrough(
     }
   } else if (generated) {
     suggestions = {
-      appName: generated.appName,
+      appName: generated.app.name,
       endpointSuggestions: [
         {
           displayName: "cdn",
@@ -363,37 +354,32 @@ export async function runWalkthrough(
 }
 
 /**
- * Write a Dockerfile (and a `.dockerignore`, unless one exists) for a
- * detected app at the project root, and return the Dockerfile path. With
- * `dryRun`, print the Dockerfile instead of writing anything.
+ * Write the generated Dockerfile (and a `.dockerignore`, unless one exists)
+ * to the project root and return its path. With `dryRun`, print it instead.
  */
 function writeGeneratedDockerfile(
-  plan: AppPlan,
-  snapshot: AppSnapshot,
+  { app, port }: { app: DetectedApp; port: number },
   dryRun?: boolean,
 ): string {
-  const cwd = process.cwd();
-  const contents = renderDockerfile(plan, snapshot);
+  const path = "Dockerfile";
+  const contents = app.dockerfile(port);
 
   if (dryRun) {
     logger.dim("--- Dockerfile (preview) ---");
     logger.log(contents);
     logger.dim("--- end preview ---");
-    logger.dim("Would write Dockerfile (--dry-run).");
-    return GENERATED_DOCKERFILE;
+    return path;
   }
 
-  writeFileSync(resolve(cwd, GENERATED_DOCKERFILE), contents);
-  logger.success(`Wrote a Dockerfile for ${plan.label}.`);
-  const dockerignore = resolve(cwd, ".dockerignore");
-  if (!existsSync(dockerignore)) {
-    writeFileSync(dockerignore, DOCKERIGNORE);
+  writeFileSync(resolve(process.cwd(), path), contents);
+  logger.success(`Wrote a Dockerfile for ${app.label}.`);
+  const ignorePath = resolve(process.cwd(), ".dockerignore");
+  if (!existsSync(ignorePath)) {
+    writeFileSync(ignorePath, dockerignore(app));
     logger.success("Wrote .dockerignore.");
   }
-  return GENERATED_DOCKERFILE;
+  return path;
 }
-
-const GENERATED_DOCKERFILE = "Dockerfile";
 
 /**
  * Compose import path: translate `compose.yml` → `bunny.jsonc` and write.

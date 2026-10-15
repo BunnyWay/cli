@@ -34,7 +34,7 @@ Deploy an app. Three modes, chosen by what you pass:
 If no `bunny.jsonc` exists, the first run launches a walkthrough that:
 
 1. Looks for a `compose.yml` / `docker-compose.yml` in the working directory and offers to import the services from it.
-2. Otherwise offers to build from a `Dockerfile` (if one exists) or to deploy a pre-built image ref. With no Dockerfile, a detected Node or Bun app gets a third option: generate one (see below).
+2. Otherwise offers to build from a `Dockerfile` (if one exists) or to deploy a pre-built image ref. With no Dockerfile, a detected app (Node, Bun, Python, Go, Rust, Rails, Laravel) gets a third option: generate one (see below).
 3. Resolves the registry (prompts "is this image public, or do you need credentials?" for new hostnames).
 4. Calls bunny.net's image-suggestions endpoint to pre-fill app name, endpoints, and required environment variables for known public images.
 5. Prompts for a single region. Multi-region apps can be configured by editing the resulting `bunny.jsonc`: the schema accepts an array, the walkthrough just keeps the initial setup focused.
@@ -49,23 +49,25 @@ To rollback:    bunny apps deploy ghcr.io/me/api:abc-123
 
 ### Generating a Dockerfile
 
-When the project has no Dockerfile, the walkthrough reads `package.json` and offers to write one for you:
+When the project has no Dockerfile, the walkthrough looks at the project root and offers to write one for you:
 
-| Detected from                              | Runs                                     | Port |
-| ------------------------------------------ | ---------------------------------------- | ---- |
-| `next`                                     | `next start`                             | 3000 |
-| `nuxt`                                     | `.output/server/index.mjs` (output only) | 3000 |
-| `@sveltejs/kit` + `@sveltejs/adapter-node` | `build/index.js`                         | 3000 |
-| `astro` + `@astrojs/node`                  | `dist/server/entry.mjs`                  | 4321 |
-| `@react-router/serve`                      | `react-router-serve`                     | 3000 |
-| `@remix-run/serve`                         | `remix-serve`                            | 3000 |
-| `@nestjs/core`                             | `dist/main.js`                           | 3000 |
-| a `start` script                           | the `start` script                       | 3000 |
-| `module` / `main` with no `start` script   | that file                                | 3000 |
+| Detected from                                                                                              | Image                               | Runs                         | Port              |
+| ---------------------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------- | ----------------- |
+| `composer.json` requiring `laravel/framework`                                                              | `dunglas/frankenphp`                | FrankenPHP serving `public/` | 8080              |
+| `Gemfile` with `rails`                                                                                     | `ruby:<version>-slim`               | `bin/rails server`           | 3000              |
+| `requirements.txt` / `pyproject.toml` with Django                                                          | `python:<version>-slim`             | `gunicorn <project>.wsgi`    | 8000              |
+| ... with FastAPI (`main.py`, `app.py` or `app/main.py`)                                                    | `python:<version>-slim`             | `uvicorn <module>:app`       | 8000              |
+| ... with Flask (`app.py`, `wsgi.py` or `main.py`)                                                          | `python:<version>-slim`             | `gunicorn <module>:app`      | 8000              |
+| `go.mod` with a root package or `cmd/<module>/main.go`                                                     | `golang`, then distroless           | the compiled binary          | 8080              |
+| `Cargo.toml` with a `[package]`                                                                            | `rust`, then `debian:bookworm-slim` | the compiled binary          | 8080              |
+| `package.json` with Next.js, Nuxt, React Router, Remix, NestJS, or SvelteKit/Astro with their Node adapter | `node:<major>-slim` or `oven/bun:1` | the framework's server       | 3000 (Astro 4321) |
+| `package.json` with a `start` script or a `main`/`module` entry                                            | `node:<major>-slim` or `oven/bun:1` | that script or file          | 3000              |
 
-The package manager comes from the lockfile (`bun.lock`, `pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`). Bun projects build on `oven/bun:1`; everything else on `node:<major>-slim`, with the major read from `.nvmrc`, `.node-version` or `engines.node` (default 24). The build runs the `build` script when there is one, and the image sets `PORT` and binds to `0.0.0.0`. `--port` changes the port in the generated file and the endpoint.
+Versions come from `.nvmrc` / `.node-version` / `engines.node`, `.python-version`, `.ruby-version` / the Gemfile's `ruby` line, `go.mod`, and `composer.json`'s `php` constraint. JS package managers come from the lockfile, Python from `uv.lock` or `requirements.txt`. Dependencies install before the source is copied so they cache between deploys. Every image gets `PORT` set and binds to `0.0.0.0`; `--port` changes the port in the generated file and the endpoint.
 
-A frontend framework without a server adapter (Vite, Create React App, Astro or SvelteKit without the Node adapter) is not offered a Dockerfile: its `start` script is a dev server. The walkthrough points you at `bunny sites deploy` instead.
+Laravel and Rails win over a `package.json` next to them; Laravel builds its Vite assets in a separate Node stage when there is a `build` script. Set `APP_KEY` (Laravel) or `SECRET_KEY_BASE` / `RAILS_MASTER_KEY` (Rails) with `bunny apps env` before the first request. Rails 7.1+ apps already ship a Dockerfile, which the walkthrough uses as-is.
+
+A site with no server to run (Vite, Create React App, Astro or SvelteKit without the Node adapter, Hugo, Jekyll, and so on) is not offered a Dockerfile: the walkthrough points you at `bunny sites deploy` instead.
 
 The Dockerfile and a `.dockerignore` (unless you have one) are written to the project root. They are yours from then on: deploys build the file as-is, and the generator never runs again. `--dry-run` prints the Dockerfile instead of writing it. The `.dockerignore` keeps `.env` files out of the image; set them with `bunny apps env` instead.
 
