@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { offerLink, offerSaveEnv } from "./create-next-steps.ts";
+import { offerLink, offerSaveEnv, promptedPath } from "./create-next-steps.ts";
 
 const LIBRARY = { Id: 12345, Name: "my-library", ApiKey: "secret-key" };
 const cwd = process.cwd();
@@ -45,4 +45,10 @@ test("--link points the directory at the new library", async () => {
   expect(
     JSON.parse(readFileSync(join(dir, ".bunny", "stream.json"), "utf-8")),
   ).toEqual({ id: 12345, name: "my-library" });
+});
+
+test("a dropped or typed path is unquoted, unescaped and has ~ expanded", () => {
+  expect(promptedPath("/videos/My\\ Clip.mp4 ")).toBe("/videos/My Clip.mp4");
+  expect(promptedPath("'/videos/My Clip.mp4'")).toBe("/videos/My Clip.mp4");
+  expect(promptedPath("~/clip.mp4")).toBe(join(homedir(), "clip.mp4"));
 });

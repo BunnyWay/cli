@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import type { VideoLibraryModel } from "@/commands/stream/api.ts";
 import {
   STREAM_MANIFEST,
@@ -51,10 +52,12 @@ export async function offerSaveEnv(
 ): Promise<boolean> {
   const apiKey = library.ApiKey;
   if (!library.Id || !apiKey) return false;
+  if (flag === false || (flag === undefined && !isInteractive(output)))
+    return false;
 
   const existing =
     readEnvValue(ENV_STREAM_LIBRARY_ID) ?? readEnvValue(ENV_STREAM_API_KEY);
-  let save = flag;
+  let save: boolean | undefined = flag;
   if (save === undefined && isInteractive(output)) {
     save = await confirm(
       existing
@@ -121,7 +124,7 @@ export async function offerAddVideos(
       name: "file",
       message: "Path to the video file:",
     });
-    const path = typeof file === "string" ? file.trim() : "";
+    const path = typeof file === "string" ? promptedPath(file) : "";
     if (!path) return;
     await streamVideoUploadCommand.handler({
       ...globals,
@@ -131,6 +134,21 @@ export async function offerAddVideos(
       $0: "bunny",
     });
   }
+}
+
+/** A path as typed or dropped into a prompt: no shell runs, so undo its quoting and `~` here. */
+export function promptedPath(input: string): string {
+  let path = input.trim();
+  const quote = path[0];
+  if (
+    (quote === "'" || quote === '"') &&
+    path.length > 1 &&
+    path.endsWith(quote)
+  )
+    path = path.slice(1, -1);
+  else path = path.replace(/\\(.)/g, "$1");
+  if (path === "~" || path.startsWith("~/")) path = homedir() + path.slice(1);
+  return path;
 }
 
 /** The commands and links to carry on with, printed last. */

@@ -37,6 +37,7 @@ interface LibraryCreateArgs extends LibrarySettingsArgs {
   playerVersion?: number;
   link?: boolean;
   saveEnv?: boolean;
+  addVideos?: boolean;
 }
 
 export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
@@ -66,6 +67,10 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
       "$0 stream libraries create my-library --link --save-env",
       "Link this directory and save the library ID and API key to .env",
     ],
+    [
+      "$0 stream libraries create my-library --no-link --no-save-env --no-add-videos",
+      "Create without any follow-up prompts",
+    ],
   ],
 
   builder: (yargs) =>
@@ -93,6 +98,11 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
         .option("save-env", {
           type: "boolean",
           describe: `Save ${ENV_STREAM_LIBRARY_ID} and ${ENV_STREAM_API_KEY} to .env (skips prompt). Use --no-save-env to skip without prompting.`,
+        })
+        .option("add-videos", {
+          type: "boolean",
+          describe:
+            "Ask how to add videos after creating (interactive only). Use --no-add-videos to skip the prompt.",
         }),
     ),
 
@@ -187,7 +197,7 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
 
     await offerLink(created, args.link, output);
     await offerSaveEnv(created, args.saveEnv, output);
-    if (isInteractive(output))
+    if (args.addVideos !== false && isInteractive(output))
       await offerAddVideos(created, { profile, output, verbose, apiKey });
     printNextSteps(created);
   },
