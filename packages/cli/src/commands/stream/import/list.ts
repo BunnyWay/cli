@@ -41,7 +41,9 @@ function renderListing(listing: ImportListing, output: OutputFormat): void {
       ),
     );
     if (listing.truncated)
-      logger.dim(`Showing the first ${listing.videos.length} videos.`);
+      logger.dim(
+        `Showing the first ${listing.videos.length.toLocaleString("en-US")} videos, the most one listing returns. Narrow it with --folder (or --prefix for S3).`,
+      );
     return;
   }
   if (!listing.supportsFolders) {
