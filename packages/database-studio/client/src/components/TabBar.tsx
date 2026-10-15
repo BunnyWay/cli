@@ -5,9 +5,8 @@ import { DatabaseIcon } from "@/components/DatabaseIcon";
 import { Popover } from "@/components/Popover";
 import { TablePicker } from "@/components/TablePicker";
 import { SQL_TAB } from "@/hooks/use-url-state";
+import { MOD_KEY } from "@/lib/interaction";
 import { cn } from "@/lib/utils";
-
-const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
 export function TabBar({
   schema,
@@ -126,7 +125,7 @@ export function TabBar({
         <button
           type="button"
           onClick={() => onPickerOpenChange(!pickerOpen)}
-          title={`Open a table (${isMac ? "⌘K" : "Ctrl K"})`}
+          title={`Open a table (${MOD_KEY}K)`}
           aria-label="Open a table"
           className={cn(
             "flex h-full w-10 items-center justify-center hover:text-foreground",

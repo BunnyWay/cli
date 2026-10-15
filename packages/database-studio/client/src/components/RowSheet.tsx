@@ -19,24 +19,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { toText } from "@/lib/format";
+import { useCopy } from "@/lib/interaction";
+import { incomingReferences } from "@/lib/schema";
 import { cn } from "@/lib/utils";
 
 export interface SheetEntry {
   table: TableDefinition;
   row: Row;
-}
-
-function useCopy() {
-  const [copied, setCopied] = useState<string | null>(null);
-  return {
-    copied,
-    copy(key: string, text: string) {
-      navigator.clipboard.writeText(text).then(() => {
-        setCopied(key);
-        setTimeout(() => setCopied((c) => (c === key ? null : c)), 1200);
-      });
-    },
-  };
 }
 
 function rowLabel({ table, row }: SheetEntry): string {
@@ -68,17 +57,7 @@ export function RowSheet({
   const { copied, copy } = useCopy();
   const [followErrors, setFollowErrors] = useState<Record<string, string>>({});
 
-  const incoming = entry
-    ? tables.flatMap((t) =>
-        t.foreignKeys
-          .filter((fk) => fk.referencesTable === entry.table.name)
-          .map((fk) => ({
-            table: t.name,
-            column: fk.column,
-            to: fk.referencesColumn,
-          })),
-      )
-    : [];
+  const incoming = entry ? incomingReferences(tables, entry.table.name) : [];
 
   return (
     <Sheet
@@ -238,7 +217,7 @@ export function RowSheet({
                 </h3>
                 <div className="space-y-1">
                   {incoming.map((ref) => {
-                    const value = entry.row[ref.to];
+                    const value = entry.row[ref.referencesColumn];
                     if (value === null || value === undefined) return null;
                     return (
                       <button

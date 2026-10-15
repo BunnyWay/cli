@@ -1,4 +1,7 @@
-import { DEFAULT_EXCLUDE_PATTERNS } from "@bunny.net/database-adapter";
+import {
+  DEFAULT_EXCLUDE_PATTERNS,
+  shouldInclude,
+} from "@bunny.net/database-adapter";
 import type { Database } from "@bunny.net/database-client";
 
 export interface ViewDefinition {
@@ -18,10 +21,7 @@ type CatalogClient = Pick<Database, "prepare">;
 const quote = (name: string) => `"${name.replace(/"/g, '""')}"`;
 
 const excluded = (name: string) =>
-  name.startsWith("sqlite_") ||
-  DEFAULT_EXCLUDE_PATTERNS.some((p) =>
-    p.endsWith("*") ? name.startsWith(p.slice(0, -1)) : name === p,
-  );
+  name.startsWith("sqlite_") || !shouldInclude(name, DEFAULT_EXCLUDE_PATTERNS);
 
 /**
  * A view's columns, or none when SQLite can't resolve it (a view over a

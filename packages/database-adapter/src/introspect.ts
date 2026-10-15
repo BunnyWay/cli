@@ -162,7 +162,8 @@ const matchesPattern = (name: string, pattern: string): boolean => {
   return name === pattern;
 };
 
-const shouldInclude = (
+/** Whether introspection keeps a table or view named `name`, by the same rules as `exclude`/`include`. */
+export const shouldInclude = (
   name: string,
   exclude: string[],
   include?: string[],

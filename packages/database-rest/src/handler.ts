@@ -27,7 +27,7 @@ export interface RestHandlerOptions {
  * the client as bigint (which JSON.stringify throws on) and BLOBs as
  * Uint8Array. Send them as a decimal string and a base64 string.
  */
-const encodeValue = (_key: string, value: unknown): unknown => {
+export const encodeValue = (_key: string, value: unknown): unknown => {
   if (typeof value === "bigint") return value.toString();
   if (value instanceof Uint8Array) return Buffer.from(value).toString("base64");
   return value;

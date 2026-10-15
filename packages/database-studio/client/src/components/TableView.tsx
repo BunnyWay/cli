@@ -1,29 +1,16 @@
-import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  Columns3,
-  Download,
-  Filter,
-  RefreshCw,
-} from "lucide-react";
+import { Columns3, Download, Filter, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { OpenTable } from "@/App";
-import {
-  fetchRows,
-  fetchRowWhere,
-  type RowsQuery,
-  type RowsResponse,
-  type TableDefinition,
-} from "@/api";
+import { fetchRowWhere, type RowsQuery, type TableDefinition } from "@/api";
 import { DataGrid, type GridColumn } from "@/components/DataGrid";
 import { FilterBar } from "@/components/FilterBar";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES, Pager } from "@/components/Pager";
 import { MenuItem, Popover } from "@/components/Popover";
 import { RowSheet, type SheetEntry } from "@/components/RowSheet";
 import { SchemaTab } from "@/components/SchemaTab";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useTableRows } from "@/hooks/use-table-rows";
 import { setUrlParams, useUrlParam } from "@/hooks/use-url-state";
 import {
   type FilterCondition,
@@ -33,9 +20,6 @@ import {
 } from "@/lib/filters";
 import { download, toCsv } from "@/lib/format";
 import { cn } from "@/lib/utils";
-
-const PAGE_SIZES = [25, 50, 100, 250];
-const DEFAULT_PAGE_SIZE = 50;
 
 function parseFilters(
   raw: string | null,
@@ -74,10 +58,6 @@ export function TableView({
   ddl: string[];
   onOpenTable: OpenTable;
 }) {
-  const [data, setData] = useState<RowsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -108,36 +88,20 @@ export function TableView({
     ? Number(limitParam)
     : DEFAULT_PAGE_SIZE;
   const page = Math.max(1, Math.floor(Number(pageParam)) || 1);
-  const sort =
+  const sort: RowsQuery["sort"] =
     sortParam && columnNames.has(sortParam)
       ? { column: sortParam, order: orderParam === "desc" ? "desc" : "asc" }
       : undefined;
 
-  // A stable key so the fetch effect only reruns when the query changes.
-  const queryKey = JSON.stringify({ page, limit, filters, mode, sort });
-  const query = useMemo(() => JSON.parse(queryKey) as RowsQuery, [queryKey]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey forces a refetch
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    fetchRows(table.name, query, controller.signal)
-      .then((d) => {
-        setData(d);
-        setError(null);
-        setSelectedRow(null);
-      })
-      .catch((e) => {
-        if (controller.signal.aborted) return;
-        setError(e instanceof Error ? e.message : String(e));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [table.name, query, reloadKey]);
-
-  const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
+  const { data, loading, error, refresh } = useTableRows(table.name, {
+    page,
+    limit,
+    filters,
+    mode,
+    sort,
+  });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new page clears the highlighted row
+  useEffect(() => setSelectedRow(null), [data]);
 
   // A page past the end (a stale link, or rows deleted elsewhere) snaps back to the last one.
   useEffect(() => {
@@ -475,78 +439,18 @@ export function TableView({
             )}
           </div>
 
-          <footer className="flex h-9 shrink-0 items-center gap-3 border-t px-3 text-xs text-muted-foreground">
-            {data && (
-              <span className="tabular-nums">
-                {data.totalRows === 0
-                  ? "0 rows"
-                  : `${(offset + 1).toLocaleString()}–${(offset + data.rows.length).toLocaleString()} of ${data.totalRows.toLocaleString()} row${data.totalRows === 1 ? "" : "s"}`}
-                <span className="ml-2 text-muted-foreground/60">
-                  {data.responseTime} ms
-                </span>
-              </span>
-            )}
-            <div className="ml-auto flex items-center gap-3">
-              <label className="flex items-center gap-1.5">
-                Rows per page
-                <select
-                  value={limit}
-                  onChange={(e) =>
-                    setUrlParams({
-                      limit:
-                        Number(e.target.value) === DEFAULT_PAGE_SIZE
-                          ? null
-                          : e.target.value,
-                      page: null,
-                    })
-                  }
-                  className="h-6 rounded border bg-background px-1 text-xs text-foreground"
-                >
-                  {PAGE_SIZES.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {data && (
-                <div className="flex items-center gap-0.5">
-                  <PagerButton
-                    label="First page"
-                    disabled={page <= 1}
-                    onClick={() => setPage(1)}
-                  >
-                    <ChevronsLeft className="h-3.5 w-3.5" />
-                  </PagerButton>
-                  <PagerButton
-                    label="Previous page"
-                    disabled={page <= 1}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </PagerButton>
-                  <span className="px-1.5 tabular-nums">
-                    Page {page.toLocaleString()} of{" "}
-                    {data.totalPages.toLocaleString()}
-                  </span>
-                  <PagerButton
-                    label="Next page"
-                    disabled={page >= data.totalPages}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </PagerButton>
-                  <PagerButton
-                    label="Last page"
-                    disabled={page >= data.totalPages}
-                    onClick={() => setPage(data.totalPages)}
-                  >
-                    <ChevronsRight className="h-3.5 w-3.5" />
-                  </PagerButton>
-                </div>
-              )}
-            </div>
-          </footer>
+          <Pager
+            data={data}
+            page={page}
+            limit={limit}
+            onPage={setPage}
+            onLimit={(n) =>
+              setUrlParams({
+                limit: n === DEFAULT_PAGE_SIZE ? null : String(n),
+                page: null,
+              })
+            }
+          />
         </>
       )}
 
@@ -562,31 +466,5 @@ export function TableView({
         onOpenTable={openTable}
       />
     </div>
-  );
-}
-
-function PagerButton({
-  label,
-  disabled,
-  onClick,
-  children,
-}: {
-  label: string;
-  disabled: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="h-6 w-6"
-      disabled={disabled}
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-    >
-      {children}
-    </Button>
   );
 }

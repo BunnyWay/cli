@@ -1,6 +1,6 @@
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
-import { confirm } from "@/core/ui.ts";
+import { confirm, openBrowser } from "@/core/ui.ts";
 import {
   ARG_DATABASE_ID,
   databaseUserAgent,
@@ -133,7 +133,7 @@ export const dbStudioCommand = defineCommand<{
       // Only a token created here is known to be read-only; one from --token or .env may be full-access.
       tokenReadOnly: tokenGenerated,
       port: port ?? 4488,
-      open: !noOpen,
+      open: noOpen ? undefined : openBrowser,
       dev,
       logger: {
         log: (msg: string) => logger.log(msg),

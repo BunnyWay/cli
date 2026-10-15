@@ -1,6 +1,7 @@
 import { Eye, KeyRound, SquareTerminal, Table2 } from "lucide-react";
 import type { StudioSchema } from "@/api";
 import { Button } from "@/components/ui/button";
+import { incomingReferences } from "@/lib/schema";
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
@@ -54,12 +55,6 @@ export function Overview({
   const { tables, views, ddl } = schema;
   const triggers = (table: string) =>
     (ddl[table] ?? []).filter((s) => /^\s*CREATE\s+TRIGGER/i.test(s)).length;
-  const incoming = (table: string) =>
-    tables.reduce(
-      (n, t) =>
-        n + t.foreignKeys.filter((fk) => fk.referencesTable === table).length,
-      0,
-    );
   const totals = {
     indexes: tables.reduce((n, t) => n + t.indexes.length, 0),
     triggers: tables.reduce((n, t) => n + triggers(t.name), 0),
@@ -154,7 +149,7 @@ export function Overview({
                       <Count n={t.columns.length} />
                       <Count n={t.indexes.length} />
                       <Count n={t.foreignKeys.length} />
-                      <Count n={incoming(t.name)} />
+                      <Count n={incomingReferences(tables, t.name).length} />
                       <Count n={triggers(t.name)} />
                       <td className="whitespace-nowrap px-3 py-2 text-right">
                         <Action onClick={() => onSelect(t.name)}>Browse</Action>

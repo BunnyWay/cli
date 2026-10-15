@@ -30,4 +30,4 @@ const client = connect({
   headers: { "User-Agent": "bunny-database-studio" },
 });
 
-await startStudio({ client, port: Number(values.port), open: false });
+await startStudio({ client, port: Number(values.port) });

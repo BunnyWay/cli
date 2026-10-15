@@ -1,7 +1,8 @@
 import { Check, Copy, KeyRound } from "lucide-react";
-import { useState } from "react";
 import type { OpenTable } from "@/App";
 import type { TableDefinition } from "@/api";
+import { useCopy } from "@/lib/interaction";
+import { incomingReferences } from "@/lib/schema";
 
 function Section({
   title,
@@ -84,15 +85,11 @@ export function SchemaTab({
   ddl: string[];
   onOpenTable: OpenTable;
 }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
   const definition = ddl.map((s) => `${s.trim()};`).join("\n\n");
   const foreignKeys = new Map(table.foreignKeys.map((fk) => [fk.column, fk]));
   const unique = new Set(table.uniqueColumns);
-  const incoming = tables.flatMap((t) =>
-    t.foreignKeys
-      .filter((fk) => fk.referencesTable === table.name)
-      .map((fk) => ({ table: t.name, ...fk })),
-  );
+  const incoming = incomingReferences(tables, table.name);
 
   return (
     <div className="flex-1 overflow-auto p-6">
@@ -218,15 +215,10 @@ export function SchemaTab({
             </h3>
             <button
               type="button"
-              onClick={() =>
-                navigator.clipboard.writeText(definition).then(() => {
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1200);
-                })
-              }
+              onClick={() => copy("ddl", definition)}
               className="ml-auto inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
             >
-              {copied ? (
+              {copied === "ddl" ? (
                 <Check className="h-3 w-3 text-green-500" />
               ) : (
                 <Copy className="h-3 w-3" />

@@ -2,7 +2,11 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
 import { createExecutor, introspect } from "@bunny.net/database-adapter";
 import type { Database } from "@bunny.net/database-client";
-import { createRestHandler, requireAuth } from "@bunny.net/database-rest";
+import {
+  createRestHandler,
+  encodeValue,
+  requireAuth,
+} from "@bunny.net/database-rest";
 import { loadCatalog } from "./catalog.ts";
 import { assets } from "./client-manifest.ts";
 import { queryErrorMessage, runReadOnlyQuery } from "./query.ts";
@@ -18,7 +22,8 @@ export interface StudioOptions {
    */
   tokenReadOnly?: boolean;
   port?: number;
-  open?: boolean;
+  /** Opens the studio URL in a browser; omit to only print it. */
+  open?: (url: string) => void;
   dev?: boolean;
   logger?: {
     log(msg: string): void;
@@ -45,13 +50,6 @@ const AUTH_COOKIE = "bunny_studio_auth";
 const SCHEMA_PATH = "/studio-api/schema";
 const QUERY_PATH = "/studio-api/query";
 
-/** Same encoding as the REST handler: bigint as a decimal string, bytes as base64. */
-const encodeValue = (_key: string, value: unknown): unknown => {
-  if (typeof value === "bigint") return value.toString();
-  if (value instanceof Uint8Array) return Buffer.from(value).toString("base64");
-  return value;
-};
-
 const jsonResponse = (
   body: unknown,
   status = 200,
@@ -61,24 +59,6 @@ const jsonResponse = (
     status,
     headers: { "Content-Type": "application/json", ...headers },
   });
-
-const BROWSER_OPENERS: Record<string, (url: string) => string[]> = {
-  darwin: (url) => ["open", url],
-  linux: (url) => ["xdg-open", url],
-  win32: (url) => ["rundll32", "url.dll,FileProtocolHandler", url],
-};
-
-/** Best effort: a missing opener (headless Linux, unknown platform) must not take the server down. */
-const openBrowser = (url: string): boolean => {
-  const opener = BROWSER_OPENERS[process.platform];
-  if (!opener) return false;
-  try {
-    Bun.spawn(opener(url), { stdio: ["ignore", "ignore", "ignore"] });
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 const safeEqual = (a: string, b: string): boolean => {
   const ab = Buffer.from(a);
@@ -124,7 +104,7 @@ export async function startStudio(options: StudioOptions): Promise<void> {
     label,
     tokenReadOnly = false,
     port = 4488,
-    open = true,
+    open,
     dev = false,
     logger = console,
   } = options;
@@ -161,7 +141,6 @@ export async function startStudio(options: StudioOptions): Promise<void> {
     async () =>
       jsonResponse({
         label: label ?? null,
-        readOnly: true,
         tokenReadOnly,
         tables,
         ddl,
@@ -308,8 +287,13 @@ export async function startStudio(options: StudioOptions): Promise<void> {
     logger.log("Press Ctrl+C to stop.");
   }
 
-  if (open && !openBrowser(browserUrl)) {
-    logger.log("Couldn't open a browser. Open the URL above to continue.");
+  if (open) {
+    // Best effort: a missing opener (headless Linux) must not take the server down.
+    try {
+      open(browserUrl);
+    } catch {
+      logger.log("Couldn't open a browser. Open the URL above to continue.");
+    }
   }
 
   // Keep the process alive until interrupted

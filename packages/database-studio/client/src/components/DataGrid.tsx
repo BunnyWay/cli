@@ -9,6 +9,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { CellValue } from "@/components/CellValue";
 import { toText } from "@/lib/format";
+import { startDrag, useCopy } from "@/lib/interaction";
 import { cn } from "@/lib/utils";
 
 const NUMERIC = new Set(["INTEGER", "REAL"]);
@@ -59,7 +60,7 @@ export function DataGrid({
 }) {
   const [selected, setSelected] = useState<Cell | null>(null);
   const [widths, setWidths] = useState<Record<string, number>>({});
-  const [copied, setCopied] = useState<string | null>(null);
+  const { copied, copy } = useCopy(900);
   const [followErrors, setFollowErrors] = useState<Record<string, string>>({});
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -79,14 +80,8 @@ export function DataGrid({
     return w ? { width: w, minWidth: w, maxWidth: w } : undefined;
   };
 
-  function copyCell(cell: Cell) {
-    const value = rows[cell.row]?.[cell.col];
-    navigator.clipboard.writeText(toText(value)).then(() => {
-      const key = `${cell.row}:${cell.col}`;
-      setCopied(key);
-      setTimeout(() => setCopied((c) => (c === key ? null : c)), 900);
-    });
-  }
+  const copyCell = (cell: Cell) =>
+    copy(`${cell.row}:${cell.col}`, toText(rows[cell.row]?.[cell.col]));
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (!selected || rows.length === 0) return;
@@ -127,26 +122,15 @@ export function DataGrid({
   }
 
   function startResize(e: React.PointerEvent, name: string) {
-    e.preventDefault();
-    e.stopPropagation();
     const th = (e.currentTarget as HTMLElement).closest("th");
     if (!th) return;
-    const startX = e.clientX;
     const startWidth = th.getBoundingClientRect().width;
-    const onMove = (ev: PointerEvent) =>
+    startDrag(e, (dx) =>
       setWidths((w) => ({
         ...w,
-        [name]: Math.max(
-          MIN_WIDTH,
-          Math.round(startWidth + ev.clientX - startX),
-        ),
-      }));
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+        [name]: Math.max(MIN_WIDTH, Math.round(startWidth + dx)),
+      })),
+    );
   }
 
   return (

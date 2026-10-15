@@ -6,13 +6,13 @@ import { MenuItem, Popover } from "@/components/Popover";
 import { SqlEditor } from "@/components/SqlEditor";
 import { Button } from "@/components/ui/button";
 import { download, toCsv } from "@/lib/format";
+import { MOD_KEY, startDrag } from "@/lib/interaction";
 import { quoteIdent } from "@/lib/sql";
 import { cn } from "@/lib/utils";
 
 const DRAFT_KEY = "bunny-studio:sql-draft";
 const HISTORY_KEY = "bunny-studio:sql-history";
 const HISTORY_LIMIT = 50;
-const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
 interface HistoryEntry {
   sql: string;
@@ -136,22 +136,12 @@ export function SqlConsole({
   }
 
   function startResize(e: React.PointerEvent) {
-    e.preventDefault();
-    const startY = e.clientY;
     const start = editorHeight;
-    const onMove = (ev: PointerEvent) =>
+    startDrag(e, (_, dy) =>
       setEditorHeight(
-        Math.max(
-          80,
-          Math.min(window.innerHeight - 200, start + ev.clientY - startY),
-        ),
-      );
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+        Math.max(80, Math.min(window.innerHeight - 200, start + dy)),
+      ),
+    );
   }
 
   const gridColumns = useMemo(
@@ -167,13 +157,11 @@ export function SqlConsole({
           className="h-7 gap-1.5 text-xs"
           disabled={running}
           onClick={() => run(sql)}
-          title={`Run (${isMac ? "⌘" : "Ctrl"}+Enter runs the statement under the cursor)`}
+          title={`Run (${MOD_KEY}Enter runs the statement under the cursor)`}
         >
           <Play className="h-3 w-3" />
           Run
-          <kbd className="font-mono text-[10px] opacity-70">
-            {isMac ? "⌘↵" : "Ctrl ↵"}
-          </kbd>
+          <kbd className="font-mono text-[10px] opacity-70">{MOD_KEY}↵</kbd>
         </Button>
         <div className="relative">
           <Button
