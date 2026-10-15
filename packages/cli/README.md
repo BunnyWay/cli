@@ -375,7 +375,7 @@ bunny db shell --url libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net
 
 Open a read-only database explorer in your browser. Spins up a local server, generates a short-lived read-only token if needed, and opens the studio UI. The local server refuses writes even when `--token` or `.env` supplies a full-access token.
 
-Browse tables from the sidebar (<kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> to search), sort by any column, and filter with AND/OR conditions (equals, contains, starts with, ranges, IN, LIKE, NULL checks). Click a row to see every field, follow foreign keys to the referenced row, or jump to rows in other tables that reference it. The Schema tab lists columns, defaults, constraints, indexes, and incoming foreign keys. Export the current page as CSV or JSON. Filters, sorting, and paging live in the URL, so Back works and links can be reopened while studio is running.
+Open tables as tabs across the top (<kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> to search for one); each tab keeps its own filters, sort, and page. Sort by any column and filter with AND/OR conditions (equals, contains, starts with, ranges, IN, LIKE, NULL checks). Click a row to see every field, follow foreign keys to the referenced row, or jump to rows in other tables that reference it. The Schema tab lists columns, defaults, constraints, indexes, and incoming foreign keys. Export the current page as CSV or JSON. Filters, sorting, and paging live in the URL, so Back works and links can be reopened while studio is running.
 
 ```bash
 # Auto-detect database (link, .env, or interactive)

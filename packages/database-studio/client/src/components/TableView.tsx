@@ -233,9 +233,6 @@ export function TableView({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
-        <h1 className="mr-1 truncate font-mono text-sm font-medium">
-          {table.name}
-        </h1>
         <div className="flex rounded-md border p-0.5">
           {(["data", "schema"] as const).map((v) => (
             <button
