@@ -7,7 +7,10 @@ import {
 
 export function detectGo(project: Project): DetectedApp | undefined {
   const gomod = project.read("go.mod");
-  const rootGo = project.entries.some((e) => e.endsWith(".go"));
+  // A root `package main`; root files of another package are a library.
+  const rootGo = project.entries.some(
+    (e) => e.endsWith(".go") && /^package main\b/m.test(project.read(e) ?? ""),
+  );
   if (gomod === null && !rootGo) return undefined;
 
   // Build the root package, or else the first `cmd/<name>` with a main.go.

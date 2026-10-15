@@ -102,6 +102,10 @@ describe("node", () => {
     ).toBeUndefined();
   });
 
+  test("a script next to index.html is a static site's browser code", () => {
+    expect(detect({ "index.html": "", "main.js": "" })).toBeUndefined();
+  });
+
   test("a lone script runs on bun", () => {
     expect(render({ "index.ts": "Bun.serve({})" })).toContain(
       'CMD ["bun", "index.ts"]',
@@ -165,6 +169,7 @@ describe("go", () => {
   test("builds the cmd/<module> layout into a distroless image", () => {
     const dockerfile = render({
       "go.mod": "module github.com/acme/api\n\ngo 1.23.4\n",
+      "doc.go": "package api",
       "go.sum": "",
       "cmd/api/main.go": "package main",
     });
@@ -174,20 +179,23 @@ describe("go", () => {
   });
 
   test("a lone main.go gets a module", () => {
-    const dockerfile = render({ "main.go": "package main" });
+    const dockerfile = render({ "main.go": "package main\n" });
     expect(dockerfile).toContain("RUN go mod init app && go mod tidy");
     expect(dockerfile).toContain("-o /server .");
   });
 
-  test("no main package is not an app", () => {
-    expect(detect({ "go.mod": "module example.com/lib\n" })).toBeUndefined();
+  test("a library is not an app", () => {
+    expect(
+      detect({ "go.mod": "module example.com/lib\n", "lib.go": "package lib" }),
+    ).toBeUndefined();
   });
 });
 
 describe("rust", () => {
   test("ships the package binary", () => {
     const dockerfile = render({
-      "Cargo.toml": '[package]\nname = "api"\nversion = "0.1.0"\n',
+      "Cargo.toml":
+        '[package]\nauthors = ["a"]\nname = "api"\n\n[dependencies]\nname = "x"\n',
       "Cargo.lock": "",
     });
     expect(dockerfile).toContain("RUN cargo build --release --locked");
@@ -239,6 +247,15 @@ describe("php", () => {
     expect(dockerfile).toContain("ENV APP_ENV=production SERVER_NAME=:8080\n");
   });
 
+  test("PHP older than FrankenPHP supports falls back to the default", () => {
+    expect(
+      render({
+        "index.php": "",
+        "composer.json": { require: { php: "^8.1" } },
+      }),
+    ).toContain("FROM dunglas/frankenphp:1-php8.4");
+  });
+
   test("a lone index.php serves the project root without composer", () => {
     const dockerfile = render({ "index.php": "<?php echo 'hi';" });
     expect(dockerfile).toContain("ENV SERVER_NAME=:8080 SERVER_ROOT=/app");
@@ -278,6 +295,7 @@ describe("java", () => {
       gradlew: "",
     });
     expect(dockerfile).toContain("FROM eclipse-temurin:17-jdk AS build");
+    expect(dockerfile).toContain("RUN sh gradlew bootJar");
     expect(dockerfile).toContain("grep -v -- -plain.jar");
     expect(dockerfile).toContain("FROM eclipse-temurin:17-jre");
   });

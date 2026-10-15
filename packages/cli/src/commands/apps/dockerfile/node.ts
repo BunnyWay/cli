@@ -203,6 +203,8 @@ const SCRIPT_ENTRIES = [
  * as-is and installs the packages it imports when it starts.
  */
 function detectScript(project: Project): DetectedApp | undefined {
+  // Next to an index.html, the script is the page's browser code.
+  if (project.entries.includes("index.html")) return undefined;
   const entry = SCRIPT_ENTRIES.find((e) => project.entries.includes(e));
   if (!entry) return undefined;
   return {

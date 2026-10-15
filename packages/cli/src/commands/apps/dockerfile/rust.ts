@@ -4,7 +4,9 @@ export function detectRust(project: Project): DetectedApp | undefined {
   // The binary is named after `[package]`; workspaces have no single one.
   const name = project
     .read("Cargo.toml")
-    ?.match(/^\[package\][^[]*?^name\s*=\s*"([^"]+)"/m)?.[1];
+    ?.split(/^\[/m)
+    .find((section) => section.startsWith("package]"))
+    ?.match(/^name\s*=\s*"([^"]+)"/m)?.[1];
   if (!name) return undefined;
   const locked = project.entries.includes("Cargo.lock") ? " --locked" : "";
 
@@ -15,7 +17,8 @@ export function detectRust(project: Project): DetectedApp | undefined {
     ignore: ["target"],
     dockerfile: (port) =>
       dockerfile("Rust", [
-        "FROM rust:1 AS build",
+        // Same Debian release in both stages, so the binary's glibc matches.
+        "FROM rust:1-bookworm AS build",
         "WORKDIR /src",
         "COPY . .",
         `RUN cargo build --release${locked}`,

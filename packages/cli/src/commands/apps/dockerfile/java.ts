@@ -16,17 +16,18 @@ export function detectJava(project: Project): DetectedApp | undefined {
 
   const jdk = versionFrom(
     [build],
-    /(?:<java\.version>|JavaLanguageVersion\.of\(|sourceCompatibility\s*=\s*(?:JavaVersion\.VERSION_)?['"]?)(\d+)/,
+    /(?:<java\.version>|JavaLanguageVersion\.of\(|sourceCompatibility\s*=\s*(?:JavaVersion\.VERSION_)?['"]?)(\d{2})/,
     "21",
   );
   // Use the project's wrapper when it has one, so the build tool version
-  // matches; otherwise the build image provides Maven or Gradle.
+  // matches; otherwise the build image provides Maven or Gradle. `sh` runs
+  // the wrapper even when a Windows checkout lost its executable bit.
   const [image, command] = pom
     ? has("mvnw")
-      ? [`eclipse-temurin:${jdk}-jdk`, "./mvnw"]
+      ? [`eclipse-temurin:${jdk}-jdk`, "sh mvnw"]
       : [`maven:3-eclipse-temurin-${jdk}`, "mvn"]
     : has("gradlew")
-      ? [`eclipse-temurin:${jdk}-jdk`, "./gradlew"]
+      ? [`eclipse-temurin:${jdk}-jdk`, "sh gradlew"]
       : [`gradle:jdk${jdk}`, "gradle"];
   // Gradle also writes a `-plain.jar` without dependencies; skip it.
   const jar = pom
