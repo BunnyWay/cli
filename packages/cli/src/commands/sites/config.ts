@@ -1,11 +1,14 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   CURRENT_VERSION,
   type SiteConfig,
   SiteConfigSchema,
 } from "@bunny.net/config";
 import {
+  CONFIG_FILENAME,
   configPath,
+  findConfigRoot,
   readBunnyConfig,
   SCHEMA_REF,
 } from "@/core/bunny-config.ts";
@@ -19,8 +22,12 @@ interface LoadedSiteConfig {
 }
 
 // Read the `sites` block from `bunny.jsonc`, validating only that block so a sites-only file needs no `app` (or `version`); returns null when no file or no `sites` block.
-export function loadSiteConfig(): LoadedSiteConfig | null {
-  const found = readBunnyConfig();
+export function loadSiteConfig(from?: string): LoadedSiteConfig | null {
+  const fromRoot = from ? findConfigRoot(from) : undefined;
+  if (fromRoot === null) return null;
+  const found = readBunnyConfig(
+    fromRoot ? join(fromRoot, CONFIG_FILENAME) : undefined,
+  );
   if (!found) return null;
 
   const sites = (found.data as Record<string, unknown> | null)?.sites;
