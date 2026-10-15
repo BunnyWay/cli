@@ -21,6 +21,7 @@ import {
   fetchSystemHostname,
   promoteDeploy,
   rereadRemoteState,
+  warnIfUnconfirmed,
   writeRemoteState,
 } from "./api.ts";
 import {
@@ -460,9 +461,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const production = productionUrl(state, systemHost);
 
     if (skipUpload && alreadyLive) {
-      await withSpinner("Checking routing...", () =>
+      const confirmed = await withSpinner("Checking routing...", () =>
         promoteDeploy({ coreClient, state, deployId }),
       );
+      warnIfUnconfirmed(confirmed, deployId);
       if (output === "json") {
         logger.log(
           JSON.stringify(
@@ -470,7 +472,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
               site: state.name,
               id: deployId,
               unchanged: true,
-              live: true,
+              live: confirmed,
               production: production ?? null,
             },
             null,
@@ -541,13 +543,18 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       etag = await writeRemoteState(connection, state, etag);
     }
 
-    await withSpinner("Publishing to production...", async () => {
-      await promoteDeploy({ coreClient, state, deployId });
-      markCurrent(state, deployId);
-      etag = await writeRemoteState(connection, state, etag, {
-        promotedTo: deployId,
-      });
-    });
+    const promoteConfirmed = await withSpinner(
+      "Publishing to production...",
+      async () => {
+        const confirmed = await promoteDeploy({ coreClient, state, deployId });
+        markCurrent(state, deployId);
+        etag = await writeRemoteState(connection, state, etag, {
+          promotedTo: deployId,
+        });
+        return confirmed;
+      },
+    );
+    warnIfUnconfirmed(promoteConfirmed, deployId);
 
     if (output === "json") {
       logger.log(
@@ -559,7 +566,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
             files: files.length,
             bytes: totalBytes,
             unchanged: skipUpload,
-            live: true,
+            live: promoteConfirmed,
             production: production ?? null,
           },
           null,
@@ -570,7 +577,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
 
     if (skipUpload) {
-      logger.success(`Deploy ${deployId} is now live.`);
+      logger.success(
+        promoteConfirmed
+          ? `Deploy ${deployId} is now live.`
+          : `Published deploy ${deployId}.`,
+      );
     } else {
       logger.success(
         `Deployed ${deployId} (${files.length} files, ${formatBytes(totalBytes)}).`,

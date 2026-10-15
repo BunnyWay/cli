@@ -44,7 +44,7 @@ beforeEach(() => {
   promoteVerification.probe = async (url) => ({
     status: 200,
     deploy:
-      new URL(url).searchParams.get("__bunny_promote")?.replace(/-\d+$/, "") ??
+      new URL(url).pathname.match(/^\/__bunny_promote\/(.+)-\d+$/)?.[1] ??
       null,
   });
   siteFiles.connect = (zone) =>
@@ -724,6 +724,41 @@ test("promoteDeploy retargets the rewrite rule, probes the edge, and purges twic
   );
   expect(purges).toHaveLength(2);
   expect(purges[0]?.params).toEqual({ path: { id: 30 } });
+});
+
+test("promoteDeploy keeps paths a user excluded from the rewrite rule", async () => {
+  const coreClient = fakeCoreClient({ calls: [], storageZones: [ZONE] });
+  await promoteDeploy({ coreClient, state: fakeState(), deployId: "aaaa" });
+
+  const rulesOf = async () =>
+    (await coreClient.GET("/pullzone/{id}", { params: { path: { id: 30 } } }))
+      .data?.EdgeRules ?? [];
+  const rewrite = (await rulesOf()).find(
+    (r) => r.Description === REWRITE_RULE_DESC,
+  ) as EdgeRule;
+  await coreClient.POST("/pullzone/{pullZoneId}/edgerules/addOrUpdate", {
+    params: { path: { pullZoneId: 30 } },
+    body: {
+      ...rewrite,
+      Triggers: [
+        {
+          ...rewrite.Triggers?.[0],
+          PatternMatches: ["*/deploys/*", "*/api/*"],
+        },
+      ],
+    },
+  });
+
+  await promoteDeploy({ coreClient, state: fakeState(), deployId: "bbbb" });
+  const after = (await rulesOf()).filter(
+    (r) => r.Description === REWRITE_RULE_DESC,
+  );
+  expect(after).toHaveLength(1);
+  expect(after[0]?.ActionParameter3).toBe("/deploys/bbbb/");
+  expect(after[0]?.Triggers?.[0]?.PatternMatches).toEqual([
+    "*/deploys/*",
+    "*/api/*",
+  ]);
 });
 
 test("promoteDeploy keeps the storage zone's not-found settings on the live deploy", async () => {

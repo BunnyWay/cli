@@ -20,6 +20,7 @@ import {
   fetchSystemHostname,
   migrateSite,
   siteFiles,
+  warnIfUnconfirmed,
   type ZoneState,
 } from "./api.ts";
 import {
@@ -139,6 +140,7 @@ export const sitesMigrateCommand = defineCommand<MigrateArgs>({
       );
     }
     if (result.state.current) {
+      warnIfUnconfirmed(result.promoteConfirmed, result.state.current);
       const systemHost = result.state.domain
         ? undefined
         : await fetchSystemHostname(coreClient, result.state.pullZoneId);
