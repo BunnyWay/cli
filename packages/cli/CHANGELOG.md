@@ -1,5 +1,23 @@
 # @bunny.net/cli
 
+## 0.20.0
+
+### Minor Changes
+
+- [#253](https://github.com/BunnyWay/cli/pull/253) [`8254578`](https://github.com/BunnyWay/cli/commit/8254578d60dfd080f062b894d7c135989f2e07ea) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add `bunny stream` commands to manage Stream video libraries and videos: `stream libraries` (create, list, show, update, credentials, player and security settings), `stream videos` (upload, fetch, update, thumbnails, stats, embed URLs, encode, transcribe, and Smart Generate), `stream collections`, `stream captions`, `stream link`, and `stream regions`.
+
+### Patch Changes
+
+- [#253](https://github.com/BunnyWay/cli/pull/253) [`8254578`](https://github.com/BunnyWay/cli/commit/8254578d60dfd080f062b894d7c135989f2e07ea) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny stream library create` now offers to link the directory, save the library ID and API key to `.env`, and import or upload videos, then prints next steps. `storage zones create`, `sites create`, and `pz create` link to the matching examples.
+
+- [#250](https://github.com/BunnyWay/cli/pull/250) [`897157c`](https://github.com/BunnyWay/cli/commit/897157cb9317ead9ce76c1431b58a78efce1fddd) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites delete` lists the pull zone, its hostnames, and the storage zone it will delete before asking to confirm
+
+- [#257](https://github.com/BunnyWay/cli/pull/257) [`a863793`](https://github.com/BunnyWay/cli/commit/a863793d2fa9f5b5226d9ae1b6016a69224764fb) Thanks [@twogood](https://github.com/twogood)! - `bunny sites list` no longer warns about unreadable storage zones for pull zones that have no storage origin
+
+- [#259](https://github.com/BunnyWay/cli/pull/259) [`93b3749`](https://github.com/BunnyWay/cli/commit/93b3749c0e71dfbdd9ab7f16d60f1ad68b358c7e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(stream): stop suggesting --clean-failed alone for videos the source no longer lists, and name the 10,000-video cap in `stream import list`
+
+- [#254](https://github.com/BunnyWay/cli/pull/254) [`b91d4a4`](https://github.com/BunnyWay/cli/commit/b91d4a4f25f914896c1b73edff625039fae0dd34) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add the `bunny stream` libraries, videos, captions, collections, and paid commands to the agent skill, and bring the import reference up to date
+
 ## 0.19.0
 
 ### Minor Changes
