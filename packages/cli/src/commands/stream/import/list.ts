@@ -40,10 +40,18 @@ function renderListing(listing: ImportListing, output: OutputFormat): void {
         output,
       ),
     );
-    if (listing.truncated)
+    if (listing.truncated) {
+      // Only suggest a flag the source accepts: flat sources reject --folder.
+      const narrow =
+        listing.source === "s3"
+          ? " Narrow it with --prefix."
+          : listing.supportsFolders
+            ? " Narrow it with --folder."
+            : "";
       logger.dim(
-        `Showing the first ${listing.videos.length.toLocaleString("en-US")} videos, the most one listing returns. Narrow it with --folder (or --prefix for S3).`,
+        `Showing the first ${listing.videos.length.toLocaleString("en-US")} videos, the most one listing returns.${narrow}`,
       );
+    }
     return;
   }
   if (!listing.supportsFolders) {
