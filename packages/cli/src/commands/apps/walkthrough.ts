@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { detectFrameworkFrom } from "@bunny.net/framework-detector";
 import { parseDotenv } from "@/core/env.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
@@ -28,6 +29,14 @@ import {
   readDockerfileExposedPorts,
   resolveRegistryForImage,
 } from "./docker.ts";
+import {
+  type AppPlan,
+  type AppSnapshot,
+  DOCKERIGNORE,
+  detectAppFrom,
+  readAppSnapshot,
+  renderDockerfile,
+} from "./dockerfile.ts";
 import {
   confirmEndpointSuggestions,
   endpointRequestToConfig,
@@ -103,10 +112,27 @@ export async function runWalkthrough(
 
   let imageRef: string | undefined = input.positionalImage;
   let dockerfilePath: string | undefined = input.dockerfileFlag;
+  // Set when we write a Dockerfile for a detected framework; its port
+  // seeds the endpoint, since in --dry-run the file is never on disk.
+  let generated: AppPlan | undefined;
 
   if (!imageRef && !dockerfilePath) {
     const composeFile = findComposeFile(process.cwd());
     const detectedDockerfiles = findDockerfiles(process.cwd());
+    // Only offer to generate when there's no Dockerfile to build already.
+    const snapshot =
+      detectedDockerfiles.length === 0
+        ? readAppSnapshot(process.cwd())
+        : undefined;
+    const detectedApp = snapshot ? detectAppFrom(snapshot) : undefined;
+    // A frontend with no server to run belongs on Sites, not in a container.
+    const staticFramework =
+      snapshot && !detectedApp ? detectFrameworkFrom(snapshot) : undefined;
+    if (staticFramework && staticFramework.id !== "static") {
+      logger.dim(
+        `This looks like a static ${staticFramework.label} site. \`bunny sites deploy\` hosts it without a container.`,
+      );
+    }
 
     const composeServicesCount = composeFile
       ? Object.keys(loadComposeFile(composeFile).services).length
@@ -132,6 +158,14 @@ export async function runWalkthrough(
               },
             ]
           : []),
+        ...(detectedApp
+          ? [
+              {
+                title: `Generate a Dockerfile for ${detectedApp.label} and build it`,
+                value: "generate",
+              },
+            ]
+          : []),
         { title: dockerfileChoiceTitle, value: "dockerfile" },
         { title: "Deploy a pre-built image", value: "image" },
       ],
@@ -139,9 +173,9 @@ export async function runWalkthrough(
     if (!value) throw new UserError("Setup cancelled.");
 
     // Bail before any further prompts / disk writes if Docker is missing.
-    // Both "compose" and "dockerfile" picks always end in a local build;
-    // without Docker we'd write `bunny.jsonc` and then crash mid-deploy.
-    if (value === "compose" || value === "dockerfile") {
+    // Every pick but "image" ends in a local build; without Docker we'd
+    // write `bunny.jsonc` and then crash mid-deploy.
+    if (value !== "image") {
       await ensureDockerAvailable();
     }
 
@@ -149,7 +183,17 @@ export async function runWalkthrough(
       return runComposeImport(client, composeFile, input);
     }
 
-    if (value === "dockerfile") {
+    if (value === "generate" && detectedApp && snapshot) {
+      generated = {
+        ...detectedApp,
+        port: input.portOverride ?? detectedApp.port,
+      };
+      dockerfilePath = writeGeneratedDockerfile(
+        generated,
+        snapshot,
+        input.dryRun,
+      );
+    } else if (value === "dockerfile") {
       const selectedPaths = await chooseDockerfiles(detectedDockerfiles);
       if (selectedPaths.length === 0) {
         throw new UserError("At least one Dockerfile is required.");
@@ -192,6 +236,19 @@ export async function runWalkthrough(
       logger.dim(suggestions.instructions);
       logger.log();
     }
+  } else if (generated) {
+    suggestions = {
+      appName: generated.appName,
+      endpointSuggestions: [
+        {
+          displayName: "cdn",
+          cdn: {
+            isSslEnabled: true,
+            portMappings: [{ exposedPort: 443, containerPort: generated.port }],
+          },
+        },
+      ],
+    };
   } else if (mode === "build" && dockerfilePath) {
     // Read EXPOSE directives from the Dockerfile to seed endpoint
     // suggestions. bunny's getConfigSuggestions only works for pre-built
@@ -304,6 +361,39 @@ export async function runWalkthrough(
 
   return { config: toml, registries: { [name]: registry.id } };
 }
+
+/**
+ * Write a Dockerfile (and a `.dockerignore`, unless one exists) for a
+ * detected app at the project root, and return the Dockerfile path. With
+ * `dryRun`, print the Dockerfile instead of writing anything.
+ */
+function writeGeneratedDockerfile(
+  plan: AppPlan,
+  snapshot: AppSnapshot,
+  dryRun?: boolean,
+): string {
+  const cwd = process.cwd();
+  const contents = renderDockerfile(plan, snapshot);
+
+  if (dryRun) {
+    logger.dim("--- Dockerfile (preview) ---");
+    logger.log(contents);
+    logger.dim("--- end preview ---");
+    logger.dim("Would write Dockerfile (--dry-run).");
+    return GENERATED_DOCKERFILE;
+  }
+
+  writeFileSync(resolve(cwd, GENERATED_DOCKERFILE), contents);
+  logger.success(`Wrote a Dockerfile for ${plan.label}.`);
+  const dockerignore = resolve(cwd, ".dockerignore");
+  if (!existsSync(dockerignore)) {
+    writeFileSync(dockerignore, DOCKERIGNORE);
+    logger.success("Wrote .dockerignore.");
+  }
+  return GENERATED_DOCKERFILE;
+}
+
+const GENERATED_DOCKERFILE = "Dockerfile";
 
 /**
  * Compose import path: translate `compose.yml` → `bunny.jsonc` and write.

@@ -34,7 +34,7 @@ Deploy an app. Three modes, chosen by what you pass:
 If no `bunny.jsonc` exists, the first run launches a walkthrough that:
 
 1. Looks for a `compose.yml` / `docker-compose.yml` in the working directory and offers to import the services from it.
-2. Otherwise offers to build from a `Dockerfile` (if one exists) or to deploy a pre-built image ref.
+2. Otherwise offers to build from a `Dockerfile` (if one exists) or to deploy a pre-built image ref. With no Dockerfile, a detected Node or Bun app gets a third option: generate one (see below).
 3. Resolves the registry (prompts "is this image public, or do you need credentials?" for new hostnames).
 4. Calls bunny.net's image-suggestions endpoint to pre-fill app name, endpoints, and required environment variables for known public images.
 5. Prompts for a single region. Multi-region apps can be configured by editing the resulting `bunny.jsonc`: the schema accepts an array, the walkthrough just keeps the initial setup focused.
@@ -46,6 +46,28 @@ After a successful deploy that replaced a running image, the CLI prints the prev
 Previous image: ghcr.io/me/api:abc-123
 To rollback:    bunny apps deploy ghcr.io/me/api:abc-123
 ```
+
+### Generating a Dockerfile
+
+When the project has no Dockerfile, the walkthrough reads `package.json` and offers to write one for you:
+
+| Detected from                              | Runs                                     | Port |
+| ------------------------------------------ | ---------------------------------------- | ---- |
+| `next`                                     | `next start`                             | 3000 |
+| `nuxt`                                     | `.output/server/index.mjs` (output only) | 3000 |
+| `@sveltejs/kit` + `@sveltejs/adapter-node` | `build/index.js`                         | 3000 |
+| `astro` + `@astrojs/node`                  | `dist/server/entry.mjs`                  | 4321 |
+| `@react-router/serve`                      | `react-router-serve`                     | 3000 |
+| `@remix-run/serve`                         | `remix-serve`                            | 3000 |
+| `@nestjs/core`                             | `dist/main.js`                           | 3000 |
+| a `start` script                           | the `start` script                       | 3000 |
+| `module` / `main` with no `start` script   | that file                                | 3000 |
+
+The package manager comes from the lockfile (`bun.lock`, `pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`). Bun projects build on `oven/bun:1`; everything else on `node:<major>-slim`, with the major read from `.nvmrc`, `.node-version` or `engines.node` (default 24). The build runs the `build` script when there is one, and the image sets `PORT` and binds to `0.0.0.0`. `--port` changes the port in the generated file and the endpoint.
+
+A frontend framework without a server adapter (Vite, Create React App, Astro or SvelteKit without the Node adapter) is not offered a Dockerfile: its `start` script is a dev server. The walkthrough points you at `bunny sites deploy` instead.
+
+The Dockerfile and a `.dockerignore` (unless you have one) are written to the project root. They are yours from then on: deploys build the file as-is, and the generator never runs again. `--dry-run` prints the Dockerfile instead of writing it. The `.dockerignore` keeps `.env` files out of the image; set them with `bunny apps env` instead.
 
 ### Importing from docker-compose
 
