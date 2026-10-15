@@ -48,8 +48,7 @@ export function statementAt(doc: string, pos: number): string {
   return statement;
 }
 
+/** Always quoted: a bare name can be a keyword (`order`, `group`). */
 export function quoteIdent(name: string): string {
-  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name)
-    ? name
-    : `"${name.replace(/"/g, '""')}"`;
+  return `"${name.replace(/"/g, '""')}"`;
 }

@@ -132,15 +132,21 @@ function parseIsValue(raw: string): boolean | null {
 }
 
 /**
- * Numeric strings become numbers, except integers beyond 2^53, which a
- * number can't hold exactly; those stay strings, and SQLite's INTEGER
- * affinity still compares them as integers.
+ * A value becomes a number only when it's written the way a number prints
+ * (`18`, `-2.5`): then it compares correctly against any column, and SQLite's
+ * TEXT affinity still turns it back into `'18'` for a TEXT column. Anything
+ * else stays a string so it matches as written: `007` and `1e3` would
+ * otherwise become 7 and 1000 and miss TEXT values, and integers beyond 2^53
+ * would lose precision (INTEGER affinity still compares those strings as
+ * integers).
  */
 export function parseValue(raw: string): string | number {
   const num = Number(raw);
-  if (Number.isNaN(num) || raw.trim() === "") return raw;
-  if (Number.isInteger(num) && !Number.isSafeInteger(num)) return raw;
-  return num;
+  return Number.isFinite(num) &&
+    Number.isSafeInteger(Math.trunc(num)) &&
+    String(num) === raw
+    ? num
+    : raw;
 }
 
 /**
@@ -187,14 +193,19 @@ export function parseOrGroup(raw: string): FilterGroup | null {
     if (dotIndex <= 0) return null;
     const column = part.substring(0, dotIndex).trim();
     let rest = part.substring(dotIndex + 1);
-    // Unquote `op."value"` (and `not.op."value"`) so quoted values compare as written.
-    rest = rest.replace(
-      /^((?:not\.)?[a-z]+\.)"(.*)"$/s,
-      (_, prefix: string, value: string) =>
-        prefix + value.replace(/\\(.)/gs, "$1"),
-    );
+    // `op."value"` (and `not.op."value"`): the quotes make it a literal string.
+    const quoted = rest.match(/^((?:not\.)?[a-z]+\.)"(.*)"$/s);
+    const literal = quoted?.[2]?.replace(/\\(.)/gs, "$1");
+    if (quoted?.[1]) rest = `${quoted[1]}${literal}`;
     const condition = parseFilterValue(column, rest);
     if (!condition || !rest.includes(".")) return null;
+    if (
+      literal !== undefined &&
+      condition.operator !== "in" &&
+      condition.operator !== "is"
+    ) {
+      condition.value = literal;
+    }
     conditions.push(condition);
   }
   return { or: conditions };
@@ -248,9 +259,11 @@ export function parseQueryParams(url: URL): ParsedQuery {
     }
 
     const filter = parseFilterValue(key, value);
-    if (filter) {
-      filters.push(filter);
+    if (!filter) {
+      // Dropping a filter would widen the match, so refuse it instead.
+      throw new QueryParseError(`Invalid filter: ${key}=${value}`);
     }
+    filters.push(filter);
   }
 
   return {

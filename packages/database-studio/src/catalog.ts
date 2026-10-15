@@ -24,6 +24,24 @@ const excluded = (name: string) =>
   );
 
 /**
+ * A view's columns, or none when SQLite can't resolve it (a view over a
+ * dropped table): one stale view must not stop studio from starting.
+ */
+async function viewColumns(
+  client: CatalogClient,
+  name: string,
+): Promise<string[]> {
+  try {
+    const info = await client
+      .prepare(`PRAGMA table_info(${quote(name)})`)
+      .run();
+    return info.rows.map((r) => String(r.name));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * What introspection leaves out and the schema view wants: the CREATE
  * statements as written (including triggers, which introspection doesn't
  * read), and views with their columns.
@@ -49,10 +67,7 @@ export async function loadCatalog(
 
     if (type === "view") {
       if (excluded(name)) continue;
-      const info = await client
-        .prepare(`PRAGMA table_info(${quote(name)})`)
-        .run();
-      views.push({ name, sql, columns: info.rows.map((r) => String(r.name)) });
+      views.push({ name, sql, columns: await viewColumns(client, name) });
     } else if (tableNames.has(table) && sql) {
       ddl[table] ??= [];
       ddl[table].push(sql);

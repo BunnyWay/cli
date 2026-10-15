@@ -75,6 +75,12 @@ function quoteForGroup(encoded: string): string {
   return `${op}"${value.replace(/[\\"]/g, "\\$&")}"`;
 }
 
+/** Query parameters the REST handler reads as paging or options, not as column filters. */
+const RESERVED_PARAMS = new Set(["select", "order", "limit", "offset", "or"]);
+
+const groupPart = (f: FilterCondition) =>
+  `${f.column}.${quoteForGroup(OPERATORS[f.operator].encode(f.value))}`;
+
 /** Query parameters for the REST handler: one per filter, or a single `or=(...)` group. */
 export function filterParams(
   filters: FilterCondition[],
@@ -82,11 +88,13 @@ export function filterParams(
 ): [string, string][] {
   const ready = filters.filter(isComplete);
   if (mode === "or" && ready.length > 1) {
-    const parts = ready.map(
-      (f) =>
-        `${f.column}.${quoteForGroup(OPERATORS[f.operator].encode(f.value))}`,
-    );
-    return [["or", `(${parts.join(",")})`]];
+    return [["or", `(${ready.map(groupPart).join(",")})`]];
   }
-  return ready.map((f) => [f.column, OPERATORS[f.operator].encode(f.value)]);
+  return ready.map((f): [string, string] =>
+    // A column named `limit` or `order` would collide with the paging
+    // parameter, so its filter goes in a one-condition group instead.
+    RESERVED_PARAMS.has(f.column)
+      ? ["or", `(${groupPart(f)})`]
+      : [f.column, OPERATORS[f.operator].encode(f.value)],
+  );
 }

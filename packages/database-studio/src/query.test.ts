@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { DatabaseError, type SqlValue } from "@bunny.net/database-client";
 import {
   MAX_ROWS,
+  pragmaAsSelect,
   type QueryClient,
   QueryRejected,
   queryErrorMessage,
@@ -104,6 +105,29 @@ describe("runReadOnlyQuery", () => {
   });
 });
 
+describe("pragmaAsSelect", () => {
+  test("passes the argument as a plain string and keeps the schema", () => {
+    expect(pragmaAsSelect("PRAGMA table_info(users)")).toBe(
+      "SELECT * FROM pragma_table_info('users')",
+    );
+    expect(pragmaAsSelect('PRAGMA table_info("my""t")')).toBe(
+      `SELECT * FROM pragma_table_info('my"t')`,
+    );
+    expect(pragmaAsSelect("PRAGMA table_info('o''b')")).toBe(
+      "SELECT * FROM pragma_table_info('o''b')",
+    );
+    expect(pragmaAsSelect('PRAGMA table_info("a(b)");')).toBe(
+      "SELECT * FROM pragma_table_info('a(b)')",
+    );
+    expect(pragmaAsSelect("PRAGMA aux.table_info(t)")).toBe(
+      "SELECT * FROM pragma_table_info('t', 'aux')",
+    );
+    expect(pragmaAsSelect("PRAGMA aux.user_version")).toBe(
+      "SELECT * FROM pragma_user_version('aux')",
+    );
+  });
+});
+
 describe("rejectionReason", () => {
   test("ignores write words inside strings, identifiers, comments, and replace()", () => {
     for (const sql of [
@@ -113,6 +137,7 @@ describe("rejectionReason", () => {
       "SELECT 1 /* insert later */",
       "SELECT replace(name, 'a', 'b') FROM users",
       "SELECT deleted_at, created_at FROM users",
+      "SELECT begin, release, analyze, col2delete FROM events",
       "-- a comment first\nSELECT 1",
     ]) {
       expect(rejectionReason(sql)).toBeNull();
@@ -129,6 +154,11 @@ describe("rejectionReason", () => {
     ]) {
       expect(rejectionReason(sql)).toBeNull();
     }
+  });
+
+  test("rejects more than one statement", () => {
+    expect(rejectionReason("SELECT 1; PRAGMA user_version = 5")).not.toBeNull();
+    expect(rejectionReason("SELECT ';' AS semi")).toBeNull();
   });
 
   test("rejects PRAGMAs that set something", () => {

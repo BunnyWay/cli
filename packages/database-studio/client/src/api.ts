@@ -117,7 +117,12 @@ export async function fetchRowWhere(
   value: unknown,
 ): Promise<Row | null> {
   const params = new URLSearchParams({ limit: "1" });
-  params.set(column, `eq.${String(value)}`);
+  for (const [key, v] of filterParams(
+    [{ column, operator: "eq", value: String(value) }],
+    "and",
+  )) {
+    params.append(key, v);
+  }
   const res = await request(`/api/${encodeURIComponent(table)}?${params}`);
   const body = (await res.json()) as { data: Row[] };
   return body.data[0] ?? null;

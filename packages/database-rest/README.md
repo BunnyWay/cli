@@ -188,7 +188,7 @@ GET /users?or=(name.eq."Smith, John",name.is.null)
 
 **Operators**: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `is`, `in`
 
-Prefix any operator with `not.` to negate it. Separate parameters are combined with `AND`; an `or=(...)` parameter matches rows where any of its conditions hold. Wrap a value in double quotes when it contains commas or parentheses. A malformed `or` group returns `400` rather than being dropped, since ignoring part of it would match more rows.
+Prefix any operator with `not.` to negate it. Separate parameters are combined with `AND`; an `or=(...)` parameter matches rows where any of its conditions hold. Wrap a value in double quotes when it contains commas or parentheses. A filter that doesn't parse (an unknown operator, a malformed `or` group) returns `400` rather than being dropped, since ignoring it would match more rows. Values are sent as numbers only when written exactly as a number prints (`18`, `-2.5`); anything else, such as `007` or `1e3`, or any quoted value inside `or=(...)`, is compared as text.
 
 #### Order
 

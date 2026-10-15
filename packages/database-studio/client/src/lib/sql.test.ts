@@ -24,8 +24,8 @@ describe("statementAt", () => {
 });
 
 describe("quoteIdent", () => {
-  test("leaves plain names bare and quotes the rest", () => {
-    expect(quoteIdent("users")).toBe("users");
+  test("quotes every name, so keywords work as table names", () => {
+    expect(quoteIdent("order")).toBe('"order"');
     expect(quoteIdent("user roles")).toBe('"user roles"');
     expect(quoteIdent('a"b')).toBe('"a""b"');
   });

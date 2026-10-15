@@ -310,6 +310,35 @@ describe("value encoding", () => {
     expect(body.data[0].data).toBe("AQL/");
   });
 
+  test("matches number-like text as written, and still compares numbers", async () => {
+    const codes = new Database(":memory:");
+    codes.exec(
+      "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT); INSERT INTO users VALUES (7, '007'), (8, '1e3'), (9, 'x')",
+    );
+    const h = createRestHandler(createTestExecutor(codes), schema);
+    const names = async (path: string) =>
+      (await jsonBody(await h(req("GET", path)))).data.map(
+        (u: { name: string }) => u.name,
+      );
+
+    expect(await names("/users?name=eq.007")).toEqual(["007"]);
+    expect(await names("/users?name=eq.1e3")).toEqual(["1e3"]);
+    expect(await names("/users?id=eq.7")).toEqual(["007"]);
+    expect(
+      await names(
+        `/users?or=${encodeURIComponent('(name.eq."007",name.eq.x)')}`,
+      ),
+    ).toEqual(["007", "x"]);
+    codes.close();
+  });
+
+  test("refuses a filter it can't parse instead of dropping it", async () => {
+    for (const path of ["/users?name=not.bogus", "/users?name=bogus.x"]) {
+      const res = await handler(req("GET", path));
+      expect(res.status).toBe(400);
+    }
+  });
+
   test("filters on integers beyond 2^53 without rounding them", async () => {
     const big = new Database(":memory:");
     big.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)");

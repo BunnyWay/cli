@@ -23,26 +23,20 @@ const READ_KEYWORDS = new Set([
   "VALUES",
 ]);
 
-/** Keywords that only appear in statements that change something. */
+/**
+ * Keywords that can make a single statement write even after a read keyword
+ * (`WITH … DELETE`, `EXPLAIN` aside). Words like BEGIN or VACUUM can only
+ * start a statement, which the first-keyword check already covers, and
+ * leaving them out keeps columns named `begin` or `release` usable.
+ */
 const WRITE_KEYWORDS = new Set([
   "INSERT",
   "UPDATE",
   "DELETE",
   "REPLACE",
-  "UPSERT",
   "CREATE",
   "DROP",
   "ALTER",
-  "ATTACH",
-  "DETACH",
-  "VACUUM",
-  "REINDEX",
-  "ANALYZE",
-  "BEGIN",
-  "COMMIT",
-  "ROLLBACK",
-  "SAVEPOINT",
-  "RELEASE",
 ]);
 
 /** PRAGMAs that read schema and may name a table or index: `PRAGMA table_info(users)`. */
@@ -125,8 +119,13 @@ export function rejectionReason(statement: string): string | null {
       : `Studio only runs PRAGMAs that read, such as table_info(name) or user_version on its own. PRAGMA ${name || "?"} as written could change a setting.`;
   }
 
+  // One statement only, so nothing can follow the checked one.
+  if (code.includes(";")) {
+    return "Run one statement at a time: select it, or put the cursor in it, and press Run.";
+  }
+
   // `REPLACE(...)` is the string function; `REPLACE INTO` is a write.
-  for (const match of code.matchAll(/[A-Za-z_]+/g)) {
+  for (const match of code.matchAll(/[A-Za-z_][A-Za-z0-9_$]*/g)) {
     const word = match[0].toUpperCase();
     if (!WRITE_KEYWORDS.has(word)) continue;
     const after = code.slice(match.index + word.length);
@@ -146,17 +145,29 @@ export function rejectionReason(statement: string): string | null {
  * SELECT. Only called for PRAGMAs `rejectionReason()` already allowed.
  */
 export function pragmaAsSelect(statement: string): string | null {
-  const match = codeOnly(statement).match(
-    /^\s*PRAGMA\s+(?:\w+\s*\.\s*)?(\w+)\s*(?:\(\s*([^()]*?)\s*\))?\s*$/i,
+  const match = statement.match(
+    /^\s*PRAGMA\s+(?:(\w+)\s*\.\s*)?(\w+)\s*(?:\((.*)\))?\s*;?\s*$/is,
   );
   if (!match) return null;
-  const name = match[1]?.toLowerCase();
-  // The argument was blanked out if it was quoted, so read it from the original.
-  const raw = statement.match(/\(\s*([^()]*?)\s*\)\s*;?\s*$/)?.[1] ?? "";
-  const arg = raw
-    .replace(/^(['"`])(.*)\1$/s, "$2")
-    .replace(/^\[(.*)\]$/s, "$1");
-  return `SELECT * FROM pragma_${name}(${arg ? `'${arg.replace(/'/g, "''")}'` : ""})`;
+  const [, schema, name, rawArg = ""] = match;
+  const arg = unquote(rawArg.trim());
+  // The table-valued form takes the PRAGMA's argument, then the schema.
+  const args = [...(arg ? [arg] : []), ...(schema ? [schema] : [])].map(
+    (a) => `'${a.replace(/'/g, "''")}'`,
+  );
+  return `SELECT * FROM pragma_${name?.toLowerCase()}(${args.join(", ")})`;
+}
+
+/** A quoted SQL name or string as its plain text: `"a""b"` → `a"b`, `'o''b'` → `o'b`. */
+function unquote(text: string): string {
+  const quote = text[0];
+  if (text.length >= 2 && (quote === '"' || quote === "'" || quote === "`")) {
+    if (text.endsWith(quote)) {
+      return text.slice(1, -1).replaceAll(quote + quote, quote);
+    }
+  }
+  if (text.startsWith("[") && text.endsWith("]")) return text.slice(1, -1);
+  return text;
 }
 
 /**
