@@ -68,13 +68,12 @@ bunny sites deploy ./dist                             # deploy a directory and p
 bunny sites domains add example.com --wait            # custom production domain
 bunny sites deployments publish --previous --force    # instant rollback
 
-# manage Bunny Stream video (experimental)
-bunny stream library create my-library
-bunny stream library link my-library
-bunny stream video upload ./video.mp4 --title "Launch demo"
-bunny stream video list
+# manage Bunny Stream video
+bunny stream libraries create my-library --link --save-env --no-add-videos   # link this directory, write .env
+bunny stream videos upload ./video.mp4 --title "Launch demo"
+bunny stream videos list
 
-# import a video library into Bunny Stream (experimental)
+# import a video library into Bunny Stream
 bunny stream import list --source vimeo                        # browse folders first
 bunny stream import --library 12345 --source vimeo --dry-run   # plan first
 bunny stream import --library 12345 --source vimeo --force     # hand every video to Bunny
@@ -93,8 +92,8 @@ Use this to route to the correct reference file:
 - **Static sites (create, deploy, rollback, custom domains, GitHub Actions)** -> `references/sites.md`
 - **Edge Storage (zones, files, connection credentials, S3/FTP/HTTP, custom domains)** -> `references/storage.md`
 - **Sandboxes (create, exec, ssh, files list/cp, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
-- **Bunny Stream (experimental: libraries, player/security settings, video upload/fetch/embed/cleanup, collections, captions, encoding, transcription, smart titles/chapters)** -> `references/stream.md`
-- **Import a video library into Bunny Stream (experimental: Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, Brightcove; browse, dry run, resume, status)** -> `references/stream-import.md`
+- **Bunny Stream (libraries, player/security settings, video upload/fetch/embed/cleanup, captions, collections, encoding, transcription, smart titles/chapters)** -> `references/stream.md`
+- **Import a video library into Bunny Stream (Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, Brightcove; browse, dry run, resume, status)** -> `references/stream-import.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)
 

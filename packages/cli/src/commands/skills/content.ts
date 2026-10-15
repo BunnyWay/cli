@@ -40,7 +40,7 @@ This project uses bunny.net. Manage its resources with the \`bunny\` CLI: databa
 - When the CLI has no command for something, fall back to \`bunny api <METHOD> <path>\` against api.bunny.net.`;
 
 /** The shipped bunny-cli skill, embedded at bundle time from skills/bunny-cli/. */
-// Experimental namespaces (apps, registries) stay out of the skill until they stabilize; stream ships early, labelled experimental.
+// Experimental namespaces (apps, registries) stay out of the skill until they stabilize.
 export const BUNNY_CLI_SKILL: ProjectSkill = {
   name: "bunny-cli",
   agentsSection: AGENTS_SECTION,

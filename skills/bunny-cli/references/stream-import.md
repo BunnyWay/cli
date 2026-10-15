@@ -1,7 +1,5 @@
 # Stream Import Commands
 
-> **Experimental.** `bunny stream` is hidden from `--help` while it stabilizes. Flags and JSON shapes may still change.
-
 `bunny stream import` moves an existing video library into a Bunny Stream library from **Vimeo**, **AWS S3** (or an S3-compatible provider), **Wistia**, **Mux**, **Cloudflare Stream**, **JW Player**, or **Brightcove**. Bunny fetches every file straight from the source by URL, so nothing is downloaded to the local machine. The command hands each video to Bunny, tags it, and returns once they are all queued; encoding then happens on Bunny's side.
 
 ## Resolving the library
@@ -9,7 +7,7 @@
 `--library` (alias `--lib`) takes a library name or numeric ID. When omitted, it resolves in this order:
 
 1. `--library`
-2. `.bunny/stream.json` (the directory's linked library, see `stream.md`)
+2. `.bunny/stream.json` (the directory's linked library, written by `bunny stream link`; see `stream.md`)
 3. Interactive picker, which offers to link the directory (never on `--dry-run`)
 
 The library's own Stream API key is read from the account automatically and never printed.
