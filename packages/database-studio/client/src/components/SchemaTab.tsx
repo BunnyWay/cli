@@ -1,4 +1,5 @@
-import { KeyRound } from "lucide-react";
+import { Check, Copy, KeyRound } from "lucide-react";
+import { useState } from "react";
 import type { OpenTable } from "@/App";
 import type { TableDefinition } from "@/api";
 
@@ -75,12 +76,16 @@ function isRowid(table: TableDefinition, column: string): boolean {
 export function SchemaTab({
   table,
   tables,
+  ddl,
   onOpenTable,
 }: {
   table: TableDefinition;
   tables: TableDefinition[];
+  ddl: string[];
   onOpenTable: OpenTable;
 }) {
+  const [copied, setCopied] = useState(false);
+  const definition = ddl.map((s) => `${s.trim()};`).join("\n\n");
   const foreignKeys = new Map(table.foreignKeys.map((fk) => [fk.column, fk]));
   const unique = new Set(table.uniqueColumns);
   const incoming = tables.flatMap((t) =>
@@ -204,6 +209,35 @@ export function SchemaTab({
             ))}
           </tbody>
         </Section>
+      )}
+      {definition && (
+        <section className="mb-8">
+          <div className="mb-2 flex items-center">
+            <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Definition
+            </h3>
+            <button
+              type="button"
+              onClick={() =>
+                navigator.clipboard.writeText(definition).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1200);
+                })
+              }
+              className="ml-auto inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              {copied ? (
+                <Check className="h-3 w-3 text-green-500" />
+              ) : (
+                <Copy className="h-3 w-3" />
+              )}
+              Copy SQL
+            </button>
+          </div>
+          <pre className="overflow-x-auto rounded-lg border bg-card p-4 font-mono text-xs leading-relaxed">
+            {definition}
+          </pre>
+        </section>
       )}
     </div>
   );

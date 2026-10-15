@@ -1,9 +1,10 @@
-import { Lock, Plus, X } from "lucide-react";
+import { Lock, Plus, SquareTerminal, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { StudioSchema } from "@/api";
 import { DatabaseIcon } from "@/components/DatabaseIcon";
 import { Popover } from "@/components/Popover";
 import { TablePicker } from "@/components/TablePicker";
+import { SQL_TAB } from "@/hooks/use-url-state";
 import { cn } from "@/lib/utils";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -15,8 +16,10 @@ export function TabBar({
   pickerOpen,
   onPickerOpenChange,
   onSelect,
+  onSelectView,
   onClose,
   onHome,
+  onOpenSql,
 }: {
   schema: StudioSchema;
   openTabs: string[];
@@ -24,9 +27,12 @@ export function TabBar({
   pickerOpen: boolean;
   onPickerOpenChange: (open: boolean) => void;
   onSelect: (name: string) => void;
+  onSelectView: (name: string) => void;
   onClose: (name: string) => void;
   onHome: () => void;
+  onOpenSql: () => void;
 }) {
+  const sqlActive = activeTab === SQL_TAB;
   const navRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -49,6 +55,23 @@ export function TabBar({
         )}
       >
         <DatabaseIcon className="h-4 w-4" />
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenSql}
+        className={cn(
+          "relative flex shrink-0 items-center gap-1.5 border-r px-3 text-xs",
+          sqlActive
+            ? "bg-background text-foreground"
+            : "text-muted-foreground hover:bg-background/50 hover:text-foreground",
+        )}
+      >
+        {sqlActive && (
+          <span className="absolute inset-x-0 top-0 h-0.5 bg-primary" />
+        )}
+        <SquareTerminal className="h-3.5 w-3.5" />
+        SQL
       </button>
 
       <nav
@@ -115,8 +138,10 @@ export function TabBar({
         <Popover open={pickerOpen} onClose={() => onPickerOpenChange(false)}>
           <TablePicker
             tables={schema.tables}
+            views={schema.views}
             openTabs={openTabs}
             onSelect={onSelect}
+            onSelectView={onSelectView}
           />
         </Popover>
       </div>

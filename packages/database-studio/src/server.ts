@@ -3,7 +3,9 @@ import { join } from "node:path";
 import { createExecutor, introspect } from "@bunny.net/database-adapter";
 import type { Database } from "@bunny.net/database-client";
 import { createRestHandler, requireAuth } from "@bunny.net/database-rest";
+import { loadCatalog } from "./catalog.ts";
 import { assets } from "./client-manifest.ts";
+import { queryErrorMessage, runReadOnlyQuery } from "./query.ts";
 
 export interface StudioOptions {
   client: Database;
@@ -35,13 +37,21 @@ const AUTH_COOKIE = "bunny_studio_auth";
 
 /** Studio-only endpoints live outside `/api`, where every path segment is a table name. */
 const SCHEMA_PATH = "/studio-api/schema";
+const QUERY_PATH = "/studio-api/query";
+
+/** Same encoding as the REST handler: bigint as a decimal string, bytes as base64. */
+const encodeValue = (_key: string, value: unknown): unknown => {
+  if (typeof value === "bigint") return value.toString();
+  if (value instanceof Uint8Array) return Buffer.from(value).toString("base64");
+  return value;
+};
 
 const jsonResponse = (
   body: unknown,
   status = 200,
   headers?: Record<string, string>,
 ): Response =>
-  new Response(JSON.stringify(body), {
+  new Response(JSON.stringify(body, encodeValue), {
     status,
     headers: { "Content-Type": "application/json", ...headers },
   });
@@ -136,8 +146,45 @@ export async function startStudio(options: StudioOptions): Promise<void> {
   const tables = Object.values(schema.tables).sort((a, b) =>
     a.name.localeCompare(b.name),
   );
+  const { ddl, views } = await loadCatalog(
+    client,
+    new Set(tables.map((t) => t.name)),
+  );
   const handleSchema = requireAuth(
-    async () => jsonResponse({ label: label ?? null, readOnly: true, tables }),
+    async () =>
+      jsonResponse({
+        label: label ?? null,
+        readOnly: true,
+        tables,
+        ddl,
+        views,
+      }),
+    { token: sessionToken, cookieName: AUTH_COOKIE },
+  );
+  const handleQuery = requireAuth(
+    async (req) => {
+      if (req.method !== "POST") {
+        return jsonResponse({ message: "Method not allowed" }, 405, {
+          Allow: "POST",
+        });
+      }
+      const body = (await req.json().catch(() => null)) as {
+        sql?: unknown;
+      } | null;
+      if (typeof body?.sql !== "string") {
+        return jsonResponse({ message: "Expected { sql: string }" }, 400);
+      }
+      try {
+        return jsonResponse(await runReadOnlyQuery(client, body.sql));
+      } catch (err) {
+        const message = queryErrorMessage(err);
+        if (message) return jsonResponse({ message }, 400);
+        logger.error(
+          `Query error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
+        );
+        return jsonResponse({ message: "Internal error" }, 500);
+      }
+    },
     { token: sessionToken, cookieName: AUTH_COOKIE },
   );
 
@@ -159,6 +206,9 @@ export async function startStudio(options: StudioOptions): Promise<void> {
 
         if (pathname === SCHEMA_PATH) {
           return await handleSchema(req);
+        }
+        if (pathname === QUERY_PATH) {
+          return await handleQuery(req);
         }
 
         // API routes - delegate to REST handler

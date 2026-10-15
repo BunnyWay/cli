@@ -1,5 +1,3 @@
-import type { Row } from "@/api";
-
 /** Plain-text form of a cell, as copied to the clipboard or exported. */
 export function toText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -37,10 +35,11 @@ function csvField(value: unknown): string {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-export function toCsv(columns: string[], rows: Row[]): string {
+/** CSV with a header row; rows are positional so repeated column names keep their own values. */
+export function toCsv(columns: string[], rows: unknown[][]): string {
   const lines = [columns.map(csvField).join(",")];
   for (const row of rows) {
-    lines.push(columns.map((c) => csvField(row[c])).join(","));
+    lines.push(row.map(csvField).join(","));
   }
   return `${lines.join("\r\n")}\r\n`;
 }

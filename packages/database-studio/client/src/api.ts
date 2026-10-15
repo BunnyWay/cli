@@ -12,11 +12,28 @@ export type { ColumnDefinition, TableDefinition };
 
 export type Row = Record<string, unknown>;
 
+export interface ViewDefinition {
+  name: string;
+  sql: string | null;
+  columns: string[];
+}
+
 export interface StudioSchema {
   /** Which database is open, e.g. `db_… (host)`. */
   label: string | null;
   readOnly: boolean;
   tables: TableDefinition[];
+  /** Each table's CREATE statements: the table, then its indexes and triggers. */
+  ddl: Record<string, string[]>;
+  views: ViewDefinition[];
+}
+
+export interface QueryResult {
+  columns: string[];
+  rows: unknown[][];
+  /** The server stopped at its row cap. */
+  truncated: boolean;
+  durationMs: number;
 }
 
 export interface RowsQuery {
@@ -34,8 +51,12 @@ export interface RowsResponse {
   responseTime: number;
 }
 
-async function request(url: string, signal?: AbortSignal): Promise<Response> {
-  const res = await fetch(url, { signal, credentials: "same-origin" });
+async function request(
+  url: string,
+  signal?: AbortSignal,
+  init?: RequestInit,
+): Promise<Response> {
+  const res = await fetch(url, { ...init, signal, credentials: "same-origin" });
   if (res.ok) return res;
 
   if (res.status === 401) {
@@ -98,4 +119,17 @@ export async function fetchRowWhere(
   const res = await request(`/api/${encodeURIComponent(table)}?${params}`);
   const body = (await res.json()) as { data: Row[] };
   return body.data[0] ?? null;
+}
+
+/** Run one read-only statement in the SQL console. */
+export async function runQuery(
+  sql: string,
+  signal?: AbortSignal,
+): Promise<QueryResult> {
+  const res = await request("/studio-api/query", signal, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sql }),
+  });
+  return res.json();
 }

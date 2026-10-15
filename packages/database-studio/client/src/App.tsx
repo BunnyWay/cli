@@ -2,14 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchSchema, type StudioSchema } from "@/api";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { Overview } from "@/components/Overview";
+import { type ConsoleRequest, SqlConsole } from "@/components/SqlConsole";
 import { TabBar } from "@/components/TabBar";
 import { TableView } from "@/components/TableView";
 import {
+  SQL_TAB,
   setUrlParams,
   TABLE_VIEW_PARAMS,
   useUrlParam,
 } from "@/hooks/use-url-state";
 import type { FilterCondition } from "@/lib/filters";
+import { quoteIdent } from "@/lib/sql";
 
 export type OpenTable = (name: string, filters?: FilterCondition[]) => void;
 
@@ -27,7 +30,16 @@ export function App() {
   const [schema, setSchema] = useState<StudioSchema | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [consoleRequest, setConsoleRequest] = useState<ConsoleRequest | null>(
+    null,
+  );
   const activeName = useUrlParam("table");
+  const isSql = activeName === SQL_TAB;
+  // Once opened, the console stays mounted so its editor and results survive tab switches.
+  const [consoleMounted, setConsoleMounted] = useState(isSql);
+  useEffect(() => {
+    if (isSql) setConsoleMounted(true);
+  }, [isSql]);
   const openParam = useUrlParam("open");
   // Each tab keeps its filters, sort, and page while another tab is active.
   const tabState = useRef(new Map<string, ViewState>());
@@ -51,10 +63,12 @@ export function App() {
       opts: { filters?: FilterCondition[]; tabs?: string[] } = {},
     ) => {
       const current = new URLSearchParams(window.location.search).get("table");
-      if (current) tabState.current.set(current, currentViewState());
+      if (current && current !== SQL_TAB) {
+        tabState.current.set(current, currentViewState());
+      }
 
       const tabs = opts.tabs ?? openKey.split(",").filter(Boolean);
-      if (name && !tabs.includes(name)) tabs.push(name);
+      if (name && name !== SQL_TAB && !tabs.includes(name)) tabs.push(name);
 
       const view: Record<string, string | null> = opts.filters
         ? {
@@ -77,6 +91,14 @@ export function App() {
     (name, filters) => switchTo(name, { filters }),
     [switchTo],
   );
+
+  function openView(name: string) {
+    setConsoleRequest({
+      sql: `SELECT * FROM ${quoteIdent(name)} LIMIT 100;`,
+      nonce: Date.now(),
+    });
+    switchTo(SQL_TAB);
+  }
 
   function closeTab(name: string) {
     tabState.current.delete(name);
@@ -107,11 +129,13 @@ export function App() {
 
   useEffect(() => {
     if (schema) {
-      document.title = activeName
-        ? `${activeName} · Database Studio`
-        : "Database Studio";
+      document.title = isSql
+        ? "SQL · Database Studio"
+        : activeName
+          ? `${activeName} · Database Studio`
+          : "Database Studio";
     }
-  }, [schema, activeName]);
+  }, [schema, activeName, isSql]);
 
   if (!schema) {
     return <LoadingScreen error={error} />;
@@ -124,26 +148,39 @@ export function App() {
       <TabBar
         schema={schema}
         openTabs={openTabs}
-        activeTab={active?.name ?? null}
+        activeTab={isSql ? SQL_TAB : (active?.name ?? null)}
         pickerOpen={pickerOpen}
         onPickerOpenChange={setPickerOpen}
         onSelect={(name) => switchTo(name)}
+        onSelectView={openView}
         onClose={closeTab}
         onHome={() => switchTo(null)}
+        onOpenSql={() => switchTo(SQL_TAB)}
       />
       <main className="flex min-h-0 flex-1 flex-col">
-        {active ? (
+        {consoleMounted && (
+          <div className={isSql ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <SqlConsole schema={schema} request={consoleRequest} />
+          </div>
+        )}
+        {isSql ? null : active ? (
           <TableView
             key={active.name}
             table={active}
             tables={schema.tables}
+            ddl={schema.ddl[active.name] ?? []}
             onOpenTable={openTable}
           />
         ) : (
           <Overview
-            tables={schema.tables}
+            schema={schema}
             missing={activeName}
-            onSelect={(name) => switchTo(name)}
+            onSelect={(name, view) => {
+              switchTo(name);
+              if (view) setUrlParams({ view });
+            }}
+            onSelectView={openView}
+            onOpenSql={() => switchTo(SQL_TAB)}
           />
         )}
       </main>

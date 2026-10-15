@@ -2,61 +2,172 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowUp,
-  Check,
-  Copy,
   KeyRound,
   Link2,
   Maximize2,
 } from "lucide-react";
-import { useState } from "react";
-import type { ColumnDefinition, Row, TableDefinition } from "@/api";
+import { useEffect, useRef, useState } from "react";
 import { CellValue } from "@/components/CellValue";
 import { toText } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const NUMERIC = new Set(["INTEGER", "REAL"]);
+const MIN_WIDTH = 60;
 
+export interface GridColumn {
+  name: string;
+  /** Declared type; unknown for query results. */
+  type?: string;
+  primaryKey?: boolean;
+  /** `table.column` this column references, for the header icon and following the key. */
+  references?: string;
+}
+
+interface Cell {
+  row: number;
+  col: number;
+}
+
+/**
+ * The spreadsheet-style grid behind table browsing and query results. Click a
+ * cell to select it, move with the arrow keys, copy with Cmd/Ctrl+C, and open
+ * the row with Enter, a double-click, or the row number. Drag a header's edge
+ * to resize a column; double-click the edge to reset it.
+ */
 export function DataGrid({
-  table,
   columns,
   rows,
-  offset,
+  offset = 0,
   sort,
   onSort,
-  selectedRow,
+  activeRow = null,
   onOpenRow,
   onFollowForeignKey,
   emptyMessage,
 }: {
-  table: TableDefinition;
-  columns: ColumnDefinition[];
-  rows: Row[];
-  offset: number;
+  columns: GridColumn[];
+  /** Positional rows: `rows[i][j]` is column `j`. */
+  rows: unknown[][];
+  offset?: number;
   sort?: { column: string; order: string };
-  onSort: (column: string) => void;
-  selectedRow: number | null;
-  onOpenRow: (index: number, row: Row) => void;
-  onFollowForeignKey: (
-    column: string,
-    value: unknown,
-  ) => Promise<string | null>;
+  onSort?: (column: string) => void;
+  /** The row whose details are open, highlighted. */
+  activeRow?: number | null;
+  onOpenRow?: (index: number) => void;
+  onFollowForeignKey?: (col: number, value: unknown) => Promise<string | null>;
   emptyMessage: string;
 }) {
-  const foreignKeys = new Map(table.foreignKeys.map((fk) => [fk.column, fk]));
-  const primaryKey = new Set(table.primaryKey);
+  const [selected, setSelected] = useState<Cell | null>(null);
+  const [widths, setWidths] = useState<Record<string, number>>({});
+  const [copied, setCopied] = useState<string | null>(null);
+  const [followErrors, setFollowErrors] = useState<Record<string, string>>({});
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // A new page or result starts without a selection.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset when the rows change
+  useEffect(() => setSelected(null), [rows]);
+
+  useEffect(() => {
+    if (!selected) return;
+    containerRef.current
+      ?.querySelector(`[data-cell="${selected.row}:${selected.col}"]`)
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [selected]);
+
+  const widthStyle = (name: string): React.CSSProperties | undefined => {
+    const w = widths[name];
+    return w ? { width: w, minWidth: w, maxWidth: w } : undefined;
+  };
+
+  function copyCell(cell: Cell) {
+    const value = rows[cell.row]?.[cell.col];
+    navigator.clipboard.writeText(toText(value)).then(() => {
+      const key = `${cell.row}:${cell.col}`;
+      setCopied(key);
+      setTimeout(() => setCopied((c) => (c === key ? null : c)), 900);
+    });
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (!selected || rows.length === 0) return;
+    const move = (row: number, col: number) => {
+      e.preventDefault();
+      setSelected({
+        row: Math.max(0, Math.min(rows.length - 1, row)),
+        col: Math.max(0, Math.min(columns.length - 1, col)),
+      });
+    };
+    switch (e.key) {
+      case "ArrowUp":
+        return move(selected.row - 1, selected.col);
+      case "ArrowDown":
+        return move(selected.row + 1, selected.col);
+      case "ArrowLeft":
+        return move(selected.row, selected.col - 1);
+      case "ArrowRight":
+        return move(selected.row, selected.col + 1);
+      case "Home":
+        return move(selected.row, 0);
+      case "End":
+        return move(selected.row, columns.length - 1);
+      case "Enter":
+        e.preventDefault();
+        onOpenRow?.(selected.row);
+        return;
+      case "Escape":
+        setSelected(null);
+        return;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "c") {
+      // Leave a real text selection to the browser's own copy.
+      if (window.getSelection()?.toString()) return;
+      e.preventDefault();
+      copyCell(selected);
+    }
+  }
+
+  function startResize(e: React.PointerEvent, name: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = (e.currentTarget as HTMLElement).closest("th");
+    if (!th) return;
+    const startX = e.clientX;
+    const startWidth = th.getBoundingClientRect().width;
+    const onMove = (ev: PointerEvent) =>
+      setWidths((w) => ({
+        ...w,
+        [name]: Math.max(
+          MIN_WIDTH,
+          Math.round(startWidth + ev.clientX - startX),
+        ),
+      }));
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto">
+    // biome-ignore lint/a11y/noStaticElementInteractions: the key handler is the grid's keyboard model
+    <div
+      ref={containerRef}
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: the grid takes focus so arrow keys move the cell selection
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      className="min-h-0 flex-1 overflow-auto outline-none"
+    >
       <table className="w-max min-w-full border-separate border-spacing-0 font-mono text-xs">
         <thead className="sticky top-0 z-10 bg-card">
           <tr>
             <th className="sticky left-0 z-10 w-12 border-b border-r bg-card" />
-            {columns.map((col) => {
-              const fk = foreignKeys.get(col.name);
+            {columns.map((col, j) => {
               const sorted = sort?.column === col.name ? sort.order : null;
               return (
                 <th
-                  key={col.name}
+                  // biome-ignore lint/suspicious/noArrayIndexKey: query results can repeat a column name
+                  key={j}
                   aria-sort={
                     sorted === "asc"
                       ? "ascending"
@@ -64,42 +175,61 @@ export function DataGrid({
                         ? "descending"
                         : undefined
                   }
-                  className="border-b border-r p-0 text-left font-normal"
+                  className="relative border-b border-r p-0 text-left font-normal"
                 >
                   <button
                     type="button"
-                    onClick={() => onSort(col.name)}
-                    title={`Sort by ${col.name}`}
-                    className="group flex h-9 w-full min-w-[140px] max-w-[360px] items-center gap-1.5 px-3 hover:bg-accent/50"
+                    disabled={!onSort}
+                    onClick={() => onSort?.(col.name)}
+                    title={onSort ? `Sort by ${col.name}` : col.name}
+                    style={widthStyle(col.name)}
+                    className={cn(
+                      "group flex h-9 w-full items-center gap-1.5 px-3 disabled:cursor-default",
+                      !widths[col.name] && "min-w-[140px] max-w-[360px]",
+                      onSort && "hover:bg-accent/50",
+                    )}
                   >
-                    {primaryKey.has(col.name) && (
+                    {col.primaryKey && (
                       <KeyRound
                         className="h-3 w-3 shrink-0 text-primary"
                         aria-label="Primary key"
                       />
                     )}
-                    {fk && (
+                    {col.references && (
                       <Link2
                         className="h-3 w-3 shrink-0 text-muted-foreground"
-                        aria-label={`References ${fk.referencesTable}.${fk.referencesColumn}`}
+                        aria-label={`References ${col.references}`}
                       />
                     )}
                     <span className="truncate font-medium text-foreground">
                       {col.name}
                     </span>
-                    <span className="shrink-0 text-[10px] uppercase text-muted-foreground/70">
-                      {col.type}
-                    </span>
-                    <span className="ml-auto shrink-0">
-                      {sorted === "asc" ? (
-                        <ArrowUp className="h-3 w-3 text-foreground" />
-                      ) : sorted === "desc" ? (
-                        <ArrowDown className="h-3 w-3 text-foreground" />
-                      ) : (
-                        <ArrowUp className="h-3 w-3 text-muted-foreground/0 group-hover:text-muted-foreground/50" />
-                      )}
-                    </span>
+                    {col.type && (
+                      <span className="shrink-0 text-[10px] uppercase text-muted-foreground/70">
+                        {col.type}
+                      </span>
+                    )}
+                    {onSort && (
+                      <span className="ml-auto shrink-0">
+                        {sorted === "asc" ? (
+                          <ArrowUp className="h-3 w-3 text-foreground" />
+                        ) : sorted === "desc" ? (
+                          <ArrowDown className="h-3 w-3 text-foreground" />
+                        ) : (
+                          <ArrowUp className="h-3 w-3 text-muted-foreground/0 group-hover:text-muted-foreground/50" />
+                        )}
+                      </span>
+                    )}
                   </button>
+                  {/* biome-ignore lint/a11y/noStaticElementInteractions: pointer-only affordance; columns stay readable without resizing */}
+                  <div
+                    onPointerDown={(e) => startResize(e, col.name)}
+                    onDoubleClick={() =>
+                      setWidths(({ [col.name]: _, ...rest }) => rest)
+                    }
+                    title="Drag to resize, double-click to reset"
+                    className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize hover:bg-primary/40"
+                  />
                 </th>
               );
             })}
@@ -112,39 +242,93 @@ export function DataGrid({
             <tr
               // biome-ignore lint/suspicious/noArrayIndexKey: rows have no guaranteed identity (tables without a primary key); position in the result is the row
               key={offset + i}
-              onClick={() => {
-                // Let people select text in a cell without opening the row.
-                if (window.getSelection()?.toString()) return;
-                onOpenRow(i, row);
-              }}
               className={cn(
-                "group/row cursor-default",
-                selectedRow === i ? "bg-accent" : "hover:bg-accent/40",
+                "group/row",
+                activeRow === i ? "bg-accent" : "hover:bg-accent/30",
               )}
             >
               <td
                 className={cn(
-                  "sticky left-0 w-12 border-b border-r px-2 text-right tabular-nums text-muted-foreground/70",
-                  selectedRow === i ? "bg-accent" : "bg-background",
+                  "sticky left-0 w-12 border-b border-r p-0 text-right tabular-nums text-muted-foreground/70",
+                  activeRow === i ? "bg-accent" : "bg-background",
                 )}
               >
-                <span className="group-hover/row:hidden">
-                  {(offset + i + 1).toLocaleString()}
-                </span>
-                <Maximize2
-                  className="ml-auto hidden h-3 w-3 text-foreground group-hover/row:block"
-                  aria-label="Open row"
-                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  disabled={!onOpenRow}
+                  onClick={() => onOpenRow?.(i)}
+                  aria-label={`Open row ${offset + i + 1}`}
+                  className="flex h-8 w-full items-center justify-end px-2 enabled:cursor-pointer"
+                >
+                  <span className={cn(onOpenRow && "group-hover/row:hidden")}>
+                    {(offset + i + 1).toLocaleString()}
+                  </span>
+                  {onOpenRow && (
+                    <Maximize2 className="hidden h-3 w-3 text-foreground group-hover/row:block" />
+                  )}
+                </button>
               </td>
-              {columns.map((col) => (
-                <GridCell
-                  key={col.name}
-                  column={col}
-                  value={row[col.name]}
-                  foreignKey={foreignKeys.has(col.name)}
-                  onFollow={() => onFollowForeignKey(col.name, row[col.name])}
-                />
-              ))}
+              {columns.map((col, j) => {
+                const value = row[j];
+                const key = `${i}:${j}`;
+                const isSelected = selected?.row === i && selected.col === j;
+                const hasValue = value !== null && value !== undefined;
+                return (
+                  // biome-ignore lint/a11y/useKeyWithClickEvents: arrow keys on the focused grid move the selection
+                  <td
+                    // biome-ignore lint/suspicious/noArrayIndexKey: query results can repeat a column name
+                    key={j}
+                    data-cell={key}
+                    onClick={() => setSelected({ row: i, col: j })}
+                    onDoubleClick={() => onOpenRow?.(i)}
+                    className={cn(
+                      "cursor-default border-b border-r p-0",
+                      col.type && NUMERIC.has(col.type) && "text-right",
+                    )}
+                  >
+                    <div
+                      style={widthStyle(col.name)}
+                      title={followErrors[key]}
+                      className={cn(
+                        "flex h-8 items-center gap-1 px-3",
+                        !widths[col.name] && "min-w-[140px] max-w-[360px]",
+                        isSelected &&
+                          "outline outline-2 -outline-offset-2 outline-primary",
+                        copied === key && "bg-primary/20",
+                      )}
+                    >
+                      <div className="min-w-0 flex-1 truncate">
+                        <CellValue value={value} type={col.type ?? ""} inline />
+                      </div>
+                      {col.references && hasValue && onFollowForeignKey && (
+                        <button
+                          type="button"
+                          title={
+                            followErrors[key] ?? `Open ${col.references} row`
+                          }
+                          aria-label="Open referenced row"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const err = await onFollowForeignKey(j, value);
+                            setFollowErrors(({ [key]: _, ...rest }) =>
+                              err ? { ...rest, [key]: err } : rest,
+                            );
+                          }}
+                          className={cn(
+                            "shrink-0 rounded p-0.5 hover:bg-muted",
+                            followErrors[key]
+                              ? "text-destructive-foreground"
+                              : "text-muted-foreground",
+                          )}
+                        >
+                          <ArrowRight className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                );
+              })}
               <td className="w-full border-b" />
             </tr>
           ))}
@@ -156,79 +340,5 @@ export function DataGrid({
         </p>
       )}
     </div>
-  );
-}
-
-function GridCell({
-  column,
-  value,
-  foreignKey,
-  onFollow,
-}: {
-  column: ColumnDefinition;
-  value: unknown;
-  foreignKey: boolean;
-  onFollow: () => Promise<string | null>;
-}) {
-  const [copied, setCopied] = useState(false);
-  const [followError, setFollowError] = useState<string | null>(null);
-  const hasValue = value !== null && value !== undefined;
-
-  return (
-    <td
-      className={cn(
-        "border-b border-r p-0",
-        NUMERIC.has(column.type) && "text-right",
-      )}
-    >
-      <div
-        className="group/cell flex h-8 min-w-[140px] max-w-[360px] items-center gap-1 px-3"
-        title={followError ?? undefined}
-      >
-        <div className="min-w-0 flex-1 truncate">
-          <CellValue value={value} type={column.type} inline />
-        </div>
-        {hasValue && (
-          <button
-            type="button"
-            title="Copy value"
-            aria-label="Copy value"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigator.clipboard.writeText(toText(value)).then(() => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1200);
-              });
-            }}
-            className="hidden shrink-0 rounded p-0.5 hover:bg-muted group-hover/cell:block"
-          >
-            {copied ? (
-              <Check className="h-3 w-3 text-green-500" />
-            ) : (
-              <Copy className="h-3 w-3 text-muted-foreground" />
-            )}
-          </button>
-        )}
-        {foreignKey && hasValue && (
-          <button
-            type="button"
-            title={followError ?? "Open referenced row"}
-            aria-label="Open referenced row"
-            onClick={async (e) => {
-              e.stopPropagation();
-              setFollowError(await onFollow());
-            }}
-            className={cn(
-              "shrink-0 rounded p-0.5 hover:bg-muted",
-              followError
-                ? "text-destructive-foreground"
-                : "text-muted-foreground",
-            )}
-          >
-            <ArrowRight className="h-3 w-3" />
-          </button>
-        )}
-      </div>
-    </td>
   );
 }

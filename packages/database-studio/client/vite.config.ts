@@ -9,6 +9,8 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    // CodeMirror breaks (and the bundle doubles) if two copies of these load.
+    dedupe: ["@codemirror/state", "@codemirror/view", "@codemirror/language"],
   },
   build: {
     rollupOptions: {

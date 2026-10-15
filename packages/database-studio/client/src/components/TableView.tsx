@@ -13,12 +13,11 @@ import type { OpenTable } from "@/App";
 import {
   fetchRows,
   fetchRowWhere,
-  type Row,
   type RowsQuery,
   type RowsResponse,
   type TableDefinition,
 } from "@/api";
-import { DataGrid } from "@/components/DataGrid";
+import { DataGrid, type GridColumn } from "@/components/DataGrid";
 import { FilterBar } from "@/components/FilterBar";
 import { MenuItem, Popover } from "@/components/Popover";
 import { RowSheet, type SheetEntry } from "@/components/RowSheet";
@@ -66,10 +65,13 @@ function parseFilters(
 export function TableView({
   table,
   tables,
+  ddl,
   onOpenTable,
 }: {
   table: TableDefinition;
   tables: TableDefinition[];
+  /** The table's CREATE statements, for the schema view. */
+  ddl: string[];
   onOpenTable: OpenTable;
 }) {
   const [data, setData] = useState<RowsResponse | null>(null);
@@ -148,7 +150,13 @@ export function TableView({
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
-      if (target.closest("input, textarea, select, [role=dialog]")) return;
+      if (
+        target.closest(
+          "input, textarea, select, [contenteditable], [role=dialog]",
+        )
+      ) {
+        return;
+      }
       if (e.key === "r" && !e.metaKey && !e.ctrlKey && !e.altKey) refresh();
     }
     window.addEventListener("keydown", onKeyDown);
@@ -208,19 +216,38 @@ export function TableView({
     }
   }
 
-  const visibleColumns = table.columns.filter((c) => !hidden.has(c.name));
+  const visibleColumns = useMemo(
+    () => table.columns.filter((c) => !hidden.has(c.name)),
+    [table, hidden],
+  );
+  const gridColumns = useMemo<GridColumn[]>(() => {
+    const fks = new Map(table.foreignKeys.map((fk) => [fk.column, fk]));
+    return visibleColumns.map((c) => {
+      const fk = fks.get(c.name);
+      return {
+        name: c.name,
+        type: c.type,
+        primaryKey: table.primaryKey.includes(c.name),
+        references: fk && `${fk.referencesTable}.${fk.referencesColumn}`,
+      };
+    });
+  }, [table, visibleColumns]);
+  const gridRows = useMemo(
+    () => data?.rows.map((r) => visibleColumns.map((c) => r[c.name])) ?? [],
+    [data, visibleColumns],
+  );
   const offset = (page - 1) * limit;
 
   function exportPage(format: "csv" | "json") {
     if (!data) return;
     const names = visibleColumns.map((c) => c.name);
-    const rows = data.rows.map((r) =>
-      Object.fromEntries(names.map((n) => [n, r[n]])),
-    );
     const base = `${table.name}-page-${page}`;
     if (format === "csv") {
-      download(`${base}.csv`, toCsv(names, rows), "text/csv");
+      download(`${base}.csv`, toCsv(names, gridRows), "text/csv");
     } else {
+      const rows = gridRows.map((r) =>
+        Object.fromEntries(names.map((n, i) => [n, r[i]])),
+      );
       download(
         `${base}.json`,
         `${JSON.stringify(rows, null, 2)}\n`,
@@ -368,7 +395,12 @@ export function TableView({
       </div>
 
       {view === "schema" ? (
-        <SchemaTab table={table} tables={tables} onOpenTable={openTable} />
+        <SchemaTab
+          table={table}
+          tables={tables}
+          ddl={ddl}
+          onOpenTable={openTable}
+        />
       ) : (
         <>
           {filtersOpen && (
@@ -412,20 +444,24 @@ export function TableView({
               </div>
             ) : data ? (
               <DataGrid
-                table={table}
-                columns={visibleColumns}
-                rows={data.rows}
+                columns={gridColumns}
+                rows={gridRows}
                 offset={offset}
                 sort={sort}
                 onSort={setSort}
-                selectedRow={selectedRow}
-                onOpenRow={(index, row: Row) => {
+                activeRow={selectedRow}
+                onOpenRow={(index) => {
+                  const row = data.rows[index];
+                  if (!row) return;
                   setSelectedRow(index);
                   setSheet([{ table, row }]);
                 }}
-                onFollowForeignKey={(column, value) =>
-                  followForeignKey(table, column, value)
-                }
+                onFollowForeignKey={(col, value) => {
+                  const column = gridColumns[col]?.name;
+                  return column
+                    ? followForeignKey(table, column, value)
+                    : Promise.resolve(null);
+                }}
                 emptyMessage={
                   filters.length > 0
                     ? "No rows match these filters."

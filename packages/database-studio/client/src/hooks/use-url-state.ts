@@ -53,3 +53,6 @@ export const TABLE_VIEW_PARAMS = {
   filters: null,
   mode: null,
 } as const;
+
+/** The `table` param value for the SQL console; not a valid unquoted table name. */
+export const SQL_TAB = ":sql";
