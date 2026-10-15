@@ -2,6 +2,7 @@ import ora, { type Ora } from "ora";
 import promptsLib from "prompts";
 import { UserError } from "./errors.ts";
 import { logger } from "./logger.ts";
+import { type BlockedKind, programStatus } from "./program-status.ts";
 
 let stdinEnded = false;
 let eofWarned = false;
@@ -31,6 +32,7 @@ function hasInjectedAnswers(): boolean {
 // Prompts require an interactive terminal: piped stdin is refused up front, and the EOF race below is a backstop for a terminal that hangs up mid-prompt, where the prompts library would otherwise busy-poll the dead stream at 100% CPU forever. The null result maps to "cancelled" at each call site.
 async function promptOrEof<T extends object>(
   run: () => Promise<T>,
+  blocked?: { kind: BlockedKind; message?: unknown },
 ): Promise<T | null> {
   if (
     !hasInjectedAnswers() &&
@@ -52,11 +54,19 @@ async function promptOrEof<T extends object>(
     };
     process.stdin.once("end", onEnd);
   });
+  // Tell the terminal the CLI is waiting on the user, and what for, while the prompt is up.
+  if (blocked) {
+    programStatus.blocked(
+      blocked.kind,
+      typeof blocked.message === "string" ? blocked.message : undefined,
+    );
+  }
   try {
     const result = await Promise.race([run(), eof]);
     return result === null ? abortUnanswerablePrompt("ended") : result;
   } finally {
     process.stdin.off("end", onEnd);
+    if (blocked) programStatus.resume();
   }
 }
 
@@ -70,7 +80,11 @@ export async function prompts<T extends string = string>(
   questions: promptsLib.PromptObject<T> | Array<promptsLib.PromptObject<T>>,
   options?: promptsLib.Options,
 ): Promise<promptsLib.Answers<T>> {
-  const result = await promptOrEof(() => promptsLib(questions, options));
+  const first = Array.isArray(questions) ? questions[0] : questions;
+  const result = await promptOrEof(() => promptsLib(questions, options), {
+    kind: "question",
+    message: first?.message,
+  });
   return result ?? ({} as promptsLib.Answers<T>);
 }
 
@@ -81,12 +95,14 @@ export async function prompts<T extends string = string>(
  * (e.g. `--api-key`) that bypasses this prompt entirely.
  */
 export async function readPassword(message: string): Promise<string> {
-  const result = await promptOrEof(() =>
-    promptsLib({
-      type: "password",
-      name: "value",
-      message,
-    }),
+  const result = await promptOrEof(
+    () =>
+      promptsLib({
+        type: "password",
+        name: "value",
+        message,
+      }),
+    { kind: "auth", message },
   );
   return result?.value ?? "";
 }
@@ -115,13 +131,15 @@ export async function confirm(
   opts?: { force?: boolean; initial?: boolean; optional?: boolean },
 ): Promise<boolean> {
   if (opts?.force) return true;
-  const result = await promptOrEof(() =>
-    promptsLib({
-      type: "confirm",
-      name: "confirmed",
-      message,
-      initial: opts?.initial ?? false,
-    }),
+  const result = await promptOrEof(
+    () =>
+      promptsLib({
+        type: "confirm",
+        name: "confirmed",
+        message,
+        initial: opts?.initial ?? false,
+      }),
+    { kind: "permission", message },
   );
   if (result === null && !opts?.optional) throw stdinClosedError();
   return result?.confirmed ?? false;
@@ -133,20 +151,22 @@ export async function confirmOrCancel(
   opts?: { initial?: boolean },
 ): Promise<"yes" | "no" | "cancel"> {
   let cancelled = false;
-  const result = await promptOrEof(() =>
-    promptsLib(
-      {
-        type: "confirm",
-        name: "confirmed",
-        message,
-        initial: opts?.initial ?? false,
-      },
-      {
-        onCancel: () => {
-          cancelled = true;
+  const result = await promptOrEof(
+    () =>
+      promptsLib(
+        {
+          type: "confirm",
+          name: "confirmed",
+          message,
+          initial: opts?.initial ?? false,
         },
-      },
-    ),
+        {
+          onCancel: () => {
+            cancelled = true;
+          },
+        },
+      ),
+    { kind: "permission", message },
   );
   if (result === null || cancelled) return "cancel";
   return result.confirmed ? "yes" : "no";
@@ -157,12 +177,15 @@ export async function confirmTyped(
   opts?: { force?: boolean },
 ): Promise<boolean> {
   if (opts?.force) return true;
-  const result = await promptOrEof(() =>
-    promptsLib({
-      type: "text",
-      name: "value",
-      message: `Type "${expected}" to confirm:`,
-    }),
+  const message = `Type "${expected}" to confirm:`;
+  const result = await promptOrEof(
+    () =>
+      promptsLib({
+        type: "text",
+        name: "value",
+        message,
+      }),
+    { kind: "permission", message },
   );
   if (result === null) throw stdinClosedError();
   return result.value === expected;

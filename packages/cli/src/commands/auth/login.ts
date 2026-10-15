@@ -8,6 +8,7 @@ import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { detectHeadless } from "@/core/headless.ts";
 import { logger } from "@/core/logger.ts";
+import { programStatus } from "@/core/program-status.ts";
 import {
   confirm,
   isInteractive,
@@ -134,6 +135,7 @@ async function browserLogin(opts: { tunnel: boolean }): Promise<string> {
   }
 
   logger.info("Waiting for authentication...");
+  programStatus.blocked("auth", "Waiting for browser login");
 
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, rej) => {
@@ -148,6 +150,7 @@ async function browserLogin(opts: { tunnel: boolean }): Promise<string> {
   } catch (err: any) {
     throw new UserError(`Authentication failed: ${err.message}`);
   } finally {
+    programStatus.resume();
     clearTimeout(timeoutId);
     // Graceful stop: the success page is still flushing to the browser.
     server.stop();

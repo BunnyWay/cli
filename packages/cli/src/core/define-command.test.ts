@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import yargs from "yargs";
-import { groupHelpOptions } from "./define-command.ts";
+import { commandLabel, groupHelpOptions } from "./define-command.ts";
 
 // `--lib` with alias `--library` is two keys to yargs; help must still list it once.
 test("groupHelpOptions lists an option with an alias once", async () => {
@@ -12,4 +12,24 @@ test("groupHelpOptions lists an option with an alias once", async () => {
   const help = await y.getHelp();
   expect(help.match(/--lib, --library/g)?.length).toBe(1);
   expect(help.match(/-f, --force/g)?.length).toBe(1);
+});
+
+// A declared positional can be a signed URL or a key; the terminal status label must carry the command words only.
+test("commandLabel never includes positional values", async () => {
+  let label = "";
+  await yargs(["fetch", "https://x.test/v?token=SECRET", "--name", "n"])
+    .command(
+      "fetch <url>",
+      "f",
+      (y) =>
+        y
+          .positional("url", { type: "string" })
+          .option("name", { type: "string" }),
+      (argv) => {
+        label = commandLabel(argv);
+      },
+    )
+    .strict()
+    .parse();
+  expect(label).toBe("bunny fetch");
 });

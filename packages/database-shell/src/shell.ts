@@ -130,6 +130,13 @@ export async function startShell(options: ShellOptions): Promise<void> {
     historySize: HISTORY_MAX,
   });
 
+  // Every prompt redraw is an idle hand-off to the user; hook it once instead of at each call site.
+  const showPrompt = rl.prompt.bind(rl);
+  rl.prompt = (preserveCursor?: boolean) => {
+    options.onIdle?.();
+    showPrompt(preserveCursor);
+  };
+
   logger.log();
   logger.log(`${chalk.green("✓")} Connected to database`);
   logger.dim("  Type .help for commands, .quit to exit.");
@@ -157,6 +164,7 @@ export async function startShell(options: ShellOptions): Promise<void> {
     // Dot-command (only when not in a multi-line statement)
     if (buffer.length === 0 && trimmed.startsWith(".")) {
       try {
+        options.onBusy?.();
         logger.log();
         const result = await executeDotCommand(
           trimmed,
@@ -196,6 +204,7 @@ export async function startShell(options: ShellOptions): Promise<void> {
     rl.setPrompt(PROMPT);
 
     try {
+      options.onBusy?.();
       logger.log();
       const t0 = performance.now();
       const result = await client.execute(statement);

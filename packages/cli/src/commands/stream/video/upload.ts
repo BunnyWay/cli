@@ -16,6 +16,7 @@ import { defineCommand } from "@/core/define-command.ts";
 import { errorMessage, UserError } from "@/core/errors.ts";
 import { formatBytes, formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import { programStatus } from "@/core/program-status.ts";
 import { withSpinner } from "@/core/ui.ts";
 
 interface UploadArgs {
@@ -231,6 +232,7 @@ export const streamVideoUploadCommand = defineCommand<UploadArgs>({
             onProgress: (uploaded, total) => {
               const percent = Math.floor((uploaded / total) * 100);
               spin.text = `Uploading ${basename(file)} (${formatBytes(uploaded)}/${formatBytes(total)}, ${percent}%) resumably...`;
+              programStatus.working(`Uploading ${basename(file)}`, percent);
             },
           });
         },

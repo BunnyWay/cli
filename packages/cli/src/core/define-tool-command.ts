@@ -9,6 +9,7 @@ import type { z } from "zod";
 import { resolveConfig } from "@/config/index.ts";
 import { defineCommand } from "./define-command.ts";
 import { logger } from "./logger.ts";
+import { programStatus } from "./program-status.ts";
 import { toolContext } from "./tool-context.ts";
 import type { GlobalArgs } from "./types.ts";
 import { spinner } from "./ui.ts";
@@ -110,7 +111,9 @@ export function defineToolCommand<A, Schema extends z.ZodObject, Result>(
         signal: controller.signal,
         // Only steer the spinner while it runs, so progress never overwrites a prompt shown during prepare().
         onProgress: (message) => {
-          if (spin.isSpinning) spin.text = message;
+          if (!spin.isSpinning) return;
+          spin.text = message;
+          programStatus.working(message);
         },
       });
 

@@ -359,6 +359,8 @@ All of this lives in `core/ui.ts`. The rules here are load-bearing.
 | `requireConfirmable(output, { force, message, hint })` | Guard called immediately before a `confirm()` that gates a destructive action. Returns silently under `force` or when interactive; otherwise throws with `hint`. Without it an unattended run blocks forever on a prompt nobody can answer, and the prompt lands on stdout ahead of the JSON payload. |
 | `spinner(text)`                                        | `ora` spinner, auto-silenced when stdout is not a TTY                                                                                                                                                                                                                                                 |
 
+**Terminal status (OSC 7501) is automatic; do not report it by hand in commands.** `core/program-status.ts` emits the program status escape to whichever of stderr/stdout is a TTY (`BUNNYNET_NO_PROGRAM_STATUS` or `TERM=dumb` turn it off). `defineCommand()` reports `working` on entry and `done`/`error` on exit; every `ui.ts` prompt reports `blocked` (`question` for text/select, `permission` for the confirm variants, `auth` for `readPassword`) and resumes the previous state afterwards; tool progress messages are mirrored. Call `programStatus` directly only for a wait the wrappers cannot see (`auth login` waiting on the browser callback, a REPL going idle, a byte-level upload percentage).
+
 ---
 
 ## Agent & scripting compatibility
