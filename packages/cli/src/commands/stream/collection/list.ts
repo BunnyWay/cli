@@ -15,9 +15,9 @@ export const streamCollectionListCommand = defineCommand<CollectionListArgs>({
   aliases: ["ls"],
   describe: "List the collections in a Stream video library.",
   examples: [
-    ["$0 stream collection list", "List collections in the linked library"],
-    ["$0 stream collection list --lib 12345", "List a specific library's"],
-    ["$0 stream collection list --search tutorial", "Filter by name"],
+    ["$0 stream collections list", "List collections in the linked library"],
+    ["$0 stream collections list --lib 12345", "List a specific library's"],
+    ["$0 stream collections list --search tutorial", "Filter by name"],
   ],
 
   builder: (yargs) =>
@@ -53,9 +53,7 @@ export const streamCollectionListCommand = defineCommand<CollectionListArgs>({
 
     if (collections.length === 0) {
       logger.info("No collections found.");
-      logger.dim(
-        "Create one with `bunny stream collection create --name <name>`.",
-      );
+      logger.dim("Create one with `bunny stream collections create <name>`.");
       return;
     }
 

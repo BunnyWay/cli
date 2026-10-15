@@ -1,5 +1,6 @@
 import { pullZonesCreate } from "@bunny.net/tools/pullzones";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
+import { examplesUrl } from "@/core/examples.ts";
 import { logger } from "@/core/logger.ts";
 import { saveManifest } from "@/core/manifest.ts";
 import { confirm } from "@/core/ui.ts";
@@ -36,12 +37,15 @@ export const pzCreateCommand = defineToolCommand({
     const link = await confirm(`Link this directory to "${zone.name}"?`, {
       optional: true,
     });
-    if (!link) return;
-    saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, {
-      id: zone.id,
-      name: zone.name,
-    });
-    logger.success(`Linked to ${zone.name}.`);
+    if (link) {
+      saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, {
+        id: zone.id,
+        name: zone.name,
+      });
+      logger.success(`Linked to ${zone.name}.`);
+    }
+    logger.log();
+    logger.dim(`  Examples:  ${examplesUrl("cdn")}`);
   },
 
   render: () => {},

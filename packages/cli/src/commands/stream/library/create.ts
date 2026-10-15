@@ -10,13 +10,20 @@ import {
   type VideoLibraryCreateModel,
   type VideoLibraryModel,
 } from "@/commands/stream/api.ts";
-import { nameArg } from "@/commands/stream/name-arg.ts";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { isInteractive, prompts, spinner } from "@/core/ui.ts";
+import {
+  ENV_STREAM_API_KEY,
+  ENV_STREAM_LIBRARY_ID,
+  offerAddVideos,
+  offerLink,
+  offerSaveEnv,
+  printNextSteps,
+} from "./create-next-steps.ts";
 import {
   type LibrarySettingsArgs,
   librarySettingsFromFlags,
@@ -26,45 +33,50 @@ import {
 import { checkTranscribingLanguages } from "./language-check.ts";
 
 interface LibraryCreateArgs extends LibrarySettingsArgs {
-  libraryName?: string;
   replicationRegions?: string[];
   playerVersion?: number;
+  link?: boolean;
+  saveEnv?: boolean;
+  addVideos?: boolean;
 }
 
 export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
-  command: "create [library-name]",
+  command: "create [name]",
   aliases: ["add"],
   describe: "Create a new Stream video library.",
   examples: [
-    ["$0 stream library create my-library", "Create a video library"],
-    ["$0 stream library create --name my-library", "Same, as a flag"],
-    ["$0 stream library create", "Interactive: prompts for the name"],
+    ["$0 stream libraries create my-library", "Create a video library"],
+    ["$0 stream libraries create", "Interactive: prompts for the name"],
     [
-      "$0 stream library create my-library --replication-regions NY,SG",
+      "$0 stream libraries create my-library --replication-regions NY,SG",
       "Replicate to New York and Singapore only (plus DE, the main region)",
     ],
     [
-      "$0 stream library create internal --replication-regions DE",
+      "$0 stream libraries create internal --replication-regions DE",
       "Keep everything in DE, with no replication",
     ],
     [
-      "$0 stream library create my-library --encoding-tier premium --codecs x264,vp9",
+      "$0 stream libraries create my-library --encoding-tier premium --codecs x264,vp9",
       "Create with premium encoding and extra codecs",
     ],
     [
-      "$0 stream library create my-library --transcribing --transcribing-languages en,de",
+      "$0 stream libraries create my-library --transcribing --transcribing-languages en,de",
       "Create with transcribing enabled",
+    ],
+    [
+      "$0 stream libraries create my-library --link --save-env",
+      "Link this directory and save the library ID and API key to .env",
+    ],
+    [
+      "$0 stream libraries create my-library --no-link --no-save-env --no-add-videos",
+      "Create without any follow-up prompts",
     ],
   ],
 
   builder: (yargs) =>
     withLibrarySettingsOptions(
       yargs
-        .positional("library-name", {
-          type: "string",
-          describe: "Name for the new video library",
-        })
-        .option("name", {
+        .positional("name", {
           type: "string",
           describe: "Name for the new video library",
         })
@@ -77,22 +89,29 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
           type: "number",
           choices: [1, 2],
           describe: "Player to use: 1 = legacy, 2 = current",
+        })
+        .option("link", {
+          type: "boolean",
+          describe:
+            "Link this directory to the new library (skips prompt). Use --no-link to skip without prompting.",
+        })
+        .option("save-env", {
+          type: "boolean",
+          describe: `Save ${ENV_STREAM_LIBRARY_ID} and ${ENV_STREAM_API_KEY} to .env (skips prompt). Use --no-save-env to skip without prompting.`,
+        })
+        .option("add-videos", {
+          type: "boolean",
+          describe:
+            "Ask how to add videos after creating (interactive only). Use --no-add-videos to skip the prompt.",
         }),
     ),
 
   handler: async (args) => {
-    const {
-      libraryName,
-      replicationRegions,
-      profile,
-      output,
-      verbose,
-      apiKey,
-    } = args;
+    const { replicationRegions, profile, output, verbose, apiKey } = args;
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    let nameInput = nameArg(libraryName, args.name);
+    let nameInput = args.name?.trim() || undefined;
     if (!nameInput && isInteractive(output)) {
       const { value } = await prompts({
         type: "text",
@@ -104,7 +123,7 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     if (!nameInput) {
       throw new UserError(
         "A library name is required.",
-        "Pass the name: bunny stream library create my-library",
+        "Pass the name: bunny stream libraries create my-library",
       );
     }
     const name = nameInput;
@@ -143,11 +162,23 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     }
 
     if (output === "json") {
-      // The create response carries the new library's keys; read them back on
-      // purpose with `bunny stream library credentials`.
+      // No prompts here: only the flags link or save. The create response carries
+      // the new library's keys; read them back on purpose with `bunny stream libraries credentials`.
+      const linked = created
+        ? await offerLink(created, args.link, output)
+        : false;
+      const savedToEnv = created
+        ? await offerSaveEnv(created, args.saveEnv, output)
+        : false;
       logger.log(
         JSON.stringify(
-          created ? toSafeVideoLibrary(created) : { Name: name },
+          created
+            ? {
+                ...toSafeVideoLibrary(created),
+                Linked: linked,
+                SavedToEnv: savedToEnv,
+              }
+            : { Name: name },
           null,
           2,
         ),
@@ -162,5 +193,12 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
         : `Created video library ${name}, ${where}.`,
     );
     for (const warning of warnings) logger.warn(warning);
+    if (!created?.Id) return;
+
+    await offerLink(created, args.link, output);
+    await offerSaveEnv(created, args.saveEnv, output);
+    if (args.addVideos !== false && isInteractive(output))
+      await offerAddVideos(created, { profile, output, verbose, apiKey });
+    printNextSteps(created);
   },
 });

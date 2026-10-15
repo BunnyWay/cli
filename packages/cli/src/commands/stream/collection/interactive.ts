@@ -30,7 +30,7 @@ export async function resolveCollectionInteractive(
   if (opts.force || !isInteractive(opts.output)) {
     throw new UserError(
       "A collection is required.",
-      "Pass the collection ID, which `bunny stream collection list` prints.",
+      "Pass the collection ID, which `bunny stream collections list` prints.",
     );
   }
 
@@ -40,7 +40,7 @@ export async function resolveCollectionInteractive(
   if (collections.length === 0) {
     throw new UserError(
       "No collections found in this library.",
-      'Create one with "bunny stream collection create --name <name>".',
+      'Create one with "bunny stream collections create <name>".',
     );
   }
 

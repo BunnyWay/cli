@@ -9,6 +9,11 @@ import { formatKeyValue, maskSecret } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
+import {
+  ENV_STREAM_API_KEY,
+  ENV_STREAM_LIBRARY_ID,
+  offerSaveEnv,
+} from "./create-next-steps.ts";
 
 interface CredentialsArgs {
   library?: string;
@@ -16,6 +21,7 @@ interface CredentialsArgs {
   showSecret?: boolean;
   rotate?: boolean;
   force?: boolean;
+  saveEnv?: boolean;
 }
 
 export const streamLibraryCredentialsCommand = defineCommand<CredentialsArgs>({
@@ -24,24 +30,28 @@ export const streamLibraryCredentialsCommand = defineCommand<CredentialsArgs>({
   describe: "Show the Stream API keys for a video library.",
   examples: [
     [
-      "$0 stream library credentials my-library",
+      "$0 stream libraries credentials my-library",
       "Show the library ID and API key (key masked)",
     ],
     [
-      "$0 stream library credentials my-library --show-secret",
+      "$0 stream libraries credentials my-library --show-secret",
       "Reveal the API key",
     ],
     [
-      "$0 stream library credentials my-library --read-only",
+      "$0 stream libraries credentials my-library --read-only",
       "Use the read-only API key instead",
     ],
     [
-      "$0 stream library credentials my-library --rotate",
+      "$0 stream libraries credentials my-library --rotate",
       "Reset the API key, then show the new one (masked)",
     ],
     [
-      "$0 stream library credentials my-library --rotate --read-only --force",
+      "$0 stream libraries credentials my-library --rotate --read-only --force",
       "Reset the read-only key without asking",
+    ],
+    [
+      "$0 stream libraries credentials my-library --save-env",
+      `Save ${ENV_STREAM_LIBRARY_ID} and ${ENV_STREAM_API_KEY} to .env`,
     ],
   ],
 
@@ -72,6 +82,10 @@ export const streamLibraryCredentialsCommand = defineCommand<CredentialsArgs>({
         type: "boolean",
         default: false,
         describe: "Skip the rotation confirmation",
+      })
+      .option("save-env", {
+        type: "boolean",
+        describe: `Save ${ENV_STREAM_LIBRARY_ID} and ${ENV_STREAM_API_KEY} to .env (skips prompt). Use --no-save-env to skip without prompting.`,
       }),
 
   handler: async ({
@@ -80,6 +94,7 @@ export const streamLibraryCredentialsCommand = defineCommand<CredentialsArgs>({
     showSecret,
     rotate,
     force,
+    saveEnv,
     profile,
     output,
     verbose,
@@ -134,7 +149,12 @@ export const streamLibraryCredentialsCommand = defineCommand<CredentialsArgs>({
       );
     }
 
+    // The saved key is the one shown: the read-only key under --read-only.
+    const withKey = { ...lib, ApiKey: key };
+
     if (output === "json") {
+      // No prompt here: only --save-env saves.
+      const savedToEnv = await offerSaveEnv(withKey, saveEnv, output);
       // Mask by default like the table; --show-secret opts into the raw key.
       logger.log(
         JSON.stringify(
@@ -144,6 +164,7 @@ export const streamLibraryCredentialsCommand = defineCommand<CredentialsArgs>({
             readOnly: readOnly ?? false,
             rotated: rotate ?? false,
             apiKey: showSecret ? key : maskSecret(key),
+            savedToEnv,
           },
           null,
           2,
@@ -167,5 +188,6 @@ export const streamLibraryCredentialsCommand = defineCommand<CredentialsArgs>({
     } else {
       logger.dim("Key masked. Pass --show-secret to reveal it.");
     }
+    await offerSaveEnv(withKey, saveEnv, output);
   },
 });

@@ -60,12 +60,12 @@ export const streamVideoResolutionsCommand = defineCommand<ResolutionsArgs>({
   describe: "Show which resolutions exist for a video.",
   examples: [
     [
-      "$0 stream video resolutions 1a2b3c4d-...",
+      "$0 stream videos resolutions 1a2b3c4d-...",
       "List the video's resolutions",
     ],
-    ["$0 stream video resolutions", "Pick a video interactively"],
+    ["$0 stream videos resolutions", "Pick a video interactively"],
     [
-      "$0 stream video resolutions 1a2b3c4d-... --output json",
+      "$0 stream videos resolutions 1a2b3c4d-... --output json",
       "JSON output (includes storage objects)",
     ],
   ],

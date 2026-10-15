@@ -44,7 +44,7 @@ test("librarySettingsWarnings flags Early-Play exposure and refuses it without o
     "Early-Play publicly exposes the original video files, and only works when originals are kept: add --keep-original.",
   ]);
   expect(librarySettingsWarnings({ keepOriginal: false })[0]).toContain(
-    "encode reencode",
+    "videos encode",
   );
   expect(() =>
     librarySettingsWarnings({ earlyPlay: true, keepOriginal: false }),

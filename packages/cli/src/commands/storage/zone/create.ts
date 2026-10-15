@@ -38,6 +38,7 @@ import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
+import { examplesUrl } from "@/core/examples.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import {
   addHostname,
@@ -588,6 +589,7 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
       `  Upload files:  bunny storage files upload <file> -z ${zoneName}`,
     );
     logger.dim(`  Credentials:   bunny storage zones credentials ${zoneName}`);
+    logger.dim(`  Examples:      ${examplesUrl("storage")}`);
 
     if (domainError) throw domainError;
   },

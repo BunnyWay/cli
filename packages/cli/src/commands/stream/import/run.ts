@@ -53,6 +53,14 @@ interface ImportArgs {
   videoTimeout?: number;
 }
 
+/** The flag defaults, for callers that run the import without going through yargs (`library create`). */
+export const IMPORT_FLAG_DEFAULTS = {
+  concurrency: DEFAULT_CONCURRENCY,
+  requestTimeout: DEFAULT_REQUEST_TIMEOUT / 1000,
+  videoTimeout: DEFAULT_MIGRATION_TIMEOUT / 1000,
+  processingTimeout: DEFAULT_PROCESSING_TIMEOUT / 1000,
+};
+
 function assertRange(
   value: number | undefined,
   min: number,
@@ -337,7 +345,7 @@ export const streamImportRunCommand = defineToolCommand({
       .option("concurrency", {
         alias: "c",
         type: "number",
-        default: DEFAULT_CONCURRENCY,
+        default: IMPORT_FLAG_DEFAULTS.concurrency,
         describe: "Videos to hand to Bunny in parallel (1-20)",
       })
       .option("bucket", { type: "string", describe: "S3 bucket override" })
@@ -363,18 +371,18 @@ export const streamImportRunCommand = defineToolCommand({
       })
       .option("request-timeout", {
         type: "number",
-        default: DEFAULT_REQUEST_TIMEOUT / 1000,
+        default: IMPORT_FLAG_DEFAULTS.requestTimeout,
         describe: "Seconds before one HTTP request gives up (1-3600)",
       })
       .option("video-timeout", {
         type: "number",
-        default: DEFAULT_MIGRATION_TIMEOUT / 1000,
+        default: IMPORT_FLAG_DEFAULTS.videoTimeout,
         describe:
           "Seconds before one video's hand-off to Bunny, or its encode wait with --wait, gives up (60-86400)",
       })
       .option("processing-timeout", {
         type: "number",
-        default: DEFAULT_PROCESSING_TIMEOUT / 1000,
+        default: IMPORT_FLAG_DEFAULTS.processingTimeout,
         describe:
           "With --wait: seconds to wait for Bunny to encode one video; raises --video-timeout when larger (60-86400)",
       }) as Argv<ImportArgs>;
