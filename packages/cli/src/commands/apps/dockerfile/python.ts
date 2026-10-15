@@ -7,6 +7,8 @@ import {
 
 // Scripts a plain Python app starts from, in order.
 const ENTRIES = ["main.py", "app.py", "server.py"];
+// Modules that hold a FastAPI or Flask `app`, in order.
+const APP_MODULES = [...ENTRIES, "wsgi.py", "app/main.py"];
 
 /** The first of `files` that exists, as a module path (`app/main.py` → `app.main`). */
 function moduleOf(project: Project, files: string[]): string | undefined {
@@ -48,10 +50,8 @@ export function detectPython(project: Project): DetectedApp | undefined {
   const settings = project
     .read("manage.py")
     ?.match(/DJANGO_SETTINGS_MODULE["'],\s*["']([\w.]+)\.settings["']/)?.[1];
-  const fastapi =
-    has("fastapi") && moduleOf(project, [...ENTRIES, "app/main.py"]);
-  const flask =
-    has("flask") && moduleOf(project, ["app.py", "wsgi.py", "main.py"]);
+  const fastapi = has("fastapi") && moduleOf(project, APP_MODULES);
+  const flask = has("flask") && moduleOf(project, APP_MODULES);
   if (has("django") && settings) {
     label = "Django";
     command = gunicorn(`${settings}.wsgi`);

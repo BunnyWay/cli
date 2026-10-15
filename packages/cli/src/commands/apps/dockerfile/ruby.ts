@@ -13,8 +13,15 @@ export function detectRuby(project: Project): DetectedApp | undefined {
   if (!gemfile) return undefined;
 
   const rails = gem(gemfile, "rails");
-  // Rack apps (Sinatra, Roda, Hanami) start from config.ru.
-  if (!rails && !project.entries.includes("config.ru")) return undefined;
+  const puma = gem(gemfile, "puma");
+  // Rack apps (Sinatra, Roda, Hanami) start from config.ru, with a server
+  // from the bundle: `bundle exec` can't run one the Gemfile doesn't list.
+  if (
+    !rails &&
+    !(project.entries.includes("config.ru") && (puma || gem(gemfile, "rackup")))
+  ) {
+    return undefined;
+  }
 
   const label = rails ? "Rails" : gem(gemfile, "sinatra") ? "Sinatra" : "Rack";
   const version = versionFrom(
@@ -29,9 +36,19 @@ export function detectRuby(project: Project): DetectedApp | undefined {
   const start = (port: number) =>
     rails
       ? ["bin/rails", "server", "-b", "0.0.0.0", "-p", String(port)]
-      : gem(gemfile, "puma")
+      : puma
         ? ["bundle", "exec", "puma", "-b", `tcp://0.0.0.0:${port}`]
         : ["bundle", "exec", "rackup", "-o", "0.0.0.0", "-p", String(port)];
+
+  // Native extensions for the common database gems.
+  const packages = [
+    "build-essential",
+    "git",
+    "libpq-dev",
+    "libyaml-dev",
+    "pkg-config",
+    ...(gem(gemfile, "mysql2") ? ["default-libmysqlclient-dev"] : []),
+  ];
 
   return {
     label,
@@ -40,7 +57,7 @@ export function detectRuby(project: Project): DetectedApp | undefined {
     dockerfile: (port) =>
       dockerfile(label, [
         `FROM ruby:${version}-slim`,
-        "RUN apt-get update && apt-get install -y --no-install-recommends build-essential git libpq-dev libyaml-dev pkg-config && rm -rf /var/lib/apt/lists/*",
+        `RUN apt-get update && apt-get install -y --no-install-recommends ${packages.join(" ")} && rm -rf /var/lib/apt/lists/*`,
         "WORKDIR /app",
         `ENV ${rails ? "RAILS_ENV" : "RACK_ENV"}=production BUNDLE_WITHOUT=development:test`,
         `COPY Gemfile${lock} ./`,

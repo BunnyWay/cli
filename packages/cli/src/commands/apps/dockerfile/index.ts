@@ -64,9 +64,10 @@ export function detectApp(root: string): DetectedApp | undefined {
 }
 
 /**
- * Keeps VCS data, secrets and the stack's local build output out of the
- * build context. `.env` files must never be baked into an image; `bunny
- * apps env` sets them at runtime instead.
+ * Keeps VCS data, secrets, bunny config and the stack's local build output
+ * out of the build context. `.env` files must never be baked into an image
+ * (`bunny apps env` sets them at runtime), and a server that serves the
+ * project root (plain PHP) would otherwise publish the rest.
  */
 export function dockerignore(app: DetectedApp): string {
   return `${[
@@ -75,6 +76,8 @@ export function dockerignore(app: DetectedApp): string {
     ".env",
     ".env.*",
     "!.env.example",
+    "bunny.jsonc",
+    ".bunny",
     "Dockerfile",
     ".dockerignore",
     ...app.ignore,

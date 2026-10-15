@@ -26,8 +26,9 @@ export function detectPhp(project: Project): DetectedApp | undefined {
       : ["PHP", ""];
   // FrankenPHP publishes images for PHP 8.2 and later.
   const php = versionFrom([require.php], /(8\.[2-9])/, "8.4");
-  // Frontend assets (Vite, Encore) build in a Node stage into public/build.
-  const pkg = readJson(project, "package.json");
+  // Laravel (Vite) and Symfony (Encore) build frontend assets into
+  // public/build, in a Node stage.
+  const pkg = label === "PHP" ? null : readJson(project, "package.json");
   const build = pkg && (pkg.scripts as Record<string, unknown>)?.build;
 
   return {

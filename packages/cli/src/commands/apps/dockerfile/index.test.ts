@@ -66,6 +66,15 @@ describe("node", () => {
     ).toMatchObject({ label: "Astro", port: 4321 });
   });
 
+  test("a Next.js static export is a site, not an app", () => {
+    expect(
+      detect({
+        "package.json": { dependencies: { next: "15" } },
+        "next.config.mjs": 'export default { output: "export" };',
+      }),
+    ).toBeUndefined();
+  });
+
   test("a frontend with its own server runs the server", () => {
     expect(
       detect({
@@ -158,6 +167,12 @@ describe("python", () => {
     expect(dockerfile).toContain('"main:app"');
   });
 
+  test("Flask in server.py runs under gunicorn, not its dev server", () => {
+    expect(
+      render({ "requirements.txt": "flask\n", "server.py": "" }),
+    ).toContain('CMD ["gunicorn","server:app","--bind","0.0.0.0:8000"]');
+  });
+
   test("a lone script with no framework runs with python", () => {
     expect(render({ "server.py": "import http.server" })).toContain(
       'CMD ["python","server.py"]',
@@ -217,6 +232,18 @@ describe("ruby", () => {
     expect(dockerfile).toContain('"-b","0.0.0.0","-p","3000"');
   });
 
+  test("Rails with mysql2 gets the MySQL client headers", () => {
+    expect(render({ Gemfile: 'gem "rails"\ngem "mysql2"\n' })).toContain(
+      "default-libmysqlclient-dev",
+    );
+  });
+
+  test("a Rack app with no server in the bundle is not an app", () => {
+    expect(
+      detect({ Gemfile: 'gem "sinatra"\n', "config.ru": "run App" }),
+    ).toBeUndefined();
+  });
+
   test("Sinatra starts config.ru with puma", () => {
     const app = detect({
       Gemfile: 'gem "sinatra"\ngem "puma"\n',
@@ -254,6 +281,15 @@ describe("php", () => {
         "composer.json": { require: { php: "^8.1" } },
       }),
     ).toContain("FROM dunglas/frankenphp:1-php8.4");
+  });
+
+  test("plain PHP skips the asset stage, which only Laravel and Symfony fit", () => {
+    expect(
+      render({
+        "index.php": "",
+        "package.json": { scripts: { build: "tsc" } },
+      }),
+    ).not.toContain("AS assets");
   });
 
   test("a lone index.php serves the project root without composer", () => {
@@ -315,11 +351,12 @@ describe("deno", () => {
   });
 });
 
-test("dockerignore keeps env files out and adds the stack's own lines", () => {
+test("dockerignore keeps env files and bunny config out, plus the stack's own lines", () => {
   const app = detect({ "Cargo.toml": '[package]\nname = "api"\n' });
   if (!app) throw new Error("expected an app");
   const lines = dockerignore(app).split("\n");
   expect(lines).toContain(".env");
   expect(lines).toContain(".env.*");
+  expect(lines).toContain("bunny.jsonc");
   expect(lines).toContain("target");
 });

@@ -187,6 +187,12 @@ function onBun(command: string[]): string[] {
   return command;
 }
 
+function nextStaticExport(project: Project): boolean {
+  return ["next.config.js", "next.config.mjs", "next.config.ts"].some((f) =>
+    /output:\s*["']export["']/.test(project.read(f) ?? ""),
+  );
+}
+
 // Files a lone JS/TS server starts from, in order.
 const SCRIPT_ENTRIES = [
   "server.ts",
@@ -236,6 +242,10 @@ export function detectNode(project: Project): DetectedApp | undefined {
 
   let server: Omit<ServerFramework, "requires"> | undefined =
     SERVER_FRAMEWORKS.find((f) => f.requires.every((dep) => deps.has(dep)));
+  // A static export has no server to start; it's a Sites deploy.
+  if (server?.label === "Next.js" && nextStaticExport(project)) {
+    return undefined;
+  }
 
   if (!server) {
     // A frontend framework without a server adapter builds static files,
