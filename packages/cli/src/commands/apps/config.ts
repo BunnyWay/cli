@@ -1,6 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type BunnyAppConfig, BunnyAppConfigSchema } from "@bunny.net/config";
+import {
+  type BunnyAppConfig,
+  BunnyAppConfigSchema,
+  normalizeRegions,
+} from "@bunny.net/config";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import {
   CONFIG_FILENAME,
@@ -126,6 +130,29 @@ export function saveConfig(data: BunnyAppConfig, explicitPath?: string): void {
   } else {
     writeFileSync(path, `${JSON.stringify(output, null, 2)}\n`);
   }
+}
+
+/**
+ * Refuse a config that mounts a volume in an app allowed to run in more than
+ * one region. Volumes are regional: each region gets its own empty volume and
+ * nothing syncs between them, so the data silently splits.
+ * `--allow-regional-volumes` opts in for apps that want that (a cache, say).
+ */
+export function assertVolumeRegions(
+  config: BunnyAppConfig,
+  allow?: boolean,
+): void {
+  if (allow) return;
+  const { allowed } = normalizeRegions(config.app.regions);
+  if (allowed.length < 2) return;
+  const withVolume = Object.entries(config.app.containers).find(
+    ([, container]) => container.volumes?.length,
+  );
+  if (!withVolume) return;
+  throw new UserError(
+    `Container "${withVolume[0]}" mounts a volume, but the app runs in ${allowed.length} regions (${allowed.join(", ")}).`,
+    "Volumes don't sync between regions: each region gets its own empty volume. Keep one region in bunny.jsonc, or pass --allow-regional-volumes if each region should keep separate data.",
+  );
 }
 
 /**

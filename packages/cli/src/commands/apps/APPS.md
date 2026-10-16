@@ -110,21 +110,22 @@ For compose files that have just one service, the import overlaps with the Docke
 
 ### Deploy flags
 
-| Flag           | Description                                                                                                                                           |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<image>`      | Container image reference to deploy (e.g. `ghcr.io/me/api:v1.2`). Skips build.                                                                        |
-| `--name`       | App name. Used during the first-run walkthrough; skips the interactive prompt.                                                                        |
-| `--region`     | Region ID for a new app. Skips the region prompt; required without a terminal.                                                                        |
-| `--dockerfile` | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`, which is generated when there is none (see below).         |
-| `--context`    | Docker build context directory. Defaults to the directory of the Dockerfile.                                                                          |
-| `--tag`        | Override the auto-generated `<sha>-<timestamp>` image tag.                                                                                            |
-| `--registry`   | Registry ID to push to, or `bunny` for the bunny.net registry (`registry.bunny.net`, override with `BUNNYNET_REGISTRY_URL`). Overrides `bunny.jsonc`. |
-| `--container`  | Name of the container to update. Required when `bunny.jsonc` has multiple containers and you pass `<image>`/`--dockerfile`.                           |
-| `--port`       | Override the container port. Retargets any endpoints written to `bunny.jsonc`.                                                                        |
-| `--command`    | Override the container `CMD`. Passed as a single string, split on whitespace.                                                                         |
-| `--config`     | Use this file as the app config instead of cwd's `bunny.jsonc`. Useful in CI / agent flows.                                                           |
-| `--dry-run`    | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                                              |
-| `--no-push`    | Build only. Skip pushing the image and skip the deploy.                                                                                               |
+| Flag                       | Description                                                                                                                                           |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<image>`                  | Container image reference to deploy (e.g. `ghcr.io/me/api:v1.2`). Skips build.                                                                        |
+| `--name`                   | App name. Used during the first-run walkthrough; skips the interactive prompt.                                                                        |
+| `--region`                 | Region ID for a new app. Skips the region prompt; required without a terminal.                                                                        |
+| `--dockerfile`             | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`, which is generated when there is none (see below).         |
+| `--context`                | Docker build context directory. Defaults to the directory of the Dockerfile.                                                                          |
+| `--tag`                    | Override the auto-generated `<sha>-<timestamp>` image tag.                                                                                            |
+| `--registry`               | Registry ID to push to, or `bunny` for the bunny.net registry (`registry.bunny.net`, override with `BUNNYNET_REGISTRY_URL`). Overrides `bunny.jsonc`. |
+| `--container`              | Name of the container to update. Required when `bunny.jsonc` has multiple containers and you pass `<image>`/`--dockerfile`.                           |
+| `--port`                   | Override the container port. Retargets any endpoints written to `bunny.jsonc`.                                                                        |
+| `--command`                | Override the container `CMD`. Passed as a single string, split on whitespace.                                                                         |
+| `--config`                 | Use this file as the app config instead of cwd's `bunny.jsonc`. Useful in CI / agent flows.                                                           |
+| `--dry-run`                | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                                              |
+| `--no-push`                | Build only. Skip pushing the image and skip the deploy.                                                                                               |
+| `--allow-regional-volumes` | Deploy an app that mounts a volume in more than one region (see [Volumes and regions](#volumes-and-regions)).                                         |
 
 ```bash
 # Deploy a pre-built image
@@ -258,6 +259,9 @@ bunny apps pull --force
 # Push local bunny.jsonc to remote (config only — does not deploy)
 bunny apps push
 bunny apps push --dry-run
+
+# Apply a volume across regions on purpose (see Volumes and regions)
+bunny apps push --allow-regional-volumes
 ```
 
 ## `bunny apps env`
@@ -416,3 +420,7 @@ For the rare case where you need to distinguish "regions bunny.net is allowed to
 ```
 
 The array form sets both `allowed` and `required` to the same list under the hood.
+
+### Volumes and regions
+
+Volumes are regional: every region an app runs in gets its own empty volume, and nothing syncs between them. A database in three regions is three unrelated databases. So `bunny apps deploy` and `bunny apps push` refuse a config where any container mounts a volume and `regions` (or `regions.allowed`) lists more than one region. Keep one region, or pass `--allow-regional-volumes` when separate data per region is what you want (a cache, say).

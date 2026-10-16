@@ -1,8 +1,10 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { useTempDir } from "@/test-utils/temp-dir.ts";
 import {
+  assertVolumeRegions,
+  type BunnyAppConfig,
   configExists,
   loadConfig,
   saveConfig,
@@ -171,4 +173,46 @@ test("load → save → reload preserves intent fields", () => {
     "-g",
     "daemon off;",
   ]);
+});
+
+describe("assertVolumeRegions", () => {
+  const app = (
+    regions: BunnyAppConfig["app"]["regions"],
+    volumes = true,
+  ): BunnyAppConfig => ({
+    version: "2026-05-11",
+    app: {
+      name: "x",
+      regions,
+      containers: {
+        web: {},
+        db: volumes
+          ? { volumes: [{ name: "data", mount: "/data", size: 1 }] }
+          : {},
+      },
+    },
+  });
+
+  test("refuses a volume in more than one region, naming both", () => {
+    expect(() => assertVolumeRegions(app(["de", "uk"]))).toThrow(
+      'Container "db" mounts a volume, but the app runs in 2 regions (de, uk).',
+    );
+  });
+
+  test("counts the regions an app may run in, not just the required ones", () => {
+    expect(() =>
+      assertVolumeRegions(app({ allowed: ["de", "uk"], required: ["de"] })),
+    ).toThrow();
+  });
+
+  test.each([
+    ["one region", app(["de"])],
+    ["no volume", app(["de", "uk"], false)],
+  ])("allows %s", (_, config) => {
+    expect(() => assertVolumeRegions(config)).not.toThrow();
+  });
+
+  test("--allow-regional-volumes opts in", () => {
+    expect(() => assertVolumeRegions(app(["de", "uk"]), true)).not.toThrow();
+  });
 });

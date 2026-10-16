@@ -6,7 +6,12 @@ import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest } from "@/core/manifest.ts";
 import { spinner } from "@/core/ui.ts";
-import { configToPatchRequest, loadConfig, resolveAppId } from "./config.ts";
+import {
+  assertVolumeRegions,
+  configToPatchRequest,
+  loadConfig,
+  resolveAppId,
+} from "./config.ts";
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 
 const COMMAND = "push";
@@ -14,6 +19,7 @@ const DESCRIPTION = "Apply local bunny.jsonc config to remote app.";
 
 interface PushArgs {
   "dry-run"?: boolean;
+  "allow-regional-volumes"?: boolean;
 }
 
 export const appsPushCommand = defineCommand<PushArgs>({
@@ -21,14 +27,28 @@ export const appsPushCommand = defineCommand<PushArgs>({
   describe: DESCRIPTION,
 
   builder: (yargs) =>
-    yargs.option("dry-run", {
-      type: "boolean",
-      describe: "Show what would change without applying",
-    }),
+    yargs
+      .option("dry-run", {
+        type: "boolean",
+        describe: "Show what would change without applying",
+      })
+      .option("allow-regional-volumes", {
+        type: "boolean",
+        describe:
+          "Apply a volume in more than one region, each keeping its own separate data",
+      }),
 
-  handler: async ({ "dry-run": dryRun, profile, output, verbose, apiKey }) => {
+  handler: async ({
+    "dry-run": dryRun,
+    "allow-regional-volumes": allowRegionalVolumes,
+    profile,
+    output,
+    verbose,
+    apiKey,
+  }) => {
     const appId = resolveAppId();
     const toml = loadConfig();
+    assertVolumeRegions(toml, allowRegionalVolumes);
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 
