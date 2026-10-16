@@ -115,6 +115,22 @@ describe("node", () => {
     expect(detect({ "index.html": "", "main.js": "" })).toBeUndefined();
   });
 
+  test("install config, which can hold registry tokens, never reaches the runtime", () => {
+    const lines = render({
+      "package.json": {
+        scripts: { build: "next build" },
+        dependencies: { next: "15" },
+      },
+      ".npmrc": "//npm.pkg.github.com/:_authToken=secret",
+    }).split("\n");
+    expect(lines.indexOf("RUN rm -f .npmrc")).toBeGreaterThan(
+      lines.indexOf("RUN npm run build"),
+    );
+    expect(lines.indexOf("RUN rm -f .npmrc")).toBeLessThan(
+      lines.indexOf("COPY --from=build /app ./"),
+    );
+  });
+
   test("a lone script runs on bun", () => {
     expect(render({ "index.ts": "Bun.serve({})" })).toContain(
       'CMD ["bun", "index.ts"]',
@@ -144,7 +160,7 @@ describe("python", () => {
       "app/main.py": "",
     });
     expect(dockerfile).toContain(
-      "RUN uv sync --frozen --no-dev --no-install-project\n",
+      "RUN uv sync --frozen --no-dev --no-install-project\nCOPY . .\nRUN uv sync --frozen --no-dev --inexact\n",
     );
     expect(dockerfile).toContain(
       'CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","8000"]',
@@ -212,11 +228,30 @@ describe("rust", () => {
       "Cargo.toml":
         '[package]\nauthors = ["a"]\nname = "api"\n\n[dependencies]\nname = "x"\n',
       "Cargo.lock": "",
+      "src/main.rs": "fn main() {}",
     });
     expect(dockerfile).toContain("RUN cargo build --release --locked");
     expect(dockerfile).toContain(
       "/src/target/release/api /usr/local/bin/server",
     );
+  });
+
+  test("ships a named [[bin]] target", () => {
+    expect(
+      render({
+        "Cargo.toml":
+          '[package]\nname = "api"\n\n[[bin]]\nname = "server-bin"\n',
+      }),
+    ).toContain("/src/target/release/server-bin ");
+  });
+
+  test("a library crate is not an app", () => {
+    expect(
+      detect({
+        "Cargo.toml": '[package]\nname = "lib"\n',
+        "src/lib.rs": "",
+      }),
+    ).toBeUndefined();
   });
 });
 
@@ -314,6 +349,29 @@ describe("dotnet", () => {
     expect(dockerfile).toContain('CMD ["dotnet","Api.dll"]');
   });
 
+  test("the SDK follows global.json while the runtime follows the target", () => {
+    const dockerfile = render({
+      "Api.csproj":
+        '<Project Sdk="Microsoft.NET.Sdk.Web"><TargetFramework>net8.0</TargetFramework></Project>',
+      "global.json": '{ "sdk": { "version": "9.0.100" } }',
+    });
+    expect(dockerfile).toContain(
+      "FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build",
+    );
+    expect(dockerfile).toContain("FROM mcr.microsoft.com/dotnet/aspnet:8.0");
+  });
+
+  test("project references restore from the whole tree", () => {
+    expect(
+      render({
+        "Api.csproj":
+          '<Project Sdk="Microsoft.NET.Sdk.Web"><ItemGroup><ProjectReference Include="Core/Core.csproj" /></ItemGroup></Project>',
+      }),
+    ).toContain(
+      "WORKDIR /src\nCOPY . .\nRUN dotnet restore Api.csproj\nRUN dotnet publish",
+    );
+  });
+
   test("Blazor WebAssembly is a static site", () => {
     expect(
       detect({
@@ -336,6 +394,15 @@ describe("java", () => {
     expect(dockerfile).toContain("FROM eclipse-temurin:17-jre");
   });
 
+  test.each([
+    ["<java.version>8</java.version>"],
+    ["<java.version>1.8</java.version>"],
+  ])("Java 8 from %s", (version) => {
+    expect(
+      render({ "pom.xml": `org.springframework.boot ${version}` }),
+    ).toContain("FROM eclipse-temurin:8-jre");
+  });
+
   test("Maven without a wrapper builds on the Maven image", () => {
     expect(
       render({ "pom.xml": "<parent>org.springframework.boot</parent>" }),
@@ -352,11 +419,31 @@ describe("deno", () => {
 });
 
 test("dockerignore keeps env files and bunny config out, plus the stack's own lines", () => {
-  const app = detect({ "Cargo.toml": '[package]\nname = "api"\n' });
+  const app = detect({
+    "Cargo.toml": '[package]\nname = "api"\n',
+    "src/main.rs": "",
+  });
   if (!app) throw new Error("expected an app");
-  const lines = dockerignore(app).split("\n");
+  const lines = (dockerignore(app) ?? "").split("\n");
   expect(lines).toContain(".env");
   expect(lines).toContain(".env.*");
   expect(lines).toContain("bunny.jsonc");
   expect(lines).toContain("target");
+});
+
+describe("an existing dockerignore", () => {
+  const app = detect({ "index.php": "" });
+  if (!app) throw new Error("expected an app");
+
+  test("keeps the user's entries and adds the missing private ones", () => {
+    expect(dockerignore(app, "node_modules\n.env\n")).toBe(
+      "node_modules\n.env\n\n# Added by the bunny CLI: keep secrets and bunny config out of the image.\n.env.*\nbunny.jsonc\n.bunny\n!.env.example\n",
+    );
+  });
+
+  test("is left alone when it already covers them", () => {
+    expect(
+      dockerignore(app, ".env\n.env.*\nbunny.jsonc\n.bunny\n"),
+    ).toBeUndefined();
+  });
 });

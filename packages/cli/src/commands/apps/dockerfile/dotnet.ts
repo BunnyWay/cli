@@ -25,15 +25,26 @@ export function detectDotnet(project: Project): DetectedApp | undefined {
   const assembly =
     csproj.text.match(/<AssemblyName>([^<]+)</)?.[1] ??
     csproj.file.replace(/\.csproj$/, "");
-  const version = versionFrom(
-    [csproj.text, project.read("global.json")],
-    /(?:<TargetFrameworks?>[^<]*?net|"version":\s*")(\d+\.\d+)/,
+  // The runtime matches the target framework; the SDK follows global.json
+  // when it pins one, since restore refuses an older SDK than it names.
+  const runtime = versionFrom(
+    [csproj.text],
+    /<TargetFrameworks?>[^<]*?net(\d+\.\d+)/,
     "10.0",
   );
-  const restore = [
-    csproj.file,
-    ...RESTORE_FILES.filter((f) => project.entries.includes(f)),
-  ];
+  const sdk = versionFrom(
+    [project.read("global.json")],
+    /"version":\s*"(\d+\.\d+)/,
+    runtime,
+  );
+  // Referenced projects live elsewhere in the tree, so restore needs it all.
+  const restore = csproj.text.includes("<ProjectReference")
+    ? ["COPY . .", `RUN dotnet restore ${csproj.file}`]
+    : [
+        `COPY ${[csproj.file, ...RESTORE_FILES.filter((f) => project.entries.includes(f))].join(" ")} ./`,
+        `RUN dotnet restore ${csproj.file}`,
+        "COPY . .",
+      ];
 
   return {
     label: "ASP.NET Core",
@@ -42,14 +53,12 @@ export function detectDotnet(project: Project): DetectedApp | undefined {
     ignore: ["bin", "obj"],
     dockerfile: (port) =>
       dockerfile("ASP.NET Core", [
-        `FROM mcr.microsoft.com/dotnet/sdk:${version} AS build`,
+        `FROM mcr.microsoft.com/dotnet/sdk:${sdk} AS build`,
         "WORKDIR /src",
-        `COPY ${restore.join(" ")} ./`,
-        `RUN dotnet restore ${csproj.file}`,
-        "COPY . .",
+        ...restore,
         `RUN dotnet publish ${csproj.file} -c Release -o /out --no-restore`,
         "",
-        `FROM mcr.microsoft.com/dotnet/aspnet:${version}`,
+        `FROM mcr.microsoft.com/dotnet/aspnet:${runtime}`,
         "WORKDIR /app",
         "COPY --from=build /out ./",
         `ENV ASPNETCORE_URLS=http://+:${port}`,

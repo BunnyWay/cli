@@ -69,6 +69,11 @@ export interface WalkthroughInput {
    */
   interactive: boolean;
   /**
+   * Whether the caller goes on to build an image (`deploy`, but not
+   * `init` or `--dry-run`). Docker is only required when it does.
+   */
+  buildsImage: boolean;
+  /**
    * If true, skip every write side-effect: don't generate files to
    * disk, don't save bunny.jsonc. The walkthrough still prompts and
    * still returns a valid config; the caller decides what to do
@@ -198,7 +203,7 @@ export async function runWalkthrough(
     // Bail before any further prompts / disk writes if Docker is missing.
     // Every pick but "image" ends in a local build; without Docker we'd
     // write `bunny.jsonc` and then crash mid-deploy.
-    if (value !== "image") {
+    if (value !== "image" && input.buildsImage) {
       await ensureDockerAvailable();
     }
 
@@ -411,10 +416,20 @@ function writeGeneratedDockerfile(
 
   writeFileSync(resolve(process.cwd(), path), contents);
   logger.success(`Wrote a Dockerfile for ${app.label}.`);
+  // An existing .dockerignore is kept, with any missing secret entries
+  // added: the generated Dockerfile copies the whole project.
   const ignorePath = resolve(process.cwd(), ".dockerignore");
-  if (!existsSync(ignorePath)) {
-    writeFileSync(ignorePath, dockerignore(app));
-    logger.success("Wrote .dockerignore.");
+  const existing = existsSync(ignorePath)
+    ? readFileSync(ignorePath, "utf-8")
+    : undefined;
+  const ignore = dockerignore(app, existing);
+  if (ignore) {
+    writeFileSync(ignorePath, ignore);
+    logger.success(
+      existing === undefined
+        ? "Wrote .dockerignore."
+        : "Added .env and bunny config to .dockerignore.",
+    );
   }
   return path;
 }

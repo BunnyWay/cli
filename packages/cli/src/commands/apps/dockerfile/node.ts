@@ -170,6 +170,12 @@ export function nodeBuildStage(
     const run = pm === "npm" || pm === "bun" ? pm : `corepack enable && ${pm}`;
     lines.push(`RUN ${run} run build`);
   }
+  // Install config can hold private registry tokens. Delete it here, so a
+  // later stage copying this one's files never ships it.
+  const config = INSTALL_CONFIG_FILES.filter((f) =>
+    project.entries.includes(f),
+  );
+  if (config.length > 0) lines.push(`RUN rm -f ${config.join(" ")}`);
   return lines;
 }
 

@@ -305,7 +305,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     // walkthrough also checks this on its interactive picks, but for
     // `--dockerfile` (with no existing config) the choice is implicit so
     // it'd otherwise skip the menu and only blow up after writing files.
-    if (dockerfileFlag) {
+    if (dockerfileFlag && !dryRun) {
       await ensureDockerAvailable();
     }
 
@@ -326,6 +326,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         nameOverride: args.name,
         regionFlag: args.region,
         interactive: isInteractive(output),
+        buildsImage: !dryRun,
         configPath,
         dryRun,
       });
@@ -342,7 +343,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       const hasAnyBuild = Object.values(toml.app.containers).some((c) =>
         Boolean(c.dockerfile),
       );
-      if (hasAnyBuild) {
+      if (hasAnyBuild && !dryRun) {
         await ensureDockerAvailable();
       }
     }

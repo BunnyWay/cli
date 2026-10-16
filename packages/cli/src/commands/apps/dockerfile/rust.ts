@@ -1,12 +1,16 @@
 import { type DetectedApp, dockerfile, type Project } from "./project.ts";
 
 export function detectRust(project: Project): DetectedApp | undefined {
-  // The binary is named after `[package]`; workspaces have no single one.
-  const name = project
-    .read("Cargo.toml")
-    ?.split(/^\[/m)
-    .find((section) => section.startsWith("package]"))
-    ?.match(/^name\s*=\s*"([^"]+)"/m)?.[1];
+  const sections = project.read("Cargo.toml")?.split(/^\[/m) ?? [];
+  const nameIn = (header: string) =>
+    sections
+      .find((section) => section.startsWith(header))
+      ?.match(/^name\s*=\s*"([^"]+)"/m)?.[1];
+  // The binary: the first named `[[bin]]` target, else `src/main.rs`, named
+  // after the package. Library crates and workspaces have neither.
+  const name =
+    nameIn("[bin]]") ??
+    (project.read("src/main.rs") !== null ? nameIn("package]") : undefined);
   if (!name) return undefined;
   const locked = project.entries.includes("Cargo.lock") ? " --locked" : "";
 

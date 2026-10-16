@@ -130,6 +130,7 @@ export const appsInitCommand = defineCommand<InitArgs>({
       nameOverride: name,
       regionFlag: region,
       interactive: isInteractive(output),
+      buildsImage: false,
       configPath,
     });
 

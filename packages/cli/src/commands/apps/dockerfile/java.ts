@@ -14,9 +14,10 @@ export function detectJava(project: Project): DetectedApp | undefined {
   // Spring Boot packages a self-contained, runnable jar.
   if (!build?.includes("org.springframework.boot")) return undefined;
 
+  // `8`, `17`, or the legacy `1.8` / `VERSION_1_8` spelling of Java 8.
   const jdk = versionFrom(
     [build],
-    /(?:<java\.version>|JavaLanguageVersion\.of\(|sourceCompatibility\s*=\s*(?:JavaVersion\.VERSION_)?['"]?)(\d{2})/,
+    /(?:<java\.version>|JavaLanguageVersion\.of\(|sourceCompatibility\s*=\s*(?:JavaVersion\.VERSION_)?['"]?)(?:1[._])?(\d{1,2})/,
     "21",
   );
   // Use the project's wrapper when it has one, so the build tool version

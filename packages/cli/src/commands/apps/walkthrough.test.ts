@@ -26,7 +26,12 @@ describe("runWalkthrough without a terminal (agents)", () => {
   }
 
   const agent = (input: Partial<WalkthroughInput> = {}) =>
-    runWalkthrough(client, { interactive: false, dryRun: true, ...input });
+    runWalkthrough(client, {
+      interactive: false,
+      buildsImage: false,
+      dryRun: true,
+      ...input,
+    });
 
   test("--dockerfile generates one and takes every default", async () => {
     inProject({ "index.php": "<?php echo 'hi';" });

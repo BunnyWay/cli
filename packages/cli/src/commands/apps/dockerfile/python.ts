@@ -92,6 +92,9 @@ export function detectPython(project: Project): DetectedApp | undefined {
         "COPY pyproject.toml uv.lock ./",
         `RUN uv sync --frozen --no-dev --no-install-project${missing && ` && uv pip install ${missing}`}`,
         "COPY . .",
+        // Install the project itself now its source is here (a `src/`
+        // layout imports it). --inexact keeps the server added above.
+        "RUN uv sync --frozen --no-dev --inexact",
       ]
     : requirements !== null
       ? [
