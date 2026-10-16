@@ -49,7 +49,7 @@ To rollback:    bunny apps deploy ghcr.io/me/api:abc-123
 
 ### Generating a Dockerfile
 
-When the project has no Dockerfile, the walkthrough looks at the project root and offers to write one. A single file is enough: a lone `index.php`, `main.go`, `main.py` or `index.ts` deploys as-is.
+When the project has no Dockerfile, the walkthrough looks at the project root and offers to write one. Generation covers common setups, not every build a buildpack would: when a generated Dockerfile doesn't fit, edit it, or connect the GitHub repository in the bunny.net dashboard, the more reliable way to deploy without any config. A failed build of a generated Dockerfile says the same. A single file is enough: a lone `index.php`, `main.go`, `main.py` or `index.ts` deploys as-is.
 
 | Stack                                                | Detected from                                                                                          | Runs                                                     | Port              |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- | ----------------- |

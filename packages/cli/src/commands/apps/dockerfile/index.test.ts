@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { type DetectedApp, detectAppFrom, dockerignore } from "./index.ts";
+import { GENERATED_HEADER, GITHUB_HINT } from "./project.ts";
 
 /** A project root holding `files`; JSON values are serialised. */
 function detect(files: Record<string, unknown>): DetectedApp | undefined {
@@ -440,6 +441,12 @@ test("dockerignore keeps env files and bunny config out, plus the stack's own li
   expect(lines).toContain(".env.*");
   expect(lines).toContain("bunny.jsonc");
   expect(lines).toContain("target");
+});
+
+test("generated Dockerfiles point to GitHub deploys for anything they don't cover", () => {
+  const [header, note] = render({ "main.go": "package main\n" }).split("\n");
+  expect(header).toStartWith(GENERATED_HEADER);
+  expect(note).toBe(`# It covers common setups only. ${GITHUB_HINT}`);
 });
 
 describe("an existing dockerignore", () => {
