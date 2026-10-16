@@ -19,6 +19,7 @@ import {
 } from "./config.ts";
 import {
   assignContainerNamesToDockerfiles,
+  BUNNY_REGISTRY_ID,
   ensureDockerAvailable,
   findDockerfiles,
   getConfigSuggestions,
@@ -59,6 +60,14 @@ export interface WalkthroughInput {
   commandOverride?: string;
   /** App name (--name). When set, skips the interactive name prompt. */
   nameOverride?: string;
+  /** Region ID (--region). When set, skips the region prompt. */
+  regionFlag?: string;
+  /**
+   * Whether prompts can be answered. Without a terminal (an agent, or
+   * `--output json`), each prompt takes its default answer, and the ones
+   * with no default (the region, what to deploy) need their flag.
+   */
+  interactive: boolean;
   /**
    * If true, skip every write side-effect: don't generate files to
    * disk, don't save bunny.jsonc. The walkthrough still prompts and
@@ -113,7 +122,26 @@ export async function runWalkthrough(
   // in --dry-run the file is never on disk.
   let generated: { app: DetectedApp; port: number } | undefined;
 
+  // `--dockerfile` with no Dockerfile on disk: generate one for the
+  // detected app, so agents can deploy a project that has none.
+  if (
+    dockerfilePath === GENERATED_DOCKERFILE &&
+    !existsSync(resolve(process.cwd(), dockerfilePath))
+  ) {
+    const app = detectApp(process.cwd());
+    if (app) {
+      generated = { app, port: input.portOverride ?? app.port };
+      writeGeneratedDockerfile(generated, input.dryRun);
+    }
+  }
+
   if (!imageRef && !dockerfilePath) {
+    if (!input.interactive) {
+      throw new UserError(
+        "Nothing to deploy: no bunny.jsonc, image or --dockerfile.",
+        "Pass --dockerfile to build (a Dockerfile is generated when there is none), or an image ref to deploy.",
+      );
+    }
     const composeFile = findComposeFile(process.cwd());
     const detectedDockerfiles = findDockerfiles(process.cwd());
     // Only offer to generate when there's no Dockerfile to build already.
@@ -206,16 +234,20 @@ export async function runWalkthrough(
 
   const mode: "build" | "image" = dockerfilePath ? "build" : "image";
 
-  let registry: ResolvedRegistry | null;
-  if (input.registryFlag) {
-    registry = { id: input.registryFlag };
-  } else if (mode === "image" && imageRef) {
-    registry = await resolveRegistryForImage(client, imageRef);
-  } else {
-    logger.info("Pick a registry to push your image to.");
-    registry = await promptRegistry(client);
+  const registry =
+    mode === "image" && imageRef && !input.registryFlag
+      ? await resolveRegistryForImage(client, imageRef)
+      : await pickRegistry(
+          client,
+          input,
+          "Pick a registry to push your image to.",
+        );
+  if (!registry) {
+    throw new UserError(
+      "A registry is required.",
+      "Pass --registry with an ID from `bunny apps registries`, or `bunny` for the bunny.net registry.",
+    );
   }
-  if (!registry) throw new UserError("A registry is required.");
 
   let suggestions: Awaited<ReturnType<typeof getConfigSuggestions>> | null =
     null;
@@ -260,11 +292,9 @@ export async function runWalkthrough(
     }
   }
 
-  const name =
-    input.nameOverride ??
-    (await promptAppName(suggestions?.appName ?? undefined));
+  const name = await promptAppName(input, suggestions?.appName ?? undefined);
 
-  const regions = await pickRegions(client);
+  const regions = await pickRegions(client, input);
 
   // `registry` is account-scoped - it lives in the manifest, not the
   // shared config. We hold it in memory long enough for the deploy run
@@ -290,9 +320,9 @@ export async function runWalkthrough(
   }
 
   if (suggestions?.endpointSuggestions?.length) {
-    const accepted = await confirmEndpointSuggestions(
-      suggestions.endpointSuggestions,
-    );
+    const accepted = input.interactive
+      ? await confirmEndpointSuggestions(suggestions.endpointSuggestions)
+      : suggestions.endpointSuggestions;
     if (accepted.length > 0) {
       container.endpoints = accepted.map(endpointRequestToConfig);
     }
@@ -311,7 +341,11 @@ export async function runWalkthrough(
   // pushed. Compensate by scanning the Dockerfile's neighbourhood for a
   // `.env` / `.env.example` and offering those keys for inclusion.
   if (mode === "build" && dockerfilePath) {
-    const picked = await pickEnvKeysFromDockerfile(dockerfilePath, name);
+    const picked = await pickEnvKeysFromDockerfile(
+      dockerfilePath,
+      name,
+      input.interactive,
+    );
     if (Object.keys(picked).length > 0) {
       container.env = { ...(container.env ?? {}), ...picked };
     }
@@ -353,6 +387,9 @@ export async function runWalkthrough(
   return { config: toml, registries: { [name]: registry.id } };
 }
 
+/** Where generated Dockerfiles go; also what a bare `--dockerfile` names. */
+const GENERATED_DOCKERFILE = "Dockerfile";
+
 /**
  * Write the generated Dockerfile (and a `.dockerignore`, unless one exists)
  * to the project root and return its path. With `dryRun`, print it instead.
@@ -361,12 +398,13 @@ function writeGeneratedDockerfile(
   { app, port }: { app: DetectedApp; port: number },
   dryRun?: boolean,
 ): string {
-  const path = "Dockerfile";
+  const path = GENERATED_DOCKERFILE;
   const contents = app.dockerfile(port);
 
   if (dryRun) {
+    // On stderr, so `--output json` keeps stdout to the one JSON result.
     logger.dim("--- Dockerfile (preview) ---");
-    logger.log(contents);
+    logger.dim(contents);
     logger.dim("--- end preview ---");
     return path;
   }
@@ -402,17 +440,15 @@ async function runComposeImport(
     `Importing ${serviceNames.length} service${serviceNames.length === 1 ? "" : "s"} from ${basename(composeFilePath)}: ${serviceNames.join(", ")}.`,
   );
 
-  const name = input.nameOverride ?? (await promptAppName());
+  const name = await promptAppName(input);
 
-  const regions = await pickRegions(client);
+  const regions = await pickRegions(client, input);
 
-  let registry: ResolvedRegistry | null;
-  if (input.registryFlag) {
-    registry = { id: input.registryFlag };
-  } else {
-    logger.info("Pick a registry to use for all containers.");
-    registry = await promptRegistry(client);
-  }
+  const registry = await pickRegistry(
+    client,
+    input,
+    "Pick a registry to use for all containers.",
+  );
   if (!registry) throw new UserError("A registry is required.");
 
   const { config, warnings } = composeToConfig(compose, {
@@ -457,8 +493,25 @@ async function runComposeImport(
   return { config, registries };
 }
 
-async function promptAppName(suggested?: string): Promise<string> {
+/** The registry to push to: --registry, else the bunny.net registry (the prompt's default when nobody can answer it). */
+async function pickRegistry(
+  client: McClient,
+  input: WalkthroughInput,
+  message: string,
+): Promise<ResolvedRegistry | null> {
+  if (input.registryFlag) return { id: input.registryFlag };
+  if (!input.interactive) return { id: BUNNY_REGISTRY_ID };
+  logger.info(message);
+  return promptRegistry(client);
+}
+
+async function promptAppName(
+  input: WalkthroughInput,
+  suggested?: string,
+): Promise<string> {
+  if (input.nameOverride) return input.nameOverride;
   const initial = suggested?.trim() || basename(resolve(process.cwd()));
+  if (!input.interactive) return initial;
   const { value } = await prompts({
     type: "text",
     name: "value",
@@ -469,7 +522,10 @@ async function promptAppName(suggested?: string): Promise<string> {
   return value;
 }
 
-async function pickRegions(client: McClient): Promise<string[]> {
+async function pickRegions(
+  client: McClient,
+  input: WalkthroughInput,
+): Promise<string[]> {
   const spin = spinner("Fetching regions...");
   spin.start();
   const { data: regionsResult } = await client.GET("/regions");
@@ -482,6 +538,23 @@ async function pickRegions(client: McClient): Promise<string[]> {
 
   if (regionsWithCapacity.length === 0) {
     throw new UserError("No regions with capacity are available right now.");
+  }
+
+  const ids = regionsWithCapacity.map((r) => r.id);
+  if (input.regionFlag) {
+    if (!ids.includes(input.regionFlag)) {
+      throw new UserError(
+        `Region "${input.regionFlag}" is unknown or has no capacity.`,
+        `Pass --region with one of: ${ids.join(", ")}.`,
+      );
+    }
+    return [input.regionFlag];
+  }
+  if (!input.interactive) {
+    throw new UserError(
+      "A region is required.",
+      `Pass --region with one of: ${ids.join(", ")}.`,
+    );
   }
 
   // MVP scope: single-region deploys. Users can edit `bunny.jsonc` to
@@ -587,9 +660,12 @@ function discoverEnvKeysForDockerfile(dockerfilePath: string): string[] {
 async function pickEnvKeysFromDockerfile(
   dockerfilePath: string,
   containerName: string,
+  interactive: boolean,
 ): Promise<Record<string, string>> {
   const keys = discoverEnvKeysForDockerfile(dockerfilePath);
   if (keys.length === 0) return {};
+  // Every key is pre-selected, so that's the default answer.
+  if (!interactive) return Object.fromEntries(keys.map((key) => [key, key]));
 
   const { picked } = await prompts({
     type: "multiselect",
@@ -740,17 +816,15 @@ async function runMultiDockerfileImport(
     );
   }
 
-  const name = input.nameOverride ?? (await promptAppName());
+  const name = await promptAppName(input);
 
-  const regions = await pickRegions(client);
+  const regions = await pickRegions(client, input);
 
-  let registry: ResolvedRegistry | null;
-  if (input.registryFlag) {
-    registry = { id: input.registryFlag };
-  } else {
-    logger.info("Pick a registry to push all images to.");
-    registry = await promptRegistry(client);
-  }
+  const registry = await pickRegistry(
+    client,
+    input,
+    "Pick a registry to push all images to.",
+  );
   if (!registry) throw new UserError("A registry is required.");
 
   const containers: Record<string, ContainerConfig> = {};
@@ -785,7 +859,11 @@ async function runMultiDockerfileImport(
       ];
     }
 
-    const pickedEnv = await pickEnvKeysFromDockerfile(path, containerName);
+    const pickedEnv = await pickEnvKeysFromDockerfile(
+      path,
+      containerName,
+      input.interactive,
+    );
     if (Object.keys(pickedEnv).length > 0) {
       container.env = pickedEnv;
     }

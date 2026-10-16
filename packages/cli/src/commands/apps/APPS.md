@@ -114,7 +114,8 @@ For compose files that have just one service, the import overlaps with the Docke
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `<image>`      | Container image reference to deploy (e.g. `ghcr.io/me/api:v1.2`). Skips build.                                                                        |
 | `--name`       | App name. Used during the first-run walkthrough; skips the interactive prompt.                                                                        |
-| `--dockerfile` | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`.                                                            |
+| `--region`     | Region ID for a new app. Skips the region prompt; required without a terminal.                                                                        |
+| `--dockerfile` | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`, which is generated when there is none (see below).         |
 | `--context`    | Docker build context directory. Defaults to the directory of the Dockerfile.                                                                          |
 | `--tag`        | Override the auto-generated `<sha>-<timestamp>` image tag.                                                                                            |
 | `--registry`   | Registry ID to push to, or `bunny` for the bunny.net registry (`registry.bunny.net`, override with `BUNNYNET_REGISTRY_URL`). Overrides `bunny.jsonc`. |
@@ -149,6 +150,16 @@ bunny apps deploy --port 8000 --command "uvicorn app:app --host 0.0.0.0 --port 8
 
 # CI / agent flow: use a config file outside the repo
 bunny apps deploy --config /tmp/agent-task-abc.jsonc --output json
+```
+
+### Deploying from an agent
+
+Without a terminal (a coding agent, or `--output json`), the walkthrough never prompts. Every question with a default takes it: the bunny.net registry, the suggested app name, the suggested endpoints and the env keys found in `.env` / `.env.example`. The two questions with no default need flags: what to deploy (`--dockerfile` or an image) and `--region`. A missing one fails straight away with a hint naming the flag and, for the region, the IDs to choose from.
+
+`--dockerfile` with no `./Dockerfile` on disk generates one for the detected app, so a single command takes a project with no Docker setup to a running app:
+
+```bash
+bunny apps deploy --dockerfile --region de --output json
 ```
 
 ### Using `--config <path>` for CI and agent workflows
@@ -204,15 +215,16 @@ bunny apps init ghcr.io/me/api:v1
 bunny apps init --dockerfile --port 8080
 ```
 
-| Flag           | Description                                                                          |
-| -------------- | ------------------------------------------------------------------------------------ |
-| `<image>`      | Pre-built image reference. Skips the build-vs-image prompt.                          |
-| `--name`       | App name (skips the interactive name prompt).                                        |
-| `--dockerfile` | Build from a Dockerfile. Pass a path or use the bare flag for `./Dockerfile`.        |
-| `--registry`   | bunny.net registry ID to push to.                                                    |
-| `--port`       | Override the container port (affects the generated Dockerfile and the CDN endpoint). |
-| `--command`    | Override the container CMD (passed as a single string, split on whitespace).         |
-| `--config`     | Write the config to this path instead of `./bunny.jsonc`.                            |
+| Flag           | Description                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------------------- |
+| `<image>`      | Pre-built image reference. Skips the build-vs-image prompt.                                                 |
+| `--name`       | App name (skips the interactive name prompt).                                                               |
+| `--region`     | Region ID (skips the region prompt; required without a terminal).                                           |
+| `--dockerfile` | Build from a Dockerfile. Pass a path or use the bare flag for `./Dockerfile`, generated when there is none. |
+| `--registry`   | bunny.net registry ID to push to.                                                                           |
+| `--port`       | Override the container port (affects the generated Dockerfile and the CDN endpoint).                        |
+| `--command`    | Override the container CMD (passed as a single string, split on whitespace).                                |
+| `--config`     | Write the config to this path instead of `./bunny.jsonc`.                                                   |
 
 Most users can skip `init` entirely and run `bunny apps deploy` straight away. Both share the same walkthrough.
 

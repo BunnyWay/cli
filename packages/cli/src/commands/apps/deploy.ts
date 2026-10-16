@@ -15,7 +15,7 @@ import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, saveManifest } from "@/core/manifest.ts";
 import type { OutputFormat } from "@/core/types.ts";
-import { spinner } from "@/core/ui.ts";
+import { isInteractive, spinner } from "@/core/ui.ts";
 import {
   type BunnyAppConfig,
   type ContainerConfig,
@@ -164,6 +164,7 @@ const DEFAULT_DOCKERFILE = "Dockerfile";
 
 interface DeployArgs {
   image?: string;
+  region?: string;
   dockerfile?: string | boolean;
   context?: string;
   tag?: string;
@@ -182,7 +183,14 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
   describe: DESCRIPTION,
   examples: [
     ["$0 apps deploy ghcr.io/me/api:v1.2", "Deploy a pre-built image"],
-    ["$0 apps deploy --dockerfile", "Build ./Dockerfile and deploy"],
+    [
+      "$0 apps deploy --dockerfile",
+      "Build ./Dockerfile and deploy, generating it when there is none",
+    ],
+    [
+      "$0 apps deploy --dockerfile --region de --output json",
+      "First deploy without prompts (agents)",
+    ],
     [
       "$0 apps deploy --dockerfile apps/api/Dockerfile --context apps/api",
       "Build with explicit context",
@@ -226,6 +234,11 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         type: "string",
         describe:
           "App name (used during first-run walkthrough; skips the interactive prompt)",
+      })
+      .option("region", {
+        type: "string",
+        describe:
+          "Region ID for a new app (skips the interactive prompt; required without a terminal)",
       })
       .option("port", {
         type: "number",
@@ -304,6 +317,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         portOverride: args.port,
         commandOverride: args.command,
         nameOverride: args.name,
+        regionFlag: args.region,
+        interactive: isInteractive(output),
         configPath,
         dryRun,
       });
