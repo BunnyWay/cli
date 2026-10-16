@@ -122,7 +122,11 @@ function installCommand(project: Project, pm: PackageManager): string {
     case "bun":
       return locked ? "bun install --frozen-lockfile" : "bun install";
     case "pnpm":
-      return `${corepack}pnpm install${locked ? " --frozen-lockfile" : ""}`;
+      // pnpm 11+ fails an install while dependency build scripts are
+      // neither allowed nor denied (`allowBuilds` in pnpm-workspace.yaml).
+      // Leave unapproved ones unbuilt rather than fail: approving them would
+      // run arbitrary scripts, which stays the project's call.
+      return `${corepack}pnpm install${locked ? " --frozen-lockfile" : ""} --config.strict-dep-builds=false`;
     case "yarn": {
       const flag = project.entries.includes(".yarnrc.yml")
         ? " --immutable"

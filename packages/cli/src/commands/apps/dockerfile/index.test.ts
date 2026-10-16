@@ -131,6 +131,17 @@ describe("node", () => {
     );
   });
 
+  test("pnpm leaves unapproved dependency builds unbuilt instead of failing", () => {
+    expect(
+      render({
+        "package.json": { dependencies: { next: "15" } },
+        "pnpm-lock.yaml": "",
+      }),
+    ).toContain(
+      "RUN corepack enable && pnpm install --frozen-lockfile --config.strict-dep-builds=false\n",
+    );
+  });
+
   test("a lone script runs on bun", () => {
     expect(render({ "index.ts": "Bun.serve({})" })).toContain(
       'CMD ["bun", "index.ts"]',
