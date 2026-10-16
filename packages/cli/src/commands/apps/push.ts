@@ -7,7 +7,7 @@ import { logger } from "@/core/logger.ts";
 import { loadManifest } from "@/core/manifest.ts";
 import { spinner } from "@/core/ui.ts";
 import {
-  assertVolumeRegions,
+  assertVolumesNotSplit,
   configToPatchRequest,
   loadConfig,
   resolveAppId,
@@ -19,7 +19,7 @@ const DESCRIPTION = "Apply local bunny.jsonc config to remote app.";
 
 interface PushArgs {
   "dry-run"?: boolean;
-  "allow-regional-volumes"?: boolean;
+  "allow-split-volumes"?: boolean;
 }
 
 export const appsPushCommand = defineCommand<PushArgs>({
@@ -32,15 +32,15 @@ export const appsPushCommand = defineCommand<PushArgs>({
         type: "boolean",
         describe: "Show what would change without applying",
       })
-      .option("allow-regional-volumes", {
+      .option("allow-split-volumes", {
         type: "boolean",
         describe:
-          "Apply a volume in more than one region, each keeping its own separate data",
+          "Apply a volume in more than one region or instance, each keeping its own separate data",
       }),
 
   handler: async ({
     "dry-run": dryRun,
-    "allow-regional-volumes": allowRegionalVolumes,
+    "allow-split-volumes": allowSplitVolumes,
     profile,
     output,
     verbose,
@@ -48,7 +48,7 @@ export const appsPushCommand = defineCommand<PushArgs>({
   }) => {
     const appId = resolveAppId();
     const toml = loadConfig();
-    assertVolumeRegions(toml, allowRegionalVolumes);
+    assertVolumesNotSplit(toml, allowSplitVolumes);
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createMcClient(clientOptions(config, verbose));
 

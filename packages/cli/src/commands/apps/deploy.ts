@@ -17,7 +17,7 @@ import { loadManifest, saveManifest } from "@/core/manifest.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { isInteractive, spinner } from "@/core/ui.ts";
 import {
-  assertVolumeRegions,
+  assertVolumesNotSplit,
   type BunnyAppConfig,
   type ContainerConfig,
   configExists,
@@ -165,7 +165,7 @@ const DEFAULT_DOCKERFILE = "Dockerfile";
 
 interface DeployArgs {
   image?: string;
-  "allow-regional-volumes"?: boolean;
+  "allow-split-volumes"?: boolean;
   region?: string;
   dockerfile?: string | boolean;
   context?: string;
@@ -262,10 +262,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         describe:
           "Print the would-be bunny.jsonc and Dockerfile without writing anything or contacting the API to deploy",
       })
-      .option("allow-regional-volumes", {
+      .option("allow-split-volumes", {
         type: "boolean",
         describe:
-          "Deploy a volume to more than one region, each keeping its own separate data",
+          "Deploy a volume to more than one region or instance, each keeping its own separate data",
       })
       .option("no-push", {
         type: "boolean",
@@ -334,9 +334,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     } else {
       toml = loadConfig(configPath);
       // Before the Docker check and any build: an edited bunny.jsonc is
-      // the only way to reach more than one region (the walkthrough
-      // picks one).
-      assertVolumeRegions(toml, args["allow-regional-volumes"]);
+      // the only way to reach more than one region or instance (the
+      // walkthrough picks one of each).
+      assertVolumesNotSplit(toml, args["allow-split-volumes"]);
       // Existing config: bail before any registry prompts if a container
       // declares a `dockerfile` (we'll need Docker to build it).
       const hasAnyBuild = Object.values(toml.app.containers).some((c) =>

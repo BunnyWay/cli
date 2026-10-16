@@ -133,25 +133,34 @@ export function saveConfig(data: BunnyAppConfig, explicitPath?: string): void {
 }
 
 /**
- * Refuse a config that mounts a volume in an app allowed to run in more than
- * one region. Volumes are regional: each region gets its own empty volume and
- * nothing syncs between them, so the data silently splits.
- * `--allow-regional-volumes` opts in for apps that want that (a cache, say).
+ * Refuse a config that mounts a volume in an app that can run more than one
+ * copy. Volumes are never shared: every region, and every instance within a
+ * region, gets its own empty volume, so the data silently splits.
+ * `--allow-split-volumes` opts in for apps that want that (a cache, say).
  */
-export function assertVolumeRegions(
+export function assertVolumesNotSplit(
   config: BunnyAppConfig,
   allow?: boolean,
 ): void {
   if (allow) return;
-  const { allowed } = normalizeRegions(config.app.regions);
-  if (allowed.length < 2) return;
   const withVolume = Object.entries(config.app.containers).find(
     ([, container]) => container.volumes?.length,
   );
   if (!withVolume) return;
+
+  const { allowed } = normalizeRegions(config.app.regions);
+  const max = config.app.scaling?.max ?? 1;
+  const reasons = [
+    ...(allowed.length > 1
+      ? [`runs in ${allowed.length} regions (${allowed.join(", ")})`]
+      : []),
+    ...(max > 1 ? [`scales to ${max} instances`] : []),
+  ];
+  if (reasons.length === 0) return;
+
   throw new UserError(
-    `Container "${withVolume[0]}" mounts a volume, but the app runs in ${allowed.length} regions (${allowed.join(", ")}).`,
-    "Volumes don't sync between regions: each region gets its own empty volume. Keep one region in bunny.jsonc, or pass --allow-regional-volumes if each region should keep separate data.",
+    `Container "${withVolume[0]}" mounts a volume, but the app ${reasons.join(" and ")}.`,
+    "Volumes aren't shared: each region and each instance gets its own empty volume. Use one region and `scaling.max: 1` in bunny.jsonc, or pass --allow-split-volumes if each copy should keep separate data.",
   );
 }
 
