@@ -1,5 +1,11 @@
 # @bunny.net/stream-import
 
+## 0.1.1
+
+### Patch Changes
+
+- [#259](https://github.com/BunnyWay/cli/pull/259) [`93b3749`](https://github.com/BunnyWay/cli/commit/93b3749c0e71dfbdd9ab7f16d60f1ad68b358c7e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(stream): stop suggesting --clean-failed alone for videos the source no longer lists, and name the 10,000-video cap in `stream import list`
+
 ## 0.1.0
 
 ### Minor Changes
