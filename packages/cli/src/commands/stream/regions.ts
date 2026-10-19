@@ -1,7 +1,7 @@
 import {
-  DEFAULT_REPLICATION_REGIONS,
   MAIN_REGION,
   REGION_CODES,
+  SUGGESTED_REPLICATION_REGIONS,
 } from "@bunny.net/tools/stream";
 import { STORAGE_REGIONS } from "@/commands/storage/constants.ts";
 import { defineCommand } from "@/core/define-command.ts";
@@ -9,7 +9,7 @@ import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 
 /** Stream libraries store in the same regions as Storage, so the names come from its catalog. */
-function regionName(code: string): string {
+export function regionName(code: string): string {
   return STORAGE_REGIONS.find((region) => region.code === code)?.name ?? code;
 }
 
@@ -23,9 +23,7 @@ export const streamRegionsCommand = defineCommand({
       code,
       name: regionName(code),
       main: code === MAIN_REGION,
-      // The main region is part of every library, so it counts as a default too.
-      default:
-        code === MAIN_REGION || DEFAULT_REPLICATION_REGIONS.includes(code),
+      suggested: SUGGESTED_REPLICATION_REGIONS.includes(code),
     }));
 
     if (output === "json") {
@@ -35,18 +33,18 @@ export const streamRegionsCommand = defineCommand({
 
     logger.log(
       formatTable(
-        ["Code", "Name", "Role", "Default"],
+        ["Code", "Name", "Role", "Suggested"],
         regions.map((region) => [
           region.code,
           region.name,
           region.main ? "main" : "replication",
-          region.default ? "yes" : "no",
+          region.suggested ? "yes" : "no",
         ]),
         output,
       ),
     );
     logger.dim(
-      `${MAIN_REGION} is the fixed main region. Pick replicas with \`bunny stream libraries create --replication-regions\`, or add them later with \`libraries update --add-replication-regions\`.`,
+      `${MAIN_REGION} is the fixed main region. Pick replicas with \`bunny stream libraries create --replication-regions\`, or add them later with \`libraries update --add-replication-regions\`. Replicas can't be removed once added.`,
     );
   },
 });

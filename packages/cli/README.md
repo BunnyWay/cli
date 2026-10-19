@@ -1130,8 +1130,8 @@ There is deliberately no `videos create`: a video is added either by uploading a
 # Libraries
 bunny stream libraries list                          # ID, name, videos, storage, traffic, replication regions
 bunny stream libraries create my-library             # interactive: prompts for the name when omitted
-bunny stream libraries create my-library             # stored in DE (the fixed main region) and replicated to SG, LA, NY by default
-bunny stream libraries create my-library --replication-regions NY,SG   # DE + NY, SG instead; pass DE alone for no replication
+bunny stream libraries create my-library             # stored in DE (the fixed main region); in a terminal, asks whether to replicate (SG, LA, NY preselected)
+bunny stream libraries create my-library --replication-regions NY,SG   # DE + NY, SG without asking; pass DE alone for no replication
 bunny stream libraries create my-library --encoding-tier premium --codecs x264,vp9   # premium encoding with extra codecs
 bunny stream libraries create my-library --link --save-env   # link this directory and write BUNNY_STREAM_LIBRARY_ID and BUNNY_STREAM_API_KEY to .env
 bunny stream libraries show my-library               # details; API keys are never printed here, in any output format
@@ -1144,7 +1144,7 @@ bunny stream libraries credentials my-library        # library ID + API key, mas
 bunny stream libraries credentials my-library --show-secret --read-only   # reveal the read-only key
 bunny stream libraries credentials my-library --rotate   # reset the API key (confirms first), then show the new one
 bunny stream libraries credentials my-library --save-env   # write BUNNY_STREAM_LIBRARY_ID and BUNNY_STREAM_API_KEY to .env
-bunny stream regions                               # region codes: DE is the fixed main region, SG, LA, NY the default replicas
+bunny stream regions                               # region codes: DE is the fixed main region, SG, LA, NY the suggested replicas
 
 # Player and security settings (per library)
 bunny stream libraries player show my-library
@@ -1225,7 +1225,7 @@ Library flags (`bunny stream libraries ...`):
 | Flag                                                                                                      | Commands                                             | Description                                                                                      |
 | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `--name`                                                                                                  | `update`                                             | New library name (`create` takes the name as its positional)                                     |
-| `--replication-regions`                                                                                   | `create`                                             | Regions besides DE, the fixed main region; default `SG,LA,NY`; `DE` alone means none             |
+| `--replication-regions`                                                                                   | `create`                                             | Replicas besides DE; omitted asks in a terminal, none otherwise; can't be removed later          |
 | `--add-replication-regions`                                                                               | `update`                                             | Add regions later; add-only, since regions can't be removed                                      |
 | `--mp4-fallback`, `--early-play`, `--keep-original`, `--multi-audio` (and `--no-` forms)                  | `create`, `update`                                   | Encoding settings; `--early-play` needs originals and exposes them                               |
 | `--content-tagging` / `--no-content-tagging`                                                              | `update`                                             | Machine-learning content tagging (not accepted at create time)                                   |

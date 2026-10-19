@@ -28,8 +28,8 @@ export const REGION_CODES = [
   "JH",
 ] as const;
 
-/** Replication regions a new library gets when none are named (DE is added as the main region). */
-export const DEFAULT_REPLICATION_REGIONS: readonly string[] = [
+/** Replication regions preselected when `stream libraries create` asks which to add. */
+export const SUGGESTED_REPLICATION_REGIONS: readonly string[] = [
   "SG",
   "LA",
   "NY",
