@@ -47,7 +47,7 @@ bunny stream videos update 1a2b3c4d-... --collection 8a7b6c5d-...
 
 ```bash
 bunny stream libraries list                          # ID, name, videos, storage, traffic, replication regions
-bunny stream libraries create my-library             # stored in DE, replicated to SG, LA, NY by default
+bunny stream libraries create my-library             # stored in DE; asks about replicas in a terminal, none otherwise
 bunny stream libraries create my-library --replication-regions NY,SG   # DE alone means no replication
 bunny stream libraries create my-library --encoding-tier premium --codecs x264,vp9
 bunny stream libraries show my-library               # API keys are never printed here
@@ -60,7 +60,7 @@ bunny stream libraries credentials my-library --show-secret --read-only
 bunny stream libraries credentials my-library --save-env   # write BUNNY_STREAM_LIBRARY_ID and BUNNY_STREAM_API_KEY to .env
 bunny stream libraries credentials my-library --rotate   # reset the key (confirms first)
 bunny stream libraries delete my-library             # deletes every video in it; confirms with the count
-bunny stream regions                                 # DE is the fixed main region; SG, LA, NY the default replicas
+bunny stream regions                                 # DE is the fixed main region; SG, LA, NY the suggested replicas
 bunny stream link my-library                         # same as `libraries link`
 bunny stream unlink
 ```

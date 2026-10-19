@@ -1,21 +1,23 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import {
   allRegions,
-  DEFAULT_REPLICATION_REGIONS,
+  MAIN_REGION,
   parseReplicationRegions,
   REGION_CODES,
+  SUGGESTED_REPLICATION_REGIONS,
 } from "@bunny.net/tools/stream";
 import {
   toSafeVideoLibrary,
   type VideoLibraryCreateModel,
   type VideoLibraryModel,
 } from "@/commands/stream/api.ts";
+import { regionName } from "@/commands/stream/regions.ts";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { isInteractive, prompts, spinner } from "@/core/ui.ts";
+import { confirm, isInteractive, prompts, spinner } from "@/core/ui.ts";
 import {
   ENV_STREAM_API_KEY,
   ENV_STREAM_LIBRARY_ID,
@@ -49,11 +51,11 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     ["$0 stream libraries create", "Interactive: prompts for the name"],
     [
       "$0 stream libraries create my-library --replication-regions NY,SG",
-      "Replicate to New York and Singapore only (plus DE, the main region)",
+      "Replicate to New York and Singapore (plus DE, the main region)",
     ],
     [
       "$0 stream libraries create internal --replication-regions DE",
-      "Keep everything in DE, with no replication",
+      "Keep everything in DE without asking about replication",
     ],
     [
       "$0 stream libraries create my-library --encoding-tier premium --codecs x264,vp9",
@@ -83,7 +85,7 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
         .option("replication-regions", {
           type: "string",
           array: true,
-          describe: `Replication regions besides DE, the fixed main region (comma-separated or repeated; default ${DEFAULT_REPLICATION_REGIONS.join(",")}; codes ${REGION_CODES.join(", ")}). Pass DE alone for no replication`,
+          describe: `Replication regions besides DE, the fixed main region (comma-separated or repeated; codes ${REGION_CODES.join(", ")}). Replicas can't be removed later. Omitted: asks in a terminal, none otherwise. Pass DE alone for no replication`,
         })
         .option("player-version", {
           type: "number",
@@ -128,12 +130,34 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     }
     const name = nameInput;
 
-    // Accept both `--replication-regions NY,SG` and repeated flags. Omitted means
-    // the default set; DE is the fixed main region, so it is never sent.
-    const regions =
-      replicationRegions === undefined
-        ? [...DEFAULT_REPLICATION_REGIONS]
-        : parseReplicationRegions(replicationRegions);
+    // DE is the fixed main region, so it is never sent as a replica.
+    let regions: string[] = [];
+    if (replicationRegions !== undefined) {
+      regions = parseReplicationRegions(replicationRegions);
+    } else if (
+      isInteractive(output) &&
+      (await confirm(
+        "Replicate this library to other regions? Replicas can't be removed once added.",
+        { optional: true },
+      ))
+    ) {
+      const { picked } = await prompts({
+        type: "multiselect",
+        name: "picked",
+        message:
+          "Replication regions (each adds storage cost; space to toggle):",
+        choices: REGION_CODES.filter((code) => code !== MAIN_REGION).map(
+          (code) => ({
+            title: `${regionName(code)} (${code})`,
+            value: code,
+            selected: SUGGESTED_REPLICATION_REGIONS.includes(code),
+          }),
+        ),
+      });
+      // Cancelling (Ctrl+C) yields undefined; an empty array is a deliberate "no replication".
+      if (picked === undefined) throw new UserError("Creation cancelled.");
+      regions = picked;
+    }
     const warnings = librarySettingsWarnings(args);
 
     // The encoding/transcribing flags are shared with `library update`; Name is
@@ -186,7 +210,9 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
       return;
     }
 
-    const where = `replicated to ${allRegions(regions).join(", ")}`;
+    const where = regions.length
+      ? `replicated to ${allRegions(regions).join(", ")}`
+      : `stored in ${MAIN_REGION} only`;
     logger.success(
       created?.Id
         ? `Created video library ${name} (ID: ${created.Id}), ${where}.`
