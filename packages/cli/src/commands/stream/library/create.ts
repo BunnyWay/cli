@@ -17,7 +17,7 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { confirm, isInteractive, prompts, spinner } from "@/core/ui.ts";
+import { confirmOrCancel, isInteractive, prompts, spinner } from "@/core/ui.ts";
 import {
   ENV_STREAM_API_KEY,
   ENV_STREAM_LIBRARY_ID,
@@ -33,6 +33,36 @@ import {
   withLibrarySettingsOptions,
 } from "./flags.ts";
 import { checkTranscribingLanguages } from "./language-check.ts";
+
+async function resolveReplicationRegions(
+  flag: string[] | undefined,
+  output: string | undefined,
+): Promise<string[]> {
+  if (flag !== undefined) return parseReplicationRegions(flag);
+  if (!isInteractive(output)) return [];
+
+  const answer = await confirmOrCancel(
+    "Replicate this library to other regions? Replicas can't be removed once added.",
+  );
+  if (answer === "cancel") throw new UserError("Creation cancelled.");
+  if (answer === "no") return [];
+
+  const { picked } = await prompts({
+    type: "multiselect",
+    name: "picked",
+    message: "Replication regions (each adds storage cost; space to toggle):",
+    choices: REGION_CODES.filter((code) => code !== MAIN_REGION).map(
+      (code) => ({
+        title: `${regionName(code)} (${code})`,
+        value: code,
+        selected: SUGGESTED_REPLICATION_REGIONS.includes(code),
+      }),
+    ),
+  });
+
+  if (picked === undefined) throw new UserError("Creation cancelled.");
+  return picked;
+}
 
 interface LibraryCreateArgs extends LibrarySettingsArgs {
   replicationRegions?: string[];
@@ -130,34 +160,7 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     }
     const name = nameInput;
 
-    // DE is the fixed main region, so it is never sent as a replica.
-    let regions: string[] = [];
-    if (replicationRegions !== undefined) {
-      regions = parseReplicationRegions(replicationRegions);
-    } else if (
-      isInteractive(output) &&
-      (await confirm(
-        "Replicate this library to other regions? Replicas can't be removed once added.",
-        { optional: true },
-      ))
-    ) {
-      const { picked } = await prompts({
-        type: "multiselect",
-        name: "picked",
-        message:
-          "Replication regions (each adds storage cost; space to toggle):",
-        choices: REGION_CODES.filter((code) => code !== MAIN_REGION).map(
-          (code) => ({
-            title: `${regionName(code)} (${code})`,
-            value: code,
-            selected: SUGGESTED_REPLICATION_REGIONS.includes(code),
-          }),
-        ),
-      });
-      // Cancelling (Ctrl+C) yields undefined; an empty array is a deliberate "no replication".
-      if (picked === undefined) throw new UserError("Creation cancelled.");
-      regions = picked;
-    }
+    const regions = await resolveReplicationRegions(replicationRegions, output);
     const warnings = librarySettingsWarnings(args);
 
     // The encoding/transcribing flags are shared with `library update`; Name is
