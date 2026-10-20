@@ -10,6 +10,7 @@ import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { errorMessage, UserError } from "@/core/errors.ts";
+import { examplesUrl } from "@/core/examples.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import { normalizeHostname } from "@/core/hostnames/index.ts";
 import { logger } from "@/core/logger.ts";
@@ -181,6 +182,7 @@ async function importExistingZone(opts: {
   logger.log();
   logger.dim("  Go live on the existing hostnames:  bunny sites deploy <dir>");
   logger.dim("  Deploy from GitHub Actions:         bunny sites ci init");
+  logger.dim(`  Examples:                           ${examplesUrl("sites")}`);
 }
 
 // Create a static site: a storage zone (files) and a pull zone (CDN) whose edge rules serve the published deploy dir; state lives at `_bunny/site.json` in the storage zone.
@@ -421,5 +423,6 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
 
     logger.log();
     logger.dim("  Deploy your site:  bunny sites deploy <dir>");
+    logger.dim(`  Examples:          ${examplesUrl("sites")}`);
   },
 });

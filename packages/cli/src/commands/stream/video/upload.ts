@@ -101,7 +101,7 @@ async function removeOrphanVideo(
     logger.warn(
       `Upload failed, and the state of video ${videoId} could not be read (${errorMessage(err)}); leaving it in place.`,
     );
-    logger.dim("Check it with `bunny stream video list`.");
+    logger.dim("Check it with `bunny stream videos list`.");
     return;
   }
 
@@ -109,7 +109,7 @@ async function removeOrphanVideo(
     logger.warn(
       `Upload reported a failure, but video ${videoId} is ${videoStatusLabel(status)}, so the upload may have succeeded; leaving it in place.`,
     );
-    logger.dim("Check it with `bunny stream video list`.");
+    logger.dim("Check it with `bunny stream videos list`.");
     return;
   }
 
@@ -127,25 +127,25 @@ export const streamVideoUploadCommand = defineCommand<UploadArgs>({
   command: "upload <file>",
   describe: "Upload a local video file to a Stream video library.",
   examples: [
-    ["$0 stream video upload ./video.mp4", "Upload to the linked library"],
+    ["$0 stream videos upload ./video.mp4", "Upload to the linked library"],
     [
-      "$0 stream video upload ./video.mp4 --lib 12345",
+      "$0 stream videos upload ./video.mp4 --lib 12345",
       "Upload to a specific library",
     ],
     [
-      '$0 stream video upload ./video.mp4 --title "Launch demo"',
+      '$0 stream videos upload ./video.mp4 --title "Launch demo"',
       "Set the video title",
     ],
     [
-      "$0 stream video upload ./video.mp4 --collection 8a7b6c5d-...",
+      "$0 stream videos upload ./video.mp4 --collection 8a7b6c5d-...",
       "Upload into a collection",
     ],
     [
-      "$0 stream video upload ./video.mp4 --thumbnail-time 5000",
+      "$0 stream videos upload ./video.mp4 --thumbnail-time 5000",
       "Grab the thumbnail from 5s in",
     ],
     [
-      "$0 stream video fetch https://example.com/video.mp4",
+      "$0 stream videos fetch https://example.com/video.mp4",
       "For a remote video, let bunny.net fetch it instead",
     ],
   ],
@@ -169,7 +169,7 @@ export const streamVideoUploadCommand = defineCommand<UploadArgs>({
       .option("collection", {
         type: "string",
         describe:
-          "Collection ID to put the video in (see `bunny stream collection list`)",
+          "Collection ID to put the video in (see `bunny stream collections list`)",
       })
       .option("thumbnail-time", {
         type: "number",

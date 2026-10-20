@@ -145,6 +145,6 @@ export function autoTranscriptionPending(
   );
 }
 
-/** The double-billing warning shared by `transcribe` and `encode reencode`. */
+/** The double-billing warning shared by `videos transcribe` and `videos encode`. */
 export const DOUBLE_BILLING_NOTE =
-  "Don't also run `bunny stream transcribe` on this video while that's pending, or the transcription is billed twice.";
+  "Don't also run `bunny stream videos transcribe` on this video while that's pending, or the transcription is billed twice.";

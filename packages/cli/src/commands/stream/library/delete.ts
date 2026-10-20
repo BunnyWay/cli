@@ -21,9 +21,9 @@ export const streamLibraryDeleteCommand = defineCommand<LibraryDeleteArgs>({
   aliases: ["rm", "remove"],
   describe: "Delete a Stream video library and all of its videos.",
   examples: [
-    ["$0 stream library delete my-library", "Delete a video library"],
-    ["$0 stream library delete my-library --force", "Skip confirmation"],
-    ["$0 stream library delete", "Pick a library interactively"],
+    ["$0 stream libraries delete my-library", "Delete a video library"],
+    ["$0 stream libraries delete my-library --force", "Skip confirmation"],
+    ["$0 stream libraries delete", "Pick a library interactively"],
   ],
 
   builder: (yargs) =>

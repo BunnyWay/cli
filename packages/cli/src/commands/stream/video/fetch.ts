@@ -45,7 +45,7 @@ export function validateFetchUrl(url: string): string {
   if (!/^https?:\/\/\S/i.test(trimmed)) {
     throw new UserError(
       `Not an http(s) URL: ${url}`,
-      "Pass a URL bunny.net can download, or use `bunny stream video upload <file>` for a local file.",
+      "Pass a URL bunny.net can download, or use `bunny stream videos upload <file>` for a local file.",
     );
   }
   return trimmed;
@@ -56,19 +56,19 @@ export const streamVideoFetchCommand = defineCommand<FetchArgs>({
   describe: "Have bunny.net fetch a video from a URL, server side.",
   examples: [
     [
-      "$0 stream video fetch https://example.com/video.mp4",
+      "$0 stream videos fetch https://example.com/video.mp4",
       "Fetch into the linked library",
     ],
     [
-      "$0 stream video fetch https://example.com/video.mp4 --lib 12345",
+      "$0 stream videos fetch https://example.com/video.mp4 --lib 12345",
       "Fetch into a specific library",
     ],
     [
-      '$0 stream video fetch https://example.com/video.mp4 --header "Authorization: Bearer abc"',
+      '$0 stream videos fetch https://example.com/video.mp4 --header "Authorization: Bearer abc"',
       "Send a header with the fetch",
     ],
     [
-      '$0 stream video fetch https://example.com/video.mp4 --title "Launch demo"',
+      '$0 stream videos fetch https://example.com/video.mp4 --title "Launch demo"',
       "Set the video title",
     ],
   ],
@@ -92,7 +92,7 @@ export const streamVideoFetchCommand = defineCommand<FetchArgs>({
       .option("collection", {
         type: "string",
         describe:
-          "Collection ID to put the video in (see `bunny stream collection list`)",
+          "Collection ID to put the video in (see `bunny stream collections list`)",
       })
       .option("thumbnail-time", {
         type: "number",
@@ -164,7 +164,7 @@ export const streamVideoFetchCommand = defineCommand<FetchArgs>({
 
     logger.success(`Queued fetch of ${url} into ${library.Name}.`);
     logger.dim(
-      "The video appears in `bunny stream video list` once bunny.net has fetched and encoded it.",
+      "The video appears in `bunny stream videos list` once bunny.net has fetched and encoded it.",
     );
   },
 });

@@ -197,6 +197,9 @@ export function librarySettingsFromFlags(
   return settings;
 }
 
+export const PREMIUM_BILLING_NOTE =
+  "Premium encoding is billed per output codec per minute of encoded video.";
+
 /**
  * One-line warnings for encoding flags with side effects, mirroring the
  * dashboard's notes. Printed by `library create` and `library update`.
@@ -225,8 +228,14 @@ export function librarySettingsWarnings(
   }
   if (args.keepOriginal === false) {
     warnings.push(
-      "Without original files, Early-Play and `bunny stream encode reencode` stop working for new uploads.",
+      "Without original files, Early-Play and `bunny stream videos encode` stop working for new uploads.",
     );
+  }
+  if (
+    args.encodingTier !== undefined &&
+    encodingTierValue(args.encodingTier) === 1
+  ) {
+    warnings.push(PREMIUM_BILLING_NOTE);
   }
   return warnings;
 }

@@ -51,7 +51,7 @@ export async function resolveImportLibrary(
   if (!isInteractive(opts.output)) {
     throw new UserError(
       "A library is required.",
-      "Pass --library <name|id>, or link one with `bunny stream library link`.",
+      "Pass --library <name|id>, or link one with `bunny stream libraries link`.",
     );
   }
 
@@ -61,7 +61,7 @@ export async function resolveImportLibrary(
   if (libraries.length === 0) {
     throw new UserError(
       "No video libraries found.",
-      'Create one with "bunny stream library create <name>".',
+      'Create one with "bunny stream libraries create <name>".',
     );
   }
 

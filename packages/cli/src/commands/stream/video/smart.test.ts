@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
-import type { UserError } from "@/core/errors.ts";
-import { smartGenerateBody } from "./smart.ts";
 import {
   captionlessError,
   hasCaptions,
   offerTranscription,
   smartTranscriptionEstimate,
   transcribeSettingsForSmart,
-} from "./smart-transcribe.ts";
-import type { VideoModel } from "./videos-api.ts";
+} from "@/commands/stream/smart-transcribe.ts";
+import type { VideoModel } from "@/commands/stream/videos-api.ts";
+import type { UserError } from "@/core/errors.ts";
+import { smartGenerateBody } from "./smart.ts";
 
 const VIDEO = {
   videoLibraryId: 4321,
