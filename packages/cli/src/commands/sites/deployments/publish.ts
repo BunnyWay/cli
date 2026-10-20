@@ -2,6 +2,7 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import {
   promoteDeploy,
   rereadRemoteState,
+  warnAfterPromote,
   writeRemoteState,
 } from "@/commands/sites/api.ts";
 import { findDeploy, markCurrent } from "@/commands/sites/constants.ts";
@@ -132,7 +133,7 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       return;
     }
 
-    await withSpinner("Publishing...", async () => {
+    const promoted = await withSpinner("Publishing...", async () => {
       // Revalidate on fresh state right before promoting: the confirmation window is long enough for a concurrent replace to have dropped this deploy's record and started rewriting its files.
       const { state: latest, etag: latestEtag } = await rereadRemoteState(
         connection,
@@ -144,17 +145,28 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
           "Run `bunny sites deployments list` and retry.",
         );
       }
-      await promoteDeploy({ coreClient, state: latest, deployId: targetId });
+      const result = await promoteDeploy({
+        coreClient,
+        state: latest,
+        deployId: targetId,
+      });
       markCurrent(latest, targetId);
       await writeRemoteState(connection, latest, latestEtag, {
         promotedTo: targetId,
       });
+      return result;
     });
+    warnAfterPromote(promoted, targetId);
 
     if (output === "json") {
       logger.log(
         JSON.stringify(
-          { site: state.name, id: targetId, published: true },
+          {
+            site: state.name,
+            id: targetId,
+            published: true,
+            live: promoted.confirmed,
+          },
           null,
           2,
         ),
@@ -162,7 +174,11 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       return;
     }
 
-    logger.success(`Deploy ${targetId} is now live.`);
+    logger.success(
+      promoted.confirmed
+        ? `Deploy ${targetId} is now live.`
+        : `Published deploy ${targetId}.`,
+    );
     if (state.domain) logger.info(`Production: https://${state.domain}`);
 
     await offerLink();

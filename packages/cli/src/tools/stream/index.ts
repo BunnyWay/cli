@@ -538,3 +538,29 @@ export const streamSecurityTokenKey = defineTool({
     return { library, pullZoneId: lib.PullZoneId, key: zone.ZoneSecurityKey };
   },
 });
+
+export const LibraryHostnameSchema = z.object({
+  library: z.number(),
+  hostname: z.string().nullable(),
+});
+export type LibraryHostname = z.infer<typeof LibraryHostnameSchema>;
+
+export const streamLibrariesHostname = defineTool({
+  name: "stream.libraries.hostname",
+  title: "Get a video library's CDN hostname",
+  description:
+    "Get the system `b-cdn.net` hostname of a video library's linked Pull Zone, the host its videos are served from; null when the library has no Pull Zone.",
+  schema: z.strictObject({ library: libraryId }),
+  kind: "read",
+  resultSchema: LibraryHostnameSchema,
+  run: async (ctx, { library }): Promise<LibraryHostname> => {
+    const lib = await fetchLibraryModel(ctx.clients.core, library, ctx.signal);
+    if (!lib.PullZoneId) return { library, hostname: null };
+    const { data } = await ctx.clients.core.GET("/pullzone/{id}", {
+      params: { path: { id: lib.PullZoneId } },
+      signal: ctx.signal,
+    });
+    const hostname = data?.Hostnames?.find((h) => h.IsSystemHostname)?.Value;
+    return { library, hostname: hostname ?? null };
+  },
+});

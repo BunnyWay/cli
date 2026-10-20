@@ -11,6 +11,7 @@ import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
 import { streamLibrariesRotateKey } from "@/tools/stream/index.ts";
 import {
   ENV_STREAM_API_KEY,
+  ENV_STREAM_CDN_HOSTNAME,
   ENV_STREAM_LIBRARY_ID,
   offerSaveEnv,
 } from "./create-next-steps.ts";
@@ -85,7 +86,7 @@ export const streamLibraryCredentialsCommand = defineCommand<CredentialsArgs>({
       })
       .option("save-env", {
         type: "boolean",
-        describe: `Save ${ENV_STREAM_LIBRARY_ID} and ${ENV_STREAM_API_KEY} to .env (skips prompt). Use --no-save-env to skip without prompting.`,
+        describe: `Save ${ENV_STREAM_LIBRARY_ID}, ${ENV_STREAM_API_KEY} and ${ENV_STREAM_CDN_HOSTNAME} to .env (skips prompt). Use --no-save-env to skip without prompting.`,
       }),
 
   handler: async ({
@@ -154,8 +155,13 @@ export const streamLibraryCredentialsCommand = defineCommand<CredentialsArgs>({
 
     if (output === "json") {
       // No prompt here: only --save-env saves.
-      const savedToEnv = await offerSaveEnv(withKey, saveEnv, output);
-      // Mask by default like the table; --show-secret opts into the raw key.
+      const savedToEnv = await offerSaveEnv(
+        withKey,
+        saveEnv,
+        output,
+        toolContext(config, { verbose }),
+      );
+
       logger.log(
         JSON.stringify(
           {
@@ -188,6 +194,11 @@ export const streamLibraryCredentialsCommand = defineCommand<CredentialsArgs>({
     } else {
       logger.dim("Key masked. Pass --show-secret to reveal it.");
     }
-    await offerSaveEnv(withKey, saveEnv, output);
+    await offerSaveEnv(
+      withKey,
+      saveEnv,
+      output,
+      toolContext(config, { verbose }),
+    );
   },
 });

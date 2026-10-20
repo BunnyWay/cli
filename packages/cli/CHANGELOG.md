@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.20.1
+
+### Patch Changes
+
+- [#256](https://github.com/BunnyWay/cli/pull/256) [`2ec0edf`](https://github.com/BunnyWay/cli/commit/2ec0edf63bbb016599797cfe69f0675b17d53bcc) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Sites publishes keep paths excluded from the serve rule, warn about Override Origin URL rules the site still shadows, and warn when the edge never confirms the new deploy
+
 ## 0.20.0
 
 ### Minor Changes

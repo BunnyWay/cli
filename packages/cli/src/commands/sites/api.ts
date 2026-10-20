@@ -380,12 +380,14 @@ async function fetchMiddlewareScriptId(
   return id == null || id === NO_MIDDLEWARE_SCRIPT ? null : id;
 }
 
-// The rules that serve a site, rewrite last so a failed upsert never switches routing early; bodies are always rebuilt in full from these so a hand-edited rule heals on the next upsert.
+const DEPLOYS_PATTERN = `*/${DEPLOYS_DIR}/*`;
+
+// The rules that serve a site, rewrite last so a failed upsert never switches routing early; bodies are rebuilt in full so a hand-edited rule heals, except the rewrite rule's extra exclusions.
 function siteRules(
   storageZone: { Id: number; Name: string },
   deployId: string,
+  exclusions: string[] = [],
 ): Array<EdgeRule & { Description: string }> {
-  const deploysPattern = `*/${DEPLOYS_DIR}/*`;
   return [
     {
       Description: GATE_RULE_DESC,
@@ -395,7 +397,7 @@ function siteRules(
       Triggers: [
         {
           Type: EdgeRuleTriggerType.Url,
-          PatternMatches: [deploysPattern],
+          PatternMatches: [DEPLOYS_PATTERN],
           PatternMatchingType: EdgeRuleMatch.Any,
         },
       ],
@@ -445,12 +447,59 @@ function siteRules(
       Triggers: [
         {
           Type: EdgeRuleTriggerType.Url,
-          PatternMatches: [deploysPattern],
+          PatternMatches: [DEPLOYS_PATTERN, ...exclusions],
           PatternMatchingType: EdgeRuleMatch.None,
         },
       ],
     },
   ];
+}
+
+// Paths a user excluded from the rewrite rule (e.g. `*/api/*` routed to another origin); storage-origin rules win over origin-URL rules whatever the order, so this is the only way to route around the site.
+function rewriteExclusions(rules: EdgeRule[]): string[] {
+  const trigger = rules
+    .find((r) => r.Description === REWRITE_RULE_DESC)
+    ?.Triggers?.find(
+      (t) =>
+        t.Type === EdgeRuleTriggerType.Url &&
+        t.PatternMatchingType === EdgeRuleMatch.None,
+    );
+  return (trigger?.PatternMatches ?? []).filter((p) => p !== DEPLOYS_PATTERN);
+}
+
+/** An Override Origin URL rule whose URL patterns the serve rule still matches, so the site answers instead. */
+export interface ShadowedRule {
+  name: string;
+  patterns: string[];
+}
+
+function shadowedOriginRules(
+  rules: EdgeRule[],
+  exclusions: string[],
+): ShadowedRule[] {
+  const shadowed: ShadowedRule[] = [];
+  for (const rule of rules) {
+    if (rule.Enabled === false) continue;
+    const routesOrigin =
+      rule.ActionType === EdgeRuleAction.OriginUrl ||
+      rule.ExtraActions?.some((a) => a.ActionType === EdgeRuleAction.OriginUrl);
+    if (!routesOrigin) continue;
+    const patterns = (rule.Triggers ?? [])
+      .filter(
+        (t) =>
+          t.Type === EdgeRuleTriggerType.Url &&
+          t.PatternMatchingType !== EdgeRuleMatch.None,
+      )
+      .flatMap((t) => t.PatternMatches ?? [])
+      .filter((p) => !exclusions.includes(p));
+    if (patterns.length > 0) {
+      shadowed.push({
+        name: rule.Description || rule.Guid || "unnamed",
+        patterns,
+      });
+    }
+  }
+  return shadowed;
 }
 
 // Converge the pull zone's rules on `deployId`; create and promote both funnel through here, so a missing or stale rule heals on any run.
@@ -459,19 +508,22 @@ async function ensureSiteRules(opts: {
   pullZoneId: number;
   storageZone: StorageZoneModel;
   deployId: string;
-}): Promise<void> {
+}): Promise<ShadowedRule[]> {
   const { coreClient, pullZoneId, storageZone, deployId } = opts;
   const { Id: storageZoneId, Name: storageZoneName } = storageZone;
   if (storageZoneId == null || !storageZoneName) {
     throw new UserError("The site's storage zone is missing its ID or name.");
   }
   const existing = await fetchEdgeRules(coreClient, pullZoneId);
+  const exclusions = rewriteExclusions(existing);
   for (const rule of siteRules(
     { Id: storageZoneId, Name: storageZoneName },
     deployId,
+    exclusions,
   )) {
     await upsertEdgeRule(coreClient, pullZoneId, rule, existing);
   }
+  return shadowedOriginRules(existing, exclusions);
 }
 
 interface CreateSiteOptions {
@@ -833,17 +885,21 @@ export const promoteVerification = {
 async function waitForEdgePropagation(
   host: string,
   deployId: string,
-): Promise<void> {
+): Promise<boolean> {
   const start = Date.now();
   const deadline = start + PROPAGATION_DEADLINE_MS;
   let attempt = 0;
+  let confirmed = false;
   while (Date.now() < deadline) {
     try {
-      // A unique query per attempt keeps each probe out of the CDN cache so a stale entry can't mask a propagated rule.
+      // A unique path per attempt keeps each probe out of the CDN cache (the zone ignores query strings) so a stale entry can't mask a propagated rule.
       const { deploy } = await promoteVerification.probe(
-        `https://${host}/?__bunny_promote=${deployId}-${attempt++}`,
+        `https://${host}/__bunny_promote/${deployId}-${attempt++}`,
       );
-      if (deploy === deployId) break;
+      if (deploy === deployId) {
+        confirmed = true;
+        break;
+      }
     } catch {
       // Edge briefly unreachable (DNS/warmup); keep trying until the deadline.
     }
@@ -854,6 +910,7 @@ async function waitForEdgePropagation(
   if (elapsed < SETTLE_FLOOR_MS) {
     await promoteVerification.wait(SETTLE_FLOOR_MS - elapsed);
   }
+  return confirmed;
 }
 
 async function ensureNotFoundSettings(
@@ -874,12 +931,32 @@ async function ensureNotFoundSettings(
   });
 }
 
-// Point production at a deploy: retarget the rewrite rule and purge. The rule propagates async, so purge, wait for the edge to serve it, then purge again so nothing stale survives (the header can confirm on a cached response, which is why the second purge is load-bearing).
+export interface PromoteResult {
+  confirmed: boolean;
+  shadowed: ShadowedRule[];
+}
+
+export function warnAfterPromote(
+  result: PromoteResult,
+  deployId: string,
+): void {
+  for (const { name, patterns } of result.shadowed) {
+    logger.warn(
+      `The edge rule "${name}" routes ${patterns.join(", ")} to another origin, but the site's serve rule still matches it, so the site answers instead. Exclude it from the "${REWRITE_RULE_DESC}" rule.`,
+    );
+  }
+  if (result.confirmed) return;
+  logger.warn(
+    `Couldn't confirm the edge is serving ${deployId}. Check the ${DEPLOY_HEADER} header on the live site; another storage-origin edge rule on the pull zone can keep a different deploy live.`,
+  );
+}
+
+// Point production at a deploy: retarget the rewrite rule and purge; resolves to whether the edge confirmed it and which origin rules the site shadows. The rule propagates async, so purge, wait for the edge to serve it, then purge again so nothing stale survives (the header can confirm on a cached response, which is why the second purge is load-bearing).
 export async function promoteDeploy(opts: {
   coreClient: CoreClient;
   state: RemoteSiteState;
   deployId: string;
-}): Promise<void> {
+}): Promise<PromoteResult> {
   const { coreClient, state, deployId } = opts;
   const purge = () =>
     coreClient.POST("/pullzone/{id}/purgeCache", {
@@ -901,7 +978,7 @@ export async function promoteDeploy(opts: {
   if (!state.current) {
     await applySiteCacheSettings(coreClient, state.pullZoneId);
   }
-  await ensureSiteRules({
+  const shadowed = await ensureSiteRules({
     coreClient,
     pullZoneId: state.pullZoneId,
     storageZone,
@@ -909,8 +986,9 @@ export async function promoteDeploy(opts: {
   });
   await ensureNotFoundSettings(coreClient, storageZone, state, deployId);
   await purge();
-  await waitForEdgePropagation(host, deployId);
+  const confirmed = await waitForEdgePropagation(host, deployId);
   await purge();
+  return { confirmed, shadowed };
 }
 
 // Refuse to replace version-1 state that changed since it was read. `writeRemoteState`'s own conflict merge can't cover this: it reconciles against the current format, and the file being replaced is the older one, so it would abort as unparseable rather than merge.
@@ -950,6 +1028,7 @@ export interface MigrateResult {
   detachedScriptId: number | null;
   deletedScriptId: number | null;
   scriptError?: string;
+  promoted?: PromoteResult;
 }
 export async function migrateSite(opts: {
   coreClient: CoreClient;
@@ -983,9 +1062,14 @@ export async function migrateSite(opts: {
   });
   await applySiteCacheSettings(coreClient, state.pullZoneId);
 
+  let promoted: PromoteResult | undefined;
   if (state.current) {
     step("Publishing the current deploy...");
-    await promoteDeploy({ coreClient, state, deployId: state.current });
+    promoted = await promoteDeploy({
+      coreClient,
+      state,
+      deployId: state.current,
+    });
   }
 
   // Committed only once every fallible remote step is done: while the file still reads as version 1, a failed run above is fully resumable.
@@ -1012,7 +1096,13 @@ export async function migrateSite(opts: {
     }
   }
 
-  return { state, detachedScriptId, deletedScriptId, scriptError };
+  return {
+    state,
+    detachedScriptId,
+    deletedScriptId,
+    scriptError,
+    promoted,
+  };
 }
 
 interface TeardownResult {
