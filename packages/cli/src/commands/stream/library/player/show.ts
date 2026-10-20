@@ -1,6 +1,6 @@
-import { streamPlayerGet } from "@bunny.net/tools/stream";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { logger } from "@/core/logger.ts";
+import { streamPlayerGet } from "@/tools/stream/index.ts";
 import { resolveLibraryRef } from "../library-ref.ts";
 import { formatPlayerSettings } from "./render.ts";
 

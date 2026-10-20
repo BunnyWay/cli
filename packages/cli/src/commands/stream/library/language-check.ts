@@ -1,7 +1,7 @@
-import { assertLanguages, streamLanguagesList } from "@bunny.net/tools/stream";
 import type { ResolvedConfig } from "@/config/index.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { withSpinner } from "@/core/ui.ts";
+import { assertLanguages, streamLanguagesList } from "@/tools/stream/index.ts";
 
 /**
  * Check transcription output languages against the live list

@@ -1,12 +1,12 @@
-import {
-  MAIN_REGION,
-  REGION_CODES,
-  SUGGESTED_REPLICATION_REGIONS,
-} from "@bunny.net/tools/stream";
 import { STORAGE_REGIONS } from "@/commands/storage/constants.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import {
+  MAIN_REGION,
+  REGION_CODES,
+  SUGGESTED_REPLICATION_REGIONS,
+} from "@/tools/stream/index.ts";
 
 /** Stream libraries store in the same regions as Storage, so the names come from its catalog. */
 export function regionName(code: string): string {

@@ -1,4 +1,3 @@
-import { streamSecurityTokenKey } from "@bunny.net/tools/stream";
 import {
   resolveVideoInteractive,
   streamLibraryContext,
@@ -8,6 +7,7 @@ import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { withSpinner } from "@/core/ui.ts";
+import { streamSecurityTokenKey } from "@/tools/stream/index.ts";
 import { embedUrl, parseDuration, signEmbedUrl } from "./embed-url.ts";
 
 interface VideoEmbedArgs {

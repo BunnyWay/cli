@@ -1,9 +1,3 @@
-import type { ToolContext } from "@bunny.net/tools";
-import {
-  type StreamLibrary,
-  streamLibrariesList,
-  streamLibrariesResolve,
-} from "@bunny.net/tools/stream";
 import {
   STREAM_MANIFEST,
   type StreamLibraryManifest,
@@ -14,6 +8,12 @@ import { logger } from "@/core/logger.ts";
 import { loadManifest } from "@/core/manifest.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { confirm, isInteractive, prompts, withSpinner } from "@/core/ui.ts";
+import type { ToolContext } from "@/tools/index.ts";
+import {
+  type StreamLibrary,
+  streamLibrariesList,
+  streamLibrariesResolve,
+} from "@/tools/stream/index.ts";
 
 // Offer to remember a library picked from the prompt; a no-op if the user declines.
 async function maybeLinkLibrary(library: StreamLibrary): Promise<void> {

@@ -1,9 +1,9 @@
-import { pullZonesGet, pullZonesList } from "@bunny.net/tools/pullzones";
 import { CANCELLED, defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { saveManifest } from "@/core/manifest.ts";
 import { prompts } from "@/core/ui.ts";
+import { pullZonesGet, pullZonesList } from "@/tools/pullzones/index.ts";
 import { PULL_ZONE_MANIFEST, type PullZoneManifest } from "./constants.ts";
 
 export const pzLinkCommand = defineToolCommand({

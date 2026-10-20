@@ -1,13 +1,13 @@
-import type { ToolContext } from "@bunny.net/tools";
-import {
-  type PlayerChanges,
-  streamPlayerGet,
-  streamPlayerUpdate,
-} from "@bunny.net/tools/stream";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
+import type { ToolContext } from "@/tools/index.ts";
+import {
+  type PlayerChanges,
+  streamPlayerGet,
+  streamPlayerUpdate,
+} from "@/tools/stream/index.ts";
 import { resolveLibraryRef } from "../library-ref.ts";
 import {
   type PlayerFlags,

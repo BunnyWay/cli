@@ -1,6 +1,6 @@
-import { pullZonesPurge } from "@bunny.net/tools/pullzones";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { logger } from "@/core/logger.ts";
+import { pullZonesPurge } from "@/tools/pullzones/index.ts";
 import { resolvePullZoneId } from "./constants.ts";
 
 export const pzPurgeCommand = defineToolCommand({

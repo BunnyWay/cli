@@ -1,6 +1,6 @@
-import type { PlayerSettings } from "@bunny.net/tools/stream";
 import { formatKeyValue } from "@/core/format.ts";
 import type { OutputFormat } from "@/core/types.ts";
+import type { PlayerSettings } from "@/tools/stream/index.ts";
 
 function onOff(value: boolean): string {
   return value ? "On" : "Off";

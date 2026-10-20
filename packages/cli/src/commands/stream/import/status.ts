@@ -1,10 +1,4 @@
 import { stripAnsi } from "@bunny.net/stream-import";
-import {
-  requireSource,
-  SavedImportError,
-  SOURCE_IDS,
-  streamImportStatus,
-} from "@bunny.net/tools/stream";
 import type { Argv } from "yargs";
 import { cliImportError } from "@/commands/stream/import-setup.ts";
 import { bunny } from "@/core/colors.ts";
@@ -12,6 +6,12 @@ import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { formatBytes, formatTable, formatTimeAgo } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import {
+  requireSource,
+  SavedImportError,
+  SOURCE_IDS,
+  streamImportStatus,
+} from "@/tools/stream/index.ts";
 import { resolveImportLibrary } from "./library.ts";
 
 interface StatusArgs {

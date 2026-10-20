@@ -1,14 +1,14 @@
-import type { ToolContext } from "@bunny.net/tools";
-import {
-  type LibrarySummary,
-  streamLibrariesList,
-  streamLibrariesResolve,
-} from "@bunny.net/tools/stream";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, saveManifest } from "@/core/manifest.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { confirm, isInteractive, prompts, spinner } from "@/core/ui.ts";
+import type { ToolContext } from "@/tools/index.ts";
+import {
+  type LibrarySummary,
+  streamLibrariesList,
+  streamLibrariesResolve,
+} from "@/tools/stream/index.ts";
 import { STREAM_MANIFEST, type StreamLibraryManifest } from "../constants.ts";
 
 async function spin<T>(text: string, run: () => Promise<T>): Promise<T> {
@@ -26,7 +26,7 @@ async function spin<T>(text: string, run: () => Promise<T>): Promise<T> {
  * `security`): explicit name or ID, then the linked directory, then a picker.
  *
  * Same order and rules as the other stream commands, but every lookup goes
- * through `@bunny.net/tools`, so these commands never create an API client.
+ * through `src/tools/`, so these commands never create an API client.
  * Kept out of `interactive.ts` so it doesn't collide with stream import work.
  */
 export async function resolveLibraryRef(

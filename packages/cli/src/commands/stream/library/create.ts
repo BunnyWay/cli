@@ -1,12 +1,5 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import {
-  allRegions,
-  MAIN_REGION,
-  parseReplicationRegions,
-  REGION_CODES,
-  SUGGESTED_REPLICATION_REGIONS,
-} from "@bunny.net/tools/stream";
-import {
   toSafeVideoLibrary,
   type VideoLibraryCreateModel,
   type VideoLibraryModel,
@@ -18,6 +11,13 @@ import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { confirmOrCancel, isInteractive, prompts, spinner } from "@/core/ui.ts";
+import {
+  allRegions,
+  MAIN_REGION,
+  parseReplicationRegions,
+  REGION_CODES,
+  SUGGESTED_REPLICATION_REGIONS,
+} from "@/tools/stream/index.ts";
 import {
   ENV_STREAM_API_KEY,
   ENV_STREAM_LIBRARY_ID,
