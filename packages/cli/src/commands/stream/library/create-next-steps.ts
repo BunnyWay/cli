@@ -1,9 +1,7 @@
 import { homedir } from "node:os";
-import {
-  type CoreClient,
-  fetchLibraryHostname,
-  type VideoLibraryModel,
-} from "@/commands/stream/api.ts";
+import type { ToolContext } from "@bunny.net/tools";
+import { streamLibrariesHostname } from "@bunny.net/tools/stream";
+import type { VideoLibraryModel } from "@/commands/stream/api.ts";
 import {
   STREAM_MANIFEST,
   type StreamLibraryManifest,
@@ -54,7 +52,7 @@ export async function offerSaveEnv(
   library: VideoLibraryModel,
   flag: boolean | undefined,
   output: OutputFormat | undefined,
-  client?: CoreClient,
+  ctx?: ToolContext,
 ): Promise<boolean> {
   const apiKey = library.ApiKey;
   if (!library.Id || !apiKey) return false;
@@ -67,12 +65,17 @@ export async function offerSaveEnv(
   if (save === undefined && isInteractive(output)) {
     save = await confirm(
       existing
-        ? `Save ${ENV_STREAM_LIBRARY_ID} and ${ENV_STREAM_API_KEY} to .env? (replaces the values in ${existing.envPath})`
-        : `Save ${ENV_STREAM_LIBRARY_ID} and ${ENV_STREAM_API_KEY} to .env?`,
+        ? `Save ${ENV_STREAM_LIBRARY_ID}, ${ENV_STREAM_API_KEY} and ${ENV_STREAM_CDN_HOSTNAME} to .env? (replaces the values in ${existing.envPath})`
+        : `Save ${ENV_STREAM_LIBRARY_ID}, ${ENV_STREAM_API_KEY} and ${ENV_STREAM_CDN_HOSTNAME} to .env?`,
       { optional: true },
     );
   }
   if (!save) return false;
+
+  const hostname = ctx
+    ? (await streamLibrariesHostname.invoke(ctx, { library: library.Id }))
+        .hostname
+    : null;
   const envPath = writeEnvValue(
     ENV_STREAM_LIBRARY_ID,
     String(library.Id),
@@ -80,9 +83,6 @@ export async function offerSaveEnv(
   );
   writeEnvValue(ENV_STREAM_API_KEY, apiKey, envPath);
 
-  const hostname = client
-    ? await fetchLibraryHostname(client, library).catch(() => undefined)
-    : undefined;
   if (hostname) writeEnvValue(ENV_STREAM_CDN_HOSTNAME, hostname, envPath);
   if (output !== "json")
     logger.success(

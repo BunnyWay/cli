@@ -17,6 +17,7 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
+import { toolContext } from "@/core/tool-context.ts";
 import { confirmOrCancel, isInteractive, prompts, spinner } from "@/core/ui.ts";
 import {
   ENV_STREAM_API_KEY,
@@ -196,7 +197,12 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
         ? await offerLink(created, args.link, output)
         : false;
       const savedToEnv = created
-        ? await offerSaveEnv(created, args.saveEnv, output, client)
+        ? await offerSaveEnv(
+            created,
+            args.saveEnv,
+            output,
+            toolContext(config, { verbose }),
+          )
         : false;
       logger.log(
         JSON.stringify(
@@ -226,7 +232,12 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     if (!created?.Id) return;
 
     await offerLink(created, args.link, output);
-    await offerSaveEnv(created, args.saveEnv, output, client);
+    await offerSaveEnv(
+      created,
+      args.saveEnv,
+      output,
+      toolContext(config, { verbose }),
+    );
     if (args.addVideos !== false && isInteractive(output))
       await offerAddVideos(created, { profile, output, verbose, apiKey });
     printNextSteps(created);

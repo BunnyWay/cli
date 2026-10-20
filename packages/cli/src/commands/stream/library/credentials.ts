@@ -155,8 +155,13 @@ export const streamLibraryCredentialsCommand = defineCommand<CredentialsArgs>({
 
     if (output === "json") {
       // No prompt here: only --save-env saves.
-      const savedToEnv = await offerSaveEnv(withKey, saveEnv, output, client);
-      // Mask by default like the table; --show-secret opts into the raw key.
+      const savedToEnv = await offerSaveEnv(
+        withKey,
+        saveEnv,
+        output,
+        toolContext(config, { verbose }),
+      );
+
       logger.log(
         JSON.stringify(
           {
@@ -189,6 +194,11 @@ export const streamLibraryCredentialsCommand = defineCommand<CredentialsArgs>({
     } else {
       logger.dim("Key masked. Pass --show-secret to reveal it.");
     }
-    await offerSaveEnv(withKey, saveEnv, output, client);
+    await offerSaveEnv(
+      withKey,
+      saveEnv,
+      output,
+      toolContext(config, { verbose }),
+    );
   },
 });
