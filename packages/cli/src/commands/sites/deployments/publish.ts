@@ -2,7 +2,7 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import {
   promoteDeploy,
   rereadRemoteState,
-  warnIfUnconfirmed,
+  warnAfterPromote,
   writeRemoteState,
 } from "@/commands/sites/api.ts";
 import { findDeploy, markCurrent } from "@/commands/sites/constants.ts";
@@ -133,7 +133,7 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       return;
     }
 
-    const promoteConfirmed = await withSpinner("Publishing...", async () => {
+    const promoted = await withSpinner("Publishing...", async () => {
       // Revalidate on fresh state right before promoting: the confirmation window is long enough for a concurrent replace to have dropped this deploy's record and started rewriting its files.
       const { state: latest, etag: latestEtag } = await rereadRemoteState(
         connection,
@@ -145,7 +145,7 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
           "Run `bunny sites deployments list` and retry.",
         );
       }
-      const confirmed = await promoteDeploy({
+      const result = await promoteDeploy({
         coreClient,
         state: latest,
         deployId: targetId,
@@ -154,9 +154,9 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
       await writeRemoteState(connection, latest, latestEtag, {
         promotedTo: targetId,
       });
-      return confirmed;
+      return result;
     });
-    warnIfUnconfirmed(promoteConfirmed, targetId);
+    warnAfterPromote(promoted, targetId);
 
     if (output === "json") {
       logger.log(
@@ -165,7 +165,7 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
             site: state.name,
             id: targetId,
             published: true,
-            live: promoteConfirmed,
+            live: promoted.confirmed,
           },
           null,
           2,
@@ -175,7 +175,7 @@ export const sitesDeploymentsPublishCommand = defineCommand<PublishArgs>({
     }
 
     logger.success(
-      promoteConfirmed
+      promoted.confirmed
         ? `Deploy ${targetId} is now live.`
         : `Published deploy ${targetId}.`,
     );

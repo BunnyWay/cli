@@ -21,7 +21,7 @@ import {
   fetchSystemHostname,
   promoteDeploy,
   rereadRemoteState,
-  warnIfUnconfirmed,
+  warnAfterPromote,
   writeRemoteState,
 } from "./api.ts";
 import {
@@ -461,10 +461,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const production = productionUrl(state, systemHost);
 
     if (skipUpload && alreadyLive) {
-      const confirmed = await withSpinner("Checking routing...", () =>
+      const promoted = await withSpinner("Checking routing...", () =>
         promoteDeploy({ coreClient, state, deployId }),
       );
-      warnIfUnconfirmed(confirmed, deployId);
+      warnAfterPromote(promoted, deployId);
       if (output === "json") {
         logger.log(
           JSON.stringify(
@@ -472,7 +472,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
               site: state.name,
               id: deployId,
               unchanged: true,
-              live: confirmed,
+              live: promoted.confirmed,
               production: production ?? null,
             },
             null,
@@ -543,18 +543,18 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       etag = await writeRemoteState(connection, state, etag);
     }
 
-    const promoteConfirmed = await withSpinner(
+    const promoted = await withSpinner(
       "Publishing to production...",
       async () => {
-        const confirmed = await promoteDeploy({ coreClient, state, deployId });
+        const result = await promoteDeploy({ coreClient, state, deployId });
         markCurrent(state, deployId);
         etag = await writeRemoteState(connection, state, etag, {
           promotedTo: deployId,
         });
-        return confirmed;
+        return result;
       },
     );
-    warnIfUnconfirmed(promoteConfirmed, deployId);
+    warnAfterPromote(promoted, deployId);
 
     if (output === "json") {
       logger.log(
@@ -566,7 +566,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
             files: files.length,
             bytes: totalBytes,
             unchanged: skipUpload,
-            live: promoteConfirmed,
+            live: promoted.confirmed,
             production: production ?? null,
           },
           null,
@@ -578,7 +578,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
     if (skipUpload) {
       logger.success(
-        promoteConfirmed
+        promoted.confirmed
           ? `Deploy ${deployId} is now live.`
           : `Published deploy ${deployId}.`,
       );
