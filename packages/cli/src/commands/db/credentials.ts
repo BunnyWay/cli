@@ -4,7 +4,11 @@ import { clientOptions } from "@/core/client-options.ts";
 import { UserError } from "@/core/errors.ts";
 import { spinner } from "@/core/ui.ts";
 import { readEnvValue } from "@/utils/env-file.ts";
-import { generateToken, tokenExpiryFromNow } from "./api.ts";
+import {
+  generateToken,
+  type TokenAuthorization,
+  tokenExpiryFromNow,
+} from "./api.ts";
 import { ENV_DATABASE_AUTH_TOKEN, ENV_DATABASE_URL } from "./constants.ts";
 import { resolveDbId } from "./resolve-db.ts";
 
@@ -29,6 +33,8 @@ export interface ResolveCredentialsOptions {
   profile: string;
   apiKey?: string;
   verbose?: boolean;
+  /** Scope of a token created for this run. Defaults to `full-access`; tokens from flags or `.env` are used as given. */
+  authorization?: TokenAuthorization;
 }
 
 /** Schemes that encrypt in transit. `libsql:` resolves to `https:`/`wss:` unless it opts out with `?tls=0`. */
@@ -181,7 +187,7 @@ export async function resolveCredentials(
   const mintToken = () => {
     spin.text = "Generating token...";
     return generateToken(apiClient, databaseId, {
-      authorization: "full-access",
+      authorization: opts.authorization ?? "full-access",
       expiresAt: tokenExpiryFromNow(),
     });
   };

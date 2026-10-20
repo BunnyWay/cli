@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
 function getSearch() {
   return window.location.search;
@@ -9,14 +9,16 @@ function subscribe(callback: () => void) {
   return () => window.removeEventListener("popstate", callback);
 }
 
-/** Read a single URL search param reactively. */
 export function useUrlParam(key: string): string | null {
   const search = useSyncExternalStore(subscribe, getSearch);
   return new URLSearchParams(search).get(key);
 }
 
-/** Update URL search params without a page reload. */
-export function setUrlParams(updates: Record<string, string | null>) {
+// `push` is for navigation only, so Back skips individual filter and paging edits.
+export function setUrlParams(
+  updates: Record<string, string | null>,
+  { push = false }: { push?: boolean } = {},
+) {
   const params = new URLSearchParams(window.location.search);
   for (const [key, value] of Object.entries(updates)) {
     if (value === null || value === "") {
@@ -26,13 +28,24 @@ export function setUrlParams(updates: Record<string, string | null>) {
     }
   }
   const search = params.toString();
+  if (`?${search}` === window.location.search) return;
   const url = search ? `?${search}` : window.location.pathname;
-  window.history.replaceState(null, "", url);
-  // Notify subscribers
+  if (push) {
+    window.history.pushState(null, "", url);
+  } else {
+    window.history.replaceState(null, "", url);
+  }
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-/** Hook that returns a setter for URL params. */
-export function useSetUrlParams() {
-  return useCallback(setUrlParams, []);
-}
+export const TABLE_VIEW_PARAMS = {
+  view: null,
+  page: null,
+  sort: null,
+  order: null,
+  filters: null,
+  mode: null,
+} as const;
+
+// Not a valid unquoted table name, so it can't clash with one.
+export const SQL_TAB = ":sql";

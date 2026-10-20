@@ -1,6 +1,4 @@
-// Bun's `with { type: "file" }` returns a resolved file path as a string at
-// runtime, but `@types/bun` only declares ambient modules for a few extensions.
-// Declare the ones we import in `client-manifest.ts`.
+// `with { type: "file" }` imports are paths; @types/bun doesn't declare these extensions.
 declare module "*.js" {
   const path: string;
   export default path;

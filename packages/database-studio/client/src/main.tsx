@@ -3,9 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import "./index.css";
 
-// If the auto-opened URL carries ?token=…, exchange it for an HttpOnly auth
-// cookie before rendering, then scrub it from the URL so it doesn't linger in
-// history or bookmarks. Subsequent /api/* calls rely on the cookie being set.
+// Swap ?token= for the HttpOnly auth cookie, then scrub it so it never lingers in history.
 function exchangeToken(): Promise<void> {
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token");
@@ -16,13 +14,15 @@ function exchangeToken(): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
     credentials: "same-origin",
-  }).finally(() => {
-    params.delete("token");
-    const qs = params.toString();
-    const newUrl =
-      window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
-    window.history.replaceState({}, "", newUrl);
-  });
+  })
+    .then(() => undefined)
+    .finally(() => {
+      params.delete("token");
+      const qs = params.toString();
+      const newUrl =
+        window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
+      window.history.replaceState({}, "", newUrl);
+    });
 }
 
 const rootEl = document.getElementById("root");
