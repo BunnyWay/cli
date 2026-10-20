@@ -501,6 +501,7 @@ function shadowedOriginRules(
   return shadowed;
 }
 
+// Converge the pull zone's rules on `deployId`; create and promote both funnel through here, so a missing or stale rule heals on any run.
 async function ensureSiteRules(opts: {
   coreClient: CoreClient;
   pullZoneId: number;
@@ -940,7 +941,7 @@ export function warnAfterPromote(
 ): void {
   for (const { name, patterns } of result.shadowed) {
     logger.warn(
-      `The Edge rule "${name}" routes ${patterns.join(", ")} to another origin, but the site's serve rule still matches it, so the site answers instead. Exclude it from the "${REWRITE_RULE_DESC}" rule.`,
+      `The edge rule "${name}" routes ${patterns.join(", ")} to another origin, but the site's serve rule still matches it, so the site answers instead. Exclude it from the "${REWRITE_RULE_DESC}" rule.`,
     );
   }
   if (result.confirmed) return;
@@ -1026,7 +1027,6 @@ export interface MigrateResult {
   detachedScriptId: number | null;
   deletedScriptId: number | null;
   scriptError?: string;
-
   promoted?: PromoteResult;
 }
 export async function migrateSite(opts: {
