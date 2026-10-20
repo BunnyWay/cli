@@ -1,6 +1,4 @@
 import { homedir } from "node:os";
-import type { ToolContext } from "@/tools/context.ts";
-import { streamLibrariesHostname } from "@/tools/stream/index.ts";
 import type { VideoLibraryModel } from "@/commands/stream/api.ts";
 import {
   STREAM_MANIFEST,
@@ -17,6 +15,8 @@ import { logger } from "@/core/logger.ts";
 import { loadManifest } from "@/core/manifest.ts";
 import type { GlobalArgs, OutputFormat } from "@/core/types.ts";
 import { confirm, isInteractive, prompts } from "@/core/ui.ts";
+import type { ToolContext } from "@/tools/context.ts";
+import { streamLibrariesHostname } from "@/tools/stream/index.ts";
 import { readEnvValue, writeEnvValue } from "@/utils/env-file.ts";
 
 // The names the Stream examples read, so a saved .env works with them as is.
