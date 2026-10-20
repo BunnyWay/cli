@@ -44,8 +44,7 @@ beforeEach(() => {
   promoteVerification.probe = async (url) => ({
     status: 200,
     deploy:
-      new URL(url).pathname.match(/^\/__bunny_promote\/(.+)-\d+$/)?.[1] ??
-      null,
+      new URL(url).pathname.match(/^\/__bunny_promote\/(.+)-\d+$/)?.[1] ?? null,
   });
   siteFiles.connect = (zone) =>
     ({ zoneName: zone.Name }) as unknown as ReturnType<
