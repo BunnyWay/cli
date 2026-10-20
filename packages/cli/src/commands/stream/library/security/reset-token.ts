@@ -1,7 +1,7 @@
-import { streamSecurityResetToken } from "@bunny.net/tools/stream";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, requireConfirmable } from "@/core/ui.ts";
+import { streamSecurityResetToken } from "@/tools/stream/index.ts";
 import { resolveLibraryRef } from "../library-ref.ts";
 
 export const streamLibrarySecurityResetTokenCommand = defineToolCommand({

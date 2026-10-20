@@ -1,5 +1,4 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { streamLibrariesRotateKey } from "@bunny.net/tools/stream";
 import { resolveLibraryInteractive } from "@/commands/stream/interactive.ts";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
@@ -9,6 +8,7 @@ import { formatKeyValue, maskSecret } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
+import { streamLibrariesRotateKey } from "@/tools/stream/index.ts";
 import {
   ENV_STREAM_API_KEY,
   ENV_STREAM_CDN_HOSTNAME,

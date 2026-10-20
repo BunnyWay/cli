@@ -9,16 +9,6 @@ import {
   type SourcePlugin,
   stripAnsi,
 } from "@bunny.net/stream-import";
-import {
-  type ImportPlan,
-  type ImportRun,
-  MAX_PLAN_LIMIT,
-  requireSource,
-  SOURCE_IDS,
-  SOURCES,
-  streamImportPlan,
-  streamImportRun,
-} from "@bunny.net/tools/stream";
 import type { Argv } from "yargs";
 import {
   cliImportError,
@@ -31,6 +21,16 @@ import { formatBytes, formatDuration, formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { confirm, isInteractive, requireConfirmable } from "@/core/ui.ts";
+import {
+  type ImportPlan,
+  type ImportRun,
+  MAX_PLAN_LIMIT,
+  requireSource,
+  SOURCE_IDS,
+  SOURCES,
+  streamImportPlan,
+  streamImportRun,
+} from "@/tools/stream/index.ts";
 import { resolveImportLibrary } from "./library.ts";
 
 interface ImportArgs {

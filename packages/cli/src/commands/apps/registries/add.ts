@@ -1,8 +1,8 @@
-import { registriesCreate } from "@bunny.net/tools/apps";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts } from "@/core/ui.ts";
+import { registriesCreate } from "@/tools/apps/index.ts";
 
 const REGISTRY_TYPES = ["dockerHub", "gitHub"] as const;
 

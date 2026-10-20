@@ -1,17 +1,17 @@
-import type { ToolContext } from "@bunny.net/tools";
-import {
-  type ReferrerChanges,
-  type SecurityChanges,
-  type SecurityUpdateResult,
-  streamSecurityGet,
-  streamSecurityUpdate,
-} from "@bunny.net/tools/stream";
 import { resolveConfig } from "@/config/index.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
+import type { ToolContext } from "@/tools/index.ts";
+import {
+  type ReferrerChanges,
+  type SecurityChanges,
+  type SecurityUpdateResult,
+  streamSecurityGet,
+  streamSecurityUpdate,
+} from "@/tools/stream/index.ts";
 import { resolveLibraryRef } from "../library-ref.ts";
 
 interface SecurityUpdateArgs {

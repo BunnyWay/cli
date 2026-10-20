@@ -1,7 +1,7 @@
-import { pullZonesList } from "@bunny.net/tools/pullzones";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import { pullZonesList } from "@/tools/pullzones/index.ts";
 import { statusLabel } from "./show.ts";
 
 export const pzListCommand = defineToolCommand({

@@ -1,5 +1,4 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
-import { streamLibrariesAddRegions } from "@bunny.net/tools/stream";
 import type promptsLib from "prompts";
 import {
   toSafeVideoLibrary,
@@ -14,6 +13,7 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
+import { streamLibrariesAddRegions } from "@/tools/stream/index.ts";
 import {
   hasLibrarySettingsFlags,
   type LibrarySettingsArgs,

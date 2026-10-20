@@ -1,14 +1,14 @@
-import {
-  streamSecurityGet,
-  streamSecurityResetToken,
-  streamSecurityTokenKey,
-} from "@bunny.net/tools/stream";
 import { resolveConfig } from "@/config/index.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { maskSecret } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
+import {
+  streamSecurityGet,
+  streamSecurityResetToken,
+  streamSecurityTokenKey,
+} from "@/tools/stream/index.ts";
 import { resolveLibraryRef } from "../library-ref.ts";
 import { formatSecuritySettings } from "./render.ts";
 
