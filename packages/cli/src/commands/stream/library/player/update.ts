@@ -98,18 +98,18 @@ export const streamLibraryPlayerUpdateCommand = defineToolCommand({
   describe: "Update a video library's player settings.",
   examples: [
     [
-      '$0 stream library player update my-library --color "#FF7755" --heatmap',
+      '$0 stream libraries player update my-library --color "#FF7755" --heatmap',
       "Brand the player and show the heatmap",
     ],
     [
-      "$0 stream library player update my-library --speeds 0.5,1.0,1.15,2.0",
+      "$0 stream libraries player update my-library --speeds 0.5,1.0,1.15,2.0",
       "Set playback speeds, including a custom one",
     ],
     [
-      "$0 stream library player update my-library --no-controls",
+      "$0 stream libraries player update my-library --no-controls",
       "Turn every player control off",
     ],
-    ["$0 stream library player update my-library", "Edit interactively"],
+    ["$0 stream libraries player update my-library", "Edit interactively"],
   ],
   progress: "Updating player settings...",
 

@@ -15,9 +15,9 @@ export const streamLibraryShowCommand = defineCommand<LibraryShowArgs>({
   command: "show [library]",
   describe: "Show details for a Stream video library.",
   examples: [
-    ["$0 stream library show my-library", "Show library details"],
-    ["$0 stream library show 12345", "Show a library by ID"],
-    ["$0 stream library show my-library --output json", "JSON output"],
+    ["$0 stream libraries show my-library", "Show library details"],
+    ["$0 stream libraries show 12345", "Show a library by ID"],
+    ["$0 stream libraries show my-library --output json", "JSON output"],
   ],
 
   builder: (yargs) =>
@@ -40,7 +40,7 @@ export const streamLibraryShowCommand = defineCommand<LibraryShowArgs>({
       return;
     }
 
-    // No output format prints the raw keys; `bunny stream library credentials`
+    // No output format prints the raw keys; `bunny stream libraries credentials`
     // is the deliberate way to retrieve them.
     logger.log(
       formatKeyValue(
@@ -75,7 +75,7 @@ export const streamLibraryShowCommand = defineCommand<LibraryShowArgs>({
       ),
     );
     logger.dim(
-      `Run "bunny stream library credentials ${lib.Name}" for the API key.`,
+      `Run "bunny stream libraries credentials ${lib.Name}" for the API key.`,
     );
   },
 });

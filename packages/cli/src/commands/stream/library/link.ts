@@ -16,8 +16,8 @@ export const streamLibraryLinkCommand = defineCommand<LinkArgs>({
   command: "link [library]",
   describe: "Link the current directory to a Stream video library.",
   examples: [
-    ["$0 stream library link", "Interactive selection"],
-    ["$0 stream library link my-library", "Direct link by name or ID"],
+    ["$0 stream libraries link", "Interactive selection"],
+    ["$0 stream libraries link my-library", "Direct link by name or ID"],
   ],
 
   builder: (yargs) =>

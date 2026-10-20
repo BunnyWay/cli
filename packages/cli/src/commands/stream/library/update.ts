@@ -153,25 +153,25 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
   command: "update [library]",
   describe: "Update a Stream video library's settings.",
   examples: [
-    ["$0 stream library update my-library", "Edit settings interactively"],
+    ["$0 stream libraries update my-library", "Edit settings interactively"],
     [
-      "$0 stream library update my-library --resolutions 720p,1080p",
+      "$0 stream libraries update my-library --resolutions 720p,1080p",
       "Set the enabled resolutions",
     ],
     [
-      "$0 stream library update my-library --encoding-tier premium --codecs x264,vp9",
+      "$0 stream libraries update my-library --encoding-tier premium --codecs x264,vp9",
       "Move to premium encoding with extra codecs",
     ],
     [
-      "$0 stream library update my-library --transcribing --transcribing-languages en,de",
+      "$0 stream libraries update my-library --transcribing --transcribing-languages en,de",
       "Enable transcribing into two languages",
     ],
     [
-      "$0 stream library update my-library --add-replication-regions SYD",
+      "$0 stream libraries update my-library --add-replication-regions SYD",
       "Also replicate to Sydney (regions can't be removed later)",
     ],
     [
-      "$0 stream library update my-library --content-tagging",
+      "$0 stream libraries update my-library --content-tagging",
       "Turn on content tagging",
     ],
   ],

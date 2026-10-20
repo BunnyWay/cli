@@ -13,10 +13,10 @@ export const streamCollectionShowCommand = defineCommand<CollectionShowArgs>({
   command: "show [collection]",
   describe: "Show details for a collection.",
   examples: [
-    ["$0 stream collection show 8a7b6c5d-...", "Show a collection by ID"],
-    ["$0 stream collection show", "Pick a collection interactively"],
+    ["$0 stream collections show 8a7b6c5d-...", "Show a collection by ID"],
+    ["$0 stream collections show", "Pick a collection interactively"],
     [
-      "$0 stream collection show 8a7b6c5d-... --output json",
+      "$0 stream collections show 8a7b6c5d-... --output json",
       "JSON output (includes preview image URLs)",
     ],
   ],
@@ -75,7 +75,7 @@ export const streamCollectionShowCommand = defineCommand<CollectionShowArgs>({
       ),
     );
     logger.dim(
-      `List its videos with \`bunny stream video list --collection ${collection.guid}\`.`,
+      `List its videos with \`bunny stream videos list --collection ${collection.guid}\`.`,
     );
   },
 });

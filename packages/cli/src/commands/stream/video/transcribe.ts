@@ -1,29 +1,35 @@
-import { resolveConfig } from "@/config/index.ts";
-import { defineCommand } from "@/core/define-command.ts";
-import { logger } from "@/core/logger.ts";
-import { withSpinner } from "@/core/ui.ts";
-import { resolveVideoInteractive, streamLibraryContext } from "./context.ts";
-import { parseCsvFlag } from "./library/flags.ts";
-import { checkTranscribingLanguages } from "./library/language-check.ts";
+import {
+  resolveVideoInteractive,
+  streamLibraryContext,
+} from "@/commands/stream/context.ts";
+import { parseCsvFlag } from "@/commands/stream/library/flags.ts";
+import { checkTranscribingLanguages } from "@/commands/stream/library/language-check.ts";
 import {
   autoTranscriptionPending,
   DOUBLE_BILLING_NOTE,
   estimateTranscription,
   formatTranscriptionEstimate,
   outputLanguages,
-} from "./transcription-cost.ts";
-import { type TranscribeSettings, transcribeVideo } from "./videos-api.ts";
+} from "@/commands/stream/transcription-cost.ts";
+import {
+  type TranscribeSettings,
+  transcribeVideo,
+} from "@/commands/stream/videos-api.ts";
+import { resolveConfig } from "@/config/index.ts";
+import { defineCommand } from "@/core/define-command.ts";
+import { logger } from "@/core/logger.ts";
+import { withSpinner } from "@/core/ui.ts";
 
 interface TranscribeArgs {
   video?: string;
   lib?: string;
-  languages?: string;
+  targetLanguages?: string;
   sourceLanguage?: string;
   generateTitle?: boolean;
   generateDescription?: boolean;
   generateChapters?: boolean;
   generateMoments?: boolean;
-  force?: boolean;
+  overwrite?: boolean;
 }
 
 export const TRANSCRIBE_BILLING_NOTE =
@@ -38,8 +44,8 @@ export const TRANSCRIBE_BILLING_NOTE =
 export function transcribeSettings(args: TranscribeArgs): TranscribeSettings {
   const settings: TranscribeSettings = {};
 
-  if (args.languages !== undefined) {
-    const languages = parseCsvFlag(args.languages);
+  if (args.targetLanguages !== undefined) {
+    const languages = parseCsvFlag(args.targetLanguages);
     if (languages.length > 0) settings.targetLanguages = languages;
   }
   const source = args.sourceLanguage?.trim();
@@ -57,25 +63,25 @@ export function transcribeSettings(args: TranscribeArgs): TranscribeSettings {
   return settings;
 }
 
-export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
+export const streamVideoTranscribeCommand = defineCommand<TranscribeArgs>({
   command: "transcribe [video]",
   describe: "Transcribe a video's audio into captions (paid).",
   examples: [
     [
-      "$0 stream transcribe 1a2b3c4d-...",
+      "$0 stream videos transcribe 1a2b3c4d-...",
       "Transcribe with the library defaults",
     ],
     [
-      "$0 stream transcribe 1a2b3c4d-... --languages en,de",
+      "$0 stream videos transcribe 1a2b3c4d-... --target-languages en,de",
       "Transcribe into two languages",
     ],
     [
-      "$0 stream transcribe 1a2b3c4d-... --source-language en --generate-title",
+      "$0 stream videos transcribe 1a2b3c4d-... --source-language en --generate-title",
       "Name the spoken language and generate a title",
     ],
     [
-      "$0 stream transcribe 1a2b3c4d-... --force",
-      "Re-run, overriding the library defaults",
+      "$0 stream videos transcribe 1a2b3c4d-... --overwrite",
+      "Overwrite the existing transcription, overriding the library defaults",
     ],
   ],
 
@@ -87,7 +93,7 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
         type: "string",
         describe: "Video library ID (defaults to the linked library)",
       })
-      .option("languages", {
+      .option("target-languages", {
         type: "string",
         describe:
           "Target languages, comma-separated ISO 639-1 codes (e.g. en,de)",
@@ -112,15 +118,22 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
         type: "boolean",
         describe: "Generate moments from the transcript",
       })
-      .option("force", {
-        alias: "f",
+      .option("overwrite", {
         type: "boolean",
         describe:
-          "Re-run and override the library's transcribing defaults (the API's force flag)",
+          "Overwrite the existing transcription and override the library's transcribing defaults (sent as the API's force flag)",
       }),
 
   handler: async (args) => {
-    const { video: ref, lib, force, profile, output, verbose, apiKey } = args;
+    const {
+      video: ref,
+      lib,
+      overwrite,
+      profile,
+      output,
+      verbose,
+      apiKey,
+    } = args;
     const settings = transcribeSettings(args);
 
     // Check requested output languages against the live list before anything is billed.
@@ -130,7 +143,7 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
       verbose,
     );
 
-    // --force re-runs a billed transcription, so it must not also pick targets:
+    // --overwrite re-runs a billed transcription, so it must not also pick targets:
     // both resolutions error instead of prompting.
     const { client, library, libraryId } = await streamLibraryContext({
       lib,
@@ -139,12 +152,12 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
       verbose,
       apiKey,
       offerLink: true,
-      force,
+      force: overwrite,
     });
 
     const video = await resolveVideoInteractive(client, libraryId, ref, {
       output,
-      force,
+      force: overwrite,
     });
 
     // Right after an upload or re-encode, a transcribing library is about to do this itself.
@@ -171,7 +184,9 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
     }
 
     const status = await withSpinner("Queueing transcription...", () =>
-      transcribeVideo(client, libraryId, video.guid, settings, { force }),
+      transcribeVideo(client, libraryId, video.guid, settings, {
+        force: overwrite,
+      }),
     );
 
     if (output === "json") {
@@ -181,7 +196,7 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
             id: video.guid,
             title: video.title,
             queued: true,
-            force: Boolean(force),
+            overwrite: Boolean(overwrite),
             ...settings,
             ...status,
           },
@@ -194,7 +209,7 @@ export const streamTranscribeCommand = defineCommand<TranscribeArgs>({
 
     logger.success(`Queued transcription for ${video.title}.`);
     logger.dim(
-      "Once it finishes, the Captions row of `bunny stream video show` lists the new languages.",
+      "Once it finishes, the Captions row of `bunny stream videos show` lists the new languages.",
     );
   },
 });

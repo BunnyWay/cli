@@ -142,14 +142,14 @@ export const streamLibrarySecurityUpdateCommand =
       "Update a video library's security settings and allowed/blocked domains.",
     examples: [
       [
-        "$0 stream library security update my-library --embed-token --block-direct-access --allow-referrer example.com",
+        "$0 stream libraries security update my-library --embed-token --block-direct-access --allow-referrer example.com",
         "Require embed tokens and lock embeds to one domain",
       ],
       [
-        "$0 stream library security update my-library --drm-basic",
+        "$0 stream libraries security update my-library --drm-basic",
         "Turn on MediaCage Basic DRM",
       ],
-      ["$0 stream library security update my-library", "Edit interactively"],
+      ["$0 stream libraries security update my-library", "Edit interactively"],
     ],
 
     builder: (yargs) =>

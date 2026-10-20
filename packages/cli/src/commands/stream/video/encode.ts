@@ -23,12 +23,13 @@ interface ReencodeArgs {
   lib?: string;
 }
 
-export const streamEncodeReencodeCommand = defineCommand<ReencodeArgs>({
-  command: "reencode [video]",
+export const streamVideoEncodeCommand = defineCommand<ReencodeArgs>({
+  command: "encode [video]",
+  aliases: ["reencode"],
   describe: "Re-encode a video with the library's current encoding settings.",
   examples: [
-    ["$0 stream encode reencode 1a2b3c4d-...", "Re-encode one video"],
-    ["$0 stream encode reencode", "Pick a video interactively"],
+    ["$0 stream videos encode 1a2b3c4d-...", "Re-encode one video"],
+    ["$0 stream videos encode", "Pick a video interactively"],
   ],
 
   builder: (yargs) =>
@@ -58,7 +59,7 @@ export const streamEncodeReencodeCommand = defineCommand<ReencodeArgs>({
     if (video.hasOriginal === false) {
       throw new UserError(
         `${video.title} has no stored original file, so it can't be re-encoded.`,
-        "Upload the video again; turn on --keep-original (bunny stream library update) to keep originals for new uploads.",
+        "Upload the video again; turn on --keep-original (bunny stream libraries update) to keep originals for new uploads.",
       );
     }
 

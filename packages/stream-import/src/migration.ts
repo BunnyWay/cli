@@ -16,6 +16,7 @@ import {
   MAX_VIDEO_DURATION_SECONDS,
   MAX_VIDEO_LONG_EDGE,
   MAX_VIDEO_SHORT_EDGE,
+  SOURCE_MISSING_ERROR,
 } from "./constants.ts";
 import type {
   Logger,
@@ -429,7 +430,7 @@ export class MigrationService {
           (!folderId || m.sourceFolderId === folderId);
         if (!gone || signal?.aborted) continue;
         m.status = "failed";
-        m.error = "No longer listed at the source";
+        m.error = SOURCE_MISSING_ERROR;
         m.permanent = true;
       }
       state.status = signal?.aborted
@@ -604,9 +605,14 @@ export class MigrationService {
       (m) => m.status === "failed" && inScope(m),
     );
     const givenUp = failed.filter((m) => this.givenUp(m));
-    if (givenUp.length > 0)
+    const missing = givenUp.filter((m) => m.error === SOURCE_MISSING_ERROR);
+    if (givenUp.length > missing.length)
       this.logger.warn(
-        `Not retrying ${givenUp.length} videos that cannot succeed or failed ${MAX_IMPORT_ATTEMPTS} times; a fresh import or \`cleanFailed\` tries them again.`,
+        `Not retrying ${givenUp.length - missing.length} videos that cannot succeed or failed ${MAX_IMPORT_ATTEMPTS} times; a fresh import or \`cleanFailed\` tries them again.`,
+      );
+    if (missing.length > 0)
+      this.logger.warn(
+        `Not retrying ${missing.length} videos the source no longer lists; restore them there, then a fresh import or \`cleanFailed\` tries them again.`,
       );
     const retry = failed.filter((m) => !this.givenUp(m));
     if (retry.length === 0) return;

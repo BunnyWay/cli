@@ -17,6 +17,7 @@ import {
   type MigrationState,
   readMigrationState,
   refreshMigrationState,
+  SOURCE_MISSING_ERROR,
   videoStatusText,
 } from "@bunny.net/stream-import";
 import { z } from "zod";
@@ -480,9 +481,11 @@ export const streamImportRun = defineTool({
         name: m.videoName,
         sourceId: m.sourceVideoId,
         error: m.error,
+        missingAtSource: m.error === SOURCE_MISSING_ERROR,
         retryable:
-          Boolean(input.cleanFailed) ||
-          (!m.permanent && (m.attempts ?? 0) < MAX_IMPORT_ATTEMPTS),
+          m.error !== SOURCE_MISSING_ERROR &&
+          (Boolean(input.cleanFailed) ||
+            (!m.permanent && (m.attempts ?? 0) < MAX_IMPORT_ATTEMPTS)),
       })),
       collections: state.folderMappings,
       warnings,

@@ -54,15 +54,15 @@ export const streamVideoThumbnailCommand = defineCommand<ThumbnailArgs>({
   describe: "Set a video's thumbnail image.",
   examples: [
     [
-      "$0 stream video thumbnail 1a2b3c4d-... --url https://example.com/thumb.jpg",
+      "$0 stream videos thumbnail 1a2b3c4d-... --url https://example.com/thumb.jpg",
       "Have bunny.net download the image",
     ],
     [
-      "$0 stream video thumbnail 1a2b3c4d-... --file ./thumb.jpg",
+      "$0 stream videos thumbnail 1a2b3c4d-... --file ./thumb.jpg",
       "Upload a local image",
     ],
     [
-      "$0 stream video thumbnail --file ./thumb.jpg",
+      "$0 stream videos thumbnail --file ./thumb.jpg",
       "Pick the video interactively",
     ],
   ],
@@ -132,7 +132,7 @@ export const streamVideoThumbnailCommand = defineCommand<ThumbnailArgs>({
 
     logger.success(`Set the thumbnail for ${video.title}.`);
     logger.dim(
-      "It can take a moment to appear on the CDN. To pick a frame by time instead, pass --thumbnail-time to `video upload` or `video fetch` at ingest.",
+      "It can take a moment to appear on the CDN. To pick a frame by time instead, pass --thumbnail-time to `videos upload` or `videos fetch` at ingest.",
     );
   },
 });

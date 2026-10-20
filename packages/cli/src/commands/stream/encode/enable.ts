@@ -8,6 +8,7 @@ import {
   CODEC_CHOICES,
   type LibrarySettingsArgs,
   librarySettingsFromFlags,
+  PREMIUM_BILLING_NOTE,
   RESOLUTION_CHOICES,
 } from "@/commands/stream/library/flags.ts";
 import { resolveConfig } from "@/config/index.ts";
@@ -20,9 +21,6 @@ interface EncodeEnableArgs
   extends Pick<LibrarySettingsArgs, "jit" | "codecs" | "resolutions"> {
   lib?: string;
 }
-
-const BILLING_NOTE =
-  "Premium encoding is billed per output codec per minute of encoded video.";
 
 /**
  * The update body for switching a library to premium encoding.
@@ -91,7 +89,7 @@ export const streamEncodeEnableCommand = defineCommand<EncodeEnableArgs>({
     });
 
     // Text runs see the cost before the request; json output stays machine-clean.
-    if (output !== "json") logger.warn(BILLING_NOTE);
+    if (output !== "json") logger.warn(PREMIUM_BILLING_NOTE);
 
     const updated = await withSpinner(
       "Enabling premium encoding...",
