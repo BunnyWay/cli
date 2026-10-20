@@ -54,6 +54,22 @@ export async function fetchLibrary(
   return data;
 }
 
+export async function fetchLibraryHostname(
+  client: CoreClient,
+  library: Pick<VideoLibraryModel, "PullZoneId">,
+): Promise<string | undefined> {
+  if (!library.PullZoneId) return undefined;
+  const { data } = await client.GET("/pullzone/{id}", {
+    params: { path: { id: library.PullZoneId } },
+  });
+  const hostnames = data?.Hostnames ?? [];
+  const host =
+    hostnames.find((h) => !h.IsSystemHostname) ??
+    hostnames.find((h) => h.IsSystemHostname);
+
+  return host?.Value ?? undefined;
+}
+
 /**
  * Resolve a library reference (numeric ID or name) to a full library.
  *

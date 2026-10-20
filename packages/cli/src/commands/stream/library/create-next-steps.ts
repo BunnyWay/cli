@@ -1,5 +1,9 @@
 import { homedir } from "node:os";
-import type { VideoLibraryModel } from "@/commands/stream/api.ts";
+import {
+  type CoreClient,
+  fetchLibraryHostname,
+  type VideoLibraryModel,
+} from "@/commands/stream/api.ts";
 import {
   STREAM_MANIFEST,
   type StreamLibraryManifest,
@@ -20,6 +24,7 @@ import { readEnvValue, writeEnvValue } from "@/utils/env-file.ts";
 // The names the Stream examples read, so a saved .env works with them as is.
 export const ENV_STREAM_LIBRARY_ID = "BUNNY_STREAM_LIBRARY_ID";
 export const ENV_STREAM_API_KEY = "BUNNY_STREAM_API_KEY";
+export const ENV_STREAM_CDN_HOSTNAME = "BUNNY_STREAM_CDN_HOSTNAME";
 
 /** Link this directory to the new library: the flag decides, else ask when interactive. */
 export async function offerLink(
@@ -44,11 +49,12 @@ export async function offerLink(
   return true;
 }
 
-/** Save the library ID and API key to the nearest .env that already holds them, else ./.env. */
+/** Save the library ID, API key and CDN hostname to the nearest .env that already holds them, else ./.env. */
 export async function offerSaveEnv(
   library: VideoLibraryModel,
   flag: boolean | undefined,
   output: OutputFormat | undefined,
+  client?: CoreClient,
 ): Promise<boolean> {
   const apiKey = library.ApiKey;
   if (!library.Id || !apiKey) return false;
@@ -73,9 +79,16 @@ export async function offerSaveEnv(
     existing?.envPath,
   );
   writeEnvValue(ENV_STREAM_API_KEY, apiKey, envPath);
+
+  const hostname = client
+    ? await fetchLibraryHostname(client, library).catch(() => undefined)
+    : undefined;
+  if (hostname) writeEnvValue(ENV_STREAM_CDN_HOSTNAME, hostname, envPath);
   if (output !== "json")
     logger.success(
-      `Saved ${ENV_STREAM_LIBRARY_ID} and ${ENV_STREAM_API_KEY} to ${envPath}`,
+      hostname
+        ? `Saved ${ENV_STREAM_LIBRARY_ID}, ${ENV_STREAM_API_KEY} and ${ENV_STREAM_CDN_HOSTNAME} to ${envPath}`
+        : `Saved ${ENV_STREAM_LIBRARY_ID} and ${ENV_STREAM_API_KEY} to ${envPath}`,
     );
   return true;
 }

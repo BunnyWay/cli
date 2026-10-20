@@ -20,6 +20,7 @@ import { logger } from "@/core/logger.ts";
 import { confirmOrCancel, isInteractive, prompts, spinner } from "@/core/ui.ts";
 import {
   ENV_STREAM_API_KEY,
+  ENV_STREAM_CDN_HOSTNAME,
   ENV_STREAM_LIBRARY_ID,
   offerAddVideos,
   offerLink,
@@ -129,7 +130,7 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
         })
         .option("save-env", {
           type: "boolean",
-          describe: `Save ${ENV_STREAM_LIBRARY_ID} and ${ENV_STREAM_API_KEY} to .env (skips prompt). Use --no-save-env to skip without prompting.`,
+          describe: `Save ${ENV_STREAM_LIBRARY_ID}, ${ENV_STREAM_API_KEY} and ${ENV_STREAM_CDN_HOSTNAME} to .env (skips prompt). Use --no-save-env to skip without prompting.`,
         })
         .option("add-videos", {
           type: "boolean",
@@ -195,7 +196,7 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
         ? await offerLink(created, args.link, output)
         : false;
       const savedToEnv = created
-        ? await offerSaveEnv(created, args.saveEnv, output)
+        ? await offerSaveEnv(created, args.saveEnv, output, client)
         : false;
       logger.log(
         JSON.stringify(
@@ -225,7 +226,7 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     if (!created?.Id) return;
 
     await offerLink(created, args.link, output);
-    await offerSaveEnv(created, args.saveEnv, output);
+    await offerSaveEnv(created, args.saveEnv, output, client);
     if (args.addVideos !== false && isInteractive(output))
       await offerAddVideos(created, { profile, output, verbose, apiKey });
     printNextSteps(created);

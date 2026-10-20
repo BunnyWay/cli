@@ -1124,7 +1124,7 @@ Manage bunny.net Stream through three resource groups: **`bunny stream libraries
 
 `libraries` commands take the library as an optional positional (name or numeric ID); every other stream command takes it as the `--lib`/`--library` flag, since their positional is the video GUID, the collection ID, or a local file path. When the library is omitted it resolves from the directory's linked library (`bunny stream link`, stored in `.bunny/stream.json`), then an interactive picker, which offers to link the directory to the picked library (destructive commands never offer it). Non-interactive runs (`--output json`, no TTY, or `--force`) error with a hint instead of prompting: pass a library or link the directory. A `videos`, `collections`, or `videos captions` command with no ID behaves the same way, offering a picker interactively and erroring otherwise. `videos captions add <file> [video] [lang]` then asks for the language code, and `videos captions remove [video] [lang]` offers the video's caption languages to pick from; unattended runs need the video and the language.
 
-After creating a library, `libraries create` offers to link the directory, to save `BUNNY_STREAM_LIBRARY_ID` and `BUNNY_STREAM_API_KEY` to `.env` (the names the [Stream examples](https://github.com/BunnyWay/examples/tree/main/stream) read), and to add videos straight away by importing from another platform or uploading a file. `--link`/`--no-link` and `--save-env`/`--no-save-env` answer the first two without prompting, and `--no-add-videos` skips the third; non-interactive runs skip anything not set by a flag.
+After creating a library, `libraries create` offers to link the directory, to save `BUNNY_STREAM_LIBRARY_ID`, `BUNNY_STREAM_API_KEY` and `BUNNY_STREAM_CDN_HOSTNAME` to `.env` (the names the [Stream examples](https://github.com/BunnyWay/examples/tree/main/stream) read), and to add videos straight away by importing from another platform or uploading a file. `--link`/`--no-link` and `--save-env`/`--no-save-env` answer the first two without prompting, and `--no-add-videos` skips the third; non-interactive runs skip anything not set by a flag.
 
 There is deliberately no `videos create`: a video is added either by uploading a local file with `videos upload`, or by handing bunny.net a URL to download with `videos fetch`.
 
@@ -1135,7 +1135,7 @@ bunny stream libraries create my-library             # interactive: prompts for 
 bunny stream libraries create my-library             # stored in DE (the fixed main region); in a terminal, asks whether to replicate (SG, LA, NY preselected)
 bunny stream libraries create my-library --replication-regions NY,SG   # DE + NY, SG without asking; pass DE alone for no replication
 bunny stream libraries create my-library --encoding-tier premium --codecs x264,vp9   # premium encoding with extra codecs
-bunny stream libraries create my-library --link --save-env   # link this directory and write BUNNY_STREAM_LIBRARY_ID and BUNNY_STREAM_API_KEY to .env
+bunny stream libraries create my-library --link --save-env   # link this directory and write BUNNY_STREAM_LIBRARY_ID, BUNNY_STREAM_API_KEY and BUNNY_STREAM_CDN_HOSTNAME to .env
 bunny stream libraries show my-library               # details; API keys are never printed here, in any output format
 bunny stream libraries update my-library             # interactive: edit name, resolutions, transcribing
 bunny stream libraries update my-library --resolutions 720p,1080p      # set just the enabled resolutions
@@ -1145,7 +1145,7 @@ bunny stream libraries update my-library --add-replication-regions SYD   # add-o
 bunny stream libraries credentials my-library        # library ID + API key, masked by default
 bunny stream libraries credentials my-library --show-secret --read-only   # reveal the read-only key
 bunny stream libraries credentials my-library --rotate   # reset the API key (confirms first), then show the new one
-bunny stream libraries credentials my-library --save-env   # write BUNNY_STREAM_LIBRARY_ID and BUNNY_STREAM_API_KEY to .env
+bunny stream libraries credentials my-library --save-env   # write BUNNY_STREAM_LIBRARY_ID, BUNNY_STREAM_API_KEY and BUNNY_STREAM_CDN_HOSTNAME to .env
 bunny stream regions                               # region codes: DE is the fixed main region, SG, LA, NY the suggested replicas
 
 # Player and security settings (per library)
@@ -1241,7 +1241,7 @@ Library flags (`bunny stream libraries ...`):
 | `--transcribing-title`, `--transcribing-description`, `--transcribing-chapters`, `--transcribing-moments` | `create`, `update`                                   | Generate each field from the transcript                                                          |
 | `--read-only`, `--show-secret`                                                                            | `credentials`                                        | Use the read-only key; reveal the key (masked by default)                                        |
 | `--rotate`                                                                                                | `credentials`                                        | Reset the key (or the read-only key with `--read-only`), then show the new one                   |
-| `--save-env` / `--no-save-env`                                                                            | `create`, `credentials`                              | Save `BUNNY_STREAM_LIBRARY_ID` and the shown API key to `.env` without asking, or skip the offer |
+| `--save-env` / `--no-save-env`                                                                            | `create`, `credentials`                              | Save `BUNNY_STREAM_LIBRARY_ID`, the shown API key and `BUNNY_STREAM_CDN_HOSTNAME` to `.env` without asking, or skip the offer |
 | `--no-add-videos`                                                                                         | `create`                                             | Skip the offer to import or upload videos                                                        |
 | `--force`, `-f`                                                                                           | `update`, `unlink`, `delete`, `credentials --rotate` | Skip the prompts (required when there is no TTY to answer them)                                  |
 
