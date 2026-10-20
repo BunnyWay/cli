@@ -9,7 +9,6 @@ interface Item {
   columns: number;
 }
 
-/** Searchable list of tables and views with arrow-key navigation, shown in the tab bar's "+" popover. */
 export function TablePicker({
   tables,
   views,

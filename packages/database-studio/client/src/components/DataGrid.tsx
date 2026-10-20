@@ -17,10 +17,8 @@ const MIN_WIDTH = 60;
 
 export interface GridColumn {
   name: string;
-  /** Declared type; unknown for query results. */
   type?: string;
   primaryKey?: boolean;
-  /** `table.column` this column references, for the header icon and following the key. */
   references?: string;
 }
 
@@ -29,12 +27,6 @@ interface Cell {
   col: number;
 }
 
-/**
- * The spreadsheet-style grid behind table browsing and query results. Click a
- * cell to select it, move with the arrow keys, copy with Cmd/Ctrl+C, and open
- * the row with Enter, a double-click, or the row number. Drag a header's edge
- * to resize a column; double-click the edge to reset it.
- */
 export function DataGrid({
   columns,
   rows,
@@ -47,12 +39,11 @@ export function DataGrid({
   emptyMessage,
 }: {
   columns: GridColumn[];
-  /** Positional rows: `rows[i][j]` is column `j`. */
+  // Positional so query results can repeat a column name.
   rows: unknown[][];
   offset?: number;
   sort?: { column: string; order: string };
   onSort?: (column: string) => void;
-  /** The row whose details are open, highlighted. */
   activeRow?: number | null;
   onOpenRow?: (index: number) => void;
   onFollowForeignKey?: (col: number, value: unknown) => Promise<string | null>;
@@ -64,7 +55,6 @@ export function DataGrid({
   const [followErrors, setFollowErrors] = useState<Record<string, string>>({});
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // A new page or result starts without a selection.
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset when the rows change
   useEffect(() => setSelected(null), [rows]);
 
@@ -217,7 +207,6 @@ export function DataGrid({
                 </th>
               );
             })}
-            {/* Takes up spare width so data columns size to their content. */}
             <th className="w-full border-b" />
           </tr>
         </thead>

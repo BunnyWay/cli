@@ -91,10 +91,6 @@ const highlight = HighlightStyle.define([
   },
 ]);
 
-/**
- * CodeMirror with SQLite highlighting and completion from the schema.
- * Cmd/Ctrl+Enter runs the selection, or the statement under the cursor.
- */
 export function SqlEditor({
   value,
   onChange,
@@ -104,7 +100,6 @@ export function SqlEditor({
   value: string;
   onChange: (value: string) => void;
   onRun: (sql: string) => void;
-  /** Table and view names to their columns, for autocomplete. */
   schema: Record<string, string[]>;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -166,7 +161,6 @@ export function SqlEditor({
     return () => view.destroy();
   }, []);
 
-  // Outside changes (history, "open view") replace the document.
   useEffect(() => {
     const view = viewRef.current;
     if (!view || view.state.doc.toString() === value) return;

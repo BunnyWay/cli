@@ -9,17 +9,12 @@ function subscribe(callback: () => void) {
   return () => window.removeEventListener("popstate", callback);
 }
 
-/** Read a single URL search param reactively. */
 export function useUrlParam(key: string): string | null {
   const search = useSyncExternalStore(subscribe, getSearch);
   return new URLSearchParams(search).get(key);
 }
 
-/**
- * Update URL search params without a page reload. `push` adds a history
- * entry so Back returns to the previous view (used for navigation, not for
- * every filter keystroke).
- */
+// `push` is for navigation only, so Back skips individual filter and paging edits.
 export function setUrlParams(
   updates: Record<string, string | null>,
   { push = false }: { push?: boolean } = {},
@@ -40,11 +35,9 @@ export function setUrlParams(
   } else {
     window.history.replaceState(null, "", url);
   }
-  // Notify subscribers
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-/** Params scoped to one table's view; cleared when switching tables. */
 export const TABLE_VIEW_PARAMS = {
   view: null,
   page: null,
@@ -54,5 +47,5 @@ export const TABLE_VIEW_PARAMS = {
   mode: null,
 } as const;
 
-/** The `table` param value for the SQL console; not a valid unquoted table name. */
+// Not a valid unquoted table name, so it can't clash with one.
 export const SQL_TAB = ":sql";

@@ -40,7 +40,7 @@
 }
 
 .dark {
-  /* bunny.net branding — deep navy + orange */
+  /* bunny.net branding: deep navy + orange */
   --background: oklch(0.232 0.06 251.2); /* #041E38 */
   --foreground: oklch(1 0 0); /* white */
   --card: oklch(0.252 0.066 250.5); /* #042340 */

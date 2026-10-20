@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchRows, type RowsQuery, type RowsResponse } from "@/api";
 
-/**
- * One page of a table's rows. Refetches when the query changes, cancels a
- * fetch that a newer one replaces, and keeps the last page on screen while
- * the next loads.
- */
+// Keeps the last page on screen while the next loads.
 export function useTableRows(table: string, query: RowsQuery) {
   const [data, setData] = useState<RowsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Compare by value so a re-render with an equal query doesn't refetch.
+  // Compared by value so an equal query doesn't refetch.
   const queryKey = JSON.stringify(query);
   const stableQuery = useMemo(
     () => JSON.parse(queryKey) as RowsQuery,

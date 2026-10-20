@@ -96,7 +96,6 @@ export function TabBar({
               type="button"
               onClick={() => onSelect(name)}
               onAuxClick={(e) => {
-                // Middle-click closes, as in a browser.
                 if (e.button === 1) onClose(name);
               }}
               className="h-full pl-3 pr-1.5 font-mono text-xs"

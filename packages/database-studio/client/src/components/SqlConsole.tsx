@@ -5,7 +5,7 @@ import { DataGrid } from "@/components/DataGrid";
 import { MenuItem, Popover } from "@/components/Popover";
 import { SqlEditor } from "@/components/SqlEditor";
 import { Button } from "@/components/ui/button";
-import { download, toCsv } from "@/lib/format";
+import { downloadRows } from "@/lib/format";
 import { MOD_KEY, startDrag } from "@/lib/interaction";
 import { quoteIdent } from "@/lib/sql";
 import { cn } from "@/lib/utils";
@@ -43,7 +43,6 @@ function timeAgo(at: number): string {
   return new Date(at).toLocaleDateString();
 }
 
-/** A request from elsewhere in the app (e.g. opening a view) to load and run SQL. */
 export interface ConsoleRequest {
   sql: string;
   nonce: number;
@@ -120,18 +119,7 @@ export function SqlConsole({
 
   function exportResult(format: "csv" | "json") {
     if (!result) return;
-    const objects = result.rows.map((r) =>
-      Object.fromEntries(result.columns.map((c, i) => [c, r[i]])),
-    );
-    if (format === "csv") {
-      download("query.csv", toCsv(result.columns, result.rows), "text/csv");
-    } else {
-      download(
-        "query.json",
-        `${JSON.stringify(objects, null, 2)}\n`,
-        "application/json",
-      );
-    }
+    downloadRows("query", result.columns, result.rows, format);
     setExportOpen(false);
   }
 
@@ -143,11 +131,6 @@ export function SqlConsole({
       ),
     );
   }
-
-  const gridColumns = useMemo(
-    () => result?.columns.map((name) => ({ name })) ?? [],
-    [result],
-  );
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -252,7 +235,7 @@ export function SqlConsole({
           </div>
         ) : result ? (
           <DataGrid
-            columns={gridColumns}
+            columns={result.columns.map((name) => ({ name }))}
             rows={result.rows}
             emptyMessage={
               result.columns.length === 0

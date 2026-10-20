@@ -18,7 +18,6 @@ export type OpenTable = (name: string, filters?: FilterCondition[]) => void;
 
 type ViewState = Record<keyof typeof TABLE_VIEW_PARAMS, string | null>;
 
-/** The active tab's view params as they stand in the URL. */
 function currentViewState(): ViewState {
   const params = new URLSearchParams(window.location.search);
   return Object.fromEntries(
@@ -107,7 +106,6 @@ export function App() {
       setUrlParams({ open: tabs.length ? tabs.join(",") : null });
       return;
     }
-    // Closing the active tab moves to its neighbour, like a browser.
     const index = openTabs.indexOf(name);
     const next = tabs[Math.min(index, tabs.length - 1)] ?? null;
     // The closed tab's state must not be saved on the way out.
@@ -115,7 +113,6 @@ export function App() {
     switchTo(next, { tabs });
   }
 
-  // Cmd/Ctrl+K opens the table picker from anywhere.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {

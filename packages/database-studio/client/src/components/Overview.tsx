@@ -36,7 +36,6 @@ const Th = ({ children }: { children?: React.ReactNode }) => (
   </th>
 );
 
-/** The database at a glance, like phpMyAdmin's Structure page. */
 export function Overview({
   schema,
   missing,
@@ -45,10 +44,8 @@ export function Overview({
   onOpenSql,
 }: {
   schema: StudioSchema;
-  /** A table named in the URL that isn't in the schema. */
   missing: string | null;
   onSelect: (name: string, view?: "schema") => void;
-  /** Opens a table or view in the SQL console with a starter query. */
   onSelectView: (name: string) => void;
   onOpenSql: () => void;
 }) {
@@ -143,7 +140,7 @@ export function Overview({
                             {t.primaryKey.join(", ")}
                           </span>
                         ) : (
-                          "—"
+                          "-"
                         )}
                       </td>
                       <Count n={t.columns.length} />

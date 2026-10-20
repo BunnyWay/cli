@@ -19,12 +19,9 @@ export interface ViewDefinition {
 }
 
 export interface StudioSchema {
-  /** Which database is open, e.g. `db_… (host)`. */
   label: string | null;
-  /** The database token itself is read-only (studio created it), not just studio's checks. */
   tokenReadOnly: boolean;
   tables: TableDefinition[];
-  /** Each table's CREATE statements: the table, then its indexes and triggers. */
   ddl: Record<string, string[]>;
   views: ViewDefinition[];
 }
@@ -32,7 +29,6 @@ export interface StudioSchema {
 export interface QueryResult {
   columns: string[];
   rows: unknown[][];
-  /** The server stopped at its row cap. */
   truncated: boolean;
   durationMs: number;
 }
@@ -109,25 +105,20 @@ export async function fetchRows(
   };
 }
 
-/** The first row where `column` equals `value`, or null; used to follow foreign keys. */
 export async function fetchRowWhere(
   table: string,
   column: string,
   value: unknown,
 ): Promise<Row | null> {
-  const params = new URLSearchParams({ limit: "1" });
-  for (const [key, v] of filterParams(
-    [{ column, operator: "eq", value: String(value) }],
-    "and",
-  )) {
-    params.append(key, v);
-  }
-  const res = await request(`/api/${encodeURIComponent(table)}?${params}`);
-  const body = (await res.json()) as { data: Row[] };
-  return body.data[0] ?? null;
+  const { rows } = await fetchRows(table, {
+    page: 1,
+    limit: 1,
+    filters: [{ column, operator: "eq", value: String(value) }],
+    mode: "and",
+  });
+  return rows[0] ?? null;
 }
 
-/** Run one read-only statement in the SQL console. */
 export async function runQuery(
   sql: string,
   signal?: AbortSignal,

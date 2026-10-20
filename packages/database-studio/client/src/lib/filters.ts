@@ -8,14 +8,11 @@ export interface FilterCondition {
 
 interface Operator {
   label: string;
-  /** Operators like IS NULL take no value. */
   nullary?: boolean;
-  /** The `op.value` part of a REST filter (`not.` prefix included). */
   encode: (value: string) => string;
 }
 
-// LIKE patterns: `%` and `_` in the user's value stay wildcards, which is
-// what people typing into a "contains" box usually expect anyway.
+// `%` and `_` in a "contains" value stay wildcards on purpose.
 export const OPERATORS = {
   eq: { label: "equals", encode: (v) => `eq.${v}` },
   neq: { label: "not equal", encode: (v) => `neq.${v}` },
@@ -58,12 +55,10 @@ export function isNullary(id: OperatorId): boolean {
   return "nullary" in OPERATORS[id];
 }
 
-/** A filter is ready to send once it has a value, unless its operator needs none. */
 export function isComplete(f: FilterCondition): boolean {
   return isNullary(f.operator) || f.value !== "";
 }
 
-/** Quote a value for an `or=(...)` group when it carries characters the group syntax uses. */
 function quoteForGroup(encoded: string): string {
   const dot = encoded.startsWith("not.")
     ? encoded.indexOf(".", 4)
@@ -75,13 +70,11 @@ function quoteForGroup(encoded: string): string {
   return `${op}"${value.replace(/[\\"]/g, "\\$&")}"`;
 }
 
-/** Query parameters the REST handler reads as paging or options, not as column filters. */
 const RESERVED_PARAMS = new Set(["select", "order", "limit", "offset", "or"]);
 
 const groupPart = (f: FilterCondition) =>
   `${f.column}.${quoteForGroup(OPERATORS[f.operator].encode(f.value))}`;
 
-/** Query parameters for the REST handler: one per filter, or a single `or=(...)` group. */
 export function filterParams(
   filters: FilterCondition[],
   mode: FilterMode,
@@ -91,8 +84,7 @@ export function filterParams(
     return [["or", `(${ready.map(groupPart).join(",")})`]];
   }
   return ready.map((f): [string, string] =>
-    // A column named `limit` or `order` would collide with the paging
-    // parameter, so its filter goes in a one-condition group instead.
+    // A column named like a paging param (`limit`, `order`) would collide, so it goes in a group.
     RESERVED_PARAMS.has(f.column)
       ? ["or", `(${groupPart(f)})`]
       : [f.column, OPERATORS[f.operator].encode(f.value)],

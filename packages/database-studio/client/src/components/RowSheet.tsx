@@ -69,7 +69,6 @@ export function RowSheet({
     >
       {entry && (
         <SheetContent
-          hideOverlay
           className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
           onInteractOutside={(e) => {
             // Clicking another row swaps the sheet's contents instead of closing it.

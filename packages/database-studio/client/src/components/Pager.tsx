@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 export const PAGE_SIZES = [25, 50, 100, 250];
 export const DEFAULT_PAGE_SIZE = 50;
 
-/** The table view's footer: which rows are showing, the page size, and page buttons. */
 export function Pager({
   data,
   page,

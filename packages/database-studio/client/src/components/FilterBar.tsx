@@ -27,7 +27,6 @@ interface Draft extends FilterCondition {
 let nextId = 0;
 const draft = (f: FilterCondition): Draft => ({ ...f, id: nextId++ });
 
-/** A sensible first operator: text columns are usually searched, not matched exactly. */
 function defaultOperator(column?: ColumnDefinition): OperatorId {
   return column?.type === "TEXT" ? "contains" : "eq";
 }
@@ -43,18 +42,15 @@ export function FilterBar({
   mode: FilterMode;
   onApply: (filters: FilterCondition[], mode: FilterMode) => void;
 }) {
-  // Re-mounted (via key) whenever the applied filters change, so drafts start
-  // from what's in the URL.
+  // Re-mounted via key when the applied filters change, so drafts start from the URL.
+  const blank = () =>
+    draft({
+      column: columns[0]?.name ?? "",
+      operator: defaultOperator(columns[0]),
+      value: "",
+    });
   const [drafts, setDrafts] = useState<Draft[]>(() =>
-    applied.length > 0
-      ? applied.map(draft)
-      : [
-          draft({
-            column: columns[0]?.name ?? "",
-            operator: defaultOperator(columns[0]),
-            value: "",
-          }),
-        ],
+    applied.length > 0 ? applied.map(draft) : [blank()],
   );
 
   const strip = (ds: Draft[]): FilterCondition[] =>
@@ -71,18 +67,6 @@ export function FilterBar({
     const next = drafts.filter((d) => d.id !== id);
     setDrafts(next);
     onApply(strip(next), mode);
-  }
-
-  function add() {
-    const column = columns[0];
-    setDrafts((ds) => [
-      ...ds,
-      draft({
-        column: column?.name ?? "",
-        operator: defaultOperator(column),
-        value: "",
-      }),
-    ]);
   }
 
   return (
@@ -179,7 +163,7 @@ export function FilterBar({
           variant="ghost"
           size="sm"
           className="h-6 gap-1 px-2 text-xs"
-          onClick={add}
+          onClick={() => setDrafts((ds) => [...ds, blank()])}
         >
           <Plus className="h-3 w-3" />
           Add filter

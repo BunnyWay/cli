@@ -1,14 +1,9 @@
 import { useCallback, useState } from "react";
 
-export const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+export const MOD_KEY = /Mac|iPhone|iPad/.test(navigator.platform)
+  ? "⌘"
+  : "Ctrl ";
 
-/** The platform's modifier key as shown in shortcut hints. */
-export const MOD_KEY = isMac ? "⌘" : "Ctrl ";
-
-/**
- * Copy text and remember which thing was copied for a moment, so the caller
- * can flash a check mark next to it.
- */
 export function useCopy(duration = 1200) {
   const [copied, setCopied] = useState<string | null>(null);
   const copy = useCallback(
@@ -23,10 +18,7 @@ export function useCopy(duration = 1200) {
   return { copied, copy };
 }
 
-/**
- * Track a pointer drag that started with `e`, reporting how far it has moved.
- * Listens on the window so the drag survives leaving the handle.
- */
+// Listens on the window so the drag survives leaving the handle.
 export function startDrag(
   e: React.PointerEvent,
   onMove: (dx: number, dy: number) => void,

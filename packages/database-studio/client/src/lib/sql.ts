@@ -1,8 +1,4 @@
-/**
- * The statement around `pos`: the text between the semicolons on either side,
- * ignoring semicolons inside quotes and comments. Lets Cmd+Enter run the
- * statement under the cursor when the editor holds several.
- */
+// Lets Cmd+Enter run the statement under the cursor; skips semicolons in quotes and comments.
 export function statementAt(doc: string, pos: number): string {
   const bounds: number[] = [];
   let quote: string | null = null;
@@ -43,12 +39,11 @@ export function statementAt(doc: string, pos: number): string {
     }
   }
   const statement = doc.slice(start, end).trim();
-  // The cursor on a blank line after the last statement means that statement.
   if (!statement && start > 0) return statementAt(doc, start - 1);
   return statement;
 }
 
-/** Always quoted: a bare name can be a keyword (`order`, `group`). */
+// Always quoted: a bare name can be a keyword (`order`, `group`).
 export function quoteIdent(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
 }

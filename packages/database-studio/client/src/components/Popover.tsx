@@ -1,10 +1,7 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
-/**
- * A panel anchored under its trigger. Closes on outside click or Escape.
- * Render it inside a `relative` wrapper alongside the trigger.
- */
+// Render inside a `relative` wrapper alongside the trigger.
 export function Popover({
   open,
   onClose,

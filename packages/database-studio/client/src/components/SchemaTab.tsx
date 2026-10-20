@@ -129,7 +129,7 @@ export function SchemaTab({
                 <Td mono>
                   {col.defaultValue === null ||
                   col.defaultValue === undefined ? (
-                    <span className="text-muted-foreground/60">—</span>
+                    <span className="text-muted-foreground/60">-</span>
                   ) : (
                     String(col.defaultValue)
                   )}
@@ -174,7 +174,7 @@ export function SchemaTab({
                   {idx.unique ? (
                     <Tag>UNIQUE</Tag>
                   ) : (
-                    <span className="text-muted-foreground/60">—</span>
+                    <span className="text-muted-foreground/60">-</span>
                   )}
                 </Td>
               </tr>

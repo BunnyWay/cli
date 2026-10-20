@@ -1,9 +1,5 @@
 import { base64Size, formatBytes, parseJsonObject } from "@/lib/format";
 
-/**
- * Renders a value by its column type. `inline` is the one-line grid form;
- * otherwise long text wraps and JSON is pretty-printed.
- */
 export function CellValue({
   value,
   type,

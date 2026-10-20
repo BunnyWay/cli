@@ -1,5 +1,5 @@
 import { Columns3, Download, Filter, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { OpenTable } from "@/App";
 import { fetchRowWhere, type RowsQuery, type TableDefinition } from "@/api";
 import { DataGrid, type GridColumn } from "@/components/DataGrid";
@@ -18,7 +18,7 @@ import {
   isComplete,
   isOperator,
 } from "@/lib/filters";
-import { download, toCsv } from "@/lib/format";
+import { downloadRows } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 function parseFilters(
@@ -54,7 +54,6 @@ export function TableView({
 }: {
   table: TableDefinition;
   tables: TableDefinition[];
-  /** The table's CREATE statements, for the schema view. */
   ddl: string[];
   onOpenTable: OpenTable;
 }) {
@@ -73,14 +72,8 @@ export function TableView({
   const modeParam = useUrlParam("mode");
 
   const view = viewParam === "schema" ? "schema" : "data";
-  const columnNames = useMemo(
-    () => new Set(table.columns.map((c) => c.name)),
-    [table],
-  );
-  const filters = useMemo(
-    () => parseFilters(filtersParam, columnNames),
-    [filtersParam, columnNames],
-  );
+  const columnNames = new Set(table.columns.map((c) => c.name));
+  const filters = parseFilters(filtersParam, columnNames);
   const mode: FilterMode = modeParam === "or" ? "or" : "and";
   const [filtersOpen, setFiltersOpen] = useState(filters.length > 0);
 
@@ -110,7 +103,6 @@ export function TableView({
     }
   }, [data, page]);
 
-  // R refreshes, like a browser reload but without losing the session.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
@@ -132,7 +124,6 @@ export function TableView({
   }
 
   function setSort(column: string) {
-    // Cycle: ascending, descending, unsorted.
     if (sort?.column !== column) {
       setUrlParams({ sort: column, order: null, page: null });
     } else if (sort.order === "asc") {
@@ -151,14 +142,11 @@ export function TableView({
     });
   }
 
-  const openTable = useCallback<OpenTable>(
-    (name, nextFilters) => {
-      setSheet([]);
-      if (nextFilters?.length) setFiltersOpen(true);
-      onOpenTable(name, nextFilters);
-    },
-    [onOpenTable],
-  );
+  const openTable: OpenTable = (name, nextFilters) => {
+    setSheet([]);
+    if (nextFilters?.length) setFiltersOpen(true);
+    onOpenTable(name, nextFilters);
+  };
 
   async function followForeignKey(
     from: TableDefinition,
@@ -184,40 +172,28 @@ export function TableView({
     () => table.columns.filter((c) => !hidden.has(c.name)),
     [table, hidden],
   );
-  const gridColumns = useMemo<GridColumn[]>(() => {
-    const fks = new Map(table.foreignKeys.map((fk) => [fk.column, fk]));
-    return visibleColumns.map((c) => {
-      const fk = fks.get(c.name);
-      return {
-        name: c.name,
-        type: c.type,
-        primaryKey: table.primaryKey.includes(c.name),
-        references: fk && `${fk.referencesTable}.${fk.referencesColumn}`,
-      };
-    });
-  }, [table, visibleColumns]);
+  const gridColumns: GridColumn[] = visibleColumns.map((c) => {
+    const fk = table.foreignKeys.find((f) => f.column === c.name);
+    return {
+      name: c.name,
+      type: c.type,
+      primaryKey: table.primaryKey.includes(c.name),
+      references: fk && `${fk.referencesTable}.${fk.referencesColumn}`,
+    };
+  });
+  // Stable rows matter: DataGrid clears its cell selection when they change.
   const gridRows = useMemo(
     () => data?.rows.map((r) => visibleColumns.map((c) => r[c.name])) ?? [],
     [data, visibleColumns],
   );
-  const offset = (page - 1) * limit;
 
   function exportPage(format: "csv" | "json") {
-    if (!data) return;
-    const names = visibleColumns.map((c) => c.name);
-    const base = `${table.name}-page-${page}`;
-    if (format === "csv") {
-      download(`${base}.csv`, toCsv(names, gridRows), "text/csv");
-    } else {
-      const rows = gridRows.map((r) =>
-        Object.fromEntries(names.map((n, i) => [n, r[i]])),
-      );
-      download(
-        `${base}.json`,
-        `${JSON.stringify(rows, null, 2)}\n`,
-        "application/json",
-      );
-    }
+    downloadRows(
+      `${table.name}-page-${page}`,
+      visibleColumns.map((c) => c.name),
+      gridRows,
+      format,
+    );
     setExportOpen(false);
   }
 
@@ -313,48 +289,48 @@ export function TableView({
                 )}
               </Popover>
             </div>
-          </>
-        )}
 
-        {view === "data" && (
-          <div className="ml-auto flex items-center gap-1">
-            <div className="relative">
+            <div className="ml-auto flex items-center gap-1">
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  disabled={!data || data.rows.length === 0}
+                  onClick={() => setExportOpen(!exportOpen)}
+                >
+                  <Download className="h-3 w-3" />
+                  Export
+                </Button>
+                <Popover
+                  open={exportOpen}
+                  onClose={() => setExportOpen(false)}
+                  align="right"
+                  className="w-44"
+                >
+                  <MenuItem onClick={() => exportPage("csv")}>
+                    This page as CSV
+                  </MenuItem>
+                  <MenuItem onClick={() => exportPage("json")}>
+                    This page as JSON
+                  </MenuItem>
+                </Popover>
+              </div>
               <Button
                 variant="ghost"
-                size="sm"
-                className="h-7 gap-1 text-xs"
-                disabled={!data || data.rows.length === 0}
-                onClick={() => setExportOpen(!exportOpen)}
+                size="icon"
+                className="h-7 w-7"
+                disabled={loading}
+                onClick={refresh}
+                title="Refresh (R)"
+                aria-label="Refresh"
               >
-                <Download className="h-3 w-3" />
-                Export
+                <RefreshCw
+                  className={cn("h-3 w-3", loading && "animate-spin")}
+                />
               </Button>
-              <Popover
-                open={exportOpen}
-                onClose={() => setExportOpen(false)}
-                align="right"
-                className="w-44"
-              >
-                <MenuItem onClick={() => exportPage("csv")}>
-                  This page as CSV
-                </MenuItem>
-                <MenuItem onClick={() => exportPage("json")}>
-                  This page as JSON
-                </MenuItem>
-              </Popover>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              disabled={loading}
-              onClick={refresh}
-              title="Refresh (R)"
-              aria-label="Refresh"
-            >
-              <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
-            </Button>
-          </div>
+          </>
         )}
       </div>
 
@@ -410,7 +386,7 @@ export function TableView({
               <DataGrid
                 columns={gridColumns}
                 rows={gridRows}
-                offset={offset}
+                offset={(page - 1) * limit}
                 sort={sort}
                 onSort={setSort}
                 activeRow={selectedRow}

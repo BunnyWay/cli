@@ -7,12 +7,10 @@ export interface QueryResult {
   columns: string[];
   /** Positional, so duplicate column names (`a.id`, `b.id`) both survive. */
   rows: SqlValue[][];
-  /** True when the query returned more than `MAX_ROWS` rows and the rest were dropped. */
   truncated: boolean;
   durationMs: number;
 }
 
-/** Rows sent to the browser per query; the console says when a result was cut. */
 export const MAX_ROWS = 1000;
 
 const READ_KEYWORDS = new Set([
@@ -23,12 +21,7 @@ const READ_KEYWORDS = new Set([
   "VALUES",
 ]);
 
-/**
- * Keywords that can make a single statement write even after a read keyword
- * (`WITH … DELETE`, `EXPLAIN` aside). Words like BEGIN or VACUUM can only
- * start a statement, which the first-keyword check already covers, and
- * leaving them out keeps columns named `begin` or `release` usable.
- */
+// Writes that can follow a read keyword (`WITH … DELETE`); statement-initial words like BEGIN are caught by the first-keyword check.
 const WRITE_KEYWORDS = new Set([
   "INSERT",
   "UPDATE",
@@ -39,7 +32,7 @@ const WRITE_KEYWORDS = new Set([
   "ALTER",
 ]);
 
-/** PRAGMAs that read schema and may name a table or index: `PRAGMA table_info(users)`. */
+/** Read-only PRAGMAs that may take a table or index name. */
 const SCHEMA_PRAGMAS = new Set([
   "table_info",
   "table_xinfo",
@@ -53,7 +46,7 @@ const SCHEMA_PRAGMAS = new Set([
   "quick_check",
 ]);
 
-/** PRAGMAs that report a setting; with an argument or `=` they'd change it, so they must stand alone. */
+/** PRAGMAs that read a setting only when they stand alone; an argument or `=` sets it. */
 const STATUS_PRAGMAS = new Set([
   "compile_options",
   "database_list",
@@ -76,10 +69,7 @@ const STATUS_PRAGMAS = new Set([
 /** A query studio won't run; the message is safe to show as-is. */
 export class QueryRejected extends Error {}
 
-/**
- * The SQL with comments, string literals, and quoted identifiers blanked
- * out, so keyword checks only see the statement's own words.
- */
+/** The SQL with comments, strings, and quoted identifiers blanked out. */
 function codeOnly(sql: string): string {
   return sql.replace(
     /--[^\n]*|\/\*[\s\S]*?\*\/|'(?:[^']|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]*\]/g,
@@ -87,8 +77,7 @@ function codeOnly(sql: string): string {
   );
 }
 
-/** The first keyword after any leading whitespace and comments. */
-export function firstKeyword(sql: string): string | null {
+function firstKeyword(sql: string): string | null {
   return (
     codeOnly(sql)
       .trim()
@@ -119,7 +108,6 @@ export function rejectionReason(statement: string): string | null {
       : `Studio only runs PRAGMAs that read, such as table_info(name) or user_version on its own. PRAGMA ${name || "?"} as written could change a setting.`;
   }
 
-  // One statement only, so nothing can follow the checked one.
   if (code.includes(";")) {
     return "Run one statement at a time: select it, or put the cursor in it, and press Run.";
   }
@@ -138,12 +126,7 @@ export function rejectionReason(statement: string): string | null {
   return null;
 }
 
-/**
- * `PRAGMA name(arg)` as `SELECT * FROM pragma_name('arg')`. libSQL servers
- * classify some read-only PRAGMAs (foreign_key_list, user_version) as
- * writes, so a read-only token can't run them, but the table-valued form is a
- * SELECT. Only called for PRAGMAs `rejectionReason()` already allowed.
- */
+/** libSQL treats some read-only PRAGMAs as writes, so run them in their table-valued SELECT form. */
 export function pragmaAsSelect(statement: string): string | null {
   const match = statement.match(
     /^\s*PRAGMA\s+(?:(\w+)\s*\.\s*)?(\w+)\s*(?:\((.*)\))?\s*;?\s*$/is,
@@ -151,7 +134,6 @@ export function pragmaAsSelect(statement: string): string | null {
   if (!match) return null;
   const [, schema, name, rawArg = ""] = match;
   const arg = unquote(rawArg.trim());
-  // The table-valued form takes the PRAGMA's argument, then the schema.
   const args = [...(arg ? [arg] : []), ...(schema ? [schema] : [])].map(
     (a) => `'${a.replace(/'/g, "''")}'`,
   );
@@ -170,14 +152,7 @@ function unquote(text: string): string {
   return text;
 }
 
-/**
- * Run one statement from the SQL console. Writes are stopped at two layers:
- * studio rejects statements that contain write keywords, and a libSQL
- * server refuses anything its parser classifies as a write when the token is
- * read-only, which it is whenever studio created the token. (SQLite's
- * `PRAGMA query_only` would be a neater guard, but libSQL servers reject
- * that statement outright.)
- */
+/** Runs one console statement; writes are refused here and, with a CLI-created token, by the server too. */
 export async function runReadOnlyQuery(
   client: QueryClient,
   sql: string,
@@ -207,12 +182,7 @@ export async function runReadOnlyQuery(
 const AUTH_ERROR =
   /not authori[sz]ed|unauthori[sz]ed|forbidden|permission|read.?only|readonly/i;
 
-/**
- * The message to show the person who typed the query. SQL errors (syntax,
- * unknown column) are about their own query, so they're shown; scope and
- * token failures get an explanation; anything else stays generic and goes to
- * the terminal.
- */
+/** A message safe to show in the browser, or null to log the error and show a generic one. */
 export function queryErrorMessage(err: unknown): string | null {
   if (err instanceof QueryRejected) return err.message;
   if (!(err instanceof DatabaseError)) return null;

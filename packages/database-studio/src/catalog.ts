@@ -23,10 +23,7 @@ const quote = (name: string) => `"${name.replace(/"/g, '""')}"`;
 const excluded = (name: string) =>
   name.startsWith("sqlite_") || !shouldInclude(name, DEFAULT_EXCLUDE_PATTERNS);
 
-/**
- * A view's columns, or none when SQLite can't resolve it (a view over a
- * dropped table): one stale view must not stop studio from starting.
- */
+/** A view's columns, or none when it can't resolve (a view over a dropped table). */
 async function viewColumns(
   client: CatalogClient,
   name: string,
@@ -41,11 +38,7 @@ async function viewColumns(
   }
 }
 
-/**
- * What introspection leaves out and the schema view wants: the CREATE
- * statements as written (including triggers, which introspection doesn't
- * read), and views with their columns.
- */
+/** The CREATE statements (including triggers) and views that introspection leaves out. */
 export async function loadCatalog(
   client: CatalogClient,
   tableNames: Set<string>,
