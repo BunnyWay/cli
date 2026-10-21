@@ -142,7 +142,6 @@ export async function uploadFile(
   contents: Blob,
   options?: UploadOptions,
 ): Promise<void> {
-
   await BunnyStorage.file.upload(
     zone,
     normalizePath(remotePath),
