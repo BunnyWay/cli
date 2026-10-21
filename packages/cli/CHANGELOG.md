@@ -1,5 +1,15 @@
 # @bunny.net/cli
 
+## 0.20.3
+
+### Patch Changes
+
+- [#269](https://github.com/BunnyWay/cli/pull/269) [`655a0da`](https://github.com/BunnyWay/cli/commit/655a0da51f14fd97848b2c0fdcc3f8a258d9029c) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Show a Public Preview notice on `sites` and `stream` commands
+
+- [#270](https://github.com/BunnyWay/cli/pull/270) [`290ffba`](https://github.com/BunnyWay/cli/commit/290ffba684b650b1737b7e1bc3963226c5baacb2) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix `sites deploy` and `storage files upload --checksum` which failed with "invalid path or checksum"
+
+- [#272](https://github.com/BunnyWay/cli/pull/272) [`ca396df`](https://github.com/BunnyWay/cli/commit/ca396dfaeae0a5ce0661e7860037fd399c9f9526) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - Prompt for a missing file or URL in `stream videos upload`, `stream videos fetch`, and `stream videos captions add` instead of failing with "Not enough non-option arguments"
+
 ## 0.20.2
 
 ### Patch Changes
