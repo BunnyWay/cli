@@ -107,10 +107,6 @@ async function downloadText(
   }
 }
 
-function textStream(text: string): ReadableStream<Uint8Array> {
-  return new Blob([text]).stream();
-}
-
 function readRawState(connection: StorageZone): Promise<string | null> {
   return downloadText(connection, REMOTE_STATE_PATH);
 }
@@ -182,7 +178,7 @@ export async function writeRemoteState(
     }
   }
   const raw = `${JSON.stringify(state, null, 2)}\n`;
-  await siteFiles.upload(connection, REMOTE_STATE_PATH, textStream(raw), {
+  await siteFiles.upload(connection, REMOTE_STATE_PATH, new Blob([raw]), {
     sha256Checksum: sha256Hex(raw).toUpperCase(),
   });
   return sha256Hex(raw);
