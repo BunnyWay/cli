@@ -50,6 +50,7 @@ import {
 import { logger } from "@/core/logger.ts";
 import { loadManifest } from "@/core/manifest.ts";
 import { confirm, isInteractive, prompts, spinner } from "@/core/ui.ts";
+import { fetchStorageRegions } from "@/tools/storage/index.ts";
 import { zoneDetailRows } from "./details.ts";
 
 async function zoneWithPassword(
@@ -286,6 +287,7 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
       });
     }
     const scope = { tier: zoneTier, s3: s3Enabled };
+    const catalog = await fetchStorageRegions(client);
 
     // The main region cannot be changed after creation, so prompt for it too.
     let mainRegion = region;
@@ -308,7 +310,7 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
         type: "select",
         name: "picked",
         message: "Main region:",
-        choices: mainRegionChoices(scope).map((r) => ({
+        choices: mainRegionChoices(catalog, scope).map((r) => ({
           title: `${r.name} (${r.code})`,
           value: r.code,
         })),
@@ -323,7 +325,7 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
     }
     mainRegion = mainRegion.toUpperCase();
 
-    const allowedMain = mainRegionChoices(scope);
+    const allowedMain = mainRegionChoices(catalog, scope);
     if (!allowedMain.some((r) => r.code === mainRegion)) {
       throw new UserError(
         `${mainRegion} cannot be the main region of ${s3Enabled ? "an S3" : "a"} storage zone.`,
@@ -338,17 +340,24 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
         name: "picked",
         message:
           "Replication regions (each adds storage cost; space to toggle):",
-        choices: replicationChoices(mainRegion, scope).map((region) => ({
-          title: `${region.name} (${region.code})`,
-          value: region.code,
-        })),
+        choices: replicationChoices(catalog, mainRegion, scope).map(
+          (region) => ({
+            title: `${region.name} (${region.code})`,
+            value: region.code,
+          }),
+        ),
       });
       // Cancelling (Ctrl+C) yields undefined; an empty array is a deliberate "no replication".
       if (picked === undefined) throw new UserError("Creation cancelled.");
       replicationRegions = picked;
     }
     const replicationCodes = replicationRegions
-      ? normalizeReplicationRegions(replicationRegions, mainRegion, scope)
+      ? normalizeReplicationRegions(
+          catalog,
+          replicationRegions,
+          mainRegion,
+          scope,
+        )
       : [];
 
     // Replicas can't be removed once added, so confirm before creating a zone with any.

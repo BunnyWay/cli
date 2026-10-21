@@ -1,6 +1,7 @@
 import * as BunnyStorage from "@bunny.net/storage-sdk";
 import { UserError } from "@/core/errors.ts";
 import { confirm } from "@/core/ui.ts";
+import type { StorageRegionModel } from "@/tools/storage/index.ts";
 import type { StorageZoneModel } from "./api.ts";
 
 export interface StorageRegion {
@@ -45,64 +46,58 @@ export function zoneTierLabel(
   return tier?.[form] ?? "-";
 }
 
-interface CatalogRegion extends StorageRegion {
-  replicaOnly?: boolean;
-  noS3?: boolean;
-}
-
-// TODO: Request API endpoint for these
-const REGION_CATALOG: CatalogRegion[] = [
-  { code: "DE", name: "Frankfurt" },
-  { code: "UK", name: "London" },
-  { code: "ES", name: "Madrid", replicaOnly: true },
-  { code: "CZ", name: "Prague", replicaOnly: true },
-  { code: "SE", name: "Stockholm" },
-  { code: "LA", name: "Los Angeles" },
-  { code: "MI", name: "Miami", replicaOnly: true },
-  { code: "NY", name: "New York" },
-  { code: "WA", name: "Seattle", replicaOnly: true },
-  { code: "HK", name: "Hong Kong", replicaOnly: true },
-  { code: "SG", name: "Singapore" },
-  { code: "SYD", name: "Sydney" },
-  { code: "JP", name: "Tokyo", replicaOnly: true },
-  { code: "BR", name: "Sao Paulo", noS3: true },
-  { code: "JH", name: "Johannesburg" },
-];
-
 export interface RegionScope {
   tier?: ZoneTierChoice;
   s3?: boolean;
 }
 
-function inScope(region: CatalogRegion, scope: RegionScope): boolean {
-  if (scope.s3 && region.noS3) return false;
-  if (region.replicaOnly) return scope.tier === "ssd" && !scope.s3;
-  return true;
+function toRegion(region: StorageRegionModel): StorageRegion {
+  return { code: region.Code ?? "", name: region.Name ?? "" };
 }
 
-export const STORAGE_REGIONS: StorageRegion[] = REGION_CATALOG.map(
-  ({ code, name }) => ({ code, name }),
-);
+// The catalog lists each region once per tier; an unscoped zone is Standard (HDD).
+function tierRegions(
+  catalog: StorageRegionModel[],
+  scope: RegionScope,
+): StorageRegionModel[] {
+  const tier = zoneTierValue(scope.tier ?? "hdd");
+  return catalog.filter(
+    (region) => region.Tier === tier && (!scope.s3 || region.IsS3Supported),
+  );
+}
 
-export function mainRegionChoices(scope: RegionScope = {}): StorageRegion[] {
-  if (scope.tier === "ssd") {
-    return REGION_CATALOG.filter(
-      (region) => region.code === SSD_PRIMARY_REGION,
-    ).map(({ code, name }) => ({ code, name }));
+// Every region on any tier, once each.
+export function storageRegions(catalog: StorageRegionModel[]): StorageRegion[] {
+  const byCode = new Map<string, StorageRegion>();
+  for (const region of catalog) {
+    if (region.Code && !byCode.has(region.Code))
+      byCode.set(region.Code, toRegion(region));
   }
-  return REGION_CATALOG.filter(
-    (region) => !region.replicaOnly && inScope(region, scope),
-  ).map(({ code, name }) => ({ code, name }));
+  return [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code));
 }
 
-export function regionTierNote(code: string): string {
-  const region = REGION_CATALOG.find((r) => r.code === code.toUpperCase());
-  if (region?.replicaOnly) return "Edge (SSD), replication only";
-  if (region?.noS3) return "No S3";
+export function mainRegionChoices(
+  catalog: StorageRegionModel[],
+  scope: RegionScope = {},
+): StorageRegion[] {
+  return tierRegions(catalog, scope)
+    .filter((region) => region.IsMainRegionSupported)
+    .map(toRegion);
+}
+
+export function regionTierNote(
+  catalog: StorageRegionModel[],
+  code: string,
+): string {
+  const wanted = code.toUpperCase();
+  const hdd = catalog.find(
+    (r) => r.Code === wanted && r.Tier === ZONE_TIERS.hdd.value,
+  );
+  if (!hdd) return "Edge (SSD), replication only";
+  if (!hdd.IsS3Supported) return "No S3";
+
   return "-";
 }
-
-const REGION_CODES = new Set(REGION_CATALOG.map((region) => region.code));
 
 export function sdkRegionKey(
   code: string | null | undefined,
@@ -115,13 +110,14 @@ export function sdkRegionKey(
 
 // Replication spans every region the zone's tier and S3 setting allow, minus the primary itself.
 export function replicationChoices(
+  catalog: StorageRegionModel[],
   primaryCode?: string,
   scope: RegionScope = {},
 ): StorageRegion[] {
   const primary = primaryCode?.toUpperCase();
-  return REGION_CATALOG.filter(
-    (region) => region.code !== primary && inScope(region, scope),
-  ).map(({ code, name }) => ({ code, name }));
+  return tierRegions(catalog, scope)
+    .filter((region) => region.Code !== primary)
+    .map(toRegion);
 }
 
 function scopeLabel(scope: RegionScope): string {
@@ -132,6 +128,7 @@ function scopeLabel(scope: RegionScope): string {
 // Uppercase, validate, and drop the primary region from a list of replication codes.
 // `existing` is what the zone already replicates to, which stays valid whether or not it is still on offer.
 export function normalizeReplicationRegions(
+  catalog: StorageRegionModel[],
   regions: string[],
   primaryCode?: string,
   scope: RegionScope = {},
@@ -144,16 +141,19 @@ export function normalizeReplicationRegions(
     .filter(Boolean);
 
   const allowed = new Set([
-    ...replicationChoices(undefined, scope).map((region) => region.code),
+    ...replicationChoices(catalog, undefined, scope).map(
+      (region) => region.code,
+    ),
     ...existing.map((region) => region.toUpperCase()),
   ]);
   const rejected = normalized.filter((region) => !allowed.has(region));
   if (rejected.length > 0) {
-    const unknown = rejected.filter((region) => !REGION_CODES.has(region));
+    const known = storageRegions(catalog).map((region) => region.code);
+    const unknown = rejected.filter((region) => !known.includes(region));
     if (unknown.length > 0) {
       throw new UserError(
         `Unknown replication region(s): ${unknown.join(", ")}.`,
-        `Valid regions: ${[...REGION_CODES].join(", ")}.`,
+        `Valid regions: ${known.join(", ")}.`,
       );
     }
     throw new UserError(

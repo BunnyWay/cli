@@ -12,6 +12,8 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { confirmOrCancel, isInteractive, prompts, spinner } from "@/core/ui.ts";
+import type { CoreClient } from "@/tools/context.ts";
+import { fetchStorageRegions } from "@/tools/storage/index.ts";
 import {
   allRegions,
   MAIN_REGION,
@@ -37,6 +39,7 @@ import {
 import { checkTranscribingLanguages } from "./language-check.ts";
 
 async function resolveReplicationRegions(
+  client: CoreClient,
   flag: string[] | undefined,
   output: string | undefined,
 ): Promise<string[]> {
@@ -49,13 +52,14 @@ async function resolveReplicationRegions(
   if (answer === "cancel") throw new UserError("Creation cancelled.");
   if (answer === "no") return [];
 
+  const catalog = await fetchStorageRegions(client);
   const { picked } = await prompts({
     type: "multiselect",
     name: "picked",
     message: "Replication regions (each adds storage cost; space to toggle):",
     choices: REGION_CODES.filter((code) => code !== MAIN_REGION).map(
       (code) => ({
-        title: `${regionName(code)} (${code})`,
+        title: `${regionName(catalog, code)} (${code})`,
         value: code,
         selected: SUGGESTED_REPLICATION_REGIONS.includes(code),
       }),
@@ -162,7 +166,11 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     }
     const name = nameInput;
 
-    const regions = await resolveReplicationRegions(replicationRegions, output);
+    const regions = await resolveReplicationRegions(
+      client,
+      replicationRegions,
+      output,
+    );
     const warnings = librarySettingsWarnings(args);
 
     // The encoding/transcribing flags are shared with `library update`; Name is

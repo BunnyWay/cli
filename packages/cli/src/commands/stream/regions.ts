@@ -1,40 +1,51 @@
-import { STORAGE_REGIONS } from "@/commands/storage/constants.ts";
-import { defineCommand } from "@/core/define-command.ts";
+import { storageRegions } from "@/commands/storage/constants.ts";
+import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import {
+  type StorageRegionModel,
+  storageRegionsList,
+} from "@/tools/storage/index.ts";
 import {
   MAIN_REGION,
   REGION_CODES,
   SUGGESTED_REPLICATION_REGIONS,
 } from "@/tools/stream/index.ts";
 
-/** Stream libraries store in the same regions as Storage, so the names come from its catalog. */
-export function regionName(code: string): string {
-  return STORAGE_REGIONS.find((region) => region.code === code)?.name ?? code;
+export function regionName(
+  catalog: StorageRegionModel[],
+  code: string,
+): string {
+  return (
+    storageRegions(catalog).find((region) => region.code === code)?.name ?? code
+  );
 }
 
-export const streamRegionsCommand = defineCommand({
+function streamRegions(catalog: StorageRegionModel[]) {
+  return REGION_CODES.map((code) => ({
+    code,
+    name: regionName(catalog, code),
+    main: code === MAIN_REGION,
+    suggested: SUGGESTED_REPLICATION_REGIONS.includes(code),
+  }));
+}
+
+export const streamRegionsCommand = defineToolCommand({
+  tool: storageRegionsList,
   command: "regions",
   describe: "List the regions a video library can replicate to.",
   examples: [["$0 stream regions", "List every Stream region"]],
+  progress: "Fetching regions...",
 
-  handler: async ({ output }) => {
-    const regions = REGION_CODES.map((code) => ({
-      code,
-      name: regionName(code),
-      main: code === MAIN_REGION,
-      suggested: SUGGESTED_REPLICATION_REGIONS.includes(code),
-    }));
+  prepare: async () => ({ input: {} }),
 
-    if (output === "json") {
-      logger.log(JSON.stringify(regions, null, 2));
-      return;
-    }
+  json: (catalog) => streamRegions(catalog),
 
+  render: (catalog, { output }) => {
     logger.log(
       formatTable(
         ["Code", "Name", "Role", "Suggested"],
-        regions.map((region) => [
+        streamRegions(catalog).map((region) => [
           region.code,
           region.name,
           region.main ? "main" : "replication",
