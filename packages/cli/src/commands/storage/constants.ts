@@ -19,7 +19,6 @@ export interface StorageZoneManifest {
 
 export const ZONE_TIER_CHOICES = ["hdd", "ssd"] as const;
 
-export const SSD_PRIMARY_REGION = "DE";
 export type ZoneTierChoice = (typeof ZONE_TIER_CHOICES)[number];
 
 const ZONE_TIERS: Record<
@@ -120,7 +119,7 @@ export function replicationChoices(
     .map(toRegion);
 }
 
-function scopeLabel(scope: RegionScope): string {
+export function scopeLabel(scope: RegionScope): string {
   const tier = scope.tier === "ssd" ? "Edge (SSD)" : "Standard (HDD)";
   return scope.s3 ? `${tier} with S3` : tier;
 }

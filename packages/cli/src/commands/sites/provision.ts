@@ -1,12 +1,17 @@
 import { basename } from "node:path";
 import type { CoreClient } from "@/commands/storage/api.ts";
 import {
-  SSD_PRIMARY_REGION,
+  mainRegionChoices,
+  scopeLabel,
   type ZoneTierChoice,
 } from "@/commands/storage/constants.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, withSpinner } from "@/core/ui.ts";
+import {
+  fetchStorageRegions,
+  type StorageRegionModel,
+} from "@/tools/storage/index.ts";
 import { type CreateSiteResult, createSite, type SiteContext } from "./api.ts";
 import { isValidSiteName } from "./constants.ts";
 import { saveSiteLink } from "./interactive.ts";
@@ -54,18 +59,22 @@ export async function promptSiteName(
   return name;
 }
 
-// Edge (SSD) storage only exists in one region, and the API rewrites the region silently, so a conflicting `--region` is rejected instead.
+// The API silently rewrites an unsupported main region, so a conflicting `--region` is rejected instead.
 // Normalizes an explicit region only; without one, createSite picks the default for a fresh zone and a resumed zone keeps its own.
 export function resolveSiteRegion(
+  catalog: StorageRegionModel[],
   region: string | undefined,
   tier?: ZoneTierChoice,
 ): string | undefined {
   if (!region) return undefined;
   const main = region.toUpperCase();
-  if (tier === "ssd" && main !== SSD_PRIMARY_REGION) {
+  const allowed = mainRegionChoices(catalog, { tier }).map((r) => r.code);
+  if (!allowed.includes(main)) {
     throw new UserError(
-      `The Edge (SSD) tier is only available with ${SSD_PRIMARY_REGION} as the storage region, but --region ${region} was given.`,
-      `Drop --region to use ${SSD_PRIMARY_REGION}, or pass --tier hdd to keep ${main}.`,
+      `${main} cannot be the storage region of ${scopeLabel({ tier })} sites.`,
+      tier === "ssd"
+        ? `Use ${allowed.join(", ")}, or pass --tier hdd to keep ${main}.`
+        : `Available regions: ${allowed.join(", ")}.`,
     );
   }
   return main;
@@ -78,7 +87,13 @@ export async function createSiteWithProgress(opts: {
   region?: string;
   tier?: ZoneTierChoice;
 }): Promise<CreateSiteResult> {
-  const region = resolveSiteRegion(opts.region, opts.tier);
+  const region = opts.region
+    ? resolveSiteRegion(
+        await fetchStorageRegions(opts.coreClient),
+        opts.region,
+        opts.tier,
+      )
+    : undefined;
   return withSpinner(`Creating site "${opts.name}"...`, (spin) =>
     createSite({
       coreClient: opts.coreClient,

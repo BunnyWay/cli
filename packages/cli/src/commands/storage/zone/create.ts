@@ -25,9 +25,9 @@ import {
   mainRegionChoices,
   normalizeReplicationRegions,
   replicationChoices,
-  SSD_PRIMARY_REGION,
   STORAGE_MANIFEST,
   type StorageZoneManifest,
+  scopeLabel,
   ZONE_TIER_CHOICES,
   type ZoneTierChoice,
   zoneTierValue,
@@ -224,6 +224,8 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
+    const catalog = await fetchStorageRegions(client);
+
     // JSON output, non-TTY, and --force all stay non-interactive; values must come from flags.
     const interactive = isInteractive(output) && !force;
 
@@ -254,9 +256,12 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
     }
     if (!zoneName) throw new UserError("A storage zone name is required.");
 
-    // Asked before the region because Edge (SSD) fixes it. Neither can change later.
+    // Asked before the region because Edge (SSD) narrows it. Neither can change later.
     let zoneTier = tier;
     if (!zoneTier && interactive) {
+      const ssdMain = mainRegionChoices(catalog, { tier: "ssd" }).map(
+        (r) => r.code,
+      );
       const { picked } = await prompts({
         type: "select",
         name: "picked",
@@ -269,7 +274,7 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
           },
           {
             title: "Edge (SSD)",
-            description: `Faster reads, higher cost, ${SSD_PRIMARY_REGION} only`,
+            description: `Faster reads, higher cost, ${ssdMain.join(", ")} only`,
             value: "ssd" as const,
           },
         ],
@@ -287,22 +292,21 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
       });
     }
     const scope = { tier: zoneTier, s3: s3Enabled };
-    const catalog = await fetchStorageRegions(client);
+    const allowedMain = mainRegionChoices(catalog, scope);
 
     // The main region cannot be changed after creation, so prompt for it too.
-    let mainRegion = region;
-    if (zoneTier === "ssd") {
-      // The API would rewrite this to DE without saying so.
-      if (mainRegion && mainRegion.toUpperCase() !== SSD_PRIMARY_REGION) {
-        throw new UserError(
-          `The Edge (SSD) tier is only available with ${SSD_PRIMARY_REGION} as the main region, but --region ${mainRegion} was given.`,
-          `Drop --region to use ${SSD_PRIMARY_REGION}, or pass --tier hdd to keep ${mainRegion.toUpperCase()}.`,
-        );
-      }
-      mainRegion = SSD_PRIMARY_REGION;
+    let mainRegion = region?.toUpperCase();
+    if (mainRegion && !allowedMain.some((r) => r.code === mainRegion)) {
+      throw new UserError(
+        `${mainRegion} cannot be the main region of ${scopeLabel(scope)} zones.`,
+        `Available main regions: ${allowedMain.map((r) => r.code).join(", ")}.`,
+      );
+    }
+    if (!mainRegion && allowedMain.length === 1) {
+      mainRegion = allowedMain[0]?.code;
       if (interactive) {
         logger.dim(
-          `Edge (SSD) zones are always stored in ${SSD_PRIMARY_REGION} first. Replication can still span other regions.`,
+          `${scopeLabel(scope)} zones are always stored in ${mainRegion} first. Replication can still span other regions.`,
         );
       }
     } else if (!mainRegion && interactive) {
@@ -310,7 +314,7 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
         type: "select",
         name: "picked",
         message: "Main region:",
-        choices: mainRegionChoices(catalog, scope).map((r) => ({
+        choices: allowedMain.map((r) => ({
           title: `${r.name} (${r.code})`,
           value: r.code,
         })),
@@ -320,16 +324,7 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
     if (!mainRegion) {
       throw new UserError(
         "A region is required.",
-        "Pass --region with a region code (e.g. DE, NY, LA, SG).",
-      );
-    }
-    mainRegion = mainRegion.toUpperCase();
-
-    const allowedMain = mainRegionChoices(catalog, scope);
-    if (!allowedMain.some((r) => r.code === mainRegion)) {
-      throw new UserError(
-        `${mainRegion} cannot be the main region of ${s3Enabled ? "an S3" : "a"} storage zone.`,
-        `Available main regions: ${allowedMain.map((r) => r.code).join(", ")}.`,
+        `Pass --region with a region code (${allowedMain.map((r) => r.code).join(", ")}).`,
       );
     }
 
