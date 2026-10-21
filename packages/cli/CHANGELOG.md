@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.20.2
+
+### Patch Changes
+
+- [#266](https://github.com/BunnyWay/cli/pull/266) [`e0056a9`](https://github.com/BunnyWay/cli/commit/e0056a9e1606347918253dd4040b43228c0833ab) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Save `BUNNY_STREAM_CDN_HOSTNAME` to `.env` alongside the Stream library ID and API key
+
 ## 0.20.1
 
 ### Patch Changes
