@@ -1,4 +1,5 @@
 import { defineNamespace } from "@/core/define-namespace.ts";
+import { withPreviewNotice } from "@/core/preview-notice.ts";
 import { streamCollectionNamespace } from "./collection/index.ts";
 import { streamEncodeNamespace } from "./encode/index.ts";
 import { streamImportNamespace } from "./import/index.ts";
@@ -11,22 +12,23 @@ import { streamVideoNamespace } from "./video/index.ts";
 import { streamVideoSmartCommand } from "./video/smart.ts";
 import { streamVideoTranscribeCommand } from "./video/transcribe.ts";
 
-export const streamNamespace = defineNamespace(
-  "stream",
-  "Manage Stream video libraries and videos (preview).",
-  [
-    streamLibraryNamespace,
-    streamVideoNamespace,
-    streamCollectionNamespace,
-    streamImportNamespace,
-    // The link scopes every stream command, so it is mirrored here as well as under `libraries`.
-    streamLibraryLinkCommand,
-    streamLibraryUnlinkCommand,
-    streamRegionsCommand,
-    // Hidden: the old spellings of `videos transcribe`, `videos smart`, and `videos encode`.
-    { ...streamVideoTranscribeCommand, describe: false as never },
-    { ...streamVideoSmartCommand, describe: false as never },
-    streamEncodeNamespace,
-    streamCaptionsHiddenNamespace,
-  ],
+export const streamNamespace = withPreviewNotice(
+  defineNamespace(
+    "stream",
+    "Manage Stream video libraries and videos (preview).",
+    [
+      streamLibraryNamespace,
+      streamVideoNamespace,
+      streamCollectionNamespace,
+      streamImportNamespace,
+      streamLibraryLinkCommand,
+      streamLibraryUnlinkCommand,
+      streamRegionsCommand,
+      { ...streamVideoTranscribeCommand, describe: false as never },
+      { ...streamVideoSmartCommand, describe: false as never },
+      streamEncodeNamespace,
+      streamCaptionsHiddenNamespace,
+    ],
+  ),
+  "Stream",
 );
