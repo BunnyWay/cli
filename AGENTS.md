@@ -361,6 +361,7 @@ All of this lives in `core/ui.ts`. The rules here are load-bearing.
 
 The CLI must be fully usable by agents, scripts, and pipelines.
 
+- **Prompt for what can be asked for.** A required value the user could type or pick in a prompt (a name, an ID, a local file, a URL) is an optional positional (`[file]`, not `<file>`), asked for interactively and rejected with a usage hint otherwise. A bare `<arg>` lets yargs fail with "Not enough non-option arguments" before the handler can prompt. `localFileArg()` in `core/file-arg.ts` handles local file paths.
 - **Every prompt has a flag equivalent.** Confirmations get `--force`; text and password input get a named flag. If a required value is missing and no flag supplied it, **error immediately rather than blocking on stdin**.
 - **Under `--output json`**: valid JSON on stdout, one object or array per command. Errors are JSON too (`{ "error": ..., "hint": ... }`), handled by `defineCommand()`. No spinners, no colors, no tables, no blank lines. Exit codes still apply.
 - **Prompts are suppressed entirely under `--output json`**, so flags become the only way to opt into follow-up behaviour. Commands with interactive follow-ups expose paired flags (`--link`/`--no-link`, `--token`/`--no-token`, `--save-env`/`--no-save-env`) and report what happened in the JSON payload.

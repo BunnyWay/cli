@@ -7,6 +7,7 @@ import {
 } from "@/commands/stream/context.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
+import { localFileArg } from "@/core/file-arg.ts";
 import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
@@ -16,7 +17,7 @@ interface CaptionAddArgs {
   lang?: string;
   lib?: string;
   label?: string;
-  file: string;
+  file?: string;
 }
 
 /** Caption formats bunny.net accepts; anything else is almost certainly a mistake. */
@@ -94,7 +95,7 @@ export async function captionLanguageArg(
 }
 
 export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
-  command: "add <file> [video] [lang]",
+  command: "add [file] [video] [lang]",
   aliases: ["upload"],
   describe: "Upload a caption file for one language.",
   examples: [
@@ -103,8 +104,8 @@ export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
       "Add English captions",
     ],
     [
-      "$0 stream videos captions add ./captions.vtt",
-      "Pick the video, then type the language",
+      "$0 stream videos captions add",
+      "Pick the caption file and the video, then type the language",
     ],
     [
       '$0 stream videos captions add ./de.srt 1a2b3c4d-... de --label "Deutsch"',
@@ -120,8 +121,7 @@ export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
     yargs
       .positional("file", {
         type: "string",
-        describe: "Path to the .vtt or .srt caption file",
-        demandOption: true,
+        describe: "Path to the .vtt or .srt caption file (prompts if omitted)",
       })
       .positional("video", {
         type: "string",
@@ -148,7 +148,7 @@ export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
     video: ref,
     lang,
     lib,
-    file,
+    file: fileArg,
     label,
     profile,
     output,
@@ -157,6 +157,12 @@ export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
   }) => {
     // Validate everything local before any network call; a missing language is asked for after the video.
     const given = lang ? captionLanguage(lang) : undefined;
+    const file = await localFileArg(fileArg, {
+      output,
+      noun: "caption file",
+      extensions: CAPTION_EXTENSIONS,
+      usage: ADD_USAGE,
+    });
     const base64 = await readCaptionFile(file);
     if (!given && !isInteractive(output)) throw languageRequired(ADD_USAGE);
 
