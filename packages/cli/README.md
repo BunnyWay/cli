@@ -1122,7 +1122,7 @@ Every deploy publishes: the files land in an immutable `deploys/<id>/` directory
 
 Manage bunny.net Stream through three resource groups: **`bunny stream libraries`** (the library itself: create, list, inspect, update, delete, plus its **`player`** and **`security`** settings; aliases `library`, `lib`), **`bunny stream videos`** (the videos inside one library, their **`captions`** files, and the paid `encode`, `transcribe`, and `smart`; alias `video`), and **`bunny stream collections`** (groups of videos within a library; alias `collection`). **`bunny stream link`** and **`unlink`** mirror `libraries link` and `unlink`, and **`bunny stream regions`** lists the region codes a library can replicate to. Library management uses the account API key on the core API; each library also carries its own Stream API key for the video-level API, which the CLI never prints unless you ask for it with `credentials`. Video commands use that per-library key, resolved automatically from the library, so there is nothing extra to configure. **`bunny stream import`** moves an existing video library in from another platform; see [below](#bunny-stream-import).
 
-`libraries` commands take the library as an optional positional (name or numeric ID); every other stream command takes it as the `--lib`/`--library` flag, since their positional is the video GUID, the collection ID, or a local file path. When the library is omitted it resolves from the directory's linked library (`bunny stream link`, stored in `.bunny/stream.json`), then an interactive picker, which offers to link the directory to the picked library (destructive commands never offer it). Non-interactive runs (`--output json`, no TTY, or `--force`) error with a hint instead of prompting: pass a library or link the directory. A `videos`, `collections`, or `videos captions` command with no ID behaves the same way, offering a picker interactively and erroring otherwise. `videos captions add <file> [video] [lang]` then asks for the language code, and `videos captions remove [video] [lang]` offers the video's caption languages to pick from; unattended runs need the video and the language.
+`libraries` commands take the library as an optional positional (name or numeric ID); every other stream command takes it as the `--lib`/`--library` flag, since their positional is the video GUID, the collection ID, or a local file path. When the library is omitted it resolves from the directory's linked library (`bunny stream link`, stored in `.bunny/stream.json`), then an interactive picker, which offers to link the directory to the picked library (destructive commands never offer it). Non-interactive runs (`--output json`, no TTY, or `--force`) error with a hint instead of prompting: pass a library or link the directory. A `videos`, `collections`, or `videos captions` command with no ID behaves the same way, offering a picker interactively and erroring otherwise. `videos upload [file]` and `videos captions add [file] [video] [lang]` offer the matching files in the working directory (or a typed path) when the file is omitted, and `videos fetch [url]` asks for the URL. `videos captions add` then asks for the language code, and `videos captions remove [video] [lang]` offers the video's caption languages to pick from; unattended runs need the video and the language.
 
 After creating a library, `libraries create` offers to link the directory, to save `BUNNY_STREAM_LIBRARY_ID`, `BUNNY_STREAM_API_KEY` and `BUNNY_STREAM_CDN_HOSTNAME` to `.env` (the names the [Stream examples](https://github.com/BunnyWay/examples/tree/main/stream) read), and to add videos straight away by importing from another platform or uploading a file. `--link`/`--no-link` and `--save-env`/`--no-save-env` answer the first two without prompting, and `--no-add-videos` skips the third; non-interactive runs skip anything not set by a flag.
 
@@ -1165,9 +1165,10 @@ bunny stream unlink
 
 # Adding videos: upload a local file, or let bunny.net fetch a URL
 bunny stream videos upload ./video.mp4              # linked library
+bunny stream videos upload                          # interactive: pick a video file from the current directory
 bunny stream videos upload ./video.mp4 --lib 12345 --title "Launch demo"
 bunny stream videos upload ./video.mp4 --collection 8a7b6c5d-...      # straight into a collection
-bunny stream videos fetch https://example.com/video.mp4 --lib 12345
+bunny stream videos fetch https://example.com/video.mp4 --lib 12345   # prompts for the URL when omitted
 bunny stream videos fetch https://example.com/video.mp4 --header "Authorization: Bearer abc"
 
 # Videos within a library (GUIDs come from `videos list`)
@@ -1193,6 +1194,7 @@ bunny stream collections delete 8a7b6c5d-...        # deletes the videos inside 
 
 # Caption files on one video (manual captions, not the paid transcription)
 bunny stream videos captions add ./captions.vtt 1a2b3c4d-... en --label "English"
+bunny stream videos captions add                    # interactive: pick the .vtt/.srt file, the video, then the language
 bunny stream videos captions remove 1a2b3c4d-... en        # confirms first; --force skips it
 
 # Paid operations

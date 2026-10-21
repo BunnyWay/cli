@@ -3,10 +3,11 @@ import { queueVideoFetch } from "@/commands/stream/videos-api.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { withSpinner } from "@/core/ui.ts";
+import type { OutputFormat } from "@/core/types.ts";
+import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 
 interface FetchArgs {
-  url: string;
+  url?: string;
   lib?: string;
   title?: string;
   collection?: string;
@@ -51,14 +52,45 @@ export function validateFetchUrl(url: string): string {
   return trimmed;
 }
 
+/** The URL to fetch: the argument when given, otherwise asked for when interactive. */
+export async function fetchUrlArg(
+  url: string | undefined,
+  output: OutputFormat | undefined,
+): Promise<string> {
+  if (url?.trim()) return validateFetchUrl(url);
+  const missing = new UserError(
+    "A video URL is required.",
+    "Pass the URL: bunny stream videos fetch https://example.com/video.mp4",
+  );
+  if (!isInteractive(output)) throw missing;
+  const { value } = await prompts({
+    type: "text",
+    name: "value",
+    message: "URL of the video to fetch:",
+    validate: (input: string) => {
+      try {
+        validateFetchUrl(input);
+
+        return true;
+      } catch {
+        return "Enter an http(s) URL.";
+      }
+    },
+  });
+  if (typeof value !== "string" || !value.trim()) throw missing;
+
+  return validateFetchUrl(value);
+}
+
 export const streamVideoFetchCommand = defineCommand<FetchArgs>({
-  command: "fetch <url>",
+  command: "fetch [url]",
   describe: "Have bunny.net fetch a video from a URL, server side.",
   examples: [
     [
       "$0 stream videos fetch https://example.com/video.mp4",
       "Fetch into the linked library",
     ],
+    ["$0 stream videos fetch", "Interactive: prompts for the URL"],
     [
       "$0 stream videos fetch https://example.com/video.mp4 --lib 12345",
       "Fetch into a specific library",
@@ -77,8 +109,8 @@ export const streamVideoFetchCommand = defineCommand<FetchArgs>({
     yargs
       .positional("url", {
         type: "string",
-        describe: "URL of the video for bunny.net to download",
-        demandOption: true,
+        describe:
+          "URL of the video for bunny.net to download (prompts if omitted)",
       })
       .option("lib", {
         alias: "library",
@@ -118,7 +150,7 @@ export const streamVideoFetchCommand = defineCommand<FetchArgs>({
     apiKey,
   }) => {
     // Validate the inputs before touching the network so a typo costs nothing.
-    const url = validateFetchUrl(rawUrl);
+    const url = await fetchUrlArg(rawUrl, output);
     const headers = parseFetchHeaders(header);
     const wantedTitle = title?.trim() || undefined;
     const collectionId = collection?.trim() || undefined;
