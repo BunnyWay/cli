@@ -30,5 +30,5 @@ export const sitesNamespace = withPreviewNotice(
     sitesDeleteCommand,
     sitesMigrateCommand,
   ]),
-  "Sites",
+  "Sites is a starting point: it sets up a pull zone, storage zone, and edge rules for you. If you already manage those yourself, or want more control, eject and manage them directly.",
 );

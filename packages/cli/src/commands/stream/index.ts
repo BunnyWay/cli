@@ -30,5 +30,4 @@ export const streamNamespace = withPreviewNotice(
       streamCaptionsHiddenNamespace,
     ],
   ),
-  "Stream",
 );

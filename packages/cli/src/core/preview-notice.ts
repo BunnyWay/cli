@@ -3,7 +3,7 @@ import { logger } from "./logger.ts";
 
 export function withPreviewNotice(
   namespace: CommandModule,
-  product: string,
+  note?: string,
 ): CommandModule {
   return {
     ...namespace,
@@ -11,8 +11,9 @@ export function withPreviewNotice(
       (namespace.builder as (y: Argv) => Argv)(yargs).middleware((argv) => {
         if (argv.output === "json") return;
         logger.info(
-          `${product} is in Public Preview: commands may change. Report feedback and bugs at https://github.com/BunnyWay/cli/issues`,
+          `The \`bunny ${namespace.command}\` commands are in Public Preview and may change. Report feedback and bugs at https://github.com/BunnyWay/cli/issues`,
         );
+        if (note) logger.dim(note);
       }),
   };
 }
