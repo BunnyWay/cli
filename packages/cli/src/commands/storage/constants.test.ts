@@ -1,12 +1,28 @@
 import { expect, test } from "bun:test";
-import type { StorageRegionModel } from "@/tools/storage/index.ts";
+import type { StorageRegionOption } from "@/tools/storage/index.ts";
 import { normalizeReplicationRegions, sdkRegionKey } from "./constants.ts";
 
-const CATALOG: StorageRegionModel[] = [
-  { Code: "DE", Tier: 0, IsMainRegionSupported: true, IsS3Supported: true },
-  { Code: "NY", Tier: 0, IsMainRegionSupported: true, IsS3Supported: true },
-  { Code: "BR", Tier: 0, IsMainRegionSupported: true, IsS3Supported: false },
-  { Code: "CZ", Tier: 1, IsMainRegionSupported: false, IsS3Supported: false },
+const region = (
+  code: string,
+  tier: "hdd" | "ssd",
+  main: boolean,
+  s3: boolean,
+): StorageRegionOption => ({
+  code,
+  name: code,
+  continent: null,
+  tier,
+  main,
+  s3,
+  pricePerGigabyte: null,
+  endpoint: null,
+  s3Endpoint: null,
+});
+const CATALOG = [
+  region("DE", "hdd", true, true),
+  region("NY", "hdd", true, true),
+  region("BR", "hdd", true, false),
+  region("CZ", "ssd", false, false),
 ];
 
 test("normalizeReplicationRegions splits, uppercases, and drops the primary", () => {

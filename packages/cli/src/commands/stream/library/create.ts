@@ -1,4 +1,5 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
+import { loadStorageRegions } from "@/commands/storage/constants.ts";
 import {
   toSafeVideoLibrary,
   type VideoLibraryCreateModel,
@@ -13,7 +14,6 @@ import { logger } from "@/core/logger.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { confirmOrCancel, isInteractive, prompts, spinner } from "@/core/ui.ts";
 import type { CoreClient } from "@/tools/context.ts";
-import { fetchStorageRegions } from "@/tools/storage/index.ts";
 import {
   allRegions,
   MAIN_REGION,
@@ -52,7 +52,7 @@ async function resolveReplicationRegions(
   if (answer === "cancel") throw new UserError("Creation cancelled.");
   if (answer === "no") return [];
 
-  const catalog = await fetchStorageRegions(client);
+  const catalog = await loadStorageRegions(client);
   const { picked } = await prompts({
     type: "multiselect",
     name: "picked",

@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import type { CoreClient } from "@/commands/storage/api.ts";
 import {
+  loadStorageRegions,
   mainRegionChoices,
   scopeLabel,
   type ZoneTierChoice,
@@ -8,10 +9,7 @@ import {
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, withSpinner } from "@/core/ui.ts";
-import {
-  fetchStorageRegions,
-  type StorageRegionModel,
-} from "@/tools/storage/index.ts";
+import type { StorageRegionOption } from "@/tools/storage/index.ts";
 import { type CreateSiteResult, createSite, type SiteContext } from "./api.ts";
 import { isValidSiteName } from "./constants.ts";
 import { saveSiteLink } from "./interactive.ts";
@@ -62,7 +60,7 @@ export async function promptSiteName(
 // The API silently rewrites an unsupported main region, so a conflicting `--region` is rejected instead.
 // Normalizes an explicit region only; without one, createSite picks the default for a fresh zone and a resumed zone keeps its own.
 export function resolveSiteRegion(
-  catalog: StorageRegionModel[],
+  catalog: StorageRegionOption[],
   region: string | undefined,
   tier?: ZoneTierChoice,
 ): string | undefined {
@@ -89,7 +87,7 @@ export async function createSiteWithProgress(opts: {
 }): Promise<CreateSiteResult> {
   const region = opts.region
     ? resolveSiteRegion(
-        await fetchStorageRegions(opts.coreClient),
+        await loadStorageRegions(opts.coreClient),
         opts.region,
         opts.tier,
       )

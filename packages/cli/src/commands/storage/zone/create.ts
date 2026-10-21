@@ -22,6 +22,7 @@ import {
 } from "@/commands/storage/connection.ts";
 import {
   confirmAddedReplicationRegions,
+  loadStorageRegions,
   mainRegionChoices,
   normalizeReplicationRegions,
   replicationChoices,
@@ -50,7 +51,6 @@ import {
 import { logger } from "@/core/logger.ts";
 import { loadManifest } from "@/core/manifest.ts";
 import { confirm, isInteractive, prompts, spinner } from "@/core/ui.ts";
-import { fetchStorageRegions } from "@/tools/storage/index.ts";
 import { zoneDetailRows } from "./details.ts";
 
 async function zoneWithPassword(
@@ -224,8 +224,6 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
-    const catalog = await fetchStorageRegions(client);
-
     // JSON output, non-TTY, and --force all stay non-interactive; values must come from flags.
     const interactive = isInteractive(output) && !force;
 
@@ -236,6 +234,9 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
         "Pass --connection http, ftp, or s3 (or --format).",
       );
     }
+
+    // Fetched before any prompt so a failure never discards answers.
+    const catalog = await loadStorageRegions(client);
 
     // Region, tier, and replication all drive storage pricing, so flag it up front.
     if (

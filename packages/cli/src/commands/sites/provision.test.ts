@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import prompts from "prompts";
+import { toStorageRegionOption } from "@/tools/storage/index.ts";
 import { promptSiteName, resolveSiteRegion } from "./provision.ts";
 
 test("promptSiteName normalizes and validates a passed name", async () => {
@@ -23,8 +24,8 @@ test("promptSiteName prompts when no name is passed and normalizes the answer", 
 
 test("resolveSiteRegion rejects a region the tier cannot use", () => {
   const catalog = [
-    { Code: "DE", Tier: 1, IsMainRegionSupported: true },
-    { Code: "NY", Tier: 1, IsMainRegionSupported: false },
+    toStorageRegionOption({ Code: "DE", Tier: 1, IsMainRegionSupported: true }),
+    toStorageRegionOption({ Code: "NY", Tier: 1 }),
   ];
   expect(resolveSiteRegion(catalog, undefined, "ssd")).toBeUndefined();
   expect(resolveSiteRegion(catalog, "de", "ssd")).toBe("DE");

@@ -2,7 +2,7 @@ import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import {
-  type StorageRegionModel,
+  type StorageRegionOption,
   storageRegionsList,
 } from "@/tools/storage/index.ts";
 import {
@@ -19,7 +19,7 @@ interface RegionsArgs {
   s3?: boolean;
 }
 
-function regionRows(catalog: StorageRegionModel[], { tier, s3 }: RegionsArgs) {
+function regionRows(catalog: StorageRegionOption[], { tier, s3 }: RegionsArgs) {
   const scope = { tier, s3 };
   const main = new Set(mainRegionChoices(catalog, scope).map((r) => r.code));
   const replica = new Set(

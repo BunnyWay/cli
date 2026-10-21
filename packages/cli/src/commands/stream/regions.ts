@@ -1,9 +1,8 @@
-import { storageRegions } from "@/commands/storage/constants.ts";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import {
-  type StorageRegionModel,
+  type StorageRegionOption,
   storageRegionsList,
 } from "@/tools/storage/index.ts";
 import {
@@ -13,15 +12,13 @@ import {
 } from "@/tools/stream/index.ts";
 
 export function regionName(
-  catalog: StorageRegionModel[],
+  catalog: StorageRegionOption[],
   code: string,
 ): string {
-  return (
-    storageRegions(catalog).find((region) => region.code === code)?.name ?? code
-  );
+  return catalog.find((region) => region.code === code)?.name ?? code;
 }
 
-function streamRegions(catalog: StorageRegionModel[]) {
+function streamRegions(catalog: StorageRegionOption[]) {
   return REGION_CODES.map((code) => ({
     code,
     name: regionName(catalog, code),
