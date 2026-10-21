@@ -19,6 +19,7 @@ export function matchingFiles(
   } catch {
     return [];
   }
+
   return entries
     .filter(
       (entry) =>
@@ -96,10 +97,12 @@ export async function localFileArg(
     validate: (input: string) => {
       const path = expandHome(input.trim());
       if (!path) return "Enter a path.";
+
       return isFile(path) || `Not a file: ${path}`;
     },
   });
   const path = typeof value === "string" ? expandHome(value.trim()) : "";
   if (!path) throw missing;
+
   return path;
 }

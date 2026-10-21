@@ -70,6 +70,7 @@ export async function fetchUrlArg(
     validate: (input: string) => {
       try {
         validateFetchUrl(input);
+
         return true;
       } catch {
         return "Enter an http(s) URL.";
@@ -77,6 +78,7 @@ export async function fetchUrlArg(
     },
   });
   if (typeof value !== "string" || !value.trim()) throw missing;
+
   return validateFetchUrl(value);
 }
 
