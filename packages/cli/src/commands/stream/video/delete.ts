@@ -5,6 +5,7 @@ import {
 import { deleteVideo } from "@/commands/stream/videos-api.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
+import { track } from "@/core/telemetry.ts";
 import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
 
 interface VideoDeleteArgs {
@@ -83,6 +84,7 @@ export const streamVideoDeleteCommand = defineCommand<VideoDeleteArgs>({
     await withSpinner("Deleting video...", () =>
       deleteVideo(client, libraryId, video.guid),
     );
+    track("stream_video", { action: "delete" });
 
     if (output === "json") {
       logger.log(

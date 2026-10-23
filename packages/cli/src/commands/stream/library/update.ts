@@ -11,6 +11,7 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
+import { track } from "@/core/telemetry.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 import { streamLibrariesAddRegions } from "@/tools/stream/index.ts";
@@ -281,6 +282,7 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
           }),
         )
       : undefined;
+    track("stream_library", { action: "update" });
 
     if (output === "json") {
       logger.log(

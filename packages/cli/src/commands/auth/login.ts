@@ -8,6 +8,7 @@ import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { detectHeadless } from "@/core/headless.ts";
 import { logger } from "@/core/logger.ts";
+import { track } from "@/core/telemetry.ts";
 import {
   confirm,
   isInteractive,
@@ -285,6 +286,7 @@ export const authLoginCommand = defineCommand<{
     const name = await verifyApiKey(apiKey, verbose);
 
     setProfile(profile, apiKey);
+    track("login");
 
     if (output === "json") {
       logger.log(

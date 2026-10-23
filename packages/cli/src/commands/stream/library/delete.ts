@@ -9,6 +9,7 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, removeManifest } from "@/core/manifest.ts";
+import { track } from "@/core/telemetry.ts";
 import { confirm, requireConfirmable, spinner } from "@/core/ui.ts";
 
 interface LibraryDeleteArgs {
@@ -72,6 +73,7 @@ export const streamLibraryDeleteCommand = defineCommand<LibraryDeleteArgs>({
     } finally {
       removeSpin.stop();
     }
+    track("stream_library", { action: "delete" });
 
     // Drop a manifest that pointed at the deleted library so later commands don't resolve a ghost.
     const manifest = loadManifest<StreamLibraryManifest>(STREAM_MANIFEST);

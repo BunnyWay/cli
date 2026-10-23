@@ -17,6 +17,7 @@ import { errorMessage, UserError } from "@/core/errors.ts";
 import { localFileArg } from "@/core/file-arg.ts";
 import { formatBytes, formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import { track } from "@/core/telemetry.ts";
 import { withSpinner } from "@/core/ui.ts";
 
 interface UploadArgs {
@@ -268,6 +269,7 @@ export const streamVideoUploadCommand = defineCommand<UploadArgs>({
       await removeOrphanVideo(client, libraryId, created.guid);
       throw err;
     }
+    track("stream_video", { action: "upload", size_bytes: size, resumable });
 
     // The bytes are already stored, so a failed refresh must not report the upload
     // as failed; fall back to the freshly created video for the summary.

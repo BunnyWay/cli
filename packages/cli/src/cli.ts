@@ -20,6 +20,7 @@ import { sitesNamespace } from "./commands/sites/index.ts";
 import { skillsNamespace } from "./commands/skills/index.ts";
 import { storageNamespace } from "./commands/storage/index.ts";
 import { streamNamespace } from "./commands/stream/index.ts";
+import { telemetryNamespace } from "./commands/telemetry/index.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { bunny } from "./core/colors.ts";
 import { groupHelpOptions, optionKeys } from "./core/define-command.ts";
@@ -40,6 +41,7 @@ const commands: CommandModule[] = [
   streamNamespace,
   configNamespace,
   skillsNamespace,
+  telemetryNamespace,
   docsCommand,
   openCommand,
   apiCommand,

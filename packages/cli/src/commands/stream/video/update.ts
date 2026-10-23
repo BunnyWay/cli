@@ -11,6 +11,7 @@ import {
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
+import { track } from "@/core/telemetry.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 
 interface VideoUpdateArgs {
@@ -217,6 +218,7 @@ export const streamVideoUpdateCommand = defineCommand<VideoUpdateArgs>({
     await withSpinner("Updating video...", () =>
       updateVideo(client, libraryId, video.guid, body),
     );
+    track("stream_video", { action: "update" });
     const updated = await withSpinner("Reading video...", () =>
       fetchVideo(client, libraryId, video.guid),
     );

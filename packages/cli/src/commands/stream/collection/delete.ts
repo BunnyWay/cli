@@ -2,6 +2,7 @@ import { deleteCollection } from "@/commands/stream/collection-api.ts";
 import { streamLibraryContext } from "@/commands/stream/context.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
+import { track } from "@/core/telemetry.ts";
 import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
 import { resolveCollectionInteractive } from "./interactive.ts";
 
@@ -101,6 +102,7 @@ export const streamCollectionDeleteCommand =
       await withSpinner("Deleting collection...", () =>
         deleteCollection(client, libraryId, collection.guid as string),
       );
+      track("stream_collection", { action: "delete" });
 
       if (output === "json") {
         logger.log(

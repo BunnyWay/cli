@@ -285,6 +285,10 @@ Under `--output json` the error payload carries all available context (`error`, 
 
 ---
 
+## Telemetry
+
+`defineCommand()` reports a `command` event for every leaf command, so new commands need nothing. Domain events go through `track()` from `core/telemetry.ts` and must first be added to `EVENTS` (and any new props to `PROPS`) in `core/telemetry.ts` and in the collector's allowlist in `BunnyWay/cli-telemetry-edge-script`; the collector drops anything it does not list, so redeploy it when the lists change. Prefer one event per resource with an `action` prop (`stream_video` + `upload`) over one event per verb, and declare fixed string values as a list in `PROPS` so the collector rejects anything else. Only send names, counts, sizes, and flags; never values the user typed, resource names, or anything credential-shaped.
+
 ## Configuration & authentication
 
 ### Config file

@@ -19,6 +19,7 @@ import { DONE, defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { formatBytes, formatDuration, formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import { track } from "@/core/telemetry.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { confirm, isInteractive, requireConfirmable } from "@/core/ui.ts";
 import {
@@ -549,6 +550,12 @@ export const streamImportRunCommand = defineToolCommand({
 
   // Set on every pass, so a retry that clears the failures also clears the exit code.
   after: (result) => {
+    track("stream_import", {
+      source: result.source,
+      import_status: result.status,
+      videos: result.queued,
+      failed: result.failed.length,
+    });
     process.exitCode =
       result.status === "paused" ? 130 : result.failed.length > 0 ? 1 : 0;
   },

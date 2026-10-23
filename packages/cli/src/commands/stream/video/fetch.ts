@@ -3,6 +3,7 @@ import { queueVideoFetch } from "@/commands/stream/videos-api.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
+import { track } from "@/core/telemetry.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 
@@ -174,6 +175,7 @@ export const streamVideoFetchCommand = defineCommand<FetchArgs>({
         { collectionId, thumbnailTime },
       ),
     );
+    track("stream_video", { action: "fetch" });
 
     if (output === "json") {
       logger.log(
