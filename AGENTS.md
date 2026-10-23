@@ -561,7 +561,7 @@ Hard-won, not inferable from the code, and expensive to rediscover.
 - **A storage-origin edge rule always beats an Override Origin URL rule matching the same request**, regardless of creation order or `OrderIndex` (verified live). Routing a path around a site therefore means excluding it from the rewrite rule's match-none trigger, so `ensureSiteRules` carries extra patterns on that trigger through every publish; everything else in the site's rules is rebuilt in full.
 - **Sites edge rules are identified by their `Description` strings** (constants in `sites/constants.ts`); upserts key on them, so treat them as frozen.
 - **An unchanged, already-live `sites deploy` still converges and purges the site's edge rules.** It is the repair/upgrade path for existing sites, so do not return from the no-op branch before `promoteDeploy()`.
-- **The `/storagezone/regions` endpoint is not reliable.** The region catalog is hand-maintained in the storage constants. The available set is a function of both tier and S3 support: Edge (SSD) zones can only be primaried in DE and the create API silently rewrites any other region rather than erroring, so reject a conflicting `--region` client-side.
+
 - **Storage zone tier and S3 support are create-time only.** The update API takes neither.
 - **Storage replication is irreversible.** There is no API to remove a replication region, so `update` models replication as additive: it offers only new regions, warns on omissions, and confirms before adding.
 - **Wildcard hostnames can shadow deeper names** at the edge. `reportIssuedCertificate()` TLS-probes the hostname (retrying once) and warns instead of printing "Live at" when the edge answers with a bad certificate.
