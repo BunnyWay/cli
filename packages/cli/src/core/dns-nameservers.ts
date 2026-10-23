@@ -5,6 +5,20 @@ import { mapWithConcurrency } from "./concurrency.ts";
 /** bunny.net delegates every zone to the same two anycast nameservers. */
 export const BUNNY_NAMESERVERS = ["kiki.bunny.net", "coco.bunny.net"] as const;
 
+async function withTimeout<T>(promise: Promise<T>, ms = 3000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("DNS lookup timed out")), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Lowercase and drop a trailing dot so nameservers compare cleanly. */
 function normalize(ns: string): string {
   return ns.trim().toLowerCase().replace(/\.$/, "");
@@ -26,6 +40,7 @@ function decodeName(buf: Buffer, start: number): { name: string; end: number } {
   let pos = start;
   let end = start;
   let jumped = false;
+  let jumps = 0;
   while (pos < buf.length) {
     const len = buf[pos] ?? 0;
     if (len === 0) {
@@ -34,6 +49,7 @@ function decodeName(buf: Buffer, start: number): { name: string; end: number } {
     }
     if ((len & 0xc0) === 0xc0) {
       const pointer = ((len & 0x3f) << 8) | (buf[pos + 1] ?? 0);
+      if (pointer >= pos || ++jumps > 64) throw new Error("Malformed DNS name");
       if (!jumped) end = pos + 2;
       pos = pointer;
       jumped = true;
@@ -85,6 +101,7 @@ function parseNsReferral(buf: Buffer, domain: string): string[] {
 function queryNs(
   server: string,
   domain: string,
+  signal?: AbortSignal,
   timeoutMs = 3000,
 ): Promise<string[] | null> {
   return new Promise((resolve) => {
@@ -100,6 +117,7 @@ function queryNs(
       resolve(value);
     };
     const timer = setTimeout(() => finish(null), timeoutMs);
+    signal?.addEventListener("abort", () => finish(null), { once: true });
     socket.on("error", () => finish(null));
     socket.on("message", (msg) => {
       try {
@@ -128,23 +146,35 @@ async function resolveParentDelegation(
   const parent = labels.slice(1).join(".");
   let parentNs: string[];
   try {
-    parentNs = await dns.resolveNs(parent);
+    parentNs = await withTimeout(dns.resolveNs(parent));
   } catch {
     return null;
   }
-  for (const host of parentNs.slice(0, 3)) {
-    let ips: string[];
-    try {
-      ips = await dns.resolve4(host);
-    } catch {
-      continue;
+  const ipLists = await Promise.all(
+    parentNs.slice(0, 3).map((host) =>
+      withTimeout(dns.resolve4(host)).then(
+        (ips) => ips.slice(0, 2),
+        () => [],
+      ),
+    ),
+  );
+  const ips = ipLists.flat();
+  if (ips.length === 0) return null;
+
+  const controller = new AbortController();
+
+  const ns = await new Promise<string[] | null>((resolve) => {
+    let pending = ips.length;
+    for (const ip of ips) {
+      queryNs(ip, domain, controller.signal).then((result) => {
+        if (result !== null) resolve(result);
+        else if (--pending === 0) resolve(null);
+      });
     }
-    for (const ip of ips.slice(0, 2)) {
-      const ns = await queryNs(ip, domain);
-      if (ns !== null) return ns.map(normalize);
-    }
-  }
-  return null;
+  });
+
+  controller.abort();
+  return ns?.map(normalize) ?? null;
 }
 
 /** "bunny" = fully delegated to the expected set; "other" = points elsewhere; "unknown" = couldn't resolve. */
@@ -172,7 +202,7 @@ export async function checkDelegation(
     const parent = await resolveParentDelegation(domain);
     // Fall back to the recursive answer only when the parent referral is unreadable.
     const resolved = (
-      parent ?? (await dns.resolveNs(domain)).map(normalize)
+      parent ?? (await withTimeout(dns.resolveNs(domain))).map(normalize)
     ).sort();
     if (resolved.length === 0) {
       // Empty parent referral is a definite "not delegated to bunny"; an empty recursive answer is inconclusive.
