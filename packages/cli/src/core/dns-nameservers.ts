@@ -5,7 +5,6 @@ import { mapWithConcurrency } from "./concurrency.ts";
 /** bunny.net delegates every zone to the same two anycast nameservers. */
 export const BUNNY_NAMESERVERS = ["kiki.bunny.net", "coco.bunny.net"] as const;
 
-
 const resolver = new dns.Resolver({ timeout: 3000, tries: 1 });
 
 /** Lowercase and drop a trailing dot so nameservers compare cleanly. */
@@ -110,7 +109,6 @@ function queryNs(
     socket.on("error", () => finish(null));
     socket.on("message", (msg) => {
       try {
-
         if (msg.readUInt16BE(2) & 0x020f) return finish(null);
         finish(parseNsReferral(msg, domain));
       } catch {
