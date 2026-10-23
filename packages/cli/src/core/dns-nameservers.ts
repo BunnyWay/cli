@@ -5,19 +5,8 @@ import { mapWithConcurrency } from "./concurrency.ts";
 /** bunny.net delegates every zone to the same two anycast nameservers. */
 export const BUNNY_NAMESERVERS = ["kiki.bunny.net", "coco.bunny.net"] as const;
 
-async function withTimeout<T>(promise: Promise<T>, ms = 3000): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("DNS lookup timed out")), ms);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
+
+const resolver = new dns.Resolver({ timeout: 3000, tries: 1 });
 
 /** Lowercase and drop a trailing dot so nameservers compare cleanly. */
 function normalize(ns: string): string {
@@ -121,7 +110,8 @@ function queryNs(
     socket.on("error", () => finish(null));
     socket.on("message", (msg) => {
       try {
-        if (msg.readUInt16BE(2) & 0x0200) return finish(null);
+
+        if (msg.readUInt16BE(2) & 0x020f) return finish(null);
         finish(parseNsReferral(msg, domain));
       } catch {
         finish(null);
@@ -146,13 +136,13 @@ async function resolveParentDelegation(
   const parent = labels.slice(1).join(".");
   let parentNs: string[];
   try {
-    parentNs = await withTimeout(dns.resolveNs(parent));
+    parentNs = await resolver.resolveNs(parent);
   } catch {
     return null;
   }
   const ipLists = await Promise.all(
     parentNs.slice(0, 3).map((host) =>
-      withTimeout(dns.resolve4(host)).then(
+      resolver.resolve4(host).then(
         (ips) => ips.slice(0, 2),
         () => [],
       ),
@@ -202,7 +192,7 @@ export async function checkDelegation(
     const parent = await resolveParentDelegation(domain);
     // Fall back to the recursive answer only when the parent referral is unreadable.
     const resolved = (
-      parent ?? (await withTimeout(dns.resolveNs(domain))).map(normalize)
+      parent ?? (await resolver.resolveNs(domain)).map(normalize)
     ).sort();
     if (resolved.length === 0) {
       // Empty parent referral is a definite "not delegated to bunny"; an empty recursive answer is inconclusive.
