@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "bun-ny-cli",
@@ -16,7 +17,7 @@
     },
     "packages/cli": {
       "name": "@bunny.net/cli",
-      "version": "0.20.0",
+      "version": "0.20.3",
       "bin": {
         "bunny": "./bin/bunny.cjs",
       },
@@ -49,32 +50,32 @@
         "zod": "^4.3.6",
       },
       "optionalDependencies": {
-        "@bunny.net/cli-darwin-arm64": "0.20.0",
-        "@bunny.net/cli-darwin-x64": "0.20.0",
-        "@bunny.net/cli-linux-arm64": "0.20.0",
-        "@bunny.net/cli-linux-x64": "0.20.0",
-        "@bunny.net/cli-windows-x64": "0.20.0",
+        "@bunny.net/cli-darwin-arm64": "0.20.3",
+        "@bunny.net/cli-darwin-x64": "0.20.3",
+        "@bunny.net/cli-linux-arm64": "0.20.3",
+        "@bunny.net/cli-linux-x64": "0.20.3",
+        "@bunny.net/cli-windows-x64": "0.20.3",
       },
     },
     "packages/cli-darwin-arm64": {
       "name": "@bunny.net/cli-darwin-arm64",
-      "version": "0.20.0",
+      "version": "0.20.3",
     },
     "packages/cli-darwin-x64": {
       "name": "@bunny.net/cli-darwin-x64",
-      "version": "0.20.0",
+      "version": "0.20.3",
     },
     "packages/cli-linux-arm64": {
       "name": "@bunny.net/cli-linux-arm64",
-      "version": "0.20.0",
+      "version": "0.20.3",
     },
     "packages/cli-linux-x64": {
       "name": "@bunny.net/cli-linux-x64",
-      "version": "0.20.0",
+      "version": "0.20.3",
     },
     "packages/cli-windows-x64": {
       "name": "@bunny.net/cli-windows-x64",
-      "version": "0.20.0",
+      "version": "0.20.3",
     },
     "packages/config": {
       "name": "@bunny.net/config",
@@ -103,7 +104,7 @@
     "packages/database-client/examples/bun": {
       "name": "database-client-example-bun",
       "dependencies": {
-        "@bunny.net/database-client": "^0.0.1",
+        "@bunny.net/database-client": "*",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -115,7 +116,7 @@
     "packages/database-client/examples/hono": {
       "name": "database-client-example-hono",
       "dependencies": {
-        "@bunny.net/database-client": "^0.0.1",
+        "@bunny.net/database-client": "*",
         "hono": "^4.13.3",
       },
       "devDependencies": {
