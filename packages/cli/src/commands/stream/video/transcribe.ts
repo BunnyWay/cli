@@ -6,7 +6,6 @@ import { parseCsvFlag } from "@/commands/stream/library/flags.ts";
 import { checkTranscribingLanguages } from "@/commands/stream/library/language-check.ts";
 import {
   autoTranscriptionPending,
-  DOUBLE_BILLING_NOTE,
   estimateTranscription,
   formatTranscriptionEstimate,
   outputLanguages,
@@ -160,12 +159,12 @@ export const streamVideoTranscribeCommand = defineCommand<TranscribeArgs>({
       force: overwrite,
     });
 
-    // Right after an upload or re-encode, a transcribing library is about to do this itself.
+    // Right after an upload, a transcribing library is about to do this itself (after a
+    // re-encode only when its transcribing languages changed), so say so before billing.
     if (output !== "json" && autoTranscriptionPending(library, video)) {
       logger.warn(
-        `This library transcribes automatically once encoding finishes, and ${video.title} is still encoding, so it will be transcribed anyway.`,
+        `This library transcribes automatically, and ${video.title} is still encoding. A fresh upload is transcribed on its own once encoding finishes (a re-encode only if the library's transcribing languages changed), so transcribing it now may bill the transcription twice.`,
       );
-      logger.warn(DOUBLE_BILLING_NOTE);
     }
 
     // Text runs see the cost before the request; json output stays machine-clean.
