@@ -39,7 +39,7 @@ Hand `adapter` to a `MigrationService` from `@bunny.net/stream-import` to run th
 | Token ID     | `MUX_TOKEN_ID`       |
 | Token secret | `MUX_TOKEN_SECRET`   |
 
-Create an access token at dashboard.mux.com/settings/api-keys.
+Create an access token at dashboard.mux.com/settings/access-tokens.
 
 Mux has no folders, so every asset is imported uncategorized. The master (original) file is preferred when temporary master access is enabled and ready; otherwise the best static MP4 rendition the asset reports as ready is used (`highest.mp4`, then resolution renditions, then the deprecated `high`/`medium`/`low` names), on a public playback ID. An asset with neither is skipped, so enable master access or static renditions before importing, and audio-only assets are always skipped. Download URLs must be HTTPS on a `mux.com` subdomain. Titles come from `meta.title`, falling back to `passthrough`. The dedup metaTag is `muxAssetId`.
 
