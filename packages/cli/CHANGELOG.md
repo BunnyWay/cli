@@ -1,5 +1,15 @@
 # @bunny.net/cli
 
+## 0.21.0
+
+### Minor Changes
+
+- [#279](https://github.com/BunnyWay/cli/pull/279) [`fb9e43b`](https://github.com/BunnyWay/cli/commit/fb9e43b85414c4bff21d9d458329177f3a93e757) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - fix(stream): `videos encode` no longer claims a re-encode transcribes the video again. A re-encode keeps the existing transcription and only transcribes again when the library's transcribing languages changed; the warning, the `videos transcribe` double-billing notice and the README now say so. The JSON field `transcriptionQueued` is renamed `transcribingEnabled`, since a transcription is not necessarily queued; scripts reading the old field need to switch.
+
+### Patch Changes
+
+- [#281](https://github.com/BunnyWay/cli/pull/281) [`01a4db5`](https://github.com/BunnyWay/cli/commit/01a4db5f3bbb32c0071ab0b54743cdcf96860891) Thanks [@NathanZBunny](https://github.com/NathanZBunny)! - fix(stream): the Mux import now links to Mux's Access Tokens settings page (settings/access-tokens) instead of settings/api-keys.
+
 ## 0.20.3
 
 ### Patch Changes
