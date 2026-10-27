@@ -1,5 +1,11 @@
 # @bunny.net/stream-import-mux
 
+## 0.1.1
+
+### Patch Changes
+
+- [#281](https://github.com/BunnyWay/cli/pull/281) [`01a4db5`](https://github.com/BunnyWay/cli/commit/01a4db5f3bbb32c0071ab0b54743cdcf96860891) Thanks [@NathanZBunny](https://github.com/NathanZBunny)! - fix(stream): the Mux import now links to Mux's Access Tokens settings page (settings/access-tokens) instead of settings/api-keys.
+
 ## 0.1.0
 
 ### Minor Changes
