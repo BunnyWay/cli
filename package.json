@@ -24,7 +24,7 @@
     "openapi:generate": "bun run --filter @bunny.net/openapi-client generate",
     "openapi:update": "bun run --filter @bunny.net/openapi-client update-specs",
     "changeset": "changeset",
-    "version": "changeset version",
+    "version": "changeset version && bun install --lockfile-only",
     "release": "changeset publish"
   },
   "devDependencies": {
