@@ -130,8 +130,9 @@ const STILL_ENCODING = new Set([0, 1, 2, 3, 7, 8]);
 
 /**
  * Whether the library will transcribe this video automatically once encoding
- * finishes, which is the case right after an upload or a re-encode. A manual
- * transcription on top of that is billed twice.
+ * finishes: always right after an upload, and after a re-encode only when the
+ * library's transcribing languages changed. A manual transcription on top of
+ * that is billed twice.
  */
 export function autoTranscriptionPending(
   library: { EnableTranscribing?: boolean | null },
@@ -144,7 +145,3 @@ export function autoTranscriptionPending(
     STILL_ENCODING.has(video.status)
   );
 }
-
-/** The double-billing warning shared by `videos transcribe` and `videos encode`. */
-export const DOUBLE_BILLING_NOTE =
-  "Don't also run `bunny stream videos transcribe` on this video while that's pending, or the transcription is billed twice.";
