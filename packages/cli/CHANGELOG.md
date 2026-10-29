@@ -1,5 +1,11 @@
 # @bunny.net/cli
 
+## 0.21.1
+
+### Patch Changes
+
+- [#283](https://github.com/BunnyWay/cli/pull/283) [`ee0c058`](https://github.com/BunnyWay/cli/commit/ee0c058ef1cc9589cfc9d9b2263340106aeae479) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - fix: the binaries are now built with Bun 1.4.4. Binaries built with Bun 1.3.x could crash with a floating point exception after uploading a small file in `sites deploy` and `storage files upload`.
+
 ## 0.21.0
 
 ### Minor Changes

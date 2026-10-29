@@ -17,7 +17,7 @@
     },
     "packages/cli": {
       "name": "@bunny.net/cli",
-      "version": "0.21.0",
+      "version": "0.21.1",
       "bin": {
         "bunny": "./bin/bunny.cjs",
       },
@@ -50,32 +50,32 @@
         "zod": "^4.3.6",
       },
       "optionalDependencies": {
-        "@bunny.net/cli-darwin-arm64": "0.21.0",
-        "@bunny.net/cli-darwin-x64": "0.21.0",
-        "@bunny.net/cli-linux-arm64": "0.21.0",
-        "@bunny.net/cli-linux-x64": "0.21.0",
-        "@bunny.net/cli-windows-x64": "0.21.0",
+        "@bunny.net/cli-darwin-arm64": "0.21.1",
+        "@bunny.net/cli-darwin-x64": "0.21.1",
+        "@bunny.net/cli-linux-arm64": "0.21.1",
+        "@bunny.net/cli-linux-x64": "0.21.1",
+        "@bunny.net/cli-windows-x64": "0.21.1",
       },
     },
     "packages/cli-darwin-arm64": {
       "name": "@bunny.net/cli-darwin-arm64",
-      "version": "0.21.0",
+      "version": "0.21.1",
     },
     "packages/cli-darwin-x64": {
       "name": "@bunny.net/cli-darwin-x64",
-      "version": "0.21.0",
+      "version": "0.21.1",
     },
     "packages/cli-linux-arm64": {
       "name": "@bunny.net/cli-linux-arm64",
-      "version": "0.21.0",
+      "version": "0.21.1",
     },
     "packages/cli-linux-x64": {
       "name": "@bunny.net/cli-linux-x64",
-      "version": "0.21.0",
+      "version": "0.21.1",
     },
     "packages/cli-windows-x64": {
       "name": "@bunny.net/cli-windows-x64",
-      "version": "0.21.0",
+      "version": "0.21.1",
     },
     "packages/config": {
       "name": "@bunny.net/config",
