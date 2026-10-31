@@ -9,51 +9,64 @@ export const SITES_WORKFLOW_PATH = ".github/workflows/bunny-sites.yml";
 
 // Bump the tag when a new major of the action ships; the action wraps the CLI.
 export const DEPLOY_SITE_ACTION =
-  "BunnyWay/actions/deploy-site@deploy-site_0.1.0";
+  "BunnyWay/actions/deploy-site@deploy-site_0.1.1";
+
+interface JsInstall {
+  /** Lockfile path for setup-node's cache when it isn't at the checkout root. */
+  cacheDependencyPath?: string;
+  /** False when the project has no lockfile: no dependency cache, and a plain install instead of a frozen one. */
+  lockfile?: boolean;
+  /** pnpm version for pnpm/action-setup, needed when the root package.json has no `packageManager` field. */
+  pnpmVersion?: string;
+}
 
 // Toolchain setup + dependency install, without the build line. setup-node looks for the lockfile at the checkout root, so a nested project passes its own path.
-function jsSetup(
-  pm: PackageManager,
-  cacheDependencyPath: string | undefined,
-): string[] {
+function jsSetup(pm: PackageManager, install: JsInstall): string[] {
+  const { cacheDependencyPath } = install;
+  const frozen = install.lockfile !== false;
   const cachePath = cacheDependencyPath
     ? [
         `          cache-dependency-path: ${JSON.stringify(cacheDependencyPath)}`,
       ]
     : [];
+  const cache = (name: string) =>
+    frozen ? [`          cache: ${name}`, ...cachePath] : [];
   switch (pm) {
     case "bun":
       return [
         "      - uses: oven-sh/setup-bun@v2",
-        "      - run: bun install --frozen-lockfile",
+        `      - run: bun install${frozen ? " --frozen-lockfile" : ""}`,
       ];
     case "pnpm":
       return [
         "      - uses: pnpm/action-setup@v6",
+        ...(install.pnpmVersion
+          ? [
+              "        with:",
+              `          version: ${JSON.stringify(install.pnpmVersion)}`,
+            ]
+          : []),
         "      - uses: actions/setup-node@v7",
         "        with:",
         '          node-version: "lts/*"',
-        "          cache: pnpm",
-        ...cachePath,
-        "      - run: pnpm install --frozen-lockfile",
+        ...cache("pnpm"),
+        `      - run: pnpm install${frozen ? " --frozen-lockfile" : ""}`,
       ];
     case "yarn":
       return [
         "      - uses: actions/setup-node@v7",
         "        with:",
         '          node-version: "lts/*"',
-        "          cache: yarn",
-        ...cachePath,
-        "      - run: yarn install --frozen-lockfile",
+        ...cache("yarn"),
+        `      - run: yarn install${frozen ? " --frozen-lockfile" : ""}`,
       ];
     case "npm":
       return [
         "      - uses: actions/setup-node@v7",
         "        with:",
         '          node-version: "lts/*"',
-        "          cache: npm",
-        ...cachePath,
-        "      - run: npm ci",
+        ...cache("npm"),
+        `      - run: ${frozen ? "npm ci" : "npm install"}`,
       ];
   }
 }
@@ -68,10 +81,10 @@ function jsSteps(
   preset: FrameworkPreset,
   pm: PackageManager,
   build: string | undefined,
-  cacheDependencyPath: string | undefined,
+  install: JsInstall,
 ): string[] {
   return [
-    ...jsSetup(pm, cacheDependencyPath),
+    ...jsSetup(pm, install),
     runStep(build, presetBuildCommand(preset, pm) ?? `${pm} run build`),
   ];
 }
@@ -80,12 +93,12 @@ function buildSteps(
   preset: FrameworkPreset,
   packageManager: PackageManager,
   build: string | undefined,
-  cacheDependencyPath: string | undefined,
+  install: JsInstall,
   installDeps: boolean | undefined,
 ): string[] {
   switch (preset.toolchain) {
     case "js":
-      return jsSteps(preset, packageManager, build, cacheDependencyPath);
+      return jsSteps(preset, packageManager, build, install);
     case "ruby":
       return [
         "      - uses: ruby/setup-ruby@v1",
@@ -109,7 +122,8 @@ function buildSteps(
         "      - uses: actions/setup-python@v7",
         "        with:",
         '          python-version: "3.x"',
-        "      - run: pip install -r requirements.txt",
+        // A project without requirements.txt still needs the generator itself.
+        `      - run: ${JSON.stringify(`if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install '${preset.pipPackage ?? preset.id}'; fi`)}`,
         runStep(build, preset.build),
       ];
     case "zola":
@@ -130,7 +144,7 @@ function buildSteps(
       if (!build) return ["      # No build step: static files deploy as-is."];
       // An unrecognized bundler lands on the static preset; a configured build in a JS project still needs its dependencies on the runner.
       return installDeps
-        ? [...jsSetup(packageManager, cacheDependencyPath), runStep(build)]
+        ? [...jsSetup(packageManager, install), runStep(build)]
         : [runStep(build)];
   }
 }
@@ -153,6 +167,12 @@ export function renderSitesWorkflow(opts: {
   installDeps?: boolean;
   /** The branch that goes live on push; main unless the repository's default branch differs. */
   branch?: string;
+  /** The `@bunny.net/cli` version range the action runs; the action's own default when omitted. */
+  cliVersion?: string;
+  /** False when the project has no lockfile; see JsInstall. */
+  lockfile?: boolean;
+  /** pnpm version to install when the root package.json doesn't pin one. */
+  pnpmVersion?: string;
 }): string {
   const { site, preset, packageManager, workingDirectory } = opts;
   // Every `run` step builds from the project directory; `uses` inputs stay workflow-root-relative, so the deploy directory carries the prefix instead.
@@ -190,7 +210,11 @@ export function renderSitesWorkflow(opts: {
       preset,
       packageManager,
       opts.build,
-      opts.cacheDependencyPath,
+      {
+        cacheDependencyPath: opts.cacheDependencyPath,
+        lockfile: opts.lockfile,
+        pnpmVersion: opts.pnpmVersion,
+      },
       opts.installDeps,
     ),
     "",
@@ -200,6 +224,9 @@ export function renderSitesWorkflow(opts: {
     `          site: ${JSON.stringify(site)}`,
     `          directory: ${JSON.stringify(workflowPath(workingDirectory, opts.dir ?? preset.dir))}`,
     "          api_key: ${{ secrets.BUNNYNET_API_KEY }}",
+    ...(opts.cliVersion
+      ? [`          cli_version: ${JSON.stringify(opts.cliVersion)}`]
+      : []),
   ];
   return `${lines.join("\n")}\n`;
 }
