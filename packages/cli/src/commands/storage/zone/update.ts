@@ -6,6 +6,7 @@ import type {
 } from "@/commands/storage/api.ts";
 import {
   confirmAddedReplicationRegions,
+  loadStorageRegions,
   normalizeReplicationRegions,
   type RegionScope,
   replicationChoices,
@@ -19,6 +20,7 @@ import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { isInteractive, prompts, spinner } from "@/core/ui.ts";
+import type { StorageRegionOption } from "@/tools/storage/index.ts";
 
 interface ZoneUpdateArgs {
   zone?: string;
@@ -44,6 +46,7 @@ function zoneScope(zone: StorageZoneModel): RegionScope {
 }
 
 function settingsFromFlags(
+  catalog: StorageRegionOption[],
   args: ZoneUpdateArgs,
   zone: StorageZoneModel,
 ): StorageZoneSettingsModel {
@@ -56,6 +59,7 @@ function settingsFromFlags(
     settings.Rewrite404To200 = args.rewrite404To200;
   if (args.replication !== undefined)
     settings.ReplicationZones = normalizeReplicationRegions(
+      catalog,
       args.replication,
       primaryCode,
       zoneScope(zone),
@@ -65,12 +69,14 @@ function settingsFromFlags(
 }
 
 async function promptSettings(
+  catalog: StorageRegionOption[],
   zone: StorageZoneModel,
 ): Promise<StorageZoneSettingsModel> {
   const existing = (zone.ReplicationRegions ?? []).map((r) => r.toUpperCase());
   if (existing.length)
     logger.dim(`Already replicated (permanent): ${existing.join(", ")}`);
   const addable = replicationChoices(
+    catalog,
     zone.Region ?? undefined,
     zoneScope(zone),
   ).filter((region) => !existing.includes(region.code));
@@ -179,10 +185,15 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
       force: args.force,
       offerLink: true,
     });
+    // Only replication needs the region catalog, so 404-only flag updates skip the fetch.
+    const catalog =
+      !hasFlags || args.replication !== undefined
+        ? await loadStorageRegions(client)
+        : [];
     // Flags take full precedence over the editor: a partial set of flags is a partial update.
     const settings = hasFlags
-      ? settingsFromFlags(args, zone)
-      : await promptSettings(zone);
+      ? settingsFromFlags(catalog, args, zone)
+      : await promptSettings(catalog, zone);
 
     if (settings.ReplicationZones) {
       const existing = (zone.ReplicationRegions ?? []).map((r) =>
