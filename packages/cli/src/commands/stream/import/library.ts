@@ -29,7 +29,6 @@ async function maybeLinkLibrary(library: StreamLibrary): Promise<void> {
   logger.success(`Linked this directory to video library ${library.name}.`);
 }
 
-
 async function chooseNewLibrary(
   existing: number,
   offerCreate: boolean | undefined,

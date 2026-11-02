@@ -414,7 +414,7 @@ export const streamImportRunCommand = defineToolCommand({
     const library = await resolveImportLibrary(baseCtx, args.library, {
       output,
       offerLink: !args.dryRun,
-      offerCreate: !args.dryRun,
+      offerCreate: !args.dryRun && !args.resume,
     });
     const targetFor = (source: string) => ({
       library: String(library.id),
