@@ -4,7 +4,7 @@ const { execFileSync } = require("node:child_process");
 const { existsSync, readFileSync } = require("node:fs");
 const path = require("node:path");
 
-// Only x64 binaries use AVX2; assume it's present on other arches or when detection fails, letting the SIGILL fallback catch any mistake.
+// Only x64 binaries use AVX2, so other arches report true; null means detection failed.
 function hasAvx2() {
   if (process.arch !== "x64") return true;
   try {
@@ -20,9 +20,9 @@ function hasAvx2() {
       return /avx2/i.test(features);
     }
   } catch {
-    return true;
+    return null;
   }
-  return true;
+  return null;
 }
 
 const PLATFORMS = {
@@ -73,7 +73,8 @@ if (existsSync(baselinePath)) {
   candidates.push(baselinePath);
 }
 // Run the baseline first on x64 CPUs without AVX2, so we don't spawn the default binary just to catch its crash on every invocation.
-if (candidates.length > 1 && !hasAvx2()) {
+const avx2 = hasAvx2();
+if (candidates.length > 1 && avx2 === false) {
   candidates.reverse();
 }
 
@@ -85,12 +86,17 @@ for (let i = 0; i < candidates.length; i++) {
     if (err.status != null) {
       process.exit(err.status);
     }
-    if (err.signal === "SIGILL" && i < candidates.length - 1) {
-      continue;
-    }
-    if (err.signal === "SIGILL") {
+    // Bun panics also exit via SIGILL, so only retry and blame the CPU when AVX2 is missing; retrying a real crash could repeat a deploy.
+    if (err.signal === "SIGILL" && avx2 !== true) {
+      if (i < candidates.length - 1) continue;
       console.error(
         "bsql crashed with an illegal instruction; this CPU is not supported.",
+      );
+      process.exit(1);
+    }
+    if (err.signal) {
+      console.error(
+        `bsql crashed unexpectedly (${err.signal}); please report this with the output above.`,
       );
       process.exit(1);
     }
