@@ -3,7 +3,7 @@ import {
   type StreamLibraryManifest,
 } from "@/commands/stream/constants.ts";
 import { writeStreamManifest } from "@/commands/stream/interactive.ts";
-import { resolveReplicationRegions } from "@/commands/stream/library/create.ts";
+import { resolveReplicationRegions } from "@/commands/stream/library/replication-regions.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest } from "@/core/manifest.ts";
