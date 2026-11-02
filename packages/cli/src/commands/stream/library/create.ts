@@ -36,7 +36,7 @@ import {
 } from "./flags.ts";
 import { checkTranscribingLanguages } from "./language-check.ts";
 
-async function resolveReplicationRegions(
+export async function resolveReplicationRegions(
   flag: string[] | undefined,
   output: string | undefined,
 ): Promise<string[]> {
