@@ -86,8 +86,12 @@ for (let i = 0; i < candidates.length; i++) {
     if (err.status != null) {
       process.exit(err.status);
     }
-    // Bun panics also exit via SIGILL, so only retry and blame the CPU when AVX2 is missing; retrying a real crash could repeat a deploy.
-    if (err.signal === "SIGILL" && avx2 !== true) {
+    // Bun panics also exit via SIGILL, so only the AVX2 build on a CPU that may lack it retries or blames the CPU; retrying a real crash could repeat a deploy.
+    if (
+      err.signal === "SIGILL" &&
+      avx2 !== true &&
+      candidates[i] !== baselinePath
+    ) {
       if (i < candidates.length - 1) continue;
       console.error(
         "bsql crashed with an illegal instruction; this CPU is not supported.",
