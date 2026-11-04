@@ -60,7 +60,7 @@ test("an unknown length still names the rate and the languages", () => {
   );
 });
 
-// Right after an upload or re-encode, a transcribing library transcribes on its own.
+// Right after an upload (or a re-encode that changed the languages), a transcribing library transcribes on its own.
 test("autoTranscriptionPending is true only while a transcribing library is still encoding", () => {
   expect(
     autoTranscriptionPending({ EnableTranscribing: true }, { status: 3 }),

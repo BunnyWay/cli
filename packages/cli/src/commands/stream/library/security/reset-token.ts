@@ -1,24 +1,16 @@
-import { streamSecurityResetToken } from "@bunny.net/tools/stream";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, requireConfirmable } from "@/core/ui.ts";
+import { streamSecurityResetToken } from "@/tools/stream/index.ts";
 import { resolveLibraryRef } from "../library-ref.ts";
 
 export const streamLibrarySecurityResetTokenCommand = defineToolCommand({
   tool: streamSecurityResetToken,
   command: "reset-token [library]",
+  // Hidden: the old spelling of `security show --rotate`.
+  hidden: true,
   describe:
     "Rotate a video library's CDN and embed view token key. Every signed URL issued with the old key stops working.",
-  examples: [
-    [
-      "$0 stream library security reset-token my-library",
-      "Rotate after confirming",
-    ],
-    [
-      "$0 stream library security reset-token my-library --force",
-      "Rotate without asking",
-    ],
-  ],
   progress: "Resetting the token key...",
 
   builder: (yargs) =>
@@ -56,7 +48,7 @@ export const streamLibrarySecurityResetTokenCommand = defineToolCommand({
       `Reset the token authentication key for video library ${library}.`,
     );
     logger.dim(
-      "Run `bunny stream library security show --show-secret` to see the new key.",
+      "Run `bunny stream libraries security show --show-secret` to see the new key.",
     );
   },
 });

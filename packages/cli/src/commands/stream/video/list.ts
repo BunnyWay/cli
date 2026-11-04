@@ -20,15 +20,15 @@ export const streamVideoListCommand = defineCommand<VideoListArgs>({
   aliases: ["ls"],
   describe: "List the videos in a Stream video library.",
   examples: [
-    ["$0 stream video list", "List videos in the linked library"],
-    ["$0 stream video list --lib 12345", "List videos in a specific library"],
-    ["$0 stream video list --search launch", "Filter by title"],
+    ["$0 stream videos list", "List videos in the linked library"],
+    ["$0 stream videos list --lib 12345", "List videos in a specific library"],
+    ["$0 stream videos list --search launch", "Filter by title"],
     [
-      "$0 stream video list --collection 8a7b6c5d-...",
+      "$0 stream videos list --collection 8a7b6c5d-...",
       "Only videos in one collection",
     ],
     [
-      "$0 stream video upload ./video.mp4",
+      "$0 stream videos upload ./video.mp4",
       "Videos are added with upload or fetch; there is no video create",
     ],
   ],
@@ -47,7 +47,7 @@ export const streamVideoListCommand = defineCommand<VideoListArgs>({
       .option("collection", {
         type: "string",
         describe:
-          "Only list videos in this collection ID (see `bunny stream collection list`)",
+          "Only list videos in this collection ID (see `bunny stream collections list`)",
       }),
 
   handler: async ({
@@ -82,7 +82,7 @@ export const streamVideoListCommand = defineCommand<VideoListArgs>({
 
     if (videos.length === 0) {
       logger.info("No videos found.");
-      logger.dim("Add one with `bunny stream video upload <file>`.");
+      logger.dim("Add one with `bunny stream videos upload <file>`.");
       return;
     }
 

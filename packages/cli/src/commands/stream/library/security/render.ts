@@ -1,6 +1,6 @@
-import type { SecuritySettings } from "@bunny.net/tools/stream";
 import { formatKeyValue, maskSecret } from "@/core/format.ts";
 import type { OutputFormat } from "@/core/types.ts";
+import type { SecuritySettings } from "@/tools/stream/index.ts";
 
 function onOff(value: boolean | null): string {
   if (value === null) return "Unknown (no linked Pull Zone)";

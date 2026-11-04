@@ -1,7 +1,7 @@
-import { registriesDelete } from "@bunny.net/tools/apps";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm } from "@/core/ui.ts";
+import { registriesDelete } from "@/tools/apps/index.ts";
 
 export const registryRemoveCommand = defineToolCommand({
   tool: registriesDelete,

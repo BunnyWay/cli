@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type CoreClient, createToolContext } from "@bunny.net/tools";
 import { writeStreamManifest } from "@/commands/stream/interactive.ts";
+import { type CoreClient, createToolContext } from "@/tools/index.ts";
 import { resolveImportLibrary } from "./library.ts";
 
 const LIBRARIES = [

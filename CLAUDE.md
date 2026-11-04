@@ -26,13 +26,12 @@ test("example", () => {
 
 ## Monorepo structure
 
-This is a Bun workspace monorepo with seven packages, plus one package per Stream import source adapter:
+This is a Bun workspace monorepo with six packages, plus one package per Stream import source adapter:
 
 - `packages/openapi-client/` (`@bunny.net/openapi-client`): standalone, type-safe OpenAPI client, zero CLI deps
 - `packages/config/` (`@bunny.net/config`): shared Zod schemas, types, and JSON Schema for `bunny.jsonc`
 - `packages/database-shell/` (`@bunny.net/database-shell`): standalone SQL shell engine (REPL, formatting, masking)
 - `packages/sandbox/` (`@bunny.net/sandbox`): standalone sandbox SDK (create, file buffering, command exec, port exposure) over Magic Containers + SSH
-- `packages/tools/` (`@bunny.net/tools`): headless tool definitions (`defineTool`: schema, kind, run) shared by the CLI and any tool host; internal workspace package, not published
 - `packages/stream-import/` (`@bunny.net/stream-import`): headless Stream import engine, published to npm; `packages/stream-import-<source>/` hold one adapter each (vimeo, s3, wistia, mux, cloudflare, jwplayer, brightcove)
 - `packages/cli/` (`@bunny.net/cli`): the CLI, depends on all of them
 
@@ -50,7 +49,7 @@ This is a Bun workspace monorepo with seven packages, plus one package per Strea
 - Throw `UserError` for expected errors.
 - Import CLI-internal modules with the `@/` alias (`@/core/logger.ts`), not `../` chains. Same-directory `./` imports stay relative. CLI only: the published packages build with `tsc`, which does not rewrite `paths`.
 - Import API clients from `@bunny.net/openapi-client`, not relative paths. Import generated types from the per-API entrypoints (`@bunny.net/openapi-client/<spec>`, e.g. `@bunny.net/openapi-client/core`); the older `generated/<spec>.d.ts` paths remain supported.
-- Use `clientOptions(config, verbose)` from `packages/cli/src/core/client-options.ts` when creating API clients in command handlers that are not yet on the tools layer. `core/tools-boundary.test.ts` is a ratchet: new command files must not create clients; put the API work in `@bunny.net/tools` and wrap it with `defineToolCommand()` from `packages/cli/src/core/define-tool-command.ts` (prepare -> confirm -> run -> after -> render). Tools never prompt or print; prompts and confirmations live in `prepare`.
+- Use `clientOptions(config, verbose)` from `packages/cli/src/core/client-options.ts` when creating API clients in command handlers that are not yet on the tools layer. `core/tools-boundary.test.ts` is a ratchet: new command files must not create clients; put the API work in `packages/cli/src/tools/` (`defineTool`) and wrap it with `defineToolCommand()` from `packages/cli/src/core/define-tool-command.ts` (prepare -> confirm -> run -> after -> render). Tools never prompt or print; prompts and confirmations live in `prepare`.
 - Database commands use v2 API endpoints (`/v2/databases/...`).
 - Apps (Magic Containers) commands use `bunny.jsonc` as the single source of truth. App ID is stored in the config (no separate manifest file). Use `resolveAppId()` and `resolveContainerId()` from `packages/cli/src/commands/apps/config.ts`. Types and conversion functions come from `@bunny.net/config`.
 - Prefer generated schema types over inline primitives. Use `Pick<components["schemas"]["TypeName"], "field1" | "field2">` instead of `{ field1: string; field2: number }`. Only fall back to `string`, `any`, or `number` when no generated type exists.

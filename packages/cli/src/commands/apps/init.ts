@@ -5,6 +5,7 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
+import { isInteractive } from "@/core/ui.ts";
 import { configExists } from "./config.ts";
 import { normalizeRegistryFlag } from "./docker.ts";
 import { runWalkthrough } from "./walkthrough.ts";
@@ -14,6 +15,7 @@ const DESCRIPTION = "Initialize a new app config (no deploy).";
 
 interface InitArgs {
   name?: string;
+  region?: string;
   image?: string;
   dockerfile?: string | boolean;
   registry?: string;
@@ -59,6 +61,11 @@ export const appsInitCommand = defineCommand<InitArgs>({
         type: "string",
         describe: "App name (skips the interactive prompt)",
       })
+      .option("region", {
+        type: "string",
+        describe:
+          "Region ID for a new app (skips the interactive prompt; required without a terminal)",
+      })
       .option("dockerfile", {
         type: "string",
         describe:
@@ -87,6 +94,7 @@ export const appsInitCommand = defineCommand<InitArgs>({
 
   handler: async ({
     name,
+    region,
     image,
     dockerfile,
     registry,
@@ -120,6 +128,9 @@ export const appsInitCommand = defineCommand<InitArgs>({
       portOverride: port,
       commandOverride: command,
       nameOverride: name,
+      regionFlag: region,
+      interactive: isInteractive(output),
+      buildsImage: false,
       configPath,
     });
 

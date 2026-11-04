@@ -72,7 +72,7 @@ export async function resolveVideoInteractive(
   if (opts.force || !isInteractive(opts.output)) {
     throw new UserError(
       "A video is required.",
-      "Pass the video GUID, which `bunny stream video list` prints.",
+      "Pass the video GUID, which `bunny stream videos list` prints.",
     );
   }
 
@@ -82,7 +82,7 @@ export async function resolveVideoInteractive(
   if (videos.length === 0) {
     throw new UserError(
       "No videos found in this library.",
-      'Add one with "bunny stream video upload <file>".',
+      'Add one with "bunny stream videos upload <file>".',
     );
   }
 

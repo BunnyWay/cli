@@ -1,6 +1,6 @@
-import { streamPlayerGet } from "@bunny.net/tools/stream";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { logger } from "@/core/logger.ts";
+import { streamPlayerGet } from "@/tools/stream/index.ts";
 import { resolveLibraryRef } from "../library-ref.ts";
 import { formatPlayerSettings } from "./render.ts";
 
@@ -9,7 +9,7 @@ export const streamLibraryPlayerShowCommand = defineToolCommand({
   command: "show [library]",
   describe: "Show a video library's player settings.",
   examples: [
-    ["$0 stream library player show my-library", "Show player settings"],
+    ["$0 stream libraries player show my-library", "Show player settings"],
   ],
   progress: "Fetching player settings...",
 

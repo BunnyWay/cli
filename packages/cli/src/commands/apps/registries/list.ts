@@ -1,7 +1,7 @@
-import { registriesList } from "@bunny.net/tools/apps";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import { registriesList } from "@/tools/apps/index.ts";
 
 // The account's own connections sit alongside registries bunny.net provides, which cannot be edited or removed.
 function source(registry: {

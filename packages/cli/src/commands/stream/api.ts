@@ -80,7 +80,7 @@ export async function resolveLibrary(
   if (!match?.Id) {
     throw new UserError(
       `No video library found for "${nameOrId}".`,
-      'Run "bunny stream library list" to see your libraries.',
+      'Run "bunny stream libraries list" to see your libraries.',
     );
   }
   return fetchLibrary(client, match.Id);

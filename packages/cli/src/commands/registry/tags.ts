@@ -1,7 +1,7 @@
-import { registryTags } from "@bunny.net/tools/registry";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import { registryTags } from "@/tools/registry/index.ts";
 
 interface TagsArgs {
   repository: string;

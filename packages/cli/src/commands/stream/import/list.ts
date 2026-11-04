@@ -1,10 +1,4 @@
 import { stripAnsi } from "@bunny.net/stream-import";
-import {
-  type ImportListing,
-  MAX_PLAN_LIMIT,
-  SOURCE_IDS,
-  streamImportList,
-} from "@bunny.net/tools/stream";
 import type { Argv } from "yargs";
 import {
   cliImportError,
@@ -14,6 +8,12 @@ import { DONE, defineToolCommand } from "@/core/define-tool-command.ts";
 import { formatBytes, formatDuration, formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
+import {
+  type ImportListing,
+  MAX_PLAN_LIMIT,
+  SOURCE_IDS,
+  streamImportList,
+} from "@/tools/stream/index.ts";
 
 interface ListArgs {
   source?: string;
@@ -40,8 +40,18 @@ function renderListing(listing: ImportListing, output: OutputFormat): void {
         output,
       ),
     );
-    if (listing.truncated)
-      logger.dim(`Showing the first ${listing.videos.length} videos.`);
+    if (listing.truncated) {
+      // Only suggest a flag the source accepts: flat sources reject --folder.
+      const narrow =
+        listing.source === "s3"
+          ? " Narrow it with --prefix."
+          : listing.supportsFolders
+            ? " Narrow it with --folder."
+            : "";
+      logger.dim(
+        `Showing the first ${listing.videos.length.toLocaleString("en-US")} videos, the most one listing returns.${narrow}`,
+      );
+    }
     return;
   }
   if (!listing.supportsFolders) {

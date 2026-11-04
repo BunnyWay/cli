@@ -16,8 +16,8 @@ export const streamLibraryListCommand = defineCommand({
   aliases: ["ls"],
   describe: "List all Stream video libraries.",
   examples: [
-    ["$0 stream library list", "List all video libraries"],
-    ["$0 stream library list --output json", "JSON output"],
+    ["$0 stream libraries list", "List all video libraries"],
+    ["$0 stream libraries list --output json", "JSON output"],
   ],
 
   handler: async ({ profile, output, verbose, apiKey }) => {

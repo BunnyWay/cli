@@ -141,7 +141,7 @@ export const storageFileUploadCommand = defineCommand<UploadArgs>({
     spin.start();
     try {
       const sha256Checksum = checksum ? await sha256(source) : undefined;
-      await uploadFile(connection, remotePath, source.stream(), {
+      await uploadFile(connection, remotePath, source, {
         contentType,
         sha256Checksum,
       });

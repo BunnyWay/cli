@@ -128,16 +128,16 @@ export const streamVideoUpdateCommand = defineCommand<VideoUpdateArgs>({
   describe: "Update a video's title, collection, chapters, or moments.",
   examples: [
     [
-      '$0 stream video update 1a2b3c4d-... --title "Launch demo"',
+      '$0 stream videos update 1a2b3c4d-... --title "Launch demo"',
       "Rename a video",
     ],
-    ["$0 stream video update", "Pick a video, then edit its title"],
+    ["$0 stream videos update", "Pick a video, then edit its title"],
     [
-      "$0 stream video update 1a2b3c4d-... --collection 8a7b6c5d-...",
+      "$0 stream videos update 1a2b3c4d-... --collection 8a7b6c5d-...",
       "Move it into a collection",
     ],
     [
-      `$0 stream video update 1a2b3c4d-... --chapters '[{"title":"Intro","start":0,"end":30}]'`,
+      `$0 stream videos update 1a2b3c4d-... --chapters '[{"title":"Intro","start":0,"end":30}]'`,
       "Replace the chapter list",
     ],
   ],
@@ -160,7 +160,7 @@ export const streamVideoUpdateCommand = defineCommand<VideoUpdateArgs>({
       .option("collection", {
         type: "string",
         describe:
-          "Collection ID to move the video to, from `bunny stream collection list` (empty string clears it)",
+          "Collection ID to move the video to, from `bunny stream collections list` (empty string clears it)",
       })
       .option("chapters", {
         type: "string",

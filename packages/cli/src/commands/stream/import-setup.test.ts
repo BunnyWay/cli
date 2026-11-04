@@ -8,8 +8,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createToolContext } from "@bunny.net/tools";
 import { setImportCredentials } from "@/config/index.ts";
+import { createToolContext } from "@/tools/index.ts";
 import { withSavedCredentials } from "./import-setup.ts";
 
 const originalConfigHome = process.env.XDG_CONFIG_HOME;

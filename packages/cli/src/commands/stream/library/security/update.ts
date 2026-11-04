@@ -1,17 +1,17 @@
-import type { ToolContext } from "@bunny.net/tools";
-import {
-  type ReferrerChanges,
-  type SecurityChanges,
-  type SecurityUpdateResult,
-  streamSecurityGet,
-  streamSecurityUpdate,
-} from "@bunny.net/tools/stream";
 import { resolveConfig } from "@/config/index.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
+import type { ToolContext } from "@/tools/index.ts";
+import {
+  type ReferrerChanges,
+  type SecurityChanges,
+  type SecurityUpdateResult,
+  streamSecurityGet,
+  streamSecurityUpdate,
+} from "@/tools/stream/index.ts";
 import { resolveLibraryRef } from "../library-ref.ts";
 
 interface SecurityUpdateArgs {
@@ -142,14 +142,14 @@ export const streamLibrarySecurityUpdateCommand =
       "Update a video library's security settings and allowed/blocked domains.",
     examples: [
       [
-        "$0 stream library security update my-library --embed-token --block-direct-access --allow-referrer example.com",
+        "$0 stream libraries security update my-library --embed-token --block-direct-access --allow-referrer example.com",
         "Require embed tokens and lock embeds to one domain",
       ],
       [
-        "$0 stream library security update my-library --drm-basic",
+        "$0 stream libraries security update my-library --drm-basic",
         "Turn on MediaCage Basic DRM",
       ],
-      ["$0 stream library security update my-library", "Edit interactively"],
+      ["$0 stream libraries security update my-library", "Edit interactively"],
     ],
 
     builder: (yargs) =>

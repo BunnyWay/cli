@@ -1,7 +1,7 @@
-import { type PullZone, pullZonesGet } from "@bunny.net/tools/pullzones";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import { type PullZone, pullZonesGet } from "@/tools/pullzones/index.ts";
 import { resolvePullZoneId } from "./constants.ts";
 
 export function statusLabel(status: PullZone["status"]): string {

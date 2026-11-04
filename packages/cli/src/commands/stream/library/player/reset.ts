@@ -1,7 +1,7 @@
-import { PLAYER_DEFAULTS, streamPlayerUpdate } from "@bunny.net/tools/stream";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, requireConfirmable } from "@/core/ui.ts";
+import { PLAYER_DEFAULTS, streamPlayerUpdate } from "@/tools/stream/index.ts";
 import { resolveLibraryRef } from "../library-ref.ts";
 
 export const streamLibraryPlayerResetCommand = defineToolCommand({
@@ -10,9 +10,9 @@ export const streamLibraryPlayerResetCommand = defineToolCommand({
   describe:
     "Reset a video library's player to the dashboard defaults (language, font, colours, captions, controls, speeds).",
   examples: [
-    ["$0 stream library player reset my-library", "Reset after confirming"],
+    ["$0 stream libraries player reset my-library", "Reset after confirming"],
     [
-      "$0 stream library player reset my-library --force",
+      "$0 stream libraries player reset my-library --force",
       "Reset without asking",
     ],
   ],

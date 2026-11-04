@@ -15,8 +15,9 @@ import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, saveManifest } from "@/core/manifest.ts";
 import type { OutputFormat } from "@/core/types.ts";
-import { spinner } from "@/core/ui.ts";
+import { isInteractive, spinner } from "@/core/ui.ts";
 import {
+  assertVolumesNotSplit,
   type BunnyAppConfig,
   type ContainerConfig,
   configExists,
@@ -164,6 +165,8 @@ const DEFAULT_DOCKERFILE = "Dockerfile";
 
 interface DeployArgs {
   image?: string;
+  "allow-split-volumes"?: boolean;
+  region?: string;
   dockerfile?: string | boolean;
   context?: string;
   tag?: string;
@@ -182,7 +185,14 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
   describe: DESCRIPTION,
   examples: [
     ["$0 apps deploy ghcr.io/me/api:v1.2", "Deploy a pre-built image"],
-    ["$0 apps deploy --dockerfile", "Build ./Dockerfile and deploy"],
+    [
+      "$0 apps deploy --dockerfile",
+      "Build ./Dockerfile and deploy, generating it when there is none",
+    ],
+    [
+      "$0 apps deploy --dockerfile --region de --output json",
+      "First deploy without prompts (agents)",
+    ],
     [
       "$0 apps deploy --dockerfile apps/api/Dockerfile --context apps/api",
       "Build with explicit context",
@@ -227,6 +237,11 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         describe:
           "App name (used during first-run walkthrough; skips the interactive prompt)",
       })
+      .option("region", {
+        type: "string",
+        describe:
+          "Region ID for a new app (skips the interactive prompt; required without a terminal)",
+      })
       .option("port", {
         type: "number",
         describe:
@@ -246,6 +261,11 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         type: "boolean",
         describe:
           "Print the would-be bunny.jsonc and Dockerfile without writing anything or contacting the API to deploy",
+      })
+      .option("allow-split-volumes", {
+        type: "boolean",
+        describe:
+          "Deploy a volume to more than one region or instance, each keeping its own separate data",
       })
       .option("no-push", {
         type: "boolean",
@@ -285,7 +305,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     // walkthrough also checks this on its interactive picks, but for
     // `--dockerfile` (with no existing config) the choice is implicit so
     // it'd otherwise skip the menu and only blow up after writing files.
-    if (dockerfileFlag) {
+    if (dockerfileFlag && !dryRun) {
       await ensureDockerAvailable();
     }
 
@@ -304,6 +324,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         portOverride: args.port,
         commandOverride: args.command,
         nameOverride: args.name,
+        regionFlag: args.region,
+        interactive: isInteractive(output),
+        buildsImage: !dryRun,
         configPath,
         dryRun,
       });
@@ -311,12 +334,16 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       walkthroughRegistries = result.registries;
     } else {
       toml = loadConfig(configPath);
+      // Before the Docker check and any build: an edited bunny.jsonc is
+      // the only way to reach more than one region or instance (the
+      // walkthrough picks one of each).
+      assertVolumesNotSplit(toml, args["allow-split-volumes"]);
       // Existing config: bail before any registry prompts if a container
       // declares a `dockerfile` (we'll need Docker to build it).
       const hasAnyBuild = Object.values(toml.app.containers).some((c) =>
         Boolean(c.dockerfile),
       );
-      if (hasAnyBuild) {
+      if (hasAnyBuild && !dryRun) {
         await ensureDockerAvailable();
       }
     }

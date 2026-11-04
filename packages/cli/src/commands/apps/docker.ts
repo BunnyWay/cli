@@ -8,6 +8,7 @@ import { dockerLogin, imageHostname } from "@/core/docker.ts";
 import { ApiError, UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, spinner } from "@/core/ui.ts";
+import { GENERATED_HEADER, GITHUB_HINT } from "./dockerfile/project.ts";
 
 export {
   dockerLogin,
@@ -299,9 +300,14 @@ export async function buildImage(
   const exitCode = await proc.exited;
 
   if (exitCode !== 0) {
+    const generated = readFileSync(dockerfileAbs, "utf-8").startsWith(
+      GENERATED_HEADER,
+    );
     throw new UserError(
       `Docker build failed (exit code ${exitCode}).`,
-      "Check the Dockerfile and build output above for errors.",
+      generated
+        ? `Check the build output above, then edit the generated Dockerfile to fit the project. ${GITHUB_HINT}`
+        : "Check the Dockerfile and build output above for errors.",
     );
   }
 }
