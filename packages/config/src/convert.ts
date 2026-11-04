@@ -303,7 +303,7 @@ export function configToPatchRequest(
 
   for (const [name, c] of entries) {
     const existing = matches.get(name);
-    const merged = mergeRegistry(name, c, registries);
+    const merged = { ...mergeRegistry(name, c, registries) };
 
     if (!merged.registry && existing?.imageRegistryId) {
       merged.registry = existing.imageRegistryId;
@@ -315,6 +315,14 @@ export function configToPatchRequest(
       endpointNames,
       existing?.id,
     );
+    if (!merged.image && existing) {
+      req.image = existing.image;
+      req.imageName = existing.imageName;
+      req.imageNamespace = existing.imageNamespace;
+      req.imageTag = existing.imageTag;
+      req.imageDigest = existing.imageDigest;
+    }
+
     // PATCH replaces the whole template, so a config without an env block must carry over the server's vars or they get wiped.
     if (!merged.env && existing?.environmentVariables?.length) {
       req.environmentVariables = existing.environmentVariables;

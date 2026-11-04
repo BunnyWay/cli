@@ -3,6 +3,7 @@ import { createMcClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
+import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest } from "@/core/manifest.ts";
 import { spinner } from "@/core/ui.ts";
@@ -13,6 +14,7 @@ import {
   resolveAppId,
 } from "./config.ts";
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
+import { resolveRegistryForImage } from "./docker.ts";
 
 const COMMAND = "push";
 const DESCRIPTION = "Apply local bunny.jsonc config to remote app.";
@@ -81,7 +83,33 @@ export const appsPushCommand = defineCommand<PushArgs>({
           : undefined);
     }
 
-    const patchRequest = configToPatchRequest(toml, existingApp, registries);
+    let patchRequest = configToPatchRequest(toml, existingApp, registries);
+
+    const added = (patchRequest.containerTemplates ?? []).filter(
+      (ct) => !ct.imageRegistryId,
+    );
+
+    for (const { name } of added) {
+      const image = toml.app.containers[name]?.image;
+      if (!image) {
+        throw new UserError(
+          `Container "${name}" is new and builds from a Dockerfile.`,
+          "Run `bunny apps deploy` to build and add it.",
+        );
+      }
+
+      if (dryRun) continue;
+
+      const registry = await resolveRegistryForImage(client, image);
+      if (!registry)
+        throw new UserError(`A registry is required for ${image}.`);
+
+      registries[name] = registry.id;
+    }
+
+    if (added.length > 0 && !dryRun) {
+      patchRequest = configToPatchRequest(toml, existingApp, registries);
+    }
 
     if (dryRun) {
       if (output === "json") {
@@ -94,10 +122,15 @@ export const appsPushCommand = defineCommand<PushArgs>({
         changes.push(`Name: ${existingApp.name} → ${patchRequest.name}`);
       }
 
-      const containerCount = patchRequest.containerTemplates?.length ?? 0;
-      const existingCount = existingApp.containerTemplates.length;
-      if (containerCount !== existingCount) {
-        changes.push(`Containers: ${existingCount} → ${containerCount}`);
+      const sent = patchRequest.containerTemplates ?? [];
+      const keptIds = new Set(sent.map((ct) => ct.id));
+
+      for (const ct of sent) {
+        if (!ct.id) changes.push(`Container added: ${ct.name}`);
+      }
+
+      for (const ct of existingApp.containerTemplates) {
+        if (!keptIds.has(ct.id)) changes.push(`Container removed: ${ct.name}`);
       }
 
       const endpointCount = (patchRequest.containerTemplates ?? []).reduce(
