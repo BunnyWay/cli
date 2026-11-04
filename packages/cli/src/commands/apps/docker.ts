@@ -638,16 +638,12 @@ export function findRegistryByHostname(
  * creates the registry on bunny.net, and returns its ID along with the
  * credentials so the caller can `docker login` without re-prompting.
  *
- * If `hostname` is given it is used as the suggested display name.
- *
- * If `isPublic` is true, the registry is created with no credentials
- * (suitable for pulling public images that don't require auth).
+ * If `displayName` is given it is used instead of prompting.
  */
 export async function createRegistry(
   client: McClient,
   opts: {
     displayName?: string;
-    isPublic?: boolean;
     target?: RegistryTarget;
   } = {},
 ): Promise<ResolvedRegistry | null> {
@@ -662,26 +658,19 @@ export async function createRegistry(
   }
   if (!displayName) return null;
 
-  let userName: string | undefined;
-  let password: string | undefined;
+  const { value: userName } = await prompts({
+    type: "text",
+    name: "value",
+    message: "Username:",
+  });
+  if (!userName) return null;
 
-  if (!opts.isPublic) {
-    const { value: rawUser } = await prompts({
-      type: "text",
-      name: "value",
-      message: "Username:",
-    });
-    userName = rawUser;
-    if (!userName) return null;
-
-    const { value: rawPass } = await prompts({
-      type: "password",
-      name: "value",
-      message: "Password/Token:",
-    });
-    password = rawPass;
-    if (!password) return null;
-  }
+  const { value: password } = await prompts({
+    type: "password",
+    name: "value",
+    message: "Password/Token:",
+  });
+  if (!password) return null;
 
   const addSpin = spinner("Adding registry...");
   addSpin.start();
@@ -690,9 +679,7 @@ export async function createRegistry(
     body: {
       displayName,
       ...opts.target,
-      ...(userName && password
-        ? { passwordCredentials: { userName, password } }
-        : {}),
+      passwordCredentials: { userName, password },
     },
   });
 
@@ -707,7 +694,7 @@ export async function createRegistry(
 
   return {
     id: String(result.id),
-    freshCredentials: userName && password ? { userName, password } : undefined,
+    freshCredentials: { userName, password },
   };
 }
 
@@ -923,8 +910,7 @@ export async function promptRegistryImage(
 
 /**
  * Resolve a registry to use when pulling an image. If the hostname matches
- * an existing registry, returns it. Otherwise prompts the user to either
- * add it as a public registry or provide credentials.
+ * an existing registry, returns it. Otherwise asks for credentials and adds it.
  *
  * Returns null if the user cancels.
  */
@@ -944,24 +930,13 @@ export async function resolveRegistryForImage(
     return { id: String(existing.id), hostName: existing.hostName };
   }
 
-  logger.info(`No registry connected for ${hostname}.`);
-
-  const { value: kind } = await prompts({
-    type: "select",
-    name: "value",
-    message: `Is ${hostname} public, or do you need credentials?`,
-    choices: [
-      { title: "Public — no credentials needed", value: "public" },
-      { title: "Private — I have credentials", value: "private" },
-      { title: "Cancel", value: "cancel" },
-    ],
-  });
-
-  if (!kind || kind === "cancel") return null;
+  // Public ghcr.io and docker.io images match bunny.net's public records above; any other host needs credentials.
+  logger.info(
+    `No registry connected for ${hostname}. Enter credentials to add it.`,
+  );
 
   return createRegistry(client, {
     displayName: hostname,
-    isPublic: kind === "public",
     target: registryTarget(hostname),
   });
 }
