@@ -8,6 +8,7 @@ import { dockerLogin, imageHostname } from "@/core/docker.ts";
 import { ApiError, UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, spinner } from "@/core/ui.ts";
+import { type RegistryTarget, registryTarget } from "@/tools/apps/index.ts";
 import { GENERATED_HEADER, GITHUB_HINT } from "./dockerfile/project.ts";
 
 export {
@@ -558,9 +559,11 @@ export function buildImageRef(
   return ns ? `${hostName}/${ns}/${name}:${tag}` : `${hostName}/${name}:${tag}`;
 }
 
-const ADD_NEW_REGISTRY = "__add_new__";
+const ADD_GITHUB_REGISTRY = "__add_github__";
+const ADD_DOCKERHUB_REGISTRY = "__add_dockerhub__";
+const ADD_OCI_REGISTRY = "__add_oci__";
 
-/** Id of the bunny.net registry's `/registries` record. It's a public record (no userName) shared by every account, so pushes use the API token and the account-id namespace instead of stored credentials. */
+/** Id of the bunny.net registry's `/registries` record, listed only for accounts with access. It has no userName, so pushes use the API token and the account-id namespace instead of stored credentials. */
 export const BUNNY_REGISTRY_ID = "9808";
 
 /**
@@ -642,7 +645,11 @@ export function findRegistryByHostname(
  */
 export async function createRegistry(
   client: McClient,
-  opts: { displayName?: string; isPublic?: boolean } = {},
+  opts: {
+    displayName?: string;
+    isPublic?: boolean;
+    target?: RegistryTarget;
+  } = {},
 ): Promise<ResolvedRegistry | null> {
   let displayName = opts.displayName;
   if (!displayName) {
@@ -682,6 +689,7 @@ export async function createRegistry(
   const { data: result } = await client.POST("/registries", {
     body: {
       displayName,
+      ...opts.target,
       ...(userName && password
         ? { passwordCredentials: { userName, password } }
         : {}),
@@ -703,6 +711,14 @@ export async function createRegistry(
   };
 }
 
+export function findBunnyRegistry(
+  registries: ContainerRegistry[],
+): ContainerRegistry | undefined {
+  return registries.find(
+    (r) => r.isPlatformManaged && String(r.id) === BUNNY_REGISTRY_ID,
+  );
+}
+
 /**
  * Interactive registry selection for "where do I push my image?".
  * Returns the registry ID, or null if cancelled.
@@ -710,34 +726,35 @@ export async function createRegistry(
 export async function promptRegistry(
   client: McClient,
 ): Promise<ResolvedRegistry | null> {
-  const bunnyEndpoint = resolveRegistryEndpoint();
-  const { value: useBunny } = await prompts({
-    type: "confirm",
-    name: "value",
-    message: "Push to the bunny.net registry?",
-    initial: true,
-  });
-  if (useBunny === undefined) return null;
-  if (useBunny) {
-    return { id: BUNNY_REGISTRY_ID, hostName: bunnyEndpoint.host };
-  }
-
   const regSpin = spinner("Fetching registries...");
   regSpin.start();
-
   const registries = await listRegistries(client);
-
   regSpin.stop();
 
-  // Only show registries the user can push to (have a username).
+  const bunny = findBunnyRegistry(registries);
+  const bunnyHost = resolveRegistryEndpoint().host;
+
   const pushable = registries.filter((r) => r.userName);
 
   const choices = [
+    ...(bunny
+      ? [
+          {
+            title: `${bunny.displayName} (${bunnyHost})`,
+            value: BUNNY_REGISTRY_ID,
+          },
+        ]
+      : []),
     ...pushable.map((r) => ({
       title: `${r.displayName} (${r.hostName} — ${r.userName})`,
       value: String(r.id ?? ""),
     })),
-    { title: "Add new registry", value: ADD_NEW_REGISTRY },
+    { title: "Add GitHub registry (ghcr.io)", value: ADD_GITHUB_REGISTRY },
+    {
+      title: "Add Docker Hub registry (docker.io)",
+      value: ADD_DOCKERHUB_REGISTRY,
+    },
+    { title: "Add another OCI registry", value: ADD_OCI_REGISTRY },
   ];
 
   const { value: choice } = await prompts({
@@ -748,12 +765,160 @@ export async function promptRegistry(
   });
 
   if (choice === undefined) return null;
-  if (choice !== ADD_NEW_REGISTRY) {
-    const existing = pushable.find((r) => String(r.id) === String(choice));
-    return { id: String(choice), hostName: existing?.hostName };
+  if (choice === BUNNY_REGISTRY_ID) {
+    return { id: BUNNY_REGISTRY_ID, hostName: bunnyHost };
+  }
+  if (choice === ADD_GITHUB_REGISTRY) {
+    return createRegistry(client, {
+      displayName: "ghcr.io",
+      target: { type: "gitHub" },
+    });
+  }
+  if (choice === ADD_DOCKERHUB_REGISTRY) {
+    return createRegistry(client, {
+      displayName: "docker.io",
+      target: { type: "dockerHub" },
+    });
+  }
+  if (choice === ADD_OCI_REGISTRY) {
+    const { value: server } = await prompts({
+      type: "text",
+      name: "value",
+      message: "Registry server (e.g. registry.example.com):",
+    });
+    if (!server?.trim()) return null;
+    return createRegistry(client, {
+      displayName: server.trim(),
+      target: registryTarget(server),
+    });
+  }
+  const existing = pushable.find((r) => String(r.id) === String(choice));
+  return { id: String(choice), hostName: existing?.hostName };
+}
+
+async function withRegistryAuth<T>(
+  registry: ContainerRegistry,
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      throw new UserError(
+        `${registry.hostName} rejected the credentials stored on "${registry.displayName}".`,
+        `Update them with \`bunny apps registries update ${registry.id}\`.`,
+      );
+    }
+    throw err;
+  }
+}
+
+export async function promptRegistryImage(
+  client: McClient,
+): Promise<{ imageRef: string; registry: ResolvedRegistry } | null> {
+  const regSpin = spinner("Fetching registries...");
+  regSpin.start();
+  const registries = await listRegistries(client);
+  regSpin.stop();
+
+  const bunny = findBunnyRegistry(registries);
+  const sources = [
+    ...(bunny ? [bunny] : []),
+    ...registries.filter((r) => r.userName),
+  ];
+  if (sources.length === 0) {
+    throw new UserError(
+      "No registries connected.",
+      "Add one with `bunny apps registries add`, or deploy an image by URL.",
+    );
   }
 
-  return createRegistry(client);
+  const { value: registryId } = await prompts({
+    type: "select",
+    name: "value",
+    message: "Registry:",
+    choices: sources.map((r) => ({
+      title: r.userName
+        ? `${r.displayName} (${r.hostName} — ${r.userName})`
+        : `${r.displayName} (${r.hostName})`,
+      value: String(r.id),
+    })),
+  });
+
+  if (registryId === undefined) return null;
+
+  const registry = sources.find((r) => String(r.id) === registryId);
+  if (!registry) return null;
+
+  const isBunny = registryId === BUNNY_REGISTRY_ID;
+  const hostName = isBunny ? resolveRegistryEndpoint().host : registry.hostName;
+
+  const imgSpin = spinner("Fetching images...");
+
+  imgSpin.start();
+
+  const images = await withRegistryAuth(registry, async () => {
+    const { data } = await client.POST("/registries/images", {
+      body: { registryId },
+    });
+
+    return data ?? [];
+  }).finally(() => imgSpin.stop());
+  if (images.length === 0) {
+    throw new UserError(
+      `No images found in "${registry.displayName}".`,
+      "Push one first, or pick another registry.",
+    );
+  }
+
+  const { value: imageIndex } = await prompts({
+    type: "select",
+    name: "value",
+    message: "Image:",
+    choices: images.map((img, i) => ({
+      title: isBunny ? (img.id ?? "") : `${img.namespace}/${img.id}`,
+      value: i,
+    })),
+  });
+
+  if (imageIndex === undefined) return null;
+
+  const image = images[imageIndex];
+  if (!image?.id || !image.namespace) return null;
+
+  const tagSpin = spinner("Fetching tags...");
+  tagSpin.start();
+
+  const tags = await withRegistryAuth(registry, async () => {
+    const { data } = await client.POST("/registries/tags", {
+      body: {
+        registryId,
+        imageName: image.id ?? "",
+        imageNamespace: image.namespace ?? "",
+      },
+    });
+
+    return (data ?? []).flatMap((t) => (t.name ? [t.name] : []));
+  }).finally(() => tagSpin.stop());
+
+  if (tags.length === 0) {
+    throw new UserError(`No tags found for ${image.id}.`);
+  }
+
+  tags.sort((a, b) => Number(b === "latest") - Number(a === "latest"));
+
+  const { value: tag } = await prompts({
+    type: "select",
+    name: "value",
+    message: "Tag:",
+    choices: tags.map((t) => ({ title: t, value: t })),
+  });
+  if (!tag) return null;
+
+  return {
+    imageRef: `${hostName}/${image.namespace}/${image.id}:${tag}`,
+    registry: { id: registryId, hostName },
+  };
 }
 
 /**
@@ -797,6 +962,7 @@ export async function resolveRegistryForImage(
   return createRegistry(client, {
     displayName: hostname,
     isPublic: kind === "public",
+    target: registryTarget(hostname),
   });
 }
 
