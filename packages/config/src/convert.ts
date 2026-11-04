@@ -16,13 +16,35 @@ type PatchApplicationRequest = components["schemas"]["PatchApplicationRequest"];
 type EndpointRequest = components["schemas"]["EndpointRequest"];
 type VolumeRequest = components["schemas"]["VolumeRequest"];
 
-function containerTemplateToConfig(ct: ContainerTemplate): ContainerConfig {
+function hasHost(image: string): boolean {
+  const [first, ...rest] = image.split("/");
+
+  return (
+    rest.length > 0 &&
+    !!first &&
+    (first.includes(".") || first.includes(":") || first === "localhost")
+  );
+}
+
+function containerTemplateToConfig(
+  ct: ContainerTemplate,
+  registryHosts: Record<string, string>,
+): ContainerConfig {
   const config: ContainerConfig = {};
 
   if (ct.image) {
     const [repository, digest] = ct.image.split("@");
-    config.image =
+    const image =
       digest && ct.imageTag ? `${repository}:${ct.imageTag}` : ct.image;
+    const host = registryHosts[ct.imageRegistryId];
+
+    if (host && host !== "docker.io" && !hasHost(image)) {
+      config.image = `${host}/${image}`;
+    } else if (image.startsWith("library/") && image.split("/").length === 2) {
+      config.image = image.slice("library/".length);
+    } else {
+      config.image = image;
+    }
   }
 
   if (ct.entryPoint?.commandArray?.length) {
@@ -64,8 +86,10 @@ function containerTemplateToConfig(ct: ContainerTemplate): ContainerConfig {
   return config;
 }
 
-/** Convert an API Application response to BunnyAppConfig. */
-export function apiToConfig(app: Application): BunnyAppConfig {
+export function apiToConfig(
+  app: Application,
+  registryHosts: Record<string, string> = {},
+): BunnyAppConfig {
   const volumeSizeMap = new Map(app.volumes.map((v) => [v.name, v.size]));
 
   const containers: Record<
@@ -73,7 +97,7 @@ export function apiToConfig(app: Application): BunnyAppConfig {
     ReturnType<typeof containerTemplateToConfig>
   > = {};
   for (const ct of app.containerTemplates) {
-    const c = containerTemplateToConfig(ct);
+    const c = containerTemplateToConfig(ct, registryHosts);
     if (c.volumes) {
       for (const vol of c.volumes) {
         vol.size = volumeSizeMap.get(vol.name) ?? 0;

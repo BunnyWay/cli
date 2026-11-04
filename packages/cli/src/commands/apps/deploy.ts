@@ -281,8 +281,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       })
       .option("push", {
         type: "boolean",
-        default: true,
-        describe: "Push and deploy after building (--no-push builds only)",
+        describe:
+          "Push and deploy after building (default: true). Use --no-push to build only.",
       }),
 
   handler: async (args) => {
@@ -670,6 +670,16 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       saveConfig(toml, configPath);
     }
 
+    if (mode.kind === "redeploy" && !registryId) {
+      const resolved = await resolveRegistryForImage(client, mode.image);
+      if (!resolved) {
+        throw new UserError(`A registry is required to deploy ${mode.image}.`);
+      }
+
+      registryId = resolved.id;
+      setContainerRegistry(targetName, registryId);
+    }
+
     if (mode.kind === "image") {
       const resolved = await resolveRegistryForImage(client, mode.image);
       if (!resolved) {
@@ -852,7 +862,13 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     if (!isFirstDeploy && previousImage && previousImage !== deployImage) {
       logger.log();
       logger.dim(`Previous image: ${previousImage}`);
-      logger.dim(`To rollback:    bunny apps deploy ${previousImage}`);
+      const containerFlag =
+        Object.keys(toml.app.containers).length > 1
+          ? ` --container ${targetName}`
+          : "";
+      logger.dim(
+        `To rollback:    bunny apps deploy ${previousImage}${containerFlag}`,
+      );
     }
   },
 });

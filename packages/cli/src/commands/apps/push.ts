@@ -93,6 +93,12 @@ export const appsPushCommand = defineCommand<PushArgs>({
 
     let patchRequest = configToPatchRequest(toml, existingApp, registries);
 
+    if (!dryRun && !(await confirmRemovals(patchRequest, existingApp, force))) {
+      logger.log("Push cancelled.");
+
+      return;
+    }
+
     const added = (patchRequest.containerTemplates ?? []).filter(
       (ct) => !ct.imageRegistryId,
     );
@@ -109,8 +115,9 @@ export const appsPushCommand = defineCommand<PushArgs>({
       if (dryRun) continue;
 
       const registry = await resolveRegistryForImage(client, image);
-      if (!registry)
+      if (!registry) {
         throw new UserError(`A registry is required for ${image}.`);
+      }
 
       registries[name] = registry.id;
     }
@@ -174,12 +181,6 @@ export const appsPushCommand = defineCommand<PushArgs>({
       return;
     }
 
-    if (!(await confirmRemovals(patchRequest, existingApp, force))) {
-      logger.log("Push cancelled.");
-
-      return;
-    }
-
     const pushSpin = spinner("Pushing config...");
     pushSpin.start();
 
@@ -190,13 +191,19 @@ export const appsPushCommand = defineCommand<PushArgs>({
 
     pushSpin.stop();
 
+    const containers = pruneManifestContainers(
+      manifest.containers,
+      Object.keys(toml.app.containers),
+    );
+
+    for (const { name } of added) {
+      containers[name] = { ...containers[name], registry: registries[name] };
+    }
+
     saveManifest<AppManifest>(APP_MANIFEST, {
       ...manifest,
       id: appId,
-      containers: pruneManifestContainers(
-        manifest.containers,
-        Object.keys(toml.app.containers),
-      ),
+      containers,
     });
 
     if (output === "json") {
