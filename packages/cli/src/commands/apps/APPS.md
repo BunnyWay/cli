@@ -33,11 +33,11 @@ Deploy an app. Three modes, chosen by what you pass:
 
 If no `bunny.jsonc` exists, the first run launches a walkthrough that:
 
-1. Offers to build from a `Dockerfile` (if one exists) or to deploy a pre-built image ref. With no Dockerfile, a detected app gets a third option: generate one (see below).
-2. Resolves the registry (prompts "is this image public, or do you need credentials?" for new hostnames).
+1. Asks where the image comes from: build from local source (a detected `Dockerfile`, or a generated one for a detected app; see below), pick an image and tag from a connected registry, or enter an image ref by URL.
+2. Resolves the registry. Public ghcr.io and docker.io images use the public records bunny.net provides; other new hostnames prompt for credentials.
 3. Calls bunny.net's image-suggestions endpoint to pre-fill app name, endpoints, and required environment variables for known public images.
 4. Prompts for a single region. Multi-region apps can be configured by editing the resulting `bunny.jsonc`: the schema accepts an array, the walkthrough just keeps the initial setup focused.
-5. Writes `bunny.jsonc`, creates the app, and deploys.
+6. Writes `bunny.jsonc`, creates the app, and deploys.
 
 After a successful deploy that replaced a running image, the CLI prints the previous image reference and a one-line rollback command:
 
@@ -171,7 +171,7 @@ Either path persists in `~/.docker/config.json`, so subsequent deploys skip this
 
 ## `bunny apps init`
 
-Scaffold a new `bunny.jsonc` without deploying. Runs exactly the same walkthrough as `deploy` (Dockerfile or pre-built image). It just stops at "config written" instead of continuing on to build/push/deploy. Use this when you want to inspect or edit the generated config before the first deploy.
+Scaffold a new `bunny.jsonc` without deploying. Runs exactly the same walkthrough as `deploy` (local source, a connected registry, or an image URL). It just stops at "config written" instead of continuing on to build/push/deploy. Use this when you want to inspect or edit the generated config before the first deploy.
 
 ```bash
 bunny apps init

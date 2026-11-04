@@ -338,6 +338,38 @@ function dockerHasCredentials(hostname: string): boolean {
   }
 }
 
+/** The username Docker has stored for `hostname`, or null. */
+export async function dockerLoginUser(
+  hostname: string,
+  configPath?: string,
+): Promise<string | null> {
+  const path = configPath ?? join(homedir(), ".docker", "config.json");
+  if (!existsSync(path)) return null;
+  try {
+    const config = JSON.parse(readFileSync(path, "utf-8")) as {
+      auths?: Record<string, { auth?: string }>;
+      credHelpers?: Record<string, string>;
+      credsStore?: string;
+    };
+    const inline = config.auths?.[hostname]?.auth;
+    if (inline) {
+      return Buffer.from(inline, "base64").toString().split(":")[0] || null;
+    }
+    const helper = config.credHelpers?.[hostname] ?? config.credsStore;
+    if (!helper) return null;
+    const proc = Bun.spawn([`docker-credential-${helper}`, "get"], {
+      stdin: new TextEncoder().encode(hostname),
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    if ((await proc.exited) !== 0) return null;
+    const { Username } = JSON.parse(await new Response(proc.stdout).text());
+    return typeof Username === "string" && Username ? Username : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Check whether `gh` is on PATH and the user is authenticated.
  * Used to offer a one-click docker-login flow for ghcr.io.
@@ -435,6 +467,15 @@ export async function ghEnsureWritePackagesScope(): Promise<void> {
   }
 }
 
+async function ghLogin(): Promise<string | null> {
+  const proc = Bun.spawn(["gh", "api", "user", "--jq", ".login"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if ((await proc.exited) !== 0) return null;
+  return (await new Response(proc.stdout).text()).trim() || null;
+}
+
 /**
  * Log in to a registry using the local `gh` CLI for credentials.
  *
@@ -447,17 +488,13 @@ export async function ghDockerLogin(hostname: string): Promise<void> {
     await ghEnsureWritePackagesScope();
   }
 
-  const userProc = Bun.spawn(["gh", "api", "user", "--jq", ".login"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if ((await userProc.exited) !== 0) {
+  const username = await ghLogin();
+  if (!username) {
     throw new UserError(
       "`gh api user` failed.",
       "Ensure the GitHub CLI is authenticated (`gh auth status`).",
     );
   }
-  const username = (await new Response(userProc.stdout).text()).trim();
 
   const tokenProc = Bun.spawn(["gh", "auth", "token"], {
     stdout: "pipe",
@@ -471,26 +508,46 @@ export async function ghDockerLogin(hostname: string): Promise<void> {
   await dockerLogin(hostname, username, token);
 }
 
-/**
- * Ensure docker is logged in to `hostname` before a push. If not, offer
- * a login flow:
- *
- * - `ghcr.io` + `gh` authenticated → one-click via GitHub CLI
- * - any host → fall back to manual username / password prompts
- *
- * On success, credentials persist in `~/.docker/config.json` so future
- * deploys skip this step.
- */
-export async function ensureRegistryLogin(hostname: string): Promise<void> {
-  if (dockerHasCredentials(hostname)) return;
+/** Ensure Docker is logged in to `hostname` as `expectedUser` before a push, offering to log in if not. */
+export async function ensureRegistryLogin(
+  hostname: string,
+  expectedUser?: string | null,
+): Promise<void> {
+  const sameUser = (user: string | null) =>
+    !expectedUser || user?.toLowerCase() === expectedUser.toLowerCase();
 
-  logger.warn(`Not logged in to ${hostname}.`);
+  if (dockerHasCredentials(hostname)) {
+    const current = await dockerLoginUser(hostname);
+    if (!current || sameUser(current)) return;
 
-  if (hostname === "ghcr.io" && (await ghIsAuthenticated())) {
+    logger.warn(
+      `Docker is logged in to ${hostname} as ${current}, but this registry pushes as ${expectedUser}.`,
+    );
     const { value } = await prompts({
       type: "confirm",
       name: "value",
-      message: "Use the GitHub CLI (`gh`) to log in to ghcr.io?",
+      message: `Log in to ${hostname} as ${expectedUser}? This replaces the ${current} login.`,
+      initial: true,
+    });
+    if (!value) {
+      throw new UserError(
+        `${current} can't push to ${expectedUser}'s namespace on ${hostname}.`,
+        `Run \`docker login ${hostname} -u ${expectedUser}\`, or pick a registry for ${current}.`,
+      );
+    }
+  } else {
+    logger.warn(`Not logged in to ${hostname}.`);
+  }
+
+  const ghUser =
+    hostname === "ghcr.io" && (await ghIsAuthenticated())
+      ? await ghLogin()
+      : null;
+  if (ghUser && sameUser(ghUser)) {
+    const { value } = await prompts({
+      type: "confirm",
+      name: "value",
+      message: `Use the GitHub CLI (\`gh\`) to log in to ghcr.io as ${ghUser}?`,
       initial: true,
     });
     if (value) {
@@ -512,6 +569,7 @@ export async function ensureRegistryLogin(hostname: string): Promise<void> {
     type: "text",
     name: "value",
     message: `Username for ${hostname}:`,
+    initial: expectedUser ?? undefined,
   });
   if (!username) throw new UserError(`Login to ${hostname} required.`);
 
@@ -563,7 +621,7 @@ const ADD_GITHUB_REGISTRY = "__add_github__";
 const ADD_DOCKERHUB_REGISTRY = "__add_dockerhub__";
 const ADD_OCI_REGISTRY = "__add_oci__";
 
-/** Id of the bunny.net registry's `/registries` record, listed only for accounts with access. It has no userName, so pushes use the API token and the account-id namespace instead of stored credentials. */
+/** The bunny.net registry's `/registries` id; pushes authenticate with the API token. */
 export const BUNNY_REGISTRY_ID = "9808";
 
 /**
@@ -633,13 +691,7 @@ export function findRegistryByHostname(
   return registries.find((r) => r.hostName?.toLowerCase() === normalized);
 }
 
-/**
- * Inline "add new registry" flow. Prompts for display name + credentials,
- * creates the registry on bunny.net, and returns its ID along with the
- * credentials so the caller can `docker login` without re-prompting.
- *
- * If `displayName` is given it is used instead of prompting.
- */
+/** Prompt for credentials, add the registry, and return them so the caller can `docker login`. */
 export async function createRegistry(
   client: McClient,
   opts: {
@@ -930,7 +982,6 @@ export async function resolveRegistryForImage(
     return { id: String(existing.id), hostName: existing.hostName };
   }
 
-  // Public ghcr.io and docker.io images match bunny.net's public records above; any other host needs credentials.
   logger.info(
     `No registry connected for ${hostname}. Enter credentials to add it.`,
   );

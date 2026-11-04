@@ -581,7 +581,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       } else {
         // No just-entered credentials, so make sure docker is logged in
         // before we attempt the push, prompting if not.
-        await ensureRegistryLogin(reg.hostName);
+        await ensureRegistryLogin(reg.hostName, reg.userName);
       }
 
       logger.info(`Pushing ${imageRef}...`);
@@ -1142,7 +1142,7 @@ async function buildAndPushContainer(
       throw err;
     }
   } else {
-    await ensureRegistryLogin(reg.hostName);
+    await ensureRegistryLogin(reg.hostName, reg.userName);
   }
 
   logger.info(`Pushing ${imageRef}...`);

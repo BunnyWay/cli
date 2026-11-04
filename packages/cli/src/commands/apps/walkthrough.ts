@@ -748,16 +748,7 @@ async function chooseDockerfiles(detected: string[]): Promise<string[]> {
   return selected;
 }
 
-/**
- * Multi-Dockerfile import path: build a multi-container `bunny.jsonc`
- * from the user's Dockerfile picks.
- *
- * Mirrors the shape of {@link runComposeImport}: one registry is shared
- * across every container (deploy can re-prompt per container later if
- * needed), endpoints are seeded from each Dockerfile's `EXPOSE`
- * directives, container names are derived from path conventions, and
- * the file is saved unless `dryRun` is set.
- */
+/** Build a multi-container `bunny.jsonc` from the picked Dockerfiles, sharing one registry. */
 async function runMultiDockerfileImport(
   client: McClient,
   dockerfilePaths: string[],
