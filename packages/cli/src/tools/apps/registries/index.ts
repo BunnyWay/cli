@@ -182,7 +182,9 @@ export const registriesUpdate = defineTool({
       params: { path: { registryId: input.registry } },
       body: {
         displayName: input.name ?? existing.displayName ?? "",
-        ...(input.type ? { type: input.type } : {}),
+        ...(input.type
+          ? { type: input.type, hostName: existing.hostName }
+          : {}),
         ...(input.username && input.password
           ? {
               passwordCredentials: {

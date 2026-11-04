@@ -18,6 +18,7 @@ interface AddArgs {
   ssl?: boolean;
   "container-port"?: number;
   "public-port"?: number;
+  name?: string;
 }
 
 export const appsEndpointsAddCommand = defineCommand<AddArgs>({
@@ -50,6 +51,10 @@ export const appsEndpointsAddCommand = defineCommand<AddArgs>({
       .option("public-port", {
         type: "number",
         describe: "Public port",
+      })
+      .option("name", {
+        type: "string",
+        describe: "Endpoint name, unique per app (defaults to the type)",
       }),
 
   handler: async ({
@@ -59,6 +64,7 @@ export const appsEndpointsAddCommand = defineCommand<AddArgs>({
     ssl,
     "container-port": containerPort,
     "public-port": publicPort,
+    name,
     profile,
     output,
     verbose,
@@ -122,9 +128,18 @@ export const appsEndpointsAddCommand = defineCommand<AddArgs>({
     const spin = spinner("Adding endpoint...");
     spin.start();
 
-    const body: Record<string, unknown> = {
-      displayName: endpointType,
-    };
+    const taken = new Set(
+      app.containerTemplates.flatMap((ct) =>
+        ct.endpoints.map((ep) => ep.displayName),
+      ),
+    );
+
+    let displayName = name ?? endpointType;
+    for (let n = 2; !name && taken.has(displayName); n++) {
+      displayName = `${endpointType}-${n}`;
+    }
+
+    const body: Record<string, unknown> = { displayName };
 
     if (endpointType === "cdn") {
       body.cdn = {
@@ -149,6 +164,7 @@ export const appsEndpointsAddCommand = defineCommand<AddArgs>({
     if (container) {
       addEndpointToConfig(appId, container.name, {
         type: endpointType,
+        ...(displayName !== endpointType ? { name: displayName } : {}),
         ...(endpointType === "cdn" ? { ssl: sslEnabled } : {}),
         ports: [{ public: pPort, container: cPort }],
       });

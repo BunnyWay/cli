@@ -820,7 +820,6 @@ async function runMultiDockerfileImport(
     containers[containerName] = container;
   }
 
-  // --command is ambiguous with multiple containers.
   if (input.commandOverride) {
     logger.warn(
       "--command was ignored: pass it per container in bunny.jsonc when multiple Dockerfiles are selected.",

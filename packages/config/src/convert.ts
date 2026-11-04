@@ -20,7 +20,9 @@ function containerTemplateToConfig(ct: ContainerTemplate): ContainerConfig {
   const config: ContainerConfig = {};
 
   if (ct.image) {
-    config.image = ct.image;
+    const [repository, digest] = ct.image.split("@");
+    config.image =
+      digest && ct.imageTag ? `${repository}:${ct.imageTag}` : ct.image;
   }
 
   if (ct.entryPoint?.commandArray?.length) {
@@ -36,14 +38,19 @@ function containerTemplateToConfig(ct: ContainerTemplate): ContainerConfig {
   }
 
   if (ct.endpoints.length > 0) {
-    config.endpoints = ct.endpoints.map((ep) => ({
-      type: ep.type.toLowerCase() as "cdn" | "anycast",
-      ssl: ep.isSslEnabled,
-      ports: ep.portMappings.map((pm) => ({
-        public: pm.exposedPort,
-        container: pm.containerPort,
-      })),
-    }));
+    config.endpoints = ct.endpoints.map((ep) => {
+      const type = ep.type.toLowerCase() as "cdn" | "anycast";
+
+      return {
+        type,
+        ...(ep.displayName !== type ? { name: ep.displayName } : {}),
+        ...(ep.isSslEnabled != null ? { ssl: ep.isSslEnabled } : {}),
+        ports: ep.portMappings.map((pm) => ({
+          ...(pm.exposedPort != null ? { public: pm.exposedPort } : {}),
+          container: pm.containerPort,
+        })),
+      };
+    });
   }
 
   if (ct.volumeMounts.length > 0) {
@@ -107,10 +114,12 @@ export function apiToConfig(app: Application): BunnyAppConfig {
 function containerConfigToRequest(
   name: string,
   config: ContainerConfig,
+  endpointNames: Set<string>,
   id?: string,
 ): ContainerRequest {
   const image = config.image ?? "";
-  const { imageName, imageNamespace, imageTag } = parseImageRef(image);
+  const { imageName, imageNamespace, imageTag, imageDigest } =
+    parseImageRef(image);
 
   const req: ContainerRequest = {
     id: id ?? undefined,
@@ -119,6 +128,7 @@ function containerConfigToRequest(
     imageName,
     imageNamespace,
     imageTag,
+    ...(imageDigest ? { imageDigest } : {}),
     imageRegistryId: config.registry ?? "",
     imagePullPolicy: "always",
   };
@@ -134,23 +144,31 @@ function containerConfigToRequest(
   }
 
   if (config.endpoints) {
-    req.endpoints = config.endpoints.map((ep) => endpointConfigToRequest(ep));
+    req.endpoints = config.endpoints.map((ep) => {
+      let displayName = ep.name ?? ep.type;
+      for (let n = 2; !ep.name && endpointNames.has(displayName); n++) {
+        displayName = `${ep.type}-${n}`;
+      }
+
+      endpointNames.add(displayName);
+
+      return endpointConfigToRequest(ep, displayName);
+    });
   }
 
-  if (config.volumes) {
-    req.volumeMounts = config.volumes.map((v) => ({
-      name: v.name,
-      mountPath: v.mount,
-    }));
-  }
+  req.volumeMounts = (config.volumes ?? []).map((v) => ({
+    name: v.name,
+    mountPath: v.mount,
+  }));
 
   return req;
 }
 
-function endpointConfigToRequest(ep: EndpointConfig): EndpointRequest {
-  const req: EndpointRequest = {
-    displayName: ep.type,
-  };
+function endpointConfigToRequest(
+  ep: EndpointConfig,
+  displayName: string,
+): EndpointRequest {
+  const req: EndpointRequest = { displayName };
 
   if (ep.type === "cdn") {
     req.cdn = {
@@ -207,6 +225,35 @@ function mergeRegistry(
   return { ...c, registry: override };
 }
 
+/** Pair config containers with app templates by name; one leftover on each side is a rename. */
+function matchTemplates(
+  names: string[],
+  templates: ContainerTemplate[],
+): Map<string, ContainerTemplate> {
+  const matches = new Map<string, ContainerTemplate>();
+  for (const name of names) {
+    const template = templates.find((t) => t.name === name);
+    if (template) matches.set(name, template);
+  }
+
+  const unmatchedNames = names.filter((name) => !matches.has(name));
+  const matched = new Set(matches.values());
+  const unmatchedTemplates = templates.filter((t) => !matched.has(t));
+  const [renamed] = unmatchedNames;
+  const [template] = unmatchedTemplates;
+
+  if (
+    renamed &&
+    template &&
+    unmatchedNames.length === 1 &&
+    unmatchedTemplates.length === 1
+  ) {
+    matches.set(renamed, template);
+  }
+
+  return matches;
+}
+
 /** Convert BunnyAppConfig to an AddApplicationRequest for creating a new app. */
 export function configToAddRequest(
   config: BunnyAppConfig,
@@ -215,10 +262,11 @@ export function configToAddRequest(
   const containers: ContainerRequest[] = [];
   const volumes: VolumeRequest[] = [];
   const seenVolumes = new Set<string>();
+  const endpointNames = new Set<string>();
 
   for (const [name, c] of Object.entries(config.app.containers)) {
     const merged = mergeRegistry(name, c, registries);
-    containers.push(containerConfigToRequest(name, merged));
+    containers.push(containerConfigToRequest(name, merged, endpointNames));
     collectVolumes(merged, volumes, seenVolumes);
   }
 
@@ -245,16 +293,28 @@ export function configToPatchRequest(
   const volumes: VolumeRequest[] = [];
   const seenVolumes = new Set<string>();
 
-  // Match containers by name to preserve existing IDs
+  const endpointNames = new Set<string>();
+
   const entries = Object.entries(config.app.containers);
-  for (const [i, [name, c]] of entries.entries()) {
-    // First container matches first existing template (primary); rest match by name
-    const existing =
-      i === 0
-        ? existingApp.containerTemplates[0]
-        : existingApp.containerTemplates.find((ct) => ct.name === name);
+  const matches = matchTemplates(
+    entries.map(([name]) => name),
+    existingApp.containerTemplates,
+  );
+
+  for (const [name, c] of entries) {
+    const existing = matches.get(name);
     const merged = mergeRegistry(name, c, registries);
-    const req = containerConfigToRequest(name, merged, existing?.id);
+
+    if (!merged.registry && existing?.imageRegistryId) {
+      merged.registry = existing.imageRegistryId;
+    }
+
+    const req = containerConfigToRequest(
+      name,
+      merged,
+      endpointNames,
+      existing?.id,
+    );
     // PATCH replaces the whole template, so a config without an env block must carry over the server's vars or they get wiped.
     if (!merged.env && existing?.environmentVariables?.length) {
       req.environmentVariables = existing.environmentVariables;

@@ -17,9 +17,10 @@ export const ProbeConfigSchema = z.object({
 
 export const EndpointConfigSchema = z.object({
   type: z.enum(["cdn", "anycast"]),
+  name: z.string().optional(),
   ssl: z.boolean().optional(),
   ports: z
-    .array(z.object({ public: z.number(), container: z.number() }))
+    .array(z.object({ public: z.number().optional(), container: z.number() }))
     .optional(),
 });
 

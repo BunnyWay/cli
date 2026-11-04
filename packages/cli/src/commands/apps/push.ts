@@ -89,25 +89,45 @@ export const appsPushCommand = defineCommand<PushArgs>({
         return;
       }
 
-      logger.info("Dry run — changes that would be applied:");
-      logger.log();
-
+      const changes: string[] = [];
       if (patchRequest.name !== existingApp.name) {
-        logger.log(`  Name: ${existingApp.name} → ${patchRequest.name}`);
+        changes.push(`Name: ${existingApp.name} → ${patchRequest.name}`);
       }
 
       const containerCount = patchRequest.containerTemplates?.length ?? 0;
       const existingCount = existingApp.containerTemplates.length;
       if (containerCount !== existingCount) {
-        logger.log(`  Containers: ${existingCount} → ${containerCount}`);
+        changes.push(`Containers: ${existingCount} → ${containerCount}`);
+      }
+
+      const endpointCount = (patchRequest.containerTemplates ?? []).reduce(
+        (n, ct) => n + (ct.endpoints?.length ?? 0),
+        0,
+      );
+      const existingEndpoints = existingApp.containerTemplates.reduce(
+        (n, ct) => n + ct.endpoints.length,
+        0,
+      );
+
+      if (endpointCount !== existingEndpoints) {
+        changes.push(`Endpoints: ${existingEndpoints} → ${endpointCount}`);
       }
 
       const volumeCount = patchRequest.volumes?.length ?? 0;
       const existingVolumes = existingApp.volumes.length;
       if (volumeCount !== existingVolumes) {
-        logger.log(`  Volumes: ${existingVolumes} → ${volumeCount}`);
+        changes.push(`Volumes: ${existingVolumes} → ${volumeCount}`);
       }
 
+      if (changes.length === 0) {
+        logger.info("Dry run: no changes in names or counts.");
+
+        return;
+      }
+
+      logger.info("Dry run — changes that would be applied:");
+      logger.log();
+      for (const change of changes) logger.log(`  ${change}`);
       logger.log();
       logger.dim("Run without --dry-run to apply.");
       return;

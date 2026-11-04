@@ -37,7 +37,7 @@ If no `bunny.jsonc` exists, the first run launches a walkthrough that:
 2. Resolves the registry. Public ghcr.io and docker.io images use the public records bunny.net provides; other new hostnames prompt for credentials.
 3. Calls bunny.net's image-suggestions endpoint to pre-fill app name, endpoints, and required environment variables for known public images.
 4. Prompts for a single region. Multi-region apps can be configured by editing the resulting `bunny.jsonc`: the schema accepts an array, the walkthrough just keeps the initial setup focused.
-6. Writes `bunny.jsonc`, creates the app, and deploys.
+5. Writes `bunny.jsonc`, creates the app, and deploys.
 
 After a successful deploy that replaced a running image, the CLI prints the previous image reference and a one-line rollback command:
 
@@ -263,13 +263,16 @@ bunny apps env push --dry-run
 
 ## `bunny apps endpoints`
 
-Manage endpoints (CDN or Anycast) per container.
+Manage endpoints (CDN or Anycast) per container. `add` and `remove` also update a linked `bunny.jsonc`, so the next push or deploy keeps the change.
 
 ```bash
 bunny apps endpoints list
 bunny apps endpoints add --type cdn --ssl --container-port 3000 --public-port 443
+bunny apps endpoints add --type anycast --name tcp-api --container-port 5432 --public-port 5432
 bunny apps endpoints remove <endpoint-id>
 ```
+
+Endpoint names are unique per app; `--name` defaults to the type, numbered (`cdn-2`) when taken.
 
 ## `bunny apps volumes`
 

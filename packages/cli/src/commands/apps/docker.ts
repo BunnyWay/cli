@@ -1,7 +1,9 @@
 import { type Dirent, existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
+import { parseImageRef } from "@bunny.net/config";
 import type { createMcClient } from "@bunny.net/openapi-client";
+import { UNAUTHORIZED_MESSAGE } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import { resolveRegistryEndpoint } from "@/core/bunny-registry.ts";
 import { dockerLogin, imageHostname } from "@/core/docker.ts";
@@ -338,7 +340,6 @@ function dockerHasCredentials(hostname: string): boolean {
   }
 }
 
-/** The username Docker has stored for `hostname`, or null. */
 export async function dockerLoginUser(
   hostname: string,
   configPath?: string,
@@ -364,6 +365,7 @@ export async function dockerLoginUser(
     });
     if ((await proc.exited) !== 0) return null;
     const { Username } = JSON.parse(await new Response(proc.stdout).text());
+
     return typeof Username === "string" && Username ? Username : null;
   } catch {
     return null;
@@ -473,6 +475,7 @@ async function ghLogin(): Promise<string | null> {
     stderr: "pipe",
   });
   if ((await proc.exited) !== 0) return null;
+
   return (await new Response(proc.stdout).text()).trim() || null;
 }
 
@@ -508,7 +511,7 @@ export async function ghDockerLogin(hostname: string): Promise<void> {
   await dockerLogin(hostname, username, token);
 }
 
-/** Ensure Docker is logged in to `hostname` as `expectedUser` before a push, offering to log in if not. */
+/** Make sure Docker can push to `hostname` as `expectedUser`, offering to log in. */
 export async function ensureRegistryLogin(
   hostname: string,
   expectedUser?: string | null,
@@ -679,16 +682,22 @@ export async function getRegistry(
   return registries.find((r) => String(r.id) === registryId);
 }
 
-/**
- * Find an existing registry that matches the given hostname.
- * Falls back to undefined if no match is found.
- */
+/** Registry for `hostname`, preferring the one whose username owns `namespace`. */
 export function findRegistryByHostname(
   registries: ContainerRegistry[],
   hostname: string,
+  namespace?: string,
 ): ContainerRegistry | undefined {
   const normalized = hostname.toLowerCase();
-  return registries.find((r) => r.hostName?.toLowerCase() === normalized);
+  const matches = registries.filter(
+    (r) => r.hostName?.toLowerCase() === normalized,
+  );
+  const owner = namespace?.toLowerCase();
+
+  return (
+    matches.find((r) => owner && r.userName?.toLowerCase() === owner) ??
+    matches[0]
+  );
 }
 
 /** Prompt for credentials, add the registry, and return them so the caller can `docker login`. */
@@ -826,12 +835,14 @@ export async function promptRegistry(
       message: "Registry server (e.g. registry.example.com):",
     });
     if (!server?.trim()) return null;
+
     return createRegistry(client, {
       displayName: server.trim(),
       target: registryTarget(server),
     });
   }
   const existing = pushable.find((r) => String(r.id) === String(choice));
+
   return { id: String(choice), hostName: existing?.hostName };
 }
 
@@ -842,7 +853,11 @@ async function withRegistryAuth<T>(
   try {
     return await fn();
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) {
+    if (
+      err instanceof ApiError &&
+      err.status === 401 &&
+      err.message !== UNAUTHORIZED_MESSAGE
+    ) {
       throw new UserError(
         `${registry.hostName} rejected the credentials stored on "${registry.displayName}".`,
         `Update them with \`bunny apps registries update ${registry.id}\`.`,
@@ -923,21 +938,28 @@ export async function promptRegistryImage(
   if (imageIndex === undefined) return null;
 
   const image = images[imageIndex];
-  if (!image?.id || !image.namespace) return null;
+  if (!image?.id) return null;
+  if (!image.namespace) {
+    throw new UserError(
+      `${hostName}/${image.id} has no namespace, which bunny.net can't deploy yet.`,
+      "Push it under a namespace (e.g. team/name), or deploy another image.",
+    );
+  }
 
   const tagSpin = spinner("Fetching tags...");
   tagSpin.start();
 
   const tags = await withRegistryAuth(registry, async () => {
-    const { data } = await client.POST("/registries/tags", {
+    const { data } = await client.POST("/registries/tags/paged", {
       body: {
         registryId,
         imageName: image.id ?? "",
         imageNamespace: image.namespace ?? "",
+        limit: 1000,
       },
     });
 
-    return (data ?? []).flatMap((t) => (t.name ? [t.name] : []));
+    return (data?.items ?? []).flatMap((t) => (t.name ? [t.name] : []));
   }).finally(() => tagSpin.stop());
 
   if (tags.length === 0) {
@@ -977,7 +999,11 @@ export async function resolveRegistryForImage(
   const registries = await listRegistries(client);
   fetchSpin.stop();
 
-  const existing = findRegistryByHostname(registries, hostname);
+  const existing = findRegistryByHostname(
+    registries,
+    hostname,
+    parseImageRef(imageRef).imageNamespace,
+  );
   if (existing?.id) {
     return { id: String(existing.id), hostName: existing.hostName };
   }

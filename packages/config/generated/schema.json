@@ -160,6 +160,9 @@
                       "type": "string",
                       "enum": ["cdn", "anycast"]
                     },
+                    "name": {
+                      "type": "string"
+                    },
                     "ssl": {
                       "type": "boolean"
                     },
@@ -175,7 +178,7 @@
                             "type": "number"
                           }
                         },
-                        "required": ["public", "container"],
+                        "required": ["container"],
                         "additionalProperties": false
                       }
                     }
