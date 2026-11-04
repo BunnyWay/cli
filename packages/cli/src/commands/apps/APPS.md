@@ -89,6 +89,7 @@ The Dockerfile and a `.dockerignore` (unless you have one) are written to the pr
 | `--dry-run`             | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                                              |
 | `--no-push`             | Build only. Skip pushing the image and skip the deploy.                                                                                               |
 | `--allow-split-volumes` | Deploy an app that mounts a volume in more than one region or instance (see [Volumes](#volumes-regions-and-scaling)).                                 |
+| `--force`, `-f`         | Remove containers or volumes dropped from `bunny.jsonc` without confirming.                                                                           |
 
 ```bash
 # Deploy a pre-built image
@@ -226,6 +227,8 @@ bunny apps push --dry-run
 # Apply a volume across regions or instances on purpose (see Volumes)
 bunny apps push --allow-split-volumes
 ```
+
+Containers and volumes missing from `bunny.jsonc` are removed from the app, volumes with their data. `push` and `deploy` list what would be removed and ask first; pass `--force` to skip the prompt (required without a terminal). Containers are matched by name, so reordering them is safe; renaming one container at a time keeps it.
 
 ## `bunny apps env`
 

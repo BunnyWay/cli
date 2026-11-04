@@ -5,7 +5,7 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
-import { loadManifest } from "@/core/manifest.ts";
+import { loadManifest, saveManifest } from "@/core/manifest.ts";
 import { spinner } from "@/core/ui.ts";
 import {
   assertVolumesNotSplit,
@@ -15,6 +15,7 @@ import {
 } from "./config.ts";
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 import { resolveRegistryForImage } from "./docker.ts";
+import { confirmRemovals, pruneManifestContainers } from "./removals.ts";
 
 const COMMAND = "push";
 const DESCRIPTION = "Apply local bunny.jsonc config to remote app.";
@@ -22,6 +23,7 @@ const DESCRIPTION = "Apply local bunny.jsonc config to remote app.";
 interface PushArgs {
   "dry-run"?: boolean;
   "allow-split-volumes"?: boolean;
+  force?: boolean;
 }
 
 export const appsPushCommand = defineCommand<PushArgs>({
@@ -38,11 +40,17 @@ export const appsPushCommand = defineCommand<PushArgs>({
         type: "boolean",
         describe:
           "Apply a volume in more than one region or instance, each keeping its own separate data",
+      })
+      .option("force", {
+        alias: "f",
+        type: "boolean",
+        describe: "Remove containers or volumes without confirming",
       }),
 
   handler: async ({
     "dry-run": dryRun,
     "allow-split-volumes": allowSplitVolumes,
+    force,
     profile,
     output,
     verbose,
@@ -166,6 +174,12 @@ export const appsPushCommand = defineCommand<PushArgs>({
       return;
     }
 
+    if (!(await confirmRemovals(patchRequest, existingApp, force))) {
+      logger.log("Push cancelled.");
+
+      return;
+    }
+
     const pushSpin = spinner("Pushing config...");
     pushSpin.start();
 
@@ -175,6 +189,15 @@ export const appsPushCommand = defineCommand<PushArgs>({
     });
 
     pushSpin.stop();
+
+    saveManifest<AppManifest>(APP_MANIFEST, {
+      ...manifest,
+      id: appId,
+      containers: pruneManifestContainers(
+        manifest.containers,
+        Object.keys(toml.app.containers),
+      ),
+    });
 
     if (output === "json") {
       logger.log(JSON.stringify({ id: appId, pushed: true }));

@@ -155,6 +155,7 @@ import {
   type DeployedEndpointLine,
 } from "./endpoints/format.ts";
 import { resolveContainerEnv } from "./env/resolve.ts";
+import { confirmRemovals, pruneManifestContainers } from "./removals.ts";
 import {
   confirmEndpointSuggestions,
   endpointRequestToConfig,
@@ -171,6 +172,7 @@ const DEFAULT_DOCKERFILE = "Dockerfile";
 interface DeployArgs {
   image?: string;
   "allow-split-volumes"?: boolean;
+  force?: boolean;
   region?: string;
   dockerfile?: string | boolean;
   context?: string;
@@ -266,6 +268,11 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         type: "boolean",
         describe:
           "Print the would-be bunny.jsonc and Dockerfile without writing anything or contacting the API to deploy",
+      })
+      .option("force", {
+        alias: "f",
+        type: "boolean",
+        describe: "Remove containers or volumes without confirming",
       })
       .option("allow-split-volumes", {
         type: "boolean",
@@ -443,9 +450,21 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
           throw new UserError(`App ${appId} not found.`);
         }
 
+        const patchRequest = configToPatchRequest(
+          config,
+          existingApp,
+          registries,
+        );
+        pushSpin.stop();
+
+        if (!(await confirmRemovals(patchRequest, existingApp, args.force))) {
+          throw new UserError("Deploy cancelled.");
+        }
+
+        pushSpin.start();
         await client.PATCH("/apps/{appId}", {
           params: { path: { appId } },
-          body: configToPatchRequest(config, existingApp, registries),
+          body: patchRequest,
         });
         pushSpin.stop();
       } else {
@@ -476,6 +495,12 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       for (const ct of savedApp?.containerTemplates ?? []) {
         setContainerTemplateId(ct.name, ct.id);
       }
+
+      draft.containers = pruneManifestContainers(
+        draft.containers,
+        Object.keys(toml.app.containers),
+      );
+      persistDraft();
 
       const deploySpin = spinner("Deploying...");
       deploySpin.start();
@@ -724,15 +749,29 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
             : previous;
       }
 
+      const patchRequest = configToPatchRequest(
+        resolveContainerEnv(toml, dotenvPath),
+        existingApp,
+        draftRegistries(draft.containers),
+      );
+      pushSpin.stop();
+
+      if (!(await confirmRemovals(patchRequest, existingApp, args.force))) {
+        throw new UserError("Deploy cancelled.");
+      }
+
+      pushSpin.start();
       await client.PATCH("/apps/{appId}", {
         params: { path: { appId } },
-        body: configToPatchRequest(
-          resolveContainerEnv(toml, dotenvPath),
-          existingApp,
-          draftRegistries(draft.containers),
-        ),
+        body: patchRequest,
       });
       pushSpin.stop();
+
+      draft.containers = pruneManifestContainers(
+        draft.containers,
+        Object.keys(toml.app.containers),
+      );
+      persistDraft();
     }
 
     if (deployImage) {
