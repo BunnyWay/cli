@@ -476,7 +476,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
             output,
           ))
         ) {
-          throw new UserError("Deploy cancelled.");
+          logger.log("Deploy cancelled.");
+
+          return;
         }
 
         pushSpin.start();
@@ -787,7 +789,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       if (
         !(await confirmRemovals(patchRequest, existingApp, args.force, output))
       ) {
-        throw new UserError("Deploy cancelled.");
+        logger.log("Deploy cancelled.");
+
+        return;
       }
 
       pushSpin.start();
@@ -1301,7 +1305,7 @@ async function buildAndPushContainer(
     {
       targetContainer: container,
       dockerfilePath: container.dockerfile,
-      interactive: isInteractive(),
+      interactive: isInteractive(opts.quiet ? "json" : undefined),
     },
   );
   return imageRef;
