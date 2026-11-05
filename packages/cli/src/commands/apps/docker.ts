@@ -58,10 +58,9 @@ export async function generateTag(): Promise<string> {
  *   EXPOSE 8080/tcp
  *   EXPOSE 80/udp        (skipped - bunny CDN/Anycast endpoints are TCP)
  *
- * Returns a deduped list in source order. Pure string parsing - no I/O -
- * so it's trivially testable without a Dockerfile on disk.
+ * Returns a deduped list in source order.
  */
-export function parseDockerfileExposedPorts(content: string): number[] {
+function parseDockerfileExposedPorts(content: string): number[] {
   const ports: number[] = [];
   const seen = new Set<number>();
   for (const rawLine of content.split("\n")) {
@@ -197,7 +196,7 @@ export function findDockerfiles(cwd: string): string[] {
  * accept (lower-kebab) so the walkthrough can drop it straight into the
  * config without further massaging.
  */
-export function defaultContainerNameFromDockerfile(path: string): string {
+function defaultContainerNameFromDockerfile(path: string): string {
   const parts = path.split("/").filter(Boolean);
   const filename = parts[parts.length - 1] ?? "";
   const parentDir = (parts.length > 1 ? parts[parts.length - 2] : "") ?? "";
@@ -320,14 +319,9 @@ export async function buildImage(
  *
  * Not a guarantee the cred is still valid (tokens expire), but a
  * strong signal that `docker login` has been run here.
- *
- * Takes an optional `configPath` to make the function testable.
  */
-export function dockerHasCredentials(
-  hostname: string,
-  configPath?: string,
-): boolean {
-  const path = configPath ?? join(homedir(), ".docker", "config.json");
+function dockerHasCredentials(hostname: string): boolean {
+  const path = join(homedir(), ".docker", "config.json");
   if (!existsSync(path)) return false;
   try {
     const config = JSON.parse(readFileSync(path, "utf-8")) as {
@@ -368,7 +362,7 @@ export async function ghIsAuthenticated(): Promise<boolean> {
  *
  * Returns `[]` if the header is absent (older gh, or no auth).
  */
-export function parseOauthScopes(headerOutput: string): string[] {
+function parseOauthScopes(headerOutput: string): string[] {
   const match = headerOutput.match(/^X-Oauth-Scopes:\s*(.+)$/im);
   if (!match?.[1]) return [];
   return match[1]
