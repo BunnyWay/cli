@@ -401,11 +401,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       return;
     }
 
-    // First-time deploy of a multi-container app (e.g. compose import).
-    // The single-container flow below can only build/push one image, so
-    // for multi-container creates we iterate every container, build any
-    // with a `dockerfile`, resolve a registry for any with a pre-built
-    // `image`, then create the app in one POST.
+    // Multi-container creates build or resolve every container, then create the app in one POST.
     const containerEntries = Object.entries(toml.app.containers);
     if (
       !draft.id &&
@@ -421,6 +417,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         onRegistryResolved: setContainerRegistry,
         cfg,
         verbose,
+        quiet: output === "json",
       });
 
       const createSpin = spinner("Creating app...");
@@ -540,7 +537,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       const buildCwd = resolveBuildContext(mode.dockerfile, args.context);
 
       logger.info(`Building ${imageRef}...`);
-      await buildImage(mode.dockerfile, imageRef, buildCwd);
+      await buildImage(mode.dockerfile, imageRef, buildCwd, {
+        quiet: output === "json",
+      });
 
       if (noPush) {
         logger.success(`Image built: ${imageRef}`);
@@ -586,7 +585,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       }
 
       logger.info(`Pushing ${imageRef}...`);
-      await pushImage(imageRef);
+      await pushImage(imageRef, { quiet: output === "json" });
 
       deployImage = imageRef;
       // In-memory only - `saveConfig` strips `image` for dockerfile
@@ -989,9 +988,7 @@ function resolveBuildContext(
  * - `dockerfile`-only entries → build + push to the configured registry,
  *   then write the resulting image ref back onto the container.
  * - Pre-built `image` entries → resolve the matching registry record on
- *   the user's account (compose import assigns the user's push registry
- *   to every container by default, which is wrong for public images like
- *   `postgres:17-alpine`).
+ *   the user's account.
  *
  * The toml is mutated in place and re-saved after every container so
  * partial progress survives a mid-loop failure.
@@ -1014,6 +1011,7 @@ async function prepareContainersForCreate(
     /** Resolved CLI config — needed to push to the bunny.net registry (API-token auth). */
     cfg: ResolvedConfig;
     verbose?: boolean;
+    quiet?: boolean;
   },
 ): Promise<void> {
   const entries = Object.entries(toml.app.containers);
@@ -1031,6 +1029,7 @@ async function prepareContainersForCreate(
         onRegistryResolved: opts.onRegistryResolved,
         cfg: opts.cfg,
         verbose: opts.verbose,
+        quiet: opts.quiet,
       });
     } else if (container.image) {
       await resolveRegistryForPrebuiltImage(client, name, container, {
@@ -1058,6 +1057,7 @@ async function buildAndPushContainer(
     onRegistryResolved: (name: string, registryId: string) => void;
     cfg: ResolvedConfig;
     verbose?: boolean;
+    quiet?: boolean;
   },
 ): Promise<void> {
   if (!container.dockerfile) return;
@@ -1113,7 +1113,9 @@ async function buildAndPushContainer(
   );
 
   logger.info(`Building ${imageRef}...`);
-  await buildImage(container.dockerfile, imageRef, buildCwd);
+  await buildImage(container.dockerfile, imageRef, buildCwd, {
+    quiet: opts.quiet,
+  });
 
   if (isBunnyRegistry) {
     if (!opts.cfg.apiKey) {
@@ -1144,7 +1146,7 @@ async function buildAndPushContainer(
   }
 
   logger.info(`Pushing ${imageRef}...`);
-  await pushImage(imageRef);
+  await pushImage(imageRef, { quiet: opts.quiet });
 
   // In-memory only - `saveConfig` strips this for dockerfile containers.
   // Needed here so `configToAddRequest` picks up the ref on first create.

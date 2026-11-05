@@ -5,11 +5,7 @@ import { parseDotenv } from "@/core/env.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, spinner } from "@/core/ui.ts";
-import {
-  composeToConfig,
-  findComposeFile,
-  loadComposeFile,
-} from "./compose/index.ts";
+import { fetchAllRegions } from "@/tools/apps/index.ts";
 import {
   type BunnyAppConfig,
   type ContainerConfig,
@@ -147,7 +143,6 @@ export async function runWalkthrough(
         "Pass --dockerfile to build (a Dockerfile is generated when there is none), or an image ref to deploy.",
       );
     }
-    const composeFile = findComposeFile(process.cwd());
     const detectedDockerfiles = findDockerfiles(process.cwd());
     // Only offer to generate when there's no Dockerfile to build already.
     const detectedApp =
@@ -162,10 +157,6 @@ export async function runWalkthrough(
       }
     }
 
-    const composeServicesCount = composeFile
-      ? Object.keys(loadComposeFile(composeFile).services).length
-      : 0;
-
     const dockerfileChoiceTitle =
       detectedDockerfiles.length === 0
         ? "Build from a Dockerfile (enter path)"
@@ -178,14 +169,6 @@ export async function runWalkthrough(
       name: "value",
       message: "How do you want to deploy?",
       choices: [
-        ...(composeFile
-          ? [
-              {
-                title: `Import ${composeServicesCount} service${composeServicesCount === 1 ? "" : "s"} from ${basename(composeFile)}`,
-                value: "compose",
-              },
-            ]
-          : []),
         ...(detectedApp
           ? [
               {
@@ -205,10 +188,6 @@ export async function runWalkthrough(
     // write `bunny.jsonc` and then crash mid-deploy.
     if (value !== "image" && input.buildsImage) {
       await ensureDockerAvailable();
-    }
-
-    if (value === "compose" && composeFile) {
-      return runComposeImport(client, composeFile, input);
     }
 
     if (value === "generate" && detectedApp) {
@@ -434,80 +413,6 @@ function writeGeneratedDockerfile(
   return path;
 }
 
-/**
- * Compose import path: translate `compose.yml` → `bunny.jsonc` and write.
- *
- * Compose carries the container topology, env, ports, and volumes.
- * The user still has to choose:
- *   - app name (compose has no app-level name)
- *   - region (compose isn't region-aware)
- *   - default registry for all containers (assigned to each in translation)
- */
-async function runComposeImport(
-  client: McClient,
-  composeFilePath: string,
-  input: WalkthroughInput,
-): Promise<WalkthroughResult> {
-  const compose = loadComposeFile(composeFilePath);
-
-  const serviceNames = Object.keys(compose.services);
-  logger.info(
-    `Importing ${serviceNames.length} service${serviceNames.length === 1 ? "" : "s"} from ${basename(composeFilePath)}: ${serviceNames.join(", ")}.`,
-  );
-
-  const name = await promptAppName(input);
-
-  const regions = await pickRegions(client, input);
-
-  const registry = await pickRegistry(
-    client,
-    input,
-    "Pick a registry to use for all containers.",
-  );
-  if (!registry) throw new UserError("A registry is required.");
-
-  const { config, warnings } = composeToConfig(compose, {
-    composeFilePath,
-    appName: name,
-    regions,
-    defaultRegistryId: registry.id,
-  });
-
-  // --command override: if a single service exists, apply it; otherwise
-  // warn, because `--command` is ambiguous with multi-service compose files.
-  if (input.commandOverride) {
-    if (serviceNames.length === 1) {
-      const onlyName = serviceNames[0];
-      if (onlyName) {
-        const primary = config.app.containers[onlyName];
-        if (primary) {
-          primary.command = input.commandOverride.trim().split(/\s+/);
-        }
-      }
-    } else {
-      warnings.push(
-        "--command was ignored: pass it via the compose file when multiple services are present.",
-      );
-    }
-  }
-
-  for (const warning of warnings) logger.warn(warning);
-
-  if (!input.dryRun) {
-    saveConfig(config, input.configPath);
-    logger.success("Wrote bunny.jsonc.");
-  } else {
-    logger.dim("Would write bunny.jsonc (--dry-run).");
-  }
-
-  // Every service in a compose import shares the same registry by default.
-  const registries: Record<string, string> = {};
-  for (const serviceName of Object.keys(config.app.containers)) {
-    registries[serviceName] = registry.id;
-  }
-  return { config, registries };
-}
-
 /** The registry to push to: --registry, else the bunny.net registry (the prompt's default when nobody can answer it). */
 async function pickRegistry(
   client: McClient,
@@ -543,10 +448,10 @@ async function pickRegions(
 ): Promise<string[]> {
   const spin = spinner("Fetching regions...");
   spin.start();
-  const { data: regionsResult } = await client.GET("/regions");
+  const regions = await fetchAllRegions(client);
   spin.stop();
 
-  const regionsWithCapacity = (regionsResult?.items ?? []).filter(
+  const regionsWithCapacity = regions.filter(
     (r): r is typeof r & { id: string } =>
       r.hasCapacity === true && typeof r.id === "string",
   );
@@ -856,8 +761,7 @@ async function runMultiDockerfileImport(
     }
 
     // Seed endpoints from EXPOSE so each container has a reachable port
-    // when MC stands it up. Same shape compose translation produces - one
-    // CDN endpoint with every exposed port grouped under it.
+    // when MC stands it up. One CDN endpoint with every exposed port grouped under it.
     const exposedPorts = await readDockerfileExposedPorts(
       resolve(process.cwd(), path),
     );
@@ -886,8 +790,7 @@ async function runMultiDockerfileImport(
     containers[containerName] = container;
   }
 
-  // --command is ambiguous with multiple containers — same rule as
-  // multi-service compose imports.
+  // --command is ambiguous with multiple containers.
   if (input.commandOverride) {
     logger.warn(
       "--command was ignored: pass it per container in bunny.jsonc when multiple Dockerfiles are selected.",

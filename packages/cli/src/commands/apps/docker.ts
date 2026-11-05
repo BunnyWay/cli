@@ -267,6 +267,7 @@ export async function buildImage(
   dockerfile: string,
   tag: string,
   cwd?: string,
+  options?: { quiet?: boolean },
 ): Promise<void> {
   // `dockerfile` is relative to `process.cwd()` (that's where every caller
   // resolves it from), but docker resolves `-f` relative to its own cwd.
@@ -293,7 +294,7 @@ export async function buildImage(
 
   const proc = Bun.spawn(args, {
     cwd: cwd ?? process.cwd(),
-    stdout: "inherit",
+    stdout: options?.quiet ? 2 : "inherit",
     stderr: "inherit",
   });
 

@@ -41,13 +41,13 @@ async function chooseNewLibrary(
     name: "mode",
     message: "Import into:",
     choices: [
-      { title: "A new library", value: "new" },
-      { title: "An existing library", value: "existing" },
+      { title: "A new video library", value: "new" },
+      { title: "An existing video library", value: "existing" },
     ],
     initial: 0,
   });
 
-  if (!mode) throw new UserError("A library is required.");
+  if (!mode) throw new UserError("A video library is required.");
 
   return mode === "new";
 }
@@ -68,7 +68,7 @@ async function pickLibrary(libraries: StreamLibrary[]): Promise<StreamLibrary> {
   });
 
   const library = libraries.find((lib) => lib.id === id);
-  if (!library) throw new UserError("A library is required.");
+  if (!library) throw new UserError("A video library is required.");
 
   return library;
 }
@@ -122,7 +122,7 @@ export async function resolveImportLibrary(
 
   if (!isInteractive(opts.output)) {
     throw new UserError(
-      "A library is required.",
+      "A video library is required.",
       "Pass --library <name|id>, or link one with `bunny stream libraries link`.",
     );
   }
