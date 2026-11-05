@@ -373,7 +373,11 @@ bunny db shell --url libsql://01KCHBG8C5KSFGG0VRNFQ7EK7X-my-app.lite.bunnydb.net
 
 #### `bunny db studio`
 
-Open a read-only table viewer in your browser. Spins up a local server, generates a short-lived auth token if needed, and opens the studio UI.
+Open a read-only database explorer in your browser. Spins up a local server, generates a short-lived read-only token if needed, and opens the studio UI. The local server refuses writes even when `--token` or `.env` supplies a full-access token.
+
+The home page summarises the database (tables, views, indexes, triggers) with Browse, Structure, and SQL actions per table. Open tables as tabs across the top (<kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> to search for one); each tab keeps its own filters, sort, and page. Sort by any column, drag a header edge to resize it, and select cells with the arrow keys (<kbd>⌘C</kbd> copies, <kbd>Enter</kbd> opens the row). Filter with AND/OR conditions (equals, contains, starts with, ranges, IN, LIKE, NULL checks). Click a row to see every field, follow foreign keys to the referenced row, or jump to rows in other tables that reference it. The Schema tab lists columns, defaults, constraints, indexes, incoming foreign keys, and the table's `CREATE` statements, triggers included. Export the current page as CSV or JSON.
+
+The **SQL** tab is a query console with schema-aware autocomplete and query history. <kbd>⌘Enter</kbd> / <kbd>Ctrl Enter</kbd> runs the selection or the statement under the cursor. Only `SELECT`, `WITH`, `EXPLAIN`, `PRAGMA`, and `VALUES` run; studio rejects statements containing write keywords and PRAGMAs that set a value. With the token studio creates, the database also refuses writes itself. A token from `--token` or `.env` may allow writes, so the console says when studio's own check is the only guard. Results show up to 1,000 rows. Views open here too. Filters, sorting, and paging live in the URL, so Back works and links can be reopened while studio is running.
 
 ```bash
 # Auto-detect database (link, .env, or interactive)
