@@ -1078,7 +1078,7 @@ bunny sites open --print
 bunny sites ssl --no-force-ssl
 
 # CI, linking, maintenance
-bunny sites ci init                                   # GitHub Actions: push to main goes live
+bunny sites ci init                                   # GitHub Actions: push to the default branch goes live
 bunny sites ci init --framework astro
 bunny sites link my-site
 bunny sites unlink
