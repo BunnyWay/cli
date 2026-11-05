@@ -421,6 +421,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         onRegistryResolved: setContainerRegistry,
         cfg,
         verbose,
+        quiet: output === "json",
       });
 
       const createSpin = spinner("Creating app...");
@@ -586,7 +587,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       }
 
       logger.info(`Pushing ${imageRef}...`);
-      await pushImage(imageRef);
+      await pushImage(imageRef, { quiet: output === "json" });
 
       deployImage = imageRef;
       // In-memory only - `saveConfig` strips `image` for dockerfile
@@ -1014,6 +1015,7 @@ async function prepareContainersForCreate(
     /** Resolved CLI config — needed to push to the bunny.net registry (API-token auth). */
     cfg: ResolvedConfig;
     verbose?: boolean;
+    quiet?: boolean;
   },
 ): Promise<void> {
   const entries = Object.entries(toml.app.containers);
@@ -1031,6 +1033,7 @@ async function prepareContainersForCreate(
         onRegistryResolved: opts.onRegistryResolved,
         cfg: opts.cfg,
         verbose: opts.verbose,
+        quiet: opts.quiet,
       });
     } else if (container.image) {
       await resolveRegistryForPrebuiltImage(client, name, container, {
@@ -1058,6 +1061,7 @@ async function buildAndPushContainer(
     onRegistryResolved: (name: string, registryId: string) => void;
     cfg: ResolvedConfig;
     verbose?: boolean;
+    quiet?: boolean;
   },
 ): Promise<void> {
   if (!container.dockerfile) return;
@@ -1144,7 +1148,7 @@ async function buildAndPushContainer(
   }
 
   logger.info(`Pushing ${imageRef}...`);
-  await pushImage(imageRef);
+  await pushImage(imageRef, { quiet: opts.quiet });
 
   // In-memory only - `saveConfig` strips this for dockerfile containers.
   // Needed here so `configToAddRequest` picks up the ref on first create.
