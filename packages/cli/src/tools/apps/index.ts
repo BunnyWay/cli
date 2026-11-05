@@ -1,3 +1,4 @@
+export { fetchApp, fetchVolumes } from "./app.ts";
 export { fetchAllApps, fetchAllRegions } from "./paged.ts";
 export type {
   ContainerRegistryModel,
