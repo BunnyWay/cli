@@ -109,6 +109,21 @@
                       },
                       "port": {
                         "type": "number"
+                      },
+                      "initialDelaySeconds": {
+                        "type": "number"
+                      },
+                      "periodSeconds": {
+                        "type": "number"
+                      },
+                      "timeoutSeconds": {
+                        "type": "number"
+                      },
+                      "failureThreshold": {
+                        "type": "number"
+                      },
+                      "successThreshold": {
+                        "type": "number"
                       }
                     },
                     "required": ["type"],
@@ -126,6 +141,21 @@
                       },
                       "port": {
                         "type": "number"
+                      },
+                      "initialDelaySeconds": {
+                        "type": "number"
+                      },
+                      "periodSeconds": {
+                        "type": "number"
+                      },
+                      "timeoutSeconds": {
+                        "type": "number"
+                      },
+                      "failureThreshold": {
+                        "type": "number"
+                      },
+                      "successThreshold": {
+                        "type": "number"
                       }
                     },
                     "required": ["type"],
@@ -142,6 +172,21 @@
                         "type": "string"
                       },
                       "port": {
+                        "type": "number"
+                      },
+                      "initialDelaySeconds": {
+                        "type": "number"
+                      },
+                      "periodSeconds": {
+                        "type": "number"
+                      },
+                      "timeoutSeconds": {
+                        "type": "number"
+                      },
+                      "failureThreshold": {
+                        "type": "number"
+                      },
+                      "successThreshold": {
                         "type": "number"
                       }
                     },

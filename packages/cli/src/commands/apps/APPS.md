@@ -394,6 +394,19 @@ For the rare case where you need to distinguish "regions bunny.net is allowed to
 
 The array form sets both `allowed` and `required` to the same list under the hood.
 
+### Health checks
+
+A container takes optional `startup`, `readiness`, and `liveness` probes. No traffic reaches a container until its startup probe passes, and a failing liveness probe restarts it.
+
+```jsonc
+"probes": {
+  "readiness": { "type": "http", "path": "/health" },
+  "liveness": { "type": "tcp", "port": 3000, "failureThreshold": 5 }
+}
+```
+
+`type` is `http`, `tcp`, or `grpc`. `path` applies to `http` and defaults to `/`. `port` defaults to the container's first endpoint port, and a probe with neither fails the deploy. The timing fields `initialDelaySeconds`, `periodSeconds`, `timeoutSeconds`, `failureThreshold`, and `successThreshold` are optional; when omitted, the platform defaults apply. `bunny apps pull` writes back probes set in the dashboard. An HTTP probe's expected status code and a gRPC probe's service name are not modeled, so a `push` resets them to the platform defaults.
+
 ### Volumes, regions and scaling
 
 Volumes are never shared: every region an app runs in, and every instance within a region, gets its own empty volume, and nothing syncs between them. A database in three regions, or scaled to three instances, is three unrelated databases. So `bunny apps deploy` and `bunny apps push` refuse a config where any container mounts a volume and either `regions` (or `regions.allowed`) lists more than one region or `scaling.max` is above 1. Keep one region and `scaling.max: 1`, or pass `--allow-split-volumes` when separate data per copy is what you want (a cache, say).

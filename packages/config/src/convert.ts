@@ -1,3 +1,4 @@
+import { UserError } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import { parseImageRef } from "./parse-image-ref.ts";
 import {
@@ -6,6 +7,7 @@ import {
   CURRENT_VERSION,
   type EndpointConfig,
   normalizeRegions,
+  type ProbeConfig,
 } from "./schema.ts";
 
 type Application = components["schemas"]["Application"];
@@ -15,6 +17,7 @@ type ContainerRequest = components["schemas"]["ContainerRequest"];
 type PatchApplicationRequest = components["schemas"]["PatchApplicationRequest"];
 type EndpointRequest = components["schemas"]["EndpointRequest"];
 type VolumeRequest = components["schemas"]["VolumeRequest"];
+type ContainerProbe = components["schemas"]["ContainerProbe"];
 
 function hasHost(image: string): boolean {
   const [first, ...rest] = image.split("/");
@@ -74,6 +77,9 @@ function containerTemplateToConfig(
       };
     });
   }
+
+  const probes = probesFromApi(ct.probes);
+  if (probes) config.probes = probes;
 
   if (ct.volumeMounts.length > 0) {
     config.volumes = ct.volumeMounts.map((vm) => ({
@@ -185,7 +191,90 @@ function containerConfigToRequest(
     mountPath: v.mount,
   }));
 
+  if (config.probes) {
+    const defaultPort = config.endpoints?.[0]?.ports?.[0]?.container;
+    req.probes = {};
+    for (const kind of PROBE_KINDS) {
+      const probe = config.probes[kind];
+      if (probe) req.probes[kind] = probeToRequest(probe, defaultPort);
+    }
+  }
+
   return req;
+}
+
+const PROBE_KINDS = ["startup", "readiness", "liveness"] as const;
+
+const PROBE_TIMINGS = [
+  "initialDelaySeconds",
+  "periodSeconds",
+  "timeoutSeconds",
+  "failureThreshold",
+  "successThreshold",
+] as const;
+
+function probeToRequest(
+  probe: ProbeConfig,
+  defaultPort: number | undefined,
+): ContainerProbe {
+  const portNumber = probe.port ?? defaultPort;
+  if (portNumber == null) {
+    throw new UserError(
+      `A ${probe.type} probe needs a port: set "port" on the probe or add an endpoint.`,
+    );
+  }
+
+  const req: ContainerProbe = {
+    initialDelaySeconds: probe.initialDelaySeconds ?? null,
+    periodSeconds: probe.periodSeconds ?? null,
+    timeoutSeconds: probe.timeoutSeconds ?? null,
+    failureThreshold: probe.failureThreshold ?? null,
+    successThreshold: probe.successThreshold ?? null,
+  };
+
+  if (probe.type === "http") {
+    req.httpGet = { request: { path: probe.path ?? "/", portNumber } };
+  } else if (probe.type === "tcp") {
+    req.tcpSocket = { request: { portNumber } };
+  } else {
+    req.grpc = { request: { portNumber } };
+  }
+
+  return req;
+}
+
+function probesFromApi(
+  probes: ContainerTemplate["probes"],
+): ContainerConfig["probes"] {
+  if (!probes) return undefined;
+
+  const config: NonNullable<ContainerConfig["probes"]> = {};
+  for (const kind of PROBE_KINDS) {
+    const probe = probes[kind];
+    if (!probe) continue;
+
+    let parsed: ProbeConfig | undefined;
+    if (probe.httpGet?.request) {
+      parsed = {
+        type: "http",
+        path: probe.httpGet.request.path,
+        port: probe.httpGet.request.portNumber,
+      };
+    } else if (probe.tcpSocket?.request) {
+      parsed = { type: "tcp", port: probe.tcpSocket.request.portNumber };
+    } else if (probe.grpc?.request) {
+      parsed = { type: "grpc", port: probe.grpc.request.portNumber };
+    }
+    if (!parsed) continue;
+
+    for (const key of PROBE_TIMINGS) {
+      const value = probe[key];
+      if (value != null) parsed[key] = value;
+    }
+    config[kind] = parsed;
+  }
+
+  return Object.keys(config).length > 0 ? config : undefined;
 }
 
 function endpointConfigToRequest(
