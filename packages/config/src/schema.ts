@@ -125,11 +125,10 @@ export function normalizeRegions(regions: RegionsConfig | undefined): {
   required: string[];
 } {
   if (!regions) return { allowed: [], required: [] };
+  const upper = (ids: string[] = []) => ids.map((id) => id.toUpperCase());
+
   if (Array.isArray(regions)) {
-    return { allowed: [...regions], required: [...regions] };
+    return { allowed: upper(regions), required: upper(regions) };
   }
-  return {
-    allowed: regions.allowed ?? [],
-    required: regions.required ?? [],
-  };
+  return { allowed: upper(regions.allowed), required: upper(regions.required) };
 }

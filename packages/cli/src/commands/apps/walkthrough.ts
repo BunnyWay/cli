@@ -501,13 +501,16 @@ async function pickRegions(
 
   const ids = regionsWithCapacity.map((r) => r.id);
   if (input.regionFlag) {
-    if (!ids.includes(input.regionFlag)) {
+    const match = ids.find(
+      (id) => id.toLowerCase() === input.regionFlag?.toLowerCase(),
+    );
+    if (!match) {
       throw new UserError(
         `Region "${input.regionFlag}" is unknown or has no capacity.`,
         `Pass --region with one of: ${ids.join(", ")}.`,
       );
     }
-    return [input.regionFlag];
+    return [match];
   }
   if (!input.interactive) {
     throw new UserError(
