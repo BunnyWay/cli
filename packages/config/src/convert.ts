@@ -447,9 +447,6 @@ export function configToPatchRequest(
     if (!merged.env && existing?.environmentVariables?.length) {
       req.environmentVariables = existing.environmentVariables;
     }
-    if (!merged.probes && existing?.probes) {
-      req.probes = existing.probes;
-    }
     containers.push(req);
     collectVolumes(merged, volumes, seenVolumes);
   }
