@@ -396,10 +396,19 @@ The array form sets both `allowed` and `required` to the same list under the hoo
 
 ### Health checks
 
-A container takes optional `startup`, `readiness`, and `liveness` probes. No traffic reaches a container until its startup probe passes, and a failing liveness probe restarts it.
+A container takes optional `startup`, `readiness`, and `liveness` probes:
+
+| Probe       | Answers                       | When it runs                       | On failure (past `failureThreshold`) |
+| ----------- | ----------------------------- | ---------------------------------- | ------------------------------------ |
+| `startup`   | Has the app finished booting? | Once, until it first passes        | The container restarts               |
+| `readiness` | Can it take requests now?     | Continuously, after startup passes | Traffic stops; no restart            |
+| `liveness`  | Is it still working?          | Continuously, after startup passes | The container restarts               |
+
+Use `startup` for a slow boot (migrations, cache warm-up): give it a generous `failureThreshold` so a long start isn't mistaken for a hang, and keep `liveness` strict. Use `readiness` for temporary unavailability, such as a lost database connection, where restarting wouldn't help.
 
 ```jsonc
 "probes": {
+  "startup": { "type": "http", "path": "/health", "periodSeconds": 5, "failureThreshold": 24 },
   "readiness": { "type": "http", "path": "/health" },
   "liveness": { "type": "tcp", "port": 3000, "failureThreshold": 5 }
 }
