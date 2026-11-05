@@ -5,6 +5,7 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, spinner } from "@/core/ui.ts";
+import { syncEndpointsToConfig } from "./sync.ts";
 
 const COMMAND = "remove <endpoint-id>";
 const DESCRIPTION = "Remove an endpoint.";
@@ -63,6 +64,7 @@ export const appsEndpointsRemoveCommand = defineCommand<RemoveArgs>({
     await client.DELETE("/apps/{appId}/endpoints/{endpointId}", {
       params: { path: { appId, endpointId } },
     });
+    await syncEndpointsToConfig(client, appId);
 
     spin.stop();
 
