@@ -90,6 +90,23 @@ bunny apps delete --force --id "$(jq -r .app.id /tmp/task.jsonc)"
 
 Pass `--force` whenever the config may drop a container or volume; without it, an unattended deploy fails instead of asking.
 
+With `--output json`, `deploy` prints `{ id, deployed, image, previousImage, endpoints }`, where each endpoint has `container`, `name`, `type`, and `target` (an `https://` URL for `cdn`, an IP for `anycast`). A missing `target` means it is still provisioning; check again with `bunny apps endpoints list --output json`.
+
+### Making the container run
+
+A deploy that returns successfully only means bunny.net accepted the new config. The container still has to start. Get these right before deploying:
+
+- **Architecture**: only `linux/amd64` images run. The CLI builds with `--platform linux/amd64`; an image built elsewhere (for example on an arm64 Mac without that flag) fails to start.
+- **Listen address and port**: the app must listen on `0.0.0.0`, not `localhost`, on the port the endpoint's container port points at. No `PORT` is injected, so set it in the Dockerfile or `env` and keep it equal to the endpoint's container port. `--port` updates the generated Dockerfile and the endpoints together.
+- **Injected variables**: `BUNNYNET_MC_APPID`, `BUNNYNET_MC_REGION`, `BUNNYNET_MC_PODID`, `BUNNYNET_MC_PODIP`, `BUNNYNET_MC_HOSTIP`, `BUNNYNET_MC_ZONE`, and `BUNNYNET_MC_PUBLIC_ENDPOINTS` are set in every container.
+- **Multiple containers**: containers in one app share a pod and reach each other on `localhost`. Each must listen on a different port, or the pod won't start. They start, stop, and scale together; startup order is not guaranteed, so retry connections to a sibling.
+- **Sandbox**: containers run under gVisor, which supports a subset of Linux syscalls and has no `CAP_NET_RAW` (so `ping` fails). Outbound ports 25, 465, 587, and 2525 are blocked.
+- **Resources**: a pod gets up to 8 CPUs and 32 GiB RAM (1 CPU and 4 GiB on trial accounts) and 10 GB of ephemeral disk; writing more than that restarts it. Runtimes may see all of the host's cores, so cap thread pools (`GOMAXPROCS`, `UV_THREADPOOL_SIZE`) at 8 or fewer.
+- **Shutdown**: the container gets `SIGTERM`, then `SIGKILL` 30 seconds later. Exit codes 137 and 143 count as intentional stops.
+- **Streaming**: server-sent events through a CDN endpoint need `Cache-Control: no-cache` and a message at least every 30 seconds, or the edge closes the stream.
+
+The CLI does not set health checks, and there is no `bunny apps logs` command. When a container exits non-zero, runs out of memory, or fails its health checks, it restarts with a growing delay, and `bunny apps show` keeps reporting **Deploying** (or **Failing**) instead of **Active**. Poll it after a deploy before declaring success. A rolling update that hasn't started within 10 minutes is rolled back to the previous pods. To find out why, open the app in the dashboard and check **Logging**: the Application tab has stdout/stderr and the System tab has image pulls, starts, stops, and health-check failures.
+
 ### Registries and Docker login
 
 Every container is tied to a registry record, even for public images. Public `ghcr.io` and `docker.io` images use shared records bunny.net provides. For another hostname with no connected registry, the CLI asks for a username and token and adds it.
@@ -202,9 +219,12 @@ bunny apps regions show
 ```
 
 - `regions` takes a list, or `{ "allowed": [...], "required": [...] }` to separate where the app may run from where it must run.
+- `scaling` sets the minimum and maximum instances per region. Autoscaling between them is based on CPU, and the max is 10 per region (3 on trial accounts). Apps don't scale to zero: a running app is billed even at one instance, so use `bunny apps undeploy` to stop it.
 - An endpoint takes an optional `name`; without one it is named after its type.
 - If `version` is missing, run `bunny apps pull` to regenerate the file.
 
 ## Volumes are never shared
 
 Every region, and every instance within a region, gets its own empty volume, and nothing syncs between them. `deploy` and `push` refuse a config where a container mounts a volume and the app runs in more than one region or has `scaling.max` above 1. Keep one region and `scaling.max: 1` for a database, or pass `--allow-split-volumes` when separate data per copy is what you want, such as a cache.
+
+Other volume limits: an app can have 2 volumes (1 on trial), each up to 100 GB (30 GB on trial). Sizes can only grow. Throughput is about 10 MB/s each way. A volume is tied to one node and there are no backups. In an app with volumes, old pods stop before new ones start, so with a single pod each deploy causes a short outage.
