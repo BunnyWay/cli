@@ -608,7 +608,11 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
       // Check the docker login before building so a wrong account fails fast.
       if (!noPush && !isBunnyRegistry && !freshCreds) {
-        await ensureRegistryLogin(reg.hostName, reg.userName);
+        await ensureRegistryLogin(
+          reg.hostName,
+          reg.userName,
+          isInteractive(output),
+        );
       }
 
       logger.info(`Building ${imageRef}...`);
@@ -1287,7 +1291,11 @@ async function buildAndPushContainer(
       throw err;
     }
   } else {
-    await ensureRegistryLogin(reg.hostName, reg.userName);
+    await ensureRegistryLogin(
+      reg.hostName,
+      reg.userName,
+      isInteractive(opts.quiet ? "json" : undefined),
+    );
   }
 
   logger.info(`Pushing ${imageRef}...`);

@@ -515,14 +515,22 @@ export async function ghDockerLogin(hostname: string): Promise<void> {
 export async function ensureRegistryLogin(
   hostname: string,
   expectedUser?: string | null,
+  interactive = true,
 ): Promise<void> {
   const sameUser = (user: string | null) =>
     !expectedUser || user?.toLowerCase() === expectedUser.toLowerCase();
+  const loginHint = `Run \`docker login ${hostname}${expectedUser ? ` -u ${expectedUser}` : ""}\` first.`;
 
   if (dockerHasCredentials(hostname)) {
     const current = await dockerLoginUser(hostname);
     if (!current || sameUser(current)) return;
 
+    if (!interactive) {
+      throw new UserError(
+        `Docker is logged in to ${hostname} as ${current}, but this registry pushes as ${expectedUser}.`,
+        loginHint,
+      );
+    }
     logger.warn(
       `Docker is logged in to ${hostname} as ${current}, but this registry pushes as ${expectedUser}.`,
     );
@@ -539,6 +547,9 @@ export async function ensureRegistryLogin(
       );
     }
   } else {
+    if (!interactive) {
+      throw new UserError(`Not logged in to ${hostname}.`, loginHint);
+    }
     logger.warn(`Not logged in to ${hostname}.`);
   }
 
