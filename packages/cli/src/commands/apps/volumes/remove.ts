@@ -69,9 +69,10 @@ export const appsVolumesRemoveCommand = defineCommand<RemoveArgs>({
     await client.DELETE("/apps/{appId}/volumes/{volumeId}", {
       params: { path: { appId, volumeId } },
     });
-    if (name) removeVolumeFromConfig(appId, name);
 
     spin.stop();
+
+    if (name) removeVolumeFromConfig(appId, name);
 
     if (output === "json") {
       logger.log(JSON.stringify({ volumeId, removed: true }));

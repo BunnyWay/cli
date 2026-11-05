@@ -142,6 +142,9 @@ export const appsEndpointsAddCommand = defineCommand<AddArgs>({
       params: { path: { appId, containerId } },
       body: body as any,
     });
+
+    spin.stop();
+
     const container = app.containerTemplates.find((c) => c.id === containerId);
     if (container) {
       addEndpointToConfig(appId, container.name, {
@@ -150,8 +153,6 @@ export const appsEndpointsAddCommand = defineCommand<AddArgs>({
         ports: [{ public: pPort, container: cPort }],
       });
     }
-
-    spin.stop();
 
     if (output === "json") {
       logger.log(

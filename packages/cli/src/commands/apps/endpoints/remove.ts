@@ -72,12 +72,12 @@ export const appsEndpointsRemoveCommand = defineCommand<RemoveArgs>({
       params: { path: { appId, endpointId } },
     });
 
+    spin.stop();
+
     const local = endpoint && endpointToConfig(endpoint);
     if (container && local) {
       removeEndpointFromConfig(appId, container.name, local);
     }
-
-    spin.stop();
 
     if (output === "json") {
       logger.log(JSON.stringify({ endpointId, removed: true }));
