@@ -541,7 +541,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       const buildCwd = resolveBuildContext(mode.dockerfile, args.context);
 
       logger.info(`Building ${imageRef}...`);
-      await buildImage(mode.dockerfile, imageRef, buildCwd);
+      await buildImage(mode.dockerfile, imageRef, buildCwd, {
+        quiet: output === "json",
+      });
 
       if (noPush) {
         logger.success(`Image built: ${imageRef}`);
@@ -1117,7 +1119,9 @@ async function buildAndPushContainer(
   );
 
   logger.info(`Building ${imageRef}...`);
-  await buildImage(container.dockerfile, imageRef, buildCwd);
+  await buildImage(container.dockerfile, imageRef, buildCwd, {
+    quiet: opts.quiet,
+  });
 
   if (isBunnyRegistry) {
     if (!opts.cfg.apiKey) {
