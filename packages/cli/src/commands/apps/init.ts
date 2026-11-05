@@ -10,7 +10,7 @@ import { configExists } from "./config.ts";
 import { normalizeRegistryFlag } from "./docker.ts";
 import { runWalkthrough } from "./walkthrough.ts";
 
-const COMMAND = "init";
+const COMMAND = "init [image]";
 const DESCRIPTION = "Initialize a new app config (no deploy).";
 
 interface InitArgs {

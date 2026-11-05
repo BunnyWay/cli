@@ -126,7 +126,7 @@ Without a terminal (a coding agent, or `--output json`), the walkthrough never p
 `--dockerfile` with no `./Dockerfile` on disk generates one for the detected app, so a single command takes a project with no Docker setup to a running app:
 
 ```bash
-bunny apps deploy --dockerfile --region de --output json
+bunny apps deploy --dockerfile --region DE --output json
 ```
 
 ### Using `--config <path>` for CI and agent workflows
@@ -334,7 +334,7 @@ A single-container app:
   "app": {
     "id": "app_xxx", // written by the CLI on first deploy
     "name": "my-api",
-    "regions": ["sfo", "lhr"], // simple array
+    "regions": ["LA", "UK"], // simple array
     "scaling": { "min": 1, "max": 3 },
     "containers": {
       "api": {
@@ -359,7 +359,7 @@ A multi-container app — every container is its own entry in `app.containers`. 
   "version": "2026-05-11",
   "app": {
     "name": "my-stack",
-    "regions": ["sfo"],
+    "regions": ["LA"],
     "containers": {
       "api": {
         "image": "ghcr.io/me/api:v1",
@@ -380,15 +380,15 @@ A multi-container app — every container is its own entry in `app.containers`. 
 Most users want a single list of regions that the app should run in:
 
 ```jsonc
-"regions": ["sfo", "lhr"]
+"regions": ["LA", "UK"]
 ```
 
 For the rare case where you need to distinguish "regions bunny.net is allowed to use" from "regions bunny.net must always have running", use the object form:
 
 ```jsonc
 "regions": {
-  "allowed": ["sfo", "lhr", "nyc"],
-  "required": ["sfo"]
+  "allowed": ["LA", "UK", "NY"],
+  "required": ["LA"]
 }
 ```
 
