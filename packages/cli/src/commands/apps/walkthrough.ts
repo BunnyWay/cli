@@ -5,6 +5,7 @@ import { parseDotenv } from "@/core/env.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, spinner } from "@/core/ui.ts";
+import { fetchAllRegions } from "@/tools/apps/index.ts";
 import {
   type BunnyAppConfig,
   type ContainerConfig,
@@ -447,10 +448,10 @@ async function pickRegions(
 ): Promise<string[]> {
   const spin = spinner("Fetching regions...");
   spin.start();
-  const { data: regionsResult } = await client.GET("/regions");
+  const regions = await fetchAllRegions(client);
   spin.stop();
 
-  const regionsWithCapacity = (regionsResult?.items ?? []).filter(
+  const regionsWithCapacity = regions.filter(
     (r): r is typeof r & { id: string } =>
       r.hasCapacity === true && typeof r.id === "string",
   );
