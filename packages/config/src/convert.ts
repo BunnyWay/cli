@@ -196,7 +196,13 @@ function containerConfigToRequest(
     req.probes = {};
     for (const kind of PROBE_KINDS) {
       const probe = config.probes[kind];
-      if (probe) req.probes[kind] = probeToRequest(probe, defaultPort);
+      if (probe) {
+        req.probes[kind] = probeToRequest(
+          probe,
+          defaultPort,
+          `${name}.probes.${kind}`,
+        );
+      }
     }
   }
 
@@ -216,11 +222,12 @@ const PROBE_TIMINGS = [
 function probeToRequest(
   probe: ProbeConfig,
   defaultPort: number | undefined,
+  label: string,
 ): ContainerProbe {
   const portNumber = probe.port ?? defaultPort;
   if (portNumber == null) {
     throw new UserError(
-      `A ${probe.type} probe needs a port: set "port" on the probe or add an endpoint.`,
+      `${label} has no port. Set "port" on the probe, since the container has no endpoint to take it from.`,
     );
   }
 

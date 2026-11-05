@@ -396,25 +396,39 @@ The array form sets both `allowed` and `required` to the same list under the hoo
 
 ### Health checks
 
-A container takes optional `startup`, `readiness`, and `liveness` probes:
+Each container takes up to three probes. They differ in when they run and what a failure does:
 
-| Probe       | Answers                       | When it runs                       | On failure (past `failureThreshold`) |
-| ----------- | ----------------------------- | ---------------------------------- | ------------------------------------ |
-| `startup`   | Has the app finished booting? | Once, until it first passes        | The container restarts               |
-| `readiness` | Can it take requests now?     | Continuously, after startup passes | Traffic stops; no restart            |
-| `liveness`  | Is it still working?          | Continuously, after startup passes | The container restarts               |
+| Probe       | Asks                          | Runs                              | After `failureThreshold` failures |
+| ----------- | ----------------------------- | --------------------------------- | --------------------------------- |
+| `startup`   | Has the app finished booting? | Until it first passes             | Restarts the container            |
+| `readiness` | Can it serve requests now?    | Continuously, once startup passes | Stops sending it traffic          |
+| `liveness`  | Is it still working?          | Continuously, once startup passes | Restarts the container            |
 
-Use `startup` for a slow boot (migrations, cache warm-up): give it a generous `failureThreshold` so a long start isn't mistaken for a hang, and keep `liveness` strict. Use `readiness` for temporary unavailability, such as a lost database connection, where restarting wouldn't help.
+Give a slow boot (migrations, cache warm-up) a generous `startup` probe instead of a lenient `liveness` one, so a hang after boot is still caught quickly. Use `readiness` for problems a restart won't fix, like a lost database connection.
 
 ```jsonc
 "probes": {
+  // allow up to 2 minutes to boot: 24 checks, 5 seconds apart
   "startup": { "type": "http", "path": "/health", "periodSeconds": 5, "failureThreshold": 24 },
   "readiness": { "type": "http", "path": "/health" },
-  "liveness": { "type": "tcp", "port": 3000, "failureThreshold": 5 }
+  "liveness": { "type": "tcp", "port": 3000 }
 }
 ```
 
-`type` is `http`, `tcp`, or `grpc`. `path` applies to `http` and defaults to `/`. `port` defaults to the container's first endpoint port, and a probe with neither fails the deploy. The timing fields `initialDelaySeconds`, `periodSeconds`, `timeoutSeconds`, `failureThreshold`, and `successThreshold` are optional; when omitted, the platform defaults apply. `bunny apps pull` writes back probes set in the dashboard, and a container with no `probes` block keeps the ones it has. An HTTP probe's expected status code and a gRPC probe's service name are not modeled, so a `push` resets them to the platform defaults.
+| Field                 | Default                             |
+| --------------------- | ----------------------------------- |
+| `type`                | Required: `http`, `tcp`, or `grpc`  |
+| `path`                | `/` (`http` only)                   |
+| `port`                | The container's first endpoint port |
+| `initialDelaySeconds` | 10                                  |
+| `periodSeconds`       | 10                                  |
+| `timeoutSeconds`      | 7                                   |
+| `failureThreshold`    | 3                                   |
+| `successThreshold`    | 1                                   |
+
+A probe on a container with no endpoints must set `port`, or the deploy fails.
+
+`bunny apps pull` writes probes set in the dashboard into `bunny.jsonc`. A container with no `probes` block keeps whatever probes it already has; one with a `probes` block replaces them. The expected status code of an `http` probe and the service name of a `grpc` probe can't be set from `bunny.jsonc`, so a `push` resets them to the platform defaults.
 
 ### Volumes, regions and scaling
 
