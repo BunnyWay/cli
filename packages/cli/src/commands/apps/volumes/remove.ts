@@ -5,7 +5,8 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, spinner } from "@/core/ui.ts";
-import { removeVolumeFromConfig, volumeName } from "./sync.ts";
+import { fetchVolumes } from "@/tools/apps/index.ts";
+import { removeVolumeFromConfig } from "./sync.ts";
 
 const COMMAND = "remove <volume-id>";
 const DESCRIPTION = "Remove a volume.";
@@ -63,7 +64,8 @@ export const appsVolumesRemoveCommand = defineCommand<RemoveArgs>({
     const spin = spinner("Removing volume...");
     spin.start();
 
-    const name = await volumeName(client, appId, volumeId);
+    const volumes = await fetchVolumes(client, appId);
+    const name = volumes.find((v) => v.id === volumeId)?.name;
     await client.DELETE("/apps/{appId}/volumes/{volumeId}", {
       params: { path: { appId, volumeId } },
     });

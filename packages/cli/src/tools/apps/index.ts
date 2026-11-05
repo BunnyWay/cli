@@ -1,3 +1,4 @@
+export { fetchApp, fetchVolumes } from "./app.ts";
 export type {
   ContainerRegistryModel,
   DeletedRegistry,

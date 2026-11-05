@@ -6,7 +6,7 @@ import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, spinner } from "@/core/ui.ts";
-import { syncEndpointsToConfig } from "./sync.ts";
+import { addEndpointToConfig } from "./sync.ts";
 
 const COMMAND = "add";
 const DESCRIPTION = "Add an endpoint to a container.";
@@ -142,7 +142,14 @@ export const appsEndpointsAddCommand = defineCommand<AddArgs>({
       params: { path: { appId, containerId } },
       body: body as any,
     });
-    await syncEndpointsToConfig(client, appId);
+    const container = app.containerTemplates.find((c) => c.id === containerId);
+    if (container) {
+      addEndpointToConfig(appId, container.name, {
+        type: endpointType,
+        ...(endpointType === "cdn" ? { ssl: sslEnabled } : {}),
+        ports: [{ public: pPort, container: cPort }],
+      });
+    }
 
     spin.stop();
 
