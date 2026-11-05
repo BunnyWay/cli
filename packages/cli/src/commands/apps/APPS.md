@@ -158,14 +158,16 @@ rm /tmp/agent-task.jsonc
 
 Every container on Magic Containers is tied to a registry record on bunny.net, even for public images. When you pass `<image>` for the first time, the CLI parses the hostname and tries to match it to an existing registry on your account:
 
-- **Match found** → uses it and saves the registry ID to `bunny.jsonc`.
-- **No match** → prompts: "Is this image public, or do you need credentials?" Selecting public creates a credential-less registry record; selecting private prompts for username + token and creates the registry.
+- **Match found** → uses it and saves the registry ID to `bunny.jsonc`. When several registries share the hostname, the one whose username matches the image namespace wins.
+- **No match** → prompts for a username and token, then adds the registry: `gitHub` for ghcr.io, `dockerHub` for docker.io, and `oci` for any other host.
+
+When the walkthrough asks where to push a build, it lists the bunny.net registry, your connected registries, and options to add a GitHub, Docker Hub, or other OCI registry.
 
 Credentials entered during this flow are also passed through to `docker login` (for the build path) so the very next `docker push` succeeds without a separate manual login step.
 
 ### Docker login pre-flight
 
-Before pushing, the CLI checks `~/.docker/config.json` for an existing credential entry for the registry hostname. If none is found:
+Before building, the CLI checks `~/.docker/config.json` for a credential entry for the registry hostname. When Docker is logged in as a different user than the registry's username, it offers to log in again as that user, so a build never ends in a push to a namespace Docker can't write to. If no entry is found:
 
 - **`ghcr.io`**: if the `gh` CLI is installed and authenticated, you'll be offered a one-click login. The CLI runs `gh api user` + `gh auth token` and pipes them through `docker login` for you.
 - **Any other host**: you'll be prompted for a username and token, then logged in.
@@ -302,7 +304,7 @@ bunny apps registries update <registry-id> --username myorg --password $TOKEN   
 bunny apps registries remove <registry-id>
 ```
 
-`ghcr.io` and `docker.io` need a matching registry type; `--server` derives it, or pass `--type gitHub|dockerHub` directly. Omit both for a generic registry. `--output json` returns the normalized registry (`id`, `name`, `hostname`, `username`, `createdAt`, `lastUpdatedAt`) rather than the raw API model.
+`--server` derives the type: `gitHub` for ghcr.io, `dockerHub` for docker.io, and `oci` for any other host (e.g. `registry.example.com:5000`). Pass `--type gitHub|dockerHub|oci` to set it directly; `oci` needs `--server`. `--output json` returns the normalized registry (`id`, `name`, `hostname`, `username`, `createdAt`, `lastUpdatedAt`) rather than the raw API model.
 
 The `Source` column says where a registry comes from:
 
