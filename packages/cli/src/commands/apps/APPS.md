@@ -414,7 +414,7 @@ Use `startup` for a slow boot (migrations, cache warm-up): give it a generous `f
 }
 ```
 
-`type` is `http`, `tcp`, or `grpc`. `path` applies to `http` and defaults to `/`. `port` defaults to the container's first endpoint port, and a probe with neither fails the deploy. The timing fields `initialDelaySeconds`, `periodSeconds`, `timeoutSeconds`, `failureThreshold`, and `successThreshold` are optional; when omitted, the platform defaults apply. `bunny apps pull` writes back probes set in the dashboard. An HTTP probe's expected status code and a gRPC probe's service name are not modeled, so a `push` resets them to the platform defaults.
+`type` is `http`, `tcp`, or `grpc`. `path` applies to `http` and defaults to `/`. `port` defaults to the container's first endpoint port, and a probe with neither fails the deploy. The timing fields `initialDelaySeconds`, `periodSeconds`, `timeoutSeconds`, `failureThreshold`, and `successThreshold` are optional; when omitted, the platform defaults apply. `bunny apps pull` writes back probes set in the dashboard, and a container with no `probes` block keeps the ones it has. An HTTP probe's expected status code and a gRPC probe's service name are not modeled, so a `push` resets them to the platform defaults.
 
 ### Volumes, regions and scaling
 
