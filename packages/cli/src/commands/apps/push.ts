@@ -93,7 +93,10 @@ export const appsPushCommand = defineCommand<PushArgs>({
 
     let patchRequest = configToPatchRequest(toml, existingApp, registries);
 
-    if (!dryRun && !(await confirmRemovals(patchRequest, existingApp, force))) {
+    if (
+      !dryRun &&
+      !(await confirmRemovals(patchRequest, existingApp, force, output))
+    ) {
       logger.log("Push cancelled.");
 
       return;

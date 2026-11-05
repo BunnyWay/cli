@@ -422,7 +422,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       !dockerfileFlag &&
       !args.container
     ) {
-      await prepareContainers(client, toml, configPath, {
+      const built = await prepareContainers(client, toml, configPath, {
         tag: args.tag,
         contextOverride: args.context,
         draftContainers: draft.containers,
@@ -431,7 +431,18 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         verbose,
         registryFlag,
         quiet: output === "json",
+        noPush,
       });
+
+      if (noPush) {
+        logger.dim("Skipping push and deploy (--no-push).");
+        if (output === "json") {
+          logger.log(
+            JSON.stringify({ built: true, images: built, pushed: false }),
+          );
+        }
+        return;
+      }
 
       const config = resolveContainerEnv(toml, dotenvPath);
       const registries = draftRegistries(draft.containers);
@@ -457,7 +468,14 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         );
         pushSpin.stop();
 
-        if (!(await confirmRemovals(patchRequest, existingApp, args.force))) {
+        if (
+          !(await confirmRemovals(
+            patchRequest,
+            existingApp,
+            args.force,
+            output,
+          ))
+        ) {
           throw new UserError("Deploy cancelled.");
         }
 
@@ -766,7 +784,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       );
       pushSpin.stop();
 
-      if (!(await confirmRemovals(patchRequest, existingApp, args.force))) {
+      if (
+        !(await confirmRemovals(patchRequest, existingApp, args.force, output))
+      ) {
         throw new UserError("Deploy cancelled.");
       }
 
@@ -1109,26 +1129,38 @@ async function prepareContainers(
     verbose?: boolean;
     registryFlag?: string;
     quiet?: boolean;
+    noPush?: boolean;
   },
-): Promise<void> {
+): Promise<string[]> {
   const entries = Object.entries(toml.app.containers);
 
   // One shared tag for every build in this deploy so co-deployed images
   // are easy to correlate later (same git sha + timestamp).
   const sharedTag = opts.tag ?? (await generateTag());
 
+  const built: string[] = [];
   for (const [name, container] of entries) {
     if (container.dockerfile) {
-      await buildAndPushContainer(client, toml, name, container, {
-        tag: sharedTag,
-        contextOverride: opts.contextOverride,
-        draftContainers: opts.draftContainers,
-        onRegistryResolved: opts.onRegistryResolved,
-        cfg: opts.cfg,
-        verbose: opts.verbose,
-        registryFlag: opts.registryFlag,
-        quiet: opts.quiet,
-      });
+      const imageRef = await buildAndPushContainer(
+        client,
+        toml,
+        name,
+        container,
+        {
+          tag: sharedTag,
+          contextOverride: opts.contextOverride,
+          draftContainers: opts.draftContainers,
+          onRegistryResolved: opts.onRegistryResolved,
+          cfg: opts.cfg,
+          verbose: opts.verbose,
+          registryFlag: opts.registryFlag,
+          quiet: opts.quiet,
+          noPush: opts.noPush,
+        },
+      );
+      built.push(imageRef);
+    } else if (opts.noPush && container.image) {
+      continue;
     } else if (container.image) {
       await resolveRegistryForPrebuiltImage(client, name, container, {
         onRegistryResolved: opts.onRegistryResolved,
@@ -1141,6 +1173,7 @@ async function prepareContainers(
     }
     saveConfig(toml, configPath);
   }
+  return built;
 }
 
 async function buildAndPushContainer(
@@ -1157,9 +1190,11 @@ async function buildAndPushContainer(
     verbose?: boolean;
     registryFlag?: string;
     quiet?: boolean;
+    noPush?: boolean;
   },
-): Promise<void> {
-  if (!container.dockerfile) return;
+): Promise<string> {
+  if (!container.dockerfile)
+    throw new UserError(`Container "${name}" has no \`dockerfile\`.`);
 
   assertDockerfileExists(container.dockerfile, name);
 
@@ -1218,6 +1253,11 @@ async function buildAndPushContainer(
     quiet: opts.quiet,
   });
 
+  if (opts.noPush) {
+    logger.success(`Image built: ${imageRef}`);
+    return imageRef;
+  }
+
   if (isBunnyRegistry) {
     if (!opts.cfg.apiKey) {
       throw new UserError(
@@ -1264,6 +1304,7 @@ async function buildAndPushContainer(
       interactive: isInteractive(),
     },
   );
+  return imageRef;
 }
 
 async function resolveRegistryForPrebuiltImage(

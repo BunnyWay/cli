@@ -1,4 +1,5 @@
 import type { components } from "@bunny.net/openapi-client/magic-containers";
+import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm } from "@/core/ui.ts";
 import type { AppManifest } from "./constants.ts";
@@ -29,9 +30,17 @@ export async function confirmRemovals(
   request: PatchApplicationRequest,
   app: Application,
   force?: boolean,
+  output?: string,
 ): Promise<boolean> {
   const removals = findRemovals(request, app);
   if (removals.length === 0 || force) return true;
+
+  if (output === "json") {
+    throw new UserError(
+      `This would permanently remove ${removals.join(", ")}.`,
+      "Pass --force to confirm.",
+    );
+  }
 
   logger.warn("This will permanently remove:");
   for (const removal of removals) logger.log(`  - ${removal}`);
