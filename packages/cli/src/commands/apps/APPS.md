@@ -33,12 +33,11 @@ Deploy an app. Three modes, chosen by what you pass:
 
 If no `bunny.jsonc` exists, the first run launches a walkthrough that:
 
-1. Looks for a `compose.yml` / `docker-compose.yml` in the working directory and offers to import the services from it.
-2. Otherwise offers to build from a `Dockerfile` (if one exists) or to deploy a pre-built image ref. With no Dockerfile, a detected app gets a third option: generate one (see below).
-3. Resolves the registry (prompts "is this image public, or do you need credentials?" for new hostnames).
-4. Calls bunny.net's image-suggestions endpoint to pre-fill app name, endpoints, and required environment variables for known public images.
-5. Prompts for a single region. Multi-region apps can be configured by editing the resulting `bunny.jsonc`: the schema accepts an array, the walkthrough just keeps the initial setup focused.
-6. Writes `bunny.jsonc`, creates the app, and deploys.
+1. Offers to build from a `Dockerfile` (if one exists) or to deploy a pre-built image ref. With no Dockerfile, a detected app gets a third option: generate one (see below).
+2. Resolves the registry (prompts "is this image public, or do you need credentials?" for new hostnames).
+3. Calls bunny.net's image-suggestions endpoint to pre-fill app name, endpoints, and required environment variables for known public images.
+4. Prompts for a single region. Multi-region apps can be configured by editing the resulting `bunny.jsonc`: the schema accepts an array, the walkthrough just keeps the initial setup focused.
+5. Writes `bunny.jsonc`, creates the app, and deploys.
 
 After a successful deploy that replaced a running image, the CLI prints the previous image reference and a one-line rollback command:
 
@@ -71,42 +70,6 @@ Manifest-led stacks win over a `package.json` next to them, since PHP, Ruby and 
 A site with no server to run (a lone `index.html`, Vite, Create React App, a Next.js static export, Astro or SvelteKit without the Node adapter, Hugo, Jekyll, Blazor WebAssembly) is not offered a Dockerfile: the walkthrough points you at `bunny sites deploy` instead.
 
 The Dockerfile and a `.dockerignore` (unless you have one) are written to the project root. They are yours from then on: deploys build the file as-is, and the generator never runs again. `--dry-run` prints the Dockerfile instead of writing it. The `.dockerignore` keeps `.env` files and `bunny.jsonc` out of the image; set env vars with `bunny apps env` instead. Django static files aren't collected: serve them with WhiteNoise or a CDN.
-
-### Importing from docker-compose
-
-When you run `bunny apps deploy` in a project containing a `compose.yml` (or `compose.yaml`, `docker-compose.yml`, `docker-compose.yaml`), the walkthrough offers to translate it into `bunny.jsonc`. Each compose `service` becomes a container; the user still picks an app name, region, and registry.
-
-What translates cleanly:
-
-| Compose                                       | bunny.jsonc                                                                      |
-| --------------------------------------------- | -------------------------------------------------------------------------------- |
-| `services.<name>`                             | `app.containers.<name>`                                                          |
-| `image:` / `build:`                           | `container.image` / `container.dockerfile` + `container.context`                 |
-| `command:` (string or array)                  | `container.command` (array form)                                                 |
-| `environment:` (map or array)                 | `container.env`                                                                  |
-| `env_file:` (one or many)                     | parsed and merged into `container.env` (env vars in `environment:` override)     |
-| `ports:` (`"3000:80"` / object / IP-prefixed) | `container.endpoints[0]` (one CDN endpoint, multiple port mappings)              |
-| `volumes:` (named only)                       | `container.volumes`                                                              |
-| `healthcheck:`                                | `container.probes.liveness` (HTTP probe if `test` mentions a URL; TCP otherwise) |
-
-What's ignored (warning is printed, translation proceeds):
-
-- `depends_on:`, `networks:`, `links:`, `external_links:` (MC containers share `localhost` and start together)
-- `restart:` (MC restarts automatically)
-- `labels:` (use bunny.jsonc endpoints for routing)
-- `deploy.replicas:` (MC scales at the app level via `app.scaling`, not per-container)
-- `profiles:` (not relevant on MC)
-
-What's refused (translation fails with a clear error):
-
-- **Bind mounts** (`./data:/data` or any source starting with `.` / `/`): MC only supports named volumes
-- **Anonymous volumes** (`/data` with no source name): ambiguous, give the volume a name in top-level `volumes:`
-- `extends:`: flatten the service inline
-- `secrets:`: use `bunny apps env push` to store secrets
-- `configs:`: bake config into the image or pass via env
-- Port ranges (`"3000-3005:3000-3005"`): use individual mappings
-
-For compose files that have just one service, the import overlaps with the Dockerfile build path, but with the user's chosen ports, env, and command already filled in. For multi-service files, this is the canonical entry point.
 
 ### Deploy flags
 
@@ -208,7 +171,7 @@ Either path persists in `~/.docker/config.json`, so subsequent deploys skip this
 
 ## `bunny apps init`
 
-Scaffold a new `bunny.jsonc` without deploying. Runs exactly the same walkthrough as `deploy` (compose import, Dockerfile, or pre-built image). It just stops at "config written" instead of continuing on to build/push/deploy. Use this when you want to inspect or edit the generated config before the first deploy.
+Scaffold a new `bunny.jsonc` without deploying. Runs exactly the same walkthrough as `deploy` (Dockerfile or pre-built image). It just stops at "config written" instead of continuing on to build/push/deploy. Use this when you want to inspect or edit the generated config before the first deploy.
 
 ```bash
 bunny apps init

@@ -401,11 +401,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       return;
     }
 
-    // First-time deploy of a multi-container app (e.g. compose import).
-    // The single-container flow below can only build/push one image, so
-    // for multi-container creates we iterate every container, build any
-    // with a `dockerfile`, resolve a registry for any with a pre-built
-    // `image`, then create the app in one POST.
+    // Multi-container creates build or resolve every container, then create the app in one POST.
     const containerEntries = Object.entries(toml.app.containers);
     if (
       !draft.id &&
@@ -989,9 +985,7 @@ function resolveBuildContext(
  * - `dockerfile`-only entries → build + push to the configured registry,
  *   then write the resulting image ref back onto the container.
  * - Pre-built `image` entries → resolve the matching registry record on
- *   the user's account (compose import assigns the user's push registry
- *   to every container by default, which is wrong for public images like
- *   `postgres:17-alpine`).
+ *   the user's account.
  *
  * The toml is mutated in place and re-saved after every container so
  * partial progress survives a mid-loop failure.
