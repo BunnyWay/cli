@@ -1,4 +1,6 @@
-# `bunny apps` (Experimental)
+# `bunny apps`
+
+> **Preview**: `bunny apps` is in public preview; commands and flags may still change.
 
 Manage apps (Magic Containers). Apps are multi-container deployments where all containers share a localhost network. Configuration is stored in a `bunny.jsonc` file which is committed to your repo. The app ID is written back to the config on first deploy, so cloning the repo gives you everything you need. The JSONC format supports a `$schema` property for editor autocompletion.
 

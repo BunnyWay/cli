@@ -18,7 +18,7 @@ import { appsUnlinkCommand } from "./unlink.ts";
 import { appsVolumesNamespace } from "./volumes/index.ts";
 
 export const appsNamespace = withPreviewNotice(
-  defineNamespace("apps", false as never, [
+  defineNamespace("apps", "Deploy container apps (preview).", [
     appsDeleteCommand,
     appsDeployCommand,
     appsEndpointsNamespace,

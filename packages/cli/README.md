@@ -1370,6 +1370,22 @@ Progress is saved after every status change to `$XDG_STATE_HOME/bunnynet/stream-
 
 `bunny stream import status` reads the saved run for the library (and `--source`, when more than one platform has been imported into it), asks Bunny for the current state of every video it queued, and prints one row each: Bunny's status, encode percentage, size, and when it was queued. A video still processing with no data after 30 minutes is marked `(stalled?)`: Bunny gives no signal for a fetch that died silently, so that is the cue to re-run the import with `--retry-stalled`, which deletes and fetches it again. It exits 1 when any video has failed, so it doubles as a poll in scripts. With `--output json` it prints `{ library, source, status, completed, processing, failed, stalled, stalledAfterMinutes, saved, videos }`, one `videos` row per queued video.
 
+### `bunny apps`
+
+> **Preview**: `bunny apps` is in public preview; commands and flags may still change.
+
+Deploy container apps to Magic Containers. An app is one or more containers sharing a localhost network, configured in a committed `bunny.jsonc`. The first `bunny apps deploy` walks through setup: build from local source (using your `Dockerfile` or a generated one), pick an image from a connected registry, or deploy an image URL.
+
+```bash
+bunny apps deploy                          # first run walks through setup; later runs redeploy bunny.jsonc
+bunny apps deploy ghcr.io/myorg/api:v1.2   # deploy a pre-built image
+bunny apps deploy --dockerfile             # build the local Dockerfile, push, and deploy
+bunny apps pull                            # sync the remote app into bunny.jsonc
+bunny apps push                            # apply local bunny.jsonc changes
+```
+
+See [APPS.md](src/commands/apps/APPS.md) for every `bunny apps` command, flag, and the `bunny.jsonc` reference.
+
 ### `bunny sandbox`
 
 Manage on-demand cloud sandbox environments backed by Bunny Magic Containers. Each sandbox is a fully isolated Ubuntu container with Node.js, Bun, Python (plus `uv`), the bunny CLI, and Claude Code pre-installed, alongside the tooling agents reach for: `git`, `gh`, `ripgrep`, `fd`, `jq`, `tmux`, `sqlite3`, `tree`, and `fzf`. A 10 GB persistent volume is mounted at `/workplace`, your default working directory.
