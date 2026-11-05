@@ -219,7 +219,7 @@ bunny apps regions show
 }
 ```
 
-- Region IDs are uppercase codes such as `DE`, `UK`, or `NY`; `bunny apps regions list` shows them. `regions` takes a list, or `{ "allowed": [...], "required": [...] }` to separate where the app may run from where it must run.
+- Region IDs are codes such as `DE`, `UK`, or `NY` (any case); `bunny apps regions list` shows them. `regions` takes a list, or `{ "allowed": [...], "required": [...] }` to separate where the app may run from where it must run.
 - `scaling` sets the minimum and maximum instances per region. Autoscaling between them is based on CPU, and the max is 10 per region (3 on trial accounts). Apps don't scale to zero: a running app is billed even at one instance, so use `bunny apps undeploy` to stop it.
 - An endpoint takes an optional `name`; without one it is named after its type.
 - If `version` is missing, run `bunny apps pull` to regenerate the file.
