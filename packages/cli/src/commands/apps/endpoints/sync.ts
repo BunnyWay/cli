@@ -21,17 +21,18 @@ export function endpointToConfig(
   };
 }
 
+function portKeys(endpoint: EndpointConfig): string[] {
+  return (endpoint.ports ?? []).map((p) => `${p.public}:${p.container}`).sort();
+}
+
 function sameEndpoint(a: EndpointConfig, b: EndpointConfig): boolean {
-  const aPorts = a.ports ?? [];
-  const bPorts = b.ports ?? [];
+  const aKeys = portKeys(a);
+  const bKeys = portKeys(b);
 
   return (
     a.type === b.type &&
-    aPorts.length === bPorts.length &&
-    aPorts.every(
-      (p, i) =>
-        p.public === bPorts[i]?.public && p.container === bPorts[i]?.container,
-    )
+    aKeys.length === bKeys.length &&
+    aKeys.every((key, i) => key === bKeys[i])
   );
 }
 
