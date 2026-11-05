@@ -234,6 +234,10 @@ bunny apps push --dry-run
 bunny apps push --allow-split-volumes
 ```
 
+`pull` writes to the `bunny.jsonc` it finds (walking up from the current directory) and keeps what the app doesn't store: the `sites` block, each container's `dockerfile` and `context`, and env entries such as `.env` pointers that still resolve to the app's value. Public IP endpoints can't be described in `bunny.jsonc`, so `pull` leaves them out, and `push` or `deploy` refuse to apply an `endpoints` block to a container that has one.
+
+Settings left out of `bunny.jsonc` keep their current values on `push` and `deploy`: `scaling`, `regions`, a container's `env` and `command`, and the app's runtime type. `push` also keeps each unchanged image on the digest it runs, so it never rolls a tag like `latest` forward; `deploy` resolves the tag again.
+
 Containers and volumes missing from `bunny.jsonc` are removed from the app, volumes with their data. `push` and `deploy` list what would be removed and ask first; pass `--force` to skip the prompt (required without a terminal). Containers are matched by name, so reordering them is safe; renaming one container at a time keeps it.
 
 ## `bunny apps scale`

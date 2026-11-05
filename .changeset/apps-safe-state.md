@@ -1,4 +1,5 @@
 ---
 "@bunny.net/cli": patch
+"@bunny.net/config": patch
 ---
-fix(apps): stop `apps deploy` and `apps init` from overwriting a linked app that has no `bunny.jsonc`, and keep `apps env` changes from being undone by the next deploy
+fix(apps): never overwrite live app settings from a missing or partial `bunny.jsonc`, keep `apps env` changes and local config through deploys and pulls, and keep legacy links when syncing config

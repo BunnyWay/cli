@@ -91,7 +91,9 @@ export const appsPushCommand = defineCommand<PushArgs>({
           : undefined);
     }
 
-    let patchRequest = configToPatchRequest(toml, existingApp, registries);
+    // Push changes config, not images, so keep each unchanged image on the digest it runs.
+    const pin = { pinDigests: true };
+    let patchRequest = configToPatchRequest(toml, existingApp, registries, pin);
 
     if (
       !dryRun &&
@@ -126,7 +128,7 @@ export const appsPushCommand = defineCommand<PushArgs>({
     }
 
     if (added.length > 0 && !dryRun) {
-      patchRequest = configToPatchRequest(toml, existingApp, registries);
+      patchRequest = configToPatchRequest(toml, existingApp, registries, pin);
     }
 
     if (dryRun) {
