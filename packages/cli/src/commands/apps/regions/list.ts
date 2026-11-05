@@ -5,6 +5,7 @@ import { defineCommand } from "@/core/define-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { spinner } from "@/core/ui.ts";
+import { fetchAllRegions } from "../paged.ts";
 
 const COMMAND = "list";
 const DESCRIPTION = "List available regions.";
@@ -21,11 +22,9 @@ export const appsRegionsListCommand = defineCommand({
     const spin = spinner("Fetching regions...");
     spin.start();
 
-    const { data } = await client.GET("/regions");
+    const regions = await fetchAllRegions(client);
 
     spin.stop();
-
-    const regions = data?.items ?? [];
 
     if (output === "json") {
       logger.log(JSON.stringify(regions, null, 2));

@@ -35,6 +35,7 @@ import {
   detectApp,
   dockerignore,
 } from "./dockerfile/index.ts";
+import { fetchAllRegions } from "./paged.ts";
 import {
   confirmEndpointSuggestions,
   endpointRequestToConfig,
@@ -543,10 +544,10 @@ async function pickRegions(
 ): Promise<string[]> {
   const spin = spinner("Fetching regions...");
   spin.start();
-  const { data: regionsResult } = await client.GET("/regions");
+  const regions = await fetchAllRegions(client);
   spin.stop();
 
-  const regionsWithCapacity = (regionsResult?.items ?? []).filter(
+  const regionsWithCapacity = regions.filter(
     (r): r is typeof r & { id: string } =>
       r.hasCapacity === true && typeof r.id === "string",
   );
