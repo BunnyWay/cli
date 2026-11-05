@@ -394,6 +394,42 @@ For the rare case where you need to distinguish "regions bunny.net is allowed to
 
 The array form sets both `allowed` and `required` to the same list under the hood.
 
+### Health checks
+
+Each container takes up to three probes. They differ in when they run and what a failure does:
+
+| Probe       | Asks                          | Runs                              | After `failureThreshold` failures |
+| ----------- | ----------------------------- | --------------------------------- | --------------------------------- |
+| `startup`   | Has the app finished booting? | Until it first passes             | Restarts the container            |
+| `readiness` | Can it serve requests now?    | Continuously, once startup passes | Stops sending it traffic          |
+| `liveness`  | Is it still working?          | Continuously, once startup passes | Restarts the container            |
+
+Give a slow boot (migrations, cache warm-up) a generous `startup` probe instead of a lenient `liveness` one, so a hang after boot is still caught quickly. Use `readiness` for problems a restart won't fix, like a lost database connection.
+
+```jsonc
+"probes": {
+  // allow up to 2 minutes to boot: 24 checks, 5 seconds apart
+  "startup": { "type": "http", "path": "/health", "periodSeconds": 5, "failureThreshold": 24 },
+  "readiness": { "type": "http", "path": "/health" },
+  "liveness": { "type": "tcp", "port": 3000 }
+}
+```
+
+| Field                 | Default                             |
+| --------------------- | ----------------------------------- |
+| `type`                | Required: `http`, `tcp`, or `grpc`  |
+| `path`                | `/` (`http` only)                   |
+| `port`                | The container's first endpoint port |
+| `initialDelaySeconds` | 10                                  |
+| `periodSeconds`       | 10                                  |
+| `timeoutSeconds`      | 7                                   |
+| `failureThreshold`    | 3                                   |
+| `successThreshold`    | 1                                   |
+
+A probe on a container with no endpoints must set `port`, or the deploy fails.
+
+`bunny apps pull` writes probes set in the dashboard into `bunny.jsonc`. A container with no `probes` block keeps whatever probes it already has; one with a `probes` block replaces them. The expected status code of an `http` probe and the service name of a `grpc` probe can't be set from `bunny.jsonc`, so a `push` resets them to the platform defaults.
+
 ### Volumes, regions and scaling
 
 Volumes are never shared: every region an app runs in, and every instance within a region, gets its own empty volume, and nothing syncs between them. A database in three regions, or scaled to three instances, is three unrelated databases. So `bunny apps deploy` and `bunny apps push` refuse a config where any container mounts a volume and either `regions` (or `regions.allowed`) lists more than one region or `scaling.max` is above 1. Keep one region and `scaling.max: 1`, or pass `--allow-split-volumes` when separate data per copy is what you want (a cache, say).

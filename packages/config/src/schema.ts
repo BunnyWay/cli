@@ -13,6 +13,11 @@ export const ProbeConfigSchema = z.object({
   type: z.enum(["http", "tcp", "grpc"]),
   path: z.string().optional(),
   port: z.number().optional(),
+  initialDelaySeconds: z.number().optional(),
+  periodSeconds: z.number().optional(),
+  timeoutSeconds: z.number().optional(),
+  failureThreshold: z.number().optional(),
+  successThreshold: z.number().optional(),
 });
 
 export const EndpointConfigSchema = z.object({
