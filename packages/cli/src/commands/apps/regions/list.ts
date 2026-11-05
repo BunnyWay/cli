@@ -5,7 +5,7 @@ import { defineCommand } from "@/core/define-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { spinner } from "@/core/ui.ts";
-import { fetchAllRegions } from "../paged.ts";
+import { fetchAllRegions } from "@/tools/apps/index.ts";
 
 const COMMAND = "list";
 const DESCRIPTION = "List available regions.";

@@ -1,3 +1,4 @@
+export { fetchAllApps, fetchAllRegions } from "./paged.ts";
 export type {
   ContainerRegistryModel,
   DeletedRegistry,

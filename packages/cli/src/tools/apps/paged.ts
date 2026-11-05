@@ -1,5 +1,5 @@
 import type { components } from "@bunny.net/openapi-client/magic-containers";
-import type { McClient } from "./docker.ts";
+import type { McClient } from "../context.ts";
 
 type AppListItem = components["schemas"]["AppListItem"];
 type Region = components["schemas"]["Region"];

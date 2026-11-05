@@ -5,6 +5,7 @@ import { parseDotenv } from "@/core/env.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, spinner } from "@/core/ui.ts";
+import { fetchAllRegions } from "@/tools/apps/index.ts";
 import {
   composeToConfig,
   findComposeFile,
@@ -35,7 +36,6 @@ import {
   detectApp,
   dockerignore,
 } from "./dockerfile/index.ts";
-import { fetchAllRegions } from "./paged.ts";
 import {
   confirmEndpointSuggestions,
   endpointRequestToConfig,

@@ -7,8 +7,8 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, saveManifest } from "@/core/manifest.ts";
 import { confirm, prompts, spinner } from "@/core/ui.ts";
+import { fetchAllApps } from "@/tools/apps/index.ts";
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
-import { fetchAllApps } from "./paged.ts";
 
 type Application = components["schemas"]["Application"];
 
