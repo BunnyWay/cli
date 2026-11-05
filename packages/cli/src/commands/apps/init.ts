@@ -6,7 +6,7 @@ import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { isInteractive } from "@/core/ui.ts";
-import { configExists } from "./config.ts";
+import { assertNotLinkedWithoutConfig, configExists } from "./config.ts";
 import { normalizeRegistryFlag } from "./docker.ts";
 import { runWalkthrough } from "./walkthrough.ts";
 
@@ -117,6 +117,7 @@ export const appsInitCommand = defineCommand<InitArgs>({
         "Use `bunny apps push` to sync changes or delete it first.",
       );
     }
+    assertNotLinkedWithoutConfig();
 
     const cfg = resolveConfig(profile, apiKey);
     const client = createMcClient(clientOptions(cfg, verbose));

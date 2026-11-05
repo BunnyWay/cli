@@ -193,6 +193,17 @@ export function resolveAppId(explicit?: string): string {
   );
 }
 
+// A fresh config would overwrite the linked app's settings, so make the user pull it first.
+export function assertNotLinkedWithoutConfig(): void {
+  const { id } = loadManifest<AppManifest>(APP_MANIFEST);
+  if (!id) return;
+
+  throw new UserError(
+    `This directory is linked to app ${id} but has no ${CONFIG_FILENAME}.`,
+    `Run \`bunny apps pull\` to write ${CONFIG_FILENAME} from the app, or \`bunny apps unlink\` to start a new app.`,
+  );
+}
+
 /**
  * Resolve the registry record ID for a given container.
  *

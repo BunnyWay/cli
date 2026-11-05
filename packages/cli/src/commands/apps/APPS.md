@@ -197,6 +197,8 @@ bunny apps init --dockerfile --port 8080
 
 Most users can skip `init` entirely and run `bunny apps deploy` straight away. Both share the same walkthrough.
 
+In a directory linked to an existing app (`bunny apps link`) but with no `bunny.jsonc`, `init` and `deploy` stop instead of running the walkthrough, since its answers would overwrite the app's settings. Run `bunny apps pull` to write `bunny.jsonc` from the app, or `bunny apps unlink` to start a new one.
+
 ## `bunny apps list`
 
 List all apps.
@@ -267,6 +269,8 @@ bunny apps env push --dry-run
 | `--container` | Target container (default: primary)                                                                    |
 | `--replace`   | (`push` only) Drop remote variables that aren't in the file. Default is merge (file overrides remote). |
 | `--dry-run`   | (`push` only) Print the diff (`+ added`, `~ changed`, `- removed`) without writing.                    |
+
+When a container in the linked `bunny.jsonc` has an `env` block, `deploy` and `push` replace the container's variables with that block. So `env remove` (and `env push --replace`) also drop the key from the block, and `env set` / `env push` warn when the block would undo a change. Values are never written to `bunny.jsonc`: add the key to the block as a pointer (`"API_KEY": "API_KEY"`) and keep the value in `.env`.
 
 ## `bunny apps endpoints`
 

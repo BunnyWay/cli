@@ -17,6 +17,7 @@ import { loadManifest, saveManifest } from "@/core/manifest.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { isInteractive, spinner } from "@/core/ui.ts";
 import {
+  assertNotLinkedWithoutConfig,
   assertVolumesNotSplit,
   type BunnyAppConfig,
   type ContainerConfig,
@@ -318,6 +319,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     // walkthrough also checks this on its interactive picks, but for
     // `--dockerfile` (with no existing config) the choice is implicit so
     // it'd otherwise skip the menu and only blow up after writing files.
+    if (!configExists(configPath)) assertNotLinkedWithoutConfig();
+
     if (dockerfileFlag && !dryRun) {
       await ensureDockerAvailable();
     }

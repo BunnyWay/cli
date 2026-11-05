@@ -6,6 +6,7 @@ import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { spinner } from "@/core/ui.ts";
+import { warnEnvOverriddenByConfig } from "./sync.ts";
 
 const COMMAND = "set <key> <value>";
 const DESCRIPTION = "Set an environment variable.";
@@ -88,6 +89,9 @@ export const appsEnvSetCommand = defineCommand<SetArgs>({
     });
 
     spin.stop();
+
+    if (container)
+      warnEnvOverriddenByConfig(appId, container.name, { [key]: value });
 
     if (output === "json") {
       logger.log(
