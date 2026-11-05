@@ -1,4 +1,6 @@
-# `bunny apps` (Experimental)
+# `bunny apps`
+
+> **Preview**: `bunny apps` is in public preview; commands and flags may still change.
 
 Manage apps (Magic Containers). Apps are multi-container deployments where all containers share a localhost network. Configuration is stored in a `bunny.jsonc` file which is committed to your repo. The app ID is written back to the config on first deploy, so cloning the repo gives you everything you need. The JSONC format supports a `$schema` property for editor autocompletion.
 
@@ -33,8 +35,8 @@ Deploy an app. Three modes, chosen by what you pass:
 
 If no `bunny.jsonc` exists, the first run launches a walkthrough that:
 
-1. Offers to build from a `Dockerfile` (if one exists) or to deploy a pre-built image ref. With no Dockerfile, a detected app gets a third option: generate one (see below).
-2. Resolves the registry (prompts "is this image public, or do you need credentials?" for new hostnames).
+1. Asks where the image comes from: build from local source (a detected `Dockerfile`, or a generated one for a detected app; see below), pick an image and tag from a connected registry, or enter an image ref by URL.
+2. Resolves the registry. Public ghcr.io and docker.io images use the public records bunny.net provides; other new hostnames prompt for credentials.
 3. Calls bunny.net's image-suggestions endpoint to pre-fill app name, endpoints, and required environment variables for known public images.
 4. Prompts for a single region. Multi-region apps can be configured by editing the resulting `bunny.jsonc`: the schema accepts an array, the walkthrough just keeps the initial setup focused.
 5. Writes `bunny.jsonc`, creates the app, and deploys.
@@ -89,6 +91,7 @@ The Dockerfile and a `.dockerignore` (unless you have one) are written to the pr
 | `--dry-run`             | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                                              |
 | `--no-push`             | Build only. Skip pushing the image and skip the deploy.                                                                                               |
 | `--allow-split-volumes` | Deploy an app that mounts a volume in more than one region or instance (see [Volumes](#volumes-regions-and-scaling)).                                 |
+| `--force`, `-f`         | Remove containers or volumes dropped from `bunny.jsonc` without confirming.                                                                           |
 
 ```bash
 # Deploy a pre-built image
@@ -155,14 +158,16 @@ rm /tmp/agent-task.jsonc
 
 Every container on Magic Containers is tied to a registry record on bunny.net, even for public images. When you pass `<image>` for the first time, the CLI parses the hostname and tries to match it to an existing registry on your account:
 
-- **Match found** → uses it and saves the registry ID to `bunny.jsonc`.
-- **No match** → prompts: "Is this image public, or do you need credentials?" Selecting public creates a credential-less registry record; selecting private prompts for username + token and creates the registry.
+- **Match found** → uses it and saves the registry ID to `bunny.jsonc`. When several registries share the hostname, the one whose username matches the image namespace wins.
+- **No match** → prompts for a username and token, then adds the registry: `gitHub` for ghcr.io, `dockerHub` for docker.io, and `oci` for any other host.
+
+When the walkthrough asks where to push a build, it lists the bunny.net registry, your connected registries, and options to add a GitHub, Docker Hub, or other OCI registry.
 
 Credentials entered during this flow are also passed through to `docker login` (for the build path) so the very next `docker push` succeeds without a separate manual login step.
 
 ### Docker login pre-flight
 
-Before pushing, the CLI checks `~/.docker/config.json` for an existing credential entry for the registry hostname. If none is found:
+Before building, the CLI checks `~/.docker/config.json` for a credential entry for the registry hostname. When Docker is logged in as a different user than the registry's username, it offers to log in again as that user, so a build never ends in a push to a namespace Docker can't write to. If no entry is found:
 
 - **`ghcr.io`**: if the `gh` CLI is installed and authenticated, you'll be offered a one-click login. The CLI runs `gh api user` + `gh auth token` and pipes them through `docker login` for you.
 - **Any other host**: you'll be prompted for a username and token, then logged in.
@@ -171,7 +176,7 @@ Either path persists in `~/.docker/config.json`, so subsequent deploys skip this
 
 ## `bunny apps init`
 
-Scaffold a new `bunny.jsonc` without deploying. Runs exactly the same walkthrough as `deploy` (Dockerfile or pre-built image). It just stops at "config written" instead of continuing on to build/push/deploy. Use this when you want to inspect or edit the generated config before the first deploy.
+Scaffold a new `bunny.jsonc` without deploying. Runs exactly the same walkthrough as `deploy` (local source, a connected registry, or an image URL). It just stops at "config written" instead of continuing on to build/push/deploy. Use this when you want to inspect or edit the generated config before the first deploy.
 
 ```bash
 bunny apps init
@@ -227,6 +232,8 @@ bunny apps push --dry-run
 bunny apps push --allow-split-volumes
 ```
 
+Containers and volumes missing from `bunny.jsonc` are removed from the app, volumes with their data. `push` and `deploy` list what would be removed and ask first; pass `--force` to skip the prompt (required without a terminal). Containers are matched by name, so reordering them is safe; renaming one container at a time keeps it.
+
 ## `bunny apps env`
 
 Manage environment variables per container.
@@ -263,13 +270,16 @@ bunny apps env push --dry-run
 
 ## `bunny apps endpoints`
 
-Manage endpoints (CDN or Anycast) per container.
+Manage endpoints (CDN or Anycast) per container. `add` and `remove` also update a linked `bunny.jsonc`, so the next push or deploy keeps the change.
 
 ```bash
 bunny apps endpoints list
 bunny apps endpoints add --type cdn --ssl --container-port 3000 --public-port 443
+bunny apps endpoints add --type anycast --name tcp-api --container-port 5432 --public-port 5432
 bunny apps endpoints remove <endpoint-id>
 ```
+
+Endpoint names are unique per app; `--name` defaults to the type, numbered (`cdn-2`) when taken.
 
 ## `bunny apps volumes`
 
@@ -294,7 +304,7 @@ bunny apps registries update <registry-id> --username myorg --password $TOKEN   
 bunny apps registries remove <registry-id>
 ```
 
-`ghcr.io` and `docker.io` need a matching registry type; `--server` derives it, or pass `--type gitHub|dockerHub` directly. Omit both for a generic registry. `--output json` returns the normalized registry (`id`, `name`, `hostname`, `username`, `createdAt`, `lastUpdatedAt`) rather than the raw API model.
+`--server` derives the type: `gitHub` for ghcr.io, `dockerHub` for docker.io, and `oci` for any other host (e.g. `registry.example.com:5000`). Pass `--type gitHub|dockerHub|oci` to set it directly; `oci` needs `--server`. `--output json` returns the normalized registry (`id`, `name`, `hostname`, `username`, `createdAt`, `lastUpdatedAt`) rather than the raw API model.
 
 The `Source` column says where a registry comes from:
 

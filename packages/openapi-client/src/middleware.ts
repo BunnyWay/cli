@@ -85,8 +85,10 @@ export function redactSecrets(value: unknown, depth = 0): unknown {
   return out;
 }
 
+export const UNAUTHORIZED_MESSAGE = "Unauthorized. Check your API key.";
+
 const STATUS_MESSAGES: Record<number, string> = {
-  401: "Unauthorized. Check your API key.",
+  401: UNAUTHORIZED_MESSAGE,
   403: "Forbidden. You don't have permission for this action.",
   404: "Not found.",
   409: "Conflict. The resource already exists or is in use.",

@@ -1,5 +1,6 @@
 import { createMcClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "@/config/index.ts";
+import { resolveRegistryEndpoint } from "@/core/bunny-registry.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
@@ -12,6 +13,7 @@ import {
   saveConfig,
 } from "./config.ts";
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
+import { BUNNY_REGISTRY_ID, listRegistries } from "./docker.ts";
 
 const COMMAND = "pull";
 const DESCRIPTION = "Sync remote app config to local bunny.jsonc.";
@@ -55,9 +57,10 @@ export const appsPullCommand = defineCommand<PullArgs>({
     const spin = spinner("Pulling app config...");
     spin.start();
 
-    const { data: app } = await client.GET("/apps/{appId}", {
-      params: { path: { appId } },
-    });
+    const [{ data: app }, registries] = await Promise.all([
+      client.GET("/apps/{appId}", { params: { path: { appId } } }),
+      listRegistries(client),
+    ]);
 
     spin.stop();
 
@@ -66,7 +69,15 @@ export const appsPullCommand = defineCommand<PullArgs>({
       process.exit(1);
     }
 
-    const toml = apiToConfig(app);
+    const registryHosts = Object.fromEntries(
+      registries.map((r) => [
+        String(r.id),
+        String(r.id) === BUNNY_REGISTRY_ID
+          ? resolveRegistryEndpoint().host
+          : (r.hostName ?? ""),
+      ]),
+    );
+    const toml = apiToConfig(app, registryHosts);
     saveConfig(toml);
 
     // Mirror identity into `.bunny/app.json` so subsequent commands

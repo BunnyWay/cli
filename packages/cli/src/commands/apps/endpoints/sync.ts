@@ -13,9 +13,10 @@ export function endpointToConfig(
 
   return {
     type,
-    ssl: endpoint.isSslEnabled,
+    ...(endpoint.displayName !== type ? { name: endpoint.displayName } : {}),
+    ...(endpoint.isSslEnabled != null ? { ssl: endpoint.isSslEnabled } : {}),
     ports: endpoint.portMappings.map((pm) => ({
-      public: pm.exposedPort,
+      ...(pm.exposedPort != null ? { public: pm.exposedPort } : {}),
       container: pm.containerPort,
     })),
   };

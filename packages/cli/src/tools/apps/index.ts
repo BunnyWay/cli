@@ -4,6 +4,7 @@ export type {
   ContainerRegistryModel,
   DeletedRegistry,
   Registry,
+  RegistryTarget,
   RegistryType,
 } from "./registries/index.ts";
 export {
@@ -16,6 +17,7 @@ export {
   registriesGet,
   registriesList,
   registriesUpdate,
+  registryTarget,
   registryTypeForServer,
   toRegistry,
 } from "./registries/index.ts";

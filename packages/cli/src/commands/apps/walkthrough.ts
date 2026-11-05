@@ -17,11 +17,14 @@ import {
   assignContainerNamesToDockerfiles,
   BUNNY_REGISTRY_ID,
   ensureDockerAvailable,
+  findBunnyRegistry,
   findDockerfiles,
   getConfigSuggestions,
   isDockerfileName,
+  listRegistries,
   type McClient,
   promptRegistry,
+  promptRegistryImage,
   type ResolvedRegistry,
   readDockerfileExposedPorts,
   resolveRegistryForImage,
@@ -123,6 +126,8 @@ export async function runWalkthrough(
   // in --dry-run the file is never on disk.
   let generated: { app: DetectedApp; port: number } | undefined;
 
+  let pickedRegistry: ResolvedRegistry | undefined;
+
   // `--dockerfile` with no Dockerfile on disk: generate one for the
   // detected app, so agents can deploy a project that has none.
   if (
@@ -164,11 +169,22 @@ export async function runWalkthrough(
           ? `Build from ${detectedDockerfiles[0]}`
           : `Build from Dockerfile(s) (${detectedDockerfiles.length} detected)`;
 
-    const { value } = await prompts({
+    const { value: source } = await prompts({
       type: "select",
       name: "value",
       message: "How do you want to deploy?",
       choices: [
+        { title: "Build from local source", value: "local" },
+        { title: "Pick an image from a connected registry", value: "registry" },
+        { title: "Deploy an image by URL", value: "image" },
+      ],
+    });
+
+    if (!source) throw new UserError("Setup cancelled.");
+
+    let value: string | undefined = source;
+    if (source === "local") {
+      const localChoices = [
         ...(detectedApp
           ? [
               {
@@ -178,15 +194,22 @@ export async function runWalkthrough(
             ]
           : []),
         { title: dockerfileChoiceTitle, value: "dockerfile" },
-        { title: "Deploy a pre-built image", value: "image" },
-      ],
-    });
-    if (!value) throw new UserError("Setup cancelled.");
+      ];
+      value =
+        localChoices.length === 1
+          ? "dockerfile"
+          : (
+              await prompts({
+                type: "select",
+                name: "value",
+                message: "Build from:",
+                choices: localChoices,
+              })
+            ).value;
+      if (!value) throw new UserError("Setup cancelled.");
+    }
 
-    // Bail before any further prompts / disk writes if Docker is missing.
-    // Every pick but "image" ends in a local build; without Docker we'd
-    // write `bunny.jsonc` and then crash mid-deploy.
-    if (value !== "image" && input.buildsImage) {
+    if (value !== "image" && value !== "registry" && input.buildsImage) {
       await ensureDockerAvailable();
     }
 
@@ -205,6 +228,13 @@ export async function runWalkthrough(
         return runMultiDockerfileImport(client, selectedPaths, input);
       }
       dockerfilePath = selectedPaths[0];
+    } else if (value === "registry") {
+      const picked = await promptRegistryImage(client);
+
+      if (!picked) throw new UserError("Setup cancelled.");
+
+      imageRef = picked.imageRef;
+      pickedRegistry = picked.registry;
     } else {
       const { value: ref } = await prompts({
         type: "text",
@@ -218,8 +248,9 @@ export async function runWalkthrough(
 
   const mode: "build" | "image" = dockerfilePath ? "build" : "image";
 
-  const registry =
-    mode === "image" && imageRef && !input.registryFlag
+  const registry = pickedRegistry
+    ? pickedRegistry
+    : mode === "image" && imageRef && !input.registryFlag
       ? await resolveRegistryForImage(client, imageRef)
       : await pickRegistry(
           client,
@@ -420,7 +451,15 @@ async function pickRegistry(
   message: string,
 ): Promise<ResolvedRegistry | null> {
   if (input.registryFlag) return { id: input.registryFlag };
-  if (!input.interactive) return { id: BUNNY_REGISTRY_ID };
+  if (!input.interactive) {
+    if (findBunnyRegistry(await listRegistries(client))) {
+      return { id: BUNNY_REGISTRY_ID };
+    }
+    throw new UserError(
+      "No registry to push to.",
+      "Pass --registry <id> (see `bunny apps registries list`), or add one with `bunny apps registries add`.",
+    );
+  }
   logger.info(message);
   return promptRegistry(client);
 }
@@ -709,16 +748,7 @@ async function chooseDockerfiles(detected: string[]): Promise<string[]> {
   return selected;
 }
 
-/**
- * Multi-Dockerfile import path: build a multi-container `bunny.jsonc`
- * from the user's Dockerfile picks.
- *
- * Mirrors the shape of {@link runComposeImport}: one registry is shared
- * across every container (deploy can re-prompt per container later if
- * needed), endpoints are seeded from each Dockerfile's `EXPOSE`
- * directives, container names are derived from path conventions, and
- * the file is saved unless `dryRun` is set.
- */
+/** Build a multi-container `bunny.jsonc` from the picked Dockerfiles, sharing one registry. */
 async function runMultiDockerfileImport(
   client: McClient,
   dockerfilePaths: string[],
@@ -790,7 +820,6 @@ async function runMultiDockerfileImport(
     containers[containerName] = container;
   }
 
-  // --command is ambiguous with multiple containers.
   if (input.commandOverride) {
     logger.warn(
       "--command was ignored: pass it per container in bunny.jsonc when multiple Dockerfiles are selected.",

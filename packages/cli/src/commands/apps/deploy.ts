@@ -70,7 +70,11 @@ async function applyPostPushSuggestions(
   registryId: string,
   imageRef: string,
   _mode: { kind: "build"; dockerfile: string },
-  opts: { targetContainer: ContainerConfig; dockerfilePath: string },
+  opts: {
+    targetContainer: ContainerConfig;
+    dockerfilePath: string;
+    interactive: boolean;
+  },
 ): Promise<void> {
   const parsed = parseImageRef(imageRef);
   const suggestions = await getConfigSuggestions(client, registryId, parsed);
@@ -106,7 +110,7 @@ async function applyPostPushSuggestions(
     endpointSuggestions,
     opts.targetContainer,
   );
-  if (newEndpoints.length > 0) {
+  if (newEndpoints.length > 0 && opts.interactive) {
     const accepted = await confirmEndpointSuggestions(newEndpoints);
     if (accepted.length > 0) {
       opts.targetContainer.endpoints = [
@@ -117,7 +121,7 @@ async function applyPostPushSuggestions(
   }
 
   const newEnvs = filterNewEnvSuggestions(envSuggestions, opts.targetContainer);
-  if (newEnvs.length > 0) {
+  if (newEnvs.length > 0 && opts.interactive) {
     const env = await promptSuggestedEnv(newEnvs);
     if (Object.keys(env).length > 0) {
       opts.targetContainer.env = {
@@ -138,6 +142,7 @@ import {
   generateTag,
   getConfigSuggestions,
   getRegistry,
+  imageHostname,
   normalizeRegistryFlag,
   promptRegistry,
   pushImage,
@@ -150,6 +155,7 @@ import {
   type DeployedEndpointLine,
 } from "./endpoints/format.ts";
 import { resolveContainerEnv } from "./env/resolve.ts";
+import { confirmRemovals, pruneManifestContainers } from "./removals.ts";
 import {
   confirmEndpointSuggestions,
   endpointRequestToConfig,
@@ -166,6 +172,7 @@ const DEFAULT_DOCKERFILE = "Dockerfile";
 interface DeployArgs {
   image?: string;
   "allow-split-volumes"?: boolean;
+  force?: boolean;
   region?: string;
   dockerfile?: string | boolean;
   context?: string;
@@ -177,7 +184,7 @@ interface DeployArgs {
   command?: string;
   config?: string;
   "dry-run"?: boolean;
-  "no-push"?: boolean;
+  push?: boolean;
 }
 
 export const appsDeployCommand = defineCommand<DeployArgs>({
@@ -262,14 +269,20 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         describe:
           "Print the would-be bunny.jsonc and Dockerfile without writing anything or contacting the API to deploy",
       })
+      .option("force", {
+        alias: "f",
+        type: "boolean",
+        describe: "Remove containers or volumes without confirming",
+      })
       .option("allow-split-volumes", {
         type: "boolean",
         describe:
           "Deploy a volume to more than one region or instance, each keeping its own separate data",
       })
-      .option("no-push", {
+      .option("push", {
         type: "boolean",
-        describe: "Build only — skip push and deploy",
+        describe:
+          "Push and deploy after building (default: true). Use --no-push to build only.",
       }),
 
   handler: async (args) => {
@@ -277,7 +290,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     const positionalImage = args.image;
     const dockerfileFlag = normalizeDockerfileFlag(args.dockerfile);
     const registryFlag = normalizeRegistryFlag(args.registry);
-    const noPush = args["no-push"] === true;
+    const noPush = args.push === false;
     const dryRun = args["dry-run"] === true;
 
     // --config takes precedence over the cwd-walk for bunny.jsonc. When
@@ -401,69 +414,126 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       return;
     }
 
-    // Multi-container creates build or resolve every container, then create the app in one POST.
+    // Multi-container deploys build or resolve every container, then create or update the app in one request.
     const containerEntries = Object.entries(toml.app.containers);
     if (
-      !draft.id &&
       containerEntries.length > 1 &&
       !positionalImage &&
       !dockerfileFlag &&
       !args.container
     ) {
-      await prepareContainersForCreate(client, toml, configPath, {
+      const built = await prepareContainers(client, toml, configPath, {
         tag: args.tag,
         contextOverride: args.context,
         draftContainers: draft.containers,
         onRegistryResolved: setContainerRegistry,
         cfg,
         verbose,
+        registryFlag,
         quiet: output === "json",
+        noPush,
       });
 
-      const createSpin = spinner("Creating app...");
-      createSpin.start();
-      const { data: result } = await client.POST("/apps", {
-        body: configToAddRequest(
-          resolveContainerEnv(toml, dotenvPath),
-          draftRegistries(draft.containers),
-        ),
-      });
-      createSpin.stop();
-
-      if (!result?.id) {
-        throw new UserError("Failed to create app — no ID returned.");
+      if (noPush) {
+        logger.dim("Skipping push and deploy (--no-push).");
+        if (output === "json") {
+          logger.log(
+            JSON.stringify({ built: true, images: built, pushed: false }),
+          );
+        }
+        return;
       }
 
-      draft.id = result.id;
-      persistDraft();
-      logger.success(`App "${toml.app.name}" created (${result.id}).`);
+      const config = resolveContainerEnv(toml, dotenvPath);
+      const registries = draftRegistries(draft.containers);
+      let appId = draft.id;
 
-      // POST /apps returns only the new app ID. Fetch the full app to
-      // capture container template IDs so subsequent commands can target
-      // each container without re-fetching.
+      if (appId) {
+        const pushSpin = spinner("Pushing config...");
+        pushSpin.start();
+
+        const { data: existingApp } = await client.GET("/apps/{appId}", {
+          params: { path: { appId } },
+        });
+
+        if (!existingApp) {
+          pushSpin.stop();
+          throw new UserError(`App ${appId} not found.`);
+        }
+
+        const patchRequest = configToPatchRequest(
+          config,
+          existingApp,
+          registries,
+        );
+        pushSpin.stop();
+
+        if (
+          !(await confirmRemovals(
+            patchRequest,
+            existingApp,
+            args.force,
+            output,
+          ))
+        ) {
+          logger.log("Deploy cancelled.");
+
+          return;
+        }
+
+        pushSpin.start();
+        await client.PATCH("/apps/{appId}", {
+          params: { path: { appId } },
+          body: patchRequest,
+        });
+        pushSpin.stop();
+      } else {
+        const createSpin = spinner("Creating app...");
+        createSpin.start();
+        const { data: result } = await client.POST("/apps", {
+          body: configToAddRequest(config, registries),
+        });
+        createSpin.stop();
+
+        if (!result?.id) {
+          throw new UserError("Failed to create app — no ID returned.");
+        }
+
+        appId = result.id;
+        draft.id = appId;
+        persistDraft();
+        logger.success(`App "${toml.app.name}" created (${appId}).`);
+      }
+
       const fetchSpin = spinner("Recording container IDs...");
       fetchSpin.start();
-      const { data: createdApp } = await client.GET("/apps/{appId}", {
-        params: { path: { appId: result.id } },
+      const { data: savedApp } = await client.GET("/apps/{appId}", {
+        params: { path: { appId } },
       });
       fetchSpin.stop();
-      for (const ct of createdApp?.containerTemplates ?? []) {
+
+      for (const ct of savedApp?.containerTemplates ?? []) {
         setContainerTemplateId(ct.name, ct.id);
       }
+
+      draft.containers = pruneManifestContainers(
+        draft.containers,
+        Object.keys(toml.app.containers),
+      );
+      persistDraft();
 
       const deploySpin = spinner("Deploying...");
       deploySpin.start();
       await client.POST("/apps/{appId}/deploy", {
-        params: { path: { appId: result.id } },
+        params: { path: { appId } },
       });
       deploySpin.stop();
 
-      const endpoints = await fetchDeployedEndpoints(client, result.id);
+      const endpoints = await fetchDeployedEndpoints(client, appId);
 
       if (output === "json") {
-        logger.log(
-          JSON.stringify({ id: result.id, deployed: true, endpoints }),
-        );
+        logger.log(JSON.stringify({ id: appId, deployed: true, endpoints }));
+
         return;
       }
 
@@ -504,8 +574,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         }
         registryId = resolved.id;
         freshCreds = resolved.freshCredentials;
-        setContainerRegistry(targetName, registryId);
       }
+      setContainerRegistry(targetName, registryId);
 
       const regSpin = spinner("Fetching registry...");
       regSpin.start();
@@ -535,6 +605,15 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         tag,
       );
       const buildCwd = resolveBuildContext(mode.dockerfile, args.context);
+
+      // Check the docker login before building so a wrong account fails fast.
+      if (!noPush && !isBunnyRegistry && !freshCreds) {
+        await ensureRegistryLogin(
+          reg.hostName,
+          reg.userName,
+          isInteractive(output),
+        );
+      }
 
       logger.info(`Building ${imageRef}...`);
       await buildImage(mode.dockerfile, imageRef, buildCwd, {
@@ -578,10 +657,6 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         } finally {
           loginSpin.stop();
         }
-      } else {
-        // No just-entered credentials, so make sure docker is logged in
-        // before we attempt the push, prompting if not.
-        await ensureRegistryLogin(reg.hostName);
       }
 
       logger.info(`Pushing ${imageRef}...`);
@@ -612,10 +687,21 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         await applyPostPushSuggestions(client, registryId, imageRef, mode, {
           targetContainer,
           dockerfilePath: mode.dockerfile,
+          interactive: isInteractive(output),
         });
       }
 
       saveConfig(toml, configPath);
+    }
+
+    if (mode.kind === "redeploy" && !registryId) {
+      const resolved = await resolveRegistryForImage(client, mode.image);
+      if (!resolved) {
+        throw new UserError(`A registry is required to deploy ${mode.image}.`);
+      }
+
+      registryId = resolved.id;
+      setContainerRegistry(targetName, registryId);
     }
 
     if (mode.kind === "image") {
@@ -643,6 +729,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     // differently), which would otherwise make `previousImage !== deployImage`
     // accidentally true and surface a misleading rollback hint.
     const isFirstDeploy = !draft.id;
+
+    // Read before the config PATCH below, which already applies the new image.
+    let previousImage: string | undefined;
 
     let appId = draft.id;
     if (!appId) {
@@ -679,19 +768,49 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         throw new UserError(`App ${appId} not found.`);
       }
 
+      const templates = existingApp.containerTemplates ?? [];
+      const previous = (
+        templates.find(
+          (t) => t.name.toLowerCase() === targetName.toLowerCase(),
+        ) ?? (templates.length === 1 ? templates[0] : undefined)
+      )?.image;
+      const deployHost = deployImage ? imageHostname(deployImage) : null;
+
+      if (deployImage && previous) {
+        previousImage =
+          deployHost && !imageHostname(previous)
+            ? `${deployHost}/${previous}`
+            : previous;
+      }
+
+      const patchRequest = configToPatchRequest(
+        resolveContainerEnv(toml, dotenvPath),
+        existingApp,
+        draftRegistries(draft.containers),
+      );
+      pushSpin.stop();
+
+      if (
+        !(await confirmRemovals(patchRequest, existingApp, args.force, output))
+      ) {
+        logger.log("Deploy cancelled.");
+
+        return;
+      }
+
+      pushSpin.start();
       await client.PATCH("/apps/{appId}", {
         params: { path: { appId } },
-        body: configToPatchRequest(
-          resolveContainerEnv(toml, dotenvPath),
-          existingApp,
-          draftRegistries(draft.containers),
-        ),
+        body: patchRequest,
       });
       pushSpin.stop();
-    }
 
-    // Captured pre-deploy so we can surface a rollback hint at the end.
-    let previousImage: string | undefined;
+      draft.containers = pruneManifestContainers(
+        draft.containers,
+        Object.keys(toml.app.containers),
+      );
+      persistDraft();
+    }
 
     if (deployImage) {
       const fetchSpin = spinner("Fetching app...");
@@ -716,13 +835,11 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         );
       }
 
-      previousImage = match.image ?? undefined;
-
       const containerId = match.id;
       // Cache the resolved template ID in the manifest so the next
       // deploy/restart/env-push doesn't have to re-resolve by name.
       setContainerTemplateId(targetName, containerId);
-      const { imageName, imageNamespace, imageTag } =
+      const { imageName, imageNamespace, imageTag, imageDigest } =
         parseImageRef(deployImage);
 
       const updateSpin = spinner("Updating container image...");
@@ -734,6 +851,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
           imageName,
           imageNamespace,
           imageTag,
+          imageDigest: imageDigest ?? null,
           imageRegistryId: registryId ?? "",
         },
       });
@@ -772,7 +890,13 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     if (!isFirstDeploy && previousImage && previousImage !== deployImage) {
       logger.log();
       logger.dim(`Previous image: ${previousImage}`);
-      logger.dim(`To rollback:    bunny apps deploy ${previousImage}`);
+      const containerFlag =
+        Object.keys(toml.app.containers).length > 1
+          ? ` --container ${targetName}`
+          : "";
+      logger.dim(
+        `To rollback:    bunny apps deploy ${previousImage}${containerFlag}`,
+      );
     }
   },
 });
@@ -983,7 +1107,7 @@ function resolveBuildContext(
 }
 
 /**
- * Walk every container in bunny.jsonc and prepare it for `POST /apps`:
+ * Walk every container in bunny.jsonc and prepare it for the create or update request:
  *
  * - `dockerfile`-only entries → build + push to the configured registry,
  *   then write the resulting image ref back onto the container.
@@ -993,7 +1117,7 @@ function resolveBuildContext(
  * The toml is mutated in place and re-saved after every container so
  * partial progress survives a mid-loop failure.
  */
-async function prepareContainersForCreate(
+async function prepareContainers(
   client: ReturnType<typeof createMcClient>,
   toml: BunnyAppConfig,
   configPath: string | undefined,
@@ -1011,26 +1135,40 @@ async function prepareContainersForCreate(
     /** Resolved CLI config — needed to push to the bunny.net registry (API-token auth). */
     cfg: ResolvedConfig;
     verbose?: boolean;
+    registryFlag?: string;
     quiet?: boolean;
+    noPush?: boolean;
   },
-): Promise<void> {
+): Promise<string[]> {
   const entries = Object.entries(toml.app.containers);
 
   // One shared tag for every build in this deploy so co-deployed images
   // are easy to correlate later (same git sha + timestamp).
   const sharedTag = opts.tag ?? (await generateTag());
 
+  const built: string[] = [];
   for (const [name, container] of entries) {
     if (container.dockerfile) {
-      await buildAndPushContainer(client, toml, name, container, {
-        tag: sharedTag,
-        contextOverride: opts.contextOverride,
-        draftContainers: opts.draftContainers,
-        onRegistryResolved: opts.onRegistryResolved,
-        cfg: opts.cfg,
-        verbose: opts.verbose,
-        quiet: opts.quiet,
-      });
+      const imageRef = await buildAndPushContainer(
+        client,
+        toml,
+        name,
+        container,
+        {
+          tag: sharedTag,
+          contextOverride: opts.contextOverride,
+          draftContainers: opts.draftContainers,
+          onRegistryResolved: opts.onRegistryResolved,
+          cfg: opts.cfg,
+          verbose: opts.verbose,
+          registryFlag: opts.registryFlag,
+          quiet: opts.quiet,
+          noPush: opts.noPush,
+        },
+      );
+      built.push(imageRef);
+    } else if (opts.noPush && container.image) {
+      continue;
     } else if (container.image) {
       await resolveRegistryForPrebuiltImage(client, name, container, {
         onRegistryResolved: opts.onRegistryResolved,
@@ -1043,6 +1181,7 @@ async function prepareContainersForCreate(
     }
     saveConfig(toml, configPath);
   }
+  return built;
 }
 
 async function buildAndPushContainer(
@@ -1057,15 +1196,19 @@ async function buildAndPushContainer(
     onRegistryResolved: (name: string, registryId: string) => void;
     cfg: ResolvedConfig;
     verbose?: boolean;
+    registryFlag?: string;
     quiet?: boolean;
+    noPush?: boolean;
   },
-): Promise<void> {
-  if (!container.dockerfile) return;
+): Promise<string> {
+  if (!container.dockerfile)
+    throw new UserError(`Container "${name}" has no \`dockerfile\`.`);
 
   assertDockerfileExists(container.dockerfile, name);
 
   let freshCreds: ResolvedRegistry["freshCredentials"];
   let registryId =
+    opts.registryFlag ??
     opts.draftContainers[name]?.registry ??
     resolveContainerRegistry(name, container);
 
@@ -1079,8 +1222,9 @@ async function buildAndPushContainer(
     }
     registryId = resolved.id;
     freshCreds = resolved.freshCredentials;
-    opts.onRegistryResolved(name, registryId);
   }
+
+  opts.onRegistryResolved(name, registryId);
 
   const regSpin = spinner(`Fetching registry for ${name}...`);
   regSpin.start();
@@ -1117,6 +1261,11 @@ async function buildAndPushContainer(
     quiet: opts.quiet,
   });
 
+  if (opts.noPush) {
+    logger.success(`Image built: ${imageRef}`);
+    return imageRef;
+  }
+
   if (isBunnyRegistry) {
     if (!opts.cfg.apiKey) {
       throw new UserError(
@@ -1142,7 +1291,11 @@ async function buildAndPushContainer(
       throw err;
     }
   } else {
-    await ensureRegistryLogin(reg.hostName);
+    await ensureRegistryLogin(
+      reg.hostName,
+      reg.userName,
+      isInteractive(opts.quiet ? "json" : undefined),
+    );
   }
 
   logger.info(`Pushing ${imageRef}...`);
@@ -1157,8 +1310,13 @@ async function buildAndPushContainer(
     registryId,
     imageRef,
     { kind: "build", dockerfile: container.dockerfile },
-    { targetContainer: container, dockerfilePath: container.dockerfile },
+    {
+      targetContainer: container,
+      dockerfilePath: container.dockerfile,
+      interactive: isInteractive(opts.quiet ? "json" : undefined),
+    },
   );
+  return imageRef;
 }
 
 async function resolveRegistryForPrebuiltImage(
