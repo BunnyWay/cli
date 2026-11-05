@@ -904,7 +904,7 @@ function resolveTargetContainer(
  * `fallback` is lazy so its disk read / deprecation warning only fire
  * when neither the flag nor the draft supplies a registry.
  */
-export function resolveDeployRegistry(
+function resolveDeployRegistry(
   flag: string | undefined,
   draftRegistry: string | undefined,
   fallback: () => string | undefined,
