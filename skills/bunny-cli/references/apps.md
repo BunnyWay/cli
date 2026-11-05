@@ -2,13 +2,13 @@
 
 > **Preview**: `bunny apps` is in public preview; commands and flags may still change.
 
-All app commands live under `bunny apps`. An app runs one or more containers on Magic Containers; containers in the same app share a localhost network. The app is described by a `bunny.jsonc` committed to the repo, and the app ID is written back to it on the first deploy, so a fresh clone can deploy straight away.
+All app commands live under `bunny apps`. An app runs one or more containers on Magic Containers; containers in the same app share a localhost network. The app is described by a `bunny.jsonc` committed to the repo. The first deploy links the directory to the new app by writing its ID to `.bunny/app.json`; commit that file too if a fresh clone should deploy to the same app.
 
 Commands find the app in this order:
 
 1. `--id <app-id>`
-2. `app.id` in `bunny.jsonc` (or the file passed with `--config`)
-3. `.bunny/app.json` (written by `bunny apps link`)
+2. `.bunny/app.json` (written by the first deploy or `bunny apps link`)
+3. `app.id` in `bunny.jsonc` (deprecated; the CLI warns and suggests `bunny apps link`)
 
 ## Typical workflows
 
@@ -17,7 +17,7 @@ Commands find the app in this order:
 bunny apps deploy
 
 # Unattended first deploy from source (a Dockerfile is generated when there is none)
-bunny apps deploy --dockerfile --region de --output json
+bunny apps deploy --dockerfile --region DE --output json
 
 # Deploy a pre-built image
 bunny apps deploy ghcr.io/myorg/api:v1.2
@@ -53,23 +53,23 @@ With no `bunny.jsonc`, the first run walks through setup. It asks where the imag
 
 A static site with no server is pointed at `bunny sites deploy` instead.
 
-| Flag                    | Description                                                                                |
-| ----------------------- | ------------------------------------------------------------------------------------------ |
-| `<image>`               | Image ref to deploy. Skips the build.                                                      |
-| `--dockerfile [path]`   | Build from a Dockerfile. The bare flag uses `./Dockerfile` and generates one when missing. |
-| `--context`             | Docker build context (default: the Dockerfile's directory).                                |
-| `--tag`                 | Image tag (default: `<git-sha>-<timestamp>`).                                              |
-| `--registry`            | Registry ID to push to, or `bunny` for the bunny.net registry. Overrides `bunny.jsonc`.    |
-| `--container`           | Container to update when `bunny.jsonc` has more than one.                                  |
-| `--name`                | App name for the first-run walkthrough.                                                    |
-| `--region`              | Region ID for a new app. Required without a terminal.                                      |
-| `--port`                | Container port. Also retargets the generated Dockerfile and endpoints.                     |
-| `--command`             | Override the container `CMD` (one string, split on whitespace).                            |
-| `--config <path>`       | Use this file instead of `./bunny.jsonc`. Created by the walkthrough if it doesn't exist.  |
-| `--dry-run`             | Print the would-be `bunny.jsonc` and Dockerfile without writing or deploying.              |
-| `--no-push`             | Build only. Skip the push and the deploy.                                                  |
-| `--allow-split-volumes` | Allow a volume in more than one region or instance (each copy keeps separate data).        |
-| `--force`, `-f`         | Remove containers or volumes that are no longer in `bunny.jsonc` without asking.           |
+| Flag                    | Description                                                                                         |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| `<image>`               | Image ref to deploy. Skips the build.                                                               |
+| `--dockerfile [path]`   | Build from a Dockerfile. The bare flag uses `./Dockerfile` and generates one when missing.          |
+| `--context`             | Docker build context (default: the Dockerfile's directory).                                         |
+| `--tag`                 | Image tag (default: `<git-sha>-<timestamp>`).                                                       |
+| `--registry`            | Registry ID to push to, or `bunny` for the bunny.net registry. Overrides `bunny.jsonc`.             |
+| `--container`           | Container to update when `bunny.jsonc` has more than one.                                           |
+| `--name`                | App name for the first-run walkthrough.                                                             |
+| `--region`              | Region ID for a new app, such as `DE` (see `bunny apps regions list`). Required without a terminal. |
+| `--port`                | Container port. Also retargets the generated Dockerfile and endpoints.                              |
+| `--command`             | Override the container `CMD` (one string, split on whitespace).                                     |
+| `--config <path>`       | Use this file instead of `./bunny.jsonc`. Created by the walkthrough if it doesn't exist.           |
+| `--dry-run`             | Print the would-be `bunny.jsonc` and Dockerfile without writing or deploying.                       |
+| `--no-push`             | Build only. Skip the push and the deploy.                                                           |
+| `--allow-split-volumes` | Allow a volume in more than one region or instance (each copy keeps separate data).                 |
+| `--force`, `-f`         | Remove containers or volumes that are no longer in `bunny.jsonc` without asking.                    |
 
 After a redeploy that replaced an image, the CLI prints the previous image and the command to roll back to it:
 
@@ -83,10 +83,12 @@ To rollback:    bunny apps deploy ghcr.io/me/api:abc-123
 Without a terminal, or with `--output json`, the walkthrough never prompts. Questions with a default take it: the bunny.net registry, the suggested app name, suggested endpoints, and env keys from `.env` / `.env.example`. Two need flags: what to deploy (`--dockerfile` or an image) and `--region`. A missing one fails at once with a hint naming the flag.
 
 ```bash
-bunny apps deploy --dockerfile --region de --output json
-bunny apps deploy --config /tmp/task.jsonc --output json   # keep the config out of the repo
-bunny apps delete --force --id "$(jq -r .app.id /tmp/task.jsonc)"
+bunny apps deploy --dockerfile --region DE --output json
+APP_ID=$(bunny apps deploy --config /tmp/task.jsonc --output json | jq -r .id)   # keep the config out of the repo
+bunny apps delete --force --id "$APP_ID"
 ```
+
+Only `deploy` and `init` take `--config`. `push` and `pull` always use `./bunny.jsonc` and `.bunny/app.json` in the current directory, so run them from there. Most other commands accept `--id` instead.
 
 Pass `--force` whenever the config may drop a container or volume; without it, an unattended deploy fails instead of asking.
 
@@ -198,9 +200,8 @@ bunny apps regions show
   "$schema": "./node_modules/@bunny.net/config/generated/schema.json",
   "version": "2026-05-11",
   "app": {
-    "id": "app_xxx", // written on first deploy
     "name": "my-api",
-    "regions": ["de"],
+    "regions": ["DE"],
     "scaling": { "min": 1, "max": 3 },
     "containers": {
       "api": {
@@ -218,7 +219,7 @@ bunny apps regions show
 }
 ```
 
-- `regions` takes a list, or `{ "allowed": [...], "required": [...] }` to separate where the app may run from where it must run.
+- Region IDs are uppercase codes such as `DE`, `UK`, or `NY`; `bunny apps regions list` shows them. `regions` takes a list, or `{ "allowed": [...], "required": [...] }` to separate where the app may run from where it must run.
 - `scaling` sets the minimum and maximum instances per region. Autoscaling between them is based on CPU, and the max is 10 per region (3 on trial accounts). Apps don't scale to zero: a running app is billed even at one instance, so use `bunny apps undeploy` to stop it.
 - An endpoint takes an optional `name`; without one it is named after its type.
 - If `version` is missing, run `bunny apps pull` to regenerate the file.

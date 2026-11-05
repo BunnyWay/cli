@@ -70,7 +70,7 @@ bunny sites deployments publish --previous --force    # instant rollback
 
 # deploy a container app (Magic Containers)
 bunny apps deploy                                     # walkthrough writes bunny.jsonc, then builds and deploys
-bunny apps deploy --dockerfile --region de --output json   # unattended; generates a Dockerfile if missing
+bunny apps deploy --dockerfile --region DE --output json   # unattended; generates a Dockerfile if missing
 bunny apps deploy ghcr.io/myorg/api:v1.2              # deploy a pre-built image
 
 # manage Bunny Stream video
