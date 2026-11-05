@@ -1,5 +1,12 @@
 # @bunny.net/stream-import
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [[`6124501`](https://github.com/BunnyWay/cli/commit/61245012e85a87711b62f0b7162013eac08d3e1e), [`b60fab8`](https://github.com/BunnyWay/cli/commit/b60fab8b5ca0cc6d0fe8948c73e78f3ca0167a6b)]:
+  - @bunny.net/openapi-client@0.3.2
+
 ## 0.1.1
 
 ### Patch Changes
