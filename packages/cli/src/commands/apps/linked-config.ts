@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { CONFIG_FILENAME, findConfigRoot } from "@/core/bunny-config.ts";
 import { logger } from "@/core/logger.ts";
-import { loadManifest, manifestRoot } from "@/core/manifest.ts";
+import { loadManifest, manifestRoot, saveManifestAt } from "@/core/manifest.ts";
 import { type BunnyAppConfig, loadConfig, saveConfig } from "./config.ts";
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 
@@ -25,5 +25,16 @@ export function updateLinkedConfig(
     ? manifestId === appId && manifestRoot(APP_MANIFEST) === root
     : config.app.id === appId;
 
-  if (linked && edit(config)) saveConfig(config, join(root, CONFIG_FILENAME));
+  if (!linked || !edit(config)) return;
+
+  // Saving strips the legacy `app.id` and registry fields, so move the link into the manifest first.
+  if (!manifestId) {
+    const containers: AppManifest["containers"] = {};
+    for (const [name, c] of Object.entries(config.app.containers)) {
+      if (c.registry) containers[name] = { registry: c.registry };
+    }
+    saveManifestAt<AppManifest>(root, APP_MANIFEST, { id: appId, containers });
+  }
+
+  saveConfig(config, join(root, CONFIG_FILENAME));
 }
