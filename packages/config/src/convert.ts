@@ -19,6 +19,12 @@ type EndpointRequest = components["schemas"]["EndpointRequest"];
 type VolumeRequest = components["schemas"]["VolumeRequest"];
 type ContainerProbe = components["schemas"]["ContainerProbe"];
 
+// bunny.jsonc can only describe CDN and Anycast endpoints; anything else (a public IP) is left to the dashboard.
+function isConfigEndpoint(type: string): boolean {
+  const lower = type.toLowerCase();
+  return lower === "cdn" || lower === "anycast";
+}
+
 function hasHost(image: string): boolean {
   const [first, ...rest] = image.split("/");
 
@@ -62,8 +68,9 @@ function containerTemplateToConfig(
     );
   }
 
-  if (ct.endpoints.length > 0) {
-    config.endpoints = ct.endpoints.map((ep) => {
+  const endpoints = ct.endpoints.filter((ep) => isConfigEndpoint(ep.type));
+  if (endpoints.length > 0) {
+    config.endpoints = endpoints.map((ep) => {
       const type = ep.type.toLowerCase() as "cdn" | "anycast";
 
       return {
@@ -374,6 +381,20 @@ function matchTemplates(
   return matches;
 }
 
+/** Convert one container from BunnyAppConfig to a request for adding it to an existing app. */
+export function configToContainerRequest(
+  name: string,
+  container: ContainerConfig,
+  registries?: RegistryMap,
+  takenEndpointNames: Set<string> = new Set(),
+): ContainerRequest {
+  return containerConfigToRequest(
+    name,
+    mergeRegistry(name, container, registries),
+    takenEndpointNames,
+  );
+}
+
 /** Convert BunnyAppConfig to an AddApplicationRequest for creating a new app. */
 export function configToAddRequest(
   config: BunnyAppConfig,
@@ -408,6 +429,7 @@ export function configToPatchRequest(
   config: BunnyAppConfig,
   existingApp: Application,
   registries?: RegistryMap,
+  options: { pinDigests?: boolean } = {},
 ): PatchApplicationRequest {
   const containers: ContainerRequest[] = [];
   const volumes: VolumeRequest[] = [];
@@ -443,22 +465,56 @@ export function configToPatchRequest(
       req.imageDigest = existing.imageDigest;
     }
 
-    // PATCH replaces the whole template, so a config without an env block must carry over the server's vars or they get wiped.
-    if (!merged.env && existing?.environmentVariables?.length) {
-      req.environmentVariables = existing.environmentVariables;
+    // Env in bunny.jsonc only seeds new containers; existing ones keep the server's vars, managed with `bunny apps env`.
+    if (existing) {
+      req.environmentVariables = existing.environmentVariables ?? [];
     }
+    if (!merged.command && existing?.entryPoint) {
+      req.entryPoint = existing.entryPoint;
+    }
+
+    const unsupported = existing?.endpoints.find(
+      (ep) => !isConfigEndpoint(ep.type),
+    );
+    if (merged.endpoints && unsupported) {
+      throw new UserError(
+        `Container "${name}" has a ${unsupported.type} endpoint (${unsupported.displayName}) that bunny.jsonc can't describe, so applying its endpoints would remove it.`,
+        "Manage this container's endpoints in the dashboard, and remove its `endpoints` block from bunny.jsonc.",
+      );
+    }
+
+    if (
+      options.pinDigests &&
+      existing?.imageDigest &&
+      !req.imageDigest &&
+      req.imageName === existing.imageName &&
+      req.imageNamespace === existing.imageNamespace &&
+      req.imageTag === existing.imageTag &&
+      req.imageRegistryId === existing.imageRegistryId
+    ) {
+      req.imageDigest = existing.imageDigest;
+    }
+
     containers.push(req);
     collectVolumes(merged, volumes, seenVolumes);
   }
 
+  const regions = config.app.regions
+    ? normalizeRegions(config.app.regions)
+    : {
+        allowed: existingApp.regionSettings.allowedRegionIds,
+        required: existingApp.regionSettings.requiredRegionIds,
+      };
+
   return {
     name: config.app.name,
-    runtimeType: "shared",
-    autoScaling: config.app.scaling ?? { min: 1, max: 1 },
-    regionSettings: (() => {
-      const { allowed, required } = normalizeRegions(config.app.regions);
-      return { allowedRegionIds: allowed, requiredRegionIds: required };
-    })(),
+    runtimeType: existingApp.runtimeType ?? "shared",
+    autoScaling: config.app.scaling ??
+      existingApp.autoScaling ?? { min: 1, max: 1 },
+    regionSettings: {
+      allowedRegionIds: regions.allowed,
+      requiredRegionIds: regions.required,
+    },
     containerTemplates: containers,
     volumes,
   };

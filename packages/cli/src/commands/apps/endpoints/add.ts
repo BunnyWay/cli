@@ -6,7 +6,6 @@ import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, spinner } from "@/core/ui.ts";
-import { addEndpointToConfig } from "./sync.ts";
 
 const COMMAND = "add";
 const DESCRIPTION = "Add an endpoint to a container.";
@@ -159,16 +158,6 @@ export const appsEndpointsAddCommand = defineCommand<AddArgs>({
     });
 
     spin.stop();
-
-    const container = app.containerTemplates.find((c) => c.id === containerId);
-    if (container) {
-      addEndpointToConfig(appId, container.name, {
-        type: endpointType,
-        ...(displayName !== endpointType ? { name: displayName } : {}),
-        ...(endpointType === "cdn" ? { ssl: sslEnabled } : {}),
-        ports: [{ public: pPort, container: cPort }],
-      });
-    }
 
     if (output === "json") {
       logger.log(

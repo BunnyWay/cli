@@ -1,5 +1,7 @@
+import { BunnyAppConfigSchema, BunnyConfigSchema } from "@bunny.net/config";
 import { createMcClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "@/config/index.ts";
+import { configPath, readBunnyConfig } from "@/core/bunny-config.ts";
 import { resolveRegistryEndpoint } from "@/core/bunny-registry.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
@@ -8,6 +10,7 @@ import { saveManifest } from "@/core/manifest.ts";
 import { confirm, spinner } from "@/core/ui.ts";
 import {
   apiToConfig,
+  type BunnyAppConfig,
   configExists,
   resolveAppId,
   saveConfig,
@@ -15,8 +18,35 @@ import {
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 import { BUNNY_REGISTRY_ID, listRegistries } from "./docker.ts";
 
+// Never write live env (often secrets) into a committed file; keep the local env block, sites, and build settings instead.
+function keepLocalIntent(remote: BunnyAppConfig, path: string): BunnyAppConfig {
+  for (const container of Object.values(remote.app.containers)) {
+    delete container.env;
+  }
+
+  const parsed = BunnyConfigSchema.safeParse(readBunnyConfig(path)?.data);
+  if (!parsed.success) return remote;
+
+  const local = parsed.data;
+  if (local.sites) remote.sites = local.sites;
+
+  const localApp = BunnyAppConfigSchema.safeParse(local);
+  if (!localApp.success) return remote;
+
+  for (const [name, container] of Object.entries(remote.app.containers)) {
+    const before = localApp.data.app.containers[name];
+    if (!before) continue;
+
+    if (before.dockerfile) container.dockerfile = before.dockerfile;
+    if (before.context) container.context = before.context;
+    if (before.env) container.env = before.env;
+  }
+
+  return remote;
+}
+
 const COMMAND = "pull";
-const DESCRIPTION = "Sync remote app config to local bunny.jsonc.";
+const DESCRIPTION = "Write the live app's settings to bunny.jsonc.";
 
 interface PullArgs {
   id?: string;
@@ -77,8 +107,9 @@ export const appsPullCommand = defineCommand<PullArgs>({
           : (r.hostName ?? ""),
       ]),
     );
-    const toml = apiToConfig(app, registryHosts);
-    saveConfig(toml);
+    const target = configPath();
+    const toml = keepLocalIntent(apiToConfig(app, registryHosts), target);
+    saveConfig(toml, target);
 
     // Mirror identity into `.bunny/app.json` so subsequent commands
     // don't fall back to legacy `app.id`/`container.registry` reads from
