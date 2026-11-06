@@ -6,7 +6,6 @@ import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { spinner } from "@/core/ui.ts";
-import { removeEnvFromConfig } from "./sync.ts";
 
 const COMMAND = "remove <key>";
 const DESCRIPTION = "Remove an environment variable.";
@@ -88,8 +87,6 @@ export const appsEnvRemoveCommand = defineCommand<RemoveArgs>({
     });
 
     spin.stop();
-
-    if (container) removeEnvFromConfig(appId, container.name, [key]);
 
     if (output === "json") {
       logger.log(JSON.stringify({ key, removed: true }));

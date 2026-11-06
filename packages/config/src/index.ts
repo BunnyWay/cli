@@ -4,6 +4,7 @@
 export {
   apiToConfig,
   configToAddRequest,
+  configToContainerRequest,
   configToPatchRequest,
   type RegistryMap,
 } from "./convert.ts";

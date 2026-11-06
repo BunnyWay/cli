@@ -1,8 +1,10 @@
 # `bunny apps`
 
 > **Preview**: `bunny apps` is in public preview; commands and flags may still change.
+>
+> **Experimental**: the `bunny.jsonc` format is extremely experimental and can change at any time, including in patch releases.
 
-Manage apps (Magic Containers). Apps are multi-container deployments where all containers share a localhost network. Configuration is stored in a `bunny.jsonc` file which is committed to your repo. The app ID is written back to the config on first deploy, so cloning the repo gives you everything you need. The JSONC format supports a `$schema` property for editor autocompletion.
+Manage apps (Magic Containers). Apps are multi-container deployments where all containers share a localhost network. The live app is the source of truth. A committed `bunny.jsonc` describes how to create the app and build its images, and is optional once the app exists; the link to the app lives in `.bunny/app.json`. On an existing app, `deploy` only changes container images, so nothing in `bunny.jsonc` can overwrite a running app's settings or env. Each setting has its own command (`scale`, `regions set`, `endpoints`, `volumes`, `env`) that changes only that setting. The JSONC format supports a `$schema` property for editor autocompletion.
 
 ```bash
 # Deploy a pre-built image (first run walks through setup)
@@ -14,11 +16,12 @@ bunny apps deploy --dockerfile
 # Re-deploy whatever is in bunny.jsonc
 bunny apps deploy
 
-# Sync remote config to local bunny.jsonc
-bunny apps pull
+# Change one setting on the live app
+bunny apps scale --min 1 --max 3
+bunny apps regions set DE UK
 
-# Apply local bunny.jsonc changes to remote
-bunny apps push
+# Write the live app's settings to bunny.jsonc
+bunny apps pull
 ```
 
 ## `bunny apps deploy`
@@ -47,6 +50,10 @@ After a successful deploy that replaced a running image, the CLI prints the prev
 Previous image: ghcr.io/me/api:abc-123
 To rollback:    bunny apps deploy ghcr.io/me/api:abc-123
 ```
+
+On an app that already exists, `deploy` builds or resolves each image, points the matching container at it, and deploys. Scaling, regions, endpoints, volumes, probes, command and env stay exactly as they are on the app, whatever `bunny.jsonc` says; change them with their own commands or in the dashboard. A container in `bunny.jsonc` that the app doesn't have yet is added, with its env resolved from `.env`. Containers on the app but not in `bunny.jsonc` are left alone. Deploying an unchanged image ref resolves its tag again, so a moving tag like `latest` picks up the newest build.
+
+A linked directory needs no `bunny.jsonc`: `bunny apps deploy <image>` or `bunny apps deploy --dockerfile` updates the app's container (pass `--container` when it has more than one) and writes no config file.
 
 ### Generating a Dockerfile
 
@@ -91,7 +98,6 @@ The Dockerfile and a `.dockerignore` (unless you have one) are written to the pr
 | `--dry-run`             | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                                              |
 | `--no-push`             | Build only. Skip pushing the image and skip the deploy.                                                                                               |
 | `--allow-split-volumes` | Deploy an app that mounts a volume in more than one region or instance (see [Volumes](#volumes-regions-and-scaling)).                                 |
-| `--force`, `-f`         | Remove containers or volumes dropped from `bunny.jsonc` without confirming.                                                                           |
 
 ```bash
 # Deploy a pre-built image
@@ -197,7 +203,7 @@ bunny apps init --dockerfile --port 8080
 
 Most users can skip `init` entirely and run `bunny apps deploy` straight away. Both share the same walkthrough.
 
-In a directory linked to an existing app (`bunny apps link`) but with no `bunny.jsonc`, `init` and `deploy` stop instead of running the walkthrough, since its answers would overwrite the app's settings. Run `bunny apps pull` to write `bunny.jsonc` from the app, or `bunny apps unlink` to start a new one.
+In a directory linked to an existing app (`bunny apps link`) but with no `bunny.jsonc`, `init` stops instead of running the walkthrough. Run `bunny apps pull` to write `bunny.jsonc` from the app, or `bunny apps unlink` to start a new one.
 
 ## `bunny apps list`
 
@@ -217,28 +223,25 @@ bunny apps show
 bunny apps show --id <app-id>
 ```
 
-## `bunny apps pull` / `bunny apps push`
+## `bunny apps pull`
 
-Sync configuration between the remote API and local `bunny.jsonc`.
+Write the live app's settings to `bunny.jsonc`. It only reads from the app, never changes it.
 
 ```bash
-# Pull remote state to local bunny.jsonc
 bunny apps pull
 bunny apps pull --force
-
-# Push local bunny.jsonc to remote (config only — does not deploy)
-bunny apps push
-bunny apps push --dry-run
-
-# Apply a volume across regions or instances on purpose (see Volumes)
-bunny apps push --allow-split-volumes
 ```
 
-`pull` writes to the `bunny.jsonc` it finds (walking up from the current directory) and keeps what the app doesn't store: the `sites` block, each container's `dockerfile` and `context`, and env entries such as `.env` pointers that still resolve to the app's value. Public IP endpoints can't be described in `bunny.jsonc`, so `pull` leaves them out, and `push` or `deploy` refuse to apply an `endpoints` block to a container that has one.
+`pull` writes to the `bunny.jsonc` it finds (walking up from the current directory). It never writes the app's env values, which are often secrets, into the file; it keeps the local `env` block, the `sites` block, and each container's `dockerfile` and `context`. Public IP endpoints can't be described in `bunny.jsonc`, so `pull` leaves them out.
 
-Settings left out of `bunny.jsonc` keep their current values on `push` and `deploy`: `scaling`, `regions`, a container's `env` and `command`, and the app's runtime type. `push` also keeps each unchanged image on the digest it runs, so it never rolls a tag like `latest` forward; `deploy` resolves the tag again.
+## `bunny apps scale`
 
-Containers and volumes missing from `bunny.jsonc` are removed from the app, volumes with their data. `push` and `deploy` list what would be removed and ask first; pass `--force` to skip the prompt (required without a terminal). Containers are matched by name, so reordering them is safe; renaming one container at a time keeps it.
+Set the minimum and maximum instances. A bound you leave out keeps its current value.
+
+```bash
+bunny apps scale --min 1 --max 3
+bunny apps scale --max 5
+```
 
 ## `bunny apps env`
 
@@ -274,11 +277,11 @@ bunny apps env push --dry-run
 | `--replace`   | (`push` only) Drop remote variables that aren't in the file. Default is merge (file overrides remote). |
 | `--dry-run`   | (`push` only) Print the diff (`+ added`, `~ changed`, `- removed`) without writing.                    |
 
-When a container in the linked `bunny.jsonc` has an `env` block, `deploy` and `push` replace the container's variables with that block. So `env remove` (and `env push --replace`) also drop the key from the block, and `env set` / `env push` warn when the block would undo a change. Values are never written to `bunny.jsonc`: add the key to the block as a pointer (`"API_KEY": "API_KEY"`) and keep the value in `.env`.
+`bunny apps env` is the only way to change a running container's variables; `deploy` and `pull` never touch them. An `env` block in `bunny.jsonc` is only used when a container is created, where a value naming a key in `.env` (`"API_KEY": "API_KEY"`) is replaced with that key's value.
 
 ## `bunny apps endpoints`
 
-Manage endpoints (CDN or Anycast) per container. `add` and `remove` also update a linked `bunny.jsonc`, so the next push or deploy keeps the change.
+Manage endpoints (CDN or Anycast) per container.
 
 ```bash
 bunny apps endpoints list
@@ -322,12 +325,20 @@ The `Source` column says where a registry comes from:
 
 ## `bunny apps regions`
 
-View available regions and app region settings.
+View available regions, and view or set where an app runs.
 
 ```bash
 bunny apps regions list
 bunny apps regions show
+
+# Always run in DE and UK
+bunny apps regions set DE UK
+
+# Allow three regions, always run in DE
+bunny apps regions set DE UK NY --required DE
 ```
+
+`--required` defaults to every allowed region and must be a subset of them.
 
 ## `bunny.jsonc` schema
 
@@ -436,8 +447,8 @@ Give a slow boot (migrations, cache warm-up) a generous `startup` probe instead 
 
 A probe on a container with no endpoints must set `port`, or the deploy fails.
 
-`bunny apps pull` writes probes set in the dashboard into `bunny.jsonc`. A container with no `probes` block keeps whatever probes it already has; one with a `probes` block replaces them. The expected status code of an `http` probe and the service name of a `grpc` probe can't be set from `bunny.jsonc`, so a `push` resets them to the platform defaults.
+`bunny apps pull` writes probes set in the dashboard into `bunny.jsonc`. A container with no `probes` block keeps whatever probes it already has; one with a `probes` block replaces them. The expected status code of an `http` probe and the service name of a `grpc` probe can't be set from `bunny.jsonc`. Probes in `bunny.jsonc` only apply when a container is created.
 
 ### Volumes, regions and scaling
 
-Volumes are never shared: every region an app runs in, and every instance within a region, gets its own empty volume, and nothing syncs between them. A database in three regions, or scaled to three instances, is three unrelated databases. So `bunny apps deploy` and `bunny apps push` refuse a config where any container mounts a volume and either `regions` (or `regions.allowed`) lists more than one region or `scaling.max` is above 1. Keep one region and `scaling.max: 1`, or pass `--allow-split-volumes` when separate data per copy is what you want (a cache, say).
+Volumes are never shared: every region an app runs in, and every instance within a region, gets its own empty volume, and nothing syncs between them. A database in three regions, or scaled to three instances, is three unrelated databases. So `bunny apps deploy` refuses a config where any container mounts a volume and either `regions` (or `regions.allowed`) lists more than one region or `scaling.max` is above 1, and `bunny apps scale` and `bunny apps regions set` refuse to scale or spread an app that has a volume. Keep one region and a maximum of 1, or pass `--allow-split-volumes` when separate data per copy is what you want (a cache, say).

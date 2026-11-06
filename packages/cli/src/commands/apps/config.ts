@@ -31,6 +31,7 @@ export {
   apiToConfig,
   CURRENT_VERSION,
   configToAddRequest,
+  configToContainerRequest,
   configToPatchRequest,
   normalizeRegions,
   parseImageRef,

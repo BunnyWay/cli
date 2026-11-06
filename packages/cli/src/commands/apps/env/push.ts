@@ -9,7 +9,6 @@ import { parseDotenv } from "@/core/env.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { spinner } from "@/core/ui.ts";
-import { removeEnvFromConfig, warnEnvOverriddenByConfig } from "./sync.ts";
 
 const COMMAND = "push [file]";
 const DESCRIPTION = "Bulk-set environment variables from a .env file.";
@@ -155,17 +154,6 @@ export const appsEnvPushCommand = defineCommand<PushArgs>({
       body: next,
     });
     writeSpin.stop();
-
-    if (container) {
-      removeEnvFromConfig(appId, container.name, removed);
-      warnEnvOverriddenByConfig(
-        appId,
-        container.name,
-        Object.fromEntries(
-          [...added, ...changed].map((k) => [k, next[k] ?? ""]),
-        ),
-      );
-    }
 
     if (output === "json") {
       logger.log(JSON.stringify({ added, changed, removed }, null, 2));

@@ -5,8 +5,6 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, spinner } from "@/core/ui.ts";
-import { fetchApp } from "@/tools/apps/index.ts";
-import { endpointToConfig, removeEndpointFromConfig } from "./sync.ts";
 
 const COMMAND = "remove <endpoint-id>";
 const DESCRIPTION = "Remove an endpoint.";
@@ -62,22 +60,11 @@ export const appsEndpointsRemoveCommand = defineCommand<RemoveArgs>({
     const spin = spinner("Removing endpoint...");
     spin.start();
 
-    const app = await fetchApp(client, appId);
-    const container = app?.containerTemplates.find((c) =>
-      c.endpoints.some((ep) => ep.id === endpointId),
-    );
-    const endpoint = container?.endpoints.find((ep) => ep.id === endpointId);
-
     await client.DELETE("/apps/{appId}/endpoints/{endpointId}", {
       params: { path: { appId, endpointId } },
     });
 
     spin.stop();
-
-    const local = endpoint && endpointToConfig(endpoint);
-    if (container && local) {
-      removeEndpointFromConfig(appId, container.name, local);
-    }
 
     if (output === "json") {
       logger.log(JSON.stringify({ endpointId, removed: true }));

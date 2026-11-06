@@ -1,4 +1,3 @@
-import { dirname, join } from "node:path";
 import { BunnyAppConfigSchema, BunnyConfigSchema } from "@bunny.net/config";
 import { createMcClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "@/config/index.ts";
@@ -18,10 +17,13 @@ import {
 } from "./config.ts";
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 import { BUNNY_REGISTRY_ID, listRegistries } from "./docker.ts";
-import { resolveContainerEnv } from "./env/resolve.ts";
 
-// Keep what the API doesn't store: the sites block, build settings, and env entries (like .env pointers) that still resolve to the remote value.
+// Never write live env (often secrets) into a committed file; keep the local env block, sites, and build settings instead.
 function keepLocalIntent(remote: BunnyAppConfig, path: string): BunnyAppConfig {
+  for (const container of Object.values(remote.app.containers)) {
+    delete container.env;
+  }
+
   const parsed = BunnyConfigSchema.safeParse(readBunnyConfig(path)?.data);
   if (!parsed.success) return remote;
 
@@ -31,31 +33,20 @@ function keepLocalIntent(remote: BunnyAppConfig, path: string): BunnyAppConfig {
   const localApp = BunnyAppConfigSchema.safeParse(local);
   if (!localApp.success) return remote;
 
-  const resolved = resolveContainerEnv(
-    localApp.data,
-    join(dirname(path), ".env"),
-  );
   for (const [name, container] of Object.entries(remote.app.containers)) {
     const before = localApp.data.app.containers[name];
     if (!before) continue;
 
     if (before.dockerfile) container.dockerfile = before.dockerfile;
     if (before.context) container.context = before.context;
-
-    const resolvedEnv = resolved.app.containers[name]?.env ?? {};
-    for (const [key, value] of Object.entries(container.env ?? {})) {
-      const raw = before.env?.[key];
-      if (raw !== undefined && resolvedEnv[key] === value && container.env) {
-        container.env[key] = raw;
-      }
-    }
+    if (before.env) container.env = before.env;
   }
 
   return remote;
 }
 
 const COMMAND = "pull";
-const DESCRIPTION = "Sync remote app config to local bunny.jsonc.";
+const DESCRIPTION = "Write the live app's settings to bunny.jsonc.";
 
 interface PullArgs {
   id?: string;
