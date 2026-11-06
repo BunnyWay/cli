@@ -2,4 +2,4 @@
 "@bunny.net/cli": patch
 "@bunny.net/config": patch
 ---
-fix(apps): never overwrite live app settings from a missing or partial `bunny.jsonc`, keep `apps env` changes and local config through deploys and pulls, and keep legacy links when syncing config
+fix(apps): the live app is the source of truth: `deploy` only updates container images and works without `bunny.jsonc`, `apps push` is removed in favour of `apps scale` and `apps regions set`, env is never sent by `deploy` or written by `pull` (`bunny apps env` owns it), and `bunny.jsonc` is marked experimental

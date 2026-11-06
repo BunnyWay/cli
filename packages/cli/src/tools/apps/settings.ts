@@ -12,7 +12,7 @@ type RegionSettings = Pick<
 >;
 
 const appRef = z.string().min(1).describe("App ID.");
-const instances = z.number().int().min(1).max(1000);
+const instances = z.number().int().min(0);
 const allowSplitVolumes = z
   .boolean()
   .optional()
@@ -20,31 +20,12 @@ const allowSplitVolumes = z
 
 type App = components["schemas"]["Application"];
 
-const ScalingSchema = z.object({ min: z.number(), max: z.number() });
-const RegionSettingsSchema = z.object({
-  allowedRegionIds: z.array(z.string()),
-  requiredRegionIds: z.array(z.string()),
-});
-
-/** Refusal to split an app's volumes; commands reword the hint for their own flag. */
-export class SplitVolumeError extends UserError {
-  constructor(message: string) {
-    super(
-      message,
-      "Volumes aren't shared: each region and each instance gets its own empty volume. Set `allowSplitVolumes` if each copy should keep separate data.",
-    );
-    this.name = "SplitVolumeError";
-  }
-}
-
-// Volumes aren't shared, so more than one copy of an app with a mounted volume means separate, empty data per copy.
+// Volumes aren't shared, so more than one copy of an app with a volume means separate, empty data per copy.
 function assertNoSplit(app: App, reason: string | undefined, allow?: boolean) {
-  const mounted = app.containerTemplates.some(
-    (ct) => ct.volumeMounts.length > 0,
-  );
-  if (allow || !reason || !mounted) return;
-  throw new SplitVolumeError(
+  if (allow || !reason || app.volumes.length === 0) return;
+  throw new UserError(
     `App ${app.name} has a volume, but it would ${reason}.`,
+    "Volumes aren't shared: each region and each instance gets its own empty volume. Pass --allow-split-volumes if each copy should keep separate data.",
   );
 }
 
@@ -77,7 +58,6 @@ export const appsScale = defineTool({
     allowSplitVolumes,
   }),
   kind: "write",
-  resultSchema: ScalingSchema,
   examples: [[{ app: "abc123", min: 1, max: 3 }, "Run 1 to 3 instances"]],
   run: async (ctx, input): Promise<AutoscalingSettings> => {
     if (input.min === undefined && input.max === undefined) {
@@ -133,7 +113,6 @@ export const appsRegionsSet = defineTool({
     allowSplitVolumes,
   }),
   kind: "write",
-  resultSchema: RegionSettingsSchema,
   examples: [
     [{ app: "abc123", regions: ["DE", "UK"] }, "Run in DE and UK"],
     [
@@ -153,16 +132,9 @@ export const appsRegionsSet = defineTool({
 
     ctx.progress("Fetching app...");
     const app = await requireApp(ctx.clients.mc, input.app);
-    const moved = required.filter(
-      (id) => !app.regionSettings.requiredRegionIds.includes(id),
-    );
     assertNoSplit(
       app,
-      allowed.length > 1
-        ? `run in ${allowed.length} regions`
-        : moved.length > 0
-          ? `move to ${moved.join(", ")}, away from its existing volume data`
-          : undefined,
+      allowed.length > 1 ? `run in ${allowed.length} regions` : undefined,
       input.allowSplitVolumes,
     );
 

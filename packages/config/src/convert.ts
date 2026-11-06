@@ -381,6 +381,19 @@ function matchTemplates(
   return matches;
 }
 
+/** Convert one container from BunnyAppConfig to a request for adding it to an existing app. */
+export function configToContainerRequest(
+  name: string,
+  container: ContainerConfig,
+  registries?: RegistryMap,
+): ContainerRequest {
+  return containerConfigToRequest(
+    name,
+    mergeRegistry(name, container, registries),
+    new Set(),
+  );
+}
+
 /** Convert BunnyAppConfig to an AddApplicationRequest for creating a new app. */
 export function configToAddRequest(
   config: BunnyAppConfig,
@@ -451,9 +464,9 @@ export function configToPatchRequest(
       req.imageDigest = existing.imageDigest;
     }
 
-    // PATCH replaces the whole template, so a config without an env block must carry over the server's vars or they get wiped.
-    if (!merged.env && existing?.environmentVariables?.length) {
-      req.environmentVariables = existing.environmentVariables;
+    // Env in bunny.jsonc only seeds new containers; existing ones keep the server's vars, managed with `bunny apps env`.
+    if (existing) {
+      req.environmentVariables = existing.environmentVariables ?? [];
     }
     if (!merged.command && existing?.entryPoint) {
       req.entryPoint = existing.entryPoint;

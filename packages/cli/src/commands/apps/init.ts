@@ -114,7 +114,7 @@ export const appsInitCommand = defineCommand<InitArgs>({
       const where = configPath ?? "this directory";
       throw new UserError(
         `A config file already exists at ${where}.`,
-        "Use `bunny apps push` to sync changes or delete it first.",
+        "Deploy it with `bunny apps deploy`, or delete it to start over.",
       );
     }
     assertNotLinkedWithoutConfig();

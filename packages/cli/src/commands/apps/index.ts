@@ -8,7 +8,6 @@ import { appsInitCommand } from "./init.ts";
 import { appsLinkCommand } from "./link.ts";
 import { appsListCommand } from "./list.ts";
 import { appsPullCommand } from "./pull.ts";
-import { appsPushCommand } from "./push.ts";
 import { appsRegionsNamespace } from "./regions/index.ts";
 import { appsRegistriesNamespace } from "./registries/index.ts";
 import { appsRestartCommand } from "./restart.ts";
@@ -28,7 +27,6 @@ export const appsNamespace = withPreviewNotice(
     appsLinkCommand,
     appsListCommand,
     appsPullCommand,
-    appsPushCommand,
     appsRegionsNamespace,
     appsRegistriesNamespace,
     appsRestartCommand,
