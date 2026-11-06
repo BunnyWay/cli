@@ -11,7 +11,7 @@ import {
 import { clientOptions } from "@/core/client-options.ts";
 import { bunny } from "@/core/colors.ts";
 import { defineCommand } from "@/core/define-command.ts";
-import { UserError } from "@/core/errors.ts";
+import { ApiError, UserError } from "@/core/errors.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, saveManifest } from "@/core/manifest.ts";
@@ -837,6 +837,52 @@ function findTemplate(app: App, name: string, configCount: number) {
   );
 }
 
+// The volumes list replaces the app's by name, so it must carry every live volume exactly as read, or the missing ones lose their data.
+async function addVolumes(
+  client: ReturnType<typeof createMcClient>,
+  appId: string,
+  add: Map<string, number>,
+): Promise<void> {
+  const { data } = await client.GET("/apps/{appId}", {
+    params: { path: { appId } },
+  });
+  const live = data?.volumes;
+  const valid =
+    Array.isArray(live) &&
+    live.every((v) => typeof v.name === "string" && typeof v.size === "number");
+  if (!valid) {
+    throw new UserError(
+      `Couldn't read the volumes on app ${appId}, so no volume was added.`,
+      "Try the deploy again, or add the volume in the bunny.net dashboard.",
+    );
+  }
+
+  const volumes = live.map(({ name, size }) => ({ name, size }));
+  for (const [name, size] of add) {
+    if (!volumes.some((v) => v.name === name)) volumes.push({ name, size });
+  }
+  if (volumes.length === live.length) return;
+
+  const spin = spinner("Adding volumes...");
+  spin.start();
+  try {
+    await client.PATCH("/apps/{appId}", {
+      params: { path: { appId } },
+      body: { volumes },
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 400) {
+      throw new UserError(
+        `Couldn't add volumes to app ${appId}: ${error.message}`,
+        "If a volume on this app is being resized, wait for it to finish and deploy again; a volume already created is reused, not duplicated.",
+      );
+    }
+    throw error;
+  } finally {
+    spin.stop();
+  }
+}
+
 // Deploy only swaps images (adding containers the app lacks), so every other live setting stays as it is.
 async function applyImages(
   client: ReturnType<typeof createMcClient>,
@@ -861,16 +907,24 @@ async function applyImages(
     (name) =>
       toml.app.containers[name]?.image && !findTemplate(app, name, count),
   );
-  const withVolume = added.find(
-    (name) => toml.app.containers[name]?.volumes?.length,
-  );
-  const regions = app.regionSettings.allowedRegionIds.length;
-  const max = app.autoScaling?.max ?? 1;
-  if (withVolume && !allowSplitVolumes && (regions > 1 || max > 1)) {
-    throw new UserError(
-      `Container "${withVolume}" mounts a volume, but app ${app.name} runs in ${regions} region(s) with up to ${max} instance(s).`,
-      "Volumes aren't shared: each region and each instance gets its own empty volume. Pass --allow-split-volumes if each copy should keep separate data.",
-    );
+  const newVolumes = new Map<string, number>();
+  const liveVolumes = new Set(app.volumes.map((v) => v.name));
+  for (const name of added) {
+    for (const v of toml.app.containers[name]?.volumes ?? []) {
+      if (liveVolumes.has(v.name)) continue;
+      newVolumes.set(v.name, Math.max(v.size, newVolumes.get(v.name) ?? 0));
+    }
+  }
+  if (newVolumes.size > 0) {
+    const regions = app.regionSettings.allowedRegionIds.length;
+    const max = app.autoScaling?.max ?? 1;
+    if (!allowSplitVolumes && (regions > 1 || max > 1)) {
+      throw new UserError(
+        `Deploy would add volume "${[...newVolumes.keys()][0]}", but app ${app.name} runs in ${regions} region(s) with up to ${max} instance(s).`,
+        "Volumes aren't shared: each region and each instance gets its own empty volume. Pass --allow-split-volumes if each copy should keep separate data.",
+      );
+    }
+    await addVolumes(client, appId, newVolumes);
   }
   const takenEndpointNames = new Set(
     app.containerTemplates.flatMap((t) =>
