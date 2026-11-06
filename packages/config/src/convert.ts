@@ -386,11 +386,12 @@ export function configToContainerRequest(
   name: string,
   container: ContainerConfig,
   registries?: RegistryMap,
+  takenEndpointNames: Set<string> = new Set(),
 ): ContainerRequest {
   return containerConfigToRequest(
     name,
     mergeRegistry(name, container, registries),
-    new Set(),
+    takenEndpointNames,
   );
 }
 
