@@ -362,10 +362,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       walkthroughRegistries = result.registries;
     } else {
       toml = loadConfig(configPath);
-      // Before the Docker check and any build: an edited bunny.jsonc is
-      // the only way to reach more than one region or instance (the
-      // walkthrough picks one of each).
-      assertVolumesNotSplit(toml, args["allow-split-volumes"]);
+      // Config regions and scaling only apply on create; an existing app is checked live when a container is added.
+      if (!(linkedId ?? toml.app.id)) {
+        assertVolumesNotSplit(toml, args["allow-split-volumes"]);
+      }
       // Existing config: bail before any registry prompts if a container
       // declares a `dockerfile` (we'll need Docker to build it).
       const hasAnyBuild = Object.values(toml.app.containers).some((c) =>
@@ -475,6 +475,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
           config,
           Object.keys(config.app.containers),
           registries,
+          args["allow-split-volumes"],
         );
       } else {
         const createSpin = spinner("Creating app...");
@@ -770,6 +771,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         resolveContainerEnv(toml, dotenvPath),
         [targetName],
         draftRegistries(draft.containers),
+        args["allow-split-volumes"],
         existingApp,
       );
       if (deployImage) logger.success(`Image updated to ${deployImage}.`);
@@ -842,6 +844,7 @@ async function applyImages(
   toml: BunnyAppConfig,
   names: string[],
   registries: RegistryMap | undefined,
+  allowSplitVolumes: boolean | undefined,
   existing?: App,
 ): Promise<void> {
   let app = existing;
@@ -854,6 +857,27 @@ async function applyImages(
   }
 
   const count = Object.keys(toml.app.containers).length;
+  const added = names.filter(
+    (name) =>
+      toml.app.containers[name]?.image && !findTemplate(app, name, count),
+  );
+  const withVolume = added.find(
+    (name) => toml.app.containers[name]?.volumes?.length,
+  );
+  const regions = app.regionSettings.allowedRegionIds.length;
+  const max = app.autoScaling?.max ?? 1;
+  if (withVolume && !allowSplitVolumes && (regions > 1 || max > 1)) {
+    throw new UserError(
+      `Container "${withVolume}" mounts a volume, but app ${app.name} runs in ${regions} region(s) with up to ${max} instance(s).`,
+      "Volumes aren't shared: each region and each instance gets its own empty volume. Pass --allow-split-volumes if each copy should keep separate data.",
+    );
+  }
+  const takenEndpointNames = new Set(
+    app.containerTemplates.flatMap((t) =>
+      t.endpoints.map((ep) => ep.displayName),
+    ),
+  );
+
   const spin = spinner("Updating container images...");
   spin.start();
   try {
@@ -867,6 +891,7 @@ async function applyImages(
           name,
           container,
           registries,
+          takenEndpointNames,
         );
         await client.POST("/apps/{appId}/containers", {
           params: { path: { appId } },
