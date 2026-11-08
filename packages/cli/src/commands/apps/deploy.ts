@@ -491,6 +491,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
           {
             allowSplitVolumes: args["allow-split-volumes"],
             addAlongside: args["add-alongside"],
+            links: draft.containers,
           },
         );
       } else {
@@ -520,6 +521,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
       for (const ct of savedApp?.containerTemplates ?? []) {
         setContainerTemplateId(ct.name, ct.id);
+      }
+      for (const name of Object.keys(toml.app.containers)) {
+        const ct = savedApp && findTemplate(savedApp, name, draft.containers);
+        if (ct) setContainerTemplateId(name, ct.id);
       }
 
       const deploySpin = spinner("Deploying...");
@@ -770,7 +775,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       const previous = findTemplate(
         existingApp,
         targetName,
-        Object.keys(toml.app.containers).length,
+        draft.containers,
       )?.image;
       const deployHost = deployImage ? imageHostname(deployImage) : null;
 
@@ -790,6 +795,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         {
           allowSplitVolumes: args["allow-split-volumes"],
           addAlongside: args["add-alongside"],
+          links: draft.containers,
         },
         existingApp,
       );
@@ -801,6 +807,11 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     });
     for (const ct of savedApp?.containerTemplates ?? []) {
       setContainerTemplateId(ct.name, ct.id);
+    }
+    // Keep the link for config names that differ from the live name, so later deploys still match them.
+    for (const name of Object.keys(toml.app.containers)) {
+      const ct = savedApp && findTemplate(savedApp, name, draft.containers);
+      if (ct) setContainerTemplateId(name, ct.id);
     }
 
     const deploySpin = spinner("Deploying...");
@@ -847,17 +858,20 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
 type App = components["schemas"]["Application"];
 
-/** The live template for a config container, matched by name, or the only one when both sides have one container. */
-function findTemplate(app: App, name: string, configCount: number) {
+type Links = AppManifest["containers"];
+
+/** The live template for a config container: same name, or the template ID `.bunny/app.json` recorded for that name. */
+function findTemplate(app: App, name: string, links: Links) {
   const templates = app.containerTemplates ?? [];
+  const id = links[name]?.id;
   return (
     templates.find((t) => t.name.toLowerCase() === name.toLowerCase()) ??
-    (templates.length === 1 && configCount === 1 ? templates[0] : undefined)
+    (id ? templates.find((t) => t.id === id) : undefined)
   );
 }
 
 // Deploy never applies these, so say when bunny.jsonc and the app disagree instead of ignoring the file silently.
-function warnIgnoredSettings(toml: BunnyAppConfig, app: App, count: number) {
+function warnIgnoredSettings(toml: BunnyAppConfig, app: App, links: Links) {
   const notes: string[] = [];
   const scaling = toml.app.scaling;
   const live = app.autoScaling;
@@ -887,7 +901,7 @@ function warnIgnoredSettings(toml: BunnyAppConfig, app: App, count: number) {
     }
   }
   for (const [name, container] of Object.entries(toml.app.containers)) {
-    const template = findTemplate(app, name, count);
+    const template = findTemplate(app, name, links);
     if (!template || !container.env) continue;
     const liveKeys = new Set(template.environmentVariables?.map((v) => v.name));
     const missing = Object.keys(container.env).filter((k) => !liveKeys.has(k));
@@ -959,7 +973,7 @@ async function applyImages(
   toml: BunnyAppConfig,
   names: string[],
   registries: RegistryMap | undefined,
-  opts: { allowSplitVolumes?: boolean; addAlongside?: boolean },
+  opts: { allowSplitVolumes?: boolean; addAlongside?: boolean; links: Links },
   existing?: App,
 ): Promise<void> {
   let app = existing;
@@ -971,17 +985,17 @@ async function applyImages(
     app = data;
   }
 
-  const count = Object.keys(toml.app.containers).length;
+  const { links } = opts;
   const added = names.filter(
     (name) =>
-      toml.app.containers[name]?.image && !findTemplate(app, name, count),
+      toml.app.containers[name]?.image && !findTemplate(app, name, links),
   );
-  warnIgnoredSettings(toml, app, count);
+  warnIgnoredSettings(toml, app, links);
 
   // A container missing on both sides is most likely a rename, and adding it would run a second copy next to the old one.
   const configNames = Object.keys(toml.app.containers);
   const unlisted = app.containerTemplates.filter(
-    (t) => !configNames.some((n) => findTemplate(app, n, count)?.id === t.id),
+    (t) => !configNames.some((n) => findTemplate(app, n, links)?.id === t.id),
   );
   if (added.length > 0 && unlisted.length > 0 && !opts.addAlongside) {
     throw new UserError(
@@ -1022,7 +1036,7 @@ async function applyImages(
       const container = toml.app.containers[name];
       if (!container?.image) continue;
 
-      const template = findTemplate(app, name, count);
+      const template = findTemplate(app, name, links);
       if (!template) {
         const { id: _id, ...body } = configToContainerRequest(
           name,
