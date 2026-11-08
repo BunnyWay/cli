@@ -3,11 +3,12 @@ export { requireAuth } from "./auth.ts";
 export type { DatabaseExecutor, ExecuteResult } from "./executor.ts";
 export type {
   RestHandlerOptions,
+  RestHooks,
   ScopeContext,
   ScopeOperation,
   ScopeResult,
 } from "./handler.ts";
-export { createRestHandler } from "./handler.ts";
+export { createRestHandler, HookRejection } from "./handler.ts";
 export type {
   Filter,
   FilterCondition,

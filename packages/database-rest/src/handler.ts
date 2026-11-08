@@ -29,6 +29,50 @@ export interface ScopeContext {
  */
 export type ScopeResult = Filter | null | undefined | false;
 
+type Row = Record<string, unknown>;
+type MaybePromise<T> = T | Promise<T>;
+
+interface HookContext {
+  request: Request;
+  table: string;
+}
+
+/**
+ * Runs around writes. `before*` hooks run after validation and before the
+ * write; they may return replacement rows or values, or throw a
+ * `HookRejection` to answer with its status. `after*` hooks run once the
+ * write has happened and get the affected rows; anything they throw goes to
+ * `onError` and does not change the response, since the write is done.
+ */
+export interface RestHooks {
+  /** Runs before the scope check, so it can fill in columns such as an owner. */
+  beforeInsert?: (
+    context: HookContext & { rows: Row[] },
+  ) => MaybePromise<Row[] | undefined | void>;
+  afterInsert?: (context: HookContext & { rows: Row[] }) => MaybePromise<void>;
+  beforeUpdate?: (
+    context: HookContext & { values: Row; filters: Filter[] },
+  ) => MaybePromise<Row | undefined | void>;
+  afterUpdate?: (context: HookContext & { rows: Row[] }) => MaybePromise<void>;
+  beforeDelete?: (
+    context: HookContext & { filters: Filter[] },
+  ) => MaybePromise<void>;
+  afterDelete?: (context: HookContext & { rows: Row[] }) => MaybePromise<void>;
+}
+
+/** Thrown from a `before*` hook to refuse a write with a client error. */
+export class HookRejection extends Error {
+  override name = "HookRejection";
+
+  constructor(
+    message: string,
+    readonly status = 400,
+    readonly code = "REJECTED",
+  ) {
+    super(message);
+  }
+}
+
 export interface RestHandlerOptions {
   /** Base path prefix to strip before routing (e.g. "/api"). Defaults to none. */
   basePath?: string;
@@ -51,6 +95,19 @@ export interface RestHandlerOptions {
    * scope does not stop an update from moving a row out of scope.
    */
   scope?: (context: ScopeContext) => ScopeResult | Promise<ScopeResult>;
+  /** Lifecycle hooks around inserts, updates, and deletes. See {@link RestHooks}. */
+  hooks?: RestHooks;
+}
+
+/** Everything a route handler needs for one request. */
+interface RequestContext {
+  executor: DatabaseExecutor;
+  table: string;
+  req: Request;
+  url: URL;
+  scope: Filter[];
+  hooks: RestHooks;
+  reportError: (err: unknown) => void;
 }
 
 const json = (data: unknown, status = 200, headers?: Record<string, string>) =>
@@ -176,6 +233,15 @@ export const createRestHandler = (
       return errorResponse("Table not found", 404, "NOT_FOUND");
     }
 
+    // The detail goes to the host's logger, not the response: a mounted handler must not leak schema names or file paths.
+    const reportError = (err: unknown) => {
+      try {
+        options.onError?.(err);
+      } catch {
+        // A reporting hook that throws must not replace the response with a rejection.
+      }
+    };
+
     try {
       const operation = SCOPE_OPERATIONS[req.method];
       const scoped =
@@ -189,41 +255,35 @@ export const createRestHandler = (
       if (scoped === false) {
         return forbidden();
       }
-      const scope: Filter[] = scoped ? [scoped] : [];
+
+      const ctx: RequestContext = {
+        executor,
+        table: route.table,
+        req,
+        url,
+        scope: scoped ? [scoped] : [],
+        hooks: options.hooks ?? {},
+        reportError,
+      };
 
       if (route.kind === "single") {
         const column = resolveSingleColumn(route);
         if (!column) {
           return errorResponse("Not found", 404, "NOT_FOUND");
         }
+        const match: Filter = {
+          column,
+          operator: "eq",
+          value: parsePathValue(route.value),
+        };
 
         switch (req.method) {
           case "GET":
-            return await handleGetOne(
-              executor,
-              route.table,
-              column,
-              route.value,
-              url,
-              scope,
-            );
+            return await handleGetOne(ctx, match);
           case "PATCH":
-            return await handlePatchOne(
-              executor,
-              route.table,
-              column,
-              route.value,
-              req,
-              scope,
-            );
+            return await handlePatchOne(ctx, match);
           case "DELETE":
-            return await handleDeleteOne(
-              executor,
-              route.table,
-              column,
-              route.value,
-              scope,
-            );
+            return await handleDeleteOne(ctx, match);
           default:
             return errorResponse(
               "Method not allowed",
@@ -235,13 +295,13 @@ export const createRestHandler = (
 
       switch (req.method) {
         case "GET":
-          return await handleGet(executor, route.table, url, scope);
+          return await handleGet(ctx);
         case "POST":
-          return await handlePost(executor, route.table, req, scope);
+          return await handlePost(ctx);
         case "PATCH":
-          return await handlePatch(executor, route.table, url, req, scope);
+          return await handlePatch(ctx);
         case "DELETE":
-          return await handleDelete(executor, route.table, url, scope);
+          return await handleDelete(ctx);
         default:
           return errorResponse("Method not allowed", 405, "METHOD_NOT_ALLOWED");
       }
@@ -249,110 +309,36 @@ export const createRestHandler = (
       if (err instanceof QueryParseError) {
         return errorResponse(err.message, 400, "BAD_REQUEST");
       }
-      // The detail goes to the host's logger, not the response: a mounted handler must not leak schema names or file paths.
-      try {
-        options.onError?.(err);
-      } catch {
-        // A reporting hook that throws must not replace the 500 with a rejection.
+      if (err instanceof HookRejection) {
+        return errorResponse(err.message, err.status, err.code);
       }
+      reportError(err);
+
       return errorResponse("Internal error", 500, "INTERNAL_ERROR");
     }
   };
 };
 
-// Collection handlers
-
-const handleGet = async (
-  executor: DatabaseExecutor,
-  table: string,
-  url: URL,
-  scope: Filter[],
-): Promise<Response> => {
-  const parsed = parseQueryParams(url);
-  const query = { ...parsed, filters: [...parsed.filters, ...scope] };
-  const selectQuery = buildSelectQuery(table, query);
-  const countQuery = buildCountQuery(table, query);
-
-  const [dataResult, countResult] = await Promise.all([
-    executor.execute(selectQuery.sql, selectQuery.args),
-    executor.execute(countQuery.sql, countQuery.args),
-  ]);
-
-  const totalCount = Number(countResult.rows[0]?.count ?? 0);
-
-  return json({ data: dataResult.rows }, 200, {
-    "X-Total-Count": String(totalCount),
-    "Content-Range": `items ${query.offset ?? 0}-${(query.offset ?? 0) + dataResult.rows.length - 1}/${totalCount}`,
-  });
+/** Runs an after-hook. The write has already happened, so a failure is reported, not returned. */
+const runAfterHook = async (
+  ctx: RequestContext,
+  hook:
+    | ((context: HookContext & { rows: Row[] }) => MaybePromise<void>)
+    | undefined,
+  rows: Row[],
+) => {
+  if (!hook || rows.length === 0) {
+    return;
+  }
+  try {
+    await hook({ request: ctx.req, table: ctx.table, rows });
+  } catch (err) {
+    ctx.reportError(err);
+  }
 };
 
-const handlePost = async (
-  executor: DatabaseExecutor,
-  table: string,
-  req: Request,
-  scope: Filter[],
-): Promise<Response> => {
-  const body = await req.json();
-
-  if (body === null || typeof body !== "object") {
-    return errorResponse(
-      "Request body must be a JSON object or array",
-      400,
-      "BAD_REQUEST",
-    );
-  }
-
-  const rows = Array.isArray(body) ? body : [body];
-
-  if (rows.length === 0) {
-    return errorResponse("Request body must not be empty", 400, "BAD_REQUEST");
-  }
-
-  for (const row of rows) {
-    if (typeof row !== "object" || row === null || Array.isArray(row)) {
-      return errorResponse(
-        "Each row must be a JSON object",
-        400,
-        "BAD_REQUEST",
-      );
-    }
-  }
-
-  // Check every row before inserting any, so a body with one row out of
-  // scope writes nothing. The filters only see the row's own values, so a
-  // check made now still holds when the insert runs.
-  if (scope.length > 0) {
-    const required = filterColumns(scope);
-    for (const row of rows as Record<string, unknown>[]) {
-      if ([...required].some((column) => !(column in row))) {
-        return forbidden();
-      }
-      const check = buildFilterCheckQuery(row, scope);
-      const result = await executor.execute(check.sql, check.args);
-      if (result.rows.length === 0) {
-        return forbidden();
-      }
-    }
-  }
-
-  const results = [];
-  for (const row of rows) {
-    const insertQuery = buildInsertQuery(table, row as Record<string, unknown>);
-    const result = await executor.execute(insertQuery.sql, insertQuery.args);
-    results.push(...result.rows);
-  }
-
-  return json({ data: results }, 201);
-};
-
-const handlePatch = async (
-  executor: DatabaseExecutor,
-  table: string,
-  url: URL,
-  req: Request,
-  scope: Filter[],
-): Promise<Response> => {
-  const query = parseQueryParams(url);
+/** Reads a JSON object body, or returns the 400 response to send. */
+const readObjectBody = async (req: Request): Promise<Row | Response> => {
   const body = await req.json();
 
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
@@ -363,8 +349,144 @@ const handlePatch = async (
     );
   }
 
-  if (Object.keys(body as Record<string, unknown>).length === 0) {
+  if (Object.keys(body as Row).length === 0) {
     return errorResponse("Request body must not be empty", 400, "BAD_REQUEST");
+  }
+
+  return body as Row;
+};
+
+// Collection handlers
+
+const handleGet = async (ctx: RequestContext): Promise<Response> => {
+  const parsed = parseQueryParams(ctx.url);
+  const query = { ...parsed, filters: [...parsed.filters, ...ctx.scope] };
+  const selectQuery = buildSelectQuery(ctx.table, query);
+  const countQuery = buildCountQuery(ctx.table, query);
+
+  const [dataResult, countResult] = await Promise.all([
+    ctx.executor.execute(selectQuery.sql, selectQuery.args),
+    ctx.executor.execute(countQuery.sql, countQuery.args),
+  ]);
+
+  const totalCount = Number(countResult.rows[0]?.count ?? 0);
+
+  return json({ data: dataResult.rows }, 200, {
+    "X-Total-Count": String(totalCount),
+    "Content-Range": `items ${query.offset ?? 0}-${(query.offset ?? 0) + dataResult.rows.length - 1}/${totalCount}`,
+  });
+};
+
+const handlePost = async (ctx: RequestContext): Promise<Response> => {
+  const body = await ctx.req.json();
+
+  if (body === null || typeof body !== "object") {
+    return errorResponse(
+      "Request body must be a JSON object or array",
+      400,
+      "BAD_REQUEST",
+    );
+  }
+
+  const received = Array.isArray(body) ? body : [body];
+
+  if (received.length === 0) {
+    return errorResponse("Request body must not be empty", 400, "BAD_REQUEST");
+  }
+
+  for (const row of received) {
+    if (typeof row !== "object" || row === null || Array.isArray(row)) {
+      return errorResponse(
+        "Each row must be a JSON object",
+        400,
+        "BAD_REQUEST",
+      );
+    }
+  }
+
+  const rows =
+    (await ctx.hooks.beforeInsert?.({
+      request: ctx.req,
+      table: ctx.table,
+      rows: received as Row[],
+    })) ?? (received as Row[]);
+
+  // Check every row before inserting any, so a body with one row out of
+  // scope writes nothing. The filters only see the row's own values, so a
+  // check made now still holds when the insert runs.
+  if (ctx.scope.length > 0) {
+    const required = filterColumns(ctx.scope);
+    for (const row of rows) {
+      if ([...required].some((column) => !(column in row))) {
+        return forbidden();
+      }
+      const check = buildFilterCheckQuery(row, ctx.scope);
+      const result = await ctx.executor.execute(check.sql, check.args);
+      if (result.rows.length === 0) {
+        return forbidden();
+      }
+    }
+  }
+
+  const results: Row[] = [];
+  for (const row of rows) {
+    const insertQuery = buildInsertQuery(ctx.table, row);
+    const result = await ctx.executor.execute(
+      insertQuery.sql,
+      insertQuery.args,
+    );
+    results.push(...result.rows);
+  }
+
+  await runAfterHook(ctx, ctx.hooks.afterInsert, results);
+
+  return json({ data: results }, 201);
+};
+
+/** Shared by bulk and single-row updates: runs hooks around one UPDATE. */
+const runUpdate = async (
+  ctx: RequestContext,
+  received: Row,
+  filters: Filter[],
+): Promise<Row[]> => {
+  const values =
+    (await ctx.hooks.beforeUpdate?.({
+      request: ctx.req,
+      table: ctx.table,
+      values: received,
+      filters,
+    })) ?? received;
+
+  const updateQuery = buildUpdateQuery(ctx.table, values, filters);
+  const result = await ctx.executor.execute(updateQuery.sql, updateQuery.args);
+  await runAfterHook(ctx, ctx.hooks.afterUpdate, result.rows);
+
+  return result.rows;
+};
+
+/** Shared by bulk and single-row deletes: runs hooks around one DELETE. */
+const runDelete = async (
+  ctx: RequestContext,
+  filters: Filter[],
+): Promise<Row[]> => {
+  await ctx.hooks.beforeDelete?.({
+    request: ctx.req,
+    table: ctx.table,
+    filters,
+  });
+
+  const deleteQuery = buildDeleteQuery(ctx.table, filters);
+  const result = await ctx.executor.execute(deleteQuery.sql, deleteQuery.args);
+  await runAfterHook(ctx, ctx.hooks.afterDelete, result.rows);
+
+  return result.rows;
+};
+
+const handlePatch = async (ctx: RequestContext): Promise<Response> => {
+  const query = parseQueryParams(ctx.url);
+  const body = await readObjectBody(ctx.req);
+  if (body instanceof Response) {
+    return body;
   }
 
   if (query.filters.length === 0) {
@@ -377,22 +499,13 @@ const handlePatch = async (
 
   // The scope is added after the check above: it narrows an update, but must
   // not count as the filter that guards against updating every row.
-  const updateQuery = buildUpdateQuery(table, body as Record<string, unknown>, [
-    ...query.filters,
-    ...scope,
-  ]);
-  const result = await executor.execute(updateQuery.sql, updateQuery.args);
+  const rows = await runUpdate(ctx, body, [...query.filters, ...ctx.scope]);
 
-  return json({ data: result.rows });
+  return json({ data: rows });
 };
 
-const handleDelete = async (
-  executor: DatabaseExecutor,
-  table: string,
-  url: URL,
-  scope: Filter[],
-): Promise<Response> => {
-  const query = parseQueryParams(url);
+const handleDelete = async (ctx: RequestContext): Promise<Response> => {
+  const query = parseQueryParams(ctx.url);
 
   if (query.filters.length === 0) {
     return errorResponse(
@@ -402,34 +515,26 @@ const handleDelete = async (
     );
   }
 
-  const deleteQuery = buildDeleteQuery(table, [...query.filters, ...scope]);
-  const result = await executor.execute(deleteQuery.sql, deleteQuery.args);
+  const rows = await runDelete(ctx, [...query.filters, ...ctx.scope]);
 
-  return json({ data: result.rows });
+  return json({ data: rows });
 };
 
 // Single-resource handlers
 
 const handleGetOne = async (
-  executor: DatabaseExecutor,
-  table: string,
-  pkColumn: string,
-  pkValue: string,
-  url: URL,
-  scope: Filter[],
+  ctx: RequestContext,
+  match: Filter,
 ): Promise<Response> => {
-  const query = parseQueryParams(url);
-  const selectQuery = buildSelectQuery(table, {
+  const query = parseQueryParams(ctx.url);
+  const selectQuery = buildSelectQuery(ctx.table, {
     select: query.select,
-    filters: [
-      { column: pkColumn, operator: "eq", value: parsePathValue(pkValue) },
-      ...scope,
-    ],
+    filters: [match, ...ctx.scope],
     order: [],
     limit: 1,
   });
 
-  const result = await executor.execute(selectQuery.sql, selectQuery.args);
+  const result = await ctx.executor.execute(selectQuery.sql, selectQuery.args);
 
   if (result.rows.length === 0) {
     return errorResponse("Row not found", 404, "NOT_FOUND");
@@ -439,56 +544,30 @@ const handleGetOne = async (
 };
 
 const handlePatchOne = async (
-  executor: DatabaseExecutor,
-  table: string,
-  pkColumn: string,
-  pkValue: string,
-  req: Request,
-  scope: Filter[],
+  ctx: RequestContext,
+  match: Filter,
 ): Promise<Response> => {
-  const body = await req.json();
-
-  if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    return errorResponse(
-      "Request body must be a JSON object",
-      400,
-      "BAD_REQUEST",
-    );
+  const body = await readObjectBody(ctx.req);
+  if (body instanceof Response) {
+    return body;
   }
 
-  if (Object.keys(body as Record<string, unknown>).length === 0) {
-    return errorResponse("Request body must not be empty", 400, "BAD_REQUEST");
-  }
-
-  const updateQuery = buildUpdateQuery(table, body as Record<string, unknown>, [
-    { column: pkColumn, operator: "eq", value: parsePathValue(pkValue) },
-    ...scope,
-  ]);
-  const result = await executor.execute(updateQuery.sql, updateQuery.args);
-
-  if (result.rows.length === 0) {
+  const [row] = await runUpdate(ctx, body, [match, ...ctx.scope]);
+  if (!row) {
     return errorResponse("Row not found", 404, "NOT_FOUND");
   }
 
-  return json({ data: result.rows[0] });
+  return json({ data: row });
 };
 
 const handleDeleteOne = async (
-  executor: DatabaseExecutor,
-  table: string,
-  pkColumn: string,
-  pkValue: string,
-  scope: Filter[],
+  ctx: RequestContext,
+  match: Filter,
 ): Promise<Response> => {
-  const deleteQuery = buildDeleteQuery(table, [
-    { column: pkColumn, operator: "eq", value: parsePathValue(pkValue) },
-    ...scope,
-  ]);
-  const result = await executor.execute(deleteQuery.sql, deleteQuery.args);
-
-  if (result.rows.length === 0) {
+  const [row] = await runDelete(ctx, [match, ...ctx.scope]);
+  if (!row) {
     return errorResponse("Row not found", 404, "NOT_FOUND");
   }
 
-  return json({ data: result.rows[0] });
+  return json({ data: row });
 };
