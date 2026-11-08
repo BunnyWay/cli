@@ -3,9 +3,11 @@ import type { ParsedQuery } from "./parser.ts";
 import {
   buildCountQuery,
   buildDeleteQuery,
+  buildFilterCheckQuery,
   buildInsertQuery,
   buildSelectQuery,
   buildUpdateQuery,
+  filterColumns,
 } from "./sql.ts";
 
 describe("buildSelectQuery", () => {
@@ -267,5 +269,63 @@ describe("buildDeleteQuery", () => {
       'DELETE FROM "users" WHERE "status" = ? AND "age" < ? RETURNING *',
     );
     expect(result.args).toEqual(["deleted", 18]);
+  });
+});
+
+describe("filter groups", () => {
+  test("wraps nested and/or groups in parentheses and keeps args in order", () => {
+    const result = buildSelectQuery("notes", {
+      select: [],
+      order: [],
+      filters: [
+        { column: "deleted", operator: "is", value: false },
+        {
+          or: [
+            { column: "owner", operator: "eq", value: "alice" },
+            {
+              and: [
+                { column: "public", operator: "eq", value: 1 },
+                { column: "status", operator: "in", value: ["live", "beta"] },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.sql).toBe(
+      'SELECT * FROM "notes" WHERE "deleted" IS FALSE AND ("owner" = ? OR ("public" = ? AND "status" IN (?, ?)))',
+    );
+    expect(result.args).toEqual(["alice", 1, "live", "beta"]);
+  });
+
+  test("an empty or-group matches nothing and an empty and-group matches everything", () => {
+    const query = (filters: ParsedQuery["filters"]) =>
+      buildSelectQuery("notes", { select: [], order: [], filters }).sql;
+
+    expect(query([{ or: [] }])).toBe('SELECT * FROM "notes" WHERE (1 = 0)');
+    expect(query([{ and: [] }])).toBe('SELECT * FROM "notes" WHERE (1 = 1)');
+  });
+
+  test("filterColumns collects columns from nested groups", () => {
+    expect([
+      ...filterColumns([
+        { column: "a", operator: "eq", value: 1 },
+        { or: [{ and: [{ column: "b", operator: "gt", value: 2 }] }] },
+      ]),
+    ]).toEqual(["a", "b"]);
+  });
+});
+
+describe("buildFilterCheckQuery", () => {
+  test("evaluates the filters against the row's own values", () => {
+    const result = buildFilterCheckQuery({ owner: "alice", body: "hi" }, [
+      { column: "owner", operator: "eq", value: "alice" },
+    ]);
+
+    expect(result.sql).toBe(
+      'SELECT 1 AS matched FROM (SELECT ? AS "owner", ? AS "body") WHERE "owner" = ?',
+    );
+    expect(result.args).toEqual(["alice", "hi", "alice"]);
   });
 });
