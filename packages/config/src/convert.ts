@@ -42,9 +42,14 @@ function containerTemplateToConfig(
   const config: ContainerConfig = {};
 
   if (ct.image) {
-    const [repository, digest] = ct.image.split("@");
+    const [repository = ct.image, digest] = ct.image.split("@");
+    const tagged = repository
+      .slice(repository.lastIndexOf("/") + 1)
+      .includes(":");
     const image =
-      digest && ct.imageTag ? `${repository}:${ct.imageTag}` : ct.image;
+      digest && ct.imageTag && !tagged
+        ? `${repository}:${ct.imageTag}`
+        : repository;
     const host = registryHosts[ct.imageRegistryId];
 
     if (host && host !== "docker.io" && !hasHost(image)) {

@@ -26,6 +26,7 @@ import {
   configToAddRequest,
   configToContainerRequest,
   loadConfig,
+  normalizeRegions,
   parseImageRef,
   resolveContainerRegistry,
   saveConfig,
@@ -34,8 +35,8 @@ import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 
 /**
  * Extract the per-container registry IDs we have so far into the
- * registry-override map expected by `configToAddRequest` /
- * `configToPatchRequest`. Empty entries are omitted so they don't
+ * registry-override map expected by `configToAddRequest` and
+ * `configToContainerRequest`. Empty entries are omitted so they don't
  * accidentally clear a registry on the server.
  */
 function draftRegistries(
@@ -174,6 +175,7 @@ interface DeployArgs {
   image?: string;
   "allow-split-volumes"?: boolean;
   force?: boolean;
+  "add-alongside"?: boolean;
   region?: string;
   dockerfile?: string | boolean;
   context?: string;
@@ -274,6 +276,11 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         alias: "f",
         type: "boolean",
         hidden: true,
+      })
+      .option("add-alongside", {
+        type: "boolean",
+        describe:
+          "Add a container even when the app has containers bunny.jsonc doesn't list",
       })
       .option("allow-split-volumes", {
         type: "boolean",
@@ -475,7 +482,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
           config,
           Object.keys(config.app.containers),
           registries,
-          args["allow-split-volumes"],
+          {
+            allowSplitVolumes: args["allow-split-volumes"],
+            addAlongside: args["add-alongside"],
+          },
         );
       } else {
         const createSpin = spinner("Creating app...");
@@ -650,8 +660,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       // In-memory only - `saveConfig` strips `image` for dockerfile
       // containers via `stripTransientFields`. The MC API is the source
       // of truth for what's deployed; `bunny.jsonc` stores intent only.
-      // The mutation is still needed for `configToAddRequest` /
-      // `configToPatchRequest` to read the ref in the same deploy run.
+      // The mutation is still needed for `configToAddRequest` and
+      // `applyImages` to read the ref in the same deploy run.
       targetContainer.image = imageRef;
       // Persist dockerfile/context if they came from flags so the manifest stays the source of truth.
       if (!targetContainer.dockerfile) {
@@ -771,7 +781,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         resolveContainerEnv(toml, dotenvPath),
         [targetName],
         draftRegistries(draft.containers),
-        args["allow-split-volumes"],
+        {
+          allowSplitVolumes: args["allow-split-volumes"],
+          addAlongside: args["add-alongside"],
+        },
         existingApp,
       );
       if (deployImage) logger.success(`Image updated to ${deployImage}.`);
@@ -837,6 +850,56 @@ function findTemplate(app: App, name: string, configCount: number) {
   );
 }
 
+// Deploy never applies these, so say when bunny.jsonc and the app disagree instead of ignoring the file silently.
+function warnIgnoredSettings(toml: BunnyAppConfig, app: App, count: number) {
+  const notes: string[] = [];
+  const scaling = toml.app.scaling;
+  const live = app.autoScaling;
+  if (
+    scaling &&
+    live &&
+    (scaling.min !== live.min || scaling.max !== live.max)
+  ) {
+    notes.push(
+      `scaling: bunny.jsonc ${scaling.min}-${scaling.max}, app ${live.min}-${live.max}`,
+    );
+  }
+  if (toml.app.regions) {
+    const want = normalizeRegions(toml.app.regions);
+    const same = (a: string[], b: string[]) =>
+      a.length === b.length && a.every((id) => b.includes(id.toUpperCase()));
+    const allowed = app.regionSettings.allowedRegionIds.map((id) =>
+      id.toUpperCase(),
+    );
+    const required = app.regionSettings.requiredRegionIds.map((id) =>
+      id.toUpperCase(),
+    );
+    if (!same(want.allowed, allowed) || !same(want.required, required)) {
+      notes.push(
+        `regions: bunny.jsonc ${want.allowed.join(", ")}, app ${allowed.join(", ") || "none"}`,
+      );
+    }
+  }
+  for (const [name, container] of Object.entries(toml.app.containers)) {
+    const template = findTemplate(app, name, count);
+    if (!template || !container.env) continue;
+    const liveKeys = new Set(template.environmentVariables?.map((v) => v.name));
+    const missing = Object.keys(container.env).filter((k) => !liveKeys.has(k));
+    if (missing.length > 0) {
+      notes.push(`env on "${name}": ${missing.join(", ")} not set on the app`);
+    }
+  }
+  if (notes.length === 0) return;
+
+  logger.warn(
+    "bunny.jsonc differs from the app. Deploy only updates images, so the app keeps its own:",
+  );
+  for (const note of notes) logger.dim(`  ${note}`);
+  logger.dim(
+    "Change them with `bunny apps scale`, `bunny apps regions set` or `bunny apps env set`, or run `bunny apps pull` to update bunny.jsonc.",
+  );
+}
+
 // The volumes list replaces the app's by name, so it must carry every live volume exactly as read, or the missing ones lose their data.
 async function addVolumes(
   client: ReturnType<typeof createMcClient>,
@@ -890,7 +953,7 @@ async function applyImages(
   toml: BunnyAppConfig,
   names: string[],
   registries: RegistryMap | undefined,
-  allowSplitVolumes: boolean | undefined,
+  opts: { allowSplitVolumes?: boolean; addAlongside?: boolean },
   existing?: App,
 ): Promise<void> {
   let app = existing;
@@ -907,6 +970,20 @@ async function applyImages(
     (name) =>
       toml.app.containers[name]?.image && !findTemplate(app, name, count),
   );
+  warnIgnoredSettings(toml, app, count);
+
+  // A container missing on both sides is most likely a rename, and adding it would run a second copy next to the old one.
+  const configNames = Object.keys(toml.app.containers);
+  const unlisted = app.containerTemplates.filter(
+    (t) => !configNames.some((n) => findTemplate(app, n, count)?.id === t.id),
+  );
+  if (added.length > 0 && unlisted.length > 0 && !opts.addAlongside) {
+    throw new UserError(
+      `bunny.jsonc has container "${added[0]}", which the app doesn't, and the app has "${unlisted[0]?.name}", which bunny.jsonc doesn't. Deploy would add "${added[0]}" and leave "${unlisted[0]?.name}" running.`,
+      `If you renamed it, put the old name back in bunny.jsonc. To add "${added[0]}" alongside it, pass --add-alongside.`,
+    );
+  }
+
   const newVolumes = new Map<string, number>();
   const liveVolumes = new Set(app.volumes.map((v) => v.name));
   for (const name of added) {
@@ -918,7 +995,7 @@ async function applyImages(
   if (newVolumes.size > 0) {
     const regions = app.regionSettings.allowedRegionIds.length;
     const max = app.autoScaling?.max ?? 1;
-    if (!allowSplitVolumes && (regions > 1 || max > 1)) {
+    if (!opts.allowSplitVolumes && (regions > 1 || max > 1)) {
       throw new UserError(
         `Deploy would add volume "${[...newVolumes.keys()][0]}", but app ${app.name} runs in ${regions} region(s) with up to ${max} instance(s).`,
         "Volumes aren't shared: each region and each instance gets its own empty volume. Pass --allow-split-volumes if each copy should keep separate data.",

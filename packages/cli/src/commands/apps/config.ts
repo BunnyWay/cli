@@ -32,7 +32,6 @@ export {
   CURRENT_VERSION,
   configToAddRequest,
   configToContainerRequest,
-  configToPatchRequest,
   normalizeRegions,
   parseImageRef,
 } from "@bunny.net/config";

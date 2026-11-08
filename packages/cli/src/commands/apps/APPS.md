@@ -51,7 +51,7 @@ Previous image: ghcr.io/me/api:abc-123
 To rollback:    bunny apps deploy ghcr.io/me/api:abc-123
 ```
 
-On an app that already exists, `deploy` builds or resolves each image, points the matching container at it, and deploys. Scaling, regions, endpoints, volumes, probes, command and env stay exactly as they are on the app, whatever `bunny.jsonc` says; change them with their own commands or in the dashboard. A container in `bunny.jsonc` that the app doesn't have yet is added, with its env resolved from `.env`. Containers on the app but not in `bunny.jsonc` are left alone. Deploying an unchanged image ref resolves its tag again, so a moving tag like `latest` picks up the newest build.
+On an app that already exists, `deploy` builds or resolves each image, points the matching container at it, and deploys. Scaling, regions, endpoints, volumes, probes, command and env stay exactly as they are on the app, whatever `bunny.jsonc` says; change them with their own commands or in the dashboard. A container in `bunny.jsonc` that the app doesn't have yet is added, with its env resolved from `.env`. Containers on the app but not in `bunny.jsonc` are left alone. When both sides have a container the other lacks, that usually means a rename, and adding the new name would run a second copy next to the old one, so deploy stops; put the old name back, or pass `--add-alongside` to add it anyway. When `scaling`, `regions` or a container's `env` keys in `bunny.jsonc` differ from the app, deploy prints the differences and leaves the app's values in place. Deploying an unchanged image ref resolves its tag again, so a moving tag like `latest` picks up the newest build.
 
 A linked directory needs no `bunny.jsonc`: `bunny apps deploy <image>` or `bunny apps deploy --dockerfile` updates the app's container (pass `--container` when it has more than one) and writes no config file.
 
@@ -98,6 +98,7 @@ The Dockerfile and a `.dockerignore` (unless you have one) are written to the pr
 | `--dry-run`             | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                                              |
 | `--no-push`             | Build only. Skip pushing the image and skip the deploy.                                                                                               |
 | `--allow-split-volumes` | Deploy an app that mounts a volume in more than one region or instance (see [Volumes](#volumes-regions-and-scaling)).                                 |
+| `--add-alongside`       | Add a container from `bunny.jsonc` even though the app has containers `bunny.jsonc` doesn't list (see below).                                         |
 
 ```bash
 # Deploy a pre-built image
@@ -222,6 +223,8 @@ Show app details including status, regions, scaling, cost, and containers.
 bunny apps show
 bunny apps show --id <app-id>
 ```
+
+`bunny apps push` was removed: it applied the whole of `bunny.jsonc` to a running app. Running it now changes nothing and points to the per-setting commands.
 
 ## `bunny apps pull`
 
@@ -380,7 +383,7 @@ A single-container app:
 }
 ```
 
-A multi-container app — every container is its own entry in `app.containers`. `bunny apps deploy <image>` and `bunny apps deploy --dockerfile` require `--container <name>` to disambiguate which one to update; `bunny apps deploy` with no args re-triggers a deploy of the whole app at its current state.
+A multi-container app — every container is its own entry in `app.containers`. `bunny apps deploy <image>` and `bunny apps deploy --dockerfile` require `--container <name>` to disambiguate which one to update; `bunny apps deploy` with no args builds or resolves every container's image and deploys them all.
 
 ```jsonc
 {
