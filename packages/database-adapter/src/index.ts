@@ -1,4 +1,10 @@
-export type { AdapterClient, AdapterStatement } from "./client.ts";
+export type {
+  AdapterBatchMode,
+  AdapterBatchResult,
+  AdapterClient,
+  AdapterResult,
+  AdapterStatement,
+} from "./client.ts";
 export type { CreateExecutorOptions } from "./executor.ts";
 export { createExecutor } from "./executor.ts";
 export type { IntrospectOptions } from "./introspect.ts";

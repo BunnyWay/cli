@@ -1,6 +1,11 @@
 export type { RequireAuthOptions } from "./auth.ts";
 export { requireAuth } from "./auth.ts";
-export type { DatabaseExecutor, ExecuteResult } from "./executor.ts";
+export type {
+  BatchStatement,
+  DatabaseExecutor,
+  ExecuteResult,
+  SqlArg,
+} from "./executor.ts";
 export type { RestHandlerOptions } from "./handler.ts";
 export { createRestHandler } from "./handler.ts";
 export type {

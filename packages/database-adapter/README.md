@@ -49,6 +49,19 @@ import { sqliteClient } from "@bunny.net/database-adapter/sqlite";
 const executor = createExecutor({ client: sqliteClient(new Database(":memory:")) });
 ```
 
+#### `executor.batch(statements)`
+
+When the client can batch (both `Database` from `@bunny.net/database-client` and `sqliteClient` can), the executor also has `batch()`. It runs every statement in one transaction, so all commit or none do, and returns the results in statement order. It takes the write lock up front (`mode: "immediate"`), since batches are meant for writes.
+
+```ts
+const executor = createExecutor({ client: connect() });
+
+await executor.batch?.([
+  { sql: "INSERT INTO users (name) VALUES (?)", args: ["Alice"] },
+  { sql: "UPDATE stats SET users = users + 1", args: [] },
+]);
+```
+
 ### `introspect({ client, version?, exclude?, include? }): Promise<DatabaseSchema>`
 
 Connects to a database, runs `PRAGMA table_info` / `PRAGMA foreign_key_list` / `PRAGMA index_list` for each table, and returns a `DatabaseSchema` object (from `@bunny.net/database-openapi`).
