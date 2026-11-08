@@ -4,7 +4,7 @@ import type {
 } from "@bunny.net/database-openapi";
 import { generateOpenAPISpec } from "@bunny.net/database-openapi";
 import type { DatabaseExecutor } from "./executor.ts";
-import { type Filter, parseQueryParams } from "./parser.ts";
+import { type Filter, parseQueryParams, QueryParseError } from "./parser.ts";
 import {
   buildCountQuery,
   buildDeleteQuery,
@@ -246,6 +246,9 @@ export const createRestHandler = (
           return errorResponse("Method not allowed", 405, "METHOD_NOT_ALLOWED");
       }
     } catch (err: unknown) {
+      if (err instanceof QueryParseError) {
+        return errorResponse(err.message, 400, "BAD_REQUEST");
+      }
       // The detail goes to the host's logger, not the response: a mounted handler must not leak schema names or file paths.
       try {
         options.onError?.(err);

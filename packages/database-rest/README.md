@@ -211,6 +211,18 @@ GET /users?deleted_at=is.null
 
 **Operators**: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `is`, `in`
 
+#### Filter groups
+
+Use `or` and `and` to group conditions, with the same `column.operator.value` form inside parentheses. Groups can nest, and they're ANDed with any other filters.
+
+```
+GET /users?or=(age.lt.18,age.gt.65)
+GET /posts?status=eq.live&or=(author_id.eq.1,and(public.is.true,featured.is.true))
+GET /users?or=(name.eq."Doe, John",zip.eq."01234")
+```
+
+Double quotes keep a value as a string, including commas and parentheses. A malformed group returns `400` rather than being skipped, since dropping one branch would change which rows match. (Malformed plain filters are still ignored, as before.)
+
 #### Order
 
 ```

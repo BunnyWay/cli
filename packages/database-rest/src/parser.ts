@@ -55,6 +55,18 @@ const FILTER_OPERATORS: Record<string, FilterOperator> = {
 
 const RESERVED_PARAMS = new Set(["select", "order", "limit", "offset"]);
 
+/** Query parameters that hold a filter group, as in `?or=(a.eq.1,b.eq.2)`. */
+const GROUP_PARAMS = new Set(["and", "or"]);
+
+/**
+ * A query string the parser cannot read safely. Thrown for malformed `and` /
+ * `or` groups, because silently dropping one branch of a group would change
+ * which rows match. The handler answers it with 400.
+ */
+export class QueryParseError extends Error {
+  override name = "QueryParseError";
+}
+
 export function parseSelect(selectParam: string | null): string[] {
   if (!selectParam || selectParam === "*") {
     return [];
@@ -133,6 +145,104 @@ function parseValue(raw: string): string | number {
   return raw;
 }
 
+/**
+ * Splits on commas that are not inside parentheses or double quotes, so
+ * `a.eq.1,and(b.eq.2,c.in.(3,4))` yields two parts.
+ */
+function splitTopLevel(raw: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quoted = false;
+  let current = "";
+
+  for (const ch of raw) {
+    if (ch === '"') {
+      quoted = !quoted;
+    } else if (!quoted && ch === "(") {
+      depth++;
+    } else if (!quoted && ch === ")") {
+      depth--;
+      if (depth < 0) {
+        throw new QueryParseError(`Unbalanced parentheses in "${raw}"`);
+      }
+    } else if (!quoted && depth === 0 && ch === ",") {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+
+  if (depth !== 0 || quoted) {
+    throw new QueryParseError(`Unbalanced parentheses or quotes in "${raw}"`);
+  }
+  parts.push(current);
+
+  return parts.map((part) => part.trim());
+}
+
+/** Reads `(item,item,...)`, where each item is `column.operator.value` or a nested `and(...)` / `or(...)`. */
+function parseGroupItems(raw: string): Filter[] {
+  const match = raw.match(/^\((.*)\)$/s);
+  if (!match) {
+    throw new QueryParseError(
+      `Expected a parenthesised list like (a.eq.1,b.eq.2), got "${raw}"`,
+    );
+  }
+  const [, inner = ""] = match;
+  if (inner.trim() === "") {
+    throw new QueryParseError("A filter group must not be empty");
+  }
+
+  return splitTopLevel(inner).map(parseGroupItem);
+}
+
+function parseGroupItem(item: string): Filter {
+  const group = item.match(/^(and|or)(\(.*\))$/s);
+  if (group) {
+    const [, kind, list = ""] = group;
+    const children = parseGroupItems(list);
+
+    return kind === "and" ? { and: children } : { or: children };
+  }
+
+  const dot = item.indexOf(".");
+  const column = dot === -1 ? "" : item.slice(0, dot);
+  const rest = dot === -1 ? "" : item.slice(dot + 1);
+  // Inside a group the operator is required: "age.18" would be ambiguous.
+  if (!column || !rest.includes(".")) {
+    throw new QueryParseError(
+      `Expected column.operator.value inside a filter group, got "${item}"`,
+    );
+  }
+
+  const quoted = rest.match(/^([a-z]+)\."(.*)"$/s);
+  if (quoted) {
+    const [, operator = "", value = ""] = quoted;
+    const condition = parseFilterValue(column, `${operator}.x`);
+    if (!condition) {
+      throw new QueryParseError(`Unknown filter operator "${operator}"`);
+    }
+
+    // A quoted value is always a string, so "123" stays text.
+    return { ...condition, value };
+  }
+
+  const condition = parseFilterValue(column, rest);
+  if (!condition) {
+    throw new QueryParseError(`Unknown filter operator in "${item}"`);
+  }
+
+  return condition;
+}
+
+/** Parses the value of an `and` or `or` query parameter into a filter group. */
+export function parseFilterGroup(kind: "and" | "or", raw: string): Filter {
+  const children = parseGroupItems(raw);
+
+  return kind === "and" ? { and: children } : { or: children };
+}
+
 export function parseOrder(orderParam: string | null): OrderClause[] {
   if (!orderParam) {
     return [];
@@ -169,6 +279,11 @@ export function parseQueryParams(url: URL): ParsedQuery {
 
   for (const [key, value] of params.entries()) {
     if (RESERVED_PARAMS.has(key)) {
+      continue;
+    }
+
+    if (GROUP_PARAMS.has(key)) {
+      filters.push(parseFilterGroup(key as "and" | "or", value));
       continue;
     }
 

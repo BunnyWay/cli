@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  parseFilterGroup,
   parseFilterValue,
   parseOrder,
   parseQueryParams,
   parseSelect,
+  QueryParseError,
 } from "./parser.ts";
 
 describe("parseSelect", () => {
@@ -227,5 +229,74 @@ describe("parseQueryParams", () => {
     const result = parseQueryParams(url);
 
     expect(result.filters).toEqual([]);
+  });
+});
+
+describe("parseFilterGroup", () => {
+  test("parses a flat or-group", () => {
+    expect(parseFilterGroup("or", "(age.lt.18,age.gt.65)")).toEqual({
+      or: [
+        { column: "age", operator: "lt", value: 18 },
+        { column: "age", operator: "gt", value: 65 },
+      ],
+    });
+  });
+
+  test("parses nested groups and in-lists whose commas are inside parentheses", () => {
+    expect(
+      parseFilterGroup(
+        "or",
+        "(owner.eq.alice,and(public.is.true,status.in.(live,beta)))",
+      ),
+    ).toEqual({
+      or: [
+        { column: "owner", operator: "eq", value: "alice" },
+        {
+          and: [
+            { column: "public", operator: "is", value: true },
+            { column: "status", operator: "in", value: ["live", "beta"] },
+          ],
+        },
+      ],
+    });
+  });
+
+  test("keeps quoted values as strings, including commas and parentheses", () => {
+    expect(
+      parseFilterGroup("or", '(name.eq."Doe, John (Jr)",zip.eq."01234")'),
+    ).toEqual({
+      or: [
+        { column: "name", operator: "eq", value: "Doe, John (Jr)" },
+        { column: "zip", operator: "eq", value: "01234" },
+      ],
+    });
+  });
+
+  test.each([
+    ["missing parentheses", "age.lt.18"],
+    ["empty group", "()"],
+    ["unbalanced parentheses", "(age.lt.18,and(a.eq.1)"],
+    ["unknown operator", "(age.between.1)"],
+    ["missing operator", "(age.18)"],
+  ])("rejects %s instead of dropping part of the group", (_, raw) => {
+    expect(() => parseFilterGroup("or", raw)).toThrow(QueryParseError);
+  });
+});
+
+describe("parseQueryParams with groups", () => {
+  test("ANDs or= and and= groups with plain filters", () => {
+    const url = new URL(
+      "http://db.test/notes?deleted=is.false&or=(owner.eq.alice,public.eq.1)",
+    );
+
+    expect(parseQueryParams(url).filters).toEqual([
+      { column: "deleted", operator: "is", value: false },
+      {
+        or: [
+          { column: "owner", operator: "eq", value: "alice" },
+          { column: "public", operator: "eq", value: 1 },
+        ],
+      },
+    ]);
   });
 });

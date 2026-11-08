@@ -18,10 +18,12 @@ export type {
   SortDirection,
 } from "./parser.ts";
 export {
+  parseFilterGroup,
   parseFilterValue,
   parseOrder,
   parseQueryParams,
   parseSelect,
+  QueryParseError,
 } from "./parser.ts";
 export {
   buildCountQuery,

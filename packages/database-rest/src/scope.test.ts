@@ -230,3 +230,26 @@ describe("scope hook", () => {
     });
   });
 });
+
+describe("filter groups in the query string", () => {
+  test("an or-group narrows results and stays inside the scope", async () => {
+    const res = await call(
+      handlerFor({ scope: ownerScope("alice") }),
+      "GET",
+      `/notes?or=${encodeURIComponent("(body.like.%private,owner.eq.bob)")}&order=id.asc`,
+    );
+    const json = (await res.json()) as { data: { body: string }[] };
+
+    expect(json.data.map((note) => note.body)).toEqual([
+      "alice private",
+      "bob public",
+    ]);
+  });
+
+  test("a malformed group answers 400", async () => {
+    const res = await call(handlerFor({}), "GET", "/notes?or=(owner.eq.alice");
+
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe("BAD_REQUEST");
+  });
+});
