@@ -12,7 +12,7 @@ type RegionSettings = Pick<
 >;
 
 const appRef = z.string().min(1).describe("App ID.");
-const instances = z.number().int().min(0);
+const instances = z.number().int().min(1).max(1000);
 const allowSplitVolumes = z
   .boolean()
   .optional()
@@ -20,12 +20,22 @@ const allowSplitVolumes = z
 
 type App = components["schemas"]["Application"];
 
+/** Refusal to split an app's volumes; commands reword the hint for their own flag. */
+export class SplitVolumeError extends UserError {
+  constructor(message: string) {
+    super(
+      message,
+      "Volumes aren't shared: each region and each instance gets its own empty volume. Set `allowSplitVolumes` if each copy should keep separate data.",
+    );
+    this.name = "SplitVolumeError";
+  }
+}
+
 // Volumes aren't shared, so more than one copy of an app with a volume means separate, empty data per copy.
 function assertNoSplit(app: App, reason: string | undefined, allow?: boolean) {
   if (allow || !reason || app.volumes.length === 0) return;
-  throw new UserError(
+  throw new SplitVolumeError(
     `App ${app.name} has a volume, but it would ${reason}.`,
-    "Volumes aren't shared: each region and each instance gets its own empty volume. Pass --allow-split-volumes if each copy should keep separate data.",
   );
 }
 

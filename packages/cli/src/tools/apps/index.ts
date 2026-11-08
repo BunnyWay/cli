@@ -21,4 +21,4 @@ export {
   registryTypeForServer,
   toRegistry,
 } from "./registries/index.ts";
-export { appsRegionsSet, appsScale } from "./settings.ts";
+export { appsRegionsSet, appsScale, SplitVolumeError } from "./settings.ts";

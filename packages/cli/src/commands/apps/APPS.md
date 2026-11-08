@@ -239,7 +239,7 @@ bunny apps pull --force
 
 ## `bunny apps scale`
 
-Set the minimum and maximum instances. A bound you leave out keeps its current value.
+Set the minimum and maximum instances, each from 1 to 1000. A bound you leave out keeps its current value.
 
 ```bash
 bunny apps scale --min 1 --max 3

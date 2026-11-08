@@ -345,6 +345,12 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
           "Pass an image (`bunny apps deploy <image>`) or `--dockerfile` to build one.",
         );
       }
+      if (dryRun) {
+        logger.dim(
+          `Dry run: deploy would update the image on linked app ${linkedId} to ${positionalImage ?? `a build of ${dockerfileFlag}`}. Nothing was written and the API wasn't contacted.`,
+        );
+        return;
+      }
       const { data: app } = await client.GET("/apps/{appId}", {
         params: { path: { appId: linkedId } },
       });

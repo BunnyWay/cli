@@ -1,7 +1,8 @@
 import { defineToolCommand } from "@/core/define-tool-command.ts";
+import { UserError } from "@/core/errors.ts";
 import { formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
-import { appsScale } from "@/tools/apps/index.ts";
+import { appsScale, SplitVolumeError } from "@/tools/apps/index.ts";
 import { resolveAppId } from "./config.ts";
 
 interface ScaleArgs {
@@ -42,6 +43,14 @@ export const appsScaleCommand = defineToolCommand({
       allowSplitVolumes: args["allow-split-volumes"],
     },
   }),
+
+  onError: (error) =>
+    error instanceof SplitVolumeError
+      ? new UserError(
+          error.message,
+          "Volumes aren't shared: each region and each instance gets its own empty volume. Pass --allow-split-volumes if each copy should keep separate data.",
+        )
+      : undefined,
 
   render: (result, args) => {
     logger.success("Scaling updated.");
