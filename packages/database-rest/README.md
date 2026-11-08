@@ -127,6 +127,41 @@ const handler = createRestHandler(executor, schema, {
 - **Inserts:** every row in the body must match the filter before anything is written, or the request fails with `403`. Each column the filter checks must be present in the row.
 - An update is checked against the row as it is now, not as it will be, so a scope doesn't stop an update from moving a row out of scope. Check new values yourself if that matters.
 
+#### Lifecycle hooks
+
+`hooks` runs code around inserts, updates and deletes. `before*` hooks run after validation and before the write. They can return replacement rows or values, or throw `HookRejection` to answer with a client error. `after*` hooks run once the write is done and receive the affected rows. If an after hook throws, the error goes to `onError` and the response is unchanged, since the write already happened.
+
+```ts
+import { createRestHandler, HookRejection } from "@bunny.net/database-rest";
+
+const handler = createRestHandler(executor, schema, {
+  hooks: {
+    // Runs before `scope` is checked, so it can set the owner from the session.
+    beforeInsert: async ({ request, rows }) => {
+      const user = await getUser(request);
+      return rows.map((row) => ({ ...row, owner: user.id }));
+    },
+    beforeDelete: ({ table }) => {
+      if (table === "invoices") throw new HookRejection("Invoices are permanent", 409);
+    },
+    afterInsert: async ({ table, rows }) => {
+      await notify(table, rows);
+    },
+  },
+});
+```
+
+| Hook           | Receives                                                    | May return           |
+| -------------- | ----------------------------------------------------------- | -------------------- |
+| `beforeInsert` | `request`, `table`, `rows`                                  | replacement `rows`   |
+| `afterInsert`  | `request`, `table`, inserted `rows`                         | nothing              |
+| `beforeUpdate` | `request`, `table`, `values`, `filters` (including `scope`) | replacement `values` |
+| `afterUpdate`  | `request`, `table`, updated `rows`                          | nothing              |
+| `beforeDelete` | `request`, `table`, `filters` (including `scope`)           | nothing              |
+| `afterDelete`  | `request`, `table`, deleted `rows`                          | nothing              |
+
+After hooks only run when at least one row was affected.
+
 ### `requireAuth(handler, options): (req: Request) => Promise<Response>`
 
 Wraps any request handler with a shared-token check. Validates
