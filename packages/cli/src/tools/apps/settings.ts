@@ -20,6 +20,12 @@ const allowSplitVolumes = z
 
 type App = components["schemas"]["Application"];
 
+const ScalingSchema = z.object({ min: z.number(), max: z.number() });
+const RegionSettingsSchema = z.object({
+  allowedRegionIds: z.array(z.string()),
+  requiredRegionIds: z.array(z.string()),
+});
+
 /** Refusal to split an app's volumes; commands reword the hint for their own flag. */
 export class SplitVolumeError extends UserError {
   constructor(message: string) {
@@ -31,9 +37,12 @@ export class SplitVolumeError extends UserError {
   }
 }
 
-// Volumes aren't shared, so more than one copy of an app with a volume means separate, empty data per copy.
+// Volumes aren't shared, so more than one copy of an app with a mounted volume means separate, empty data per copy.
 function assertNoSplit(app: App, reason: string | undefined, allow?: boolean) {
-  if (allow || !reason || app.volumes.length === 0) return;
+  const mounted = app.containerTemplates.some(
+    (ct) => ct.volumeMounts.length > 0,
+  );
+  if (allow || !reason || !mounted) return;
   throw new SplitVolumeError(
     `App ${app.name} has a volume, but it would ${reason}.`,
   );
@@ -68,6 +77,7 @@ export const appsScale = defineTool({
     allowSplitVolumes,
   }),
   kind: "write",
+  resultSchema: ScalingSchema,
   examples: [[{ app: "abc123", min: 1, max: 3 }, "Run 1 to 3 instances"]],
   run: async (ctx, input): Promise<AutoscalingSettings> => {
     if (input.min === undefined && input.max === undefined) {
@@ -123,6 +133,7 @@ export const appsRegionsSet = defineTool({
     allowSplitVolumes,
   }),
   kind: "write",
+  resultSchema: RegionSettingsSchema,
   examples: [
     [{ app: "abc123", regions: ["DE", "UK"] }, "Run in DE and UK"],
     [
@@ -142,9 +153,16 @@ export const appsRegionsSet = defineTool({
 
     ctx.progress("Fetching app...");
     const app = await requireApp(ctx.clients.mc, input.app);
+    const added = allowed.filter(
+      (id) => !app.regionSettings.allowedRegionIds.includes(id),
+    );
     assertNoSplit(
       app,
-      allowed.length > 1 ? `run in ${allowed.length} regions` : undefined,
+      allowed.length > 1
+        ? `run in ${allowed.length} regions`
+        : added.length > 0
+          ? `move to ${added.join(", ")}, away from its existing volume data`
+          : undefined,
       input.allowSplitVolumes,
     );
 

@@ -1,3 +1,4 @@
+import { dirname } from "node:path";
 import { BunnyAppConfigSchema, BunnyConfigSchema } from "@bunny.net/config";
 import { createMcClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "@/config/index.ts";
@@ -124,11 +125,15 @@ export const appsPullCommand = defineCommand<PullArgs>({
             : undefined,
       };
     }
-    saveManifest<AppManifest>(APP_MANIFEST, {
-      id: appId,
-      profile: profile ?? "default",
-      containers: manifestContainers,
-    });
+    saveManifest<AppManifest>(
+      APP_MANIFEST,
+      {
+        id: appId,
+        profile: profile ?? "default",
+        containers: manifestContainers,
+      },
+      dirname(target),
+    );
 
     if (output === "json") {
       logger.log(JSON.stringify(toml, null, 2));
