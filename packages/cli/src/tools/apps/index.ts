@@ -7,6 +7,7 @@ export type {
   RegistryTarget,
   RegistryType,
 } from "./registries/index.ts";
+export { appsRegionsSet, appsScale, SplitVolumeError } from "./settings.ts";
 export {
   DeletedRegistrySchema,
   fetchRegistries,

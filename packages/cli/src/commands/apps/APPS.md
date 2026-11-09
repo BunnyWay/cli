@@ -234,6 +234,15 @@ bunny apps push --allow-split-volumes
 
 Containers and volumes missing from `bunny.jsonc` are removed from the app, volumes with their data. `push` and `deploy` list what would be removed and ask first; pass `--force` to skip the prompt (required without a terminal). Containers are matched by name, so reordering them is safe; renaming one container at a time keeps it.
 
+## `bunny apps scale`
+
+Set the minimum and maximum instances, each from 1 to 1000. A bound you leave out keeps its current value. An app with a mounted volume can't scale above 1 instance unless you pass `--allow-split-volumes`, since each instance gets its own empty volume.
+
+```bash
+bunny apps scale --min 1 --max 3
+bunny apps scale --max 5
+```
+
 ## `bunny apps env`
 
 Manage environment variables per container.
@@ -319,7 +328,15 @@ View available regions and app region settings.
 ```bash
 bunny apps regions list
 bunny apps regions show
+
+# Always run in DE and UK
+bunny apps regions set DE UK
+
+# Allow three regions, always run in DE
+bunny apps regions set DE UK NY --required DE
 ```
+
+`--required` defaults to every allowed region and must be a subset of them. An app with a mounted volume can't run in more than one region, or move to a new one, unless you pass `--allow-split-volumes`, since volumes are region-local.
 
 ## `bunny.jsonc` schema
 

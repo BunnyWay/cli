@@ -1382,6 +1382,8 @@ bunny apps deploy ghcr.io/myorg/api:v1.2   # deploy a pre-built image
 bunny apps deploy --dockerfile             # build the local Dockerfile, push, and deploy
 bunny apps pull                            # sync the remote app into bunny.jsonc
 bunny apps push                            # apply local bunny.jsonc changes
+bunny apps scale --min 1 --max 3           # change scaling on the live app
+bunny apps regions set DE UK               # change where the app runs
 ```
 
 See [APPS.md](src/commands/apps/APPS.md) for every `bunny apps` command, flag, and the `bunny.jsonc` reference.
