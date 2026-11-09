@@ -1,4 +1,5 @@
 import { resolveAppId } from "@/commands/apps/config.ts";
+import { SPLIT_VOLUME_HINT } from "@/commands/apps/constants.ts";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { formatKeyValue } from "@/core/format.ts";
@@ -58,10 +59,7 @@ export const appsRegionsSetCommand = defineToolCommand({
 
   onError: (error) =>
     error instanceof SplitVolumeError
-      ? new UserError(
-          error.message,
-          "Volumes aren't shared: each region and each instance gets its own empty volume. Pass --allow-split-volumes if each copy should keep separate data.",
-        )
+      ? new UserError(error.message, SPLIT_VOLUME_HINT)
       : undefined,
 
   render: (result, args) => {

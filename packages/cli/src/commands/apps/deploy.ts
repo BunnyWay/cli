@@ -31,7 +31,11 @@ import {
   resolveContainerRegistry,
   saveConfig,
 } from "./config.ts";
-import { APP_MANIFEST, type AppManifest } from "./constants.ts";
+import {
+  APP_MANIFEST,
+  type AppManifest,
+  SPLIT_VOLUME_HINT,
+} from "./constants.ts";
 
 /**
  * Extract the per-container registry IDs we have so far into the
@@ -1018,7 +1022,7 @@ async function applyImages(
     if (!opts.allowSplitVolumes && (regions > 1 || max > 1)) {
       throw new UserError(
         `Deploy would add volume "${[...newVolumes.keys()][0]}", but app ${app.name} runs in ${regions} region(s) with up to ${max} instance(s).`,
-        "Volumes aren't shared: each region and each instance gets its own empty volume. Pass --allow-split-volumes if each copy should keep separate data.",
+        SPLIT_VOLUME_HINT,
       );
     }
     await addVolumes(client, appId, newVolumes);

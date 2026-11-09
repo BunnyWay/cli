@@ -153,15 +153,15 @@ export const appsRegionsSet = defineTool({
 
     ctx.progress("Fetching app...");
     const app = await requireApp(ctx.clients.mc, input.app);
-    const added = allowed.filter(
-      (id) => !app.regionSettings.allowedRegionIds.includes(id),
+    const moved = required.filter(
+      (id) => !app.regionSettings.requiredRegionIds.includes(id),
     );
     assertNoSplit(
       app,
       allowed.length > 1
         ? `run in ${allowed.length} regions`
-        : added.length > 0
-          ? `move to ${added.join(", ")}, away from its existing volume data`
+        : moved.length > 0
+          ? `move to ${moved.join(", ")}, away from its existing volume data`
           : undefined,
       input.allowSplitVolumes,
     );

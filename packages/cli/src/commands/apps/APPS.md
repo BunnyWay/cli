@@ -246,15 +246,6 @@ bunny apps scale --min 1 --max 3
 bunny apps scale --max 5
 ```
 
-## `bunny apps scale`
-
-Set the minimum and maximum instances, each from 1 to 1000. A bound you leave out keeps its current value. An app with a mounted volume can't scale above 1 instance unless you pass `--allow-split-volumes`, since each instance gets its own empty volume.
-
-```bash
-bunny apps scale --min 1 --max 3
-bunny apps scale --max 5
-```
-
 ## `bunny apps env`
 
 Manage environment variables per container.
