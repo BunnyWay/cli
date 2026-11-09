@@ -54,6 +54,17 @@ async function requireApp(client: McClient, appId: string): Promise<App> {
   return app;
 }
 
+// The app response can omit autoScaling, so read the bounds from their own endpoint.
+async function fetchScaling(
+  client: McClient,
+  appId: string,
+): Promise<AutoscalingSettings | undefined> {
+  const { data } = await client.GET("/apps/{appId}/autoscaling", {
+    params: { path: { appId } },
+  });
+  return data;
+}
+
 export const appsScale = defineTool({
   name: "apps.scale",
   title: "Scale an app",
@@ -76,9 +87,11 @@ export const appsScale = defineTool({
     ctx.progress("Fetching app...");
     const app = await requireApp(ctx.clients.mc, input.app);
 
+    const current =
+      app.autoScaling ?? (await fetchScaling(ctx.clients.mc, input.app));
     const scaling = {
-      min: input.min ?? app.autoScaling?.min ?? 1,
-      max: input.max ?? app.autoScaling?.max ?? 1,
+      min: input.min ?? current?.min ?? 1,
+      max: input.max ?? current?.max ?? 1,
     };
     if (scaling.min > scaling.max) {
       throw new UserError(
@@ -140,15 +153,15 @@ export const appsRegionsSet = defineTool({
 
     ctx.progress("Fetching app...");
     const app = await requireApp(ctx.clients.mc, input.app);
-    const added = allowed.filter(
-      (id) => !app.regionSettings.allowedRegionIds.includes(id),
+    const moved = required.filter(
+      (id) => !app.regionSettings.requiredRegionIds.includes(id),
     );
     assertNoSplit(
       app,
       allowed.length > 1
         ? `run in ${allowed.length} regions`
-        : added.length > 0
-          ? `move to ${added.join(", ")}, away from its existing volume data`
+        : moved.length > 0
+          ? `move to ${moved.join(", ")}, away from its existing volume data`
           : undefined,
       input.allowSplitVolumes,
     );
