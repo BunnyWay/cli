@@ -62,6 +62,10 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
       "Create with transcribing enabled",
     ],
     [
+      "$0 stream libraries create my-library --player-version 1",
+      "Use the legacy player",
+    ],
+    [
       "$0 stream libraries create my-library --link --save-env",
       "Link this directory and save the library ID and API key to .env",
     ],

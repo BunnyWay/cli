@@ -90,6 +90,10 @@ export const streamImportListCommand = defineToolCommand({
       "$0 stream import list --source vimeo --folder 12345",
       "The videos in one folder",
     ],
+    [
+      "$0 stream import list --source s3 --bucket my-videos --prefix 2024/ --videos",
+      "The videos under one S3 prefix",
+    ],
   ],
 
   builder: (yargs) =>

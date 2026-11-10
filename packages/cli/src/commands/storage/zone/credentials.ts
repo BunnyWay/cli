@@ -44,6 +44,14 @@ export const storageZoneCredentialsCommand = defineCommand<CredentialsArgs>({
       "Show FTP credentials with the password revealed",
     ],
     [
+      "$0 storage zones credentials my-zone --connection http --read-only --show-secret",
+      "Reveal the read-only password instead of the read-write one",
+    ],
+    [
+      "$0 storage zones credentials my-zone --connection http --save-env",
+      "Save the connection's variables to .env",
+    ],
+    [
       "$0 storage zones credentials my-zone --format sdk",
       "Print a @bunny.net/storage-sdk snippet",
     ],

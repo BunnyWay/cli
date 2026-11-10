@@ -110,6 +110,22 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
       "$0 storage zones create my-zone --tier ssd --s3",
       "Create an SSD zone (always DE) with S3-compatible access",
     ],
+    [
+      "$0 storage zones create my-zone --region DE --pull-zone",
+      "Also create a pull zone to serve the files on the web",
+    ],
+    [
+      "$0 storage zones create my-zone --region DE --domain cdn.example.com",
+      "Create a pull zone and add a custom domain to it",
+    ],
+    [
+      "$0 storage zones create my-zone --region DE --connection http --save-env --link",
+      "Link this directory and save the connection details to .env",
+    ],
+    [
+      "$0 storage zones create my-zone --region DE --force",
+      "Create without any prompts",
+    ],
   ],
 
   builder: (yargs) =>
