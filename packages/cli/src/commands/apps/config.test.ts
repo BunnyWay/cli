@@ -66,7 +66,7 @@ describe("assertVolumesNotSplit", () => {
 
   test("refuses a volume in more than one region, naming them", () => {
     expect(() => assertVolumesNotSplit(app(["de", "uk"]))).toThrow(
-      'Container "db" mounts a volume, but the app runs in 2 regions (de, uk).',
+      'Container "db" mounts a volume, but the app runs in 2 regions (DE, UK).',
     );
   });
 
@@ -78,7 +78,7 @@ describe("assertVolumesNotSplit", () => {
 
   test("names both when regions and scaling split it", () => {
     expect(() => assertVolumesNotSplit(app(["de", "uk"], { max: 2 }))).toThrow(
-      "runs in 2 regions (de, uk) and scales to 2 instances.",
+      "runs in 2 regions (DE, UK) and scales to 2 instances.",
     );
   });
 
