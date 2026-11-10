@@ -18,6 +18,9 @@ export const MAX_VIDEO_SHORT_EDGE = 2_160;
 /** A resume stops retrying a video after this many fetches; a fresh run or `cleanFailed` tries it again. */
 export const MAX_IMPORT_ATTEMPTS = 3;
 
+/** The error on an entry the source stopped listing; only restoring it there lets a retry succeed. */
+export const SOURCE_MISSING_ERROR = "No longer listed at the source";
+
 export const VIDEO_EXTENSIONS = [
   ".mp4",
   ".mov",

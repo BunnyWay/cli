@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
+import type { Argv } from "yargs";
+import { UserError } from "@/core/errors.ts";
 import {
   PLAYER_CONTROLS,
   PLAYER_DEFAULTS,
   type PlayerChanges,
   type PlayerControl,
-} from "@bunny.net/tools/stream";
-import type { Argv } from "yargs";
-import { UserError } from "@/core/errors.ts";
+} from "@/tools/stream/index.ts";
 import { parseCsvFlag } from "../flags.ts";
 
 export interface PlayerFlags {

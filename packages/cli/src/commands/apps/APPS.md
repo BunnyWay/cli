@@ -1,6 +1,10 @@
-# `bunny apps` (Experimental)
+# `bunny apps`
 
-Manage apps (Magic Containers). Apps are multi-container deployments where all containers share a localhost network. Configuration is stored in a `bunny.jsonc` file which is committed to your repo. The app ID is written back to the config on first deploy, so cloning the repo gives you everything you need. The JSONC format supports a `$schema` property for editor autocompletion.
+> **Preview**: `bunny apps` is in public preview; commands and flags may still change.
+>
+> **Experimental**: the `bunny.jsonc` format is extremely experimental and can change at any time, including in patch releases.
+
+Manage apps (Magic Containers). Apps are multi-container deployments where all containers share a localhost network. The live app is the source of truth. A committed `bunny.jsonc` describes how to create the app and build its images, and is optional once the app exists; the link to the app lives in `.bunny/app.json`. On an existing app, `deploy` only changes container images, so nothing in `bunny.jsonc` can overwrite a running app's settings or env. Each setting has its own command (`scale`, `regions set`, `endpoints`, `volumes`, `env`) that changes only that setting. The JSONC format supports a `$schema` property for editor autocompletion.
 
 ```bash
 # Deploy a pre-built image (first run walks through setup)
@@ -12,11 +16,12 @@ bunny apps deploy --dockerfile
 # Re-deploy whatever is in bunny.jsonc
 bunny apps deploy
 
-# Sync remote config to local bunny.jsonc
-bunny apps pull
+# Change one setting on the live app
+bunny apps scale --min 1 --max 3
+bunny apps regions set DE UK
 
-# Apply local bunny.jsonc changes to remote
-bunny apps push
+# Write the live app's settings to bunny.jsonc
+bunny apps pull
 ```
 
 ## `bunny apps deploy`
@@ -33,12 +38,11 @@ Deploy an app. Three modes, chosen by what you pass:
 
 If no `bunny.jsonc` exists, the first run launches a walkthrough that:
 
-1. Looks for a `compose.yml` / `docker-compose.yml` in the working directory and offers to import the services from it.
-2. Otherwise offers to build from a `Dockerfile` (if one exists) or to deploy a pre-built image ref.
-3. Resolves the registry (prompts "is this image public, or do you need credentials?" for new hostnames).
-4. Calls bunny.net's image-suggestions endpoint to pre-fill app name, endpoints, and required environment variables for known public images.
-5. Prompts for a single region. Multi-region apps can be configured by editing the resulting `bunny.jsonc`: the schema accepts an array, the walkthrough just keeps the initial setup focused.
-6. Writes `bunny.jsonc`, creates the app, and deploys.
+1. Asks where the image comes from: build from local source (a detected `Dockerfile`, or a generated one for a detected app; see below), pick an image and tag from a connected registry, or enter an image ref by URL.
+2. Resolves the registry. Public ghcr.io and docker.io images use the public records bunny.net provides; other new hostnames prompt for credentials.
+3. Calls bunny.net's image-suggestions endpoint to pre-fill app name, endpoints, and required environment variables for known public images.
+4. Prompts for a single region. Multi-region apps can be configured by editing the resulting `bunny.jsonc`: the schema accepts an array, the walkthrough just keeps the initial setup focused.
+5. Writes `bunny.jsonc`, creates the app, and deploys.
 
 After a successful deploy that replaced a running image, the CLI prints the previous image reference and a one-line rollback command:
 
@@ -47,58 +51,54 @@ Previous image: ghcr.io/me/api:abc-123
 To rollback:    bunny apps deploy ghcr.io/me/api:abc-123
 ```
 
-### Importing from docker-compose
+On an app that already exists, `deploy` builds or resolves each image, points the matching container at it, and deploys. Scaling, regions, endpoints, volumes, probes, command and env stay exactly as they are on the app, whatever `bunny.jsonc` says; change them with their own commands or in the dashboard. A container in `bunny.jsonc` that the app doesn't have yet is added, with its env resolved from `.env`. Containers are matched by name, or by the container ID `.bunny/app.json` recorded for that name. Containers on the app but not in `bunny.jsonc` are left alone. When both sides have a container the other lacks, that usually means a rename, and adding the new name would run a second copy next to the old one, so deploy stops; put the old name back, or pass `--add-alongside` to add it anyway. When `scaling`, `regions` or a container's `env` keys in `bunny.jsonc` differ from the app, deploy prints the differences and leaves the app's values in place. Deploying an unchanged image ref resolves its tag again, so a moving tag like `latest` picks up the newest build.
 
-When you run `bunny apps deploy` in a project containing a `compose.yml` (or `compose.yaml`, `docker-compose.yml`, `docker-compose.yaml`), the walkthrough offers to translate it into `bunny.jsonc`. Each compose `service` becomes a container; the user still picks an app name, region, and registry.
+A linked directory needs no `bunny.jsonc`: `bunny apps deploy <image>` or `bunny apps deploy --dockerfile` updates the app's container (pass `--container` when it has more than one) and writes no config file.
 
-What translates cleanly:
+### Generating a Dockerfile
 
-| Compose                                       | bunny.jsonc                                                                      |
-| --------------------------------------------- | -------------------------------------------------------------------------------- |
-| `services.<name>`                             | `app.containers.<name>`                                                          |
-| `image:` / `build:`                           | `container.image` / `container.dockerfile` + `container.context`                 |
-| `command:` (string or array)                  | `container.command` (array form)                                                 |
-| `environment:` (map or array)                 | `container.env`                                                                  |
-| `env_file:` (one or many)                     | parsed and merged into `container.env` (env vars in `environment:` override)     |
-| `ports:` (`"3000:80"` / object / IP-prefixed) | `container.endpoints[0]` (one CDN endpoint, multiple port mappings)              |
-| `volumes:` (named only)                       | `container.volumes`                                                              |
-| `healthcheck:`                                | `container.probes.liveness` (HTTP probe if `test` mentions a URL; TCP otherwise) |
+When the project has no Dockerfile, the walkthrough looks at the project root and offers to write one. Generation covers common setups, not every build a buildpack would: when a generated Dockerfile doesn't fit, edit it, or connect the GitHub repository in the bunny.net dashboard, the more reliable way to deploy without any config. A failed build of a generated Dockerfile says the same. A single file is enough: a lone `index.php`, `main.go`, `main.py` or `index.ts` deploys as-is.
 
-What's ignored (warning is printed, translation proceeds):
+| Stack                                                | Detected from                                                                                          | Runs                                                     | Port              |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- | ----------------- |
+| PHP, Laravel, Symfony                                | `index.php` or `public/index.php` (framework from `composer.json`)                                     | FrankenPHP, serving `public/` or the root                | 8080              |
+| Rails, Sinatra, Rack                                 | `Gemfile` with `rails`, or `config.ru` with `puma` or `rackup` in the Gemfile                          | `bin/rails server`, or Puma / `rackup`                   | 3000 / 9292       |
+| Django, FastAPI, Flask, Python                       | `requirements.txt` / `pyproject.toml`, or a lone `main.py` / `app.py` / `server.py` (from its imports) | gunicorn, uvicorn, or `python <file>`                    | 8000              |
+| Go                                                   | `go.mod` or a root `package main`; builds the root or the first `cmd/<name>/main.go`                   | the static binary on distroless                          | 8080              |
+| Rust                                                 | `Cargo.toml` with a `[package]`                                                                        | the release binary                                       | 8080              |
+| ASP.NET Core                                         | a root `.csproj` on `Microsoft.NET.Sdk.Web`                                                            | `dotnet <assembly>.dll` on the ASP.NET runtime image     | 8080              |
+| Spring Boot                                          | `pom.xml` or `build.gradle(.kts)` using Spring Boot (wrapper when present)                             | `java -jar` on a JRE image                               | 8080              |
+| Deno                                                 | `deno.json` with a `main.ts` / `main.js`                                                               | `deno run --allow-all`                                   | 8000              |
+| Next.js, Nuxt, SvelteKit, Astro, Remix, NestJS, Node | `package.json` (SvelteKit and Astro need their Node adapter)                                           | the framework's server, the `start` script, or the entry | 3000 (Astro 4321) |
+| Bun                                                  | a lone `index.ts` / `server.ts` / `index.js` with no `package.json` or `index.html`                    | `bun <file>`; imports install on first start             | 3000              |
 
-- `depends_on:`, `networks:`, `links:`, `external_links:` (MC containers share `localhost` and start together)
-- `restart:` (MC restarts automatically)
-- `labels:` (use bunny.jsonc endpoints for routing)
-- `deploy.replicas:` (MC scales at the app level via `app.scaling`, not per-container)
-- `profiles:` (not relevant on MC)
+Versions come from the project's own files (`.nvmrc`, `.python-version`, `.ruby-version`, `go.mod`, the `.csproj` target framework, `composer.json`'s `php` constraint (8.2 or later), the Java toolchain). For Node, Python, Ruby, Go and .NET, dependencies install before the source is copied so they cache between deploys. A lone Python script gets FastAPI or Flask installed when it imports them; other packages need a `requirements.txt`. Frameworks are started on `0.0.0.0` and the port shown, and `--port` changes it in the generated file and the endpoint. Go, Rust, Deno and plain scripts get `PORT` set and must listen on it.
 
-What's refused (translation fails with a clear error):
+Manifest-led stacks win over a `package.json` next to them, since PHP, Ruby and Python apps often carry one for frontend assets; Laravel and Symfony apps with a `build` script get a Node stage that builds into `public/build`. Set `APP_KEY` (Laravel), `APP_SECRET` (Symfony) or `SECRET_KEY_BASE` / `RAILS_MASTER_KEY` (Rails) with `bunny apps env`. Rails 7.1+ apps already ship a Dockerfile, which the walkthrough uses as-is.
 
-- **Bind mounts** (`./data:/data` or any source starting with `.` / `/`): MC only supports named volumes
-- **Anonymous volumes** (`/data` with no source name): ambiguous, give the volume a name in top-level `volumes:`
-- `extends:`: flatten the service inline
-- `secrets:`: use `bunny apps env push` to store secrets
-- `configs:`: bake config into the image or pass via env
-- Port ranges (`"3000-3005:3000-3005"`): use individual mappings
+A site with no server to run (a lone `index.html`, Vite, Create React App, a Next.js static export, Astro or SvelteKit without the Node adapter, Hugo, Jekyll, Blazor WebAssembly) is not offered a Dockerfile: the walkthrough points you at `bunny sites deploy` instead.
 
-For compose files that have just one service, the import overlaps with the Dockerfile build path, but with the user's chosen ports, env, and command already filled in. For multi-service files, this is the canonical entry point.
+The Dockerfile and a `.dockerignore` (unless you have one) are written to the project root. They are yours from then on: deploys build the file as-is, and the generator never runs again. `--dry-run` prints the Dockerfile instead of writing it. The `.dockerignore` keeps `.env` files and `bunny.jsonc` out of the image; set env vars with `bunny apps env` instead. Django static files aren't collected: serve them with WhiteNoise or a CDN.
 
 ### Deploy flags
 
-| Flag           | Description                                                                                                                                           |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<image>`      | Container image reference to deploy (e.g. `ghcr.io/me/api:v1.2`). Skips build.                                                                        |
-| `--name`       | App name. Used during the first-run walkthrough; skips the interactive prompt.                                                                        |
-| `--dockerfile` | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`.                                                            |
-| `--context`    | Docker build context directory. Defaults to the directory of the Dockerfile.                                                                          |
-| `--tag`        | Override the auto-generated `<sha>-<timestamp>` image tag.                                                                                            |
-| `--registry`   | Registry ID to push to, or `bunny` for the bunny.net registry (`registry.bunny.net`, override with `BUNNYNET_REGISTRY_URL`). Overrides `bunny.jsonc`. |
-| `--container`  | Name of the container to update. Required when `bunny.jsonc` has multiple containers and you pass `<image>`/`--dockerfile`.                           |
-| `--port`       | Override the container port. Retargets any endpoints written to `bunny.jsonc`.                                                                        |
-| `--command`    | Override the container `CMD`. Passed as a single string, split on whitespace.                                                                         |
-| `--config`     | Use this file as the app config instead of cwd's `bunny.jsonc`. Useful in CI / agent flows.                                                           |
-| `--dry-run`    | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                                              |
-| `--no-push`    | Build only. Skip pushing the image and skip the deploy.                                                                                               |
+| Flag                    | Description                                                                                                                                           |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<image>`               | Container image reference to deploy (e.g. `ghcr.io/me/api:v1.2`). Skips build.                                                                        |
+| `--name`                | App name. Used during the first-run walkthrough; skips the interactive prompt.                                                                        |
+| `--region`              | Region ID for a new app. Skips the region prompt; required without a terminal.                                                                        |
+| `--dockerfile`          | Build from a Dockerfile, then deploy. Pass a path or use the bare flag for `./Dockerfile`, which is generated when there is none (see below).         |
+| `--context`             | Docker build context directory. Defaults to the directory of the Dockerfile.                                                                          |
+| `--tag`                 | Override the auto-generated `<sha>-<timestamp>` image tag.                                                                                            |
+| `--registry`            | Registry ID to push to, or `bunny` for the bunny.net registry (`registry.bunny.net`, override with `BUNNYNET_REGISTRY_URL`). Overrides `bunny.jsonc`. |
+| `--container`           | Name of the container to update. Required when `bunny.jsonc` has multiple containers and you pass `<image>`/`--dockerfile`.                           |
+| `--port`                | Override the container port. Retargets any endpoints written to `bunny.jsonc`.                                                                        |
+| `--command`             | Override the container `CMD`. Passed as a single string, split on whitespace.                                                                         |
+| `--config`              | Use this file as the app config instead of cwd's `bunny.jsonc`. Useful in CI / agent flows.                                                           |
+| `--dry-run`             | Run the walkthrough and print the would-be `bunny.jsonc` without writing anything or contacting the API.                                              |
+| `--no-push`             | Build only. Skip pushing the image and skip the deploy.                                                                                               |
+| `--allow-split-volumes` | Deploy an app that mounts a volume in more than one region or instance (see [Volumes](#volumes-regions-and-scaling)).                                 |
+| `--add-alongside`       | Add a container from `bunny.jsonc` even though the app has containers `bunny.jsonc` doesn't list (see below).                                         |
 
 ```bash
 # Deploy a pre-built image
@@ -124,6 +124,16 @@ bunny apps deploy --port 8000 --command "uvicorn app:app --host 0.0.0.0 --port 8
 
 # CI / agent flow: use a config file outside the repo
 bunny apps deploy --config /tmp/agent-task-abc.jsonc --output json
+```
+
+### Deploying from an agent
+
+Without a terminal (a coding agent, or `--output json`), the walkthrough never prompts. Every question with a default takes it: the bunny.net registry, the suggested app name, the suggested endpoints and the env keys found in `.env` / `.env.example`. The two questions with no default need flags: what to deploy (`--dockerfile` or an image) and `--region`. A missing one fails straight away with a hint naming the flag and, for the region, the IDs to choose from.
+
+`--dockerfile` with no `./Dockerfile` on disk generates one for the detected app, so a single command takes a project with no Docker setup to a running app:
+
+```bash
+bunny apps deploy --dockerfile --region DE --output json
 ```
 
 ### Using `--config <path>` for CI and agent workflows
@@ -155,14 +165,16 @@ rm /tmp/agent-task.jsonc
 
 Every container on Magic Containers is tied to a registry record on bunny.net, even for public images. When you pass `<image>` for the first time, the CLI parses the hostname and tries to match it to an existing registry on your account:
 
-- **Match found** → uses it and saves the registry ID to `bunny.jsonc`.
-- **No match** → prompts: "Is this image public, or do you need credentials?" Selecting public creates a credential-less registry record; selecting private prompts for username + token and creates the registry.
+- **Match found** → uses it and saves the registry ID to `bunny.jsonc`. When several registries share the hostname, the one whose username matches the image namespace wins.
+- **No match** → prompts for a username and token, then adds the registry: `gitHub` for ghcr.io, `dockerHub` for docker.io, and `oci` for any other host.
+
+When the walkthrough asks where to push a build, it lists the bunny.net registry, your connected registries, and options to add a GitHub, Docker Hub, or other OCI registry.
 
 Credentials entered during this flow are also passed through to `docker login` (for the build path) so the very next `docker push` succeeds without a separate manual login step.
 
 ### Docker login pre-flight
 
-Before pushing, the CLI checks `~/.docker/config.json` for an existing credential entry for the registry hostname. If none is found:
+Before building, the CLI checks `~/.docker/config.json` for a credential entry for the registry hostname. When Docker is logged in as a different user than the registry's username, it offers to log in again as that user, so a build never ends in a push to a namespace Docker can't write to. If no entry is found:
 
 - **`ghcr.io`**: if the `gh` CLI is installed and authenticated, you'll be offered a one-click login. The CLI runs `gh api user` + `gh auth token` and pipes them through `docker login` for you.
 - **Any other host**: you'll be prompted for a username and token, then logged in.
@@ -171,7 +183,7 @@ Either path persists in `~/.docker/config.json`, so subsequent deploys skip this
 
 ## `bunny apps init`
 
-Scaffold a new `bunny.jsonc` without deploying. Runs exactly the same walkthrough as `deploy` (compose import, Dockerfile, or pre-built image). It just stops at "config written" instead of continuing on to build/push/deploy. Use this when you want to inspect or edit the generated config before the first deploy.
+Scaffold a new `bunny.jsonc` without deploying. Runs exactly the same walkthrough as `deploy` (local source, a connected registry, or an image URL). It just stops at "config written" instead of continuing on to build/push/deploy. Use this when you want to inspect or edit the generated config before the first deploy.
 
 ```bash
 bunny apps init
@@ -179,17 +191,20 @@ bunny apps init ghcr.io/me/api:v1
 bunny apps init --dockerfile --port 8080
 ```
 
-| Flag           | Description                                                                          |
-| -------------- | ------------------------------------------------------------------------------------ |
-| `<image>`      | Pre-built image reference. Skips the build-vs-image prompt.                          |
-| `--name`       | App name (skips the interactive name prompt).                                        |
-| `--dockerfile` | Build from a Dockerfile. Pass a path or use the bare flag for `./Dockerfile`.        |
-| `--registry`   | bunny.net registry ID to push to.                                                    |
-| `--port`       | Override the container port (affects the generated Dockerfile and the CDN endpoint). |
-| `--command`    | Override the container CMD (passed as a single string, split on whitespace).         |
-| `--config`     | Write the config to this path instead of `./bunny.jsonc`.                            |
+| Flag           | Description                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------------------- |
+| `<image>`      | Pre-built image reference. Skips the build-vs-image prompt.                                                 |
+| `--name`       | App name (skips the interactive name prompt).                                                               |
+| `--region`     | Region ID (skips the region prompt; required without a terminal).                                           |
+| `--dockerfile` | Build from a Dockerfile. Pass a path or use the bare flag for `./Dockerfile`, generated when there is none. |
+| `--registry`   | bunny.net registry ID to push to.                                                                           |
+| `--port`       | Override the container port (affects the generated Dockerfile and the CDN endpoint).                        |
+| `--command`    | Override the container CMD (passed as a single string, split on whitespace).                                |
+| `--config`     | Write the config to this path instead of `./bunny.jsonc`.                                                   |
 
 Most users can skip `init` entirely and run `bunny apps deploy` straight away. Both share the same walkthrough.
+
+In a directory linked to an existing app (`bunny apps link`) but with no `bunny.jsonc`, `init` stops instead of running the walkthrough. Run `bunny apps pull` to write `bunny.jsonc` from the app, or `bunny apps unlink` to start a new one.
 
 ## `bunny apps list`
 
@@ -209,18 +224,26 @@ bunny apps show
 bunny apps show --id <app-id>
 ```
 
-## `bunny apps pull` / `bunny apps push`
+`bunny apps push` was removed: it applied the whole of `bunny.jsonc` to a running app. Running it now changes nothing and points to the per-setting commands.
 
-Sync configuration between the remote API and local `bunny.jsonc`.
+## `bunny apps pull`
+
+Write the live app's settings to `bunny.jsonc`. It only reads from the app, never changes it.
 
 ```bash
-# Pull remote state to local bunny.jsonc
 bunny apps pull
 bunny apps pull --force
+```
 
-# Push local bunny.jsonc to remote (config only — does not deploy)
-bunny apps push
-bunny apps push --dry-run
+`pull` writes to the `bunny.jsonc` it finds (walking up from the current directory). It never writes the app's env values, which are often secrets, into the file; it keeps the local `env` block, the `sites` block, and each container's `dockerfile` and `context`. Public IP endpoints can't be described in `bunny.jsonc`, so `pull` leaves them out.
+
+## `bunny apps scale`
+
+Set the minimum and maximum instances, each from 1 to 1000. A bound you leave out keeps its current value.
+
+```bash
+bunny apps scale --min 1 --max 3
+bunny apps scale --max 5
 ```
 
 ## `bunny apps env`
@@ -257,6 +280,8 @@ bunny apps env push --dry-run
 | `--replace`   | (`push` only) Drop remote variables that aren't in the file. Default is merge (file overrides remote). |
 | `--dry-run`   | (`push` only) Print the diff (`+ added`, `~ changed`, `- removed`) without writing.                    |
 
+`bunny apps env` is the only way to change a running container's variables; `deploy` and `pull` never touch them. An `env` block in `bunny.jsonc` is only used when a container is created, where a value naming a key in `.env` (`"API_KEY": "API_KEY"`) is replaced with that key's value.
+
 ## `bunny apps endpoints`
 
 Manage endpoints (CDN or Anycast) per container.
@@ -264,8 +289,11 @@ Manage endpoints (CDN or Anycast) per container.
 ```bash
 bunny apps endpoints list
 bunny apps endpoints add --type cdn --ssl --container-port 3000 --public-port 443
+bunny apps endpoints add --type anycast --name tcp-api --container-port 5432 --public-port 5432
 bunny apps endpoints remove <endpoint-id>
 ```
+
+Endpoint names are unique per app; `--name` defaults to the type, numbered (`cdn-2`) when taken.
 
 ## `bunny apps volumes`
 
@@ -290,7 +318,7 @@ bunny apps registries update <registry-id> --username myorg --password $TOKEN   
 bunny apps registries remove <registry-id>
 ```
 
-`ghcr.io` and `docker.io` need a matching registry type; `--server` derives it, or pass `--type gitHub|dockerHub` directly. Omit both for a generic registry. `--output json` returns the normalized registry (`id`, `name`, `hostname`, `username`, `createdAt`, `lastUpdatedAt`) rather than the raw API model.
+`--server` derives the type: `gitHub` for ghcr.io, `dockerHub` for docker.io, and `oci` for any other host (e.g. `registry.example.com:5000`). Pass `--type gitHub|dockerHub|oci` to set it directly; `oci` needs `--server`. `--output json` returns the normalized registry (`id`, `name`, `hostname`, `username`, `createdAt`, `lastUpdatedAt`) rather than the raw API model.
 
 The `Source` column says where a registry comes from:
 
@@ -300,12 +328,20 @@ The `Source` column says where a registry comes from:
 
 ## `bunny apps regions`
 
-View available regions and app region settings.
+View available regions, and view or set where an app runs.
 
 ```bash
 bunny apps regions list
 bunny apps regions show
+
+# Always run in DE and UK
+bunny apps regions set DE UK
+
+# Allow three regions, always run in DE
+bunny apps regions set DE UK NY --required DE
 ```
+
+`--required` defaults to every allowed region and must be a subset of them.
 
 ## `bunny.jsonc` schema
 
@@ -320,7 +356,7 @@ A single-container app:
   "app": {
     "id": "app_xxx", // written by the CLI on first deploy
     "name": "my-api",
-    "regions": ["sfo", "lhr"], // simple array
+    "regions": ["LA", "UK"], // simple array
     "scaling": { "min": 1, "max": 3 },
     "containers": {
       "api": {
@@ -338,14 +374,14 @@ A single-container app:
 }
 ```
 
-A multi-container app — every container is its own entry in `app.containers`. `bunny apps deploy <image>` and `bunny apps deploy --dockerfile` require `--container <name>` to disambiguate which one to update; `bunny apps deploy` with no args re-triggers a deploy of the whole app at its current state.
+A multi-container app — every container is its own entry in `app.containers`. `bunny apps deploy <image>` and `bunny apps deploy --dockerfile` require `--container <name>` to disambiguate which one to update; `bunny apps deploy` with no args builds or resolves every container's image and deploys them all.
 
 ```jsonc
 {
   "version": "2026-05-11",
   "app": {
     "name": "my-stack",
-    "regions": ["sfo"],
+    "regions": ["LA"],
     "containers": {
       "api": {
         "image": "ghcr.io/me/api:v1",
@@ -366,16 +402,56 @@ A multi-container app — every container is its own entry in `app.containers`. 
 Most users want a single list of regions that the app should run in:
 
 ```jsonc
-"regions": ["sfo", "lhr"]
+"regions": ["LA", "UK"]
 ```
 
 For the rare case where you need to distinguish "regions bunny.net is allowed to use" from "regions bunny.net must always have running", use the object form:
 
 ```jsonc
 "regions": {
-  "allowed": ["sfo", "lhr", "nyc"],
-  "required": ["sfo"]
+  "allowed": ["LA", "UK", "NY"],
+  "required": ["LA"]
 }
 ```
 
 The array form sets both `allowed` and `required` to the same list under the hood.
+
+### Health checks
+
+Each container takes up to three probes. They differ in when they run and what a failure does:
+
+| Probe       | Asks                          | Runs                              | After `failureThreshold` failures |
+| ----------- | ----------------------------- | --------------------------------- | --------------------------------- |
+| `startup`   | Has the app finished booting? | Until it first passes             | Restarts the container            |
+| `readiness` | Can it serve requests now?    | Continuously, once startup passes | Stops sending it traffic          |
+| `liveness`  | Is it still working?          | Continuously, once startup passes | Restarts the container            |
+
+Give a slow boot (migrations, cache warm-up) a generous `startup` probe instead of a lenient `liveness` one, so a hang after boot is still caught quickly. Use `readiness` for problems a restart won't fix, like a lost database connection.
+
+```jsonc
+"probes": {
+  // allow up to 2 minutes to boot: 24 checks, 5 seconds apart
+  "startup": { "type": "http", "path": "/health", "periodSeconds": 5, "failureThreshold": 24 },
+  "readiness": { "type": "http", "path": "/health" },
+  "liveness": { "type": "tcp", "port": 3000 }
+}
+```
+
+| Field                 | Default                             |
+| --------------------- | ----------------------------------- |
+| `type`                | Required: `http`, `tcp`, or `grpc`  |
+| `path`                | `/` (`http` only)                   |
+| `port`                | The container's first endpoint port |
+| `initialDelaySeconds` | 10                                  |
+| `periodSeconds`       | 10                                  |
+| `timeoutSeconds`      | 7                                   |
+| `failureThreshold`    | 3                                   |
+| `successThreshold`    | 1                                   |
+
+A probe on a container with no endpoints must set `port`, or the deploy fails.
+
+`bunny apps pull` writes probes set in the dashboard into `bunny.jsonc`. A container with no `probes` block keeps whatever probes it already has; one with a `probes` block replaces them. The expected status code of an `http` probe and the service name of a `grpc` probe can't be set from `bunny.jsonc`. Probes in `bunny.jsonc` only apply when a container is created.
+
+### Volumes, regions and scaling
+
+Volumes are never shared: every region an app runs in, and every instance within a region, gets its own empty volume, and nothing syncs between them. A database in three regions, or scaled to three instances, is three unrelated databases. So `bunny apps deploy` refuses to create an app from a config where any container mounts a volume and either `regions` (or `regions.allowed`) lists more than one region or `scaling.max` is above 1. On an existing app, deploy checks the live app instead when it adds a container that mounts a new volume. It creates the volume first, sending the app's volumes list back with every existing volume unchanged, so their data is kept. If another volume on the app is being resized, that request fails; wait for the resize to finish and deploy again. Likewise `bunny apps scale` and `bunny apps regions set` refuse to scale or spread an app that has a volume. Keep one region and a maximum of 1, or pass `--allow-split-volumes` when separate data per copy is what you want (a cache, say).

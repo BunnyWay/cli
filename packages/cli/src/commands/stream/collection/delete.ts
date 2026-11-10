@@ -31,11 +31,14 @@ export const streamCollectionDeleteCommand =
     describe: "Delete a collection and the videos inside it.",
     examples: [
       [
-        "$0 stream collection delete 8a7b6c5d-...",
+        "$0 stream collections delete 8a7b6c5d-...",
         "Delete a collection and its videos",
       ],
-      ["$0 stream collection delete 8a7b6c5d-... --force", "Skip confirmation"],
-      ["$0 stream collection delete", "Pick a collection interactively"],
+      [
+        "$0 stream collections delete 8a7b6c5d-... --force",
+        "Skip confirmation",
+      ],
+      ["$0 stream collections delete", "Pick a collection interactively"],
     ],
 
     builder: (yargs) =>

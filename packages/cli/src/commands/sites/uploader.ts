@@ -102,7 +102,7 @@ export async function uploadDeploy(
       siteFiles.upload(
         connection,
         `${prefix}/${file.path}`,
-        Bun.file(file.absPath).stream(),
+        Bun.file(file.absPath),
         { sha256Checksum: file.sha256.toUpperCase() },
       ),
     );

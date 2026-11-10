@@ -25,8 +25,8 @@ const subcommands: CommandModule[] = [
 ];
 
 export const streamLibraryNamespace = defineNamespace(
-  "library",
+  "libraries",
   "Manage Stream video libraries.",
   subcommands,
-  ["libraries", "lib"],
+  ["library", "lib"],
 );

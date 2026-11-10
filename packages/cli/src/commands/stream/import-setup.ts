@@ -6,15 +6,6 @@ import {
   resolveSourceConfig,
   type SourcePlugin,
 } from "@bunny.net/stream-import";
-import { extendToolContext, type ToolContext } from "@bunny.net/tools";
-import {
-  requireSource,
-  SOURCE_IDS,
-  SOURCES,
-  SourceCredentialsError,
-  StateHomeError,
-  streamImportSources,
-} from "@bunny.net/tools/stream";
 import {
   deleteImportCredentials,
   getImportCredentials,
@@ -25,6 +16,15 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { confirm, isInteractive, prompts, withSpinner } from "@/core/ui.ts";
+import { extendToolContext, type ToolContext } from "@/tools/index.ts";
+import {
+  requireSource,
+  SOURCE_IDS,
+  SOURCES,
+  SourceCredentialsError,
+  StateHomeError,
+  streamImportSources,
+} from "@/tools/stream/index.ts";
 
 /** Reword an import tool error whose hint names the tool context's env; undefined leaves the error as it is. */
 export function cliImportError(error: unknown): Error | undefined {

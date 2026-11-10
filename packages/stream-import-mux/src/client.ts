@@ -48,13 +48,13 @@ export class MuxClient {
       if (isHttpError(error, 401)) {
         throw new UserError(
           "Invalid Mux credentials.",
-          "Create an access token at https://dashboard.mux.com/settings/api-keys.",
+          "Create an access token at https://dashboard.mux.com/settings/access-tokens.",
         );
       }
       if (isHttpError(error, 403)) {
         throw new UserError(
           "Mux refused the access token (403).",
-          "Give the token Mux Video Read permission at https://dashboard.mux.com/settings/api-keys.",
+          "Give the token Mux Video Read permission at https://dashboard.mux.com/settings/access-tokens.",
         );
       }
       throw error;

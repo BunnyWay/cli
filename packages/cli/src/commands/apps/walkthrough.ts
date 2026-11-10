@@ -1,14 +1,11 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { detectFramework } from "@/commands/sites/ci/frameworks.ts";
 import { parseDotenv } from "@/core/env.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, spinner } from "@/core/ui.ts";
-import {
-  composeToConfig,
-  findComposeFile,
-  loadComposeFile,
-} from "./compose/index.ts";
+import { fetchAllRegions } from "@/tools/apps/index.ts";
 import {
   type BunnyAppConfig,
   type ContainerConfig,
@@ -18,16 +15,25 @@ import {
 } from "./config.ts";
 import {
   assignContainerNamesToDockerfiles,
+  BUNNY_REGISTRY_ID,
   ensureDockerAvailable,
+  findBunnyRegistry,
   findDockerfiles,
   getConfigSuggestions,
   isDockerfileName,
+  listRegistries,
   type McClient,
   promptRegistry,
+  promptRegistryImage,
   type ResolvedRegistry,
   readDockerfileExposedPorts,
   resolveRegistryForImage,
 } from "./docker.ts";
+import {
+  type DetectedApp,
+  detectApp,
+  dockerignore,
+} from "./dockerfile/index.ts";
 import {
   confirmEndpointSuggestions,
   endpointRequestToConfig,
@@ -53,6 +59,19 @@ export interface WalkthroughInput {
   commandOverride?: string;
   /** App name (--name). When set, skips the interactive name prompt. */
   nameOverride?: string;
+  /** Region ID (--region). When set, skips the region prompt. */
+  regionFlag?: string;
+  /**
+   * Whether prompts can be answered. Without a terminal (an agent, or
+   * `--output json`), each prompt takes its default answer, and the ones
+   * with no default (the region, what to deploy) need their flag.
+   */
+  interactive: boolean;
+  /**
+   * Whether the caller goes on to build an image (`deploy`, but not
+   * `init` or `--dry-run`). Docker is only required when it does.
+   */
+  buildsImage: boolean;
   /**
    * If true, skip every write side-effect: don't generate files to
    * disk, don't save bunny.jsonc. The walkthrough still prompts and
@@ -103,14 +122,45 @@ export async function runWalkthrough(
 
   let imageRef: string | undefined = input.positionalImage;
   let dockerfilePath: string | undefined = input.dockerfileFlag;
+  // Set when we generate a Dockerfile; its port seeds the endpoint, since
+  // in --dry-run the file is never on disk.
+  let generated: { app: DetectedApp; port: number } | undefined;
+
+  let pickedRegistry: ResolvedRegistry | undefined;
+
+  // `--dockerfile` with no Dockerfile on disk: generate one for the
+  // detected app, so agents can deploy a project that has none.
+  if (
+    dockerfilePath === GENERATED_DOCKERFILE &&
+    !existsSync(resolve(process.cwd(), dockerfilePath))
+  ) {
+    const app = detectApp(process.cwd());
+    if (app) {
+      generated = { app, port: input.portOverride ?? app.port };
+      writeGeneratedDockerfile(generated, input.dryRun);
+    }
+  }
 
   if (!imageRef && !dockerfilePath) {
-    const composeFile = findComposeFile(process.cwd());
+    if (!input.interactive) {
+      throw new UserError(
+        "Nothing to deploy: no bunny.jsonc, image or --dockerfile.",
+        "Pass --dockerfile to build (a Dockerfile is generated when there is none), or an image ref to deploy.",
+      );
+    }
     const detectedDockerfiles = findDockerfiles(process.cwd());
-
-    const composeServicesCount = composeFile
-      ? Object.keys(loadComposeFile(composeFile).services).length
-      : 0;
+    // Only offer to generate when there's no Dockerfile to build already.
+    const detectedApp =
+      detectedDockerfiles.length === 0 ? detectApp(process.cwd()) : undefined;
+    if (detectedDockerfiles.length === 0 && !detectedApp) {
+      // A site with no server to run belongs on Sites, not in a container.
+      const site = await detectFramework(process.cwd());
+      if (site || existsSync(resolve(process.cwd(), "index.html"))) {
+        logger.dim(
+          `This looks like a static${site ? ` ${site.label}` : ""} site. \`bunny sites deploy\` hosts it without a container.`,
+        );
+      }
+    }
 
     const dockerfileChoiceTitle =
       detectedDockerfiles.length === 0
@@ -119,37 +169,57 @@ export async function runWalkthrough(
           ? `Build from ${detectedDockerfiles[0]}`
           : `Build from Dockerfile(s) (${detectedDockerfiles.length} detected)`;
 
-    const { value } = await prompts({
+    const { value: source } = await prompts({
       type: "select",
       name: "value",
       message: "How do you want to deploy?",
       choices: [
-        ...(composeFile
+        { title: "Build from local source", value: "local" },
+        { title: "Pick an image from a connected registry", value: "registry" },
+        { title: "Deploy an image by URL", value: "image" },
+      ],
+    });
+
+    if (!source) throw new UserError("Setup cancelled.");
+
+    let value: string | undefined = source;
+    if (source === "local") {
+      const localChoices = [
+        ...(detectedApp
           ? [
               {
-                title: `Import ${composeServicesCount} service${composeServicesCount === 1 ? "" : "s"} from ${basename(composeFile)}`,
-                value: "compose",
+                title: `Generate a Dockerfile for ${detectedApp.label} and build it`,
+                value: "generate",
               },
             ]
           : []),
         { title: dockerfileChoiceTitle, value: "dockerfile" },
-        { title: "Deploy a pre-built image", value: "image" },
-      ],
-    });
-    if (!value) throw new UserError("Setup cancelled.");
+      ];
+      value =
+        localChoices.length === 1
+          ? "dockerfile"
+          : (
+              await prompts({
+                type: "select",
+                name: "value",
+                message: "Build from:",
+                choices: localChoices,
+              })
+            ).value;
+      if (!value) throw new UserError("Setup cancelled.");
+    }
 
-    // Bail before any further prompts / disk writes if Docker is missing.
-    // Both "compose" and "dockerfile" picks always end in a local build;
-    // without Docker we'd write `bunny.jsonc` and then crash mid-deploy.
-    if (value === "compose" || value === "dockerfile") {
+    if (value !== "image" && value !== "registry" && input.buildsImage) {
       await ensureDockerAvailable();
     }
 
-    if (value === "compose" && composeFile) {
-      return runComposeImport(client, composeFile, input);
-    }
-
-    if (value === "dockerfile") {
+    if (value === "generate" && detectedApp) {
+      generated = {
+        app: detectedApp,
+        port: input.portOverride ?? detectedApp.port,
+      };
+      dockerfilePath = writeGeneratedDockerfile(generated, input.dryRun);
+    } else if (value === "dockerfile") {
       const selectedPaths = await chooseDockerfiles(detectedDockerfiles);
       if (selectedPaths.length === 0) {
         throw new UserError("At least one Dockerfile is required.");
@@ -158,6 +228,13 @@ export async function runWalkthrough(
         return runMultiDockerfileImport(client, selectedPaths, input);
       }
       dockerfilePath = selectedPaths[0];
+    } else if (value === "registry") {
+      const picked = await promptRegistryImage(client);
+
+      if (!picked) throw new UserError("Setup cancelled.");
+
+      imageRef = picked.imageRef;
+      pickedRegistry = picked.registry;
     } else {
       const { value: ref } = await prompts({
         type: "text",
@@ -171,16 +248,21 @@ export async function runWalkthrough(
 
   const mode: "build" | "image" = dockerfilePath ? "build" : "image";
 
-  let registry: ResolvedRegistry | null;
-  if (input.registryFlag) {
-    registry = { id: input.registryFlag };
-  } else if (mode === "image" && imageRef) {
-    registry = await resolveRegistryForImage(client, imageRef);
-  } else {
-    logger.info("Pick a registry to push your image to.");
-    registry = await promptRegistry(client);
+  const registry = pickedRegistry
+    ? pickedRegistry
+    : mode === "image" && imageRef && !input.registryFlag
+      ? await resolveRegistryForImage(client, imageRef)
+      : await pickRegistry(
+          client,
+          input,
+          "Pick a registry to push your image to.",
+        );
+  if (!registry) {
+    throw new UserError(
+      "A registry is required.",
+      "Pass --registry with an ID from `bunny apps registries`, or `bunny` for the bunny.net registry.",
+    );
   }
-  if (!registry) throw new UserError("A registry is required.");
 
   let suggestions: Awaited<ReturnType<typeof getConfigSuggestions>> | null =
     null;
@@ -192,6 +274,19 @@ export async function runWalkthrough(
       logger.dim(suggestions.instructions);
       logger.log();
     }
+  } else if (generated) {
+    suggestions = {
+      appName: generated.app.name,
+      endpointSuggestions: [
+        {
+          displayName: "cdn",
+          cdn: {
+            isSslEnabled: true,
+            portMappings: [{ exposedPort: 443, containerPort: generated.port }],
+          },
+        },
+      ],
+    };
   } else if (mode === "build" && dockerfilePath) {
     // Read EXPOSE directives from the Dockerfile to seed endpoint
     // suggestions. bunny's getConfigSuggestions only works for pre-built
@@ -212,11 +307,9 @@ export async function runWalkthrough(
     }
   }
 
-  const name =
-    input.nameOverride ??
-    (await promptAppName(suggestions?.appName ?? undefined));
+  const name = await promptAppName(input, suggestions?.appName ?? undefined);
 
-  const regions = await pickRegions(client);
+  const regions = await pickRegions(client, input);
 
   // `registry` is account-scoped - it lives in the manifest, not the
   // shared config. We hold it in memory long enough for the deploy run
@@ -242,9 +335,9 @@ export async function runWalkthrough(
   }
 
   if (suggestions?.endpointSuggestions?.length) {
-    const accepted = await confirmEndpointSuggestions(
-      suggestions.endpointSuggestions,
-    );
+    const accepted = input.interactive
+      ? await confirmEndpointSuggestions(suggestions.endpointSuggestions)
+      : suggestions.endpointSuggestions;
     if (accepted.length > 0) {
       container.endpoints = accepted.map(endpointRequestToConfig);
     }
@@ -263,7 +356,11 @@ export async function runWalkthrough(
   // pushed. Compensate by scanning the Dockerfile's neighbourhood for a
   // `.env` / `.env.example` and offering those keys for inclusion.
   if (mode === "build" && dockerfilePath) {
-    const picked = await pickEnvKeysFromDockerfile(dockerfilePath, name);
+    const picked = await pickEnvKeysFromDockerfile(
+      dockerfilePath,
+      name,
+      input.interactive,
+    );
     if (Object.keys(picked).length > 0) {
       container.env = { ...(container.env ?? {}), ...picked };
     }
@@ -305,84 +402,75 @@ export async function runWalkthrough(
   return { config: toml, registries: { [name]: registry.id } };
 }
 
+/** Where generated Dockerfiles go; also what a bare `--dockerfile` names. */
+const GENERATED_DOCKERFILE = "Dockerfile";
+
 /**
- * Compose import path: translate `compose.yml` → `bunny.jsonc` and write.
- *
- * Compose carries the container topology, env, ports, and volumes.
- * The user still has to choose:
- *   - app name (compose has no app-level name)
- *   - region (compose isn't region-aware)
- *   - default registry for all containers (assigned to each in translation)
+ * Write the generated Dockerfile (and a `.dockerignore`, unless one exists)
+ * to the project root and return its path. With `dryRun`, print it instead.
  */
-async function runComposeImport(
-  client: McClient,
-  composeFilePath: string,
-  input: WalkthroughInput,
-): Promise<WalkthroughResult> {
-  const compose = loadComposeFile(composeFilePath);
+function writeGeneratedDockerfile(
+  { app, port }: { app: DetectedApp; port: number },
+  dryRun?: boolean,
+): string {
+  const path = GENERATED_DOCKERFILE;
+  const contents = app.dockerfile(port);
 
-  const serviceNames = Object.keys(compose.services);
-  logger.info(
-    `Importing ${serviceNames.length} service${serviceNames.length === 1 ? "" : "s"} from ${basename(composeFilePath)}: ${serviceNames.join(", ")}.`,
-  );
-
-  const name = input.nameOverride ?? (await promptAppName());
-
-  const regions = await pickRegions(client);
-
-  let registry: ResolvedRegistry | null;
-  if (input.registryFlag) {
-    registry = { id: input.registryFlag };
-  } else {
-    logger.info("Pick a registry to use for all containers.");
-    registry = await promptRegistry(client);
-  }
-  if (!registry) throw new UserError("A registry is required.");
-
-  const { config, warnings } = composeToConfig(compose, {
-    composeFilePath,
-    appName: name,
-    regions,
-    defaultRegistryId: registry.id,
-  });
-
-  // --command override: if a single service exists, apply it; otherwise
-  // warn, because `--command` is ambiguous with multi-service compose files.
-  if (input.commandOverride) {
-    if (serviceNames.length === 1) {
-      const onlyName = serviceNames[0];
-      if (onlyName) {
-        const primary = config.app.containers[onlyName];
-        if (primary) {
-          primary.command = input.commandOverride.trim().split(/\s+/);
-        }
-      }
-    } else {
-      warnings.push(
-        "--command was ignored: pass it via the compose file when multiple services are present.",
-      );
-    }
+  if (dryRun) {
+    // On stderr, so `--output json` keeps stdout to the one JSON result.
+    logger.dim("--- Dockerfile (preview) ---");
+    logger.dim(contents);
+    logger.dim("--- end preview ---");
+    return path;
   }
 
-  for (const warning of warnings) logger.warn(warning);
-
-  if (!input.dryRun) {
-    saveConfig(config, input.configPath);
-    logger.success("Wrote bunny.jsonc.");
-  } else {
-    logger.dim("Would write bunny.jsonc (--dry-run).");
+  writeFileSync(resolve(process.cwd(), path), contents);
+  logger.success(`Wrote a Dockerfile for ${app.label}.`);
+  // An existing .dockerignore is kept, with any missing secret entries
+  // added: the generated Dockerfile copies the whole project.
+  const ignorePath = resolve(process.cwd(), ".dockerignore");
+  const existing = existsSync(ignorePath)
+    ? readFileSync(ignorePath, "utf-8")
+    : undefined;
+  const ignore = dockerignore(app, existing);
+  if (ignore) {
+    writeFileSync(ignorePath, ignore);
+    logger.success(
+      existing === undefined
+        ? "Wrote .dockerignore."
+        : "Added .env and bunny config to .dockerignore.",
+    );
   }
-
-  // Every service in a compose import shares the same registry by default.
-  const registries: Record<string, string> = {};
-  for (const serviceName of Object.keys(config.app.containers)) {
-    registries[serviceName] = registry.id;
-  }
-  return { config, registries };
+  return path;
 }
 
-async function promptAppName(suggested?: string): Promise<string> {
+/** The registry to push to: --registry, else the bunny.net registry (the prompt's default when nobody can answer it). */
+async function pickRegistry(
+  client: McClient,
+  input: WalkthroughInput,
+  message: string,
+): Promise<ResolvedRegistry | null> {
+  if (input.registryFlag) return { id: input.registryFlag };
+  if (!input.interactive) {
+    if (findBunnyRegistry(await listRegistries(client))) {
+      return { id: BUNNY_REGISTRY_ID };
+    }
+    throw new UserError(
+      "No registry to push to.",
+      "Pass --registry <id> (see `bunny apps registries list`), or add one with `bunny apps registries add`.",
+    );
+  }
+  logger.info(message);
+  return promptRegistry(client);
+}
+
+async function promptAppName(
+  input: WalkthroughInput,
+  suggested?: string,
+): Promise<string> {
+  if (input.nameOverride) return input.nameOverride;
   const initial = suggested?.trim() || basename(resolve(process.cwd()));
+  if (!input.interactive) return initial;
   const { value } = await prompts({
     type: "text",
     name: "value",
@@ -393,19 +481,42 @@ async function promptAppName(suggested?: string): Promise<string> {
   return value;
 }
 
-async function pickRegions(client: McClient): Promise<string[]> {
+async function pickRegions(
+  client: McClient,
+  input: WalkthroughInput,
+): Promise<string[]> {
   const spin = spinner("Fetching regions...");
   spin.start();
-  const { data: regionsResult } = await client.GET("/regions");
+  const regions = await fetchAllRegions(client);
   spin.stop();
 
-  const regionsWithCapacity = (regionsResult?.items ?? []).filter(
+  const regionsWithCapacity = regions.filter(
     (r): r is typeof r & { id: string } =>
       r.hasCapacity === true && typeof r.id === "string",
   );
 
   if (regionsWithCapacity.length === 0) {
     throw new UserError("No regions with capacity are available right now.");
+  }
+
+  const ids = regionsWithCapacity.map((r) => r.id);
+  if (input.regionFlag) {
+    const match = ids.find(
+      (id) => id.toLowerCase() === input.regionFlag?.toLowerCase(),
+    );
+    if (!match) {
+      throw new UserError(
+        `Region "${input.regionFlag}" is unknown or has no capacity.`,
+        `Pass --region with one of: ${ids.join(", ")}.`,
+      );
+    }
+    return [match];
+  }
+  if (!input.interactive) {
+    throw new UserError(
+      "A region is required.",
+      `Pass --region with one of: ${ids.join(", ")}.`,
+    );
   }
 
   // MVP scope: single-region deploys. Users can edit `bunny.jsonc` to
@@ -511,9 +622,12 @@ function discoverEnvKeysForDockerfile(dockerfilePath: string): string[] {
 async function pickEnvKeysFromDockerfile(
   dockerfilePath: string,
   containerName: string,
+  interactive: boolean,
 ): Promise<Record<string, string>> {
   const keys = discoverEnvKeysForDockerfile(dockerfilePath);
   if (keys.length === 0) return {};
+  // Every key is pre-selected, so that's the default answer.
+  if (!interactive) return Object.fromEntries(keys.map((key) => [key, key]));
 
   const { picked } = await prompts({
     type: "multiselect",
@@ -637,16 +751,7 @@ async function chooseDockerfiles(detected: string[]): Promise<string[]> {
   return selected;
 }
 
-/**
- * Multi-Dockerfile import path: build a multi-container `bunny.jsonc`
- * from the user's Dockerfile picks.
- *
- * Mirrors the shape of {@link runComposeImport}: one registry is shared
- * across every container (deploy can re-prompt per container later if
- * needed), endpoints are seeded from each Dockerfile's `EXPOSE`
- * directives, container names are derived from path conventions, and
- * the file is saved unless `dryRun` is set.
- */
+/** Build a multi-container `bunny.jsonc` from the picked Dockerfiles, sharing one registry. */
 async function runMultiDockerfileImport(
   client: McClient,
   dockerfilePaths: string[],
@@ -664,17 +769,15 @@ async function runMultiDockerfileImport(
     );
   }
 
-  const name = input.nameOverride ?? (await promptAppName());
+  const name = await promptAppName(input);
 
-  const regions = await pickRegions(client);
+  const regions = await pickRegions(client, input);
 
-  let registry: ResolvedRegistry | null;
-  if (input.registryFlag) {
-    registry = { id: input.registryFlag };
-  } else {
-    logger.info("Pick a registry to push all images to.");
-    registry = await promptRegistry(client);
-  }
+  const registry = await pickRegistry(
+    client,
+    input,
+    "Pick a registry to push all images to.",
+  );
   if (!registry) throw new UserError("A registry is required.");
 
   const containers: Record<string, ContainerConfig> = {};
@@ -691,8 +794,7 @@ async function runMultiDockerfileImport(
     }
 
     // Seed endpoints from EXPOSE so each container has a reachable port
-    // when MC stands it up. Same shape compose translation produces - one
-    // CDN endpoint with every exposed port grouped under it.
+    // when MC stands it up. One CDN endpoint with every exposed port grouped under it.
     const exposedPorts = await readDockerfileExposedPorts(
       resolve(process.cwd(), path),
     );
@@ -709,7 +811,11 @@ async function runMultiDockerfileImport(
       ];
     }
 
-    const pickedEnv = await pickEnvKeysFromDockerfile(path, containerName);
+    const pickedEnv = await pickEnvKeysFromDockerfile(
+      path,
+      containerName,
+      input.interactive,
+    );
     if (Object.keys(pickedEnv).length > 0) {
       container.env = pickedEnv;
     }
@@ -717,8 +823,6 @@ async function runMultiDockerfileImport(
     containers[containerName] = container;
   }
 
-  // --command is ambiguous with multiple containers — same rule as
-  // multi-service compose imports.
   if (input.commandOverride) {
     logger.warn(
       "--command was ignored: pass it per container in bunny.jsonc when multiple Dockerfiles are selected.",

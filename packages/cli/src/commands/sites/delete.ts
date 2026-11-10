@@ -2,6 +2,7 @@ import { createCoreClient } from "@bunny.net/openapi-client";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
+import { fetchPullZoneHostnames } from "@/core/hostnames/client.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, removeManifest } from "@/core/manifest.ts";
 import {
@@ -64,19 +65,34 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
     });
     const { state } = site;
 
-    const what = args["keep-storage"]
-      ? "its pull zone"
-      : "its pull zone and its storage zone with everything in it";
     requireConfirmable(output, {
       force,
       message: `Deleting "${state.name}" needs a confirmation prompt.`,
       hint: "Re-run with --force to delete non-interactively.",
     });
+    if (!force) {
+      const hostnames = (
+        await withSpinner("Loading site details...", () =>
+          fetchPullZoneHostnames(coreClient, state.pullZoneId).catch(() => []),
+        )
+      ).flatMap((h) => (h.Value ? [h.Value] : []));
+      logger.log("This deletes:");
+      logger.log(`  pull zone ${state.pullZoneId}`);
+      for (const host of hostnames) logger.log(`    ${host}`);
+      if (args["keep-storage"]) {
+        logger.log(
+          `Keeps storage zone ${state.storageZoneId} (${site.storageZone.Name}) and its files.`,
+        );
+      } else {
+        logger.log(
+          `  storage zone ${state.storageZoneId} (${site.storageZone.Name}) and every file in it`,
+        );
+      }
+    }
     const confirmed =
-      (await confirm(
-        `Delete site "${state.name}" (${what})? This cannot be undone.`,
-        { force },
-      )) && (await confirmTyped(state.name, { force }));
+      (await confirm(`Delete site "${state.name}"? This cannot be undone.`, {
+        force,
+      })) && (await confirmTyped(state.name, { force }));
     if (!confirmed) {
       logger.log("Cancelled.");
       return;
@@ -91,13 +107,13 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
       }),
     );
 
-    // Only drop the local link when it pointed at this site.
+    const failures = results.filter((r) => !r.deleted);
+
+    // Only drop the local link when it pointed at this site, and keep it while a re-run still has work to do.
     const manifest = loadManifest<SiteManifest>(SITES_MANIFEST);
-    if (manifest.id === state.storageZoneId) {
+    if (failures.length === 0 && manifest.id === state.storageZoneId) {
       removeManifest(SITES_MANIFEST);
     }
-
-    const failures = results.filter((r) => !r.deleted);
 
     if (output === "json") {
       logger.log(
@@ -126,7 +142,9 @@ export const sitesDeleteCommand = defineCommand<DeleteArgs>({
       );
     }
     if (failures.length > 0) {
-      logger.dim("  Re-run the command to retry the failed deletions.");
+      logger.dim(
+        `  Re-run \`bunny sites delete ${state.storageZoneId}${args["keep-storage"] ? " --keep-storage" : ""}\` to retry the failed deletions.`,
+      );
       process.exit(1);
     }
   },

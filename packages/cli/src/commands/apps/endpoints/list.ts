@@ -58,6 +58,7 @@ export const appsEndpointsListCommand = defineCommand<ListArgs>({
     }
 
     const allEndpoints: Array<{
+      id: string;
       container: string;
       name: string;
       type: string;
@@ -75,13 +76,18 @@ export const appsEndpointsListCommand = defineCommand<ListArgs>({
       }
       for (const ep of ct.endpoints) {
         allEndpoints.push({
+          id: ep.id,
           container: ct.name,
           name: ep.displayName,
           type: ep.type,
           host: ep.publicHost,
           ssl: ep.isSslEnabled,
           ports: ep.portMappings
-            .map((pm) => `${pm.exposedPort}→${pm.containerPort}`)
+            .map((pm) =>
+              pm.exposedPort == null
+                ? String(pm.containerPort)
+                : `${pm.exposedPort}→${pm.containerPort}`,
+            )
             .join(", "),
         });
       }
@@ -98,6 +104,7 @@ export const appsEndpointsListCommand = defineCommand<ListArgs>({
     }
 
     const rows = allEndpoints.map((ep) => [
+      ep.id,
       ep.container,
       ep.type,
       ep.host,
@@ -106,7 +113,11 @@ export const appsEndpointsListCommand = defineCommand<ListArgs>({
     ]);
 
     logger.log(
-      formatTable(["Container", "Type", "Host", "SSL", "Ports"], rows, output),
+      formatTable(
+        ["ID", "Container", "Type", "Host", "SSL", "Ports"],
+        rows,
+        output,
+      ),
     );
   },
 });

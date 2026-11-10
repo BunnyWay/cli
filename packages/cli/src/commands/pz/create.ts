@@ -1,8 +1,9 @@
-import { pullZonesCreate } from "@bunny.net/tools/pullzones";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
+import { examplesUrl } from "@/core/examples.ts";
 import { logger } from "@/core/logger.ts";
 import { saveManifest } from "@/core/manifest.ts";
 import { confirm } from "@/core/ui.ts";
+import { pullZonesCreate } from "@/tools/pullzones/index.ts";
 import { PULL_ZONE_MANIFEST, type PullZoneManifest } from "./constants.ts";
 
 export const pzCreateCommand = defineToolCommand({
@@ -11,6 +12,14 @@ export const pzCreateCommand = defineToolCommand({
   describe: "Create a new pull zone.",
   examples: [
     ["$0 pz create my-zone https://origin.example.com", "Create a pull zone"],
+    [
+      "$0 pz create my-zone origin.example.com",
+      "https:// is prepended to a bare origin",
+    ],
+    [
+      "$0 pz create my-zone https://origin.example.com --output json",
+      "JSON output, with no link prompt",
+    ],
   ],
   progress: "Creating pull zone...",
 
@@ -36,12 +45,15 @@ export const pzCreateCommand = defineToolCommand({
     const link = await confirm(`Link this directory to "${zone.name}"?`, {
       optional: true,
     });
-    if (!link) return;
-    saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, {
-      id: zone.id,
-      name: zone.name,
-    });
-    logger.success(`Linked to ${zone.name}.`);
+    if (link) {
+      saveManifest<PullZoneManifest>(PULL_ZONE_MANIFEST, {
+        id: zone.id,
+        name: zone.name,
+      });
+      logger.success(`Linked to ${zone.name}.`);
+    }
+    logger.log();
+    logger.dim(`  Examples:  ${examplesUrl("cdn")}`);
   },
 
   render: () => {},

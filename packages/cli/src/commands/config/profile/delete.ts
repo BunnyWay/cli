@@ -12,6 +12,10 @@ export const profileDeleteCommand = defineCommand<DeleteArgs>({
   command: "delete <name>",
   aliases: ["rm"],
   describe: "Delete a configuration profile.",
+  examples: [
+    ["$0 config profile delete staging", "Delete after confirmation"],
+    ["$0 config profile delete staging --force", "Skip the confirmation"],
+  ],
 
   builder: (yargs) =>
     yargs

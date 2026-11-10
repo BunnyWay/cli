@@ -21,6 +21,7 @@ import {
   fetchSystemHostname,
   promoteDeploy,
   rereadRemoteState,
+  warnAfterPromote,
   writeRemoteState,
 } from "./api.ts";
 import {
@@ -213,6 +214,15 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       "Explicit build command",
     ],
     ["$0 sites deploy ./dist --site my-site", "Target a specific site"],
+    [
+      "$0 sites deploy --build --env API_URL=https://api.example.com",
+      "Override a build-time env var",
+    ],
+    [
+      "$0 sites deploy --build --env-file .env.production",
+      "Read build-time env overrides from a file",
+    ],
+    ["$0 sites deploy ./dist --spa", "Serve index.html for client-side routes"],
     [
       "$0 sites deploy ./catalog --deploy-id 20260827-1433-r42",
       "Identify the deploy with your own release ID",
@@ -460,9 +470,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const production = productionUrl(state, systemHost);
 
     if (skipUpload && alreadyLive) {
-      await withSpinner("Checking routing...", () =>
+      const promoted = await withSpinner("Checking routing...", () =>
         promoteDeploy({ coreClient, state, deployId }),
       );
+      warnAfterPromote(promoted, deployId);
       if (output === "json") {
         logger.log(
           JSON.stringify(
@@ -470,7 +481,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
               site: state.name,
               id: deployId,
               unchanged: true,
-              live: true,
+              live: promoted.confirmed,
               production: production ?? null,
             },
             null,
@@ -541,13 +552,18 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       etag = await writeRemoteState(connection, state, etag);
     }
 
-    await withSpinner("Publishing to production...", async () => {
-      await promoteDeploy({ coreClient, state, deployId });
-      markCurrent(state, deployId);
-      etag = await writeRemoteState(connection, state, etag, {
-        promotedTo: deployId,
-      });
-    });
+    const promoted = await withSpinner(
+      "Publishing to production...",
+      async () => {
+        const result = await promoteDeploy({ coreClient, state, deployId });
+        markCurrent(state, deployId);
+        etag = await writeRemoteState(connection, state, etag, {
+          promotedTo: deployId,
+        });
+        return result;
+      },
+    );
+    warnAfterPromote(promoted, deployId);
 
     if (output === "json") {
       logger.log(
@@ -559,7 +575,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
             files: files.length,
             bytes: totalBytes,
             unchanged: skipUpload,
-            live: true,
+            live: promoted.confirmed,
             production: production ?? null,
           },
           null,
@@ -570,7 +586,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
 
     if (skipUpload) {
-      logger.success(`Deploy ${deployId} is now live.`);
+      logger.success(
+        promoted.confirmed
+          ? `Deploy ${deployId} is now live.`
+          : `Published deploy ${deployId}.`,
+      );
     } else {
       logger.success(
         `Deployed ${deployId} (${files.length} files, ${formatBytes(totalBytes)}).`,

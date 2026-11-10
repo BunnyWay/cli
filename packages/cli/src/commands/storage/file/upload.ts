@@ -67,6 +67,14 @@ export const storageFileUploadCommand = defineCommand<UploadArgs>({
       "$0 storage files upload ./photo.png --zone my-zone",
       "Upload to a specific zone",
     ],
+    [
+      "$0 storage files upload ./data.bin --content-type application/json",
+      "Override the stored content type",
+    ],
+    [
+      "$0 storage files upload ./backup.tar.gz --checksum",
+      "Verify the upload with a SHA256 checksum",
+    ],
   ],
 
   builder: (yargs) =>
@@ -141,7 +149,7 @@ export const storageFileUploadCommand = defineCommand<UploadArgs>({
     spin.start();
     try {
       const sha256Checksum = checksum ? await sha256(source) : undefined;
-      await uploadFile(connection, remotePath, source.stream(), {
+      await uploadFile(connection, remotePath, source, {
         contentType,
         sha256Checksum,
       });

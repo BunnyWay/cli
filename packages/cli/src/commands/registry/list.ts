@@ -1,13 +1,17 @@
-import { registryRepositories } from "@bunny.net/tools/registry";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import { registryRepositories } from "@/tools/registry/index.ts";
 
 export const registryListCommand = defineToolCommand({
   tool: registryRepositories,
   command: "list",
   aliases: ["ls"],
   describe: "List repositories in the bunny.net registry.",
+  examples: [
+    ["$0 registry list", "List repositories"],
+    ["$0 registry list --output json", "JSON output"],
+  ],
   progress: "Fetching repositories...",
 
   prepare: async () => ({ input: {} }),

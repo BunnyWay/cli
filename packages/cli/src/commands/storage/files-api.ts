@@ -2,7 +2,7 @@ import * as BunnyStorage from "@bunny.net/storage-sdk";
 import { UserError } from "@/core/errors.ts";
 import type { StorageZoneModel } from "./api.ts";
 
-// The SDK types its upload stream as node:stream/web; borrow that exact type so casts stay in sync.
+// The SDK types its upload body as a node:stream/web stream; borrow that exact type so casts stay in sync.
 type UploadStream = Parameters<typeof BunnyStorage.file.upload>[2];
 
 export type StorageZone = BunnyStorage.zone.StorageZone;
@@ -139,14 +139,13 @@ function splitZones(value: string | null): string[] | null {
 export async function uploadFile(
   zone: StorageZone,
   remotePath: string,
-  contents: ReadableStream<Uint8Array>,
+  contents: Blob,
   options?: UploadOptions,
 ): Promise<void> {
-  // Bun's web-standard ReadableStream is compatible at runtime; bridge the nominal type gap.
   await BunnyStorage.file.upload(
     zone,
     normalizePath(remotePath),
-    contents as UploadStream,
+    contents as unknown as UploadStream,
     options,
   );
 }

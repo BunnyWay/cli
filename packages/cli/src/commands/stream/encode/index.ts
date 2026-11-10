@@ -1,15 +1,17 @@
 import type { CommandModule } from "yargs";
+import { streamVideoEncodeCommand } from "@/commands/stream/video/encode.ts";
 import { defineNamespace } from "@/core/define-namespace.ts";
 import { streamEncodeEnableCommand } from "./enable.ts";
-import { streamEncodeReencodeCommand } from "./reencode.ts";
 
+// Hidden: `encode enable` is now `libraries update --encoding-tier premium`, and
+// `encode reencode` is `videos encode`. Both old spellings keep working.
 const subcommands: CommandModule[] = [
   streamEncodeEnableCommand,
-  streamEncodeReencodeCommand,
+  { ...streamVideoEncodeCommand, command: "reencode [video]", aliases: [] },
 ];
 
 export const streamEncodeNamespace = defineNamespace(
   "encode",
-  "Premium encoding: enable it on a library, or re-encode a video.",
+  false,
   subcommands,
 );

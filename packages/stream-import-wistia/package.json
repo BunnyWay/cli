@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/stream-import-wistia",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Wistia source adapter for @bunny.net/stream-import: list videos and resolve download URLs for import into bunny.net Stream.",
   "license": "MIT",
   "repository": {

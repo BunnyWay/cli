@@ -14,12 +14,13 @@ import {
 } from "@/commands/stream/videos-api.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { errorMessage, UserError } from "@/core/errors.ts";
+import { localFileArg } from "@/core/file-arg.ts";
 import { formatBytes, formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { withSpinner } from "@/core/ui.ts";
 
 interface UploadArgs {
-  file: string;
+  file?: string;
   lib?: string;
   title?: string;
   collection?: string;
@@ -33,6 +34,25 @@ interface UploadArgs {
  * size the odds of that stop being good enough.
  */
 export const TUS_THRESHOLD_BYTES = 2 * 1024 ** 3;
+
+/** Video containers offered by the file picker when no path is given. */
+export const VIDEO_EXTENSIONS = [
+  ".mp4",
+  ".m4v",
+  ".mov",
+  ".mkv",
+  ".webm",
+  ".avi",
+  ".wmv",
+  ".flv",
+  ".mpg",
+  ".mpeg",
+  ".ts",
+  ".mts",
+  ".m2ts",
+  ".3gp",
+  ".mxf",
+];
 
 /** Which upload mechanism a file of this size uses. */
 export function uploadStrategy(size: number): "put" | "tus" {
@@ -101,7 +121,7 @@ async function removeOrphanVideo(
     logger.warn(
       `Upload failed, and the state of video ${videoId} could not be read (${errorMessage(err)}); leaving it in place.`,
     );
-    logger.dim("Check it with `bunny stream video list`.");
+    logger.dim("Check it with `bunny stream videos list`.");
     return;
   }
 
@@ -109,7 +129,7 @@ async function removeOrphanVideo(
     logger.warn(
       `Upload reported a failure, but video ${videoId} is ${videoStatusLabel(status)}, so the upload may have succeeded; leaving it in place.`,
     );
-    logger.dim("Check it with `bunny stream video list`.");
+    logger.dim("Check it with `bunny stream videos list`.");
     return;
   }
 
@@ -124,28 +144,32 @@ async function removeOrphanVideo(
 }
 
 export const streamVideoUploadCommand = defineCommand<UploadArgs>({
-  command: "upload <file>",
+  command: "upload [file]",
   describe: "Upload a local video file to a Stream video library.",
   examples: [
-    ["$0 stream video upload ./video.mp4", "Upload to the linked library"],
+    ["$0 stream videos upload ./video.mp4", "Upload to the linked library"],
     [
-      "$0 stream video upload ./video.mp4 --lib 12345",
+      "$0 stream videos upload",
+      "Interactive: pick a video file from the current directory",
+    ],
+    [
+      "$0 stream videos upload ./video.mp4 --lib 12345",
       "Upload to a specific library",
     ],
     [
-      '$0 stream video upload ./video.mp4 --title "Launch demo"',
+      '$0 stream videos upload ./video.mp4 --title "Launch demo"',
       "Set the video title",
     ],
     [
-      "$0 stream video upload ./video.mp4 --collection 8a7b6c5d-...",
+      "$0 stream videos upload ./video.mp4 --collection 8a7b6c5d-...",
       "Upload into a collection",
     ],
     [
-      "$0 stream video upload ./video.mp4 --thumbnail-time 5000",
+      "$0 stream videos upload ./video.mp4 --thumbnail-time 5000",
       "Grab the thumbnail from 5s in",
     ],
     [
-      "$0 stream video fetch https://example.com/video.mp4",
+      "$0 stream videos fetch https://example.com/video.mp4",
       "For a remote video, let bunny.net fetch it instead",
     ],
   ],
@@ -154,8 +178,7 @@ export const streamVideoUploadCommand = defineCommand<UploadArgs>({
     yargs
       .positional("file", {
         type: "string",
-        describe: "Path to the local video file to upload",
-        demandOption: true,
+        describe: "Path to the local video file to upload (prompts if omitted)",
       })
       .option("lib", {
         alias: "library",
@@ -169,7 +192,7 @@ export const streamVideoUploadCommand = defineCommand<UploadArgs>({
       .option("collection", {
         type: "string",
         describe:
-          "Collection ID to put the video in (see `bunny stream collection list`)",
+          "Collection ID to put the video in (see `bunny stream collections list`)",
       })
       .option("thumbnail-time", {
         type: "number",
@@ -178,7 +201,7 @@ export const streamVideoUploadCommand = defineCommand<UploadArgs>({
       }),
 
   handler: async ({
-    file,
+    file: fileArg,
     lib,
     title,
     collection,
@@ -188,6 +211,12 @@ export const streamVideoUploadCommand = defineCommand<UploadArgs>({
     verbose,
     apiKey,
   }) => {
+    const file = await localFileArg(fileArg, {
+      output,
+      noun: "video file",
+      extensions: VIDEO_EXTENSIONS,
+      usage: "bunny stream videos upload ./video.mp4",
+    });
     const size = await uploadFileSize(file);
     const resumable = uploadStrategy(size) === "tus";
 

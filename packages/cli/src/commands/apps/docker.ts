@@ -1,13 +1,17 @@
 import { type Dirent, existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
+import { parseImageRef } from "@bunny.net/config";
 import type { createMcClient } from "@bunny.net/openapi-client";
+import { UNAUTHORIZED_MESSAGE } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import { resolveRegistryEndpoint } from "@/core/bunny-registry.ts";
 import { dockerLogin, imageHostname } from "@/core/docker.ts";
 import { ApiError, UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts, spinner } from "@/core/ui.ts";
+import { type RegistryTarget, registryTarget } from "@/tools/apps/index.ts";
+import { GENERATED_HEADER, GITHUB_HINT } from "./dockerfile/project.ts";
 
 export {
   dockerLogin,
@@ -57,10 +61,9 @@ export async function generateTag(): Promise<string> {
  *   EXPOSE 8080/tcp
  *   EXPOSE 80/udp        (skipped - bunny CDN/Anycast endpoints are TCP)
  *
- * Returns a deduped list in source order. Pure string parsing - no I/O -
- * so it's trivially testable without a Dockerfile on disk.
+ * Returns a deduped list in source order.
  */
-export function parseDockerfileExposedPorts(content: string): number[] {
+function parseDockerfileExposedPorts(content: string): number[] {
   const ports: number[] = [];
   const seen = new Set<number>();
   for (const rawLine of content.split("\n")) {
@@ -196,7 +199,7 @@ export function findDockerfiles(cwd: string): string[] {
  * accept (lower-kebab) so the walkthrough can drop it straight into the
  * config without further massaging.
  */
-export function defaultContainerNameFromDockerfile(path: string): string {
+function defaultContainerNameFromDockerfile(path: string): string {
   const parts = path.split("/").filter(Boolean);
   const filename = parts[parts.length - 1] ?? "";
   const parentDir = (parts.length > 1 ? parts[parts.length - 2] : "") ?? "";
@@ -266,6 +269,7 @@ export async function buildImage(
   dockerfile: string,
   tag: string,
   cwd?: string,
+  options?: { quiet?: boolean },
 ): Promise<void> {
   // `dockerfile` is relative to `process.cwd()` (that's where every caller
   // resolves it from), but docker resolves `-f` relative to its own cwd.
@@ -292,16 +296,21 @@ export async function buildImage(
 
   const proc = Bun.spawn(args, {
     cwd: cwd ?? process.cwd(),
-    stdout: "inherit",
+    stdout: options?.quiet ? 2 : "inherit",
     stderr: "inherit",
   });
 
   const exitCode = await proc.exited;
 
   if (exitCode !== 0) {
+    const generated = readFileSync(dockerfileAbs, "utf-8").startsWith(
+      GENERATED_HEADER,
+    );
     throw new UserError(
       `Docker build failed (exit code ${exitCode}).`,
-      "Check the Dockerfile and build output above for errors.",
+      generated
+        ? `Check the build output above, then edit the generated Dockerfile to fit the project. ${GITHUB_HINT}`
+        : "Check the Dockerfile and build output above for errors.",
     );
   }
 }
@@ -314,14 +323,9 @@ export async function buildImage(
  *
  * Not a guarantee the cred is still valid (tokens expire), but a
  * strong signal that `docker login` has been run here.
- *
- * Takes an optional `configPath` to make the function testable.
  */
-export function dockerHasCredentials(
-  hostname: string,
-  configPath?: string,
-): boolean {
-  const path = configPath ?? join(homedir(), ".docker", "config.json");
+function dockerHasCredentials(hostname: string): boolean {
+  const path = join(homedir(), ".docker", "config.json");
   if (!existsSync(path)) return false;
   try {
     const config = JSON.parse(readFileSync(path, "utf-8")) as {
@@ -333,6 +337,38 @@ export function dockerHasCredentials(
     return false;
   } catch {
     return false;
+  }
+}
+
+export async function dockerLoginUser(
+  hostname: string,
+  configPath?: string,
+): Promise<string | null> {
+  const path = configPath ?? join(homedir(), ".docker", "config.json");
+  if (!existsSync(path)) return null;
+  try {
+    const config = JSON.parse(readFileSync(path, "utf-8")) as {
+      auths?: Record<string, { auth?: string }>;
+      credHelpers?: Record<string, string>;
+      credsStore?: string;
+    };
+    const inline = config.auths?.[hostname]?.auth;
+    if (inline) {
+      return Buffer.from(inline, "base64").toString().split(":")[0] || null;
+    }
+    const helper = config.credHelpers?.[hostname] ?? config.credsStore;
+    if (!helper) return null;
+    const proc = Bun.spawn([`docker-credential-${helper}`, "get"], {
+      stdin: new TextEncoder().encode(hostname),
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    if ((await proc.exited) !== 0) return null;
+    const { Username } = JSON.parse(await new Response(proc.stdout).text());
+
+    return typeof Username === "string" && Username ? Username : null;
+  } catch {
+    return null;
   }
 }
 
@@ -362,7 +398,7 @@ export async function ghIsAuthenticated(): Promise<boolean> {
  *
  * Returns `[]` if the header is absent (older gh, or no auth).
  */
-export function parseOauthScopes(headerOutput: string): string[] {
+function parseOauthScopes(headerOutput: string): string[] {
   const match = headerOutput.match(/^X-Oauth-Scopes:\s*(.+)$/im);
   if (!match?.[1]) return [];
   return match[1]
@@ -433,6 +469,16 @@ export async function ghEnsureWritePackagesScope(): Promise<void> {
   }
 }
 
+async function ghLogin(): Promise<string | null> {
+  const proc = Bun.spawn(["gh", "api", "user", "--jq", ".login"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if ((await proc.exited) !== 0) return null;
+
+  return (await new Response(proc.stdout).text()).trim() || null;
+}
+
 /**
  * Log in to a registry using the local `gh` CLI for credentials.
  *
@@ -445,17 +491,13 @@ export async function ghDockerLogin(hostname: string): Promise<void> {
     await ghEnsureWritePackagesScope();
   }
 
-  const userProc = Bun.spawn(["gh", "api", "user", "--jq", ".login"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if ((await userProc.exited) !== 0) {
+  const username = await ghLogin();
+  if (!username) {
     throw new UserError(
       "`gh api user` failed.",
       "Ensure the GitHub CLI is authenticated (`gh auth status`).",
     );
   }
-  const username = (await new Response(userProc.stdout).text()).trim();
 
   const tokenProc = Bun.spawn(["gh", "auth", "token"], {
     stdout: "pipe",
@@ -469,26 +511,57 @@ export async function ghDockerLogin(hostname: string): Promise<void> {
   await dockerLogin(hostname, username, token);
 }
 
-/**
- * Ensure docker is logged in to `hostname` before a push. If not, offer
- * a login flow:
- *
- * - `ghcr.io` + `gh` authenticated → one-click via GitHub CLI
- * - any host → fall back to manual username / password prompts
- *
- * On success, credentials persist in `~/.docker/config.json` so future
- * deploys skip this step.
- */
-export async function ensureRegistryLogin(hostname: string): Promise<void> {
-  if (dockerHasCredentials(hostname)) return;
+/** Make sure Docker can push to `hostname` as `expectedUser`, offering to log in. */
+export async function ensureRegistryLogin(
+  hostname: string,
+  expectedUser?: string | null,
+  interactive = true,
+): Promise<void> {
+  const sameUser = (user: string | null) =>
+    !expectedUser || user?.toLowerCase() === expectedUser.toLowerCase();
+  const loginHint = `Run \`docker login ${hostname}${expectedUser ? ` -u ${expectedUser}` : ""}\` first.`;
 
-  logger.warn(`Not logged in to ${hostname}.`);
+  if (dockerHasCredentials(hostname)) {
+    const current = await dockerLoginUser(hostname);
+    if (!current || sameUser(current)) return;
 
-  if (hostname === "ghcr.io" && (await ghIsAuthenticated())) {
+    if (!interactive) {
+      throw new UserError(
+        `Docker is logged in to ${hostname} as ${current}, but this registry pushes as ${expectedUser}.`,
+        loginHint,
+      );
+    }
+    logger.warn(
+      `Docker is logged in to ${hostname} as ${current}, but this registry pushes as ${expectedUser}.`,
+    );
     const { value } = await prompts({
       type: "confirm",
       name: "value",
-      message: "Use the GitHub CLI (`gh`) to log in to ghcr.io?",
+      message: `Log in to ${hostname} as ${expectedUser}? This replaces the ${current} login.`,
+      initial: true,
+    });
+    if (!value) {
+      throw new UserError(
+        `${current} can't push to ${expectedUser}'s namespace on ${hostname}.`,
+        `Run \`docker login ${hostname} -u ${expectedUser}\`, or pick a registry for ${current}.`,
+      );
+    }
+  } else {
+    if (!interactive) {
+      throw new UserError(`Not logged in to ${hostname}.`, loginHint);
+    }
+    logger.warn(`Not logged in to ${hostname}.`);
+  }
+
+  const ghUser =
+    hostname === "ghcr.io" && (await ghIsAuthenticated())
+      ? await ghLogin()
+      : null;
+  if (ghUser && sameUser(ghUser)) {
+    const { value } = await prompts({
+      type: "confirm",
+      name: "value",
+      message: `Use the GitHub CLI (\`gh\`) to log in to ghcr.io as ${ghUser}?`,
       initial: true,
     });
     if (value) {
@@ -510,6 +583,7 @@ export async function ensureRegistryLogin(hostname: string): Promise<void> {
     type: "text",
     name: "value",
     message: `Username for ${hostname}:`,
+    initial: expectedUser ?? undefined,
   });
   if (!username) throw new UserError(`Login to ${hostname} required.`);
 
@@ -557,9 +631,11 @@ export function buildImageRef(
   return ns ? `${hostName}/${ns}/${name}:${tag}` : `${hostName}/${name}:${tag}`;
 }
 
-const ADD_NEW_REGISTRY = "__add_new__";
+const ADD_GITHUB_REGISTRY = "__add_github__";
+const ADD_DOCKERHUB_REGISTRY = "__add_dockerhub__";
+const ADD_OCI_REGISTRY = "__add_oci__";
 
-/** Id of the bunny.net registry's `/registries` record. It's a public record (no userName) shared by every account, so pushes use the API token and the account-id namespace instead of stored credentials. */
+/** The bunny.net registry's `/registries` id; pushes authenticate with the API token. */
 export const BUNNY_REGISTRY_ID = "9808";
 
 /**
@@ -617,31 +693,31 @@ export async function getRegistry(
   return registries.find((r) => String(r.id) === registryId);
 }
 
-/**
- * Find an existing registry that matches the given hostname.
- * Falls back to undefined if no match is found.
- */
+/** Registry for `hostname`, preferring the one whose username owns `namespace`. */
 export function findRegistryByHostname(
   registries: ContainerRegistry[],
   hostname: string,
+  namespace?: string,
 ): ContainerRegistry | undefined {
   const normalized = hostname.toLowerCase();
-  return registries.find((r) => r.hostName?.toLowerCase() === normalized);
+  const matches = registries.filter(
+    (r) => r.hostName?.toLowerCase() === normalized,
+  );
+  const owner = namespace?.toLowerCase();
+
+  return (
+    matches.find((r) => owner && r.userName?.toLowerCase() === owner) ??
+    matches[0]
+  );
 }
 
-/**
- * Inline "add new registry" flow. Prompts for display name + credentials,
- * creates the registry on bunny.net, and returns its ID along with the
- * credentials so the caller can `docker login` without re-prompting.
- *
- * If `hostname` is given it is used as the suggested display name.
- *
- * If `isPublic` is true, the registry is created with no credentials
- * (suitable for pulling public images that don't require auth).
- */
+/** Prompt for credentials, add the registry, and return them so the caller can `docker login`. */
 export async function createRegistry(
   client: McClient,
-  opts: { displayName?: string; isPublic?: boolean } = {},
+  opts: {
+    displayName?: string;
+    target?: RegistryTarget;
+  } = {},
 ): Promise<ResolvedRegistry | null> {
   let displayName = opts.displayName;
   if (!displayName) {
@@ -654,26 +730,19 @@ export async function createRegistry(
   }
   if (!displayName) return null;
 
-  let userName: string | undefined;
-  let password: string | undefined;
+  const { value: userName } = await prompts({
+    type: "text",
+    name: "value",
+    message: "Username:",
+  });
+  if (!userName) return null;
 
-  if (!opts.isPublic) {
-    const { value: rawUser } = await prompts({
-      type: "text",
-      name: "value",
-      message: "Username:",
-    });
-    userName = rawUser;
-    if (!userName) return null;
-
-    const { value: rawPass } = await prompts({
-      type: "password",
-      name: "value",
-      message: "Password/Token:",
-    });
-    password = rawPass;
-    if (!password) return null;
-  }
+  const { value: password } = await prompts({
+    type: "password",
+    name: "value",
+    message: "Password/Token:",
+  });
+  if (!password) return null;
 
   const addSpin = spinner("Adding registry...");
   addSpin.start();
@@ -681,9 +750,8 @@ export async function createRegistry(
   const { data: result } = await client.POST("/registries", {
     body: {
       displayName,
-      ...(userName && password
-        ? { passwordCredentials: { userName, password } }
-        : {}),
+      ...opts.target,
+      passwordCredentials: { userName, password },
     },
   });
 
@@ -698,8 +766,16 @@ export async function createRegistry(
 
   return {
     id: String(result.id),
-    freshCredentials: userName && password ? { userName, password } : undefined,
+    freshCredentials: { userName, password },
   };
+}
+
+export function findBunnyRegistry(
+  registries: ContainerRegistry[],
+): ContainerRegistry | undefined {
+  return registries.find(
+    (r) => r.isPlatformManaged && String(r.id) === BUNNY_REGISTRY_ID,
+  );
 }
 
 /**
@@ -709,34 +785,35 @@ export async function createRegistry(
 export async function promptRegistry(
   client: McClient,
 ): Promise<ResolvedRegistry | null> {
-  const bunnyEndpoint = resolveRegistryEndpoint();
-  const { value: useBunny } = await prompts({
-    type: "confirm",
-    name: "value",
-    message: "Push to the bunny.net registry?",
-    initial: true,
-  });
-  if (useBunny === undefined) return null;
-  if (useBunny) {
-    return { id: BUNNY_REGISTRY_ID, hostName: bunnyEndpoint.host };
-  }
-
   const regSpin = spinner("Fetching registries...");
   regSpin.start();
-
   const registries = await listRegistries(client);
-
   regSpin.stop();
 
-  // Only show registries the user can push to (have a username).
+  const bunny = findBunnyRegistry(registries);
+  const bunnyHost = resolveRegistryEndpoint().host;
+
   const pushable = registries.filter((r) => r.userName);
 
   const choices = [
+    ...(bunny
+      ? [
+          {
+            title: `${bunny.displayName} (${bunnyHost})`,
+            value: BUNNY_REGISTRY_ID,
+          },
+        ]
+      : []),
     ...pushable.map((r) => ({
       title: `${r.displayName} (${r.hostName} — ${r.userName})`,
       value: String(r.id ?? ""),
     })),
-    { title: "Add new registry", value: ADD_NEW_REGISTRY },
+    { title: "Add GitHub registry (ghcr.io)", value: ADD_GITHUB_REGISTRY },
+    {
+      title: "Add Docker Hub registry (docker.io)",
+      value: ADD_DOCKERHUB_REGISTRY,
+    },
+    { title: "Add another OCI registry", value: ADD_OCI_REGISTRY },
   ];
 
   const { value: choice } = await prompts({
@@ -747,18 +824,178 @@ export async function promptRegistry(
   });
 
   if (choice === undefined) return null;
-  if (choice !== ADD_NEW_REGISTRY) {
-    const existing = pushable.find((r) => String(r.id) === String(choice));
-    return { id: String(choice), hostName: existing?.hostName };
+  if (choice === BUNNY_REGISTRY_ID) {
+    return { id: BUNNY_REGISTRY_ID, hostName: bunnyHost };
+  }
+  if (choice === ADD_GITHUB_REGISTRY) {
+    return createRegistry(client, {
+      displayName: "ghcr.io",
+      target: { type: "gitHub" },
+    });
+  }
+  if (choice === ADD_DOCKERHUB_REGISTRY) {
+    return createRegistry(client, {
+      displayName: "docker.io",
+      target: { type: "dockerHub" },
+    });
+  }
+  if (choice === ADD_OCI_REGISTRY) {
+    const { value: server } = await prompts({
+      type: "text",
+      name: "value",
+      message: "Registry server (e.g. registry.example.com):",
+    });
+    if (!server?.trim()) return null;
+
+    return createRegistry(client, {
+      displayName: server.trim(),
+      target: registryTarget(server),
+    });
+  }
+  const existing = pushable.find((r) => String(r.id) === String(choice));
+
+  return { id: String(choice), hostName: existing?.hostName };
+}
+
+async function withRegistryAuth<T>(
+  registry: ContainerRegistry,
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (
+      err instanceof ApiError &&
+      err.status === 401 &&
+      err.message !== UNAUTHORIZED_MESSAGE
+    ) {
+      throw new UserError(
+        `${registry.hostName} rejected the credentials stored on "${registry.displayName}".`,
+        `Update them with \`bunny apps registries update ${registry.id}\`.`,
+      );
+    }
+    throw err;
+  }
+}
+
+export async function promptRegistryImage(
+  client: McClient,
+): Promise<{ imageRef: string; registry: ResolvedRegistry } | null> {
+  const regSpin = spinner("Fetching registries...");
+  regSpin.start();
+  const registries = await listRegistries(client);
+  regSpin.stop();
+
+  const bunny = findBunnyRegistry(registries);
+  const sources = [
+    ...(bunny ? [bunny] : []),
+    ...registries.filter((r) => r.userName),
+  ];
+  if (sources.length === 0) {
+    throw new UserError(
+      "No registries connected.",
+      "Add one with `bunny apps registries add`, or deploy an image by URL.",
+    );
   }
 
-  return createRegistry(client);
+  const { value: registryId } = await prompts({
+    type: "select",
+    name: "value",
+    message: "Registry:",
+    choices: sources.map((r) => ({
+      title: r.userName
+        ? `${r.displayName} (${r.hostName} — ${r.userName})`
+        : `${r.displayName} (${r.hostName})`,
+      value: String(r.id),
+    })),
+  });
+
+  if (registryId === undefined) return null;
+
+  const registry = sources.find((r) => String(r.id) === registryId);
+  if (!registry) return null;
+
+  const isBunny = registryId === BUNNY_REGISTRY_ID;
+  const hostName = isBunny ? resolveRegistryEndpoint().host : registry.hostName;
+
+  const imgSpin = spinner("Fetching images...");
+
+  imgSpin.start();
+
+  const images = await withRegistryAuth(registry, async () => {
+    const { data } = await client.POST("/registries/images", {
+      body: { registryId },
+    });
+
+    return data ?? [];
+  }).finally(() => imgSpin.stop());
+  if (images.length === 0) {
+    throw new UserError(
+      `No images found in "${registry.displayName}".`,
+      "Push one first, or pick another registry.",
+    );
+  }
+
+  const { value: imageIndex } = await prompts({
+    type: "select",
+    name: "value",
+    message: "Image:",
+    choices: images.map((img, i) => ({
+      title: isBunny ? (img.id ?? "") : `${img.namespace}/${img.id}`,
+      value: i,
+    })),
+  });
+
+  if (imageIndex === undefined) return null;
+
+  const image = images[imageIndex];
+  if (!image?.id) return null;
+  if (!image.namespace) {
+    throw new UserError(
+      `${hostName}/${image.id} has no namespace, which bunny.net can't deploy yet.`,
+      "Push it under a namespace (e.g. team/name), or deploy another image.",
+    );
+  }
+
+  const tagSpin = spinner("Fetching tags...");
+  tagSpin.start();
+
+  const tags = await withRegistryAuth(registry, async () => {
+    const { data } = await client.POST("/registries/tags/paged", {
+      body: {
+        registryId,
+        imageName: image.id ?? "",
+        imageNamespace: image.namespace ?? "",
+        limit: 1000,
+      },
+    });
+
+    return (data?.items ?? []).flatMap((t) => (t.name ? [t.name] : []));
+  }).finally(() => tagSpin.stop());
+
+  if (tags.length === 0) {
+    throw new UserError(`No tags found for ${image.id}.`);
+  }
+
+  tags.sort((a, b) => Number(b === "latest") - Number(a === "latest"));
+
+  const { value: tag } = await prompts({
+    type: "select",
+    name: "value",
+    message: "Tag:",
+    choices: tags.map((t) => ({ title: t, value: t })),
+  });
+  if (!tag) return null;
+
+  return {
+    imageRef: `${hostName}/${image.namespace}/${image.id}:${tag}`,
+    registry: { id: registryId, hostName },
+  };
 }
 
 /**
  * Resolve a registry to use when pulling an image. If the hostname matches
- * an existing registry, returns it. Otherwise prompts the user to either
- * add it as a public registry or provide credentials.
+ * an existing registry, returns it. Otherwise asks for credentials and adds it.
  *
  * Returns null if the user cancels.
  */
@@ -773,29 +1010,22 @@ export async function resolveRegistryForImage(
   const registries = await listRegistries(client);
   fetchSpin.stop();
 
-  const existing = findRegistryByHostname(registries, hostname);
+  const existing = findRegistryByHostname(
+    registries,
+    hostname,
+    parseImageRef(imageRef).imageNamespace,
+  );
   if (existing?.id) {
     return { id: String(existing.id), hostName: existing.hostName };
   }
 
-  logger.info(`No registry connected for ${hostname}.`);
-
-  const { value: kind } = await prompts({
-    type: "select",
-    name: "value",
-    message: `Is ${hostname} public, or do you need credentials?`,
-    choices: [
-      { title: "Public — no credentials needed", value: "public" },
-      { title: "Private — I have credentials", value: "private" },
-      { title: "Cancel", value: "cancel" },
-    ],
-  });
-
-  if (!kind || kind === "cancel") return null;
+  logger.info(
+    `No registry connected for ${hostname}. Enter credentials to add it.`,
+  );
 
   return createRegistry(client, {
     displayName: hostname,
-    isPublic: kind === "public",
+    target: registryTarget(hostname),
   });
 }
 

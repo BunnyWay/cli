@@ -1,8 +1,8 @@
-import { pullZonesDelete, pullZonesGet } from "@bunny.net/tools/pullzones";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, removeManifest } from "@/core/manifest.ts";
 import { confirm } from "@/core/ui.ts";
+import { pullZonesDelete, pullZonesGet } from "@/tools/pullzones/index.ts";
 import {
   PULL_ZONE_MANIFEST,
   type PullZoneManifest,

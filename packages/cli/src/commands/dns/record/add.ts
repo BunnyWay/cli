@@ -371,6 +371,18 @@ export const dnsAddCommand = defineCommand<AddArgs>({
       "$0 dns records add example.com '@' CAA '0 issue \"letsencrypt.org\"'",
       "Add a CAA record",
     ],
+    [
+      '$0 dns records add example.com api A 198.51.100.1 --ttl 300 --comment "API origin"',
+      "Set the TTL and a comment",
+    ],
+    [
+      "$0 dns records add example.com cdn PullZone --pull-zone 12345",
+      "Point a name at a pull zone",
+    ],
+    [
+      "$0 dns records add example.com fn Script --script 67890",
+      "Answer a name from an Edge Script",
+    ],
     ["$0 dns records add", "Interactive wizard"],
   ],
 

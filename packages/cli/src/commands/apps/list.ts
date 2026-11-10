@@ -5,6 +5,7 @@ import { defineCommand } from "@/core/define-command.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { spinner } from "@/core/ui.ts";
+import { fetchAllApps } from "@/tools/apps/index.ts";
 import { STATUS_LABELS } from "./constants.ts";
 
 const COMMAND = "list";
@@ -22,11 +23,9 @@ export const appsListCommand = defineCommand({
     const spin = spinner("Fetching apps...");
     spin.start();
 
-    const { data } = await client.GET("/apps");
+    const apps = await fetchAllApps(client);
 
     spin.stop();
-
-    const apps = data?.items ?? [];
 
     if (output === "json") {
       logger.log(JSON.stringify(apps, null, 2));

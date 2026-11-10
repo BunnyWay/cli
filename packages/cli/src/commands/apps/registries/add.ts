@@ -1,10 +1,10 @@
-import { registriesCreate } from "@bunny.net/tools/apps";
 import { defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { prompts } from "@/core/ui.ts";
+import { registriesCreate } from "@/tools/apps/index.ts";
 
-const REGISTRY_TYPES = ["dockerHub", "gitHub"] as const;
+const REGISTRY_TYPES = ["dockerHub", "gitHub", "oci"] as const;
 
 // Flag first, prompt second, error last: the prompt wrapper already refuses when stdin is not a terminal.
 async function promptFor(
@@ -30,6 +30,10 @@ export const registryAddCommand = defineToolCommand({
       "$0 registries add --name 'ghcr.io (notrab)' --server ghcr.io --username notrab --password $TOKEN",
       "Add a GitHub container registry; the type is derived from the server",
     ],
+    [
+      "$0 registries add --name scaleway --server rg.fr-par.scw.cloud --username nologin --password $TOKEN",
+      "Add any other OCI registry",
+    ],
     ["$0 registries add", "Prompt for each value"],
   ],
 
@@ -38,12 +42,14 @@ export const registryAddCommand = defineToolCommand({
       .option("name", { type: "string", describe: "Display name" })
       .option("server", {
         type: "string",
-        describe: "Registry server (e.g. ghcr.io); used to derive --type",
+        describe:
+          "Registry server (e.g. ghcr.io, registry.example.com:5000); used to derive --type",
       })
       .option("type", {
         type: "string",
         choices: REGISTRY_TYPES,
-        describe: "Registry type (required for ghcr.io and docker.io)",
+        describe:
+          "Registry type; derived from --server (any host other than ghcr.io and docker.io is oci)",
       })
       .option("username", { type: "string", describe: "Registry username" })
       .option("password", {
@@ -54,6 +60,14 @@ export const registryAddCommand = defineToolCommand({
   progress: "Adding registry...",
 
   prepare: async (args) => {
+    const server =
+      args.type && args.type !== "oci"
+        ? args.server
+        : await promptFor(
+            args.server,
+            "Registry server (e.g. ghcr.io, docker.io, registry.example.com):",
+            "Server",
+          );
     const name = await promptFor(args.name, "Display name:", "Display name");
     const username = await promptFor(args.username, "Username:", "Username");
     const password = await promptFor(
@@ -63,7 +77,7 @@ export const registryAddCommand = defineToolCommand({
       "password",
     );
     return {
-      input: { name, username, password, type: args.type, server: args.server },
+      input: { name, username, password, type: args.type, server },
     };
   },
 

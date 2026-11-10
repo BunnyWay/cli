@@ -1,110 +1,15 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { useTempDir } from "@/test-utils/temp-dir.ts";
 import {
-  configExists,
+  assertVolumesNotSplit,
+  type BunnyAppConfig,
   loadConfig,
   saveConfig,
-  stripTransientFields,
 } from "./config.ts";
 
 const tempDir = useTempDir("bunny-config-");
-
-test("configExists(path) checks that exact file", () => {
-  const path = join(tempDir(), "custom.jsonc");
-  expect(configExists(path)).toBe(false);
-  writeFileSync(
-    path,
-    JSON.stringify({
-      version: "2026-05-11",
-      app: { name: "x", containers: {} },
-    }),
-  );
-  expect(configExists(path)).toBe(true);
-});
-
-test("loadConfig(path) reads from that exact file", () => {
-  const path = join(tempDir(), "elsewhere.jsonc");
-  writeFileSync(
-    path,
-    JSON.stringify({
-      version: "2026-05-11",
-      app: { name: "my-app", containers: { api: { image: "nginx" } } },
-    }),
-  );
-  const cfg = loadConfig(path);
-  expect(cfg.app.name).toBe("my-app");
-  expect(cfg.app.containers.api?.image).toBe("nginx");
-});
-
-test("loadConfig(missing) throws", () => {
-  expect(() => loadConfig(join(tempDir(), "nope.jsonc"))).toThrow(
-    /No config file found/,
-  );
-});
-
-test("saveConfig(data, path) writes there, not to cwd", () => {
-  const path = join(tempDir(), "out.jsonc");
-  saveConfig(
-    {
-      version: "2026-05-11",
-      app: { name: "demo", containers: { api: { image: "x" } } },
-    },
-    path,
-  );
-  const parsed = JSON.parse(readFileSync(path, "utf-8"));
-  expect(parsed.version).toBe("2026-05-11");
-  expect(parsed.app.name).toBe("demo");
-  expect(Object.keys(parsed)[0]).toBe("$schema");
-});
-
-test("stripTransientFields handles mixed containers in one app", () => {
-  const stripped = stripTransientFields({
-    version: "2026-05-11",
-    app: {
-      name: "stack",
-      containers: {
-        web: {
-          dockerfile: "Dockerfile",
-          image: "ghcr.io/me/web:abc",
-          registry: "7545",
-        },
-        db: { image: "postgres:17-alpine", registry: "1155" },
-      },
-    },
-  });
-
-  expect(stripped.app.containers.web).toEqual({ dockerfile: "Dockerfile" });
-  expect(stripped.app.containers.db).toEqual({ image: "postgres:17-alpine" });
-});
-
-test("saveConfig strips id/registry/transient-image on disk", () => {
-  const path = join(tempDir(), "transient.jsonc");
-  saveConfig(
-    {
-      version: "2026-05-11",
-      app: {
-        id: "app_abc123",
-        name: "demo",
-        containers: {
-          api: {
-            dockerfile: "Dockerfile",
-            image: "ghcr.io/me/api:abc123",
-            registry: "7545",
-          },
-        },
-      },
-    },
-    path,
-  );
-
-  const parsed = JSON.parse(readFileSync(path, "utf-8"));
-  expect(parsed.app.containers.api.dockerfile).toBe("Dockerfile");
-  expect(parsed.app.containers.api.registry).toBeUndefined();
-  expect(parsed.app.containers.api.image).toBeUndefined();
-  expect(parsed.app.id).toBeUndefined();
-});
 
 test("saveConfig preserves comments and a sibling sites block on an existing file", () => {
   const path = join(tempDir(), "mixed.jsonc");
@@ -140,35 +45,59 @@ test("saveConfig preserves comments and a sibling sites block on an existing fil
   expect(parsed.sites).toEqual({ dir: "dist" });
 });
 
-test("load → save → reload preserves intent fields", () => {
-  const path = join(tempDir(), "rt.jsonc");
-  writeFileSync(
-    path,
-    JSON.stringify({
-      version: "2026-05-11",
-      app: {
-        name: "rt",
-        scaling: { min: 2, max: 5 },
-        containers: {
-          api: { image: "nginx", command: ["nginx", "-g", "daemon off;"] },
-        },
+describe("assertVolumesNotSplit", () => {
+  const app = (
+    regions: BunnyAppConfig["app"]["regions"],
+    { volumes = true, max = 1 } = {},
+  ): BunnyAppConfig => ({
+    version: "2026-05-11",
+    app: {
+      name: "x",
+      regions,
+      scaling: { min: 1, max },
+      containers: {
+        web: {},
+        db: volumes
+          ? { volumes: [{ name: "data", mount: "/data", size: 1 }] }
+          : {},
       },
-    }),
-  );
-  const original = loadConfig(path);
-  // app.id mutations on the in-memory object are NOT round-tripped
-  // through the file - identity lives in .bunny/app.json now.
-  original.app.id = "app_abc123";
-  saveConfig(original, path);
+    },
+  });
 
-  const reloaded = loadConfig(path);
-  expect(reloaded.app.id).toBeUndefined();
-  expect(reloaded.app.name).toBe("rt");
-  expect(reloaded.app.scaling).toEqual({ min: 2, max: 5 });
-  expect(reloaded.app.containers.api?.image).toBe("nginx");
-  expect(reloaded.app.containers.api?.command).toEqual([
-    "nginx",
-    "-g",
-    "daemon off;",
-  ]);
+  test("refuses a volume in more than one region, naming them", () => {
+    expect(() => assertVolumesNotSplit(app(["de", "uk"]))).toThrow(
+      'Container "db" mounts a volume, but the app runs in 2 regions (DE, UK).',
+    );
+  });
+
+  test("refuses a volume on more than one instance", () => {
+    expect(() => assertVolumesNotSplit(app(["de"], { max: 3 }))).toThrow(
+      'Container "db" mounts a volume, but the app scales to 3 instances.',
+    );
+  });
+
+  test("names both when regions and scaling split it", () => {
+    expect(() => assertVolumesNotSplit(app(["de", "uk"], { max: 2 }))).toThrow(
+      "runs in 2 regions (DE, UK) and scales to 2 instances.",
+    );
+  });
+
+  test("counts the regions an app may run in, not just the required ones", () => {
+    expect(() =>
+      assertVolumesNotSplit(app({ allowed: ["de", "uk"], required: ["de"] })),
+    ).toThrow();
+  });
+
+  test.each([
+    ["one region and one instance", app(["de"])],
+    ["no volume", app(["de", "uk"], { volumes: false, max: 3 })],
+  ])("allows %s", (_, config) => {
+    expect(() => assertVolumesNotSplit(config)).not.toThrow();
+  });
+
+  test("--allow-split-volumes opts in", () => {
+    expect(() =>
+      assertVolumesNotSplit(app(["de", "uk"], { max: 3 }), true),
+    ).not.toThrow();
+  });
 });

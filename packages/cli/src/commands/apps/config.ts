@@ -1,6 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type BunnyAppConfig, BunnyAppConfigSchema } from "@bunny.net/config";
+import {
+  type BunnyAppConfig,
+  BunnyAppConfigSchema,
+  normalizeRegions,
+} from "@bunny.net/config";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import {
   CONFIG_FILENAME,
@@ -27,7 +31,7 @@ export {
   apiToConfig,
   CURRENT_VERSION,
   configToAddRequest,
-  configToPatchRequest,
+  configToContainerRequest,
   normalizeRegions,
   parseImageRef,
 } from "@bunny.net/config";
@@ -129,6 +133,38 @@ export function saveConfig(data: BunnyAppConfig, explicitPath?: string): void {
 }
 
 /**
+ * Refuse a config that mounts a volume in an app that can run more than one
+ * copy. Volumes are never shared: every region, and every instance within a
+ * region, gets its own empty volume, so the data silently splits.
+ * `--allow-split-volumes` opts in for apps that want that (a cache, say).
+ */
+export function assertVolumesNotSplit(
+  config: BunnyAppConfig,
+  allow?: boolean,
+): void {
+  if (allow) return;
+  const withVolume = Object.entries(config.app.containers).find(
+    ([, container]) => container.volumes?.length,
+  );
+  if (!withVolume) return;
+
+  const { allowed } = normalizeRegions(config.app.regions);
+  const max = config.app.scaling?.max ?? 1;
+  const reasons = [
+    ...(allowed.length > 1
+      ? [`runs in ${allowed.length} regions (${allowed.join(", ")})`]
+      : []),
+    ...(max > 1 ? [`scales to ${max} instances`] : []),
+  ];
+  if (reasons.length === 0) return;
+
+  throw new UserError(
+    `Container "${withVolume[0]}" mounts a volume, but the app ${reasons.join(" and ")}.`,
+    "Volumes aren't shared: each region and each instance gets its own empty volume. Use one region and `scaling.max: 1` in bunny.jsonc, or pass --allow-split-volumes if each copy should keep separate data.",
+  );
+}
+
+/**
  * Resolve the active app ID.
  *
  * Precedence: explicit flag → `.bunny/app.json` → legacy `app.id`
@@ -154,6 +190,17 @@ export function resolveAppId(explicit?: string): string {
   throw new UserError(
     "No linked app.",
     "Run `bunny apps link <app-id>` to link this directory, or `bunny apps deploy` to create a new app.",
+  );
+}
+
+// A fresh config would overwrite the linked app's settings, so make the user pull it first.
+export function assertNotLinkedWithoutConfig(): void {
+  const { id } = loadManifest<AppManifest>(APP_MANIFEST);
+  if (!id) return;
+
+  throw new UserError(
+    `This directory is linked to app ${id} but has no ${CONFIG_FILENAME}.`,
+    `Run \`bunny apps pull\` to write ${CONFIG_FILENAME} from the app, or \`bunny apps unlink\` to start a new app.`,
   );
 }
 

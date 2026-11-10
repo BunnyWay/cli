@@ -2,14 +2,7 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
-/**
- * Ratchet for the tools migration: command modules must not talk to the API
- * directly. API work belongs in `@bunny.net/tools`; a command is glue (flags,
- * prompts, rendering) around `defineToolCommand` or `tool.invoke`.
- *
- * Files listed here still create their own clients. Migrating a family removes
- * its entries; adding a NEW direct client use fails this test. The list only shrinks.
- */
+// Files that still create their own API clients; the list only shrinks.
 const PENDING_MIGRATION = new Set([
   "commands/apps/delete.ts",
   "commands/apps/deploy.ts",
@@ -25,7 +18,6 @@ const PENDING_MIGRATION = new Set([
   "commands/apps/link.ts",
   "commands/apps/list.ts",
   "commands/apps/pull.ts",
-  "commands/apps/push.ts",
   "commands/apps/regions/list.ts",
   "commands/apps/regions/show.ts",
   "commands/apps/restart.ts",
@@ -176,7 +168,7 @@ test("commands do not create API clients outside the tools layer", () => {
   const regressions = [...current].filter((f) => !PENDING_MIGRATION.has(f));
   expect(
     regressions,
-    "These command files create API clients directly. Move the API work into @bunny.net/tools and call it via defineToolCommand or tool.invoke instead.",
+    "These command files create API clients directly. Move the API work into src/tools/ and call it via defineToolCommand or tool.invoke instead.",
   ).toEqual([]);
 
   const migrated = [...PENDING_MIGRATION].filter((f) => !current.has(f));

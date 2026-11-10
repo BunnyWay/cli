@@ -1,4 +1,5 @@
 import { defineNamespace } from "@/core/define-namespace.ts";
+import { withPreviewNotice } from "@/core/preview-notice.ts";
 import { sitesCiNamespace } from "./ci/index.ts";
 import { sitesCreateCommand } from "./create.ts";
 import { sitesDeleteCommand } from "./delete.ts";
@@ -13,10 +14,8 @@ import { sitesShowCommand } from "./show.ts";
 import { sitesSslCommand } from "./ssl.ts";
 import { sitesUnlinkCommand } from "./unlink.ts";
 
-export const sitesNamespace = defineNamespace(
-  "sites",
-  "Host static sites (preview).",
-  [
+export const sitesNamespace = withPreviewNotice(
+  defineNamespace("sites", "Host static sites (preview).", [
     sitesCreateCommand,
     sitesListCommand,
     sitesShowCommand,
@@ -30,5 +29,6 @@ export const sitesNamespace = defineNamespace(
     sitesUnlinkCommand,
     sitesDeleteCommand,
     sitesMigrateCommand,
-  ],
+  ]),
+  "Sites is a starting point: it sets up a pull zone, storage zone, and edge rules for you. If you already manage those yourself, or want more control, eject and manage them directly.",
 );

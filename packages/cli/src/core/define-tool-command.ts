@@ -1,12 +1,12 @@
+import type { Argv, CommandModule } from "yargs";
+import type { z } from "zod";
+import { resolveConfig } from "@/config/index.ts";
 import {
   extendToolContext,
   type Tool,
   type ToolContext,
   type ToolEnv,
-} from "@bunny.net/tools";
-import type { Argv, CommandModule } from "yargs";
-import type { z } from "zod";
-import { resolveConfig } from "@/config/index.ts";
+} from "@/tools/index.ts";
 import { defineCommand } from "./define-command.ts";
 import { logger } from "./logger.ts";
 import { toolContext } from "./tool-context.ts";
@@ -30,7 +30,6 @@ export interface Prepared<Schema extends z.ZodObject> {
 }
 
 interface ToolCommandDef<A, Schema extends z.ZodObject, Result> {
-  /** The tool this command is a front end for. */
   tool: Tool<Schema, Result>;
   command: string;
   aliases?: readonly string[];
@@ -51,7 +50,7 @@ interface ToolCommandDef<A, Schema extends z.ZodObject, Result> {
   progress?: string;
   /** Ctrl-C aborts the tool's signal instead of killing the process, so it can stop cleanly and return; a second Ctrl-C exits. */
   interruptible?: boolean;
-  /** Reword a tool error for the CLI, e.g. put a command into a host-neutral hint. Returns the error to throw, or undefined to rethrow the original. */
+  /** Reword a tool error for the CLI, e.g. name a flag in the hint. Return undefined to rethrow the original. */
   onError?: (error: unknown, args: A & GlobalArgs) => Error | undefined;
   /** CLI-local follow-up such as manifest cleanup. Runs for every output format. */
   after?: (result: Result, args: A & GlobalArgs) => void | Promise<void>;
@@ -69,25 +68,7 @@ interface ToolCommandDef<A, Schema extends z.ZodObject, Result> {
   ) => Promise<z.input<Schema> | undefined>;
 }
 
-/**
- * Wrap a tool in a yargs command.
- *
- * The tool owns the API work and the result shape; the command owns the UX:
- * flags, prompts, confirmation, spinner, and rendering. `--output json` prints
- * the tool result verbatim, so a CLI run and any other host return the same
- * document for the same operation.
- *
- * @example
- * ```ts
- * export const registryListCommand = defineToolCommand({
- *   tool: registriesList,
- *   command: "list",
- *   aliases: ["ls"],
- *   prepare: async () => ({ input: {} }),
- *   render: (registries, { output }) => logger.log(formatTable(...)),
- * });
- * ```
- */
+/** Wrap a tool in a yargs command: prepare -> confirm -> run -> after -> render. */
 export function defineToolCommand<A, Schema extends z.ZodObject, Result>(
   def: ToolCommandDef<A, Schema, Result>,
 ): CommandModule {

@@ -6,6 +6,11 @@ import { logger } from "@/core/logger.ts";
 export const configShowCommand = defineCommand({
   command: "show",
   describe: "Show the loaded configuration.",
+  examples: [
+    ["$0 config show", "Show the active profile, API URL, and masked key"],
+    ["$0 config show --profile staging", "Show a named profile"],
+    ["$0 config show --output json", "JSON output"],
+  ],
 
   handler: async ({ profile, output, apiKey, verbose }) => {
     const cfg = resolveConfig(profile, apiKey, verbose);

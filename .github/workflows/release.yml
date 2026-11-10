@@ -432,6 +432,18 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Wait for platform packages on npm
+        run: |
+          VERSION=$(node -p "require('./packages/cli/package.json').version")
+          for pkg in cli-linux-x64 cli-linux-arm64 cli-darwin-x64 cli-darwin-arm64 cli-windows-x64; do
+            for i in $(seq 1 120); do
+              [ -n "$(npm view "@bunny.net/$pkg@$VERSION" version --prefer-online 2>/dev/null)" ] && break
+              [ "$i" = 120 ] && { echo "@bunny.net/$pkg@$VERSION never became available"; exit 1; }
+              echo "Waiting for @bunny.net/$pkg@$VERSION ($i/120)"
+              sleep 15
+            done
+          done
+
       - name: Publish @bunny.net/cli
         run: |
           cd packages/cli

@@ -1,5 +1,91 @@
 # @bunny.net/cli
 
+## 0.21.1
+
+### Patch Changes
+
+- [#283](https://github.com/BunnyWay/cli/pull/283) [`ee0c058`](https://github.com/BunnyWay/cli/commit/ee0c058ef1cc9589cfc9d9b2263340106aeae479) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - fix: the binaries are now built with Bun 1.4.4. Binaries built with Bun 1.3.x could crash with a floating point exception after uploading a small file in `sites deploy` and `storage files upload`.
+
+## 0.21.0
+
+### Minor Changes
+
+- [#279](https://github.com/BunnyWay/cli/pull/279) [`fb9e43b`](https://github.com/BunnyWay/cli/commit/fb9e43b85414c4bff21d9d458329177f3a93e757) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - fix(stream): `videos encode` no longer claims a re-encode transcribes the video again. A re-encode keeps the existing transcription and only transcribes again when the library's transcribing languages changed; the warning, the `videos transcribe` double-billing notice and the README now say so. The JSON field `transcriptionQueued` is renamed `transcribingEnabled`, since a transcription is not necessarily queued; scripts reading the old field need to switch.
+
+### Patch Changes
+
+- [#281](https://github.com/BunnyWay/cli/pull/281) [`01a4db5`](https://github.com/BunnyWay/cli/commit/01a4db5f3bbb32c0071ab0b54743cdcf96860891) Thanks [@NathanZBunny](https://github.com/NathanZBunny)! - fix(stream): the Mux import now links to Mux's Access Tokens settings page (settings/access-tokens) instead of settings/api-keys.
+
+## 0.20.3
+
+### Patch Changes
+
+- [#269](https://github.com/BunnyWay/cli/pull/269) [`655a0da`](https://github.com/BunnyWay/cli/commit/655a0da51f14fd97848b2c0fdcc3f8a258d9029c) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Show a Public Preview notice on `sites` and `stream` commands
+
+- [#270](https://github.com/BunnyWay/cli/pull/270) [`290ffba`](https://github.com/BunnyWay/cli/commit/290ffba684b650b1737b7e1bc3963226c5baacb2) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix `sites deploy` and `storage files upload --checksum` which failed with "invalid path or checksum"
+
+- [#272](https://github.com/BunnyWay/cli/pull/272) [`ca396df`](https://github.com/BunnyWay/cli/commit/ca396dfaeae0a5ce0661e7860037fd399c9f9526) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - Prompt for a missing file or URL in `stream videos upload`, `stream videos fetch`, and `stream videos captions add` instead of failing with "Not enough non-option arguments"
+
+## 0.20.2
+
+### Patch Changes
+
+- [#266](https://github.com/BunnyWay/cli/pull/266) [`e0056a9`](https://github.com/BunnyWay/cli/commit/e0056a9e1606347918253dd4040b43228c0833ab) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Save `BUNNY_STREAM_CDN_HOSTNAME` to `.env` alongside the Stream library ID and API key
+
+## 0.20.1
+
+### Patch Changes
+
+- [#256](https://github.com/BunnyWay/cli/pull/256) [`2ec0edf`](https://github.com/BunnyWay/cli/commit/2ec0edf63bbb016599797cfe69f0675b17d53bcc) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Sites publishes keep paths excluded from the serve rule, warn about Override Origin URL rules the site still shadows, and warn when the edge never confirms the new deploy
+
+## 0.20.0
+
+### Minor Changes
+
+- [#261](https://github.com/BunnyWay/cli/pull/261) [`b08ec2f`](https://github.com/BunnyWay/cli/commit/b08ec2fff970e95429eb97386c7013b07ee270b9) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny apps deploy` and `bunny apps init` offer to generate a Dockerfile when a project has none, detecting Node, Bun, Deno, Python, Go, Rust, Ruby, PHP, .NET and Spring Boot apps, down to a single `index.php`, `main.go`, `main.py` or `index.ts`. Agents can deploy without prompts: `--dockerfile` generates the file when it's missing, the new `--region` flag picks the region, and every other question takes its default
+
+- [#253](https://github.com/BunnyWay/cli/pull/253) [`8254578`](https://github.com/BunnyWay/cli/commit/8254578d60dfd080f062b894d7c135989f2e07ea) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add `bunny stream` commands to manage Stream video libraries and videos: `stream libraries` (create, list, show, update, credentials, player and security settings), `stream videos` (upload, fetch, update, thumbnails, stats, embed URLs, encode, transcribe, and Smart Generate), `stream collections`, `stream captions`, `stream link`, and `stream regions`.
+
+### Patch Changes
+
+- [#261](https://github.com/BunnyWay/cli/pull/261) [`b08ec2f`](https://github.com/BunnyWay/cli/commit/b08ec2fff970e95429eb97386c7013b07ee270b9) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny apps deploy` and `bunny apps push` refuse an app that mounts a volume in more than one region or scales above one instance, since each copy gets its own empty volume; pass `--allow-split-volumes` to deploy it anyway
+
+- [#253](https://github.com/BunnyWay/cli/pull/253) [`8254578`](https://github.com/BunnyWay/cli/commit/8254578d60dfd080f062b894d7c135989f2e07ea) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny stream library create` now offers to link the directory, save the library ID and API key to `.env`, and import or upload videos, then prints next steps. `storage zones create`, `sites create`, and `pz create` link to the matching examples.
+
+- [#250](https://github.com/BunnyWay/cli/pull/250) [`897157c`](https://github.com/BunnyWay/cli/commit/897157cb9317ead9ce76c1431b58a78efce1fddd) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites delete` lists the pull zone, its hostnames, and the storage zone it will delete before asking to confirm
+
+- [#257](https://github.com/BunnyWay/cli/pull/257) [`a863793`](https://github.com/BunnyWay/cli/commit/a863793d2fa9f5b5226d9ae1b6016a69224764fb) Thanks [@twogood](https://github.com/twogood)! - `bunny sites list` no longer warns about unreadable storage zones for pull zones that have no storage origin
+
+- [#259](https://github.com/BunnyWay/cli/pull/259) [`93b3749`](https://github.com/BunnyWay/cli/commit/93b3749c0e71dfbdd9ab7f16d60f1ad68b358c7e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(stream): stop suggesting --clean-failed alone for videos the source no longer lists, and name the 10,000-video cap in `stream import list`
+
+- [#254](https://github.com/BunnyWay/cli/pull/254) [`b91d4a4`](https://github.com/BunnyWay/cli/commit/b91d4a4f25f914896c1b73edff625039fae0dd34) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Add the `bunny stream` libraries, videos, captions, collections, and paid commands to the agent skill, and bring the import reference up to date
+
+## 0.19.0
+
+### Minor Changes
+
+- [#243](https://github.com/BunnyWay/cli/pull/243) [`eb4e0fc`](https://github.com/BunnyWay/cli/commit/eb4e0fc1c59d481d1b04d109332065f755752edf) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites` is now in public preview and listed in `bunny --help`: create a static site, deploy any folder or framework build with instant rollbacks, attach custom domains with SSL, and deploy from GitHub with `bunny sites ci init`
+
+- [#203](https://github.com/BunnyWay/cli/pull/203) [`7814b1f`](https://github.com/BunnyWay/cli/commit/7814b1f6ade634182245acf3146588f59c97f698) Thanks [@amir-at-bunny](https://github.com/amir-at-bunny)! - `bunny stream import` moves a video library into Bunny Stream from Vimeo, AWS S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove: it hands every video to Bunny and returns, `--wait` stays for encoding, `bunny stream import status` shows Bunny's progress, and `bunny stream import list` browses the source; with a dry run, resumable state, and de-duplication. The engine ships as `@bunny.net/stream-import` and each source adapter as `@bunny.net/stream-import-<source>`; `@bunny.net/openapi-client` verbose logs now redact the Authorization header and URL query strings, skip binary bodies, and surface Stream error messages.
+
+### Patch Changes
+
+- [#237](https://github.com/BunnyWay/cli/pull/237) [`0f0bd10`](https://github.com/BunnyWay/cli/commit/0f0bd10a067cee1b493024da834c9aa33f0b2140) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites` detects Blazor WebAssembly projects and never downloads a framework CLI that isn't installed
+
+- [#239](https://github.com/BunnyWay/cli/pull/239) [`e646f1d`](https://github.com/BunnyWay/cli/commit/e646f1d3bab2df52338b5123d3fe0bc2da284e2e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix custom domain setup silently failing to point a Bunny DNS name at a pull zone when another record already sits at that name
+
+- [#236](https://github.com/BunnyWay/cli/pull/236) [`c9ab1eb`](https://github.com/BunnyWay/cli/commit/c9ab1eb5f465bdf9d472c0a256b6154095d2740c) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix reading an empty `.env` value (like `BUNNY_DATABASE_URL=`) as the next line's contents
+
+- [#86](https://github.com/BunnyWay/cli/pull/86) [`7eb2a74`](https://github.com/BunnyWay/cli/commit/7eb2a7409b8cbc626970b08568f7e63641ccc340) Thanks [@burstw0w](https://github.com/burstw0w)! - Add an experimental, hidden `bunny pz` command for managing pull zones
+
+- [#241](https://github.com/BunnyWay/cli/pull/241) [`9a743f5`](https://github.com/BunnyWay/cli/commit/9a743f54b3ac0beef06dd129680870f13cdf5595) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Publish `@bunny.net/framework-detector`: the framework presets, framework and package manager detection, and the GitHub Actions workflow behind `bunny sites`, as a dependency-free package the dashboard and the Sites control plane share with the CLI. `bunny sites deploy` now hashes content the same way on every machine and in the dashboard, whatever the locale; a site's next content deploy after upgrading gets a new content hash once, so an unchanged folder is published again rather than skipped.
+
+- [#249](https://github.com/BunnyWay/cli/pull/249) [`b7b028f`](https://github.com/BunnyWay/cli/commit/b7b028f95a04b5eee3e2bc2a76648e15cee0880a) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Correct the `bunny sites` command reference and agent skill: `deployments delete`, `--tier`, `ci init --force`, and which commands take `--site` and `--link`
+
+- [#233](https://github.com/BunnyWay/cli/pull/233) [`f228638`](https://github.com/BunnyWay/cli/commit/f22863899b2e2ad369c27eb67bab929617e6931b) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites create --from-zone` imports an existing storage zone and its pull zone as a site, keeping its hostnames and serving it unchanged until the first deploy
+
+- [#248](https://github.com/BunnyWay/cli/pull/248) [`20063dd`](https://github.com/BunnyWay/cli/commit/20063dddcdd018a8c5d7b8dc80b9fa629791b227) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - `bunny sites delete` can be re-run after a partial failure, `create` refuses a name an imported site already uses, and `list` warns when it couldn't read every zone
+
 ## 0.18.0
 
 ### Minor Changes

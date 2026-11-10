@@ -3,18 +3,21 @@ export function parseImageRef(ref: string): {
   imageName: string;
   imageNamespace: string;
   imageTag: string;
+  imageDigest?: string;
 } {
   if (!ref) {
     return { imageName: "", imageNamespace: "", imageTag: "" };
   }
 
-  let tag = "latest";
-  let imagePath = ref;
+  const [path = ref, digest] = ref.split("@", 2);
 
-  const colonIdx = ref.lastIndexOf(":");
-  if (colonIdx > 0 && !ref.substring(colonIdx).includes("/")) {
-    tag = ref.substring(colonIdx + 1);
-    imagePath = ref.substring(0, colonIdx);
+  let tag = "latest";
+  let imagePath = path;
+
+  const colonIdx = path.lastIndexOf(":");
+  if (colonIdx > 0 && !path.substring(colonIdx).includes("/")) {
+    tag = path.substring(colonIdx + 1);
+    imagePath = path.substring(0, colonIdx);
   }
 
   const parts = imagePath.split("/");
@@ -32,5 +35,10 @@ export function parseImageRef(ref: string): {
     namespace = parts[0] ?? "";
   }
 
-  return { imageName: name, imageNamespace: namespace, imageTag: tag };
+  return {
+    imageName: name,
+    imageNamespace: namespace,
+    imageTag: tag,
+    ...(digest ? { imageDigest: digest } : {}),
+  };
 }

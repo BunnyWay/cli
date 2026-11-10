@@ -1,38 +1,32 @@
 import { createCollection } from "@/commands/stream/collection-api.ts";
 import { streamLibraryContext } from "@/commands/stream/context.ts";
-import { nameArg } from "@/commands/stream/name-arg.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 
 interface CollectionCreateArgs {
-  collectionName?: string;
   name?: string;
   lib?: string;
 }
 
 export const streamCollectionCreateCommand =
   defineCommand<CollectionCreateArgs>({
-    command: "create [collection-name]",
+    command: "create [name]",
     aliases: ["add"],
     describe: "Create a collection in a Stream video library.",
     examples: [
-      ["$0 stream collection create --name Tutorials", "Create a collection"],
-      ["$0 stream collection create Tutorials", "Same, as a positional"],
+      ["$0 stream collections create Tutorials", "Create a collection"],
+      ["$0 stream collections create", "Interactive: prompts for the name"],
       [
-        "$0 stream collection create Tutorials --lib 12345",
+        "$0 stream collections create Tutorials --lib 12345",
         "Create it in a specific library",
       ],
     ],
 
     builder: (yargs) =>
       yargs
-        .positional("collection-name", {
-          type: "string",
-          describe: "Name for the new collection",
-        })
-        .option("name", {
+        .positional("name", {
           type: "string",
           describe: "Name for the new collection",
         })
@@ -44,14 +38,14 @@ export const streamCollectionCreateCommand =
 
     handler: async (args) => {
       const { lib, profile, output, verbose, apiKey } = args;
-      let wanted = nameArg(args.collectionName, args.name);
+      let wanted = args.name?.trim() || undefined;
 
       // Fail on a missing name before any API call, since an unattended run has
       // no way to supply one later.
       if (!wanted && !isInteractive(output)) {
         throw new UserError(
           "A collection name is required.",
-          "Pass the name: bunny stream collection create --name Tutorials",
+          "Pass the name: bunny stream collections create Tutorials",
         );
       }
 
@@ -75,7 +69,7 @@ export const streamCollectionCreateCommand =
       if (!wanted) {
         throw new UserError(
           "A collection name is required.",
-          "Pass the name: bunny stream collection create --name Tutorials",
+          "Pass the name: bunny stream collections create Tutorials",
         );
       }
 
@@ -94,7 +88,7 @@ export const streamCollectionCreateCommand =
       );
       logger.log(`ID: ${collection.guid}`);
       logger.dim(
-        "Put videos in it with `bunny stream video upload --collection <id>` or `video update --collection <id>`.",
+        "Put videos in it with `bunny stream videos upload --collection <id>` or `videos update --collection <id>`.",
       );
     },
   });
