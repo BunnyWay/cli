@@ -1,7 +1,4 @@
-async function pinTTY<T>(
-  isTTY: boolean,
-  fn: () => T | Promise<T>,
-): Promise<T> {
+async function pinTTY<T>(isTTY: boolean, fn: () => T | Promise<T>): Promise<T> {
   const originalStdinTTY = process.stdin.isTTY;
   const originalStdoutTTY = process.stdout.isTTY;
   process.stdin.isTTY = isTTY;
