@@ -1,5 +1,41 @@
 # @bunny.net/cli
 
+## 0.22.0
+
+### Minor Changes
+
+- [#288](https://github.com/BunnyWay/cli/pull/288) [`6124501`](https://github.com/BunnyWay/cli/commit/61245012e85a87711b62f0b7162013eac08d3e1e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(apps): list `bunny apps` in help as a Public Preview command, deploy from local source, a connected registry, or an image URL, connect GitHub, Docker Hub, or any OCI registry, and fix rollback, paging, multi-container redeploys, and endpoint and volume sync across the apps commands
+
+- [#305](https://github.com/BunnyWay/cli/pull/305) [`0168b9e`](https://github.com/BunnyWay/cli/commit/0168b9eace7b55643d83fc529165588cd5b617bb) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(apps): add `bunny apps scale` and `bunny apps regions set` to change an app's scaling and regions in place
+
+- [#286](https://github.com/BunnyWay/cli/pull/286) [`d3963e7`](https://github.com/BunnyWay/cli/commit/d3963e782bdcd8c4004375f388ab466088649731) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat: `bunny stream import` asks whether to import into a new or an existing video library, and can create the new one.
+
+### Patch Changes
+
+- [#298](https://github.com/BunnyWay/cli/pull/298) [`46d13de`](https://github.com/BunnyWay/cli/commit/46d13de93e22684478e13ccf8449827e3fdc7352) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(apps): accept the image as a positional on `apps init`, and accept region IDs in any case on `--region` and in `bunny.jsonc`
+
+- [#294](https://github.com/BunnyWay/cli/pull/294) [`5dbe26c`](https://github.com/BunnyWay/cli/commit/5dbe26c4efccf6baf5ed6429d3733f8fb2f176e4) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(apps): keep `bunny.jsonc` in sync when adding or removing endpoints and volumes, and show endpoint IDs in `apps endpoints list`
+
+- [#291](https://github.com/BunnyWay/cli/pull/291) [`d53b2d1`](https://github.com/BunnyWay/cli/commit/d53b2d15e166bde832df528fd9b13164a1dcc879) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(apps): keep `docker build` and `docker push` output out of `apps deploy --output json`
+
+- [#297](https://github.com/BunnyWay/cli/pull/297) [`d8cb9e5`](https://github.com/BunnyWay/cli/commit/d8cb9e535ff14e2ba0d9494f9909664164775f59) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(apps): apply health-check probes from `bunny.jsonc`, which were silently dropped, and write them back on `apps pull`
+
+- [#305](https://github.com/BunnyWay/cli/pull/305) [`0168b9e`](https://github.com/BunnyWay/cli/commit/0168b9eace7b55643d83fc529165588cd5b617bb) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(apps): the live app is the source of truth: `deploy` only updates container images and works without `bunny.jsonc`, `apps push` is removed in favour of `apps scale` and `apps regions set`, deploy adds missing containers and volumes without touching existing ones and warns when `bunny.jsonc` differs from the app, env is never sent by `deploy` or written by `pull` (`bunny apps env` owns it), and `bunny.jsonc` is marked experimental
+
+- [#307](https://github.com/BunnyWay/cli/pull/307) [`9432d81`](https://github.com/BunnyWay/cli/commit/9432d8138125e9de4ecc4a2c3a62bfcffe5d082c) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - docs(cli): add missing `--help` examples for config, dns, storage, sites, and stream commands
+
+- [#285](https://github.com/BunnyWay/cli/pull/285) [`aeff75d`](https://github.com/BunnyWay/cli/commit/aeff75d740c8b8194486daced0e8b1e5b7475cbb) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Stop reporting runtime crashes as an unsupported CPU
+
+- [#274](https://github.com/BunnyWay/cli/pull/274) [`443fa8b`](https://github.com/BunnyWay/cli/commit/443fa8bf9e38b57240c19a52d7e4dbb8fc3e1641) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Fix `dns zones list` and other zone commands hanging on "Checking nameserver delegation..." when the network blocks DNS queries to nameservers directly
+
+- [#292](https://github.com/BunnyWay/cli/pull/292) [`bfe5f93`](https://github.com/BunnyWay/cli/commit/bfe5f930bca9e3054ef119f4df95cfbe71057552) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(apps): drop compose import from the deploy walkthrough
+
+- [#289](https://github.com/BunnyWay/cli/pull/289) [`8e6c291`](https://github.com/BunnyWay/cli/commit/8e6c291207d291c7d4c828dd817fc0b3d932c6ad) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Show the bunny mascot on the login success page
+
+- [#290](https://github.com/BunnyWay/cli/pull/290) [`b60fab8`](https://github.com/BunnyWay/cli/commit/b60fab8b5ca0cc6d0fe8948c73e78f3ca0167a6b) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(apps): update the Magic Containers spec and page through every app and region in `apps list`, `apps link`, `apps regions list`, and the deploy walkthrough
+
+- [#295](https://github.com/BunnyWay/cli/pull/295) [`04db2a4`](https://github.com/BunnyWay/cli/commit/04db2a4e3a3794881b2afb06f02d056a8a604a62) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(stream): say "video library" in the `stream import` library prompt
+
 ## 0.21.1
 
 ### Patch Changes
