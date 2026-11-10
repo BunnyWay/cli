@@ -79,7 +79,7 @@ export const dnsImportCommand = defineCommand<ImportArgs>({
       "$0 dns records import example.com ./zonefile.txt",
       "Import records from a zone file",
     ],
-    ["$0 dns records import", "Pick the zone interactively"],
+    ["$0 dns records import", "Pick the zone and file interactively"],
   ],
 
   builder: (yargs) =>

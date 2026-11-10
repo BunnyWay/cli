@@ -17,10 +17,7 @@ export const streamLibraryUnlinkCommand = defineCommand<UnlinkArgs>({
   describe: `Remove .bunny/${STREAM_MANIFEST}, unlinking this directory from its video library.`,
   examples: [
     ["$0 stream libraries unlink", "Unlink after confirmation"],
-    [
-      "$0 stream libraries unlink --force",
-      "Skip the confirmation prompt (for scripts)",
-    ],
+    ["$0 stream libraries unlink --force", "Skip the confirmation prompt"],
   ],
 
   builder: (yargs) =>

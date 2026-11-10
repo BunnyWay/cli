@@ -73,7 +73,7 @@ export const storageFileUploadCommand = defineCommand<UploadArgs>({
     ],
     [
       "$0 storage files upload ./backup.tar.gz --checksum",
-      "Have the server verify the upload against a SHA256 checksum",
+      "Verify the upload with a SHA256 checksum",
     ],
   ],
 

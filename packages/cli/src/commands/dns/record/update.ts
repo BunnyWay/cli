@@ -178,20 +178,8 @@ export const dnsUpdateCommand = defineCommand<UpdateArgs>({
       "Change an MX record's priority",
     ],
     [
-      "$0 dns records update example.com 123 --priority 10 --weight 5 --port 5060",
-      "Change an SRV record's priority, weight, and port",
-    ],
-    [
-      "$0 dns records update example.com 123 --flags 0 --tag issuewild --value letsencrypt.org",
-      "Change a CAA record",
-    ],
-    [
-      '$0 dns records update example.com 123 --comment "Managed by ops"',
-      "Set the comment",
-    ],
-    [
       "$0 dns records update example.com 123 --pull-zone 12345",
-      "Relink a PullZone record (use --script for Script records)",
+      "Point a PullZone record at another pull zone",
     ],
     [
       "$0 dns records update example.com --value 198.51.100.2",

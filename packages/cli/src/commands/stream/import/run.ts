@@ -325,7 +325,7 @@ export const streamImportRunCommand = defineToolCommand({
       "Give each encode up to two hours",
     ],
     [
-      "$0 stream import --library 12345 --source vimeo --request-timeout 120 --video-timeout 1800",
+      "$0 stream import --library 12345 --source vimeo --request-timeout 120 --video-timeout 10800",
       "Raise the timeouts for a slow source or large files",
     ],
   ],

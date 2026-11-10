@@ -111,7 +111,7 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
       "Create an SSD zone (always DE) with S3-compatible access",
     ],
     [
-      "$0 storage zones create my-zone --region DE --pull-zone --pull-zone-name my-cdn",
+      "$0 storage zones create my-zone --region DE --pull-zone",
       "Also create a pull zone to serve the files on the web",
     ],
     [
@@ -123,11 +123,7 @@ export const storageZoneCreateCommand = defineCommand<ZoneCreateArgs>({
       "Link this directory and save the connection details to .env",
     ],
     [
-      "$0 storage zones create my-zone --region DE --s3 --format rclone",
-      "Print an rclone remote for the new zone instead of the table",
-    ],
-    [
-      "$0 storage zones create my-zone --region DE --no-link --force",
+      "$0 storage zones create my-zone --region DE --force",
       "Create without any prompts",
     ],
   ],

@@ -9,9 +9,9 @@ export const configInitCommand = defineCommand<{ "api-key"?: string }>({
   describe: "Initialize configuration with an API key.",
   examples: [
     ["$0 config init", "Prompt for the API key"],
-    ["$0 config init --api-key $BUNNY_API_KEY", "Skip the prompt"],
+    ["$0 config init --api-key $BUNNYNET_API_KEY", "Skip the prompt"],
     [
-      "$0 config init --profile staging --api-key $BUNNY_API_KEY",
+      "$0 config init --profile staging --api-key $BUNNYNET_API_KEY",
       "Save the key to a named profile",
     ],
   ],

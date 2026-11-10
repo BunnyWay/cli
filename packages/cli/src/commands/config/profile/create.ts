@@ -11,7 +11,7 @@ export const profileCreateCommand = defineCommand<{ "api-key"?: string }>({
   examples: [
     ["$0 config profile create staging", "Prompt for the API key"],
     [
-      "$0 config profile create staging --api-key $BUNNY_API_KEY",
+      "$0 config profile create staging --api-key $BUNNYNET_API_KEY",
       "Skip the prompt",
     ],
   ],

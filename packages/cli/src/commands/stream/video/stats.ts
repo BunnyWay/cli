@@ -94,7 +94,7 @@ export const streamVideoStatsCommand = defineCommand<StatsArgs>({
       "Statistics for a date range",
     ],
     [
-      "$0 stream videos stats 1a2b3c4d-... --from 2026-08-01 --to 2026-08-02 --hourly",
+      "$0 stream videos stats 1a2b3c4d-... --from 2026-08-01 --to 2026-08-01 --hourly",
       "Hourly buckets for one day",
     ],
     [

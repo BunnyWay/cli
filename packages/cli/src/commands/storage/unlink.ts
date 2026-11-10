@@ -14,7 +14,7 @@ export const storageUnlinkCommand = defineCommand<UnlinkArgs>({
   describe: `Remove .bunny/${STORAGE_MANIFEST}, unlinking this directory from its storage zone.`,
   examples: [
     ["$0 storage unlink", "Unlink after confirmation"],
-    ["$0 storage unlink --force", "Skip the confirmation prompt (for scripts)"],
+    ["$0 storage unlink --force", "Skip the confirmation prompt"],
   ],
 
   builder: (yargs) =>

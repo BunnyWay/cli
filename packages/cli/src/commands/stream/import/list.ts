@@ -94,14 +94,6 @@ export const streamImportListCommand = defineToolCommand({
       "$0 stream import list --source s3 --bucket my-videos --prefix 2024/ --videos",
       "The videos under one S3 prefix",
     ],
-    [
-      "$0 stream import list --source s3 --videos --include-ts",
-      "Count .ts files as videos too",
-    ],
-    [
-      "$0 stream import list --source vimeo --videos --request-timeout 120",
-      "Allow slow source responses two minutes each",
-    ],
   ],
 
   builder: (yargs) =>
