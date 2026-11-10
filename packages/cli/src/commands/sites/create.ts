@@ -204,6 +204,10 @@ export const sitesCreateCommand = defineCommand<CreateArgs>({
     ],
     ["$0 sites create my-site --region NY", "Store files in New York"],
     [
+      "$0 sites create my-site --no-link",
+      "Create without linking this directory",
+    ],
+    [
       "$0 sites create my-site --tier ssd",
       "Store files on the Edge (SSD) tier (always DE)",
     ],

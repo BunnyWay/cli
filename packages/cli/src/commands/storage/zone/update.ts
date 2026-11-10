@@ -133,6 +133,14 @@ export const storageZoneUpdateCommand = defineCommand<ZoneUpdateArgs>({
       "$0 storage zones update my-zone --custom-404-path /404.html",
       "Set the custom 404 file non-interactively",
     ],
+    [
+      "$0 storage zones update my-zone --custom-404-path /index.html --rewrite-404-to-200",
+      "Single-page app fallback: serve index.html with a 200 for unknown routes",
+    ],
+    [
+      "$0 storage zones update my-zone --replication LA,SG",
+      "Add replication regions (they can't be removed later)",
+    ],
   ],
 
   builder: (yargs) =>

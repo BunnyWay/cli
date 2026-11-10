@@ -39,6 +39,10 @@ export const streamVideoShowCommand = defineCommand<VideoShowArgs>({
     ["$0 stream videos show 1a2b3c4d-...", "Show a video by GUID"],
     ["$0 stream videos show", "Pick a video interactively"],
     ["$0 stream videos show 1a2b3c4d-... --output json", "JSON output"],
+    [
+      "$0 stream videos show 1a2b3c4d-... --lib 12345",
+      "A video in a specific library",
+    ],
   ],
 
   builder: (yargs) =>

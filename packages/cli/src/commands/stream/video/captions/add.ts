@@ -115,6 +115,10 @@ export const streamCaptionAddCommand = defineCommand<CaptionAddArgs>({
       "$0 stream videos captions remove 1a2b3c4d-... en",
       "Remove a language again",
     ],
+    [
+      "$0 stream videos captions add ./captions.vtt 1a2b3c4d-... en --lib 12345",
+      "A video in a specific library",
+    ],
   ],
 
   builder: (yargs) =>

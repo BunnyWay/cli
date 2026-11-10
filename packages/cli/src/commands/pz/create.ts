@@ -12,6 +12,14 @@ export const pzCreateCommand = defineToolCommand({
   describe: "Create a new pull zone.",
   examples: [
     ["$0 pz create my-zone https://origin.example.com", "Create a pull zone"],
+    [
+      "$0 pz create my-zone origin.example.com",
+      "https:// is prepended to a bare origin",
+    ],
+    [
+      "$0 pz create my-zone https://origin.example.com --output json",
+      "JSON output, with no link prompt",
+    ],
   ],
   progress: "Creating pull zone...",
 

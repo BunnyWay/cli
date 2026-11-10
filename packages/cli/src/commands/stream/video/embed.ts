@@ -26,6 +26,10 @@ export const streamVideoEmbedCommand = defineCommand<VideoEmbedArgs>({
       "$0 stream videos embed 1a2b3c4d-... --expires 30m",
       "Sign it for 30 minutes on a token-protected library",
     ],
+    [
+      "$0 stream videos embed 1a2b3c4d-... --lib 12345",
+      "A video in a specific library",
+    ],
   ],
 
   builder: (yargs) =>

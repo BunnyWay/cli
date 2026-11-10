@@ -15,6 +15,13 @@ interface UnlinkArgs {
 export const streamLibraryUnlinkCommand = defineCommand<UnlinkArgs>({
   command: "unlink",
   describe: `Remove .bunny/${STREAM_MANIFEST}, unlinking this directory from its video library.`,
+  examples: [
+    ["$0 stream libraries unlink", "Unlink after confirmation"],
+    [
+      "$0 stream libraries unlink --force",
+      "Skip the confirmation prompt (for scripts)",
+    ],
+  ],
 
   builder: (yargs) =>
     yargs.option("force", {

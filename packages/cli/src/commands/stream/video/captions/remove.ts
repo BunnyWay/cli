@@ -72,6 +72,10 @@ export const streamCaptionRemoveCommand = defineCommand<CaptionRemoveArgs>({
       "Skip confirmation",
     ],
     ["$0 stream videos captions remove", "Pick the video, then the language"],
+    [
+      "$0 stream videos captions remove 1a2b3c4d-... en --lib 12345",
+      "A video in a specific library",
+    ],
   ],
 
   builder: (yargs) =>

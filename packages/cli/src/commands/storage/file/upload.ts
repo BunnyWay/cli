@@ -67,6 +67,14 @@ export const storageFileUploadCommand = defineCommand<UploadArgs>({
       "$0 storage files upload ./photo.png --zone my-zone",
       "Upload to a specific zone",
     ],
+    [
+      "$0 storage files upload ./data.bin --content-type application/json",
+      "Override the stored content type",
+    ],
+    [
+      "$0 storage files upload ./backup.tar.gz --checksum",
+      "Have the server verify the upload against a SHA256 checksum",
+    ],
   ],
 
   builder: (yargs) =>

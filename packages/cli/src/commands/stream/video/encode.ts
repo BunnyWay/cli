@@ -29,6 +29,10 @@ export const streamVideoEncodeCommand = defineCommand<ReencodeArgs>({
   examples: [
     ["$0 stream videos encode 1a2b3c4d-...", "Re-encode one video"],
     ["$0 stream videos encode", "Pick a video interactively"],
+    [
+      "$0 stream videos encode 1a2b3c4d-... --lib 12345",
+      "A video in a specific library",
+    ],
   ],
 
   builder: (yargs) =>

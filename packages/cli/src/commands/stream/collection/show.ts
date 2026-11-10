@@ -19,6 +19,10 @@ export const streamCollectionShowCommand = defineCommand<CollectionShowArgs>({
       "$0 stream collections show 8a7b6c5d-... --output json",
       "JSON output (includes preview image URLs)",
     ],
+    [
+      "$0 stream collections show 8a7b6c5d-... --lib 12345",
+      "A collection in a specific library",
+    ],
   ],
 
   builder: (yargs) =>

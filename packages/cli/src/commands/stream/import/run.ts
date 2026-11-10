@@ -308,6 +308,26 @@ export const streamImportRunCommand = defineToolCommand({
       "$0 stream import --source vimeo --resume",
       "Continue an interrupted import",
     ],
+    [
+      "$0 stream import --library 12345 --source vimeo --folder 67890 --concurrency 10",
+      "Import one folder, ten videos at a time",
+    ],
+    [
+      "$0 stream import --library 12345 --source s3 --include-ts --url-ttl 86400",
+      "Import .ts files too, with pre-signed URLs valid for a day",
+    ],
+    [
+      "$0 stream import --source vimeo --resume --clean-failed --retry-stalled",
+      "Retry failed and zero-byte videos from the last run",
+    ],
+    [
+      "$0 stream import --library 12345 --source vimeo --wait --processing-timeout 7200",
+      "Give each encode up to two hours",
+    ],
+    [
+      "$0 stream import --library 12345 --source vimeo --request-timeout 120 --video-timeout 1800",
+      "Raise the timeouts for a slow source or large files",
+    ],
   ],
   epilogue: credentialsHelp(),
 

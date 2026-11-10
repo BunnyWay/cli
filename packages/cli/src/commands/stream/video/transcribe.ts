@@ -79,6 +79,14 @@ export const streamVideoTranscribeCommand = defineCommand<TranscribeArgs>({
       "Name the spoken language and generate a title",
     ],
     [
+      "$0 stream videos transcribe 1a2b3c4d-... --generate-description --generate-chapters --generate-moments",
+      "Also generate a description, chapters, and moments",
+    ],
+    [
+      "$0 stream videos transcribe 1a2b3c4d-... --lib 12345",
+      "A video in a specific library",
+    ],
+    [
       "$0 stream videos transcribe 1a2b3c4d-... --overwrite",
       "Overwrite the existing transcription, overriding the library defaults",
     ],
