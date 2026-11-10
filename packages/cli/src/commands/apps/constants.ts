@@ -11,6 +11,10 @@ export const STATUS_LABELS: Record<ApplicationStatus, string> = {
   suspended: "Suspended",
 };
 
+/** CLI hint for refusing to split an app's volumes across regions or instances. */
+export const SPLIT_VOLUME_HINT =
+  "Volumes aren't shared: each region and each instance gets its own empty volume. Pass --allow-split-volumes if each copy should keep separate data.";
+
 /** Filename for the linked-app manifest stored under `.bunny/`. */
 export const APP_MANIFEST = "app.json";
 

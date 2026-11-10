@@ -1373,15 +1373,18 @@ Progress is saved after every status change to `$XDG_STATE_HOME/bunnynet/stream-
 ### `bunny apps`
 
 > **Preview**: `bunny apps` is in public preview; commands and flags may still change.
+>
+> **Experimental**: the `bunny.jsonc` format is extremely experimental and can change at any time, including in patch releases.
 
-Deploy container apps to Magic Containers. An app is one or more containers sharing a localhost network, configured in a committed `bunny.jsonc`. The first `bunny apps deploy` walks through setup: build from local source (using your `Dockerfile` or a generated one), pick an image from a connected registry, or deploy an image URL.
+Deploy container apps to Magic Containers. An app is one or more containers sharing a localhost network, created from a committed `bunny.jsonc`. The live app is the source of truth: each setting has its own command, and `bunny.jsonc` is optional once the app exists. The first `bunny apps deploy` walks through setup: build from local source (using your `Dockerfile` or a generated one), pick an image from a connected registry, or deploy an image URL.
 
 ```bash
-bunny apps deploy                          # first run walks through setup; later runs redeploy bunny.jsonc
+bunny apps deploy                          # first run walks through setup; later runs only update images
 bunny apps deploy ghcr.io/myorg/api:v1.2   # deploy a pre-built image
 bunny apps deploy --dockerfile             # build the local Dockerfile, push, and deploy
-bunny apps pull                            # sync the remote app into bunny.jsonc
-bunny apps push                            # apply local bunny.jsonc changes
+bunny apps scale --min 1 --max 3           # change scaling on the live app
+bunny apps regions set DE UK               # change where the app runs
+bunny apps pull                            # write the live app's settings to bunny.jsonc
 ```
 
 See [APPS.md](src/commands/apps/APPS.md) for every `bunny apps` command, flag, and the `bunny.jsonc` reference.

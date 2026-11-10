@@ -21,7 +21,7 @@ export interface ManifestData {
  * Returns the project root (the directory containing `.bunny/`),
  * or the current working directory if none is found.
  */
-function findRoot(filename: string): string {
+function findRoot(filename: string, fallback = process.cwd()): string {
   let dir = resolve(process.cwd());
 
   while (true) {
@@ -29,7 +29,7 @@ function findRoot(filename: string): string {
     if (existsSync(manifestPath)) return dir;
 
     const parent = dirname(dir);
-    if (parent === dir) return process.cwd();
+    if (parent === dir) return fallback;
     dir = parent;
   }
 }
@@ -66,12 +66,13 @@ export function loadManifest<T extends object = ManifestData>(
   }
 }
 
-/** Save a manifest to `.bunny/<filename>`. Creates the directory if needed. */
+/** Save a manifest to `.bunny/<filename>`, under `root` when none exists yet. Creates the directory if needed. */
 export function saveManifest<T extends object = ManifestData>(
   filename: string,
   data: T,
+  root?: string,
 ): void {
-  const dir = manifestDir(filename);
+  const dir = join(findRoot(filename, root), MANIFEST_DIR);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, filename), `${JSON.stringify(data, null, 2)}\n`, {
     mode: 0o600,
