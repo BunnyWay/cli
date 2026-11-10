@@ -4,6 +4,7 @@ import { formatKeyValue } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { appsScale, SplitVolumeError } from "@/tools/apps/index.ts";
 import { resolveAppId } from "./config.ts";
+import { SPLIT_VOLUME_HINT } from "./constants.ts";
 
 interface ScaleArgs {
   id?: string;
@@ -46,10 +47,7 @@ export const appsScaleCommand = defineToolCommand({
 
   onError: (error) =>
     error instanceof SplitVolumeError
-      ? new UserError(
-          error.message,
-          "Volumes aren't shared: each region and each instance gets its own empty volume. Pass --allow-split-volumes if each copy should keep separate data.",
-        )
+      ? new UserError(error.message, SPLIT_VOLUME_HINT)
       : undefined,
 
   render: (result, args) => {

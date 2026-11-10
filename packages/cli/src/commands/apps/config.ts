@@ -31,7 +31,7 @@ export {
   apiToConfig,
   CURRENT_VERSION,
   configToAddRequest,
-  configToPatchRequest,
+  configToContainerRequest,
   normalizeRegions,
   parseImageRef,
 } from "@bunny.net/config";
@@ -190,6 +190,17 @@ export function resolveAppId(explicit?: string): string {
   throw new UserError(
     "No linked app.",
     "Run `bunny apps link <app-id>` to link this directory, or `bunny apps deploy` to create a new app.",
+  );
+}
+
+// A fresh config would overwrite the linked app's settings, so make the user pull it first.
+export function assertNotLinkedWithoutConfig(): void {
+  const { id } = loadManifest<AppManifest>(APP_MANIFEST);
+  if (!id) return;
+
+  throw new UserError(
+    `This directory is linked to app ${id} but has no ${CONFIG_FILENAME}.`,
+    `Run \`bunny apps pull\` to write ${CONFIG_FILENAME} from the app, or \`bunny apps unlink\` to start a new app.`,
   );
 }
 
