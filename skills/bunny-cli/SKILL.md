@@ -1,6 +1,6 @@
 ---
 name: bunny-cli
-description: Manage bunny.net resources from the command line (databases, DNS, Edge Storage, Edge Scripts, static sites, sandboxes, Stream video libraries and imports, authentication, and raw API requests) and query a Bunny Database from application code with `@bunny.net/database-client`. Use when working with bunny.net (pullzones, DNS zones/records, databases, Edge Storage zones and files, Edge Scripts, Magic Containers, static-site hosting/deploys, cloud sandboxes, Stream video libraries, uploads, collections, captions, and transcription, moving a video library into Bunny Stream from Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
+description: Manage bunny.net resources from the command line (databases, DNS, Edge Storage, Edge Scripts, static sites, sandboxes, Stream video libraries and imports, authentication, and raw API requests) and write the application code that uses them (query a Bunny Database with `@bunny.net/database-client`, write Edge Scripts with `@bunny.net/edgescript-sdk`, read and write Edge Storage files with `@bunny.net/storage-sdk`). Use when working with bunny.net (pullzones, DNS zones/records, databases, Edge Storage zones and files, Edge Scripts, Magic Containers, static-site hosting/deploys, cloud sandboxes, Stream video libraries, uploads, collections, captions, and transcription, moving a video library into Bunny Stream from Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
 ---
 
 # bunny.net CLI Skill
@@ -89,8 +89,10 @@ Use this to route to the correct reference file:
 - **Querying a database from application code (`@bunny.net/database-client`: connect, prepare, bind, batch, types, errors)** -> `references/database-client.md`
 - **DNS (zones, delegation checks, records, presets, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
+- **Writing the code inside an Edge Script (`@bunny.net/edgescript-sdk`: `serve`, `servePullZone`, middleware hooks, env vars)** -> `references/edge-script-sdk.md`
 - **Static sites (create, deploy, rollback, custom domains, GitHub Actions)** -> `references/sites.md`
 - **Edge Storage (zones, files, connection credentials, S3/FTP/HTTP, custom domains)** -> `references/storage.md`
+- **Reading and writing storage files from application code (`@bunny.net/storage-sdk`: connect, list, upload, download, remove)** -> `references/storage-sdk.md`
 - **Sandboxes (create, exec, ssh, files list/cp, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
 - **Bunny Stream (libraries, player/security settings, video upload/fetch/embed/cleanup, captions, collections, encoding, transcription, smart titles/chapters)** -> `references/stream.md`
 - **Import a video library into Bunny Stream (Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, Brightcove; browse, dry run, resume, status)** -> `references/stream-import.md`

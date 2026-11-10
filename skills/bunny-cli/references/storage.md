@@ -7,6 +7,8 @@ All storage commands live under `bunny storage`, split into two resource groups:
 
 A storage zone only holds files. A **pull zone** is what serves them on the web, and custom domains live on the pull zone (`bunny storage zones domains`), not on the storage zone.
 
+To read and write files from application code or an Edge Script (`@bunny.net/storage-sdk`), see `references/storage-sdk.md`.
+
 ## Resolving the zone
 
 `zones` commands take the zone as an optional `[zone]` positional. `files` commands take it as `--zone`/`-z`, because their positional is the file path. Either accepts the zone name or its numeric ID. When omitted, the zone resolves in this order:

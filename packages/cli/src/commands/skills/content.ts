@@ -7,6 +7,9 @@ import databaseClientMd from "@skills/bunny-cli/references/database-client.md" w
   type: "text",
 };
 import dnsMd from "@skills/bunny-cli/references/dns.md" with { type: "text" };
+import edgeScriptSdkMd from "@skills/bunny-cli/references/edge-script-sdk.md" with {
+  type: "text",
+};
 import sandboxMd from "@skills/bunny-cli/references/sandbox.md" with {
   type: "text",
 };
@@ -17,6 +20,9 @@ import sitesMd from "@skills/bunny-cli/references/sites.md" with {
   type: "text",
 };
 import storageMd from "@skills/bunny-cli/references/storage.md" with {
+  type: "text",
+};
+import storageSdkMd from "@skills/bunny-cli/references/storage-sdk.md" with {
   type: "text",
 };
 import streamMd from "@skills/bunny-cli/references/stream.md" with {
@@ -37,6 +43,7 @@ This project uses bunny.net. Manage its resources with the \`bunny\` CLI: databa
 - In unattended runs, pass a flag for every value a command would prompt for, and \`--force\` on destructive commands; prompts otherwise block or cancel without a TTY.
 - Key namespaces: \`bunny db\` (Bunny Database: create, shell, studio, tokens), \`bunny dns\` (zones, records, presets), \`bunny sites\` (static hosting and deploys), \`bunny scripts\` (Edge Scripts), \`bunny storage\` (Edge Storage zones and files), \`bunny sandbox\` (cloud sandboxes).
 - To query a Bunny Database from application code, use \`@bunny.net/database-client\`; it is server-side only, since an auth token grants access to the whole database.
+- Inside an Edge Script, handle requests with \`@bunny.net/edgescript-sdk\`; read and write Edge Storage files from server-side code with \`@bunny.net/storage-sdk\`.
 - When the CLI has no command for something, fall back to \`bunny api <METHOD> <path>\` against api.bunny.net.`;
 
 /** The shipped bunny-cli skill, embedded at bundle time from skills/bunny-cli/. */
@@ -51,10 +58,12 @@ export const BUNNY_CLI_SKILL: ProjectSkill = {
     "references/database-client.md": databaseClientMd,
     "references/database.md": databaseMd,
     "references/dns.md": dnsMd,
+    "references/edge-script-sdk.md": edgeScriptSdkMd,
     "references/sandbox.md": sandboxMd,
     "references/scripts.md": scriptsMd,
     "references/sites.md": sitesMd,
     "references/storage.md": storageMd,
+    "references/storage-sdk.md": storageSdkMd,
     "references/stream.md": streamMd,
     "references/stream-import.md": streamImportMd,
   },
