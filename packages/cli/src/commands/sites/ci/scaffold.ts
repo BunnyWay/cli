@@ -25,8 +25,13 @@ export async function gitTopLevel(cwd: string): Promise<string | null> {
   return runGit(cwd, ["rev-parse", "--show-toplevel"]);
 }
 
-/** The remote's default branch (from `origin/HEAD`), or main when it isn't known locally; never the checked-out branch, which may be a feature branch. */
+/** The remote's default branch: asked of the remote, else the cached `origin/HEAD`, else main; never the checked-out branch, which may be a feature branch. */
 export async function defaultBranch(root: string): Promise<string> {
+  const live = await runGit(root, ["ls-remote", "--symref", "origin", "HEAD"], {
+    timeoutMs: 5000,
+  });
+  const head = live?.match(/^ref: refs\/heads\/(\S+)\s+HEAD$/m)?.[1];
+  if (head) return head;
   const ref = await runGit(root, [
     "symbolic-ref",
     "--short",
@@ -89,7 +94,10 @@ async function jsInstallSettings(
   const lockDir = LOCKFILES.some((name) => existsSync(join(projectRoot, name)))
     ? projectRoot
     : undefined;
-  const packageManager = await detectPackageManager(lockDir ?? projectRoot);
+  const packageManager = lockDir
+    ? await detectPackageManager(lockDir)
+    : ((await declaredPackageManager(root, projectRoot)) ??
+      (await detectPackageManager(projectRoot)));
   return {
     packageManager,
     lockfile: lockDir !== undefined,
@@ -98,6 +106,23 @@ async function jsInstallSettings(
         ? await pnpmVersion(root, projectRoot, lockDir)
         : undefined,
   };
+}
+
+// With no lockfile the manager comes from a `packageManager` field (the project's, else the root's) or a pnpm workspace file.
+async function declaredPackageManager(
+  root: string,
+  projectRoot: string,
+): Promise<PackageManager | undefined> {
+  for (const dir of new Set([projectRoot, root])) {
+    const field = (await readPackageJson(dir))?.packageManager;
+    const name = typeof field === "string" ? field.split("@")[0] : undefined;
+    const known = (["bun", "pnpm", "yarn", "npm"] as const).find(
+      (pm) => pm === name,
+    );
+    if (known) return known;
+    if (existsSync(join(dir, "pnpm-workspace.yaml"))) return "pnpm";
+  }
+  return undefined;
 }
 
 // pnpm/action-setup reads only the root package.json's `packageManager`; without one it needs an explicit version, taken from the project's own field or the lockfile format.

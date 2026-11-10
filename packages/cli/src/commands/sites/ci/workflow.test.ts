@@ -21,6 +21,15 @@ test("astro + bun workflow builds with bun and deploys dist", () => {
   expect(yml).toContain('site: "my-site"');
   expect(yml).toContain('directory: "dist"');
   expect(yml).toContain("api_key: ${{ secrets.BUNNYNET_API_KEY }}");
+  expect(yml).not.toContain("cli_version");
+  expect(
+    renderSitesWorkflow({
+      site: "my-site",
+      preset: preset("astro"),
+      packageManager: "bun",
+      cliVersion: "0.21",
+    }),
+  ).toContain('cli_version: "0.21"');
   expect(yml).not.toContain("working-directory");
   expect(yml).not.toContain("cache-dependency-path");
 });

@@ -9,7 +9,7 @@ export const SITES_WORKFLOW_PATH = ".github/workflows/bunny-sites.yml";
 
 // Bump the tag when a new major of the action ships; the action wraps the CLI.
 export const DEPLOY_SITE_ACTION =
-  "BunnyWay/actions/deploy-site@deploy-site_0.1.1";
+  "BunnyWay/actions/deploy-site@deploy-site_0.1.2";
 
 interface JsInstall {
   /** Lockfile path for setup-node's cache when it isn't at the checkout root. */
