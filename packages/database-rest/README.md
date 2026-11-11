@@ -73,6 +73,16 @@ interface DatabaseExecutor {
 
 Any database that can run parameterized SQL and return rows can implement this.
 
+An executor can also offer an optional `batch()`, which runs several statements in one transaction: all commit or none do, and results come back in statement order. Executors that can't guarantee that should leave it out rather than run the statements one by one.
+
+```ts
+interface DatabaseExecutor {
+  batch?(
+    statements: { sql: string; args: (string | number | boolean | null)[] }[],
+  ): Promise<ExecuteResult[]>;
+}
+```
+
 ## API
 
 ### `createRestHandler(executor, schema, options?): (req: Request) => Promise<Response>`
