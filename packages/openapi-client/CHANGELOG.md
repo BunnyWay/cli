@@ -1,5 +1,13 @@
 # @bunny.net/openapi-client
 
+## 0.3.2
+
+### Patch Changes
+
+- [#288](https://github.com/BunnyWay/cli/pull/288) [`6124501`](https://github.com/BunnyWay/cli/commit/61245012e85a87711b62f0b7162013eac08d3e1e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(apps): list `bunny apps` in help as a Public Preview command, deploy from local source, a connected registry, or an image URL, connect GitHub, Docker Hub, or any OCI registry, and fix rollback, paging, multi-container redeploys, and endpoint and volume sync across the apps commands
+
+- [#290](https://github.com/BunnyWay/cli/pull/290) [`b60fab8`](https://github.com/BunnyWay/cli/commit/b60fab8b5ca0cc6d0fe8948c73e78f3ca0167a6b) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(apps): update the Magic Containers spec and page through every app and region in `apps list`, `apps link`, `apps regions list`, and the deploy walkthrough
+
 ## 0.3.1
 
 ### Patch Changes
