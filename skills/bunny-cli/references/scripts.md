@@ -8,6 +8,8 @@ All Edge Script commands live under `bunny scripts`. Most accept an optional `SC
 
 When the script is chosen via the interactive prompt, these commands (`show`, `stats`, `env`, `deployments`) offer to link the directory to it. Pass `--link` to link without the prompt, or `--no-link` to skip it.
 
+For the code that runs inside a script (`@bunny.net/edgescript-sdk`: `serve`, `servePullZone`, middleware hooks, reading env vars), see `references/edge-script-sdk.md`.
+
 ## Typical workflows
 
 ```bash
