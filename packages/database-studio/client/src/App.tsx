@@ -1,221 +1,184 @@
-import { Plus, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { fetchTables, type TableSummary } from "@/api.ts";
-import { LoadingScreen } from "@/components/LoadingScreen.tsx";
-import { TableView } from "@/components/TableView.tsx";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { setUrlParams, useUrlParam } from "@/hooks/use-url-state";
-import { cn } from "@/lib/utils";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchSchema, type StudioSchema } from "@/api";
+import { LoadingScreen } from "@/components/LoadingScreen";
+import { Overview } from "@/components/Overview";
+import { type ConsoleRequest, SqlConsole } from "@/components/SqlConsole";
+import { TabBar } from "@/components/TabBar";
+import { TableView } from "@/components/TableView";
+import {
+  SQL_TAB,
+  setUrlParams,
+  TABLE_VIEW_PARAMS,
+  useUrlParam,
+} from "@/hooks/use-url-state";
+import type { FilterCondition } from "@/lib/filters";
+import { quoteIdent } from "@/lib/sql";
+
+export type OpenTable = (name: string, filters?: FilterCondition[]) => void;
+
+type ViewState = Record<keyof typeof TABLE_VIEW_PARAMS, string | null>;
+
+function currentViewState(): ViewState {
+  const params = new URLSearchParams(window.location.search);
+  return Object.fromEntries(
+    Object.keys(TABLE_VIEW_PARAMS).map((k) => [k, params.get(k)]),
+  ) as ViewState;
+}
 
 export function App() {
-  const [tables, setTables] = useState<TableSummary[]>([]);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [schema, setSchema] = useState<StudioSchema | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // URL state
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [consoleRequest, setConsoleRequest] = useState<ConsoleRequest | null>(
+    null,
+  );
+  const activeName = useUrlParam("table");
+  const isSql = activeName === SQL_TAB;
+  // Once opened, the console stays mounted so its editor and results survive tab switches.
+  const [consoleMounted, setConsoleMounted] = useState(isSql);
+  useEffect(() => {
+    if (isSql) setConsoleMounted(true);
+  }, [isSql]);
   const openParam = useUrlParam("open");
-  const activeTab = useUrlParam("tab");
-  const openTabs = openParam ? openParam.split(",").filter(Boolean) : [];
+  // Each tab keeps its filters, sort, and page while another tab is active.
+  const tabState = useRef(new Map<string, ViewState>());
 
   useEffect(() => {
-    fetchTables()
-      .then(setTables)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+    fetchSchema()
+      .then(setSchema)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    if (menuOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    } else {
-      setSearch("");
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [menuOpen]);
+  const known = new Set(schema?.tables.map((t) => t.name));
+  const openTabs = (openParam?.split(",") ?? []).filter((n) => known.has(n));
+  if (activeName && known.has(activeName) && !openTabs.includes(activeName)) {
+    openTabs.push(activeName);
+  }
+  const openKey = openTabs.join(",");
 
-  function openTable(name: string) {
-    const next = openTabs.includes(name) ? openTabs : [...openTabs, name];
-    setUrlParams({
-      open: next.join(","),
-      tab: name,
-      filters: null,
-      page: null,
+  const switchTo = useCallback(
+    (
+      name: string | null,
+      opts: { filters?: FilterCondition[]; tabs?: string[] } = {},
+    ) => {
+      const current = new URLSearchParams(window.location.search).get("table");
+      if (current && current !== SQL_TAB) {
+        tabState.current.set(current, currentViewState());
+      }
+
+      const tabs = opts.tabs ?? openKey.split(",").filter(Boolean);
+      if (name && name !== SQL_TAB && !tabs.includes(name)) tabs.push(name);
+
+      const view: Record<string, string | null> = opts.filters
+        ? {
+            ...TABLE_VIEW_PARAMS,
+            filters: opts.filters.length ? JSON.stringify(opts.filters) : null,
+          }
+        : ((name ? tabState.current.get(name) : undefined) ??
+          TABLE_VIEW_PARAMS);
+
+      setUrlParams(
+        { open: tabs.length ? tabs.join(",") : null, table: name, ...view },
+        { push: true },
+      );
+      setPickerOpen(false);
+    },
+    [openKey],
+  );
+
+  const openTable = useCallback<OpenTable>(
+    (name, filters) => switchTo(name, { filters }),
+    [switchTo],
+  );
+
+  function openView(name: string) {
+    setConsoleRequest({
+      sql: `SELECT * FROM ${quoteIdent(name)} LIMIT 100;`,
+      nonce: Date.now(),
     });
-    setMenuOpen(false);
+    switchTo(SQL_TAB);
   }
 
   function closeTab(name: string) {
-    const next = openTabs.filter((t) => t !== name);
-    let newActive = activeTab;
-    if (activeTab === name) {
-      const idx = openTabs.indexOf(name);
-      newActive = next[Math.min(idx, next.length - 1)] ?? null;
+    tabState.current.delete(name);
+    const tabs = openTabs.filter((t) => t !== name);
+    if (name !== activeName) {
+      setUrlParams({ open: tabs.length ? tabs.join(",") : null });
+      return;
     }
-    setUrlParams({
-      open: next.length ? next.join(",") : null,
-      tab: newActive,
-      filters: null,
-      page: null,
-    });
+    const index = openTabs.indexOf(name);
+    const next = tabs[Math.min(index, tabs.length - 1)] ?? null;
+    // The closed tab's state must not be saved on the way out.
+    setUrlParams({ table: null });
+    switchTo(next, { tabs });
   }
 
-  function switchTab(name: string) {
-    setUrlParams({
-      tab: name,
-      filters: null,
-      page: null,
-    });
-  }
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPickerOpen((open) => !open);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
-  if (loading || error) {
+  useEffect(() => {
+    if (schema) {
+      document.title = isSql
+        ? "SQL · Database Studio"
+        : activeName
+          ? `${activeName} · Database Studio`
+          : "Database Studio";
+    }
+  }, [schema, activeName, isSql]);
+
+  if (!schema) {
     return <LoadingScreen error={error} />;
   }
 
-  const unopenedTables = tables.filter((t) => !openTabs.includes(t.name));
-
-  const hasOpenTabs = openTabs.length > 0;
+  const active = schema.tables.find((t) => t.name === activeName) ?? null;
 
   return (
-    <div className="flex h-screen flex-col">
-      {hasOpenTabs && (
-        <header className="flex h-10 shrink-0 items-center border-b bg-sidebar">
-          <div className="flex h-full w-10 shrink-0 items-center justify-center border-r text-muted-foreground">
-            <svg
-              role="img"
-              aria-hidden="true"
-              focusable="false"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 448 512"
-              className="h-4 w-4"
-              fill="currentColor"
-            >
-              <path
-                opacity="0.4"
-                d="M0 80l0 48c0 44.2 100.3 80 224 80s224-35.8 224-80l0-48C448 35.8 347.7 0 224 0S0 35.8 0 80zM0 205.8L0 288c0 44.2 100.3 80 224 80s224-35.8 224-80l0-82.2c-14.8 9.8-31.8 17.7-49.5 24-47 16.8-108.7 26.2-174.5 26.2S96.4 246.5 49.5 229.8c-17.6-6.3-34.7-14.2-49.5-24zm0 160L0 432c0 44.2 100.3 80 224 80s224-35.8 224-80l0-66.2c-14.8 9.8-31.8 17.7-49.5 24-47 16.8-108.7 26.2-174.5 26.2S96.4 406.5 49.5 389.8c-17.6-6.3-34.7-14.2-49.5-24z"
-              />
-              <path d="M0 205.8L0 128c0 44.2 100.3 80 224 80s224-35.8 224-80l0 77.8c-14.8 9.8-31.8 17.7-49.5 24-47 16.8-108.7 26.2-174.5 26.2S96.4 246.5 49.5 229.8c-17.6-6.3-34.7-14.2-49.5-24zm0 160L0 288c0 44.2 100.3 80 224 80s224-35.8 224-80l0 77.8c-14.8 9.8-31.8 17.7-49.5 24-47 16.8-108.7 26.2-174.5 26.2S96.4 406.5 49.5 389.8c-17.6-6.3-34.7-14.2-49.5-24z" />
-            </svg>
+    <div className="flex h-screen flex-col overflow-hidden">
+      <TabBar
+        schema={schema}
+        openTabs={openTabs}
+        activeTab={isSql ? SQL_TAB : (active?.name ?? null)}
+        pickerOpen={pickerOpen}
+        onPickerOpenChange={setPickerOpen}
+        onSelect={(name) => switchTo(name)}
+        onSelectView={openView}
+        onClose={closeTab}
+        onHome={() => switchTo(null)}
+        onOpenSql={() => switchTo(SQL_TAB)}
+      />
+      <main className="flex min-h-0 flex-1 flex-col">
+        {consoleMounted && (
+          <div className={isSql ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <SqlConsole schema={schema} request={consoleRequest} />
           </div>
-          <nav className="flex h-full overflow-x-auto">
-            {openTabs.map((name) => (
-              <div
-                key={name}
-                className={cn(
-                  "group flex h-full shrink-0 items-center border-r text-sm",
-                  activeTab === name
-                    ? "bg-background text-foreground"
-                    : "text-muted-foreground hover:bg-background/50",
-                )}
-              >
-                <Button
-                  variant="ghost"
-                  onClick={() => switchTab(name)}
-                  className="flex h-full items-center gap-1.5 rounded-none pl-3 pr-1 font-mono text-xs hover:bg-transparent"
-                >
-                  {name}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeTab(name);
-                  }}
-                  className="mr-1 size-auto rounded p-0.5 opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-          </nav>
-          {unopenedTables.length > 0 && (
-            <div className="relative" ref={menuRef}>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="h-10 w-10 rounded-none text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-              {menuOpen && (
-                <div className="absolute left-0 top-full z-50 mt-0.5 w-56 rounded-md border bg-popover shadow-md">
-                  <div className="p-1.5">
-                    <Input
-                      placeholder="Filter tables..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="h-7 text-xs"
-                      autoFocus
-                    />
-                  </div>
-                  <div className="max-h-52 overflow-y-auto p-1">
-                    {unopenedTables
-                      .filter((t) =>
-                        t.name.toLowerCase().includes(search.toLowerCase()),
-                      )
-                      .map((table) => (
-                        <Button
-                          key={table.name}
-                          variant="ghost"
-                          onClick={() => {
-                            openTable(table.name);
-                            setSearch("");
-                          }}
-                          className="flex h-auto w-full items-center justify-start rounded-sm px-2 py-1.5 text-sm"
-                        >
-                          <span className="font-mono text-xs">
-                            {table.name}
-                          </span>
-                        </Button>
-                      ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </header>
-      )}
-      <main className="flex-1 overflow-hidden">
-        {activeTab ? (
-          <TableView tableName={activeTab} onSelectTable={openTable} />
+        )}
+        {isSql ? null : active ? (
+          <TableView
+            key={active.name}
+            table={active}
+            tables={schema.tables}
+            ddl={schema.ddl[active.name] ?? []}
+            onOpenTable={openTable}
+          />
         ) : (
-          <div className="h-full overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-8">
-              <div className="w-full max-w-sm">
-                <h2 className="mb-1 text-sm font-medium text-foreground">
-                  Tables
-                </h2>
-                <p className="mb-4 text-xs text-muted-foreground">
-                  {tables.length} table{tables.length !== 1 ? "s" : ""} found
-                </p>
-                <div className="rounded-lg border">
-                  {tables.map((table, i) => (
-                    <Button
-                      key={table.name}
-                      variant="ghost"
-                      onClick={() => openTable(table.name)}
-                      className={cn(
-                        "flex h-auto w-full items-center justify-start rounded-none px-3 py-2 text-left",
-                        i > 0 && "border-t",
-                      )}
-                    >
-                      <span className="font-mono text-sm">{table.name}</span>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+          <Overview
+            schema={schema}
+            missing={activeName}
+            onSelect={(name, view) => {
+              switchTo(name);
+              if (view) setUrlParams({ view });
+            }}
+            onSelectView={openView}
+            onOpenSql={() => switchTo(SQL_TAB)}
+          />
         )}
       </main>
     </div>

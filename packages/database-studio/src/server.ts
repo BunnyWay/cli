@@ -2,13 +2,24 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
 import { createExecutor, introspect } from "@bunny.net/database-adapter";
 import type { Database } from "@bunny.net/database-client";
-import { createRestHandler, requireAuth } from "@bunny.net/database-rest";
+import {
+  createRestHandler,
+  encodeValue,
+  requireAuth,
+} from "@bunny.net/database-rest";
+import { loadCatalog } from "./catalog.ts";
 import { assets } from "./client-manifest.ts";
+import { queryErrorMessage, runReadOnlyQuery } from "./query.ts";
 
 export interface StudioOptions {
   client: Database;
+  /** Shown in the studio header so it's clear which database is open. */
+  label?: string;
+  /** True when the CLI created the token as read-only; otherwise only studio's own statement checks apply. */
+  tokenReadOnly?: boolean;
   port?: number;
-  open?: boolean;
+  /** Opens the studio URL in a browser; omit to only print it. */
+  open?: (url: string) => void;
   dev?: boolean;
   logger?: {
     log(msg: string): void;
@@ -16,26 +27,31 @@ export interface StudioOptions {
   };
 }
 
-// Hostnames that are safe to accept on a loopback-bound server. Requests with
-// any other Host header are rejected to defend against DNS-rebinding attacks
-// where a browser resolves an attacker-controlled name to 127.0.0.1.
+// Any other Host header could be a DNS-rebinding attack resolving to 127.0.0.1.
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-const isAllowedHost = (hostHeader: string | null): boolean => {
-  if (!hostHeader) return false;
-  // Strip an optional :port suffix. IPv6 hosts in Host headers are bracketed
-  // (e.g. "[::1]:4488") so the trailing :port is unambiguous.
-  const hostOnly = hostHeader.replace(/:\d+$/, "");
-  return LOOPBACK_HOSTS.has(hostOnly);
-};
+const isAllowedHost = (host: string | null) =>
+  host !== null && LOOPBACK_HOSTS.has(host.replace(/:\d+$/, ""));
 
 const AUTH_COOKIE = "bunny_studio_auth";
+
+const jsonResponse = (
+  body: unknown,
+  status = 200,
+  headers?: Record<string, string>,
+): Response =>
+  new Response(JSON.stringify(body, encodeValue), {
+    status,
+    headers: { "Content-Type": "application/json", ...headers },
+  });
+
+const errorText = (err: unknown) =>
+  err instanceof Error ? (err.stack ?? err.message) : String(err);
 
 const safeEqual = (a: string, b: string): boolean => {
   const ab = Buffer.from(a);
   const bb = Buffer.from(b);
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
+  return ab.length === bb.length && timingSafeEqual(ab, bb);
 };
 
 const handleAuth = async (
@@ -45,21 +61,11 @@ const handleAuth = async (
   if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
   }
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ message: "Invalid JSON body" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-  const provided = (body as { token?: unknown })?.token;
-  if (typeof provided !== "string" || !safeEqual(provided, sessionToken)) {
-    return new Response(JSON.stringify({ message: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+  const body = (await req.json().catch(() => null)) as {
+    token?: unknown;
+  } | null;
+  if (typeof body?.token !== "string" || !safeEqual(body.token, sessionToken)) {
+    return jsonResponse({ message: "Unauthorized" }, 401);
   }
   return new Response(null, {
     status: 204,
@@ -72,8 +78,10 @@ const handleAuth = async (
 export async function startStudio(options: StudioOptions): Promise<void> {
   const {
     client,
+    label,
+    tokenReadOnly = false,
     port = 4488,
-    open = true,
+    open,
     dev = false,
     logger = console,
   } = options;
@@ -82,21 +90,55 @@ export async function startStudio(options: StudioOptions): Promise<void> {
   const distDir = join(import.meta.dir, "..", "dist", "client");
 
   const schema = await introspect({ client });
-  const executor = createExecutor({ client });
-  // Random per-startup token. The auto-opened browser URL carries it once as
-  // ?token=…; the client posts it to /api/auth which then sets an HttpOnly
-  // cookie that gates every subsequent /api/* request.
+  // Sent once in the opened URL; the client trades it at /api/auth for an HttpOnly cookie.
   const sessionToken = randomBytes(32).toString("hex");
-  const handleRest = requireAuth(
-    createRestHandler(executor, schema, {
+  const guard = (handler: (req: Request) => Promise<Response>) =>
+    requireAuth(handler, { token: sessionToken, cookieName: AUTH_COOKIE });
+
+  const handleRest = guard(
+    createRestHandler(createExecutor({ client }), schema, {
       basePath: "/api",
-      onError: (err) =>
-        logger.error(
-          `API error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
-        ),
+      onError: (err) => logger.error(`API error: ${errorText(err)}`),
     }),
-    { token: sessionToken, cookieName: AUTH_COOKIE },
   );
+  const tables = Object.values(schema.tables).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  const { ddl, views } = await loadCatalog(
+    client,
+    new Set(tables.map((t) => t.name)),
+  );
+  const handleSchema = guard(async () =>
+    jsonResponse({ label: label ?? null, tokenReadOnly, tables, ddl, views }),
+  );
+  const handleQuery = guard(async (req) => {
+    if (req.method !== "POST") {
+      return jsonResponse({ message: "Method not allowed" }, 405, {
+        Allow: "POST",
+      });
+    }
+    const body = (await req.json().catch(() => null)) as {
+      sql?: unknown;
+    } | null;
+    if (typeof body?.sql !== "string") {
+      return jsonResponse({ message: "Expected { sql: string }" }, 400);
+    }
+    try {
+      return jsonResponse(await runReadOnlyQuery(client, body.sql));
+    } catch (err) {
+      const message = queryErrorMessage(err);
+      if (message) return jsonResponse({ message }, 400);
+      logger.error(`Query error: ${errorText(err)}`);
+      return jsonResponse({ message: "Internal error" }, 500);
+    }
+  });
+
+  const serveFile = async (path: string) => {
+    const asset = assets[path];
+    if (asset) return new Response(Bun.file(asset));
+    const file = Bun.file(join(distDir, path));
+    return (await file.exists()) ? new Response(file) : null;
+  };
 
   let server: ReturnType<typeof Bun.serve>;
   try {
@@ -104,70 +146,37 @@ export async function startStudio(options: StudioOptions): Promise<void> {
       port,
       hostname: "127.0.0.1",
       async fetch(req) {
-        // Reject requests whose Host header isn't a loopback hostname.
-        // Protects against DNS-rebinding even if the server is reachable via
-        // a non-loopback address (e.g. when the caller overrides hostname).
         if (!isAllowedHost(req.headers.get("host"))) {
           return new Response("Forbidden", { status: 403 });
         }
 
-        const url = new URL(req.url);
-        const pathname = url.pathname;
+        const { pathname } = new URL(req.url);
 
-        // API routes - delegate to REST handler
+        if (pathname === "/studio-api/schema") return handleSchema(req);
+        if (pathname === "/studio-api/query") return handleQuery(req);
+        if (pathname === "/api/auth") return handleAuth(req, sessionToken);
         if (pathname.startsWith("/api")) {
-          // /api/auth is the handshake endpoint: public but only succeeds
-          // with the correct session token.
-          if (pathname === "/api/auth") {
-            return await handleAuth(req, sessionToken);
-          }
-          try {
-            return await handleRest(req);
-          } catch (err: unknown) {
-            // Detail goes to the terminal running the studio, not to the browser.
-            logger.error(
-              `API error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
-            );
-            return new Response(JSON.stringify({ message: "Internal error" }), {
-              status: 500,
-              headers: { "Content-Type": "application/json" },
+          // The REST handler also serves writes, so refuse them regardless of the token's scope.
+          if (req.method !== "GET") {
+            return jsonResponse({ message: "Studio is read-only" }, 405, {
+              Allow: "GET",
             });
           }
+          return handleRest(req);
         }
 
         if (!dev) {
-          const lookup = pathname === "/" ? "/index.html" : pathname;
-
-          // Try embedded manifest first (works in compiled binary)
-          const assetPath = assets[lookup];
-          if (assetPath) return new Response(Bun.file(assetPath));
-
-          // Fall back to filesystem (works in source mode without manifest)
-          try {
-            const filePath = join(distDir, lookup);
-            const file = Bun.file(filePath);
-            if (await file.exists()) return new Response(file);
-          } catch {
-            // fall through
-          }
-
-          // SPA fallback - serve index.html
-          const indexAsset = assets["/index.html"];
-          if (indexAsset) return new Response(Bun.file(indexAsset));
-          try {
-            const indexFile = Bun.file(join(distDir, "index.html"));
-            if (await indexFile.exists()) return new Response(indexFile);
-          } catch {
-            // fall through
-          }
+          const file =
+            (await serveFile(pathname === "/" ? "/index.html" : pathname)) ??
+            (await serveFile("/index.html"));
+          if (file) return file;
         }
 
         return new Response("Not Found", { status: 404 });
       },
     });
   } catch (err: unknown) {
-    const code = (err as { code?: string })?.code;
-    if (code === "EADDRINUSE") {
+    if ((err as { code?: string })?.code === "EADDRINUSE") {
       throw new Error(
         `Port ${port} is already in use. Try a different port with --port <number>.`,
       );
@@ -175,7 +184,6 @@ export async function startStudio(options: StudioOptions): Promise<void> {
     throw err;
   }
 
-  // In dev mode, spawn Vite dev server - it proxies /api back to this server
   let viteProc: ReturnType<typeof Bun.spawn> | undefined;
   let browserUrl: string;
 
@@ -185,7 +193,6 @@ export async function startStudio(options: StudioOptions): Promise<void> {
       stdout: "inherit",
       stderr: "inherit",
     });
-    // Give Vite a moment to bind its port
     await new Promise((r) => setTimeout(r, 1000));
     browserUrl = `http://localhost:5173/?token=${sessionToken}`;
     logger.log(`Studio API running at http://localhost:${server.port}`);
@@ -197,26 +204,21 @@ export async function startStudio(options: StudioOptions): Promise<void> {
   }
 
   if (open) {
-    const proc = Bun.spawn(
-      process.platform === "darwin"
-        ? ["open", browserUrl]
-        : ["xdg-open", browserUrl],
-      { stdout: "ignore", stderr: "ignore" },
-    );
-    await proc.exited;
+    // A missing opener (headless Linux) must not take the server down.
+    try {
+      open(browserUrl);
+    } catch {
+      logger.log("Couldn't open a browser. Open the URL above to continue.");
+    }
   }
 
-  // Keep the process alive until interrupted
   await new Promise<void>((resolve) => {
-    process.on("SIGINT", () => {
+    const stop = () => {
       viteProc?.kill();
       server.stop();
       resolve();
-    });
-    process.on("SIGTERM", () => {
-      viteProc?.kill();
-      server.stop();
-      resolve();
-    });
+    };
+    process.on("SIGINT", stop);
+    process.on("SIGTERM", stop);
   });
 }

@@ -1,409 +1,446 @@
-import type { SortingState, VisibilityState } from "@tanstack/react-table";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Columns3,
-  Filter,
-  RefreshCw,
-} from "lucide-react";
+import { Columns3, Download, Filter, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { OpenTable } from "@/App";
+import { fetchRowWhere, type RowsQuery, type TableDefinition } from "@/api";
+import { DataGrid, type GridColumn } from "@/components/DataGrid";
+import { FilterBar } from "@/components/FilterBar";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES, Pager } from "@/components/Pager";
+import { MenuItem, Popover } from "@/components/Popover";
+import { RowSheet, type SheetEntry } from "@/components/RowSheet";
+import { SchemaTab } from "@/components/SchemaTab";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useTableRows } from "@/hooks/use-table-rows";
+import { setUrlParams, useUrlParam } from "@/hooks/use-url-state";
 import {
-  FILTER_OPERATORS,
   type FilterCondition,
   type FilterMode,
-  fetchTableRows,
-  fetchTableSchema,
-  type RowsResponse,
-  type TableSchema,
-} from "@/api.ts";
-import { ColumnToggleMenu } from "@/components/ColumnToggleMenu";
-import { DataTab } from "@/components/DataTab";
-import { FilterBar, NULLARY_OPERATORS } from "@/components/FilterBar";
-import { SchemaTab } from "@/components/SchemaTab";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { setUrlParams, useUrlParam } from "@/hooks/use-url-state";
+  isComplete,
+  isOperator,
+} from "@/lib/filters";
+import { downloadRows } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
-interface TableViewProps {
-  tableName: string;
-  onSelectTable: (name: string) => void;
+function parseFilters(
+  raw: string | null,
+  columns: Set<string>,
+): FilterCondition[] {
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.flatMap((entry): FilterCondition[] => {
+    const { column, operator, value } = (entry ?? {}) as Record<
+      string,
+      unknown
+    >;
+    if (typeof column !== "string" || !columns.has(column)) return [];
+    if (!isOperator(operator)) return [];
+    return [
+      { column, operator, value: typeof value === "string" ? value : "" },
+    ];
+  });
 }
 
-export function TableView({ tableName, onSelectTable }: TableViewProps) {
-  const [schema, setSchema] = useState<TableSchema | null>(null);
-  const [data, setData] = useState<RowsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"data" | "schema">("data");
-  const [filtersOpen, setFiltersOpen] = useState(false);
+export function TableView({
+  table,
+  tables,
+  ddl,
+  onOpenTable,
+}: {
+  table: TableDefinition;
+  tables: TableDefinition[];
+  ddl: string[];
+  onOpenTable: OpenTable;
+}) {
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [columnsOpen, setColumnsOpen] = useState(false);
-  // Number of filter rows in the UI (may include empty/pending ones)
-  const [filterRowCount, setFilterRowCount] = useState(0);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [exportOpen, setExportOpen] = useState(false);
+  const [sheet, setSheet] = useState<SheetEntry[]>([]);
+  const [selectedRow, setSelectedRow] = useState<number | null>(null);
 
-  // Read state from URL
+  const viewParam = useUrlParam("view");
   const pageParam = useUrlParam("page");
   const limitParam = useUrlParam("limit");
-  const filtersParam = useUrlParam("filters");
-  const filterModeParam = useUrlParam("filterMode");
   const sortParam = useUrlParam("sort");
   const orderParam = useUrlParam("order");
+  const filtersParam = useUrlParam("filters");
+  const modeParam = useUrlParam("mode");
 
-  const filterMode: FilterMode = filterModeParam === "or" ? "or" : "and";
+  const view = viewParam === "schema" ? "schema" : "data";
+  const columnNames = new Set(table.columns.map((c) => c.name));
+  const filters = parseFilters(filtersParam, columnNames);
+  const mode: FilterMode = modeParam === "or" ? "or" : "and";
+  const [filtersOpen, setFiltersOpen] = useState(filters.length > 0);
 
-  const page = Math.max(1, Number(pageParam) || 1);
-  const limit = Math.min(100, Math.max(1, Number(limitParam) || 50));
+  const limit = PAGE_SIZES.includes(Number(limitParam))
+    ? Number(limitParam)
+    : DEFAULT_PAGE_SIZE;
+  const page = Math.max(1, Math.floor(Number(pageParam)) || 1);
+  const sort: RowsQuery["sort"] =
+    sortParam && columnNames.has(sortParam)
+      ? { column: sortParam, order: orderParam === "desc" ? "desc" : "asc" }
+      : undefined;
 
-  const columnNames = useMemo(() => {
-    if (!schema) return null;
-    return new Set(schema.columns.map((c) => c.name));
-  }, [schema]);
+  const { data, loading, error, refresh } = useTableRows(table.name, {
+    page,
+    limit,
+    filters,
+    mode,
+    sort,
+  });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new page clears the highlighted row
+  useEffect(() => setSelectedRow(null), [data]);
 
-  const sort = useMemo(() => {
-    if (!sortParam || !columnNames?.has(sortParam)) {
-      return undefined;
+  // A page past the end (a stale link, or rows deleted elsewhere) snaps back to the last one.
+  useEffect(() => {
+    if (data && data.totalRows > 0 && page > data.totalPages) {
+      setUrlParams({ page: String(data.totalPages) });
     }
-    return {
-      column: sortParam,
-      order: (orderParam === "desc" ? "desc" : "asc") as "asc" | "desc",
-    };
-  }, [sortParam, orderParam, columnNames]);
+  }, [data, page]);
 
-  const sortState: SortingState = useMemo(() => {
-    if (!sort) return [];
-    return [{ id: sort.column, desc: sort.order === "desc" }];
-  }, [sort]);
-
-  const appliedFilters: FilterCondition[] = useMemo(() => {
-    if (!filtersParam || !columnNames) return [];
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(filtersParam);
-    } catch {
-      return [];
-    }
-    if (!Array.isArray(parsed)) return [];
-    const validated: FilterCondition[] = [];
-    for (const entry of parsed) {
-      if (!entry || typeof entry !== "object") continue;
-      const { column, operator, value } = entry as Record<string, unknown>;
-      if (typeof column !== "string" || !columnNames.has(column)) continue;
-      if (typeof operator !== "string" || !FILTER_OPERATORS.has(operator)) {
-        continue;
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      if (
+        target.closest(
+          "input, textarea, select, [contenteditable], [role=dialog]",
+        )
+      ) {
+        return;
       }
-      if (typeof value !== "string") continue;
-      validated.push({ column, operator, value });
+      if (e.key === "r" && !e.metaKey && !e.ctrlKey && !e.altKey) refresh();
     }
-    return validated;
-  }, [filtersParam, columnNames]);
-
-  // Sync filter row count from URL on table change
-  useEffect(() => {
-    setFilterRowCount(appliedFilters.length);
-    if (appliedFilters.length > 0) setFiltersOpen(true);
-  }, [appliedFilters.length]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setTab("data");
-    setColumnVisibility({});
-    setColumnsOpen(false);
-    setLoading(true);
-    setError(null);
-    setSchema(null);
-    setData(null);
-    fetchTableSchema(tableName)
-      .then((s) => {
-        if (cancelled) return;
-        setSchema(s);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : String(e));
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tableName]);
-
-  useEffect(() => {
-    if (!schema) return;
-    let cancelled = false;
-    setLoading(true);
-    fetchTableRows(tableName, page, limit, appliedFilters, sort, filterMode)
-      .then((d) => {
-        if (cancelled) return;
-        setData(d);
-        setError(null);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : String(e));
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [page, limit, tableName, filterMode, sort, appliedFilters, schema]);
-
-  function refresh() {
-    setLoading(true);
-    fetchTableRows(tableName, page, limit, appliedFilters, sort, filterMode)
-      .then((d) => {
-        setData(d);
-        setError(null);
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
-  }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [refresh]);
 
   function setPage(p: number) {
-    setUrlParams({ page: p === 1 ? null : String(p) });
+    setUrlParams({ page: p <= 1 ? null : String(p) });
   }
 
-  function setLimit(l: number) {
-    setUrlParams({ limit: l === 50 ? null : String(l), page: null });
-  }
-
-  function setSorting(next: SortingState) {
-    if (next.length === 0) {
-      setUrlParams({ sort: null, order: null, page: null });
+  function setSort(column: string) {
+    if (sort?.column !== column) {
+      setUrlParams({ sort: column, order: null, page: null });
+    } else if (sort.order === "asc") {
+      setUrlParams({ order: "desc", page: null });
     } else {
-      setUrlParams({
-        sort: next[0].id,
-        order: next[0].desc ? "desc" : null,
-        page: null,
-      });
+      setUrlParams({ sort: null, order: null, page: null });
     }
   }
 
-  function applyFiltersFromRefs(
-    filterRefs: Map<
-      number,
-      { column: string; operator: string; valueRef: HTMLInputElement | null }
-    >,
-    mode?: FilterMode,
-  ) {
-    const filters: FilterCondition[] = [];
-    for (const [, ref] of filterRefs) {
-      const value = ref.valueRef?.value ?? "";
-      if (ref.column && (NULLARY_OPERATORS.has(ref.operator) || value !== "")) {
-        filters.push({ column: ref.column, operator: ref.operator, value });
-      }
-    }
-    const m = mode ?? filterMode;
+  function applyFilters(next: FilterCondition[], nextMode: FilterMode) {
+    const ready = next.filter(isComplete);
     setUrlParams({
-      filters: filters.length > 0 ? JSON.stringify(filters) : null,
-      filterMode: filters.length > 0 && m === "or" ? "or" : null,
+      filters: ready.length > 0 ? JSON.stringify(ready) : null,
+      mode: ready.length > 1 && nextMode === "or" ? "or" : null,
       page: null,
     });
   }
 
-  if (loading && !data) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">Loading...</p>
-      </div>
-    );
+  const openTable: OpenTable = (name, nextFilters) => {
+    setSheet([]);
+    if (nextFilters?.length) setFiltersOpen(true);
+    onOpenTable(name, nextFilters);
+  };
+
+  async function followForeignKey(
+    from: TableDefinition,
+    column: string,
+    value: unknown,
+  ): Promise<string | null> {
+    const fk = from.foreignKeys.find((f) => f.column === column);
+    const target = fk && tables.find((t) => t.name === fk.referencesTable);
+    if (!fk || !target) return "The referenced table isn't available.";
+    try {
+      const row = await fetchRowWhere(target.name, fk.referencesColumn, value);
+      if (!row) {
+        return `No row in ${target.name} where ${fk.referencesColumn} = ${String(value)}.`;
+      }
+      setSheet((s) => [...s, { table: target, row }]);
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
   }
 
-  if (error && !data) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
-        <p className="text-sm font-medium text-destructive">
-          Failed to load "{tableName}"
-        </p>
-        <p className="max-w-lg font-mono text-xs text-muted-foreground">
-          {error}
-        </p>
-        <Button size="sm" variant="outline" className="mt-2" onClick={refresh}>
-          Retry
-        </Button>
-      </div>
+  const visibleColumns = useMemo(
+    () => table.columns.filter((c) => !hidden.has(c.name)),
+    [table, hidden],
+  );
+  const gridColumns: GridColumn[] = visibleColumns.map((c) => {
+    const fk = table.foreignKeys.find((f) => f.column === c.name);
+    return {
+      name: c.name,
+      type: c.type,
+      primaryKey: table.primaryKey.includes(c.name),
+      references: fk && `${fk.referencesTable}.${fk.referencesColumn}`,
+    };
+  });
+  // Stable rows matter: DataGrid clears its cell selection when they change.
+  const gridRows = useMemo(
+    () => data?.rows.map((r) => visibleColumns.map((c) => r[c.name])) ?? [],
+    [data, visibleColumns],
+  );
+
+  function exportPage(format: "csv" | "json") {
+    downloadRows(
+      `${table.name}-page-${page}`,
+      visibleColumns.map((c) => c.name),
+      gridRows,
+      format,
     );
+    setExportOpen(false);
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex h-10 min-h-10 max-h-10 shrink-0 items-center gap-1 border-b px-4">
-        <div className="flex items-center gap-1">
-          <Button
-            variant={tab === "data" ? "secondary" : "ghost"}
-            size="sm"
-            className="h-6 text-xs"
-            onClick={() => setTab("data")}
-          >
-            Data
-          </Button>
-          <Button
-            variant={tab === "schema" ? "secondary" : "ghost"}
-            size="sm"
-            className="h-6 text-xs"
-            onClick={() => setTab("schema")}
-          >
-            Schema
-          </Button>
-          {tab === "data" && (
-            <>
-              <Button
-                variant={filtersOpen ? "secondary" : "ghost"}
-                size="sm"
-                className="h-6 text-xs gap-1"
-                onClick={() => setFiltersOpen(!filtersOpen)}
-              >
-                <Filter className="h-3 w-3" />
-                Filter
-                {appliedFilters.length > 0 && (
-                  <Badge
-                    variant="outline"
-                    className="ml-0.5 h-4 min-w-4 px-1 text-[10px]"
-                  >
-                    {appliedFilters.length}
-                  </Badge>
-                )}
-              </Button>
-              <div className="relative">
-                <Button
-                  variant={columnsOpen ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-6 text-xs gap-1"
-                  onClick={() => setColumnsOpen(!columnsOpen)}
-                >
-                  <Columns3 className="h-3 w-3" />
-                  Columns
-                  {Object.values(columnVisibility).some((v) => !v) && (
-                    <Badge
-                      variant="outline"
-                      className="ml-0.5 h-4 min-w-4 px-1 text-[10px]"
-                    >
-                      {Object.values(columnVisibility).filter((v) => !v).length}
-                    </Badge>
-                  )}
-                </Button>
-                {columnsOpen && schema && (
-                  <ColumnToggleMenu
-                    columns={schema.columns.map((c) => c.name)}
-                    visibility={columnVisibility}
-                    onChange={setColumnVisibility}
-                    onClose={() => setColumnsOpen(false)}
-                  />
-                )}
-              </div>
-            </>
-          )}
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
+        <div className="flex rounded-md border p-0.5">
+          {(["data", "schema"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() =>
+                setUrlParams({ view: v === "data" ? null : v }, { push: true })
+              }
+              className={cn(
+                "rounded px-2 py-0.5 text-xs capitalize",
+                view === v
+                  ? "bg-secondary text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {v}
+            </button>
+          ))}
         </div>
 
-        <div className="ml-auto flex items-center gap-1">
-          {tab === "data" && data && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                disabled={loading}
-                onClick={refresh}
-              >
-                <RefreshCw
-                  className={`h-3 w-3 ${loading ? "animate-spin" : ""}`}
-                />
-              </Button>
-
-              {data.responseTime != null && (
-                <span className="mr-2 text-[10px] tabular-nums text-muted-foreground">
-                  {data.responseTime}ms
+        {view === "data" && (
+          <>
+            <Button
+              variant={filtersOpen ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={() => setFiltersOpen(!filtersOpen)}
+            >
+              <Filter className="h-3 w-3" />
+              Filter
+              {filters.length > 0 && (
+                <span className="rounded bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                  {filters.length}
                 </span>
               )}
+            </Button>
 
-              <Badge
-                variant="outline"
-                className="mr-2 font-mono text-[10px] tabular-nums"
+            <div className="relative">
+              <Button
+                variant={columnsOpen ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={() => setColumnsOpen(!columnsOpen)}
               >
-                {data.pagination.totalRows.toLocaleString()} rows
-              </Badge>
+                <Columns3 className="h-3 w-3" />
+                Columns
+                {hidden.size > 0 && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {table.columns.length - hidden.size}/{table.columns.length}
+                  </span>
+                )}
+              </Button>
+              <Popover
+                open={columnsOpen}
+                onClose={() => setColumnsOpen(false)}
+                className="w-56"
+              >
+                <div className="max-h-72 overflow-y-auto">
+                  {table.columns.map((col) => (
+                    <MenuItem
+                      key={col.name}
+                      onClick={() => {
+                        const next = new Set(hidden);
+                        if (next.has(col.name)) next.delete(col.name);
+                        else next.add(col.name);
+                        setHidden(next);
+                      }}
+                    >
+                      <Checkbox
+                        checked={!hidden.has(col.name)}
+                        tabIndex={-1}
+                        className="pointer-events-none size-3.5"
+                      />
+                      <span className="truncate font-mono">{col.name}</span>
+                    </MenuItem>
+                  ))}
+                </div>
+                {hidden.size > 0 && (
+                  <div className="mt-1 border-t pt-1">
+                    <MenuItem
+                      onClick={() => setHidden(new Set())}
+                      className="text-muted-foreground"
+                    >
+                      Show all columns
+                    </MenuItem>
+                  </div>
+                )}
+              </Popover>
+            </div>
 
-              <label
-                htmlFor="page-limit"
-                className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            <div className="ml-auto flex items-center gap-1">
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  disabled={!data || data.rows.length === 0}
+                  onClick={() => setExportOpen(!exportOpen)}
+                >
+                  <Download className="h-3 w-3" />
+                  Export
+                </Button>
+                <Popover
+                  open={exportOpen}
+                  onClose={() => setExportOpen(false)}
+                  align="right"
+                  className="w-44"
+                >
+                  <MenuItem onClick={() => exportPage("csv")}>
+                    This page as CSV
+                  </MenuItem>
+                  <MenuItem onClick={() => exportPage("json")}>
+                    This page as JSON
+                  </MenuItem>
+                </Popover>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                disabled={loading}
+                onClick={refresh}
+                title="Refresh (R)"
+                aria-label="Refresh"
               >
-                Limit
-                <Input
-                  id="page-limit"
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={limit}
-                  onChange={(e) => {
-                    const v = Math.min(
-                      100,
-                      Math.max(1, Number(e.target.value) || 1),
-                    );
-                    setLimit(v);
-                  }}
-                  className="h-6 w-14 px-1.5 text-center font-mono text-xs tabular-nums"
+                <RefreshCw
+                  className={cn("h-3 w-3", loading && "animate-spin")}
                 />
-              </label>
-
-              <span className="mx-1 text-xs tabular-nums text-muted-foreground">
-                {data.pagination.page} / {data.pagination.totalPages}
-              </span>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                disabled={page <= 1 || loading}
-                onClick={() => setPage(page - 1)}
-              >
-                <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                disabled={page >= data.pagination.totalPages || loading}
-                onClick={() => setPage(page + 1)}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {error && data && (
-        <div className="shrink-0 border-b bg-destructive/10 px-4 py-1.5 text-xs text-destructive">
-          Failed to refresh: <span className="font-mono">{error}</span>
-        </div>
-      )}
-
-      {filtersOpen && tab === "data" && schema && (
-        <FilterBar
-          columns={schema.columns}
-          appliedFilters={appliedFilters}
-          filterRowCount={filterRowCount}
-          onFilterRowCountChange={setFilterRowCount}
-          filterMode={filterMode}
-          onApply={applyFiltersFromRefs}
-        />
-      )}
-
-      {tab === "data" ? (
-        <DataTab
-          data={data}
-          schema={schema}
-          sorting={sortState}
-          onSortingChange={setSorting}
-          columnVisibility={columnVisibility}
-          onColumnVisibilityChange={setColumnVisibility}
+      {view === "schema" ? (
+        <SchemaTab
+          table={table}
+          tables={tables}
+          ddl={ddl}
+          onOpenTable={openTable}
         />
       ) : (
-        <SchemaTab schema={schema} onSelectTable={onSelectTable} />
+        <>
+          {filtersOpen && (
+            <FilterBar
+              key={filtersParam ?? ""}
+              columns={table.columns}
+              applied={filters}
+              mode={mode}
+              onApply={applyFilters}
+            />
+          )}
+
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            {loading && data && (
+              <div className="absolute inset-x-0 top-0 z-20 h-0.5 overflow-hidden bg-border">
+                <div className="sweep-bar h-full w-1/3 bg-primary" />
+              </div>
+            )}
+            {error ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+                <p className="text-sm font-medium text-destructive-foreground">
+                  Couldn't load rows from {table.name}
+                </p>
+                <p className="max-w-lg font-mono text-xs text-muted-foreground">
+                  {error}
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <Button size="sm" variant="outline" onClick={refresh}>
+                    Retry
+                  </Button>
+                  {filters.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => applyFilters([], "and")}
+                    >
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : data ? (
+              <DataGrid
+                columns={gridColumns}
+                rows={gridRows}
+                offset={(page - 1) * limit}
+                sort={sort}
+                onSort={setSort}
+                activeRow={selectedRow}
+                onOpenRow={(index) => {
+                  const row = data.rows[index];
+                  if (!row) return;
+                  setSelectedRow(index);
+                  setSheet([{ table, row }]);
+                }}
+                onFollowForeignKey={(col, value) => {
+                  const column = gridColumns[col]?.name;
+                  return column
+                    ? followForeignKey(table, column, value)
+                    : Promise.resolve(null);
+                }}
+                emptyMessage={
+                  filters.length > 0
+                    ? "No rows match these filters."
+                    : "This table is empty."
+                }
+              />
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
+                Loading rows…
+              </div>
+            )}
+          </div>
+
+          <Pager
+            data={data}
+            page={page}
+            limit={limit}
+            onPage={setPage}
+            onLimit={(n) =>
+              setUrlParams({
+                limit: n === DEFAULT_PAGE_SIZE ? null : String(n),
+                page: null,
+              })
+            }
+          />
+        </>
       )}
+
+      <RowSheet
+        stack={sheet}
+        tables={tables}
+        onBack={() => setSheet((s) => s.slice(0, -1))}
+        onClose={() => {
+          setSheet([]);
+          setSelectedRow(null);
+        }}
+        onFollowForeignKey={followForeignKey}
+        onOpenTable={openTable}
+      />
     </div>
   );
 }

@@ -29,6 +29,8 @@ jobs:
           done
           rm -rf packages/openapi-client/dist packages/stream-import/dist packages/stream-import-*/dist
       - run: bun test
+      - name: Typecheck database studio client
+        run: bun run --filter @bunny.net/database-studio typecheck:client
       - name: Build database studio
         run: bun run --filter @bunny.net/database-studio build:client
       - name: Build CLI binary
