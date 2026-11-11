@@ -15,6 +15,8 @@ export interface FrameworkPreset {
   spa?: boolean;
   /** SDK channel for the dotnet toolchain's setup step, e.g. `9.0.x`. */
   dotnetVersion?: string;
+  /** pip requirement the python toolchain installs when the project has no requirements.txt; defaults to the preset id. */
+  pipPackage?: string;
 }
 
 // Static must stay last: the interactive prompt defaults to it.
@@ -162,6 +164,7 @@ export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
     dir: "output",
     toolchain: "python",
     build: "pelican content",
+    pipPackage: "pelican[markdown]",
   },
   {
     id: "sphinx",

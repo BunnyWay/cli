@@ -21,6 +21,15 @@ test("astro + bun workflow builds with bun and deploys dist", () => {
   expect(yml).toContain('site: "my-site"');
   expect(yml).toContain('directory: "dist"');
   expect(yml).toContain("api_key: ${{ secrets.BUNNYNET_API_KEY }}");
+  expect(yml).not.toContain("cli_version");
+  expect(
+    renderSitesWorkflow({
+      site: "my-site",
+      preset: preset("astro"),
+      packageManager: "bun",
+      cliVersion: "0.21",
+    }),
+  ).toContain('cli_version: "0.21"');
   expect(yml).not.toContain("working-directory");
   expect(yml).not.toContain("cache-dependency-path");
 });
@@ -70,7 +79,9 @@ test("mkdocs uses the python toolchain and deploys site", () => {
     packageManager: "npm",
   });
   expect(yml).toContain("uses: actions/setup-python@v7");
-  expect(yml).toContain("run: pip install -r requirements.txt");
+  expect(yml).toContain(
+    "then pip install -r requirements.txt; else pip install 'mkdocs'; fi",
+  );
   expect(yml).toContain("run: mkdocs build");
   expect(yml).toContain('directory: "site"');
   expect(yml).not.toContain("setup-node");
@@ -187,4 +198,24 @@ test("npm and pnpm projects get the matching install steps", () => {
   });
   expect(pnpm).toContain("uses: pnpm/action-setup@v6");
   expect(pnpm).toContain("run: pnpm install --frozen-lockfile");
+
+  // No lockfile: setup-node's cache and `npm ci` would both fail on the runner.
+  const unlocked = renderSitesWorkflow({
+    site: "s",
+    preset: preset("vite"),
+    packageManager: "npm",
+    lockfile: false,
+  });
+  expect(unlocked).toContain("run: npm install");
+  expect(unlocked).not.toContain("cache:");
+
+  const pinned = renderSitesWorkflow({
+    site: "s",
+    preset: preset("vite"),
+    packageManager: "pnpm",
+    pnpmVersion: "10",
+  });
+  expect(pinned).toContain(
+    'uses: pnpm/action-setup@v6\n        with:\n          version: "10"',
+  );
 });
