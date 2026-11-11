@@ -38,16 +38,18 @@ describe("BUNNY_CLI_SKILL", () => {
     expect(client).toContain("Critical: server-side only");
   });
 
+  test("documents the apps namespace", () => {
+    const apps = BUNNY_CLI_SKILL.files["references/apps.md"] as string;
+    expect(apps).toContain("bunny apps deploy");
+    expect(BUNNY_CLI_SKILL.agentsSection).toContain("bunny apps");
+  });
+
   test("does not reference experimental namespaces hidden from help", () => {
     const texts = [
       BUNNY_CLI_SKILL.agentsSection,
       ...Object.values(BUNNY_CLI_SKILL.files),
     ];
-    for (const namespace of [
-      "bunny apps",
-      "bunny registries",
-      "bunny registry",
-    ]) {
+    for (const namespace of ["bunny registries", "bunny registry"]) {
       for (const text of texts) expect(text).not.toContain(namespace);
     }
   });
