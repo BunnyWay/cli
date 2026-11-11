@@ -1,9 +1,9 @@
 // Shared-token auth wrapper. The shape (options bag, optional callbacks,
 // exported option type) is intentionally designed so future variants can
 // be added without breaking existing callers:
-//   - A verifier-based variant (Clerk, Auth0, JWT, etc.) lands by widening
-//     RequireAuthOptions to a union; today's TokenAuthOptions stays valid.
-//   - Session context can flow into the handler via an optional second arg.
+//   - The verifier-based variant (Clerk, Auth0, JWT, etc.) widened
+//     RequireAuthOptions to a union; TokenAuthOptions stays valid.
+//   - Session context flows into the handler as an optional second arg.
 //   - isPublic can grow optional arguments (e.g. the full Request) without
 //     breaking pathname-only callers.
 //   - Response customisation lands as new optional fields (e.g. onUnauthorized).
@@ -39,7 +39,7 @@ const unauthorized = (): Response =>
     },
   });
 
-export interface RequireAuthOptions {
+export interface TokenAuthOptions {
   /** Shared secret the request must present. */
   token: string;
   /** If set, also accept the token from this cookie. */
@@ -47,6 +47,32 @@ export interface RequireAuthOptions {
   /** Optional predicate: pathnames for which auth is skipped. */
   isPublic?: (pathname: string) => boolean;
 }
+
+export interface VerifyAuthOptions<Session> {
+  /**
+   * Resolves the request to a session, or `null`/`undefined` when it carries
+   * no valid credentials (answered with 401). Use it for JWTs, Clerk, Auth0,
+   * or your own sessions. A verifier that throws rejects the returned promise
+   * rather than letting the request through.
+   */
+  verify: (
+    req: Request,
+  ) => Session | null | undefined | Promise<Session | null | undefined>;
+  /** Optional predicate: pathnames for which auth is skipped. */
+  isPublic?: (pathname: string) => boolean;
+}
+
+export type RequireAuthOptions<Session = unknown> =
+  | TokenAuthOptions
+  | VerifyAuthOptions<Session>;
+
+type Handler = (req: Request) => Response | Promise<Response>;
+
+/** On a public path there is no session, so the handler gets `null`. */
+type SessionHandler<Session> = (
+  req: Request,
+  session: Session | null,
+) => Response | Promise<Response>;
 
 /**
  * Wrap a request handler with a shared-token check.
@@ -90,19 +116,43 @@ export interface RequireAuthOptions {
  * });
  * ```
  *
- * The API is shaped so a verifier-based variant
- * (`{ verify: (req) => session | null }`) can land later as an additive
- * widening of {@link RequireAuthOptions}, without breaking existing
- * `{ token }` callers.
+ * For anything beyond a shared token, pass `verify` instead. The session
+ * it returns is handed to the handler as a second argument:
+ *
+ * ```ts
+ * const guarded = requireAuth(
+ *   (req, session) => handler(req),
+ *   { verify: async (req) => verifyJwt(req.headers.get("authorization")) },
+ * );
+ * ```
  */
-export const requireAuth = (
-  handler: (req: Request) => Response | Promise<Response>,
-  options: RequireAuthOptions,
-): ((req: Request) => Promise<Response>) => {
+export function requireAuth(
+  handler: Handler,
+  options: TokenAuthOptions,
+): (req: Request) => Promise<Response>;
+export function requireAuth<Session>(
+  handler: SessionHandler<Session>,
+  options: VerifyAuthOptions<Session>,
+): (req: Request) => Promise<Response>;
+export function requireAuth<Session>(
+  handler: SessionHandler<Session>,
+  options: RequireAuthOptions<Session>,
+): (req: Request) => Promise<Response>;
+export function requireAuth<Session>(
+  handler: SessionHandler<Session>,
+  options: RequireAuthOptions<Session>,
+): (req: Request) => Promise<Response> {
   return async (req: Request): Promise<Response> => {
     if (options.isPublic) {
       const { pathname } = new URL(req.url);
-      if (options.isPublic(pathname)) return handler(req);
+      if (options.isPublic(pathname)) return handler(req, null);
+    }
+
+    if ("verify" in options) {
+      const session = await options.verify(req);
+      if (session === null || session === undefined) return unauthorized();
+
+      return handler(req, session);
     }
 
     const authHeader = req.headers.get("authorization");
@@ -116,7 +166,7 @@ export const requireAuth = (
           presented &&
           safeEqual(presented, options.token)
         ) {
-          return handler(req);
+          return handler(req, null);
         }
       }
     }
@@ -124,10 +174,10 @@ export const requireAuth = (
     if (options.cookieName) {
       const cookie = extractCookie(req, options.cookieName);
       if (cookie && safeEqual(cookie, options.token)) {
-        return handler(req);
+        return handler(req, null);
       }
     }
 
     return unauthorized();
   };
-};
+}

@@ -67,3 +67,82 @@ describe("requireAuth", () => {
     expect(res.status).toBe(expected);
   });
 });
+
+describe("requireAuth with verify", () => {
+  type Session = { userId: string };
+
+  const sessions: Record<string, Session> = {
+    "Bearer alice": { userId: "u_alice" },
+  };
+
+  const guarded = (isPublic?: (pathname: string) => boolean) =>
+    requireAuth<Session>((_req, session) => Response.json({ session }), {
+      verify: async (req) => sessions[req.headers.get("authorization") ?? ""],
+      isPublic,
+    });
+
+  test("passes the verified session to the handler", async () => {
+    const res = await guarded()(
+      new Request("http://localhost/", {
+        headers: { authorization: "Bearer alice" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ session: { userId: "u_alice" } });
+  });
+
+  test("401 with WWW-Authenticate when verify finds no session", async () => {
+    const res = await guarded()(
+      new Request("http://localhost/", {
+        headers: { authorization: "Bearer mallory" },
+      }),
+    );
+
+    expect(res.status).toBe(401);
+    expect(res.headers.get("WWW-Authenticate")).toBe(
+      'Bearer realm="database-rest"',
+    );
+  });
+
+  test("a public path skips verify and gives the handler a null session", async () => {
+    let verified = false;
+    const handler = requireAuth<Session>(
+      (_req, session) => Response.json({ session }),
+      {
+        verify: () => {
+          verified = true;
+
+          return null;
+        },
+        isPublic: (p) => p === "/health",
+      },
+    );
+
+    const res = await handler(new Request("http://localhost/health"));
+
+    expect(await res.json()).toEqual({ session: null });
+    expect(verified).toBe(false);
+  });
+
+  test("a verifier that throws rejects instead of letting the request through", async () => {
+    const reached: string[] = [];
+    const handler = requireAuth(
+      () => {
+        reached.push("handler");
+
+        return new Response("ok");
+      },
+      {
+        verify: () => {
+          throw new Error("JWKS unavailable");
+        },
+      },
+    );
+
+    await expect(handler(new Request("http://localhost/"))).rejects.toThrow(
+      "JWKS unavailable",
+    );
+    expect(reached).toEqual([]);
+  });
+});
