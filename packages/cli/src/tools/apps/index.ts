@@ -1,4 +1,12 @@
 export { fetchApp } from "./app.ts";
+export type { ExecSession, Pod, PodContainer } from "./exec.ts";
+export {
+  appsExec,
+  appsPodsList,
+  fetchPods,
+  findContainer,
+  findPod,
+} from "./exec.ts";
 export { fetchAllApps, fetchAllRegions } from "./paged.ts";
 export type {
   ContainerRegistryModel,
