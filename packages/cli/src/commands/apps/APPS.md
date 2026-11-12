@@ -246,6 +246,27 @@ bunny apps scale --min 1 --max 3
 bunny apps scale --max 5
 ```
 
+## `bunny apps exec`
+
+Open an interactive shell in a running container. Without `--pod` or `--container`, it lists the app's pods and the pod's containers to pick from; when there is only one, it picks it for you. Everything you type goes to the container, Ctrl-C included. Press Ctrl-] to disconnect from this side.
+
+```bash
+bunny apps exec
+bunny apps exec --pod <pod> --container api
+bunny apps exec --id <app-id> --container worker
+
+# Print the session's WebSocket URL instead of connecting
+bunny apps exec --pod <pod> --container api --output json
+```
+
+| Flag          | Description                                 |
+| ------------- | ------------------------------------------- |
+| `--id`        | App ID (defaults to the linked app)         |
+| `--pod`       | Pod (instance) name; prompts when left out  |
+| `--container` | Container name or ID; prompts when left out |
+
+`exec` needs an interactive terminal. With `--output json` it prints the session instead of connecting: its `url` grants a shell in the container, so treat it like a credential. In that mode it never prompts, so pass `--pod` and `--container` when there's more than one; a missing one fails with the names to choose from. A session that drops unexpectedly exits non-zero. Exec has to be enabled for your account.
+
 ## `bunny apps env`
 
 Manage environment variables per container.
