@@ -21,6 +21,7 @@
       // Repo-root assets the CLI embeds at bundle time.
       "@templates/*": ["./templates/*"],
       "@skills/*": ["./skills/*"],
+      "@bunny.net/cli-telemetry": ["./packages/cli-telemetry/src/index.ts"],
       "@bunny.net/database-client": ["./packages/database-client/src/index.ts"],
       "@bunny.net/framework-detector": [
         "./packages/framework-detector/src/index.ts"

@@ -1,68 +1,18 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import {
+  CliEvent,
+  type CommonProps,
+  EVENTS_PATH,
+  type EventName,
+  type EventProps,
+  USER_AGENT_PREFIX,
+} from "@bunny.net/cli-telemetry";
 import { loadConfigFile } from "@/config/index.ts";
 import { VERSION } from "./version.ts";
 
-/** Mirrors the collector's allowlist in BunnyWay/cli-telemetry-edge-script: an event or prop missing there is dropped. */
-type PropType = "string" | "number" | "boolean" | readonly string[];
-
-const PROPS = {
-  cli_version: "string",
-  os: "string",
-  arch: "string",
-  ci: "boolean",
-  command: "string",
-  flags: "string",
-  result: ["success", "user_error", "api_error", "error"],
-  status: "number",
-  duration_ms: "number",
-  output: "string",
-  action: ["create", "update", "delete", "upload", "fetch"],
-  size_bytes: "number",
-  resumable: "boolean",
-  source: "string",
-  import_status: ["in_progress", "completed", "failed", "paused"],
-  videos: "number",
-  failed: "number",
-} as const satisfies Record<string, PropType>;
-
-const COMMON_PROPS = ["cli_version", "os", "arch", "ci"] as const;
-
-const EVENTS = {
-  command: ["command", "flags", "result", "status", "duration_ms", "output"],
-  login: [],
-  stream_library: ["action"],
-  stream_video: ["action", "size_bytes", "resumable"],
-  stream_collection: ["action"],
-  stream_import: ["source", "import_status", "videos", "failed"],
-} as const satisfies Record<string, readonly (keyof typeof PROPS)[]>;
-
-export type EventName = keyof typeof EVENTS;
-
-type TypeOf<T extends PropType> = T extends readonly string[]
-  ? T[number]
-  : T extends "string"
-    ? string
-    : T extends "number"
-      ? number
-      : boolean;
-
-export type EventProps<E extends EventName> = {
-  [K in (typeof EVENTS)[E][number]]?: TypeOf<(typeof PROPS)[K]>;
-};
-
-type CommonProps = {
-  [K in (typeof COMMON_PROPS)[number]]: TypeOf<(typeof PROPS)[K]>;
-};
-
-interface CliEvent {
-  event: string;
-  id: string;
-  anon_id: string;
-  time: number;
-  props?: Record<string, unknown>;
-}
+export type { EventName, EventProps };
 
 /** The credentials a command ran with. */
 export interface TelemetryAuth {
@@ -70,7 +20,7 @@ export interface TelemetryAuth {
   apiKey?: string;
 }
 
-const DEFAULT_URL = "https://cli-telemetry.bunny.net/v1/events";
+const DEFAULT_URL = `https://cli-telemetry.bunny.net${EVENTS_PATH}`;
 const SEND_TIMEOUT_MS = 1500;
 export const DOCS_URL = "https://docs.bunny.net/cli/telemetry";
 
@@ -137,7 +87,7 @@ export function setTelemetryEnabled(enabled: boolean): void {
   );
 }
 
-const queue: CliEvent[] = [];
+const queue: Omit<CliEvent, "anon_id">[] = [];
 
 function commonProps(): CommonProps {
   return {
@@ -157,7 +107,6 @@ export function track<E extends EventName>(
   queue.push({
     event,
     id: crypto.randomUUID(),
-    anon_id: "",
     time: Date.now(),
     props: { ...commonProps(), ...props },
   });
@@ -176,7 +125,7 @@ function credential(auth?: TelemetryAuth): string | undefined {
 
 export async function flushTelemetry(auth?: TelemetryAuth): Promise<void> {
   if (queue.length === 0) return;
-  const events = queue.splice(0);
+  const pending = queue.splice(0);
   if (!telemetryStatus().enabled) return;
 
   const state = readState();
@@ -187,7 +136,12 @@ export async function flushTelemetry(auth?: TelemetryAuth): Promise<void> {
 
     if (readState().anon_id !== anonId) return;
   }
-  for (const e of events) e.anon_id = anonId;
+  // The collector parses with the same schema, so anything dropped here would be dropped there.
+  const events = pending.flatMap((e) => {
+    const parsed = CliEvent.safeParse({ ...e, anon_id: anonId });
+    return parsed.success ? [parsed.data] : [];
+  });
+  if (events.length === 0) return;
 
   if (truthy(process.env.BUNNYNET_TELEMETRY_DEBUG)) {
     for (const e of events) console.error(`[telemetry] ${JSON.stringify(e)}`);
@@ -200,7 +154,7 @@ export async function flushTelemetry(auth?: TelemetryAuth): Promise<void> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": `bunny-cli/${VERSION}`,
+        "User-Agent": `${USER_AGENT_PREFIX}${VERSION}`,
         ...(apiKey && { AccessKey: apiKey }),
       },
       body: JSON.stringify(events),
