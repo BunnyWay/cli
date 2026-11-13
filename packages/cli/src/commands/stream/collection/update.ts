@@ -6,6 +6,7 @@ import { streamLibraryContext } from "@/commands/stream/context.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
+import { track } from "@/core/telemetry.ts";
 import type { GlobalArgs } from "@/core/types.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 import { resolveCollectionInteractive } from "./interactive.ts";
@@ -94,6 +95,7 @@ export async function runCollectionUpdate(
   await withSpinner("Renaming collection...", () =>
     renameCollection(client, libraryId, guid, wanted),
   );
+  track("stream_collection", { action: "update" });
 
   // The update endpoint answers with a status, so read the collection back.
   const updated = await withSpinner("Reading collection...", () =>

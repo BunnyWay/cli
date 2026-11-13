@@ -9,6 +9,7 @@ import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
+import { track } from "@/core/telemetry.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { isInteractive, prompts, spinner } from "@/core/ui.ts";
 import { allRegions, MAIN_REGION, REGION_CODES } from "@/tools/stream/index.ts";
@@ -157,6 +158,7 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     } finally {
       spin.stop();
     }
+    track("stream_library", { action: "create" });
 
     if (output === "json") {
       // No prompts here: only the flags link or save. The create response carries

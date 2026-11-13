@@ -1,0 +1,51 @@
+{
+  "name": "@bunny.net/cli-telemetry",
+  "version": "0.0.0",
+  "description": "The usage events the bunny.net CLI reports, as a Zod schema with the request contract constants.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BunnyWay/cli.git",
+    "directory": "packages/cli-telemetry"
+  },
+  "homepage": "https://github.com/BunnyWay/cli/tree/main/packages/cli-telemetry#readme",
+  "bugs": "https://github.com/BunnyWay/cli/issues",
+  "keywords": [
+    "bunny",
+    "bunny.net",
+    "cli",
+    "telemetry",
+    "zod"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -2,6 +2,12 @@ import type { Argv, CommandModule } from "yargs";
 import { profileExists } from "@/config/index.ts";
 import { UserError, unauthorizedError } from "./errors.ts";
 import { logger } from "./logger.ts";
+import {
+  type EventProps,
+  flushTelemetry,
+  invocation,
+  track,
+} from "./telemetry.ts";
 import type { GlobalArgs } from "./types.ts";
 
 interface CommandDef<A = Record<string, never>> {
@@ -124,6 +130,7 @@ function rejectNaN(
  * ```
  */
 export function defineCommand<A>(def: CommandDef<A>): CommandModule {
+  let aliases: Record<string, string[]> = {};
   const wrappedBuilder = (yargs: Argv) => {
     let y = def.builder ? def.builder(yargs) : yargs;
     if (def.examples) {
@@ -133,6 +140,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
     }
     if (def.epilogue) y = y.epilogue(def.epilogue) as any;
     groupHelpOptions(y, def.command);
+    aliases = optionsOf(y).alias;
     return y.check(
       (argv) => rejectNaN(y, def.command, argv as Record<string, unknown>),
       false,
@@ -146,13 +154,42 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
     builder: wrappedBuilder as any,
     handler: async (argv) => {
       const args = argv as unknown as A & GlobalArgs;
+      const startedAt = Date.now();
+      const { command, flags } = invocation(argv, aliases);
+      const trackCommand = (
+        result: NonNullable<EventProps<"command">["result"]>,
+        status?: number,
+      ) => {
+        // Managing telemetry is never itself reported.
+        if (command.split(" ")[0] === "telemetry") return;
+
+        track("command", {
+          command,
+          flags,
+          result,
+          status,
+          duration_ms: Date.now() - startedAt,
+          output: args.output,
+        });
+
+        return flushTelemetry({ profile: args.profile, apiKey: args.apiKey });
+      };
       try {
         if (def.preRun) await def.preRun(args);
         await def.handler(args);
         if (def.postRun) await def.postRun(args);
+        await trackCommand("success");
       } catch (err: any) {
         const isUser = err?.isUserError;
         const isApi = err?.name === "ApiError";
+        // Reported after the error is printed, so telemetry never delays it.
+        const exit = async (code: number): Promise<never> => {
+          await trackCommand(
+            isApi ? "api_error" : isUser ? "user_error" : "error",
+            isApi ? err.status : undefined,
+          );
+          process.exit(code);
+        };
         // bunny.net answers 403 for a key it rejects, so both statuses get the credential hint.
         const rejected =
           isApi && (err.status === 401 || err.status === 403)
@@ -178,7 +215,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
               payload.validationErrors = err.validationErrors;
           }
           console.log(JSON.stringify(payload));
-          process.exit(isUser ? 1 : 2);
+          await exit(isUser ? 1 : 2);
         }
 
         logger.error(isUser ? message : "An unexpected error occurred.");
@@ -190,7 +227,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
         } else if (args.verbose) {
           console.error(err);
         }
-        process.exit(isUser ? 1 : 2);
+        await exit(isUser ? 1 : 2);
       }
     },
   };

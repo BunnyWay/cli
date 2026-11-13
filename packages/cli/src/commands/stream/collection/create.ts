@@ -3,6 +3,7 @@ import { streamLibraryContext } from "@/commands/stream/context.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
+import { track } from "@/core/telemetry.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 
 interface CollectionCreateArgs {
@@ -77,6 +78,7 @@ export const streamCollectionCreateCommand =
         `Creating collection ${wanted}...`,
         () => createCollection(client, libraryId, wanted as string),
       );
+      track("stream_collection", { action: "create" });
 
       if (output === "json") {
         logger.log(JSON.stringify(collection, null, 2));
