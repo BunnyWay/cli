@@ -4,7 +4,7 @@ import { setTelemetryEnabled, telemetryStatus } from "@/core/telemetry.ts";
 
 export const telemetryEnableCommand = defineCommand({
   command: "enable",
-  describe: "Allow anonymous usage data collection.",
+  describe: "Allow usage data collection.",
 
   handler: async ({ output }) => {
     setTelemetryEnabled(true);

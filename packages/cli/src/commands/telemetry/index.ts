@@ -5,6 +5,6 @@ import { telemetryStatusCommand } from "./status.ts";
 
 export const telemetryNamespace = defineNamespace(
   "telemetry",
-  "Manage anonymous usage data collection.",
+  "Manage usage data collection.",
   [telemetryStatusCommand, telemetryEnableCommand, telemetryDisableCommand],
 );

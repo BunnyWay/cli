@@ -4,7 +4,7 @@ import { DOCS_URL, telemetryStatus } from "@/core/telemetry.ts";
 
 export const telemetryStatusCommand = defineCommand({
   command: "status",
-  describe: "Show whether anonymous usage data is collected.",
+  describe: "Show whether usage data is collected.",
 
   handler: async ({ output }) => {
     const status = telemetryStatus();

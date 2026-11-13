@@ -1672,7 +1672,7 @@ After `bunny login` succeeds, it prints the exact line for your shell (zsh, bash
 
 ### `bunny telemetry`
 
-The CLI collects anonymous usage data: the command path, flag names (never values), result, duration, CLI version, OS, architecture, and whether it runs in CI. A few actions also send a product event, such as logging in, creating, updating, or deleting Stream libraries, videos, and collections, and Stream imports (source, status, and video counts). No API keys, arguments, or resource names are sent. A notice prints the first time.
+The CLI collects usage data: the command path, flag names (never values), result, duration, CLI version, OS, architecture, and whether it runs in CI. A few actions also send a product event, such as logging in, creating, updating, or deleting Stream libraries, videos, and collections, and Stream imports (source, status, and video counts). No emails, arguments, or resource names are sent. A notice prints the first time.
 
 ```bash
 bunny telemetry status   # Show whether telemetry is enabled
@@ -1711,7 +1711,7 @@ Setting `BUNNYNET_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1` also turns it off an
 | `BUNNYNET_API_URL`            | API base URL (default: `https://api.bunny.net`)                 |
 | `BUNNYNET_DASHBOARD_URL`      | Dashboard URL for auth flow (default: `https://dash.bunny.net`) |
 | `NO_COLOR`                    | Disable colored output ([no-color.org](https://no-color.org))   |
-| `BUNNYNET_TELEMETRY_DISABLED` | Disable anonymous usage data (`DO_NOT_TRACK=1` also works)      |
+| `BUNNYNET_TELEMETRY_DISABLED` | Disable usage data (`DO_NOT_TRACK=1` also works)                |
 | `BUNNYNET_TELEMETRY_DEBUG`    | Print telemetry events to stderr instead of sending them        |
 
 ## License

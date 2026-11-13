@@ -172,7 +172,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
           output: args.output,
         });
 
-        return flushTelemetry();
+        return flushTelemetry({ profile: args.profile, apiKey: args.apiKey });
       };
       try {
         if (def.preRun) await def.preRun(args);

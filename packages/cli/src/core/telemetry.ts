@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { loadConfigFile } from "@/config/index.ts";
 import { VERSION } from "./version.ts";
 
 /** Mirrors the collector's allowlist in BunnyWay/cli-telemetry-edge-script: an event or prop missing there is dropped. */
@@ -63,6 +64,12 @@ interface CliEvent {
   props?: Record<string, unknown>;
 }
 
+/** The credentials a command ran with. */
+export interface TelemetryAuth {
+  profile: string;
+  apiKey?: string;
+}
+
 const DEFAULT_URL = "https://cli-telemetry.bunny.net/v1/events";
 const SEND_TIMEOUT_MS = 1500;
 export const DOCS_URL = "https://docs.bunny.net/cli/telemetry";
@@ -122,7 +129,7 @@ export function telemetryStatus(): TelemetryStatus {
 
 export function setTelemetryEnabled(enabled: boolean): void {
   const state = readState();
-  // Opting out drops the anonymous ID too, so opting back in starts fresh.
+  // Opting out drops the install ID too, so opting back in starts fresh.
   writeState(
     enabled
       ? { ...state, enabled, notified: true }
@@ -156,7 +163,18 @@ export function track<E extends EventName>(
   });
 }
 
-export async function flushTelemetry(): Promise<void> {
+/** The API key the command ran with, read at flush time so a login or logout in the same run is reflected. */
+function credential(auth?: TelemetryAuth): string | undefined {
+  if (!auth) return undefined;
+  return (
+    auth.apiKey ||
+    process.env.BUNNYNET_API_KEY ||
+    loadConfigFile()?.profiles[auth.profile]?.api_key ||
+    undefined
+  );
+}
+
+export async function flushTelemetry(auth?: TelemetryAuth): Promise<void> {
   if (queue.length === 0) return;
   const events = queue.splice(0);
   if (!telemetryStatus().enabled) return;
@@ -176,12 +194,14 @@ export async function flushTelemetry(): Promise<void> {
     return;
   }
 
+  const apiKey = credential(auth);
   try {
     await fetch(process.env.BUNNYNET_TELEMETRY_URL || DEFAULT_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "User-Agent": `bunny-cli/${VERSION}`,
+        ...(apiKey && { AccessKey: apiKey }),
       },
       body: JSON.stringify(events),
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
@@ -191,7 +211,8 @@ export async function flushTelemetry(): Promise<void> {
 
 function printNotice(): void {
   console.error(
-    "\n  The bunny.net CLI collects anonymous usage data to improve the CLI." +
+    "\n  The bunny.net CLI collects usage data to improve the CLI. When you are authenticated," +
+      "\n  it is linked to your bunny.net user and account." +
       "\n  Run `bunny telemetry disable` or set BUNNYNET_TELEMETRY_DISABLED=1 to opt out." +
       `\n  Learn more: ${DOCS_URL}\n`,
   );
