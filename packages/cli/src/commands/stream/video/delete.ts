@@ -22,6 +22,10 @@ export const streamVideoDeleteCommand = defineCommand<VideoDeleteArgs>({
     ["$0 stream videos delete 1a2b3c4d-...", "Delete a video by GUID"],
     ["$0 stream videos delete 1a2b3c4d-... --force", "Skip confirmation"],
     ["$0 stream videos delete", "Pick a video interactively"],
+    [
+      "$0 stream videos delete 1a2b3c4d-... --lib 12345",
+      "A video in a specific library",
+    ],
   ],
 
   builder: (yargs) =>

@@ -109,6 +109,21 @@
                       },
                       "port": {
                         "type": "number"
+                      },
+                      "initialDelaySeconds": {
+                        "type": "number"
+                      },
+                      "periodSeconds": {
+                        "type": "number"
+                      },
+                      "timeoutSeconds": {
+                        "type": "number"
+                      },
+                      "failureThreshold": {
+                        "type": "number"
+                      },
+                      "successThreshold": {
+                        "type": "number"
                       }
                     },
                     "required": ["type"],
@@ -125,6 +140,21 @@
                         "type": "string"
                       },
                       "port": {
+                        "type": "number"
+                      },
+                      "initialDelaySeconds": {
+                        "type": "number"
+                      },
+                      "periodSeconds": {
+                        "type": "number"
+                      },
+                      "timeoutSeconds": {
+                        "type": "number"
+                      },
+                      "failureThreshold": {
+                        "type": "number"
+                      },
+                      "successThreshold": {
                         "type": "number"
                       }
                     },
@@ -143,6 +173,21 @@
                       },
                       "port": {
                         "type": "number"
+                      },
+                      "initialDelaySeconds": {
+                        "type": "number"
+                      },
+                      "periodSeconds": {
+                        "type": "number"
+                      },
+                      "timeoutSeconds": {
+                        "type": "number"
+                      },
+                      "failureThreshold": {
+                        "type": "number"
+                      },
+                      "successThreshold": {
+                        "type": "number"
                       }
                     },
                     "required": ["type"],
@@ -160,6 +205,9 @@
                       "type": "string",
                       "enum": ["cdn", "anycast"]
                     },
+                    "name": {
+                      "type": "string"
+                    },
                     "ssl": {
                       "type": "boolean"
                     },
@@ -175,7 +223,7 @@
                             "type": "number"
                           }
                         },
-                        "required": ["public", "container"],
+                        "required": ["container"],
                         "additionalProperties": false
                       }
                     }

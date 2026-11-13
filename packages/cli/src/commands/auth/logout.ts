@@ -6,6 +6,11 @@ import { confirm } from "@/core/ui.ts";
 export const authLogoutCommand = defineCommand<{ force: boolean }>({
   command: "logout",
   describe: "Remove a stored authentication profile.",
+  examples: [
+    ["$0 logout", "Log out of the default profile"],
+    ["$0 logout --profile staging", "Log out of a named profile"],
+    ["$0 logout --force", "Skip the confirmation prompt"],
+  ],
 
   builder: (yargs) =>
     yargs.option("force", {

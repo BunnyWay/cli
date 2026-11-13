@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/cli",
-  "version": "0.20.2",
+  "version": "0.22.0",
   "license": "MIT",
   "type": "module",
   "module": "src/index.ts",
@@ -33,18 +33,17 @@
     "jsonc-parser": "^3.3.1",
     "ora": "^9.3.0",
     "prompts": "^2.4.2",
-    "yaml": "^2.9.0",
     "yargs": "^18.2.0",
     "zod": "^4.3.6",
     "@bunny.net/database-client": "workspace:*",
     "@bunny.net/framework-detector": "workspace:*"
   },
   "optionalDependencies": {
-    "@bunny.net/cli-linux-x64": "0.20.2",
-    "@bunny.net/cli-linux-arm64": "0.20.2",
-    "@bunny.net/cli-darwin-x64": "0.20.2",
-    "@bunny.net/cli-darwin-arm64": "0.20.2",
-    "@bunny.net/cli-windows-x64": "0.20.2"
+    "@bunny.net/cli-linux-x64": "0.22.0",
+    "@bunny.net/cli-linux-arm64": "0.22.0",
+    "@bunny.net/cli-darwin-x64": "0.22.0",
+    "@bunny.net/cli-darwin-arm64": "0.22.0",
+    "@bunny.net/cli-windows-x64": "0.22.0"
   },
   "publishConfig": {
     "access": "public"

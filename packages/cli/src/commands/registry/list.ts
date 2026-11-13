@@ -8,6 +8,10 @@ export const registryListCommand = defineToolCommand({
   command: "list",
   aliases: ["ls"],
   describe: "List repositories in the bunny.net registry.",
+  examples: [
+    ["$0 registry list", "List repositories"],
+    ["$0 registry list --output json", "JSON output"],
+  ],
   progress: "Fetching repositories...",
 
   prepare: async () => ({ input: {} }),

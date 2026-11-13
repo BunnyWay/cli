@@ -104,6 +104,10 @@ export const streamVideoFetchCommand = defineCommand<FetchArgs>({
       '$0 stream videos fetch https://example.com/video.mp4 --title "Launch demo"',
       "Set the video title",
     ],
+    [
+      "$0 stream videos fetch https://example.com/video.mp4 --collection 8a7b6c5d-... --thumbnail-time 5000",
+      "Put it in a collection and take the thumbnail at five seconds",
+    ],
   ],
 
   builder: (yargs) =>

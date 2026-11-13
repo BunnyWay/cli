@@ -215,6 +215,15 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     ],
     ["$0 sites deploy ./dist --site my-site", "Target a specific site"],
     [
+      "$0 sites deploy --build --env API_URL=https://api.example.com",
+      "Override a build-time env var",
+    ],
+    [
+      "$0 sites deploy --build --env-file .env.production",
+      "Read build-time env overrides from a file",
+    ],
+    ["$0 sites deploy ./dist --spa", "Serve index.html for client-side routes"],
+    [
       "$0 sites deploy ./catalog --deploy-id 20260827-1433-r42",
       "Identify the deploy with your own release ID",
     ],

@@ -127,6 +127,14 @@ export const streamVideoCleanupCommand = defineCommand<CleanupArgs>({
       "$0 stream videos cleanup 1a2b3c4d-... --original --force",
       "Delete the stored original without confirming",
     ],
+    [
+      "$0 stream videos cleanup 1a2b3c4d-... --all --outputs hls",
+      "Delete every encoded resolution from the HLS output only",
+    ],
+    [
+      "$0 stream videos cleanup 1a2b3c4d-... --mp4 --lib 12345",
+      "Delete the MP4 fallback files for a video in a specific library",
+    ],
   ],
 
   builder: (yargs) =>

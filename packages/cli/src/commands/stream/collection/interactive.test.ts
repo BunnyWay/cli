@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { withTTY } from "@/commands/stream/test-tty.ts";
+import { withoutTTY, withTTY } from "@/commands/stream/test-tty.ts";
 import type { StreamClient } from "@/commands/stream/videos-api.ts";
 import { resolveCollectionInteractive } from "./interactive.ts";
 
@@ -17,9 +17,11 @@ test("no ID errors instead of listing, unattended or under --force", async () =>
   const paths: string[] = [];
   const client = fakeStreamClient(paths);
 
-  await expect(
-    resolveCollectionInteractive(client, 4321, undefined),
-  ).rejects.toThrow("A collection is required.");
+  await withoutTTY(() =>
+    expect(
+      resolveCollectionInteractive(client, 4321, undefined),
+    ).rejects.toThrow("A collection is required."),
+  );
   await withTTY(() =>
     expect(
       resolveCollectionInteractive(client, 4321, undefined, { force: true }),

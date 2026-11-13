@@ -39,6 +39,7 @@ const commands: CommandModule[] = [
   storageNamespace,
   sitesNamespace,
   streamNamespace,
+  appsNamespace,
   configNamespace,
   skillsNamespace,
   telemetryNamespace,
@@ -49,7 +50,6 @@ const commands: CommandModule[] = [
 
 // Experimental commands — registered but hidden from help and landing page
 const experimentalCommands: CommandModule[] = [
-  appsNamespace,
   registryNamespace,
   authNamespace,
   pzNamespace,
@@ -188,7 +188,7 @@ export const cli = instance
         ["Create a dev sandbox", "bunny sandbox create my-sandbox"],
         ["Deploy a static site", "bunny sites deploy"],
         ["Upload a video to Stream", "bunny stream videos upload ./video.mp4"],
-        // ["Deploy an app", "bunny apps deploy"],
+        ["Deploy an app", "bunny apps deploy"],
       ];
 
       console.log(bunny.bold("  Examples:\n"));

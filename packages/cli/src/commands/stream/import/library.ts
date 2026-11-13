@@ -3,6 +3,7 @@ import {
   type StreamLibraryManifest,
 } from "@/commands/stream/constants.ts";
 import { writeStreamManifest } from "@/commands/stream/interactive.ts";
+import { resolveReplicationRegions } from "@/commands/stream/library/replication-regions.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest } from "@/core/manifest.ts";
@@ -11,6 +12,7 @@ import { confirm, isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 import type { ToolContext } from "@/tools/index.ts";
 import {
   type StreamLibrary,
+  streamLibrariesCreate,
   streamLibrariesList,
   streamLibrariesResolve,
 } from "@/tools/stream/index.ts";
@@ -27,11 +29,81 @@ async function maybeLinkLibrary(library: StreamLibrary): Promise<void> {
   logger.success(`Linked this directory to video library ${library.name}.`);
 }
 
-/** The library named by `ref`, else the linked one, else a picker (TTY only); `offerLink` offers to link a picked library. */
+async function chooseNewLibrary(
+  existing: number,
+  offerCreate: boolean | undefined,
+): Promise<boolean> {
+  if (!offerCreate) return false;
+  if (existing === 0) return true;
+
+  const { mode } = await prompts({
+    type: "select",
+    name: "mode",
+    message: "Import into:",
+    choices: [
+      { title: "A new video library", value: "new" },
+      { title: "An existing video library", value: "existing" },
+    ],
+    initial: 0,
+  });
+
+  if (!mode) throw new UserError("A video library is required.");
+
+  return mode === "new";
+}
+
+async function pickLibrary(libraries: StreamLibrary[]): Promise<StreamLibrary> {
+  if (libraries.length === 0) {
+    throw new UserError(
+      "No video libraries found.",
+      'Create one with "bunny stream libraries create <name>".',
+    );
+  }
+
+  const { id } = await prompts({
+    type: "select",
+    name: "id",
+    message: "Video library:",
+    choices: libraries.map((lib) => ({ title: lib.name, value: lib.id })),
+  });
+
+  const library = libraries.find((lib) => lib.id === id);
+  if (!library) throw new UserError("A video library is required.");
+
+  return library;
+}
+
+async function createImportLibrary(
+  ctx: ToolContext,
+  output: OutputFormat | undefined,
+): Promise<StreamLibrary> {
+  const { value } = await prompts({
+    type: "text",
+    name: "value",
+    message: "Name for the new video library:",
+  });
+
+  const name = typeof value === "string" ? value.trim() : "";
+  if (!name) throw new UserError("A library name is required.");
+
+  const regions = await resolveReplicationRegions(undefined, output);
+  const library = await withSpinner("Creating video library...", () =>
+    streamLibrariesCreate.invoke(ctx, { name, regions }),
+  );
+
+  logger.success(`Created video library ${library.name} (ID: ${library.id}).`);
+
+  return library;
+}
+
 export async function resolveImportLibrary(
   ctx: ToolContext,
   ref: string | undefined,
-  opts: { output?: OutputFormat; offerLink?: boolean } = {},
+  opts: {
+    output?: OutputFormat;
+    offerLink?: boolean;
+    offerCreate?: boolean;
+  } = {},
 ): Promise<StreamLibrary> {
   if (ref) {
     return withSpinner("Resolving video library...", () =>
@@ -50,7 +122,7 @@ export async function resolveImportLibrary(
 
   if (!isInteractive(opts.output)) {
     throw new UserError(
-      "A library is required.",
+      "A video library is required.",
       "Pass --library <name|id>, or link one with `bunny stream libraries link`.",
     );
   }
@@ -58,23 +130,9 @@ export async function resolveImportLibrary(
   const libraries = await withSpinner("Fetching video libraries...", () =>
     streamLibrariesList.invoke(ctx, {}),
   );
-  if (libraries.length === 0) {
-    throw new UserError(
-      "No video libraries found.",
-      'Create one with "bunny stream libraries create <name>".',
-    );
-  }
-
-  const { id } = await prompts({
-    type: "select",
-    name: "id",
-    message: "Video library:",
-    choices: libraries.map((lib) => ({ title: lib.name, value: lib.id })),
-  });
-  if (id === undefined) throw new UserError("A library is required.");
-
-  const library = libraries.find((lib) => lib.id === id);
-  if (!library) throw new UserError("A library is required.");
+  const library = (await chooseNewLibrary(libraries.length, opts.offerCreate))
+    ? await createImportLibrary(ctx, opts.output)
+    : await pickLibrary(libraries);
   // The picker only runs interactively, so the link offer can't taint machine output.
   if (opts.offerLink) await maybeLinkLibrary(library);
   return library;

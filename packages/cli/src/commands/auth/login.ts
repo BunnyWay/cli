@@ -17,6 +17,7 @@ import {
   readPassword,
   spinner,
 } from "@/core/ui.ts";
+import mascotSvg from "./mascot.svg" with { type: "text" };
 
 const DASHBOARD_URL =
   process.env.BUNNYNET_DASHBOARD_URL ?? "https://dash.bunny.net";
@@ -39,20 +40,18 @@ const SUCCESS_HTML = `<!doctype html>
       padding: 2.8572rem;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    .card {
-      border: 1px solid #e6e9ec; border-radius: 8px;
-      background: #fff; padding: 2.5rem;
-      text-align: center; max-width: 480px; width: 100%;
-    }
-    h1 { color: #04223e; font-size: 1.5rem; margin-bottom: 0.75rem; }
-    p  { color: #04223e; font-size: 1rem; opacity: 0.7; }
+    main { text-align: center; max-width: 560px; width: 100%; }
+    .mascot svg { display: block; height: min(50vh, 360px); width: auto; margin: 0 auto 2rem; }
+    h1 { color: #183d6d; font-size: 2.5rem; font-weight: 800; margin-bottom: 0.75rem; }
+    p  { color: #183d6d; font-size: 1.25rem; font-weight: 700; opacity: 0.7; }
   </style>
 </head>
 <body>
-  <div class="card">
+  <main>
+    <div class="mascot">${mascotSvg}</div>
     <h1>Authenticated!</h1>
     <p>You can close this tab and return to the CLI.</p>
-  </div>
+  </main>
   <script>history.replaceState(null, "", location.pathname)</script>
 </body>
 </html>`;

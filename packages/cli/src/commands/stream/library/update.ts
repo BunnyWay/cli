@@ -156,6 +156,10 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
   examples: [
     ["$0 stream libraries update my-library", "Edit settings interactively"],
     [
+      "$0 stream libraries update my-library --name new-name",
+      "Rename the library",
+    ],
+    [
       "$0 stream libraries update my-library --resolutions 720p,1080p",
       "Set the enabled resolutions",
     ],

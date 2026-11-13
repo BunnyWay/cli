@@ -177,6 +177,40 @@ export const streamLibrariesResolve = defineTool({
   },
 });
 
+export const streamLibrariesCreate = defineTool({
+  name: "stream.libraries.create",
+  title: "Create a video library",
+  description: `Create a Stream video library stored in ${MAIN_REGION}, optionally replicated to other regions. Replicas can't be removed once added.`,
+  schema: z.strictObject({
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .describe("Name for the new library, e.g. `my-library`."),
+    regions: z
+      .array(z.string())
+      .optional()
+      .describe('Replication region codes besides DE, e.g. `["NY", "SG"]`.'),
+  }),
+  kind: "write",
+  resultSchema: LibrarySummarySchema,
+  examples: [[{ name: "my-library" }, "Create a library stored in DE only"]],
+  run: async (ctx, { name, regions }): Promise<LibrarySummary> => {
+    const replicas = parseReplicationRegions(regions ?? []);
+
+    ctx.progress("Creating video library...");
+
+    const { data } = await ctx.clients.core.POST("/videolibrary", {
+      body: { Name: name, ReplicationRegions: replicas },
+      signal: ctx.signal,
+    });
+
+    if (!data?.Id) throw new UserError("The API returned no library.");
+
+    return toLibrarySummary(data);
+  },
+});
+
 export const AddRegionsResultSchema = z.object({
   library: z.number(),
   storageZoneId: z.number(),

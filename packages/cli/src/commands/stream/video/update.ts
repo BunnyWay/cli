@@ -141,6 +141,14 @@ export const streamVideoUpdateCommand = defineCommand<VideoUpdateArgs>({
       `$0 stream videos update 1a2b3c4d-... --chapters '[{"title":"Intro","start":0,"end":30}]'`,
       "Replace the chapter list",
     ],
+    [
+      `$0 stream videos update 1a2b3c4d-... --moments '[{"label":"Demo","timestamp":42}]'`,
+      "Replace the moment list",
+    ],
+    [
+      '$0 stream videos update 1a2b3c4d-... --title "Launch demo" --lib 12345',
+      "Update a video in a specific library",
+    ],
   ],
 
   builder: (yargs) =>

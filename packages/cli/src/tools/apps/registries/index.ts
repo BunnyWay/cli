@@ -5,15 +5,20 @@ import {
   fetchRegistries,
   fetchRegistry,
   refusePlatformManaged,
-  registryTypeForServer,
+  registryTarget,
   requireSaved,
 } from "./api.ts";
 import { type Registry, RegistrySchema, toRegistry } from "./model.ts";
 
-export type { ContainerRegistryModel, RegistryType } from "./api.ts";
+export type {
+  ContainerRegistryModel,
+  RegistryTarget,
+  RegistryType,
+} from "./api.ts";
 export {
   fetchRegistries,
   fetchRegistry,
+  registryTarget,
   registryTypeForServer,
 } from "./api.ts";
 export type { Registry } from "./model.ts";
@@ -25,12 +30,11 @@ const registryRef = z
   .positive()
   .describe("Registry ID, e.g. `1155`.");
 
-// The API omits "generic"; leaving `type` unset is what generic means.
 const registryType = z
-  .enum(["dockerHub", "gitHub"])
+  .enum(["dockerHub", "gitHub", "oci"])
   .optional()
   .describe(
-    "Registry type. Required as `gitHub` for ghcr.io and `dockerHub` for docker.io; omit for a generic registry.",
+    "Registry type: `gitHub` for ghcr.io, `dockerHub` for docker.io, `oci` for any other registry (needs `server`). Derived from `server` when omitted.",
   );
 
 export const registriesList = defineTool({
@@ -80,7 +84,7 @@ export const registriesCreate = defineTool({
       .string()
       .optional()
       .describe(
-        "Registry server, e.g. `ghcr.io`. Used to derive `type` when it is omitted.",
+        "Registry server, e.g. `ghcr.io` or `registry.example.com:5000`. Derives `type` when it is omitted; required for `oci`.",
       ),
   }),
   kind: "write",
@@ -97,11 +101,17 @@ export const registriesCreate = defineTool({
   ],
   resultSchema: RegistrySchema,
   run: async (ctx, input): Promise<Registry> => {
+    const target = input.type
+      ? { type: input.type, hostName: input.server?.trim() || undefined }
+      : registryTarget(input.server);
+    if (target.type === "oci" && !target.hostName) {
+      throw new UserError("A server is required for an OCI registry.");
+    }
     ctx.progress("Adding registry...");
     const { data } = await ctx.clients.mc.POST("/registries", {
       body: {
         displayName: input.name,
-        type: input.type ?? registryTypeForServer(input.server),
+        ...target,
         passwordCredentials: {
           userName: input.username,
           password: input.password,
@@ -172,7 +182,9 @@ export const registriesUpdate = defineTool({
       params: { path: { registryId: input.registry } },
       body: {
         displayName: input.name ?? existing.displayName ?? "",
-        ...(input.type ? { type: input.type } : {}),
+        ...(input.type
+          ? { type: input.type, hostName: existing.hostName }
+          : {}),
         ...(input.username && input.password
           ? {
               passwordCredentials: {
