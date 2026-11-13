@@ -27,5 +27,3 @@ The request body is a JSON array of `CliEvent`. Unknown props are stripped, free
 ## Changing the schema
 
 Adding an event, a prop, or an optional field is not breaking. A change that would break a released CLI (a new required field, a different body shape) needs a new `EVENTS_PATH` alongside the old one.
-
-The schema uses `zod/mini` (`z.optional(x)` rather than `x.optional()`) to keep bundles small.

@@ -160,7 +160,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
         result: NonNullable<EventProps<"command">["result"]>,
         status?: number,
       ) => {
-        // TODO: turning off must not report itself
+        // Managing telemetry is never itself reported.
         if (command.split(" ")[0] === "telemetry") return;
 
         track("command", {
@@ -177,18 +177,19 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
       try {
         if (def.preRun) await def.preRun(args);
         await def.handler(args);
-
         if (def.postRun) await def.postRun(args);
         await trackCommand("success");
       } catch (err: any) {
         const isUser = err?.isUserError;
         const isApi = err?.name === "ApiError";
-
-        // TODO: Decide (or throw away iningest)
-        // await trackCommand(
-        //   isApi ? "api_error" : isUser ? "user_error" : "error",
-        //   isApi ? err.status : undefined,
-        // );
+        // Reported after the error is printed, so telemetry never delays it.
+        const exit = async (code: number): Promise<never> => {
+          await trackCommand(
+            isApi ? "api_error" : isUser ? "user_error" : "error",
+            isApi ? err.status : undefined,
+          );
+          process.exit(code);
+        };
         // bunny.net answers 403 for a key it rejects, so both statuses get the credential hint.
         const rejected =
           isApi && (err.status === 401 || err.status === 403)
@@ -214,7 +215,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
               payload.validationErrors = err.validationErrors;
           }
           console.log(JSON.stringify(payload));
-          process.exit(isUser ? 1 : 2);
+          await exit(isUser ? 1 : 2);
         }
 
         logger.error(isUser ? message : "An unexpected error occurred.");
@@ -226,7 +227,7 @@ export function defineCommand<A>(def: CommandDef<A>): CommandModule {
         } else if (args.verbose) {
           console.error(err);
         }
-        process.exit(isUser ? 1 : 2);
+        await exit(isUser ? 1 : 2);
       }
     },
   };

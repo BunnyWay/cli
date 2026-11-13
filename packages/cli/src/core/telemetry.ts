@@ -9,12 +9,12 @@ import {
   type EventProps,
   USER_AGENT_PREFIX,
 } from "@bunny.net/cli-telemetry";
+import { z } from "zod";
 import { loadConfigFile } from "@/config/index.ts";
 import { VERSION } from "./version.ts";
 
-export type { EventName, EventProps };
+export type { EventProps };
 
-/** The credentials a command ran with. */
 export interface TelemetryAuth {
   profile: string;
   apiKey?: string;
@@ -24,17 +24,16 @@ const DEFAULT_URL = `https://cli-telemetry.bunny.net${EVENTS_PATH}`;
 const SEND_TIMEOUT_MS = 1500;
 export const DOCS_URL = "https://docs.bunny.net/cli/telemetry";
 
-interface TelemetryState {
-  enabled?: boolean;
-  anon_id?: string;
-  notified?: boolean;
-}
+const TelemetryState = z.object({
+  enabled: z.boolean().optional(),
+  anon_id: z.guid().optional(),
+  notified: z.boolean().optional(),
+});
+type TelemetryState = z.infer<typeof TelemetryState>;
 
-export type TelemetrySource = "env" | "config" | "default";
-
-export interface TelemetryStatus {
+interface TelemetryStatus {
   enabled: boolean;
-  source: TelemetrySource;
+  source: "env" | "config" | "default";
   variable?: string;
 }
 
@@ -45,7 +44,7 @@ function statePath(): string {
 
 function readState(): TelemetryState {
   try {
-    return JSON.parse(readFileSync(statePath(), "utf-8"));
+    return TelemetryState.parse(JSON.parse(readFileSync(statePath(), "utf-8")));
   } catch {
     return {};
   }
@@ -114,13 +113,14 @@ export function track<E extends EventName>(
 
 /** The API key the command ran with, read at flush time so a login or logout in the same run is reflected. */
 function credential(auth?: TelemetryAuth): string | undefined {
-  if (!auth) return undefined;
-  return (
-    auth.apiKey ||
-    process.env.BUNNYNET_API_KEY ||
-    loadConfigFile()?.profiles[auth.profile]?.api_key ||
-    undefined
-  );
+  if (!auth || process.env.BUNNYNET_API_URL) return undefined;
+
+  const envKey = auth.apiKey || process.env.BUNNYNET_API_KEY;
+  if (envKey) return envKey;
+
+  const profile = loadConfigFile()?.profiles[auth.profile];
+
+  return profile?.api_url ? undefined : profile?.api_key || undefined;
 }
 
 export async function flushTelemetry(auth?: TelemetryAuth): Promise<void> {
@@ -129,14 +129,19 @@ export async function flushTelemetry(auth?: TelemetryAuth): Promise<void> {
   if (!telemetryStatus().enabled) return;
 
   const state = readState();
-  if (!state.notified) printNotice();
+  if (!state.notified) {
+    printNotice();
+    writeState({ ...state, notified: true });
+    // The run that shows the notice sends nothing, except in CI where there is no later run.
+    if (!truthy(process.env.CI)) return;
+  }
   const anonId = state.anon_id ?? crypto.randomUUID();
-  if (anonId !== state.anon_id || !state.notified) {
-    writeState({ ...state, anon_id: anonId, notified: true });
-
+  if (!state.anon_id) {
+    writeState({ ...readState(), anon_id: anonId });
+    // An ID that cannot be saved would count every run as a new install.
     if (readState().anon_id !== anonId) return;
   }
-  // The collector parses with the same schema, so anything dropped here would be dropped there.
+  // The collector parses with the same schema, so it would drop these too.
   const events = pending.flatMap((e) => {
     const parsed = CliEvent.safeParse({ ...e, anon_id: anonId });
     return parsed.success ? [parsed.data] : [];
@@ -179,11 +184,15 @@ export function invocation(
   command: string;
   flags: string;
 } {
-  const command = ((argv._ as unknown[]) ?? [])
-    .filter((p) => typeof p === "string")
-    .join(" ");
   const raw = process.argv.slice(2);
   const end = raw.indexOf("--");
+  // yargs appends everything after `--` to `_`; those are user values, not the command path.
+  const passthrough = end === -1 ? 0 : raw.length - end - 1;
+  const words = (argv._ as unknown[]) ?? [];
+  const command = words
+    .slice(0, words.length - passthrough)
+    .filter((p) => typeof p === "string")
+    .join(" ");
   const names = new Set<string>();
   for (const token of end === -1 ? raw : raw.slice(0, end)) {
     const name = token.match(/^--?([a-zA-Z][\w-]*)/)?.[1];

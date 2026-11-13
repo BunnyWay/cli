@@ -8,7 +8,6 @@ const text = z.pipe(
   z.transform((value: string) => value.slice(0, MAX_STRING)),
 );
 
-/** Props every event may carry. */
 const common = {
   cli_version: text,
   os: text,
@@ -16,7 +15,6 @@ const common = {
   ci: z.boolean(),
 };
 
-/** UUIDs of any version, in the 8-4-4-4-12 hex form. */
 const uuid = z.guid();
 
 function event<Name extends string, Props extends z.core.$ZodShape>(
@@ -69,7 +67,6 @@ export type EventName = CliEvent["event"];
 const commonProps = z.object(common);
 export type CommonProps = z.infer<typeof commonProps>;
 
-/** The props specific to one event, for typing the CLI's `track()`. */
 export type EventProps<E extends EventName> = Omit<
   NonNullable<Extract<CliEvent, { event: E }>["props"]>,
   keyof CommonProps
