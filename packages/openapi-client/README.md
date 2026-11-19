@@ -43,13 +43,16 @@ Each client is scoped to a specific bunny.net API domain:
 > **Storage** is region-specific — pass `baseUrl` (e.g. `https://la.storage.bunnycdn.com`) to target a non-default region. The `apiKey` should be the Storage Zone password.
 >
 > **Stream** expects a per-library Stream API key as `apiKey`, not the account-wide key.
+>
+> **`apiUrl`** points every client served from the bunny.net API at another root (a staging host or a proxy). Core, Edge Scripting and Shield use it as is, Database appends `/database` and Magic Containers appends `/mc`. Storage, Stream and Origin Errors are on other hosts and ignore it. The CLI sets it from `BUNNYNET_API_URL`.
 
 All clients accept a `ClientOptions` object:
 
 ```typescript
 interface ClientOptions {
   apiKey: string;
-  baseUrl?: string;
+  baseUrl?: string; // full base URL of this client's API; wins over apiUrl
+  apiUrl?: string; // root of the bunny.net API, e.g. a staging host or a proxy
   verbose?: boolean;
   userAgent?: string;
   onDebug?: (msg: string) => void;

@@ -1,6 +1,10 @@
 import createClient from "openapi-fetch";
 import type { paths } from "./generated/core.d.ts";
-import { authMiddleware, type ClientOptions } from "./middleware.ts";
+import {
+  authMiddleware,
+  type ClientOptions,
+  resolveBaseUrl,
+} from "./middleware.ts";
 
 /**
  * Undocumented endpoints not present in the generated OpenAPI spec.
@@ -32,7 +36,7 @@ const CORE_BASE_URL = "https://api.bunny.net";
 /** Create a type-safe client for the bunny.net Core API (CDN, DNS, storage zones, billing). */
 export function createCoreClient(options: ClientOptions) {
   const client = createClient<paths & CustomPaths>({
-    baseUrl: options.baseUrl ?? CORE_BASE_URL,
+    baseUrl: resolveBaseUrl(options, CORE_BASE_URL),
   });
   client.use(authMiddleware(options));
   return client;
