@@ -102,11 +102,8 @@ export function connectStreamLibrary(
 ): StreamClient {
   const apiKey = libraryApiKey(library);
 
-  // baseUrl is the core API host: leaving it in would point the Stream client at api.bunny.net.
-  const { baseUrl: _core, ...options } = clientOptions(
-    opts.config,
-    opts.verbose,
-  );
+  // apiUrl is the bunny.net API root, which the Stream API is not served from; drop it.
+  const { apiUrl: _api, ...options } = clientOptions(opts.config, opts.verbose);
   return createStreamClient({ ...options, apiKey });
 }
 

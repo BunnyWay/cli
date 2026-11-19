@@ -3,7 +3,19 @@ import { ApiError } from "./errors.ts";
 
 export interface ClientOptions {
   apiKey: string;
+  /**
+   * Full base URL of this client's API, e.g. `https://api.bunny.net/database`
+   * or a regional Storage host. Takes precedence over `apiUrl`.
+   */
   baseUrl?: string;
+  /**
+   * Root of the bunny.net API (default `https://api.bunny.net`), e.g. a staging
+   * host or a proxy. Clients served from it derive their base URL: Core, Edge
+   * Scripting and Shield use it as is, Database appends `/database` and Magic
+   * Containers appends `/mc`. Clients on other hosts (Storage, Stream, Origin
+   * Errors) ignore it.
+   */
+  apiUrl?: string;
   verbose?: boolean;
   /** User-Agent header value (e.g. "bunny-cli/0.1.0"). Defaults to "bunnynet-api". */
   userAgent?: string;
@@ -243,4 +255,19 @@ export function authMiddleware(options: ClientOptions): Middleware {
       );
     },
   };
+}
+
+/**
+ * Resolve a client's base URL: an explicit `baseUrl` wins, then `apiUrl` plus
+ * the API's path prefix, then the default.
+ */
+export function resolveBaseUrl(
+  options: Pick<ClientOptions, "baseUrl" | "apiUrl">,
+  defaultBaseUrl: string,
+  apiPathPrefix = "",
+): string {
+  if (options.baseUrl) return options.baseUrl;
+  if (options.apiUrl)
+    return `${options.apiUrl.replace(/\/+$/, "")}${apiPathPrefix}`;
+  return defaultBaseUrl;
 }
