@@ -46,6 +46,7 @@ export function resolveApiKey(auth: SandboxAuth): string {
 export function mcClient(auth: SandboxAuth): McClient {
   const options: ClientOptions = {
     apiKey: resolveApiKey(auth),
+    baseUrl: auth.baseUrl,
     apiUrl: auth.apiUrl,
     verbose: auth.verbose,
     userAgent: "bunny-sandbox-sdk",

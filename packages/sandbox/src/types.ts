@@ -1,8 +1,16 @@
 export interface SandboxAuth {
   /** bunny.net API key. Falls back to BUNNYNET_API_KEY when omitted. */
   apiKey?: string;
-  /** Override the Magic Containers API base URL. */
+  /**
+   * Root of the bunny.net API (default `https://api.bunny.net`), e.g. a staging
+   * host or a proxy. The Magic Containers base is derived as `<apiUrl>/mc`.
+   */
   apiUrl?: string;
+  /**
+   * Full Magic Containers API base URL, e.g. `https://api.bunny.net/mc`.
+   * Takes precedence over `apiUrl`.
+   */
+  baseUrl?: string;
   /** Emit request/response debug lines to onDebug. */
   verbose?: boolean;
   /** Debug logger callback, used when verbose is true. */
