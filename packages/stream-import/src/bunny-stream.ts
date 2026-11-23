@@ -54,6 +54,8 @@ export interface FetchVideoResult {
   error?: string;
   /** The request may have reached Bunny (timeout, dropped connection, 5xx), so a video could exist that this call never saw. */
   indeterminate?: boolean;
+  /** HTTP status of a failed fetch request, when there was a response. */
+  status?: number;
 }
 
 export interface ProcessingResult {
@@ -303,9 +305,14 @@ export class BunnyStream {
       const status = apiErrorStatus(error);
       const indeterminate = !(status !== undefined && status < 500);
       if (error instanceof Error)
-        return { success: false, error: error.message, indeterminate };
+        return { success: false, error: error.message, indeterminate, status };
 
-      return { success: false, error: "Video fetch failed", indeterminate };
+      return {
+        success: false,
+        error: "Video fetch failed",
+        indeterminate,
+        status,
+      };
     }
   }
 

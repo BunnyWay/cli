@@ -347,6 +347,14 @@ export const streamImportRun = defineTool({
       .describe(
         `Videos to hand to Bunny in parallel (default ${DEFAULT_CONCURRENCY}).`,
       ),
+    delay: z
+      .number()
+      .min(0)
+      .max(600)
+      .optional()
+      .describe(
+        "Minimum seconds between starting two hand-offs, across all workers (default 0). A gap makes a large import more reliable; the run also widens it by itself once fetches start failing with HTTP 422/503.",
+      ),
     videoTimeout: z
       .number()
       .int()
@@ -405,6 +413,7 @@ export const streamImportRun = defineTool({
       state = await session.service.runMigration({
         folderId: session.folder,
         concurrency: input.concurrency ?? DEFAULT_CONCURRENCY,
+        fetchIntervalMs: (input.delay ?? 0) * 1000,
         resume: input.resume,
         wait: input.wait,
         cleanFailed: input.cleanFailed,
@@ -481,6 +490,7 @@ export const streamImportRun = defineTool({
         sourceId: m.sourceVideoId,
         error: m.error,
         missingAtSource: m.error === SOURCE_MISSING_ERROR,
+        sourceRejected: Boolean(m.sourceRejected),
         retryable:
           m.error !== SOURCE_MISSING_ERROR &&
           (Boolean(input.cleanFailed) ||

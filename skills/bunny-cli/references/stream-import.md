@@ -75,16 +75,19 @@ bunny stream import --library 12345 --source vimeo --clean-failed --force
 | `--resume`                          | Continue the saved import for this source and library                                                                |
 | `--wait`                            | Stay until Bunny has encoded every video (default: return once they are queued)                                      |
 | `--force`, `-f`                     | Skip the confirmation (which defaults to No) and the post-run retry offer                                            |
-| `--concurrency`, `-c`               | Videos handed to Bunny in parallel, 1 to 20 (default 3)                                                              |
+| `--concurrency`, `-c`               | Videos handed to Bunny in parallel, 1 to 20 (default 3; 2 for >500 Vimeo videos)                                     |
+| `--delay`                           | Seconds between starting two videos, 0 to 600 (default 0; 10 for >500 Vimeo videos)                                  |
 | `--bucket`, `--prefix`, `--url-ttl` | S3 overrides for one run (`--url-ttl` 3600 to 604800 seconds)                                                        |
 | `--include-ts`                      | S3: import `.ts` files too                                                                                           |
 | `--clean-failed`                    | Delete a video's failed Bunny copies before importing it again; retries rejected videos and ones that failed 3 times |
 | `--retry-stalled`                   | Delete and import again videos stuck at zero bytes past the 30 minute stall threshold                                |
-| `--request-timeout`                 | Seconds per HTTP request, 1 to 3600 (default 30)                                                                     |
+| `--request-timeout`                 | Seconds per HTTP request, 1 to 3600 (default 30; 120 for >500 Vimeo videos)                                          |
 | `--video-timeout`                   | Seconds per video hand-off, or per encode wait with `--wait`, 60 to 86400 (default 5400)                             |
 | `--processing-timeout`              | With `--wait`, seconds per encode, 60 to 86400 (default 3600); raises `--video-timeout` when larger                  |
 
-**Re-running is safe.** Every imported video carries a per-source metaTag (`vimeoId`, `s3Source`, `wistiaId`, `muxAssetId`, `cfStreamId`, `jwPlayerId`, `brightcoveId`). A re-run skips tagged videos Bunny has finished, leaves ones still encoding alone, and imports again only the ones Bunny failed on. Source folders become Stream collections of the same name. Videos the source reports as beyond Bunny's limits (over 72 hours, or above 2160p) are flagged before you confirm.
+**Re-running is safe.** Every imported video carries a per-source metaTag (`vimeoId`, `s3Source`, `wistiaId`, `muxAssetId`, `cfStreamId`, `jwPlayerId`, `brightcoveId`). A re-run skips tagged videos Bunny has finished, leaves ones still encoding alone, and imports again only the ones Bunny failed on. Source folders become Stream collections of the same name. Videos the source reports as beyond Bunny's limits (over 72 hours, or above 2160p) are flagged before you confirm. Videos imported by vimeo2bunny carry the same `vimeoId` tag and are skipped too.
+
+**Slowing down.** A failure reading "Import failed, try slowing down the import using delay or concurrency" (HTTP 422/503 from Bunny's fetch) usually clears with a slower pace; the run already slows itself down. Retry later with `--resume --concurrency 1 --delay 30`. Imports of more than 500 Vimeo videos are paced automatically (`--concurrency 2 --delay 10 --request-timeout 120`) unless those flags are passed.
 
 **Progress** is saved to `$XDG_STATE_HOME/bunnynet/stream-import/<account>/<source>-<library>.json` (default `~/.local/state/...`). `--resume` retries failed videos, works outstanding ones, and keeps the `--folder` scope the run started with. It does **not** retry videos Bunny rejected for a reason the same file cannot get past (over limits, invalid framerate, corrupt original), ones no longer at the source, or ones that failed 3 times; use `--clean-failed` for those. Two imports cannot share one state file.
 

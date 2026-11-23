@@ -89,6 +89,8 @@ export const ImportRunSchema = z.object({
       error: z.string().nullable(),
       /** The source no longer lists it, so only restoring it there can bring it back. */
       missingAtSource: z.boolean(),
+      /** Failed with HTTP 422/503 from Bunny's fetch; a slower retry usually works. */
+      sourceRejected: z.boolean(),
       /** False when a resume will not retry it: a retry cannot fix it, or it has failed too often. */
       retryable: z.boolean(),
     }),

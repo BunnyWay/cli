@@ -32,6 +32,7 @@ import {
   streamImportRun,
 } from "@/tools/stream/index.ts";
 import { resolveImportLibrary } from "./library.ts";
+import { importPacing, pacingNotice, retryPacing } from "./pacing.ts";
 
 interface ImportArgs {
   library?: string;
@@ -41,7 +42,9 @@ interface ImportArgs {
   resume?: boolean;
   wait?: boolean;
   force?: boolean;
-  concurrency: number;
+  /** Undefined unless passed, so a large import can pick the source's gentler default. */
+  concurrency?: number;
+  delay?: number;
   bucket?: string;
   prefix?: string;
   urlTtl?: number;
@@ -53,10 +56,12 @@ interface ImportArgs {
   videoTimeout?: number;
 }
 
-/** The flag defaults, for callers that run the import without going through yargs (`library create`). */
+/**
+ * The flag defaults, for callers that run the import without going through
+ * yargs (`library create`). Concurrency, delay and request timeout are left
+ * out on purpose: they depend on the import's size (see `importPacing`).
+ */
 export const IMPORT_FLAG_DEFAULTS = {
-  concurrency: DEFAULT_CONCURRENCY,
-  requestTimeout: DEFAULT_REQUEST_TIMEOUT / 1000,
   videoTimeout: DEFAULT_MIGRATION_TIMEOUT / 1000,
   processingTimeout: DEFAULT_PROCESSING_TIMEOUT / 1000,
 };
@@ -273,7 +278,16 @@ function renderResult(
     logger.info(
       `${missing} are no longer listed at the source. Restore them there, then add --clean-failed to try again.`,
     );
-  if (failed.length > givenUp + missing || result.status === "paused")
+  const rejected = failed.filter((f) => f.sourceRejected).length;
+  if (rejected > 0) {
+    // Retrying at the same pace usually fails the same way.
+    logger.warn(
+      `${rejected} failed to import. Try slowing down the import using delay or concurrency.`,
+    );
+    logger.info(
+      `Wait a while, then resume more slowly: ${bunny(`${resumeCommand(result, libraryArg, includeTs)} --concurrency 1 --delay 30`)}`,
+    );
+  } else if (failed.length > givenUp + missing || result.status === "paused")
     logger.info(
       `Resume with ${bunny(resumeCommand(result, libraryArg, includeTs))}`,
     );
@@ -370,8 +384,12 @@ export const streamImportRunCommand = defineToolCommand({
       .option("concurrency", {
         alias: "c",
         type: "number",
-        default: IMPORT_FLAG_DEFAULTS.concurrency,
-        describe: "Videos to hand to Bunny in parallel (1-20)",
+        describe: `Videos to hand to Bunny in parallel (1-20; default ${DEFAULT_CONCURRENCY}, lower for a large Vimeo import)`,
+      })
+      .option("delay", {
+        type: "number",
+        describe:
+          "Seconds between starting two videos (0-600; default 0, 10 for a large Vimeo import). Slows the import down",
       })
       .option("bucket", { type: "string", describe: "S3 bucket override" })
       .option("prefix", { type: "string", describe: "S3 prefix override" })
@@ -396,8 +414,7 @@ export const streamImportRunCommand = defineToolCommand({
       })
       .option("request-timeout", {
         type: "number",
-        default: IMPORT_FLAG_DEFAULTS.requestTimeout,
-        describe: "Seconds before one HTTP request gives up (1-3600)",
+        describe: `Seconds before one HTTP request gives up (1-3600; default ${DEFAULT_REQUEST_TIMEOUT / 1000}, 120 for a large Vimeo import)`,
       })
       .option("video-timeout", {
         type: "number",
@@ -415,6 +432,11 @@ export const streamImportRunCommand = defineToolCommand({
 
   preRun: async (args) => {
     assertRange(args.concurrency, 1, 20, "--concurrency");
+    if (
+      args.delay !== undefined &&
+      (!Number.isFinite(args.delay) || args.delay < 0 || args.delay > 600)
+    )
+      throw new UserError("--delay must be between 0 and 600 seconds.");
     assertRange(args.requestTimeout, 1, 3600, "--request-timeout");
     assertRange(args.videoTimeout, 60, 86400, "--video-timeout");
     assertRange(args.processingTimeout, 60, 86400, "--processing-timeout");
@@ -470,6 +492,14 @@ export const streamImportRunCommand = defineToolCommand({
     const { summary } = plan;
     if (plan.folderFromSavedRun)
       logger.info(`Resuming the import of folder ${plan.folder}.`);
+    // Sized to this import: a large one from a source with a large-library profile is paced unless the flags say otherwise.
+    const pacing = importPacing(plugin, summary.newVideos, args);
+    const pacingSummary = {
+      concurrency: pacing.concurrency,
+      delay: pacing.delay,
+      requestTimeout: pacing.requestTimeout,
+      largeLibrary: Boolean(pacing.profile),
+    };
 
     // Every exit before the run prints this one shape; `outcome` says which exit it was.
     const printPlan = (outcome: "no_videos" | "nothing_new" | "dry_run") =>
@@ -483,6 +513,7 @@ export const streamImportRunCommand = defineToolCommand({
             dryRun,
             truncated: plan.truncated,
             summary,
+            pacing: pacingSummary,
           },
           null,
           2,
@@ -524,6 +555,12 @@ export const streamImportRunCommand = defineToolCommand({
       return DONE;
     }
 
+    if (output !== "json") {
+      const notice = pacingNotice(pacing, summary.newVideos);
+      for (const line of notice.warn) logger.warn(line);
+      for (const line of notice.info) logger.dim(line);
+    }
+
     if (dryRun) {
       if (output === "json") {
         printPlan("dry_run");
@@ -540,7 +577,9 @@ export const streamImportRunCommand = defineToolCommand({
     return {
       input: {
         ...target,
-        concurrency: args.concurrency,
+        concurrency: pacing.concurrency,
+        delay: pacing.delay,
+        requestTimeout: pacing.requestTimeout,
         wait: args.wait,
         videoTimeout: args.videoTimeout,
         processingTimeout: args.processingTimeout,
@@ -578,11 +617,18 @@ export const streamImportRunCommand = defineToolCommand({
     const retryable = result.failed.filter((f) => f.retryable).length;
     if (retryable === 0 || args.force || !isInteractive(args.output))
       return undefined;
-    const retry = await confirm(`${retryable} videos failed. Retry them now?`, {
-      optional: true,
-    });
+    // Fetches failed at this pace, so a retry goes one at a time with a wider gap.
+    const slower = result.failed.some((f) => f.retryable && f.sourceRejected)
+      ? retryPacing(input)
+      : undefined;
+    const retry = await confirm(
+      slower
+        ? `${retryable} videos failed. Retry them now, more slowly (one at a time, ${slower.delay}s apart)?`
+        : `${retryable} videos failed. Retry them now?`,
+      { optional: true },
+    );
     return retry
-      ? { ...input, resume: true, expectedCount: undefined }
+      ? { ...input, ...slower, resume: true, expectedCount: undefined }
       : undefined;
   },
 
