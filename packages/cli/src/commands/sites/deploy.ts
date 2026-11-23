@@ -1,6 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { createCoreClient } from "@bunny.net/openapi-client";
+import type { StorageZone } from "@/commands/storage/files-api.ts";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
@@ -33,15 +34,24 @@ import {
 import { detectFramework } from "./ci/frameworks.ts";
 import { loadSiteConfig, saveSiteConfig } from "./config.ts";
 import {
+  DEFAULT_KEEP_DEPLOYS,
   type DeployRecord,
   deployIdError,
   findDeploy,
   markCurrent,
   type NotFoundMode,
   productionUrl,
+  pruneVictims,
+  type RemoteSiteState,
 } from "./constants.ts";
 import { type DeployIdentity, resolveDeployIdentity } from "./deploy-id.ts";
 import { deleteBlocker } from "./deployments/delete.ts";
+import {
+  type PruneResult,
+  PruneStateWriteError,
+  pruneDeploys,
+  resolveKeepCount,
+} from "./deployments/prune.ts";
 import { setupSiteDomain } from "./domains/index.ts";
 import {
   type SiteSelectorArgs,
@@ -60,6 +70,7 @@ interface DeployArgs extends SiteSelectorArgs {
   force?: boolean;
   spa?: boolean;
   "deploy-id"?: string;
+  keep?: number;
 }
 
 export function resolveNotFoundMode(
@@ -227,6 +238,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       "$0 sites deploy ./catalog --deploy-id 20260827-1433-r42",
       "Identify the deploy with your own release ID",
     ],
+    [
+      "$0 sites deploy ./dist --keep 3",
+      "Publish, then delete older deploys beyond the newest 3",
+    ],
   ],
 
   builder: (yargs) =>
@@ -263,6 +278,11 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
           describe:
             "Identify this deploy yourself (e.g. a release or catalog ID) instead of using the git sha or content hash; used exactly as given",
         })
+        .option("keep", {
+          type: "number",
+          describe:
+            "After publishing, delete older deploys beyond the newest N (live and previous are always kept)",
+        })
         .option("spa", {
           type: "boolean",
           describe:
@@ -272,6 +292,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
+    const keep =
+      args.keep === undefined ? undefined : resolveKeepCount(args.keep);
     const siteConfig = loadSiteConfig();
     const root = siteConfig?.root ?? process.cwd();
     const explicitDir = args.dir ?? siteConfig?.config.dir;
@@ -474,6 +496,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         promoteDeploy({ coreClient, state, deployId }),
       );
       warnAfterPromote(promoted, deployId);
+
+      const pruneResult = await pruneWithKeep(connection, state, keep);
+
       if (output === "json") {
         logger.log(
           JSON.stringify(
@@ -483,6 +508,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
               unchanged: true,
               live: promoted.confirmed,
               production: production ?? null,
+              ...(keep !== undefined && {
+                pruned: pruneResult?.pruned ?? [],
+                pruneFailures: pruneResult?.failures ?? [],
+              }),
             },
             null,
             2,
@@ -494,6 +523,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         `No changes: deploy ${deployId} is already live. Use --force to redeploy.`,
       );
       if (production) logger.log(`  ${production}`);
+
+      await reportOrOfferPrune(pruneResult, keep, state, connection, output);
+
       // The common repeat path after declining the first-deploy domain offer still gets the hint.
       if (!state.domain) logger.dim(DOMAIN_HINT);
       return;
@@ -565,6 +597,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     );
     warnAfterPromote(promoted, deployId);
 
+    const pruneResult = await pruneWithKeep(connection, state, keep);
+
     if (output === "json") {
       logger.log(
         JSON.stringify(
@@ -577,6 +611,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
             unchanged: skipUpload,
             live: promoted.confirmed,
             production: production ?? null,
+            ...(keep !== undefined && {
+              pruned: pruneResult?.pruned ?? [],
+              pruneFailures: pruneResult?.failures ?? [],
+            }),
           },
           null,
           2,
@@ -598,6 +636,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     }
     if (production) logger.info(`Production: ${production}`);
     if (notFoundNote) logger.info(notFoundNote);
+
+    await reportOrOfferPrune(pruneResult, keep, state, connection, output);
 
     // Domainless sites: the first deploy offers a custom production domain, later ones just hint.
     if (!state.domain) {
@@ -639,3 +679,113 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     await offerLink();
   },
 });
+
+async function pruneWithKeep(
+  connection: StorageZone,
+  state: RemoteSiteState,
+  keep: number | undefined,
+): Promise<PruneResult | undefined> {
+  if (keep === undefined) return undefined;
+  const victims = pruneVictims(
+    state.deploys,
+    keep,
+    state.current,
+    state.previous,
+  );
+
+  if (victims.length === 0) return undefined;
+
+  return safePrune(connection, victims, keep);
+}
+
+async function reportOrOfferPrune(
+  pruneResult: PruneResult | undefined,
+  keep: number | undefined,
+  state: RemoteSiteState,
+  connection: StorageZone,
+  output: string | undefined,
+): Promise<void> {
+  if (pruneResult) {
+    reportPrune(pruneResult);
+  } else if (keep === undefined) {
+    await offerPrune(state.deploys, state.current, state.previous, {
+      connection,
+      siteName: state.name,
+      interactive: isInteractive(output),
+    });
+  }
+}
+
+async function safePrune(
+  connection: StorageZone,
+  victims: DeployRecord[],
+  keep: number,
+): Promise<PruneResult> {
+  try {
+    return await withSpinner("Pruning old deploys...", (spin) =>
+      pruneDeploys(connection, victims, keep, (text) => {
+        spin.text = text;
+      }),
+    );
+  } catch (err) {
+    if (err instanceof PruneStateWriteError) throw err;
+    return {
+      pruned: [],
+      kept: [],
+      failures: victims.map((v) => ({ id: v.id, error: errorMessage(err) })),
+    };
+  }
+}
+
+function reportPrune({ pruned, failures }: PruneResult): void {
+  if (pruned.length > 0) {
+    logger.info(`Pruned ${pruned.length} old deploy(s): ${pruned.join(", ")}.`);
+  }
+  for (const failure of failures) {
+    logger.warn(`Couldn't prune ${failure.id}: ${failure.error}`);
+  }
+}
+
+async function offerPrune(
+  deploys: DeployRecord[],
+  current: string | undefined,
+  previous: string | undefined,
+  opts: {
+    connection: StorageZone;
+    siteName: string;
+    interactive: boolean;
+  },
+): Promise<void> {
+  const keep = DEFAULT_KEEP_DEPLOYS;
+  const victims = pruneVictims(deploys, keep, current, previous);
+  if (victims.length === 0) return;
+
+  const bytes = victims.reduce((sum, d) => sum + d.bytes, 0);
+  const summary = `${deploys.length} deploys are stored for ${opts.siteName}; each is a separate folder in storage you're billed for. ${victims.length} older one(s) (${formatBytes(bytes)}) can be pruned.`;
+
+  logger.log();
+  logger.warn(summary);
+
+  if (!opts.interactive) {
+    logger.dim(
+      `  Prune with: bunny sites deployments prune ${opts.siteName}, or pass --keep <n> to deploy`,
+    );
+
+    return;
+  }
+
+  const proceed = await confirm(
+    `Delete them, keeping the newest ${keep} (live and previous are always kept)?`,
+    { optional: true },
+  );
+
+  if (!proceed) {
+    logger.dim(
+      "  Prune later with: bunny sites deployments prune, or pass --keep <n> to deploy",
+    );
+
+    return;
+  }
+
+  reportPrune(await safePrune(opts.connection, victims, keep));
+}
