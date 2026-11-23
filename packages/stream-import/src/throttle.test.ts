@@ -10,22 +10,27 @@ import {
   SourceRejectedError,
 } from "./throttle.ts";
 
-test("the pacer spaces starts across callers and does nothing at zero", async () => {
-  let now = 1_000;
+/** A pacer on a fake clock: waiting advances it, and every wait is recorded. */
+function fakePacer(interval: number) {
+  const clock = { now: 1_000 };
   const waits: number[] = [];
   const pacer = new Pacer(
-    10_000,
+    interval,
     async (ms) => {
       waits.push(ms);
+      clock.now += ms;
     },
-    () => now,
+    () => clock.now,
   );
-  await pacer.turn();
-  await pacer.turn();
-  await pacer.turn();
-  expect(waits).toEqual([10_000, 20_000]);
+  return { pacer, clock, waits };
+}
 
-  now += 60_000;
+test("the pacer spaces starts across callers and does nothing at zero", async () => {
+  const { pacer, clock, waits } = fakePacer(10_000);
+  await Promise.all([pacer.turn(), pacer.turn(), pacer.turn()]);
+  expect(waits).toEqual([10_000, 10_000]);
+
+  clock.now += 60_000;
   await pacer.turn();
   expect(waits).toHaveLength(2);
 
@@ -34,6 +39,31 @@ test("the pacer spaces starts across callers and does nothing at zero", async ()
   });
   await off.turn();
   await off.turn();
+});
+
+test("a backoff also pushes out callers that were already waiting", async () => {
+  const { pacer, clock } = fakePacer(10_000);
+  const started: number[] = [];
+  const take = () => pacer.turn().then(() => started.push(clock.now));
+  const first = take();
+  const queued = [take(), take()];
+  await first;
+  // The first hand-off is rejected before the others start.
+  // Doubled from 10s.
+  expect(pacer.backoff()).toBe(20_000);
+  await Promise.all(queued);
+  expect(started[1]! - started[0]!).toBeGreaterThanOrEqual(20_000);
+  expect(started[2]! - started[1]!).toBeGreaterThanOrEqual(20_000);
+});
+
+test("an aborted caller takes no turn and does not hold up the queue", async () => {
+  const { pacer, waits } = fakePacer(10_000);
+  await pacer.turn();
+  const aborted = AbortSignal.abort();
+  await pacer.turn(aborted);
+  expect(waits).toEqual([]);
+  await pacer.turn();
+  expect(waits).toEqual([10_000]);
 });
 
 test("backoff starts at 15s, doubles, and stops at two minutes", () => {
@@ -186,4 +216,60 @@ test("the gap is kept between Bunny fetches even when source lookups take differ
   expect(fetchedAt).toHaveLength(2);
   const [first = 0, second = 0] = [...fetchedAt].sort((a, b) => a - b);
   expect(second - first).toBeGreaterThanOrEqual(55);
+});
+
+test("a pause during the pacing wait does not use up an attempt", async () => {
+  const controller = new AbortController();
+  const adapter: SourceAdapter = {
+    id: "vimeo",
+    dedupTag: "vimeoId",
+    validateCredentials: async () => {},
+    listContent: async () => ({
+      folders: [],
+      videos: new Map(),
+      uncategorizedVideos: [
+        { sourceId: "first", displayName: "First", folderId: null },
+        { sourceId: "second", displayName: "Second", folderId: null },
+      ],
+    }),
+    getDownloadInfo: async (id) => ({
+      url: `https://player.vimeo.com/${id}.mp4`,
+      title: id,
+    }),
+  };
+  const bunny = {
+    listVideos: mock(async () => []),
+    getOrCreateCollection: mock(async () => ({ guid: "c", name: "c" })),
+    // Pause the run once the first video is handed over, while the second waits its turn.
+    fetchVideoFromUrl: mock(async () => {
+      controller.abort();
+      return { success: true, videoId: "v1" };
+    }),
+    setVideoMetadata: mock(async () => {}),
+  } as unknown as BunnyStream;
+  const service = new MigrationService({
+    adapter,
+    bunny,
+    store: { load: () => null, save: () => {}, clear: () => {} },
+    logger: {
+      log: () => {},
+      debug: () => {},
+      info: () => {},
+      success: () => {},
+      warn: () => {},
+      error: () => {},
+      dim: () => {},
+    },
+    libraryId: "12345",
+    accountId: "acct-1",
+    label: "Vimeo",
+  });
+  const state = await service.runMigration({
+    concurrency: 2,
+    fetchIntervalMs: 60_000,
+    signal: controller.signal,
+  });
+  const waiting = state.videoMigrations.find((m) => !m.bunnyVideoId);
+  expect(waiting?.status).toBe("pending");
+  expect(waiting?.attempts ?? 0).toBe(0);
 });

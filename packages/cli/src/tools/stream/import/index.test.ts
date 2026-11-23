@@ -238,5 +238,6 @@ test("a run reports the pace it used, defaults filled in", async () => {
     concurrency: 2,
     delay: 10,
     requestTimeout: 30,
+    finalDelay: 10,
   });
 });

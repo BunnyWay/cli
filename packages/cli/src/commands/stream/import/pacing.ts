@@ -136,7 +136,16 @@ export function retryPacing(previous: { delay?: number }): {
  */
 export function slowResumeFlags(
   rejected: ReadonlyArray<{ retryable: boolean }>,
+  pacing: { delay: number; finalDelay: number },
 ): string {
   const exhausted = rejected.some((f) => !f.retryable);
-  return `${exhausted ? " --clean-failed" : ""} --concurrency 1 --delay 30`;
+  const { delay } = retryPacing(slowestPace(pacing));
+  return `${exhausted ? " --clean-failed" : ""} --concurrency 1 --delay ${delay}`;
+}
+
+/** The slowest pace a run reached: its own gap, or the wider one it slowed itself down to. */
+export function slowestPace(pacing: { delay: number; finalDelay: number }): {
+  delay: number;
+} {
+  return { delay: Math.max(pacing.delay, pacing.finalDelay) };
 }

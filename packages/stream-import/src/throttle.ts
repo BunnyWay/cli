@@ -56,9 +56,15 @@ export function largeLibraryProfile(
  * Spaces out the start of each hand-off across all workers, so `intervalMs`
  * caps the rate however many run in parallel. `backoff()` doubles the gap
  * (from at least 15s, up to 2 minutes) and reports the new one.
+ *
+ * Callers queue in call order and each one works out its wait only when its
+ * turn comes, from the gap at that moment, and checks again on waking. So a
+ * backoff also applies to callers that were already waiting.
  */
 export class Pacer {
-  private next = 0;
+  /** When the last turn was granted; `-Infinity` until the first. */
+  private last = Number.NEGATIVE_INFINITY;
+  private queue: Promise<void> = Promise.resolve();
 
   constructor(
     private intervalMs: number,
@@ -73,13 +79,20 @@ export class Pacer {
     return this.intervalMs;
   }
 
-  /** Waits for this caller's slot; slots are handed out in call order. */
-  async turn(signal?: AbortSignal): Promise<void> {
-    if (this.intervalMs <= 0) return;
-    const now = this.now();
-    const at = Math.max(now, this.next);
-    this.next = at + this.intervalMs;
-    if (at > now) await this.wait(at - now, signal);
+  /** Waits for this caller's turn. An aborted caller returns at once and takes no turn. */
+  turn(signal?: AbortSignal): Promise<void> {
+    const mine = this.queue.then(async () => {
+      for (;;) {
+        if (signal?.aborted) return;
+        const remaining = this.last + this.intervalMs - this.now();
+        if (remaining <= 0) break;
+        // The gap may have grown while asleep, so the loop measures it again.
+        await this.wait(remaining, signal);
+      }
+      this.last = this.now();
+    });
+    this.queue = mine.catch(() => {});
+    return mine;
   }
 
   /** Slow down after a rejection. Returns the new gap, or undefined when already at the ceiling. */
@@ -90,8 +103,8 @@ export class Pacer {
     );
     if (slower <= this.intervalMs) return undefined;
     this.intervalMs = slower;
-    // Push queued slots out too, so the next hand-off already observes the new gap.
-    this.next = Math.max(this.next, this.now() + slower);
+    // The rejection counts as the latest start, so the next one waits the full new gap.
+    this.last = Math.max(this.last, this.now());
     return slower;
   }
 }

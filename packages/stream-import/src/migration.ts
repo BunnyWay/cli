@@ -159,6 +159,11 @@ export class MigrationService {
   private pacer = new Pacer(0);
   private adaptiveThrottle = true;
 
+  /** The gap between hand-offs the last run ended with, in ms; larger than `fetchIntervalMs` when it slowed itself down. */
+  get fetchIntervalMs(): number {
+    return this.pacer.interval;
+  }
+
   /** Discovery result, cached so the run does not re-walk the source after the summary. */
   private discovery: {
     folderId: string | undefined;
@@ -987,6 +992,9 @@ export class MigrationService {
     await this.pacer.turn(
       runSignal ? AbortSignal.any([signal, runSignal]) : signal,
     );
+    // Stopped while waiting: no request went to Bunny, so this was not an attempt.
+    if (signal.aborted || runSignal?.aborted)
+      migration.attempts = Math.max(0, (migration.attempts ?? 1) - 1);
     signal.throwIfAborted();
     runSignal?.throwIfAborted();
     migration.pendingFetch = {

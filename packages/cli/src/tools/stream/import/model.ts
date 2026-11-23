@@ -112,6 +112,8 @@ export const ImportRunSchema = z.object({
     concurrency: z.number(),
     delay: z.number(),
     requestTimeout: z.number(),
+    /** Seconds between hand-offs when the run ended; more than `delay` when it slowed itself down after failed fetches. */
+    finalDelay: z.number(),
   }),
   elapsedMs: z.number(),
 });

@@ -406,6 +406,7 @@ export const streamImportRun = defineTool({
       concurrency: input.concurrency ?? DEFAULT_CONCURRENCY,
       delay: input.delay ?? 0,
       requestTimeout: input.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT / 1000,
+      finalDelay: input.delay ?? 0,
     };
     const opened: OpenedImport = {};
     let session: ImportSession;
@@ -466,6 +467,7 @@ export const streamImportRun = defineTool({
       };
     }
 
+    pacing.finalDelay = session.service.fetchIntervalMs / 1000;
     const by = (status: string) =>
       state.videoMigrations.filter((m) => m.status === status);
     const { warnings } = session.sink;

@@ -36,6 +36,7 @@ import {
   importPacing,
   pacingNotice,
   retryPacing,
+  slowestPace,
   slowResumeFlags,
 } from "./pacing.ts";
 
@@ -290,7 +291,7 @@ function renderResult(
       `${rejected.length} failed to import. Try slowing down the import using delay or concurrency.`,
     );
     logger.info(
-      `Wait a while, then resume more slowly: ${bunny(`${resumeCommand(result, libraryArg, includeTs)}${slowResumeFlags(rejected)}`)}`,
+      `Wait a while, then resume more slowly: ${bunny(`${resumeCommand(result, libraryArg, includeTs)}${slowResumeFlags(rejected, result.pacing)}`)}`,
     );
   } else if (failed.length > givenUp + missing || result.status === "paused")
     logger.info(
@@ -624,7 +625,7 @@ export const streamImportRunCommand = defineToolCommand({
       return undefined;
     // Fetches failed at this pace, so a retry goes one at a time with a wider gap.
     const slower = result.failed.some((f) => f.retryable && f.sourceRejected)
-      ? retryPacing(input)
+      ? retryPacing(slowestPace(result.pacing))
       : undefined;
     const retry = await confirm(
       slower

@@ -4,6 +4,7 @@ import {
   importPacing,
   pacingNotice,
   retryPacing,
+  slowestPace,
   slowResumeFlags,
 } from "./pacing.ts";
 
@@ -77,10 +78,23 @@ test("a retry after source rejections goes one at a time and at least 30s apart"
 });
 
 test("the slow resume hint adds --clean-failed only when a failure used up its attempts", () => {
-  expect(slowResumeFlags([{ retryable: true }])).toBe(
+  const pace = { delay: 0, finalDelay: 0 };
+  expect(slowResumeFlags([{ retryable: true }], pace)).toBe(
     " --concurrency 1 --delay 30",
   );
-  expect(slowResumeFlags([{ retryable: true }, { retryable: false }])).toBe(
-    " --clean-failed --concurrency 1 --delay 30",
-  );
+  expect(
+    slowResumeFlags([{ retryable: true }, { retryable: false }], pace),
+  ).toBe(" --clean-failed --concurrency 1 --delay 30");
+});
+
+test("the slow resume hint never suggests a faster pace than the failed run", () => {
+  // The run's own gap was already 45s: resume at twice that, not 30s.
+  expect(
+    slowResumeFlags([{ retryable: true }], { delay: 45, finalDelay: 45 }),
+  ).toBe(" --concurrency 1 --delay 90");
+  // It slowed itself down to 120s: resume from there.
+  expect(
+    slowResumeFlags([{ retryable: true }], { delay: 10, finalDelay: 120 }),
+  ).toBe(" --concurrency 1 --delay 240");
+  expect(slowestPace({ delay: 10, finalDelay: 60 })).toEqual({ delay: 60 });
 });
