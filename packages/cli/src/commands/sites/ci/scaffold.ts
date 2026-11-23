@@ -1,9 +1,11 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { DEFAULT_KEEP_DEPLOYS } from "@/commands/sites/constants.ts";
 import { UserError } from "@/core/errors.ts";
 import { runGit } from "@/core/git.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, prompts } from "@/core/ui.ts";
+import { VERSION } from "@/core/version.ts";
 import {
   detectFramework,
   detectPackageManager,
@@ -182,6 +184,8 @@ export async function scaffoldSitesWorkflow(opts: {
   force?: boolean;
   dir?: string;
   build?: string;
+
+  keep?: number | false;
 }): Promise<ScaffoldResult | null> {
   const settings = await workflowSettings(opts);
   const preset = await resolvePreset(
@@ -200,6 +204,7 @@ export async function scaffoldSitesWorkflow(opts: {
     workingDirectory: settings.prefix || undefined,
     cacheDependencyPath: settings.cacheDependencyPath,
     installDeps: await needsJsInstall(preset, settings),
+    ...pruneOptions(opts.keep),
   });
 
   const target = join(opts.root, SITES_WORKFLOW_PATH);
@@ -227,6 +232,16 @@ export async function scaffoldSitesWorkflow(opts: {
     preset,
     packageManager,
     dir: workflowPath(settings.prefix, settings.dir ?? preset.dir),
+  };
+}
+
+function pruneOptions(keep: number | false | undefined): {
+  keep?: number;
+  cliVersion: string;
+} {
+  return {
+    keep: keep === false ? undefined : (keep ?? DEFAULT_KEEP_DEPLOYS),
+    cliVersion: `^${VERSION}`,
   };
 }
 
@@ -259,6 +274,7 @@ export async function printWorkflowInstructions(
       workingDirectory: settings.prefix || undefined,
       cacheDependencyPath: settings.cacheDependencyPath,
       installDeps: await needsJsInstall(preset, settings),
+      ...pruneOptions(undefined),
     }),
   );
   printSecretHint();

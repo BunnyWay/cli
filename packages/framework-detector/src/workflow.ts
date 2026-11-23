@@ -135,6 +135,25 @@ function buildSteps(
   }
 }
 
+function pruneStep(
+  site: string,
+  keep: number | undefined,
+  cliVersion: string | undefined,
+): string[] {
+  if (keep === undefined) return [];
+  const pkg = cliVersion ? `@bunny.net/cli@${cliVersion}` : "@bunny.net/cli";
+  return [
+    "",
+    `      # Each deploy is a separate folder in storage you're billed for; keep the newest ${keep} (live and previous are always kept).`,
+    "      - name: Prune old deploys",
+    `        run: npx --yes ${pkg} sites deployments prune "$BUNNY_SITE" --keep ${keep} --force`,
+    "        continue-on-error: true",
+    "        env:",
+    `          BUNNY_SITE: ${JSON.stringify(site)}`,
+    "          BUNNYNET_API_KEY: ${{ secrets.BUNNYNET_API_KEY }}",
+  ];
+}
+
 /** Join a workflow-root-relative prefix onto a project-relative path, POSIX-style (these are YAML/GitHub paths, never local ones). */
 export function workflowPath(prefix: string | undefined, path: string): string {
   if (!prefix) return path;
@@ -153,6 +172,10 @@ export function renderSitesWorkflow(opts: {
   installDeps?: boolean;
   /** The branch that goes live on push; main unless the repository's default branch differs. */
   branch?: string;
+  /** Prune deploys beyond the newest N after each deploy; omitted means no prune step. */
+  keep?: number;
+  /** The `@bunny.net/cli` version range the prune step runs. */
+  cliVersion?: string;
 }): string {
   const { site, preset, packageManager, workingDirectory } = opts;
   // Every `run` step builds from the project directory; `uses` inputs stay workflow-root-relative, so the deploy directory carries the prefix instead.
@@ -200,6 +223,7 @@ export function renderSitesWorkflow(opts: {
     `          site: ${JSON.stringify(site)}`,
     `          directory: ${JSON.stringify(workflowPath(workingDirectory, opts.dir ?? preset.dir))}`,
     "          api_key: ${{ secrets.BUNNYNET_API_KEY }}",
+    ...pruneStep(site, opts.keep, opts.cliVersion),
   ];
   return `${lines.join("\n")}\n`;
 }
