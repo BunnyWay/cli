@@ -402,6 +402,11 @@ export const streamImportRun = defineTool({
       DEFAULT_MIGRATION_TIMEOUT,
     );
     const startedAt = Date.now();
+    const pacing = {
+      concurrency: input.concurrency ?? DEFAULT_CONCURRENCY,
+      delay: input.delay ?? 0,
+      requestTimeout: input.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT / 1000,
+    };
     const opened: OpenedImport = {};
     let session: ImportSession;
     let state: MigrationState;
@@ -412,8 +417,8 @@ export const streamImportRun = defineTool({
       session = await openImport(ctx, input, { processingTimeoutMs, opened });
       state = await session.service.runMigration({
         folderId: session.folder,
-        concurrency: input.concurrency ?? DEFAULT_CONCURRENCY,
-        fetchIntervalMs: (input.delay ?? 0) * 1000,
+        concurrency: pacing.concurrency,
+        fetchIntervalMs: pacing.delay * 1000,
         resume: input.resume,
         wait: input.wait,
         cleanFailed: input.cleanFailed,
@@ -456,6 +461,7 @@ export const streamImportRun = defineTool({
         collections: [],
         warnings: [],
         statePath: statePath && existsSync(statePath) ? statePath : null,
+        pacing,
         elapsedMs: Date.now() - startedAt,
       };
     }
@@ -499,6 +505,7 @@ export const streamImportRun = defineTool({
       collections: state.folderMappings,
       warnings,
       statePath: session.statePath,
+      pacing,
       elapsedMs: Date.now() - startedAt,
     };
   },

@@ -217,3 +217,26 @@ test("only a source turning the credentials down is a SourceCredentialsError; a 
   expect(error).not.toBeInstanceOf(SourceCredentialsError);
   slow.mockRestore();
 });
+
+test("a run reports the pace it used, defaults filled in", async () => {
+  const controller = new AbortController();
+  const aborting = {
+    GET: async () => {
+      controller.abort();
+      throw new DOMException("aborted", "AbortError");
+    },
+  } as unknown as CoreClient;
+  const result = await streamImportRun.invoke(
+    createToolContext({
+      env: { XDG_STATE_HOME: dir, MUX_TOKEN_ID: "id", MUX_TOKEN_SECRET: "s" },
+      clients: { core: aborting, streamLibrary: () => stream },
+      signal: controller.signal,
+    }),
+    { library: "7", source: "mux", concurrency: 2, delay: 10 },
+  );
+  expect(result.pacing).toEqual({
+    concurrency: 2,
+    delay: 10,
+    requestTimeout: 30,
+  });
+});

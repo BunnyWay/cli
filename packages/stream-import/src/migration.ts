@@ -389,13 +389,6 @@ export class MigrationService {
           toQueue,
           concurrency,
           async (migration) => {
-            // Only a new download is paced; finishing an interrupted tag never touches the source.
-            if (
-              !(migration.status === "processing" && migration.bunnyVideoId)
-            ) {
-              await this.pacer.turn(signal);
-              if (signal?.aborted) return;
-            }
             await this.withTimeout(
               migration,
               timeout,
@@ -988,6 +981,13 @@ export class MigrationService {
 
     this.logger.debug(`Importing: ${stripAnsi(migration.videoName)}`);
 
+    // Paced right before the hand-off, so a slow source lookup in another
+    // worker cannot bunch two Bunny fetches together. Re-tags never get here.
+    // A pause while waiting leaves the entry pending: nothing reached Bunny yet.
+    await this.pacer.turn(
+      runSignal ? AbortSignal.any([signal, runSignal]) : signal,
+    );
+    signal.throwIfAborted();
     runSignal?.throwIfAborted();
     migration.pendingFetch = {
       title,

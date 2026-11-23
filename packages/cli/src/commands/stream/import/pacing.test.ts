@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import { requireSource } from "@/tools/stream/index.ts";
-import { importPacing, pacingNotice, retryPacing } from "./pacing.ts";
+import {
+  importPacing,
+  pacingNotice,
+  retryPacing,
+  slowResumeFlags,
+} from "./pacing.ts";
 
 const vimeo = requireSource("vimeo");
 const s3 = requireSource("s3");
@@ -69,4 +74,13 @@ test("a retry after source rejections goes one at a time and at least 30s apart"
   expect(retryPacing({ delay: 10 })).toEqual({ concurrency: 1, delay: 30 });
   expect(retryPacing({ delay: 45 })).toEqual({ concurrency: 1, delay: 90 });
   expect(retryPacing({ delay: 500 })).toEqual({ concurrency: 1, delay: 600 });
+});
+
+test("the slow resume hint adds --clean-failed only when a failure used up its attempts", () => {
+  expect(slowResumeFlags([{ retryable: true }])).toBe(
+    " --concurrency 1 --delay 30",
+  );
+  expect(slowResumeFlags([{ retryable: true }, { retryable: false }])).toBe(
+    " --clean-failed --concurrency 1 --delay 30",
+  );
 });

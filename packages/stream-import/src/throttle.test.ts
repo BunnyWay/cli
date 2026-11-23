@@ -133,3 +133,57 @@ test("a 422 from Bunny's fetch fails the video as a source rejection and slows t
     "Videos are failing to import; slowing down to one new video every 15s.",
   );
 });
+
+test("the gap is kept between Bunny fetches even when source lookups take different times", async () => {
+  const fetchedAt: number[] = [];
+  const adapter: SourceAdapter = {
+    id: "vimeo",
+    dedupTag: "vimeoId",
+    validateCredentials: async () => {},
+    listContent: async () => ({
+      folders: [],
+      videos: new Map(),
+      uncategorizedVideos: [
+        { sourceId: "slow", displayName: "Slow", folderId: null },
+        { sourceId: "fast", displayName: "Fast", folderId: null },
+      ],
+    }),
+    // The first lookup is slow, so without pacing the hand-off itself the
+    // second video's fetch would land right next to the first one.
+    getDownloadInfo: async (id) => {
+      if (id === "slow") await Bun.sleep(80);
+      return { url: `https://player.vimeo.com/${id}.mp4`, title: id };
+    },
+  };
+  let n = 0;
+  const bunny = {
+    listVideos: mock(async () => []),
+    getOrCreateCollection: mock(async () => ({ guid: "c", name: "c" })),
+    fetchVideoFromUrl: mock(async () => {
+      fetchedAt.push(performance.now());
+      return { success: true, videoId: `v${++n}` };
+    }),
+    setVideoMetadata: mock(async () => {}),
+  } as unknown as BunnyStream;
+  const service = new MigrationService({
+    adapter,
+    bunny,
+    store: { load: () => null, save: () => {}, clear: () => {} },
+    logger: {
+      log: () => {},
+      debug: () => {},
+      info: () => {},
+      success: () => {},
+      warn: () => {},
+      error: () => {},
+      dim: () => {},
+    },
+    libraryId: "12345",
+    accountId: "acct-1",
+    label: "Vimeo",
+  });
+  await service.runMigration({ concurrency: 2, fetchIntervalMs: 60 });
+  expect(fetchedAt).toHaveLength(2);
+  const [first = 0, second = 0] = [...fetchedAt].sort((a, b) => a - b);
+  expect(second - first).toBeGreaterThanOrEqual(55);
+});

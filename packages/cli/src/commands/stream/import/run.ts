@@ -32,7 +32,12 @@ import {
   streamImportRun,
 } from "@/tools/stream/index.ts";
 import { resolveImportLibrary } from "./library.ts";
-import { importPacing, pacingNotice, retryPacing } from "./pacing.ts";
+import {
+  importPacing,
+  pacingNotice,
+  retryPacing,
+  slowResumeFlags,
+} from "./pacing.ts";
 
 interface ImportArgs {
   library?: string;
@@ -278,14 +283,14 @@ function renderResult(
     logger.info(
       `${missing} are no longer listed at the source. Restore them there, then add --clean-failed to try again.`,
     );
-  const rejected = failed.filter((f) => f.sourceRejected).length;
-  if (rejected > 0) {
+  const rejected = failed.filter((f) => f.sourceRejected);
+  if (rejected.length > 0) {
     // Retrying at the same pace usually fails the same way.
     logger.warn(
-      `${rejected} failed to import. Try slowing down the import using delay or concurrency.`,
+      `${rejected.length} failed to import. Try slowing down the import using delay or concurrency.`,
     );
     logger.info(
-      `Wait a while, then resume more slowly: ${bunny(`${resumeCommand(result, libraryArg, includeTs)} --concurrency 1 --delay 30`)}`,
+      `Wait a while, then resume more slowly: ${bunny(`${resumeCommand(result, libraryArg, includeTs)}${slowResumeFlags(rejected)}`)}`,
     );
   } else if (failed.length > givenUp + missing || result.status === "paused")
     logger.info(

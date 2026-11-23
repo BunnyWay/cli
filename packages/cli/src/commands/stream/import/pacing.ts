@@ -128,3 +128,15 @@ export function retryPacing(previous: { delay?: number }): {
     delay: Math.min(Math.max((previous.delay ?? 0) * 2, 30), 600),
   };
 }
+
+/**
+ * The flags to resume more slowly after fetches failed with HTTP 422/503. A
+ * plain resume skips entries that used up their attempts (not `retryable`),
+ * so `--clean-failed` comes along when any of them did.
+ */
+export function slowResumeFlags(
+  rejected: ReadonlyArray<{ retryable: boolean }>,
+): string {
+  const exhausted = rejected.some((f) => !f.retryable);
+  return `${exhausted ? " --clean-failed" : ""} --concurrency 1 --delay 30`;
+}

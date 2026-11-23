@@ -107,6 +107,12 @@ export const ImportRunSchema = z.object({
   warnings: z.array(z.string()),
   /** The local journal a resume or a status check reads; null when an aborted call never reached one. */
   statePath: z.string().nullable(),
+  /** The pace this run used: videos in parallel, seconds between hand-offs, seconds per request. */
+  pacing: z.object({
+    concurrency: z.number(),
+    delay: z.number(),
+    requestTimeout: z.number(),
+  }),
   elapsedMs: z.number(),
 });
 
