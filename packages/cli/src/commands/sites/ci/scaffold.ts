@@ -241,7 +241,7 @@ function pruneOptions(keep: number | false | undefined): {
 } {
   return {
     keep: keep === false ? undefined : (keep ?? DEFAULT_KEEP_DEPLOYS),
-    cliVersion: `^${VERSION}`,
+    cliVersion: VERSION,
   };
 }
 

@@ -46,6 +46,9 @@ export interface PruneResult {
   failures: Array<{ id: string; error: string }>;
 }
 
+// Thrown when deploy files were deleted but the deploy list couldn't be updated and callers must surface it
+export class PruneStateWriteError extends UserError {}
+
 export async function pruneDeploys(
   connection: StorageZone,
   victims: DeployRecord[],
@@ -93,9 +96,18 @@ export async function pruneDeploys(
   }
   latest.deploys = latest.deploys.filter((d) => !pruned.has(d.id));
 
-  await writeRemoteState(connection, latest, latestEtag, {
-    removedIds: [...pruned],
-  });
+  try {
+    await writeRemoteState(connection, latest, latestEtag, {
+      removedIds: [...pruned],
+    });
+  } catch (err) {
+    if (pruned.size === 0) throw err;
+
+    throw new PruneStateWriteError(
+      `Deleted ${[...pruned].join(", ")} but couldn't update the deploy list: ${errorMessage(err)}`,
+      "Re-run bunny sites deployments prune to finish; don't publish those deploys.",
+    );
+  }
 
   return { pruned: [...pruned], kept, failures };
 }

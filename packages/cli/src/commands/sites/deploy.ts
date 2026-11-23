@@ -42,11 +42,13 @@ import {
   type NotFoundMode,
   productionUrl,
   pruneVictims,
+  type RemoteSiteState,
 } from "./constants.ts";
 import { type DeployIdentity, resolveDeployIdentity } from "./deploy-id.ts";
 import { deleteBlocker } from "./deployments/delete.ts";
 import {
   type PruneResult,
+  PruneStateWriteError,
   pruneDeploys,
   resolveKeepCount,
 } from "./deployments/prune.ts";
@@ -494,6 +496,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         promoteDeploy({ coreClient, state, deployId }),
       );
       warnAfterPromote(promoted, deployId);
+
+      const pruneResult = await pruneWithKeep(connection, state, keep);
+
       if (output === "json") {
         logger.log(
           JSON.stringify(
@@ -503,6 +508,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
               unchanged: true,
               live: promoted.confirmed,
               production: production ?? null,
+              ...(keep !== undefined && {
+                pruned: pruneResult?.pruned ?? [],
+                pruneFailures: pruneResult?.failures ?? [],
+              }),
             },
             null,
             2,
@@ -514,6 +523,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         `No changes: deploy ${deployId} is already live. Use --force to redeploy.`,
       );
       if (production) logger.log(`  ${production}`);
+
+      await reportOrOfferPrune(pruneResult, keep, state, connection, output);
+
       // The common repeat path after declining the first-deploy domain offer still gets the hint.
       if (!state.domain) logger.dim(DOMAIN_HINT);
       return;
@@ -585,20 +597,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     );
     warnAfterPromote(promoted, deployId);
 
-    let pruneResult: PruneResult | undefined;
-
-    if (keep !== undefined) {
-      const victims = pruneVictims(
-        state.deploys,
-        keep,
-        state.current,
-        state.previous,
-      );
-
-      if (victims.length > 0) {
-        pruneResult = await safePrune(connection, victims, keep);
-      }
-    }
+    const pruneResult = await pruneWithKeep(connection, state, keep);
 
     if (output === "json") {
       logger.log(
@@ -638,15 +637,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     if (production) logger.info(`Production: ${production}`);
     if (notFoundNote) logger.info(notFoundNote);
 
-    if (pruneResult) {
-      reportPrune(pruneResult);
-    } else if (keep === undefined) {
-      await offerPrune(state.deploys, state.current, state.previous, {
-        connection,
-        siteName: state.name,
-        interactive: isInteractive(output),
-      });
-    }
+    await reportOrOfferPrune(pruneResult, keep, state, connection, output);
 
     // Domainless sites: the first deploy offers a custom production domain, later ones just hint.
     if (!state.domain) {
@@ -689,6 +680,42 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
   },
 });
 
+async function pruneWithKeep(
+  connection: StorageZone,
+  state: RemoteSiteState,
+  keep: number | undefined,
+): Promise<PruneResult | undefined> {
+  if (keep === undefined) return undefined;
+  const victims = pruneVictims(
+    state.deploys,
+    keep,
+    state.current,
+    state.previous,
+  );
+
+  if (victims.length === 0) return undefined;
+
+  return safePrune(connection, victims, keep);
+}
+
+async function reportOrOfferPrune(
+  pruneResult: PruneResult | undefined,
+  keep: number | undefined,
+  state: RemoteSiteState,
+  connection: StorageZone,
+  output: string | undefined,
+): Promise<void> {
+  if (pruneResult) {
+    reportPrune(pruneResult);
+  } else if (keep === undefined) {
+    await offerPrune(state.deploys, state.current, state.previous, {
+      connection,
+      siteName: state.name,
+      interactive: isInteractive(output),
+    });
+  }
+}
+
 async function safePrune(
   connection: StorageZone,
   victims: DeployRecord[],
@@ -701,6 +728,7 @@ async function safePrune(
       }),
     );
   } catch (err) {
+    if (err instanceof PruneStateWriteError) throw err;
     return {
       pruned: [],
       kept: [],

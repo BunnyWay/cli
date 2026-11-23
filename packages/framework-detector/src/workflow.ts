@@ -146,7 +146,7 @@ function pruneStep(
     "",
     `      # Each deploy is a separate folder in storage you're billed for; keep the newest ${keep} (live and previous are always kept).`,
     "      - name: Prune old deploys",
-    `        run: npx --yes ${pkg} sites deployments prune "$BUNNY_SITE" --keep ${keep} --force`,
+    `        run: npx --yes '${pkg}' sites deployments prune "$BUNNY_SITE" --keep ${keep} --force`,
     "        continue-on-error: true",
     "        env:",
     `          BUNNY_SITE: ${JSON.stringify(site)}`,
@@ -174,7 +174,7 @@ export function renderSitesWorkflow(opts: {
   branch?: string;
   /** Prune deploys beyond the newest N after each deploy; omitted means no prune step. */
   keep?: number;
-  /** The `@bunny.net/cli` version range the prune step runs. */
+  /** The exact `@bunny.net/cli` version the prune step runs. */
   cliVersion?: string;
 }): string {
   const { site, preset, packageManager, workingDirectory } = opts;
