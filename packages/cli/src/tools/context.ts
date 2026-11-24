@@ -80,7 +80,7 @@ export function createToolContext(
     }
     return {
       apiKey,
-      baseUrl: options.apiUrl,
+      apiUrl: options.apiUrl,
       verbose: Boolean(options.onDebug),
       userAgent: options.userAgent ?? DEFAULT_USER_AGENT,
       onDebug: options.onDebug,

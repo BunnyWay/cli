@@ -15,7 +15,7 @@ export function clientOptions(
 
   return {
     apiKey: config.apiKey,
-    baseUrl: config.apiUrl,
+    apiUrl: config.apiUrl,
     verbose,
     userAgent: `bunny-cli/${VERSION}`,
     onDebug: (msg) => logger.debug(msg, true),
