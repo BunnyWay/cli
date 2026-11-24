@@ -1,5 +1,11 @@
 # @bunny.net/framework-detector
 
+## 0.2.0
+
+### Minor Changes
+
+- [#313](https://github.com/BunnyWay/cli/pull/313) [`65aaa7a`](https://github.com/BunnyWay/cli/commit/65aaa7a0036c8b7bdb525c335390a252499da2e9) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(sites): `sites deploy` prunes to the live and previous deploys by default (existing sites opt in once), with `sites.keep` in bunny.jsonc and `deploy --keep`; `sites deployments prune` without `--keep` now follows the same setting and keeps only the live and previous deploys instead of the newest 5
+
 ## 0.1.0
 
 ### Minor Changes
