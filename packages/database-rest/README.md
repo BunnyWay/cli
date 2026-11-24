@@ -100,6 +100,33 @@ Bun.serve({ port: 8080, fetch: handler });
 | `openapi.version`     | `string` | `schema.version`      | Version in the OpenAPI spec                       |
 | `openapi.description` | `string` | auto-generated        | Description in the OpenAPI spec                   |
 
+#### Scoping requests to allowed rows
+
+`scope` limits each request to the rows it may touch, such as rows the signed-in user owns. It runs once per request after routing and returns a filter, `null` for no limit, or `false` to refuse the request with `403`. Filters can nest `and` and `or` groups.
+
+```ts
+const handler = createRestHandler(executor, schema, {
+  scope: async ({ request, table, operation }) => {
+    const user = await getUser(request);
+    if (!user) return false;
+    if (table !== "notes") return null;
+
+    return operation === "select"
+      ? {
+          or: [
+            { column: "owner", operator: "eq", value: user.id },
+            { column: "public", operator: "eq", value: 1 },
+          ],
+        }
+      : { column: "owner", operator: "eq", value: user.id };
+  },
+});
+```
+
+- **Reads, updates, deletes:** the filter is ANDed into the query. Rows outside it are never read, changed or deleted, and single-row routes answer `404` for them. Query-string filters can only narrow a scope, never widen it. A scope doesn't count as the filter that bulk `PATCH` and `DELETE` require.
+- **Inserts:** every row in the body must match the filter before anything is written, or the request fails with `403`. Each column the filter checks must be present in the row.
+- An update is checked against the row as it is now, not as it will be, so a scope doesn't stop an update from moving a row out of scope. Check new values yourself if that matters.
+
 ### `requireAuth(handler, options): (req: Request) => Promise<Response>`
 
 Wraps any request handler with a shared-token check. Validates

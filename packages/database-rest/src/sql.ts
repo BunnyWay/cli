@@ -1,4 +1,10 @@
-import type { FilterCondition, OrderClause, ParsedQuery } from "./parser.ts";
+import type {
+  Filter,
+  FilterCondition,
+  FilterGroup,
+  OrderClause,
+  ParsedQuery,
+} from "./parser.ts";
 
 function quoteIdentifier(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
@@ -9,74 +15,102 @@ interface WhereClause {
   args: (string | number | boolean | null)[];
 }
 
-function buildWhere(filters: FilterCondition[]): WhereClause {
+const isGroup = (filter: Filter): filter is FilterGroup =>
+  "and" in filter || "or" in filter;
+
+function compileCondition(filter: FilterCondition): WhereClause {
+  const col = quoteIdentifier(filter.column);
+
+  switch (filter.operator) {
+    case "eq":
+      return { sql: `${col} = ?`, args: [filter.value as string | number] };
+    case "neq":
+      return { sql: `${col} != ?`, args: [filter.value as string | number] };
+    case "gt":
+      return { sql: `${col} > ?`, args: [filter.value as string | number] };
+    case "gte":
+      return { sql: `${col} >= ?`, args: [filter.value as string | number] };
+    case "lt":
+      return { sql: `${col} < ?`, args: [filter.value as string | number] };
+    case "lte":
+      return { sql: `${col} <= ?`, args: [filter.value as string | number] };
+    case "like":
+      return { sql: `${col} LIKE ?`, args: [filter.value as string] };
+    case "ilike":
+      return {
+        sql: `${col} LIKE ? COLLATE NOCASE`,
+        args: [filter.value as string],
+      };
+    case "is": {
+      if (filter.value === null) {
+        return { sql: `${col} IS NULL`, args: [] };
+      }
+
+      return {
+        sql: filter.value === true ? `${col} IS TRUE` : `${col} IS FALSE`,
+        args: [],
+      };
+    }
+    case "in": {
+      const values = filter.value as (string | number)[];
+      const placeholders = values.map(() => "?").join(", ");
+
+      return { sql: `${col} IN (${placeholders})`, args: values };
+    }
+  }
+}
+
+/** Joins compiled filters with AND or OR. An empty AND is true and an empty OR is false, as in logic. */
+function joinFilters(filters: Filter[], joiner: "AND" | "OR"): WhereClause {
+  if (filters.length === 0) {
+    return { sql: joiner === "AND" ? "1 = 1" : "1 = 0", args: [] };
+  }
+  const parts = filters.map(compileFilter);
+
+  return {
+    sql: parts.map((part) => part.sql).join(` ${joiner} `),
+    args: parts.flatMap((part) => part.args),
+  };
+}
+
+function compileFilter(filter: Filter): WhereClause {
+  if (!isGroup(filter)) {
+    return compileCondition(filter);
+  }
+  const inner =
+    "and" in filter
+      ? joinFilters(filter.and, "AND")
+      : joinFilters(filter.or, "OR");
+
+  return { sql: `(${inner.sql})`, args: inner.args };
+}
+
+function buildWhere(filters: Filter[]): WhereClause {
   if (filters.length === 0) {
     return { sql: "", args: [] };
   }
+  const where = joinFilters(filters, "AND");
 
-  const conditions: string[] = [];
-  const args: (string | number | boolean | null)[] = [];
+  return { sql: ` WHERE ${where.sql}`, args: where.args };
+}
 
-  for (const filter of filters) {
-    const col = quoteIdentifier(filter.column);
-
-    switch (filter.operator) {
-      case "eq":
-        conditions.push(`${col} = ?`);
-        args.push(filter.value as string | number);
-        break;
-      case "neq":
-        conditions.push(`${col} != ?`);
-        args.push(filter.value as string | number);
-        break;
-      case "gt":
-        conditions.push(`${col} > ?`);
-        args.push(filter.value as string | number);
-        break;
-      case "gte":
-        conditions.push(`${col} >= ?`);
-        args.push(filter.value as string | number);
-        break;
-      case "lt":
-        conditions.push(`${col} < ?`);
-        args.push(filter.value as string | number);
-        break;
-      case "lte":
-        conditions.push(`${col} <= ?`);
-        args.push(filter.value as string | number);
-        break;
-      case "like":
-        conditions.push(`${col} LIKE ?`);
-        args.push(filter.value as string);
-        break;
-      case "ilike":
-        conditions.push(`${col} LIKE ? COLLATE NOCASE`);
-        args.push(filter.value as string);
-        break;
-      case "is": {
-        if (filter.value === null) {
-          conditions.push(`${col} IS NULL`);
-        } else if (filter.value === true) {
-          conditions.push(`${col} IS TRUE`);
-        } else {
-          conditions.push(`${col} IS FALSE`);
-        }
-        break;
-      }
-      case "in": {
-        const values = filter.value as (string | number)[];
-        const placeholders = values.map(() => "?").join(", ");
-        conditions.push(`${col} IN (${placeholders})`);
-        args.push(...values);
-        break;
-      }
+/** Every column a filter references, including inside nested groups. */
+export function filterColumns(filters: Filter[]): Set<string> {
+  const columns = new Set<string>();
+  const visit = (filter: Filter) => {
+    if (!isGroup(filter)) {
+      columns.add(filter.column);
+      return;
     }
+    for (const child of "and" in filter ? filter.and : filter.or) {
+      visit(child);
+    }
+  };
+  for (const filter of filters) {
+    visit(filter);
   }
 
-  return {
-    sql: ` WHERE ${conditions.join(" AND ")}`,
-    args,
-  };
+  return columns;
 }
 
 function buildOrderBy(order: OrderClause[]): string {
@@ -153,7 +187,7 @@ export function buildInsertQuery(
 export function buildUpdateQuery(
   table: string,
   values: Record<string, unknown>,
-  filters: FilterCondition[],
+  filters: Filter[],
 ): SelectQuery {
   const setClauses = Object.keys(values).map(
     (col) => `${quoteIdentifier(col)} = ?`,
@@ -169,12 +203,41 @@ export function buildUpdateQuery(
 
 export function buildDeleteQuery(
   table: string,
-  filters: FilterCondition[],
+  filters: Filter[],
 ): SelectQuery {
   const where = buildWhere(filters);
 
   return {
     sql: `DELETE FROM ${quoteIdentifier(table)}${where.sql} RETURNING *`,
     args: where.args,
+  };
+}
+
+/**
+ * Checks a row against filters before it is inserted, without touching the
+ * table: the row's values become a one-row derived table and the filters run
+ * against it. Returns a row only when the filters match. Every column the
+ * filters reference must be present in `row`; callers check that first.
+ *
+ * Values are compared as sent, without the table's column affinity, so a
+ * string "5" does not equal the number 5 here even if an INTEGER column
+ * would store it as 5.
+ */
+export function buildFilterCheckQuery(
+  row: Record<string, unknown>,
+  filters: Filter[],
+): SelectQuery {
+  const columns = Object.keys(row);
+  const candidate = columns
+    .map((column) => `? AS ${quoteIdentifier(column)}`)
+    .join(", ");
+  const where = buildWhere(filters);
+
+  return {
+    sql: `SELECT 1 AS matched FROM (SELECT ${candidate})${where.sql}`,
+    args: [
+      ...columns.map((column) => row[column] as string | number | null),
+      ...where.args,
+    ],
   };
 }

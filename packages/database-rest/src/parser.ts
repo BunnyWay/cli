@@ -18,6 +18,14 @@ export interface FilterCondition {
   value: string | number | boolean | null | (string | number)[];
 }
 
+/**
+ * A condition or a nested `and`/`or` group of filters. A list of filters at
+ * the top level (as in `ParsedQuery.filters`) is ANDed together.
+ */
+export type Filter = FilterCondition | FilterGroup;
+
+export type FilterGroup = { and: Filter[] } | { or: Filter[] };
+
 export interface OrderClause {
   column: string;
   direction: SortDirection;
@@ -26,7 +34,7 @@ export interface OrderClause {
 
 export interface ParsedQuery {
   select: string[];
-  filters: FilterCondition[];
+  filters: Filter[];
   order: OrderClause[];
   limit?: number;
   offset?: number;
@@ -157,7 +165,7 @@ export function parseQueryParams(url: URL): ParsedQuery {
   const offsetParam = params.get("offset");
   const offset = offsetParam ? parseInt(offsetParam, 10) : undefined;
 
-  const filters: FilterCondition[] = [];
+  const filters: Filter[] = [];
 
   for (const [key, value] of params.entries()) {
     if (RESERVED_PARAMS.has(key)) {

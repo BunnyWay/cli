@@ -4,14 +4,30 @@ import type {
 } from "@bunny.net/database-openapi";
 import { generateOpenAPISpec } from "@bunny.net/database-openapi";
 import type { DatabaseExecutor } from "./executor.ts";
-import { parseQueryParams } from "./parser.ts";
+import { type Filter, parseQueryParams } from "./parser.ts";
 import {
   buildCountQuery,
   buildDeleteQuery,
+  buildFilterCheckQuery,
   buildInsertQuery,
   buildSelectQuery,
   buildUpdateQuery,
+  filterColumns,
 } from "./sql.ts";
+
+export type ScopeOperation = "select" | "insert" | "update" | "delete";
+
+export interface ScopeContext {
+  request: Request;
+  table: string;
+  operation: ScopeOperation;
+}
+
+/**
+ * What a scope hook returns: a filter to AND into the operation, `null` or
+ * `undefined` for no restriction, or `false` to refuse the request with 403.
+ */
+export type ScopeResult = Filter | null | undefined | false;
 
 export interface RestHandlerOptions {
   /** Base path prefix to strip before routing (e.g. "/api"). Defaults to none. */
@@ -20,6 +36,21 @@ export interface RestHandlerOptions {
   openapi?: GenerateOptions;
   /** Called with the real error behind a 500 so the host can log it; responses never carry the detail. */
   onError?: (err: unknown) => void;
+  /**
+   * Restricts each request to the rows it may touch, for example to rows the
+   * signed-in user owns. Called once per request after routing.
+   *
+   * - `select`, `update`, `delete`: the filter is ANDed into the query, so
+   *   rows outside it are never read, changed, or deleted, and single-row
+   *   routes answer 404 for them.
+   * - `insert`: every row in the body must match the filter, checked before
+   *   anything is written, or the request fails with 403. Each column the
+   *   filter references must be in the row.
+   *
+   * An update is checked against the row as it is, not as it will be, so a
+   * scope does not stop an update from moving a row out of scope.
+   */
+  scope?: (context: ScopeContext) => ScopeResult | Promise<ScopeResult>;
 }
 
 const json = (data: unknown, status = 200, headers?: Record<string, string>) =>
@@ -71,6 +102,16 @@ const parseRoute = (
 
   return null;
 };
+
+const SCOPE_OPERATIONS: Record<string, ScopeOperation> = {
+  GET: "select",
+  POST: "insert",
+  PATCH: "update",
+  DELETE: "delete",
+};
+
+const forbidden = () =>
+  errorResponse("Not allowed by the request scope", 403, "FORBIDDEN");
 
 const parsePathValue = (raw: string): string | number => {
   const num = Number(raw);
@@ -136,6 +177,20 @@ export const createRestHandler = (
     }
 
     try {
+      const operation = SCOPE_OPERATIONS[req.method];
+      const scoped =
+        operation && options.scope
+          ? await options.scope({
+              request: req,
+              table: route.table,
+              operation,
+            })
+          : null;
+      if (scoped === false) {
+        return forbidden();
+      }
+      const scope: Filter[] = scoped ? [scoped] : [];
+
       if (route.kind === "single") {
         const column = resolveSingleColumn(route);
         if (!column) {
@@ -150,6 +205,7 @@ export const createRestHandler = (
               column,
               route.value,
               url,
+              scope,
             );
           case "PATCH":
             return await handlePatchOne(
@@ -158,6 +214,7 @@ export const createRestHandler = (
               column,
               route.value,
               req,
+              scope,
             );
           case "DELETE":
             return await handleDeleteOne(
@@ -165,6 +222,7 @@ export const createRestHandler = (
               route.table,
               column,
               route.value,
+              scope,
             );
           default:
             return errorResponse(
@@ -177,13 +235,13 @@ export const createRestHandler = (
 
       switch (req.method) {
         case "GET":
-          return await handleGet(executor, route.table, url);
+          return await handleGet(executor, route.table, url, scope);
         case "POST":
-          return await handlePost(executor, route.table, req);
+          return await handlePost(executor, route.table, req, scope);
         case "PATCH":
-          return await handlePatch(executor, route.table, url, req);
+          return await handlePatch(executor, route.table, url, req, scope);
         case "DELETE":
-          return await handleDelete(executor, route.table, url);
+          return await handleDelete(executor, route.table, url, scope);
         default:
           return errorResponse("Method not allowed", 405, "METHOD_NOT_ALLOWED");
       }
@@ -205,8 +263,10 @@ const handleGet = async (
   executor: DatabaseExecutor,
   table: string,
   url: URL,
+  scope: Filter[],
 ): Promise<Response> => {
-  const query = parseQueryParams(url);
+  const parsed = parseQueryParams(url);
+  const query = { ...parsed, filters: [...parsed.filters, ...scope] };
   const selectQuery = buildSelectQuery(table, query);
   const countQuery = buildCountQuery(table, query);
 
@@ -227,6 +287,7 @@ const handlePost = async (
   executor: DatabaseExecutor,
   table: string,
   req: Request,
+  scope: Filter[],
 ): Promise<Response> => {
   const body = await req.json();
 
@@ -244,7 +305,6 @@ const handlePost = async (
     return errorResponse("Request body must not be empty", 400, "BAD_REQUEST");
   }
 
-  const results = [];
   for (const row of rows) {
     if (typeof row !== "object" || row === null || Array.isArray(row)) {
       return errorResponse(
@@ -253,6 +313,27 @@ const handlePost = async (
         "BAD_REQUEST",
       );
     }
+  }
+
+  // Check every row before inserting any, so a body with one row out of
+  // scope writes nothing. The filters only see the row's own values, so a
+  // check made now still holds when the insert runs.
+  if (scope.length > 0) {
+    const required = filterColumns(scope);
+    for (const row of rows as Record<string, unknown>[]) {
+      if ([...required].some((column) => !(column in row))) {
+        return forbidden();
+      }
+      const check = buildFilterCheckQuery(row, scope);
+      const result = await executor.execute(check.sql, check.args);
+      if (result.rows.length === 0) {
+        return forbidden();
+      }
+    }
+  }
+
+  const results = [];
+  for (const row of rows) {
     const insertQuery = buildInsertQuery(table, row as Record<string, unknown>);
     const result = await executor.execute(insertQuery.sql, insertQuery.args);
     results.push(...result.rows);
@@ -266,6 +347,7 @@ const handlePatch = async (
   table: string,
   url: URL,
   req: Request,
+  scope: Filter[],
 ): Promise<Response> => {
   const query = parseQueryParams(url);
   const body = await req.json();
@@ -290,11 +372,12 @@ const handlePatch = async (
     );
   }
 
-  const updateQuery = buildUpdateQuery(
-    table,
-    body as Record<string, unknown>,
-    query.filters,
-  );
+  // The scope is added after the check above: it narrows an update, but must
+  // not count as the filter that guards against updating every row.
+  const updateQuery = buildUpdateQuery(table, body as Record<string, unknown>, [
+    ...query.filters,
+    ...scope,
+  ]);
   const result = await executor.execute(updateQuery.sql, updateQuery.args);
 
   return json({ data: result.rows });
@@ -304,6 +387,7 @@ const handleDelete = async (
   executor: DatabaseExecutor,
   table: string,
   url: URL,
+  scope: Filter[],
 ): Promise<Response> => {
   const query = parseQueryParams(url);
 
@@ -315,7 +399,7 @@ const handleDelete = async (
     );
   }
 
-  const deleteQuery = buildDeleteQuery(table, query.filters);
+  const deleteQuery = buildDeleteQuery(table, [...query.filters, ...scope]);
   const result = await executor.execute(deleteQuery.sql, deleteQuery.args);
 
   return json({ data: result.rows });
@@ -329,12 +413,14 @@ const handleGetOne = async (
   pkColumn: string,
   pkValue: string,
   url: URL,
+  scope: Filter[],
 ): Promise<Response> => {
   const query = parseQueryParams(url);
   const selectQuery = buildSelectQuery(table, {
     select: query.select,
     filters: [
       { column: pkColumn, operator: "eq", value: parsePathValue(pkValue) },
+      ...scope,
     ],
     order: [],
     limit: 1,
@@ -355,6 +441,7 @@ const handlePatchOne = async (
   pkColumn: string,
   pkValue: string,
   req: Request,
+  scope: Filter[],
 ): Promise<Response> => {
   const body = await req.json();
 
@@ -372,6 +459,7 @@ const handlePatchOne = async (
 
   const updateQuery = buildUpdateQuery(table, body as Record<string, unknown>, [
     { column: pkColumn, operator: "eq", value: parsePathValue(pkValue) },
+    ...scope,
   ]);
   const result = await executor.execute(updateQuery.sql, updateQuery.args);
 
@@ -387,9 +475,11 @@ const handleDeleteOne = async (
   table: string,
   pkColumn: string,
   pkValue: string,
+  scope: Filter[],
 ): Promise<Response> => {
   const deleteQuery = buildDeleteQuery(table, [
     { column: pkColumn, operator: "eq", value: parsePathValue(pkValue) },
+    ...scope,
   ]);
   const result = await executor.execute(deleteQuery.sql, deleteQuery.args);
 
