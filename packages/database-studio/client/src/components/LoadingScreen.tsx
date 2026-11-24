@@ -1,7 +1,7 @@
 const LOADING_STEPS = [
-  { label: "Connecting to database" },
-  { label: "Fetching tables" },
-  { label: "Preparing studio" },
+  "Connecting to database",
+  "Fetching tables",
+  "Preparing studio",
 ];
 
 export function LoadingScreen({ error }: { error: string | null }) {
@@ -28,16 +28,14 @@ export function LoadingScreen({ error }: { error: string | null }) {
           <div className="mb-10 space-y-2.5">
             {LOADING_STEPS.map((step, i) => (
               <div
-                key={step.label}
+                key={step}
                 className="step-reveal flex items-baseline gap-3"
                 style={{ animationDelay: `${0.3 + i * 0.8}s` }}
               >
                 <span className="w-4 shrink-0 font-mono text-[10px] uppercase tracking-widest text-muted-foreground/40">
                   {String(i + 1).padStart(2, "0")}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {step.label}
-                </span>
+                <span className="text-xs text-muted-foreground">{step}</span>
               </div>
             ))}
           </div>

@@ -180,9 +180,15 @@ GET /users?age=gte.18
 GET /users?name=like.John%25
 GET /users?role=in.(admin,moderator)
 GET /users?deleted_at=is.null
+GET /users?deleted_at=not.is.null
+GET /users?name=not.like.John%25
+GET /users?or=(role.eq.admin,age.gte.18)
+GET /users?or=(name.eq."Smith, John",name.is.null)
 ```
 
 **Operators**: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `is`, `in`
+
+Prefix any operator with `not.` to negate it. Separate parameters are combined with `AND`; an `or=(...)` parameter matches rows where any of its conditions hold. Wrap a value in double quotes when it contains commas or parentheses. A filter that doesn't parse (an unknown operator, a malformed `or` group) returns `400` rather than being dropped, since ignoring it would match more rows. Values are sent as numbers only when written exactly as a number prints (`18`, `-2.5`); anything else, such as `007` or `1e3`, or any quoted value inside `or=(...)`, is compared as text.
 
 #### Order
 
@@ -296,6 +302,8 @@ Returns `404` if the row doesn't exist or if the column isn't a unique index. Co
   "data": { "id": 1, "name": "John" }
 }
 ```
+
+Integers outside JavaScript's safe range (±2^53) are sent as decimal strings, and `BLOB` values as base64 strings.
 
 **Error:**
 

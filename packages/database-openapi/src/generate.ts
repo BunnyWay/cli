@@ -237,7 +237,12 @@ const tableToInsertSchema = (table: TableDefinition): SchemaObject => {
   const required: string[] = [];
 
   for (const column of table.columns) {
-    if (column.primaryKey && column.type === "INTEGER") {
+    // Only a sole INTEGER PRIMARY KEY aliases the rowid and is assigned by SQLite.
+    if (
+      column.primaryKey &&
+      column.type === "INTEGER" &&
+      table.primaryKey.length === 1
+    ) {
       continue;
     }
     properties[column.name] = columnTypeToSchema(column);

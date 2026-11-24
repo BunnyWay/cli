@@ -9,6 +9,8 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    // CodeMirror breaks (and the bundle doubles) if two copies of these load.
+    dedupe: ["@codemirror/state", "@codemirror/view", "@codemirror/language"],
   },
   build: {
     rollupOptions: {
@@ -22,6 +24,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": "http://localhost:4488",
+      "/studio-api": "http://localhost:4488",
     },
   },
 });

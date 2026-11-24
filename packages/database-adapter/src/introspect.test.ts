@@ -22,6 +22,11 @@ beforeAll(async () => {
       title TEXT NOT NULL,
       user_id INTEGER REFERENCES users(id)
     );
+    CREATE TABLE post_tags (
+      tag_id INTEGER NOT NULL,
+      post_id INTEGER NOT NULL,
+      PRIMARY KEY (post_id, tag_id)
+    );
     CREATE TABLE "__drizzle_migrations" (
       id INTEGER PRIMARY KEY,
       hash TEXT NOT NULL
@@ -119,6 +124,37 @@ describe("introspect", () => {
     expect(posts.foreignKeys).toHaveLength(1);
     expect(posts.foreignKeys[0]?.column).toBe("user_id");
     expect(posts.foreignKeys[0]?.referencesTable).toBe("users");
+  });
+
+  test("reports every column of a composite primary key, in key order", async () => {
+    const schema = await introspect({ client });
+    const postTags = schema.tables.post_tags!;
+
+    expect(postTags.primaryKey).toEqual(["post_id", "tag_id"]);
+    expect(postTags.columns.every((c) => c.primaryKey)).toBe(true);
+  });
+
+  test("only runs statements a read-only libSQL token may run", async () => {
+    // libSQL servers check each statement's kind against the token's scope.
+    // These PRAGMAs are the ones they classify as reads; anything else (even
+    // `PRAGMA foreign_key_list`) needs write access and would break studio,
+    // which connects with a read-only token.
+    const READ_PRAGMAS =
+      /^PRAGMA (table_info|table_xinfo|table_list|index_list|index_info|index_xinfo)\b/i;
+    const seen: string[] = [];
+    const recording: AdapterClient = {
+      prepare: (sql) => {
+        seen.push(sql.trim());
+        return client.prepare(sql);
+      },
+    };
+
+    await introspect({ client: recording });
+
+    const notRead = seen.filter(
+      (sql) => !/^SELECT\b/i.test(sql) && !READ_PRAGMAS.test(sql),
+    );
+    expect(notRead).toEqual([]);
   });
 
   test("uses custom version", async () => {

@@ -8,7 +8,7 @@ type Database = components["schemas"]["Database2"];
 type RegionConfig = components["schemas"]["ListConfigAPIResponse"];
 type GenerateTokenResponse =
   components["schemas"]["GenerateTokenDatabaseV2Response"];
-type TokenAuthorization =
+export type TokenAuthorization =
   components["schemas"]["GenerateTokenDatabaseV2Payload"]["authorization"];
 type DBLiveStatus = components["schemas"]["DBLiveStatus"];
 
