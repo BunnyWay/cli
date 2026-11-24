@@ -7,6 +7,8 @@ import {
 } from "@/tools/storage/index.ts";
 import {
   mainRegionChoices,
+  replicationChoices,
+  storageRegions,
   ZONE_TIER_CHOICES,
   type ZoneTierChoice,
 } from "./constants.ts";
@@ -38,6 +40,33 @@ function regionRows(catalog: StorageRegionOption[], { tier, s3 }: RegionsArgs) {
     .sort((a, b) => a.code.localeCompare(b.code));
 }
 
+// One row per region with the original main/replication fields, plus the per-tier rows under `tiers`.
+function jsonRows(catalog: StorageRegionOption[], args: RegionsArgs) {
+  const scope = { tier: args.tier, s3: args.s3 };
+  const main = new Set(mainRegionChoices(catalog, scope).map((r) => r.code));
+  const replica = new Set(
+    replicationChoices(catalog, undefined, scope).map((r) => r.code),
+  );
+  const scoped = args.tier !== undefined || args.s3 !== undefined;
+  const rows = regionRows(catalog, args);
+
+  return storageRegions(catalog)
+    .filter((r) => !scoped || main.has(r.code) || replica.has(r.code))
+    .map((region) => ({
+      ...region,
+      main: main.has(region.code),
+      replication: replica.has(region.code),
+      tiers: rows
+        .filter((row) => row.code === region.code)
+        .map(({ tier, main, replication, s3 }) => ({
+          tier,
+          main,
+          replication,
+          s3,
+        })),
+    }));
+}
+
 export const storageRegionsCommand = defineToolCommand({
   tool: storageRegionsList,
   command: "regions",
@@ -65,7 +94,7 @@ export const storageRegionsCommand = defineToolCommand({
 
   prepare: async () => ({ input: {} }),
 
-  json: (catalog, args) => regionRows(catalog, args),
+  json: (catalog, args) => jsonRows(catalog, args),
 
   render: (catalog, args) => {
     logger.log(
