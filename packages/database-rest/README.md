@@ -125,30 +125,19 @@ const guarded = requireAuth(handler, {
 
 #### Bringing your own auth
 
-`requireAuth` covers the shared-token case. For richer auth (Clerk,
-Auth0, JWT verification, per-row scopes), wrap `createRestHandler`'s
-result yourself; it returns a standard Web `Request → Response` handler,
-so any check that fits in a `fetch` wrapper works:
+For anything beyond a shared token (Clerk, Auth0, JWT verification, your own sessions), pass `verify` instead of `token`. It resolves the request to a session, or `null` for a `401`. The handler receives the session as a second argument:
 
 ```ts
-const handler = createRestHandler(executor, schema);
-
-Bun.serve({
-  fetch: async (req) => {
-    const session = await myAuthProvider.authenticate(req);
-    if (!session)
-      return new Response("Unauthorized", {
-        status: 401,
-      });
-    return handler(req);
+const guarded = requireAuth((req, session) => handler(req), {
+  verify: async (req) => {
+    const token = req.headers.get("authorization")?.replace(/^Bearer /, "");
+    return token ? await verifyJwt(token) : null;
   },
+  isPublic: (p) => p === "/health",
 });
 ```
 
-The `requireAuth` API is intentionally shaped to grow a verifier-based
-variant (`{ verify: (req) => session | null }`) later without breaking
-existing `{ token }` callers. When there's demand, it lands as an
-additive widening.
+On a path that `isPublic` allows, `verify` isn't called and the session is `null`. If `verify` throws, the returned promise rejects instead of letting the request through.
 
 ## Endpoints
 

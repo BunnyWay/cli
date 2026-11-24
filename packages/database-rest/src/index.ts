@@ -1,4 +1,8 @@
-export type { RequireAuthOptions } from "./auth.ts";
+export type {
+  RequireAuthOptions,
+  TokenAuthOptions,
+  VerifyAuthOptions,
+} from "./auth.ts";
 export { requireAuth } from "./auth.ts";
 export type { DatabaseExecutor, ExecuteResult } from "./executor.ts";
 export type { RestHandlerOptions } from "./handler.ts";
