@@ -9,6 +9,6 @@
   "dependencies": {
     "@astrojs/node": "^11.1.4",
     "@bunny.net/database-client": "*",
-    "astro": "^7.2.7"
+    "astro": "^7.4.7"
   }
 }
