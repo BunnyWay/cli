@@ -12,7 +12,11 @@ export const STATE_VERSION = 2;
 
 export const LEGACY_STATE_VERSION = 1;
 
-export const DEFAULT_KEEP_DEPLOYS = 5;
+// What `sites deploy` prunes to once a site opts in: only the live and previous deploys survive.
+export const AUTO_PRUNE_KEEP = 0;
+
+/** Deploys a site keeps after each deploy's prune: the newest N (live and previous always survive), or "all" to never prune. */
+export type DeployRetention = number | "all";
 
 export interface SiteManifest {
   /** The site's storage zone ID; the site's identity. */
@@ -47,6 +51,8 @@ export interface RemoteSiteState {
   domain?: string;
   current?: string;
   previous?: string;
+  /** Recorded deploy retention; absent on sites from before auto-prune until someone chooses. */
+  keep?: DeployRetention;
   deploys: DeployRecord[];
 }
 

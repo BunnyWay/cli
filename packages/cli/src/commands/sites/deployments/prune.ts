@@ -4,8 +4,9 @@ import {
   rereadRemoteState,
   writeRemoteState,
 } from "@/commands/sites/api.ts";
+import { loadSiteConfig } from "@/commands/sites/config.ts";
 import {
-  DEFAULT_KEEP_DEPLOYS,
+  AUTO_PRUNE_KEEP,
   type DeployRecord,
   isValidDeployId,
   pruneVictims,
@@ -29,15 +30,14 @@ interface PruneArgs extends SiteSelectorArgs {
 }
 
 // yargs hands us NaN for `--keep abc`, which passes pruneVictims' `Math.max(0, keep)` untouched and marks every deploy but current/previous for deletion; the same goes for a negative count.
-export function resolveKeepCount(keep: number | undefined): number {
-  const value = keep ?? DEFAULT_KEEP_DEPLOYS;
-  if (!Number.isInteger(value) || value < 0) {
+export function resolveKeepCount(keep: number): number {
+  if (!Number.isInteger(keep) || keep < 0) {
     throw new UserError(
       "--keep must be a whole number of deploys to keep, 0 or more.",
-      `Omit it to keep the newest ${DEFAULT_KEEP_DEPLOYS}.`,
+      "Omit it to use sites.keep or the site's saved setting.",
     );
   }
-  return value;
+  return keep;
 }
 
 export interface PruneResult {
@@ -118,7 +118,7 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
   examples: [
     [
       "$0 sites deployments prune",
-      `Keep the ${DEFAULT_KEEP_DEPLOYS} newest deploys`,
+      "Prune to sites.keep or the site's saved setting (default: live and previous)",
     ],
     ["$0 sites deployments prune --keep 10", "Keep the 10 newest deploys"],
     ["$0 sites deployments prune my-site", "Prune a specific site"],
@@ -129,9 +129,8 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
     sitePositionalBuilder(yargs)
       .option("keep", {
         type: "number",
-        default: DEFAULT_KEEP_DEPLOYS,
         describe:
-          "Number of recent deploys to keep (current and previous are always kept)",
+          "Number of recent deploys to keep (current and previous are always kept); defaults to sites.keep, then the site's saved setting",
       })
       .option("force", {
         alias: "f",
@@ -141,7 +140,8 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
-    const keep = resolveKeepCount(args.keep);
+    const flagKeep =
+      args.keep === undefined ? undefined : resolveKeepCount(args.keep);
 
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
@@ -153,6 +153,11 @@ export const sitesDeploymentsPruneCommand = defineCommand<PruneArgs>({
       force: args.force,
     });
     const { state, connection } = site;
+
+    // An explicit prune of a keep-everything site falls back to live and previous; the confirmation lists what goes.
+    const saved = loadSiteConfig()?.config.keep ?? state.keep;
+    const keep =
+      flagKeep ?? (typeof saved === "number" ? saved : AUTO_PRUNE_KEEP);
 
     const victims = pruneVictims(
       state.deploys,
