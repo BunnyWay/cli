@@ -1,6 +1,6 @@
 {
   "name": "@bunny.net/config",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "type": "module",
   "module": "src/index.ts",
@@ -13,6 +13,6 @@
   },
   "dependencies": {
     "@bunny.net/openapi-client": "workspace:*",
-    "zod": "^4.3.6"
+    "zod": "^4.6.6"
   }
 }

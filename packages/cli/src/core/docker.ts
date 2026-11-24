@@ -96,7 +96,7 @@ export async function pushImage(
     const hostname = imageHostname(tag);
     const hint =
       hostname === "ghcr.io"
-        ? "If you saw `permission_denied: write_package`, your token is missing the `write:packages` scope. Run `gh auth refresh -h github.com -s write:packages` then `gh auth token | docker login ghcr.io -u $(gh api user --jq .login) --password-stdin` and try again."
+        ? "If you saw `permission_denied`, Docker is logged in to ghcr.io as an account that can't push to this namespace, or its token lacks `write:packages`. Run `gh auth refresh -h github.com -s write:packages` then `gh auth token | docker login ghcr.io -u $(gh api user --jq .login) --password-stdin` and try again."
         : `Run \`docker login ${hostname ?? "<hostname>"}\` and try again. Check that your token has push permission.`;
     throw new UserError(`Docker push failed (exit code ${exitCode}).`, hint);
   }

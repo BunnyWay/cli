@@ -1,5 +1,11 @@
 # @bunny.net/database-shell
 
+## 0.2.9
+
+### Patch Changes
+
+- [#285](https://github.com/BunnyWay/cli/pull/285) [`aeff75d`](https://github.com/BunnyWay/cli/commit/aeff75d740c8b8194486daced0e8b1e5b7475cbb) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Stop reporting runtime crashes as an unsupported CPU
+
 ## 0.2.8
 
 ### Patch Changes

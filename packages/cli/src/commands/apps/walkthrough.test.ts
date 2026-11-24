@@ -5,10 +5,15 @@ import { useTempDir } from "@/test-utils/temp-dir.ts";
 import { BUNNY_REGISTRY_ID, type McClient } from "./docker.ts";
 import { runWalkthrough, type WalkthroughInput } from "./walkthrough.ts";
 
-// Only the regions lookup reaches the API on the build path.
+// The build path only reads registries and regions.
 const client = {
-  GET: async () => ({
-    data: { items: [{ id: "de", name: "Frankfurt", hasCapacity: true }] },
+  GET: async (path: string) => ({
+    data: {
+      items:
+        path === "/registries"
+          ? [{ id: Number(BUNNY_REGISTRY_ID), isPlatformManaged: true }]
+          : [{ id: "de", name: "Frankfurt", hasCapacity: true }],
+    },
   }),
 } as unknown as McClient;
 

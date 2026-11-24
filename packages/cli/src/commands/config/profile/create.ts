@@ -8,6 +8,13 @@ export const profileCreateCommand = defineCommand<{ "api-key"?: string }>({
   command: "create <name>",
   aliases: ["add"],
   describe: "Create a configuration profile.",
+  examples: [
+    ["$0 config profile create staging", "Prompt for the API key"],
+    [
+      "$0 config profile create staging --api-key $BUNNYNET_API_KEY",
+      "Skip the prompt",
+    ],
+  ],
 
   builder: (yargs) =>
     yargs.option("api-key", {

@@ -7,7 +7,7 @@ import {
   resolveLibraryInteractive,
   writeStreamManifest,
 } from "./interactive.ts";
-import { withTTY } from "./test-tty.ts";
+import { withoutTTY, withTTY } from "./test-tty.ts";
 
 const LIBRARIES: VideoLibraryModel[] = [
   { Id: 1, Name: "Alpha", VideoCount: 3 },
@@ -67,11 +67,13 @@ test("ignoreManifest skips the linked library so linking can re-pick", async () 
   writeStreamManifest(LIBRARIES[0] as VideoLibraryModel);
   const calls: string[] = [];
 
-  await expect(
-    resolveLibraryInteractive(fakeCoreClient(calls), undefined, {
-      ignoreManifest: true,
-    }),
-  ).rejects.toThrow("A library is required.");
+  await withoutTTY(() =>
+    expect(
+      resolveLibraryInteractive(fakeCoreClient(calls), undefined, {
+        ignoreManifest: true,
+      }),
+    ).rejects.toThrow("A library is required."),
+  );
   expect(calls).toEqual([]);
 });
 

@@ -21,6 +21,10 @@ export const sandboxUrlRemoveCommand = defineCommand<RemoveArgs>({
       "$0 sandbox url remove my-sandbox port-3000",
       "Remove an endpoint by name",
     ],
+    [
+      "$0 sandbox url remove my-sandbox port-3000 --force",
+      "Skip the confirmation",
+    ],
   ],
 
   builder: (yargs) =>

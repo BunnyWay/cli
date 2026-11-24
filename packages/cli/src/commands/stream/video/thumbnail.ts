@@ -65,6 +65,10 @@ export const streamVideoThumbnailCommand = defineCommand<ThumbnailArgs>({
       "$0 stream videos thumbnail --file ./thumb.jpg",
       "Pick the video interactively",
     ],
+    [
+      "$0 stream videos thumbnail 1a2b3c4d-... --file ./thumb.jpg --lib 12345",
+      "A video in a specific library",
+    ],
   ],
 
   builder: (yargs) =>

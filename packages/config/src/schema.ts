@@ -13,13 +13,19 @@ export const ProbeConfigSchema = z.object({
   type: z.enum(["http", "tcp", "grpc"]),
   path: z.string().optional(),
   port: z.number().optional(),
+  initialDelaySeconds: z.number().optional(),
+  periodSeconds: z.number().optional(),
+  timeoutSeconds: z.number().optional(),
+  failureThreshold: z.number().optional(),
+  successThreshold: z.number().optional(),
 });
 
 export const EndpointConfigSchema = z.object({
   type: z.enum(["cdn", "anycast"]),
+  name: z.string().optional(),
   ssl: z.boolean().optional(),
   ports: z
-    .array(z.object({ public: z.number(), container: z.number() }))
+    .array(z.object({ public: z.number().optional(), container: z.number() }))
     .optional(),
 });
 
@@ -119,11 +125,10 @@ export function normalizeRegions(regions: RegionsConfig | undefined): {
   required: string[];
 } {
   if (!regions) return { allowed: [], required: [] };
+  const upper = (ids: string[] = []) => ids.map((id) => id.toUpperCase());
+
   if (Array.isArray(regions)) {
-    return { allowed: [...regions], required: [...regions] };
+    return { allowed: upper(regions), required: upper(regions) };
   }
-  return {
-    allowed: regions.allowed ?? [],
-    required: regions.required ?? [],
-  };
+  return { allowed: upper(regions.allowed), required: upper(regions.required) };
 }

@@ -21,7 +21,7 @@ export const muxSource: SourcePlugin<MuxConfig> = {
       env: "MUX_TOKEN_ID",
       secret: true,
       required: true,
-      hint: "https://dashboard.mux.com/settings/api-keys",
+      hint: "https://dashboard.mux.com/settings/access-tokens",
     },
     {
       key: "tokenSecret",

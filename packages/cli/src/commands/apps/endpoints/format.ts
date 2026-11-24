@@ -28,9 +28,7 @@ export interface DeployedEndpointLine {
  * anycast endpoint whose public IPs are still being assigned in the
  * seconds after a deploy. Callers render that as "provisioning…".
  */
-export function endpointTarget(
-  endpoint: ContainerEndpoint,
-): string | undefined {
+function endpointTarget(endpoint: ContainerEndpoint): string | undefined {
   if (endpoint.type === "cdn") {
     if (!endpoint.publicHost) return undefined;
     const scheme = endpoint.isSslEnabled ? "https" : "http";

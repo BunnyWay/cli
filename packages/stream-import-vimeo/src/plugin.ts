@@ -13,6 +13,14 @@ export const vimeoSource: SourcePlugin<VimeoConfig> = {
   label: "Vimeo",
   dedupTag: "vimeoId",
   supportsFolders: true,
+  // Large imports run more reliably paced: over 500 videos, hand them over at
+  // most 360 an hour (one every 10s, two at a time) and give slow responses longer.
+  largeLibrary: {
+    threshold: 500,
+    concurrency: 2,
+    intervalSeconds: 10,
+    requestTimeoutSeconds: 120,
+  },
   credentials: [
     {
       key: "accessToken",

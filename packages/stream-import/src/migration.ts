@@ -40,6 +40,11 @@ import {
   videoHealth,
 } from "./source-index.ts";
 import { isStalled } from "./status.ts";
+import {
+  Pacer,
+  SOURCE_REJECTION_STATUSES,
+  SourceRejectedError,
+} from "./throttle.ts";
 import { parseBunnyDate } from "./time.ts";
 
 /** How long encode-progress updates accumulate before hitting disk; status transitions still write through immediately. */
@@ -60,6 +65,8 @@ export interface MigrationOptions {
   cleanFailed?: boolean;
   /** Delete and fetch again videos stuck at zero bytes past the stall threshold. */
   retryStalled?: boolean;
+  /** Minimum gap between starting two new hand-offs to Bunny, across all workers; 0 (default) means no gap. The run widens it by itself when fetches fail with HTTP 422/503. */
+  fetchIntervalMs?: number;
   /** Pauses the run: no new videos start, in-flight ones are abandoned for the next resume, and the state comes back `paused` instead of throwing. */
   signal?: AbortSignal;
   onProgress?: (
@@ -147,6 +154,12 @@ export class MigrationService {
   /** Failed tagged copies by dedup value, every one of them, for `cleanFailed` to delete. */
   private deadCopies = new Map<string, string[]>();
   private cleanFailed = false;
+  private pacer = new Pacer(0);
+
+  /** The gap between hand-offs the last run ended with, in ms; larger than `fetchIntervalMs` when it slowed itself down. */
+  get fetchIntervalMs(): number {
+    return this.pacer.interval;
+  }
 
   /** Discovery result, cached so the run does not re-walk the source after the summary. */
   private discovery: {
@@ -292,6 +305,7 @@ export class MigrationService {
   async runMigration(options: MigrationOptions = {}): Promise<MigrationState> {
     const { folderId, resume = false, wait = false, signal } = options;
     this.cleanFailed = Boolean(options.cleanFailed);
+    this.pacer = new Pacer(Math.max(0, options.fetchIntervalMs ?? 0));
     const concurrency = Math.max(
       1,
       Math.floor(positiveOr(options.concurrency, DEFAULT_CONCURRENCY)),
@@ -874,6 +888,7 @@ export class MigrationService {
       }
       migration.status = "failed";
       migration.error = safeErrorMessage(error, "Import failed");
+      migration.sourceRejected = error instanceof SourceRejectedError;
       this.logger.error(
         `Failed: ${stripAnsi(migration.videoName)} - ${migration.error}`,
       );
@@ -934,6 +949,7 @@ export class MigrationService {
     migration.attempts = (migration.attempts ?? 0) + 1;
     migration.startedAt = new Date().toISOString();
     migration.error = null;
+    migration.sourceRejected = undefined;
     this.flush();
 
     // A pause cancels the source lookup; only a fetch already sent to Bunny is allowed to settle.
@@ -959,6 +975,16 @@ export class MigrationService {
 
     this.logger.debug(`Importing: ${stripAnsi(migration.videoName)}`);
 
+    // Paced right before the hand-off, so a slow source lookup in another
+    // worker cannot bunch two Bunny fetches together. Re-tags never get here.
+    // A pause while waiting leaves the entry pending: nothing reached Bunny yet.
+    const turn = await this.pacer.turn(
+      runSignal ? AbortSignal.any([signal, runSignal]) : signal,
+    );
+    // Stopped while waiting: no request went to Bunny, so this was not an attempt.
+    if (signal.aborted || runSignal?.aborted)
+      migration.attempts = Math.max(0, (migration.attempts ?? 1) - 1);
+    signal.throwIfAborted();
     runSignal?.throwIfAborted();
     migration.pendingFetch = {
       title,
@@ -973,8 +999,27 @@ export class MigrationService {
     if (!result.success || !result.videoId) {
       signal.throwIfAborted();
       if (!result.indeterminate) migration.pendingFetch = undefined;
+      // A slower retry usually gets past these, so tell the user to slow down.
+      if (
+        result.status !== undefined &&
+        SOURCE_REJECTION_STATUSES.has(result.status)
+      ) {
+        const gap = this.pacer.backoff(turn);
+        if (gap)
+          this.logger.warn(
+            `Videos are failing to import; slowing down to one new video every ${gap / 1000}s.`,
+          );
+        throw new SourceRejectedError(result.status);
+      }
       throw new Error(result.error ?? "Failed to initiate fetch");
     }
+    const gap = this.pacer.succeeded();
+    if (gap !== undefined)
+      this.logger.info(
+        gap > 0
+          ? `Videos are importing again; speeding up to one new video every ${gap / 1000}s.`
+          : "Videos are importing again; back to full speed.",
+      );
 
     // Saved before the abort check and the metaTag write, so a pause or resume can never lose a video Bunny created.
     migration.pendingFetch = undefined;

@@ -68,6 +68,10 @@ export const streamVideoResolutionsCommand = defineCommand<ResolutionsArgs>({
       "$0 stream videos resolutions 1a2b3c4d-... --output json",
       "JSON output (includes storage objects)",
     ],
+    [
+      "$0 stream videos resolutions 1a2b3c4d-... --lib 12345",
+      "A video in a specific library",
+    ],
   ],
 
   builder: (yargs) =>

@@ -18,7 +18,6 @@ const PENDING_MIGRATION = new Set([
   "commands/apps/link.ts",
   "commands/apps/list.ts",
   "commands/apps/pull.ts",
-  "commands/apps/push.ts",
   "commands/apps/regions/list.ts",
   "commands/apps/regions/show.ts",
   "commands/apps/restart.ts",

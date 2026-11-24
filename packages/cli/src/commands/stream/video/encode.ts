@@ -3,7 +3,6 @@ import {
   streamLibraryContext,
 } from "@/commands/stream/context.ts";
 import {
-  DOUBLE_BILLING_NOTE,
   estimateTranscription,
   formatTranscriptionEstimate,
   outputLanguages,
@@ -30,6 +29,10 @@ export const streamVideoEncodeCommand = defineCommand<ReencodeArgs>({
   examples: [
     ["$0 stream videos encode 1a2b3c4d-...", "Re-encode one video"],
     ["$0 stream videos encode", "Pick a video interactively"],
+    [
+      "$0 stream videos encode 1a2b3c4d-... --lib 12345",
+      "A video in a specific library",
+    ],
   ],
 
   builder: (yargs) =>
@@ -63,7 +66,8 @@ export const streamVideoEncodeCommand = defineCommand<ReencodeArgs>({
       );
     }
 
-    // A transcribing library transcribes again after the re-encode, billed separately.
+    // A transcribing library keeps the existing transcription across a re-encode and only
+    // transcribes again (billed separately) when its transcribing languages changed since.
     const autoTranscribe = library.EnableTranscribing ?? false;
 
     // Re-encoding regenerates every rendition, so it is billed like a new encode.
@@ -77,9 +81,8 @@ export const streamVideoEncodeCommand = defineCommand<ReencodeArgs>({
           outputLanguages(undefined, library.TranscribingCaptionLanguages),
         );
         logger.warn(
-          `Transcribing is on for this library, so re-encoding also transcribes this video again once encoding finishes, billed separately. ${formatTranscriptionEstimate(estimate)}`,
+          `Transcribing is on for this library. Re-encoding keeps the existing transcription and only transcribes again, billed separately, if the library's transcribing languages changed since this video was transcribed. If they did: ${formatTranscriptionEstimate(estimate)}`,
         );
-        logger.warn(DOUBLE_BILLING_NOTE);
       }
     }
 
@@ -90,7 +93,7 @@ export const streamVideoEncodeCommand = defineCommand<ReencodeArgs>({
     if (output === "json") {
       logger.log(
         JSON.stringify(
-          { ...updated, transcriptionQueued: autoTranscribe },
+          { ...updated, transcribingEnabled: autoTranscribe },
           null,
           2,
         ),

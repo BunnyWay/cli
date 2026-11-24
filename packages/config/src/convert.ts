@@ -1,3 +1,4 @@
+import { UserError } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/magic-containers.d.ts";
 import { parseImageRef } from "./parse-image-ref.ts";
 import {
@@ -6,6 +7,7 @@ import {
   CURRENT_VERSION,
   type EndpointConfig,
   normalizeRegions,
+  type ProbeConfig,
 } from "./schema.ts";
 
 type Application = components["schemas"]["Application"];
@@ -15,12 +17,48 @@ type ContainerRequest = components["schemas"]["ContainerRequest"];
 type PatchApplicationRequest = components["schemas"]["PatchApplicationRequest"];
 type EndpointRequest = components["schemas"]["EndpointRequest"];
 type VolumeRequest = components["schemas"]["VolumeRequest"];
+type ContainerProbe = components["schemas"]["ContainerProbe"];
 
-function containerTemplateToConfig(ct: ContainerTemplate): ContainerConfig {
+// bunny.jsonc can only describe CDN and Anycast endpoints; anything else (a public IP) is left to the dashboard.
+function isConfigEndpoint(type: string): boolean {
+  const lower = type.toLowerCase();
+  return lower === "cdn" || lower === "anycast";
+}
+
+function hasHost(image: string): boolean {
+  const [first, ...rest] = image.split("/");
+
+  return (
+    rest.length > 0 &&
+    !!first &&
+    (first.includes(".") || first.includes(":") || first === "localhost")
+  );
+}
+
+function containerTemplateToConfig(
+  ct: ContainerTemplate,
+  registryHosts: Record<string, string>,
+): ContainerConfig {
   const config: ContainerConfig = {};
 
   if (ct.image) {
-    config.image = ct.image;
+    const [repository = ct.image, digest] = ct.image.split("@");
+    const tagged = repository
+      .slice(repository.lastIndexOf("/") + 1)
+      .includes(":");
+    const image =
+      digest && ct.imageTag && !tagged
+        ? `${repository}:${ct.imageTag}`
+        : repository;
+    const host = registryHosts[ct.imageRegistryId];
+
+    if (host && host !== "docker.io" && !hasHost(image)) {
+      config.image = `${host}/${image}`;
+    } else if (image.startsWith("library/") && image.split("/").length === 2) {
+      config.image = image.slice("library/".length);
+    } else {
+      config.image = image;
+    }
   }
 
   if (ct.entryPoint?.commandArray?.length) {
@@ -35,16 +73,25 @@ function containerTemplateToConfig(ct: ContainerTemplate): ContainerConfig {
     );
   }
 
-  if (ct.endpoints.length > 0) {
-    config.endpoints = ct.endpoints.map((ep) => ({
-      type: ep.type.toLowerCase() as "cdn" | "anycast",
-      ssl: ep.isSslEnabled,
-      ports: ep.portMappings.map((pm) => ({
-        public: pm.exposedPort,
-        container: pm.containerPort,
-      })),
-    }));
+  const endpoints = ct.endpoints.filter((ep) => isConfigEndpoint(ep.type));
+  if (endpoints.length > 0) {
+    config.endpoints = endpoints.map((ep) => {
+      const type = ep.type.toLowerCase() as "cdn" | "anycast";
+
+      return {
+        type,
+        ...(ep.displayName !== type ? { name: ep.displayName } : {}),
+        ...(ep.isSslEnabled != null ? { ssl: ep.isSslEnabled } : {}),
+        ports: ep.portMappings.map((pm) => ({
+          ...(pm.exposedPort != null ? { public: pm.exposedPort } : {}),
+          container: pm.containerPort,
+        })),
+      };
+    });
   }
+
+  const probes = probesFromApi(ct.probes);
+  if (probes) config.probes = probes;
 
   if (ct.volumeMounts.length > 0) {
     config.volumes = ct.volumeMounts.map((vm) => ({
@@ -57,8 +104,10 @@ function containerTemplateToConfig(ct: ContainerTemplate): ContainerConfig {
   return config;
 }
 
-/** Convert an API Application response to BunnyAppConfig. */
-export function apiToConfig(app: Application): BunnyAppConfig {
+export function apiToConfig(
+  app: Application,
+  registryHosts: Record<string, string> = {},
+): BunnyAppConfig {
   const volumeSizeMap = new Map(app.volumes.map((v) => [v.name, v.size]));
 
   const containers: Record<
@@ -66,7 +115,7 @@ export function apiToConfig(app: Application): BunnyAppConfig {
     ReturnType<typeof containerTemplateToConfig>
   > = {};
   for (const ct of app.containerTemplates) {
-    const c = containerTemplateToConfig(ct);
+    const c = containerTemplateToConfig(ct, registryHosts);
     if (c.volumes) {
       for (const vol of c.volumes) {
         vol.size = volumeSizeMap.get(vol.name) ?? 0;
@@ -107,10 +156,12 @@ export function apiToConfig(app: Application): BunnyAppConfig {
 function containerConfigToRequest(
   name: string,
   config: ContainerConfig,
+  endpointNames: Set<string>,
   id?: string,
 ): ContainerRequest {
   const image = config.image ?? "";
-  const { imageName, imageNamespace, imageTag } = parseImageRef(image);
+  const { imageName, imageNamespace, imageTag, imageDigest } =
+    parseImageRef(image);
 
   const req: ContainerRequest = {
     id: id ?? undefined,
@@ -119,6 +170,7 @@ function containerConfigToRequest(
     imageName,
     imageNamespace,
     imageTag,
+    ...(imageDigest ? { imageDigest } : {}),
     imageRegistryId: config.registry ?? "",
     imagePullPolicy: "always",
   };
@@ -134,23 +186,121 @@ function containerConfigToRequest(
   }
 
   if (config.endpoints) {
-    req.endpoints = config.endpoints.map((ep) => endpointConfigToRequest(ep));
+    req.endpoints = config.endpoints.map((ep) => {
+      let displayName = ep.name ?? ep.type;
+      for (let n = 2; !ep.name && endpointNames.has(displayName); n++) {
+        displayName = `${ep.type}-${n}`;
+      }
+
+      endpointNames.add(displayName);
+
+      return endpointConfigToRequest(ep, displayName);
+    });
   }
 
-  if (config.volumes) {
-    req.volumeMounts = config.volumes.map((v) => ({
-      name: v.name,
-      mountPath: v.mount,
-    }));
+  req.volumeMounts = (config.volumes ?? []).map((v) => ({
+    name: v.name,
+    mountPath: v.mount,
+  }));
+
+  if (config.probes) {
+    const defaultPort = config.endpoints?.[0]?.ports?.[0]?.container;
+    req.probes = {};
+    for (const kind of PROBE_KINDS) {
+      const probe = config.probes[kind];
+      if (probe) {
+        req.probes[kind] = probeToRequest(
+          probe,
+          defaultPort,
+          `${name}.probes.${kind}`,
+        );
+      }
+    }
   }
 
   return req;
 }
 
-function endpointConfigToRequest(ep: EndpointConfig): EndpointRequest {
-  const req: EndpointRequest = {
-    displayName: ep.type,
+const PROBE_KINDS = ["startup", "readiness", "liveness"] as const;
+
+const PROBE_TIMINGS = [
+  "initialDelaySeconds",
+  "periodSeconds",
+  "timeoutSeconds",
+  "failureThreshold",
+  "successThreshold",
+] as const;
+
+function probeToRequest(
+  probe: ProbeConfig,
+  defaultPort: number | undefined,
+  label: string,
+): ContainerProbe {
+  const portNumber = probe.port ?? defaultPort;
+  if (portNumber == null) {
+    throw new UserError(
+      `${label} has no port. Set "port" on the probe, since the container has no endpoint to take it from.`,
+    );
+  }
+
+  const req: ContainerProbe = {
+    initialDelaySeconds: probe.initialDelaySeconds ?? null,
+    periodSeconds: probe.periodSeconds ?? null,
+    timeoutSeconds: probe.timeoutSeconds ?? null,
+    failureThreshold: probe.failureThreshold ?? null,
+    successThreshold: probe.successThreshold ?? null,
   };
+
+  if (probe.type === "http") {
+    req.httpGet = { request: { path: probe.path ?? "/", portNumber } };
+  } else if (probe.type === "tcp") {
+    req.tcpSocket = { request: { portNumber } };
+  } else {
+    req.grpc = { request: { portNumber } };
+  }
+
+  return req;
+}
+
+function probesFromApi(
+  probes: ContainerTemplate["probes"],
+): ContainerConfig["probes"] {
+  if (!probes) return undefined;
+
+  const config: NonNullable<ContainerConfig["probes"]> = {};
+  for (const kind of PROBE_KINDS) {
+    const probe = probes[kind];
+    if (!probe) continue;
+
+    let parsed: ProbeConfig | undefined;
+    if (probe.httpGet?.request) {
+      parsed = {
+        type: "http",
+        path: probe.httpGet.request.path,
+        port: probe.httpGet.request.portNumber,
+      };
+    } else if (probe.tcpSocket?.request) {
+      parsed = { type: "tcp", port: probe.tcpSocket.request.portNumber };
+    } else if (probe.grpc?.request) {
+      parsed = { type: "grpc", port: probe.grpc.request.portNumber };
+    }
+    if (!parsed) continue;
+
+    for (const key of PROBE_TIMINGS) {
+      const value = probe[key];
+      if (value != null) parsed[key] = value;
+    }
+    config[kind] = parsed;
+  }
+
+  return Object.keys(config).length > 0 ? config : undefined;
+}
+
+function endpointConfigToRequest(
+  ep: EndpointConfig,
+  displayName: string,
+): EndpointRequest {
+  const req: EndpointRequest = { displayName };
 
   if (ep.type === "cdn") {
     req.cdn = {
@@ -207,6 +357,49 @@ function mergeRegistry(
   return { ...c, registry: override };
 }
 
+/** Pair config containers with app templates by name; one leftover on each side is a rename. */
+function matchTemplates(
+  names: string[],
+  templates: ContainerTemplate[],
+): Map<string, ContainerTemplate> {
+  const matches = new Map<string, ContainerTemplate>();
+  for (const name of names) {
+    const template = templates.find((t) => t.name === name);
+    if (template) matches.set(name, template);
+  }
+
+  const unmatchedNames = names.filter((name) => !matches.has(name));
+  const matched = new Set(matches.values());
+  const unmatchedTemplates = templates.filter((t) => !matched.has(t));
+  const [renamed] = unmatchedNames;
+  const [template] = unmatchedTemplates;
+
+  if (
+    renamed &&
+    template &&
+    unmatchedNames.length === 1 &&
+    unmatchedTemplates.length === 1
+  ) {
+    matches.set(renamed, template);
+  }
+
+  return matches;
+}
+
+/** Convert one container from BunnyAppConfig to a request for adding it to an existing app. */
+export function configToContainerRequest(
+  name: string,
+  container: ContainerConfig,
+  registries?: RegistryMap,
+  takenEndpointNames: Set<string> = new Set(),
+): ContainerRequest {
+  return containerConfigToRequest(
+    name,
+    mergeRegistry(name, container, registries),
+    takenEndpointNames,
+  );
+}
+
 /** Convert BunnyAppConfig to an AddApplicationRequest for creating a new app. */
 export function configToAddRequest(
   config: BunnyAppConfig,
@@ -215,10 +408,11 @@ export function configToAddRequest(
   const containers: ContainerRequest[] = [];
   const volumes: VolumeRequest[] = [];
   const seenVolumes = new Set<string>();
+  const endpointNames = new Set<string>();
 
   for (const [name, c] of Object.entries(config.app.containers)) {
     const merged = mergeRegistry(name, c, registries);
-    containers.push(containerConfigToRequest(name, merged));
+    containers.push(containerConfigToRequest(name, merged, endpointNames));
     collectVolumes(merged, volumes, seenVolumes);
   }
 
@@ -240,37 +434,92 @@ export function configToPatchRequest(
   config: BunnyAppConfig,
   existingApp: Application,
   registries?: RegistryMap,
+  options: { pinDigests?: boolean } = {},
 ): PatchApplicationRequest {
   const containers: ContainerRequest[] = [];
   const volumes: VolumeRequest[] = [];
   const seenVolumes = new Set<string>();
 
-  // Match containers by name to preserve existing IDs
+  const endpointNames = new Set<string>();
+
   const entries = Object.entries(config.app.containers);
-  for (const [i, [name, c]] of entries.entries()) {
-    // First container matches first existing template (primary); rest match by name
-    const existing =
-      i === 0
-        ? existingApp.containerTemplates[0]
-        : existingApp.containerTemplates.find((ct) => ct.name === name);
-    const merged = mergeRegistry(name, c, registries);
-    const req = containerConfigToRequest(name, merged, existing?.id);
-    // PATCH replaces the whole template, so a config without an env block must carry over the server's vars or they get wiped.
-    if (!merged.env && existing?.environmentVariables?.length) {
-      req.environmentVariables = existing.environmentVariables;
+  const matches = matchTemplates(
+    entries.map(([name]) => name),
+    existingApp.containerTemplates,
+  );
+
+  for (const [name, c] of entries) {
+    const existing = matches.get(name);
+    const merged = { ...mergeRegistry(name, c, registries) };
+
+    if (!merged.registry && existing?.imageRegistryId) {
+      merged.registry = existing.imageRegistryId;
     }
+
+    const req = containerConfigToRequest(
+      name,
+      merged,
+      endpointNames,
+      existing?.id,
+    );
+    if (!merged.image && existing) {
+      req.image = existing.image;
+      req.imageName = existing.imageName;
+      req.imageNamespace = existing.imageNamespace;
+      req.imageTag = existing.imageTag;
+      req.imageDigest = existing.imageDigest;
+    }
+
+    // Env in bunny.jsonc only seeds new containers; existing ones keep the server's vars, managed with `bunny apps env`.
+    if (existing) {
+      req.environmentVariables = existing.environmentVariables ?? [];
+    }
+    if (!merged.command && existing?.entryPoint) {
+      req.entryPoint = existing.entryPoint;
+    }
+
+    const unsupported = existing?.endpoints.find(
+      (ep) => !isConfigEndpoint(ep.type),
+    );
+    if (merged.endpoints && unsupported) {
+      throw new UserError(
+        `Container "${name}" has a ${unsupported.type} endpoint (${unsupported.displayName}) that bunny.jsonc can't describe, so applying its endpoints would remove it.`,
+        "Manage this container's endpoints in the dashboard, and remove its `endpoints` block from bunny.jsonc.",
+      );
+    }
+
+    if (
+      options.pinDigests &&
+      existing?.imageDigest &&
+      !req.imageDigest &&
+      req.imageName === existing.imageName &&
+      req.imageNamespace === existing.imageNamespace &&
+      req.imageTag === existing.imageTag &&
+      req.imageRegistryId === existing.imageRegistryId
+    ) {
+      req.imageDigest = existing.imageDigest;
+    }
+
     containers.push(req);
     collectVolumes(merged, volumes, seenVolumes);
   }
 
+  const regions = config.app.regions
+    ? normalizeRegions(config.app.regions)
+    : {
+        allowed: existingApp.regionSettings.allowedRegionIds,
+        required: existingApp.regionSettings.requiredRegionIds,
+      };
+
   return {
     name: config.app.name,
-    runtimeType: "shared",
-    autoScaling: config.app.scaling ?? { min: 1, max: 1 },
-    regionSettings: (() => {
-      const { allowed, required } = normalizeRegions(config.app.regions);
-      return { allowedRegionIds: allowed, requiredRegionIds: required };
-    })(),
+    runtimeType: existingApp.runtimeType ?? "shared",
+    autoScaling: config.app.scaling ??
+      existingApp.autoScaling ?? { min: 1, max: 1 },
+    regionSettings: {
+      allowedRegionIds: regions.allowed,
+      requiredRegionIds: regions.required,
+    },
     containerTemplates: containers,
     volumes,
   };

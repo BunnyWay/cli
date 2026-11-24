@@ -1,5 +1,20 @@
 # @bunny.net/config
 
+## 0.1.9
+
+### Patch Changes
+
+- [#298](https://github.com/BunnyWay/cli/pull/298) [`46d13de`](https://github.com/BunnyWay/cli/commit/46d13de93e22684478e13ccf8449827e3fdc7352) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(apps): accept the image as a positional on `apps init`, and accept region IDs in any case on `--region` and in `bunny.jsonc`
+
+- [#288](https://github.com/BunnyWay/cli/pull/288) [`6124501`](https://github.com/BunnyWay/cli/commit/61245012e85a87711b62f0b7162013eac08d3e1e) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - feat(apps): list `bunny apps` in help as a Public Preview command, deploy from local source, a connected registry, or an image URL, connect GitHub, Docker Hub, or any OCI registry, and fix rollback, paging, multi-container redeploys, and endpoint and volume sync across the apps commands
+
+- [#297](https://github.com/BunnyWay/cli/pull/297) [`d8cb9e5`](https://github.com/BunnyWay/cli/commit/d8cb9e535ff14e2ba0d9494f9909664164775f59) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(apps): apply health-check probes from `bunny.jsonc`, which were silently dropped, and write them back on `apps pull`
+
+- [#305](https://github.com/BunnyWay/cli/pull/305) [`0168b9e`](https://github.com/BunnyWay/cli/commit/0168b9eace7b55643d83fc529165588cd5b617bb) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - fix(apps): the live app is the source of truth: `deploy` only updates container images and works without `bunny.jsonc`, `apps push` is removed in favour of `apps scale` and `apps regions set`, deploy adds missing containers and volumes without touching existing ones and warns when `bunny.jsonc` differs from the app, env is never sent by `deploy` or written by `pull` (`bunny apps env` owns it), and `bunny.jsonc` is marked experimental
+
+- Updated dependencies [[`6124501`](https://github.com/BunnyWay/cli/commit/61245012e85a87711b62f0b7162013eac08d3e1e), [`b60fab8`](https://github.com/BunnyWay/cli/commit/b60fab8b5ca0cc6d0fe8948c73e78f3ca0167a6b)]:
+  - @bunny.net/openapi-client@0.3.2
+
 ## 0.1.8
 
 ### Patch Changes

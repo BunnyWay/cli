@@ -7,6 +7,10 @@ export const profileListCommand = defineCommand({
   command: "list",
   aliases: ["ls"],
   describe: "List configured profiles.",
+  examples: [
+    ["$0 config profile list", "List profiles with masked API keys"],
+    ["$0 config profile list --output json", "Profile names as JSON"],
+  ],
 
   handler: async ({ output }) => {
     const file = loadConfigFile();

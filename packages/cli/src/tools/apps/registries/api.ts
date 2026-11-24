@@ -5,6 +5,10 @@ import type { McClient } from "@/tools/context.ts";
 export type ContainerRegistryModel = components["schemas"]["ContainerRegistry"];
 export type RegistryType = components["schemas"]["RegistryType"];
 type SaveResult = components["schemas"]["SaveContainerRegistryResult"];
+export type RegistryTarget = Pick<
+  components["schemas"]["ContainerRegistryRequest"],
+  "type" | "hostName"
+>;
 
 export async function fetchRegistries(
   client: McClient,
@@ -86,4 +90,14 @@ export function registryTypeForServer(
     return "dockerHub";
   }
   return undefined;
+}
+
+export function registryTarget(server: string | undefined): RegistryTarget {
+  const type = registryTypeForServer(server);
+
+  if (type) return { type };
+
+  const hostName = server?.trim();
+
+  return hostName ? { type: "oci", hostName } : {};
 }

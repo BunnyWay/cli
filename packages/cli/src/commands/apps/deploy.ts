@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import type { RegistryMap } from "@bunny.net/config";
 import { createMcClient } from "@bunny.net/openapi-client";
+import type { components } from "@bunny.net/openapi-client/magic-containers";
 import { type ResolvedConfig, resolveConfig } from "@/config/index.ts";
 import {
   fetchRegistryNamespace,
@@ -10,30 +11,36 @@ import {
 import { clientOptions } from "@/core/client-options.ts";
 import { bunny } from "@/core/colors.ts";
 import { defineCommand } from "@/core/define-command.ts";
-import { UserError } from "@/core/errors.ts";
+import { ApiError, UserError } from "@/core/errors.ts";
 import { formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, saveManifest } from "@/core/manifest.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { isInteractive, spinner } from "@/core/ui.ts";
 import {
+  apiToConfig,
   assertVolumesNotSplit,
   type BunnyAppConfig,
   type ContainerConfig,
   configExists,
   configToAddRequest,
-  configToPatchRequest,
+  configToContainerRequest,
   loadConfig,
+  normalizeRegions,
   parseImageRef,
   resolveContainerRegistry,
   saveConfig,
 } from "./config.ts";
-import { APP_MANIFEST, type AppManifest } from "./constants.ts";
+import {
+  APP_MANIFEST,
+  type AppManifest,
+  SPLIT_VOLUME_HINT,
+} from "./constants.ts";
 
 /**
  * Extract the per-container registry IDs we have so far into the
- * registry-override map expected by `configToAddRequest` /
- * `configToPatchRequest`. Empty entries are omitted so they don't
+ * registry-override map expected by `configToAddRequest` and
+ * `configToContainerRequest`. Empty entries are omitted so they don't
  * accidentally clear a registry on the server.
  */
 function draftRegistries(
@@ -70,7 +77,11 @@ async function applyPostPushSuggestions(
   registryId: string,
   imageRef: string,
   _mode: { kind: "build"; dockerfile: string },
-  opts: { targetContainer: ContainerConfig; dockerfilePath: string },
+  opts: {
+    targetContainer: ContainerConfig;
+    dockerfilePath: string;
+    interactive: boolean;
+  },
 ): Promise<void> {
   const parsed = parseImageRef(imageRef);
   const suggestions = await getConfigSuggestions(client, registryId, parsed);
@@ -106,7 +117,7 @@ async function applyPostPushSuggestions(
     endpointSuggestions,
     opts.targetContainer,
   );
-  if (newEndpoints.length > 0) {
+  if (newEndpoints.length > 0 && opts.interactive) {
     const accepted = await confirmEndpointSuggestions(newEndpoints);
     if (accepted.length > 0) {
       opts.targetContainer.endpoints = [
@@ -117,7 +128,7 @@ async function applyPostPushSuggestions(
   }
 
   const newEnvs = filterNewEnvSuggestions(envSuggestions, opts.targetContainer);
-  if (newEnvs.length > 0) {
+  if (newEnvs.length > 0 && opts.interactive) {
     const env = await promptSuggestedEnv(newEnvs);
     if (Object.keys(env).length > 0) {
       opts.targetContainer.env = {
@@ -138,6 +149,7 @@ import {
   generateTag,
   getConfigSuggestions,
   getRegistry,
+  imageHostname,
   normalizeRegistryFlag,
   promptRegistry,
   pushImage,
@@ -166,6 +178,8 @@ const DEFAULT_DOCKERFILE = "Dockerfile";
 interface DeployArgs {
   image?: string;
   "allow-split-volumes"?: boolean;
+  force?: boolean;
+  "add-alongside"?: boolean;
   region?: string;
   dockerfile?: string | boolean;
   context?: string;
@@ -177,7 +191,7 @@ interface DeployArgs {
   command?: string;
   config?: string;
   "dry-run"?: boolean;
-  "no-push"?: boolean;
+  push?: boolean;
 }
 
 export const appsDeployCommand = defineCommand<DeployArgs>({
@@ -262,14 +276,25 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         describe:
           "Print the would-be bunny.jsonc and Dockerfile without writing anything or contacting the API to deploy",
       })
+      .option("force", {
+        alias: "f",
+        type: "boolean",
+        hidden: true,
+      })
+      .option("add-alongside", {
+        type: "boolean",
+        describe:
+          "Add a container even when the app has containers bunny.jsonc doesn't list",
+      })
       .option("allow-split-volumes", {
         type: "boolean",
         describe:
           "Deploy a volume to more than one region or instance, each keeping its own separate data",
       })
-      .option("no-push", {
+      .option("push", {
         type: "boolean",
-        describe: "Build only — skip push and deploy",
+        describe:
+          "Push and deploy after building (default: true). Use --no-push to build only.",
       }),
 
   handler: async (args) => {
@@ -277,7 +302,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     const positionalImage = args.image;
     const dockerfileFlag = normalizeDockerfileFlag(args.dockerfile);
     const registryFlag = normalizeRegistryFlag(args.registry);
-    const noPush = args["no-push"] === true;
+    const noPush = args.push === false;
     const dryRun = args["dry-run"] === true;
 
     // --config takes precedence over the cwd-walk for bunny.jsonc. When
@@ -315,7 +340,27 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     let toml: BunnyAppConfig;
     /** Registries the walkthrough resolved, to seed the manifest draft below. */
     let walkthroughRegistries: Record<string, string> = {};
-    if (!configExists(configPath)) {
+    const linkedId = loadManifest<AppManifest>(APP_MANIFEST).id;
+    if (!configExists(configPath) && linkedId) {
+      // Linked apps deploy without bunny.jsonc: the live app supplies everything but the new image.
+      if (!positionalImage && !dockerfileFlag) {
+        throw new UserError(
+          "This directory has no bunny.jsonc, so there is nothing to redeploy.",
+          "Pass an image (`bunny apps deploy <image>`) or `--dockerfile` to build one.",
+        );
+      }
+      if (dryRun) {
+        logger.dim(
+          `Dry run: deploy would update the image on linked app ${linkedId} to ${positionalImage ?? `a build of ${dockerfileFlag}`}. Nothing was written and the API wasn't contacted.`,
+        );
+        return;
+      }
+      const { data: app } = await client.GET("/apps/{appId}", {
+        params: { path: { appId: linkedId } },
+      });
+      if (!app) throw new UserError(`App ${linkedId} not found.`);
+      toml = apiToConfig(app);
+    } else if (!configExists(configPath)) {
       const result = await runWalkthrough(client, {
         positionalImage,
         dockerfileFlag,
@@ -334,10 +379,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       walkthroughRegistries = result.registries;
     } else {
       toml = loadConfig(configPath);
-      // Before the Docker check and any build: an edited bunny.jsonc is
-      // the only way to reach more than one region or instance (the
-      // walkthrough picks one of each).
-      assertVolumesNotSplit(toml, args["allow-split-volumes"]);
+      // Config regions and scaling only apply on create; an existing app is checked live when a container is added.
+      if (!(linkedId ?? toml.app.id)) {
+        assertVolumesNotSplit(toml, args["allow-split-volumes"]);
+      }
       // Existing config: bail before any registry prompts if a container
       // declares a `dockerfile` (we'll need Docker to build it).
       const hasAnyBuild = Object.values(toml.app.containers).some((c) =>
@@ -370,6 +415,10 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         registry: registryId,
       };
     }
+    // Never create bunny.jsonc for a linked app deployed without one.
+    const persistConfig = () => {
+      if (configExists(configPath)) saveConfig(toml, configPath);
+    };
     const persistDraft = () => {
       if (!draft.id) return;
       saveManifest<AppManifest>(APP_MANIFEST, {
@@ -401,72 +450,99 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       return;
     }
 
-    // First-time deploy of a multi-container app (e.g. compose import).
-    // The single-container flow below can only build/push one image, so
-    // for multi-container creates we iterate every container, build any
-    // with a `dockerfile`, resolve a registry for any with a pre-built
-    // `image`, then create the app in one POST.
+    // Multi-container deploys build or resolve every container, then create or update the app in one request.
     const containerEntries = Object.entries(toml.app.containers);
     if (
-      !draft.id &&
       containerEntries.length > 1 &&
       !positionalImage &&
       !dockerfileFlag &&
       !args.container
     ) {
-      await prepareContainersForCreate(client, toml, configPath, {
+      const built = await prepareContainers(client, toml, configPath, {
         tag: args.tag,
         contextOverride: args.context,
         draftContainers: draft.containers,
         onRegistryResolved: setContainerRegistry,
         cfg,
         verbose,
+        registryFlag,
+        quiet: output === "json",
+        noPush,
+        suggest: !draft.id,
       });
 
-      const createSpin = spinner("Creating app...");
-      createSpin.start();
-      const { data: result } = await client.POST("/apps", {
-        body: configToAddRequest(
-          resolveContainerEnv(toml, dotenvPath),
-          draftRegistries(draft.containers),
-        ),
-      });
-      createSpin.stop();
-
-      if (!result?.id) {
-        throw new UserError("Failed to create app — no ID returned.");
+      if (noPush) {
+        logger.dim("Skipping push and deploy (--no-push).");
+        if (output === "json") {
+          logger.log(
+            JSON.stringify({ built: true, images: built, pushed: false }),
+          );
+        }
+        return;
       }
 
-      draft.id = result.id;
-      persistDraft();
-      logger.success(`App "${toml.app.name}" created (${result.id}).`);
+      const config = resolveContainerEnv(toml, dotenvPath);
+      const registries = draftRegistries(draft.containers);
+      let appId = draft.id;
 
-      // POST /apps returns only the new app ID. Fetch the full app to
-      // capture container template IDs so subsequent commands can target
-      // each container without re-fetching.
+      if (appId) {
+        await applyImages(
+          client,
+          appId,
+          config,
+          Object.keys(config.app.containers),
+          registries,
+          {
+            allowSplitVolumes: args["allow-split-volumes"],
+            addAlongside: args["add-alongside"],
+            links: draft.containers,
+          },
+        );
+      } else {
+        const createSpin = spinner("Creating app...");
+        createSpin.start();
+        const { data: result } = await client.POST("/apps", {
+          body: configToAddRequest(config, registries),
+        });
+        createSpin.stop();
+
+        if (!result?.id) {
+          throw new UserError("Failed to create app — no ID returned.");
+        }
+
+        appId = result.id;
+        draft.id = appId;
+        persistDraft();
+        logger.success(`App "${toml.app.name}" created (${appId}).`);
+      }
+
       const fetchSpin = spinner("Recording container IDs...");
       fetchSpin.start();
-      const { data: createdApp } = await client.GET("/apps/{appId}", {
-        params: { path: { appId: result.id } },
+      const { data: savedApp } = await client.GET("/apps/{appId}", {
+        params: { path: { appId } },
       });
       fetchSpin.stop();
-      for (const ct of createdApp?.containerTemplates ?? []) {
+
+      for (const ct of savedApp?.containerTemplates ?? []) {
         setContainerTemplateId(ct.name, ct.id);
+      }
+      for (const name of Object.keys(toml.app.containers)) {
+        const ct = savedApp && findTemplate(savedApp, name, draft.containers);
+        if (ct) setContainerTemplateId(name, ct.id);
       }
 
       const deploySpin = spinner("Deploying...");
       deploySpin.start();
       await client.POST("/apps/{appId}/deploy", {
-        params: { path: { appId: result.id } },
+        params: { path: { appId } },
       });
       deploySpin.stop();
 
-      const endpoints = await fetchDeployedEndpoints(client, result.id);
+      const endpoints = await fetchDeployedEndpoints(client, appId);
 
       if (output === "json") {
-        logger.log(
-          JSON.stringify({ id: result.id, deployed: true, endpoints }),
-        );
+        logger.log(JSON.stringify({ id: appId, deployed: true, endpoints }));
+
         return;
       }
 
@@ -507,8 +583,8 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         }
         registryId = resolved.id;
         freshCreds = resolved.freshCredentials;
-        setContainerRegistry(targetName, registryId);
       }
+      setContainerRegistry(targetName, registryId);
 
       const regSpin = spinner("Fetching registry...");
       regSpin.start();
@@ -539,8 +615,19 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       );
       const buildCwd = resolveBuildContext(mode.dockerfile, args.context);
 
+      // Check the docker login before building so a wrong account fails fast.
+      if (!noPush && !isBunnyRegistry && !freshCreds) {
+        await ensureRegistryLogin(
+          reg.hostName,
+          reg.userName,
+          isInteractive(output),
+        );
+      }
+
       logger.info(`Building ${imageRef}...`);
-      await buildImage(mode.dockerfile, imageRef, buildCwd);
+      await buildImage(mode.dockerfile, imageRef, buildCwd, {
+        quiet: output === "json",
+      });
 
       if (noPush) {
         logger.success(`Image built: ${imageRef}`);
@@ -579,21 +666,17 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
         } finally {
           loginSpin.stop();
         }
-      } else {
-        // No just-entered credentials, so make sure docker is logged in
-        // before we attempt the push, prompting if not.
-        await ensureRegistryLogin(reg.hostName);
       }
 
       logger.info(`Pushing ${imageRef}...`);
-      await pushImage(imageRef);
+      await pushImage(imageRef, { quiet: output === "json" });
 
       deployImage = imageRef;
       // In-memory only - `saveConfig` strips `image` for dockerfile
       // containers via `stripTransientFields`. The MC API is the source
       // of truth for what's deployed; `bunny.jsonc` stores intent only.
-      // The mutation is still needed for `configToAddRequest` /
-      // `configToPatchRequest` to read the ref in the same deploy run.
+      // The mutation is still needed for `configToAddRequest` and
+      // `applyImages` to read the ref in the same deploy run.
       targetContainer.image = imageRef;
       // Persist dockerfile/context if they came from flags so the manifest stays the source of truth.
       if (!targetContainer.dockerfile) {
@@ -609,14 +692,27 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       // endpoint and env-var hints derived from the image manifest /
       // known-image patterns. For a fresh first deploy we usually have
       // no endpoints yet, so this is what populates them.
-      if (registryId) {
+      if (registryId && !draft.id) {
         await applyPostPushSuggestions(client, registryId, imageRef, mode, {
           targetContainer,
           dockerfilePath: mode.dockerfile,
+          interactive: isInteractive(output),
         });
       }
 
-      saveConfig(toml, configPath);
+      persistConfig();
+    }
+
+    if (mode.kind === "redeploy") deployImage = mode.image;
+
+    if (mode.kind === "redeploy" && !registryId) {
+      const resolved = await resolveRegistryForImage(client, mode.image);
+      if (!resolved) {
+        throw new UserError(`A registry is required to deploy ${mode.image}.`);
+      }
+
+      registryId = resolved.id;
+      setContainerRegistry(targetName, registryId);
     }
 
     if (mode.kind === "image") {
@@ -633,7 +729,7 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
       // Registry is account-scoped - record in the manifest instead.
       targetContainer.image = mode.image;
       setContainerRegistry(targetName, registryId);
-      saveConfig(toml, configPath);
+      persistConfig();
     }
 
     // Captured before the create-or-patch so the rollback hint at the
@@ -644,6 +740,9 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     // differently), which would otherwise make `previousImage !== deployImage`
     // accidentally true and surface a misleading rollback hint.
     const isFirstDeploy = !draft.id;
+
+    // Read before the config PATCH below, which already applies the new image.
+    let previousImage: string | undefined;
 
     let appId = draft.id;
     if (!appId) {
@@ -668,78 +767,55 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
 
       logger.success(`App "${toml.app.name}" created (${appId}).`);
     } else {
-      const pushSpin = spinner("Pushing config...");
-      pushSpin.start();
-
-      const { data: existingApp } = await client.GET("/apps/{appId}", {
-        params: { path: { appId } },
-      });
-
-      if (!existingApp) {
-        pushSpin.stop();
-        throw new UserError(`App ${appId} not found.`);
-      }
-
-      await client.PATCH("/apps/{appId}", {
-        params: { path: { appId } },
-        body: configToPatchRequest(
-          resolveContainerEnv(toml, dotenvPath),
-          existingApp,
-          draftRegistries(draft.containers),
-        ),
-      });
-      pushSpin.stop();
-    }
-
-    // Captured pre-deploy so we can surface a rollback hint at the end.
-    let previousImage: string | undefined;
-
-    if (deployImage) {
       const fetchSpin = spinner("Fetching app...");
       fetchSpin.start();
-      const { data: app } = await client.GET("/apps/{appId}", {
+      const { data: existingApp } = await client.GET("/apps/{appId}", {
         params: { path: { appId } },
       });
       fetchSpin.stop();
 
-      // Find the remote container template matching our target by name —
-      // falls back to the primary if there's only one.
-      const templates = app?.containerTemplates ?? [];
-      const match =
-        templates.find(
-          (t) => t.name.toLowerCase() === targetName.toLowerCase(),
-        ) ?? (templates.length === 1 ? templates[0] : undefined);
+      if (!existingApp) throw new UserError(`App ${appId} not found.`);
 
-      if (!match) {
-        throw new UserError(
-          `Container "${targetName}" not found on the remote app.`,
-          `Remote containers: ${templates.map((t) => t.name).join(", ") || "(none)"}`,
-        );
+      const previous = findTemplate(
+        existingApp,
+        targetName,
+        draft.containers,
+      )?.image;
+      const deployHost = deployImage ? imageHostname(deployImage) : null;
+
+      if (deployImage && previous) {
+        previousImage =
+          deployHost && !imageHostname(previous)
+            ? `${deployHost}/${previous}`
+            : previous;
       }
 
-      previousImage = match.image ?? undefined;
-
-      const containerId = match.id;
-      // Cache the resolved template ID in the manifest so the next
-      // deploy/restart/env-push doesn't have to re-resolve by name.
-      setContainerTemplateId(targetName, containerId);
-      const { imageName, imageNamespace, imageTag } =
-        parseImageRef(deployImage);
-
-      const updateSpin = spinner("Updating container image...");
-      updateSpin.start();
-      await client.PATCH("/apps/{appId}/containers/{containerId}", {
-        params: { path: { appId, containerId } },
-        body: {
-          image: deployImage,
-          imageName,
-          imageNamespace,
-          imageTag,
-          imageRegistryId: registryId ?? "",
+      await applyImages(
+        client,
+        appId,
+        resolveContainerEnv(toml, dotenvPath),
+        [targetName],
+        draftRegistries(draft.containers),
+        {
+          allowSplitVolumes: args["allow-split-volumes"],
+          addAlongside: args["add-alongside"],
+          links: draft.containers,
         },
-      });
-      updateSpin.stop();
-      logger.success(`Image updated to ${deployImage}.`);
+        existingApp,
+      );
+      if (deployImage) logger.success(`Image updated to ${deployImage}.`);
+    }
+
+    const { data: savedApp } = await client.GET("/apps/{appId}", {
+      params: { path: { appId } },
+    });
+    for (const ct of savedApp?.containerTemplates ?? []) {
+      setContainerTemplateId(ct.name, ct.id);
+    }
+    // Keep the link for config names that differ from the live name, so later deploys still match them.
+    for (const name of Object.keys(toml.app.containers)) {
+      const ct = savedApp && findTemplate(savedApp, name, draft.containers);
+      if (ct) setContainerTemplateId(name, ct.id);
     }
 
     const deploySpin = spinner("Deploying...");
@@ -773,10 +849,230 @@ export const appsDeployCommand = defineCommand<DeployArgs>({
     if (!isFirstDeploy && previousImage && previousImage !== deployImage) {
       logger.log();
       logger.dim(`Previous image: ${previousImage}`);
-      logger.dim(`To rollback:    bunny apps deploy ${previousImage}`);
+      const containerFlag =
+        Object.keys(toml.app.containers).length > 1
+          ? ` --container ${targetName}`
+          : "";
+      logger.dim(
+        `To rollback:    bunny apps deploy ${previousImage}${containerFlag}`,
+      );
     }
   },
 });
+
+type App = components["schemas"]["Application"];
+
+type Links = AppManifest["containers"];
+
+/** The live template for a config container: same name, or the template ID `.bunny/app.json` recorded for that name. */
+function findTemplate(app: App, name: string, links: Links) {
+  const templates = app.containerTemplates ?? [];
+  const id = links[name]?.id;
+  return (
+    templates.find((t) => t.name.toLowerCase() === name.toLowerCase()) ??
+    (id ? templates.find((t) => t.id === id) : undefined)
+  );
+}
+
+// Deploy never applies these, so say when bunny.jsonc and the app disagree instead of ignoring the file silently.
+function warnIgnoredSettings(toml: BunnyAppConfig, app: App, links: Links) {
+  const notes: string[] = [];
+  const scaling = toml.app.scaling;
+  const live = app.autoScaling;
+  if (
+    scaling &&
+    live &&
+    (scaling.min !== live.min || scaling.max !== live.max)
+  ) {
+    notes.push(
+      `scaling: bunny.jsonc ${scaling.min}-${scaling.max}, app ${live.min}-${live.max}`,
+    );
+  }
+  if (toml.app.regions) {
+    const want = normalizeRegions(toml.app.regions);
+    const same = (a: string[], b: string[]) =>
+      a.length === b.length && a.every((id) => b.includes(id.toUpperCase()));
+    const allowed = app.regionSettings.allowedRegionIds.map((id) =>
+      id.toUpperCase(),
+    );
+    const required = app.regionSettings.requiredRegionIds.map((id) =>
+      id.toUpperCase(),
+    );
+    if (!same(want.allowed, allowed) || !same(want.required, required)) {
+      notes.push(
+        `regions: bunny.jsonc ${want.allowed.join(", ")}, app ${allowed.join(", ") || "none"}`,
+      );
+    }
+  }
+  for (const [name, container] of Object.entries(toml.app.containers)) {
+    const template = findTemplate(app, name, links);
+    if (!template || !container.env) continue;
+    const liveKeys = new Set(template.environmentVariables?.map((v) => v.name));
+    const missing = Object.keys(container.env).filter((k) => !liveKeys.has(k));
+    if (missing.length > 0) {
+      notes.push(`env on "${name}": ${missing.join(", ")} not set on the app`);
+    }
+  }
+  if (notes.length === 0) return;
+
+  logger.warn(
+    "bunny.jsonc differs from the app. Deploy only updates images, so the app keeps its own:",
+  );
+  for (const note of notes) logger.dim(`  ${note}`);
+  logger.dim(
+    "Change them with `bunny apps scale`, `bunny apps regions set` or `bunny apps env set`, or run `bunny apps pull` to update bunny.jsonc.",
+  );
+}
+
+// The volumes list replaces the app's by name, so it must carry every live volume exactly as read, or the missing ones lose their data.
+async function addVolumes(
+  client: ReturnType<typeof createMcClient>,
+  appId: string,
+  add: Map<string, number>,
+): Promise<void> {
+  const { data } = await client.GET("/apps/{appId}", {
+    params: { path: { appId } },
+  });
+  const live = data?.volumes;
+  const valid =
+    Array.isArray(live) &&
+    live.every((v) => typeof v.name === "string" && typeof v.size === "number");
+  if (!valid) {
+    throw new UserError(
+      `Couldn't read the volumes on app ${appId}, so no volume was added.`,
+      "Try the deploy again, or add the volume in the bunny.net dashboard.",
+    );
+  }
+
+  const volumes = live.map(({ name, size }) => ({ name, size }));
+  for (const [name, size] of add) {
+    if (!volumes.some((v) => v.name === name)) volumes.push({ name, size });
+  }
+  if (volumes.length === live.length) return;
+
+  const spin = spinner("Adding volumes...");
+  spin.start();
+  try {
+    await client.PATCH("/apps/{appId}", {
+      params: { path: { appId } },
+      body: { volumes },
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 400) {
+      throw new UserError(
+        `Couldn't add volumes to app ${appId}: ${error.message}`,
+        "If a volume on this app is being resized, wait for it to finish and deploy again; a volume already created is reused, not duplicated.",
+      );
+    }
+    throw error;
+  } finally {
+    spin.stop();
+  }
+}
+
+// Deploy only swaps images (adding containers the app lacks), so every other live setting stays as it is.
+async function applyImages(
+  client: ReturnType<typeof createMcClient>,
+  appId: string,
+  toml: BunnyAppConfig,
+  names: string[],
+  registries: RegistryMap | undefined,
+  opts: { allowSplitVolumes?: boolean; addAlongside?: boolean; links: Links },
+  existing?: App,
+): Promise<void> {
+  let app = existing;
+  if (!app) {
+    const { data } = await client.GET("/apps/{appId}", {
+      params: { path: { appId } },
+    });
+    if (!data) throw new UserError(`App ${appId} not found.`);
+    app = data;
+  }
+
+  const { links } = opts;
+  const added = names.filter(
+    (name) =>
+      toml.app.containers[name]?.image && !findTemplate(app, name, links),
+  );
+  warnIgnoredSettings(toml, app, links);
+
+  // A container missing on both sides is most likely a rename, and adding it would run a second copy next to the old one.
+  const configNames = Object.keys(toml.app.containers);
+  const unlisted = app.containerTemplates.filter(
+    (t) => !configNames.some((n) => findTemplate(app, n, links)?.id === t.id),
+  );
+  if (added.length > 0 && unlisted.length > 0 && !opts.addAlongside) {
+    throw new UserError(
+      `bunny.jsonc has container "${added[0]}", which the app doesn't, and the app has "${unlisted[0]?.name}", which bunny.jsonc doesn't. Deploy would add "${added[0]}" and leave "${unlisted[0]?.name}" running.`,
+      `If you renamed it, put the old name back in bunny.jsonc. To add "${added[0]}" alongside it, pass --add-alongside.`,
+    );
+  }
+
+  const newVolumes = new Map<string, number>();
+  const liveVolumes = new Set(app.volumes.map((v) => v.name));
+  for (const name of added) {
+    for (const v of toml.app.containers[name]?.volumes ?? []) {
+      if (liveVolumes.has(v.name)) continue;
+      newVolumes.set(v.name, Math.max(v.size, newVolumes.get(v.name) ?? 0));
+    }
+  }
+  if (newVolumes.size > 0) {
+    const regions = app.regionSettings.allowedRegionIds.length;
+    const max = app.autoScaling?.max ?? 1;
+    if (!opts.allowSplitVolumes && (regions > 1 || max > 1)) {
+      throw new UserError(
+        `Deploy would add volume "${[...newVolumes.keys()][0]}", but app ${app.name} runs in ${regions} region(s) with up to ${max} instance(s).`,
+        SPLIT_VOLUME_HINT,
+      );
+    }
+    await addVolumes(client, appId, newVolumes);
+  }
+  const takenEndpointNames = new Set(
+    app.containerTemplates.flatMap((t) =>
+      t.endpoints.map((ep) => ep.displayName),
+    ),
+  );
+
+  const spin = spinner("Updating container images...");
+  spin.start();
+  try {
+    for (const name of names) {
+      const container = toml.app.containers[name];
+      if (!container?.image) continue;
+
+      const template = findTemplate(app, name, links);
+      if (!template) {
+        const { id: _id, ...body } = configToContainerRequest(
+          name,
+          container,
+          registries,
+          takenEndpointNames,
+        );
+        await client.POST("/apps/{appId}/containers", {
+          params: { path: { appId } },
+          body,
+        });
+        continue;
+      }
+
+      const { imageName, imageNamespace, imageTag, imageDigest } =
+        parseImageRef(container.image);
+      await client.PATCH("/apps/{appId}/containers/{containerId}", {
+        params: { path: { appId, containerId: template.id } },
+        body: {
+          image: container.image,
+          imageName,
+          imageNamespace,
+          imageTag,
+          imageDigest: imageDigest ?? null,
+          imageRegistryId: registries?.[name] ?? template.imageRegistryId ?? "",
+        },
+      });
+    }
+  } finally {
+    spin.stop();
+  }
+}
 
 /**
  * Fetch the app post-deploy and flatten its endpoints to reachable
@@ -905,7 +1201,7 @@ function resolveTargetContainer(
  * `fallback` is lazy so its disk read / deprecation warning only fire
  * when neither the flag nor the draft supplies a registry.
  */
-export function resolveDeployRegistry(
+function resolveDeployRegistry(
   flag: string | undefined,
   draftRegistry: string | undefined,
   fallback: () => string | undefined,
@@ -984,19 +1280,17 @@ function resolveBuildContext(
 }
 
 /**
- * Walk every container in bunny.jsonc and prepare it for `POST /apps`:
+ * Walk every container in bunny.jsonc and prepare it for the create or update request:
  *
  * - `dockerfile`-only entries → build + push to the configured registry,
  *   then write the resulting image ref back onto the container.
  * - Pre-built `image` entries → resolve the matching registry record on
- *   the user's account (compose import assigns the user's push registry
- *   to every container by default, which is wrong for public images like
- *   `postgres:17-alpine`).
+ *   the user's account.
  *
  * The toml is mutated in place and re-saved after every container so
  * partial progress survives a mid-loop failure.
  */
-async function prepareContainersForCreate(
+async function prepareContainers(
   client: ReturnType<typeof createMcClient>,
   toml: BunnyAppConfig,
   configPath: string | undefined,
@@ -1014,24 +1308,42 @@ async function prepareContainersForCreate(
     /** Resolved CLI config — needed to push to the bunny.net registry (API-token auth). */
     cfg: ResolvedConfig;
     verbose?: boolean;
+    registryFlag?: string;
+    quiet?: boolean;
+    noPush?: boolean;
+    suggest?: boolean;
   },
-): Promise<void> {
+): Promise<string[]> {
   const entries = Object.entries(toml.app.containers);
 
   // One shared tag for every build in this deploy so co-deployed images
   // are easy to correlate later (same git sha + timestamp).
   const sharedTag = opts.tag ?? (await generateTag());
 
+  const built: string[] = [];
   for (const [name, container] of entries) {
     if (container.dockerfile) {
-      await buildAndPushContainer(client, toml, name, container, {
-        tag: sharedTag,
-        contextOverride: opts.contextOverride,
-        draftContainers: opts.draftContainers,
-        onRegistryResolved: opts.onRegistryResolved,
-        cfg: opts.cfg,
-        verbose: opts.verbose,
-      });
+      const imageRef = await buildAndPushContainer(
+        client,
+        toml,
+        name,
+        container,
+        {
+          tag: sharedTag,
+          contextOverride: opts.contextOverride,
+          draftContainers: opts.draftContainers,
+          onRegistryResolved: opts.onRegistryResolved,
+          cfg: opts.cfg,
+          verbose: opts.verbose,
+          registryFlag: opts.registryFlag,
+          quiet: opts.quiet,
+          noPush: opts.noPush,
+          suggest: opts.suggest,
+        },
+      );
+      built.push(imageRef);
+    } else if (opts.noPush && container.image) {
+      continue;
     } else if (container.image) {
       await resolveRegistryForPrebuiltImage(client, name, container, {
         onRegistryResolved: opts.onRegistryResolved,
@@ -1042,8 +1354,9 @@ async function prepareContainersForCreate(
         "Add one or the other in bunny.jsonc.",
       );
     }
-    saveConfig(toml, configPath);
+    if (configExists(configPath)) saveConfig(toml, configPath);
   }
+  return built;
 }
 
 async function buildAndPushContainer(
@@ -1058,14 +1371,20 @@ async function buildAndPushContainer(
     onRegistryResolved: (name: string, registryId: string) => void;
     cfg: ResolvedConfig;
     verbose?: boolean;
+    registryFlag?: string;
+    quiet?: boolean;
+    noPush?: boolean;
+    suggest?: boolean;
   },
-): Promise<void> {
-  if (!container.dockerfile) return;
+): Promise<string> {
+  if (!container.dockerfile)
+    throw new UserError(`Container "${name}" has no \`dockerfile\`.`);
 
   assertDockerfileExists(container.dockerfile, name);
 
   let freshCreds: ResolvedRegistry["freshCredentials"];
   let registryId =
+    opts.registryFlag ??
     opts.draftContainers[name]?.registry ??
     resolveContainerRegistry(name, container);
 
@@ -1079,8 +1398,9 @@ async function buildAndPushContainer(
     }
     registryId = resolved.id;
     freshCreds = resolved.freshCredentials;
-    opts.onRegistryResolved(name, registryId);
   }
+
+  opts.onRegistryResolved(name, registryId);
 
   const regSpin = spinner(`Fetching registry for ${name}...`);
   regSpin.start();
@@ -1113,7 +1433,14 @@ async function buildAndPushContainer(
   );
 
   logger.info(`Building ${imageRef}...`);
-  await buildImage(container.dockerfile, imageRef, buildCwd);
+  await buildImage(container.dockerfile, imageRef, buildCwd, {
+    quiet: opts.quiet,
+  });
+
+  if (opts.noPush) {
+    logger.success(`Image built: ${imageRef}`);
+    return imageRef;
+  }
 
   if (isBunnyRegistry) {
     if (!opts.cfg.apiKey) {
@@ -1140,23 +1467,33 @@ async function buildAndPushContainer(
       throw err;
     }
   } else {
-    await ensureRegistryLogin(reg.hostName);
+    await ensureRegistryLogin(
+      reg.hostName,
+      reg.userName,
+      isInteractive(opts.quiet ? "json" : undefined),
+    );
   }
 
   logger.info(`Pushing ${imageRef}...`);
-  await pushImage(imageRef);
+  await pushImage(imageRef, { quiet: opts.quiet });
 
   // In-memory only - `saveConfig` strips this for dockerfile containers.
   // Needed here so `configToAddRequest` picks up the ref on first create.
   container.image = imageRef;
 
+  if (!opts.suggest) return imageRef;
   await applyPostPushSuggestions(
     client,
     registryId,
     imageRef,
     { kind: "build", dockerfile: container.dockerfile },
-    { targetContainer: container, dockerfilePath: container.dockerfile },
+    {
+      targetContainer: container,
+      dockerfilePath: container.dockerfile,
+      interactive: isInteractive(opts.quiet ? "json" : undefined),
+    },
   );
+  return imageRef;
 }
 
 async function resolveRegistryForPrebuiltImage(

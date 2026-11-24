@@ -11,6 +11,10 @@ interface UnlinkArgs {
 export const dnsZoneUnlinkCommand = defineCommand<UnlinkArgs>({
   command: "unlink",
   describe: `Remove .bunny/${DNS_MANIFEST}, unlinking this directory from its zone.`,
+  examples: [
+    ["$0 dns zones unlink", "Unlink after confirmation"],
+    ["$0 dns zones unlink --force", "Skip the confirmation prompt"],
+  ],
 
   builder: (yargs) =>
     yargs.option("force", {

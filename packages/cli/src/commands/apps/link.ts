@@ -7,6 +7,7 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { loadManifest, saveManifest } from "@/core/manifest.ts";
 import { confirm, prompts, spinner } from "@/core/ui.ts";
+import { fetchAllApps } from "@/tools/apps/index.ts";
 import { APP_MANIFEST, type AppManifest } from "./constants.ts";
 
 type Application = components["schemas"]["Application"];
@@ -144,10 +145,10 @@ async function pickAppInteractively(
 ): Promise<Application> {
   const spin = spinner("Fetching apps...");
   spin.start();
-  const { data } = await client.GET("/apps");
+  const listed = await fetchAllApps(client);
   spin.stop();
 
-  const apps = (data?.items ?? []).filter(
+  const apps = listed.filter(
     (a): a is typeof a & { id: string; name: string } =>
       typeof a.id === "string" && typeof a.name === "string",
   );

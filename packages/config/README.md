@@ -1,5 +1,7 @@
 # @bunny.net/config
 
+> **Experimental**: the `bunny.jsonc` format is extremely experimental and can change at any time, including in patch releases.
+
 Shared Zod schemas, inferred types, JSON Schema, and API conversion functions for `bunny.jsonc`, the single bunny.net project config file. It holds an optional `app` block (Magic Containers) and an optional `sites` block (static sites); both are optional, so app-only, sites-only, and combined files all validate.
 
 ## Installation

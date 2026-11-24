@@ -72,6 +72,10 @@ export const streamVideoSmartCommand = defineCommand<SmartArgs>({
       "Generate chapters and moments",
     ],
     [
+      "$0 stream videos smart 1a2b3c4d-... --chapters --source-language de --lib 12345",
+      "Generate from the German captions of a video in a specific library",
+    ],
+    [
       "$0 stream videos smart 1a2b3c4d-... --chapters --transcribe",
       "Transcribe a captionless video first (billed per language-minute)",
     ],

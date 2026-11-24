@@ -78,4 +78,5 @@ export {
   isStalled,
   refreshMigrationState,
 } from "./status.ts";
+export { largeLibraryProfile, SourceRejectedError } from "./throttle.ts";
 export { parseBunnyDate } from "./time.ts";
