@@ -4,6 +4,7 @@ import { UserError } from "@/core/errors.ts";
 import { runGit } from "@/core/git.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, prompts } from "@/core/ui.ts";
+import { VERSION } from "@/core/version.ts";
 import {
   detectFramework,
   detectPackageManager,
@@ -200,6 +201,7 @@ export async function scaffoldSitesWorkflow(opts: {
     workingDirectory: settings.prefix || undefined,
     cacheDependencyPath: settings.cacheDependencyPath,
     installDeps: await needsJsInstall(preset, settings),
+    cliVersion: VERSION,
   });
 
   const target = join(opts.root, SITES_WORKFLOW_PATH);
@@ -259,6 +261,7 @@ export async function printWorkflowInstructions(
       workingDirectory: settings.prefix || undefined,
       cacheDependencyPath: settings.cacheDependencyPath,
       installDeps: await needsJsInstall(preset, settings),
+      cliVersion: VERSION,
     }),
   );
   printSecretHint();

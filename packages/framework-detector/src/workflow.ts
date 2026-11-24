@@ -153,6 +153,8 @@ export function renderSitesWorkflow(opts: {
   installDeps?: boolean;
   /** The branch that goes live on push; main unless the repository's default branch differs. */
   branch?: string;
+  /** The `@bunny.net/cli` version the action runs; the action's own default predates deploy-time pruning. */
+  cliVersion?: string;
 }): string {
   const { site, preset, packageManager, workingDirectory } = opts;
   // Every `run` step builds from the project directory; `uses` inputs stay workflow-root-relative, so the deploy directory carries the prefix instead.
@@ -200,6 +202,9 @@ export function renderSitesWorkflow(opts: {
     `          site: ${JSON.stringify(site)}`,
     `          directory: ${JSON.stringify(workflowPath(workingDirectory, opts.dir ?? preset.dir))}`,
     "          api_key: ${{ secrets.BUNNYNET_API_KEY }}",
+    ...(opts.cliVersion
+      ? [`          cli_version: ${JSON.stringify(opts.cliVersion)}`]
+      : []),
   ];
   return `${lines.join("\n")}\n`;
 }

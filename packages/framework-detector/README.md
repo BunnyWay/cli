@@ -42,3 +42,4 @@ and `presetBuildCommand(preset, packageManager)` returns the command to run loca
 `renderSitesWorkflow(...)` writes the workflow `bunny sites ci init` creates at
 `SITES_WORKFLOW_PATH` (`.github/workflows/bunny-sites.yml`): install, build and deploy to a
 bunny.net site on every push.
+Pass `cliVersion` to pin the `@bunny.net/cli` version the deploy action runs.

@@ -513,6 +513,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
               unchanged: true,
               live: promoted.confirmed,
               production: production ?? null,
+              keep: keep ?? null,
               ...(typeof keep === "number" && {
                 pruned: pruneResult?.pruned ?? [],
                 pruneFailures: pruneResult?.failures ?? [],
@@ -621,6 +622,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
             unchanged: skipUpload,
             live: promoted.confirmed,
             production: production ?? null,
+            keep: keep ?? null,
             ...(typeof keep === "number" && {
               pruned: pruneResult?.pruned ?? [],
               pruneFailures: pruneResult?.failures ?? [],
@@ -802,9 +804,6 @@ async function askAutoPrune(opts: {
     state.current,
     state.previous,
   );
-  if (victims.length === 0) return opts.etag;
-
-  const bytes = victims.reduce((sum, d) => sum + d.bytes, 0);
 
   if (!isInteractive(opts.output)) {
     logger.dim(
@@ -813,8 +812,11 @@ async function askAutoPrune(opts: {
     return opts.etag;
   }
 
+  const bytes = victims.reduce((sum, d) => sum + d.bytes, 0);
   const proceed = await confirm(
-    `Deploys now prune automatically, keeping only the live and previous ones. Delete ${victims.length} older deploy(s) (${formatBytes(bytes)}) now and after every deploy?`,
+    victims.length === 0
+      ? `Deploys now prune automatically, keeping only the live and previous ones. Turn this on for ${state.name}?`
+      : `Deploys now prune automatically, keeping only the live and previous ones. Delete ${victims.length} older deploy(s) (${formatBytes(bytes)}) now and after every deploy?`,
     { optional: true },
   );
 
@@ -828,6 +830,8 @@ async function askAutoPrune(opts: {
     return etag;
   }
 
-  reportPrune(await safePrune(connection, victims, AUTO_PRUNE_KEEP));
+  if (victims.length > 0) {
+    reportPrune(await safePrune(connection, victims, AUTO_PRUNE_KEEP));
+  }
   return etag;
 }
