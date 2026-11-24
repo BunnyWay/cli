@@ -1,11 +1,6 @@
 import { expect, test } from "bun:test";
 import { importPacing, requireSource } from "@/tools/stream/index.ts";
-import {
-  pacingNotice,
-  retryPacing,
-  slowestPace,
-  slowResumeFlags,
-} from "./pacing.ts";
+import { pacingNotice, retryPacing, slowResumeFlags } from "./pacing.ts";
 
 const vimeo = requireSource("vimeo");
 const s3 = requireSource("s3");
@@ -16,10 +11,8 @@ test("a large Vimeo import is paced with the Vimeo profile", () => {
     concurrency: 2,
     delay: 10,
     requestTimeout: 120,
-    applied: ["--concurrency 2", "--delay 10", "--request-timeout 120"],
-    riskier: [],
   });
-  const notice = pacingNotice(pacing, 1500);
+  const notice = pacingNotice(pacing, {}, 1500);
   expect(notice.warn[0]).toBe(
     "Large library detected (1,500 videos to import). To keep it reliable, this import is paced with: --concurrency 2 --delay 10 --request-timeout 120",
   );
@@ -27,25 +20,17 @@ test("a large Vimeo import is paced with the Vimeo profile", () => {
 });
 
 test("flags the user passed win, and aggressive ones get a warning", () => {
-  const pacing = importPacing(vimeo, 1500, {
-    concurrency: 8,
-    delay: 0,
-    requestTimeout: 300,
-  });
-  expect(pacing).toMatchObject({
-    concurrency: 8,
-    delay: 0,
-    requestTimeout: 300,
-    applied: [],
-  });
-  expect(pacing.riskier.map((r) => r.flag)).toEqual(["concurrency", "delay"]);
-  const { warn, info } = pacingNotice(pacing, 1500);
+  const flags = { concurrency: 8, delay: 0, requestTimeout: 300 };
+  const pacing = importPacing(vimeo, 1500, flags);
+  expect(pacing).toMatchObject(flags);
+  const { warn, info } = pacingNotice(pacing, flags, 1500);
   expect(warn[0]).toContain(
     "Recommended settings: --concurrency 2 --delay 10 --request-timeout 120",
   );
   expect(warn[1]).toBe(
     "--concurrency 8 is above the recommended 2; videos may fail to import (the import then slows down by itself).",
   );
+  expect(warn).toHaveLength(3);
   expect(info).toEqual([]);
 });
 
@@ -59,41 +44,28 @@ test("small imports, and sources without a profile, keep the usual defaults", ()
       concurrency: 3,
       delay: 0,
       requestTimeout: 30,
-      applied: [],
     });
     expect(pacing.profile).toBeUndefined();
-    expect(pacingNotice(pacing, count)).toEqual({
+    expect(pacingNotice(pacing, {}, count)).toEqual({
       warn: [],
       info: [],
     });
   }
 });
 
-test("a retry after source rejections goes one at a time and at least 30s apart", () => {
-  expect(retryPacing({})).toEqual({ concurrency: 1, delay: 30 });
-  expect(retryPacing({ delay: 10 })).toEqual({ concurrency: 1, delay: 30 });
-  expect(retryPacing({ delay: 45 })).toEqual({ concurrency: 1, delay: 90 });
-  expect(retryPacing({ delay: 500 })).toEqual({ concurrency: 1, delay: 600 });
-});
+test("a retry goes one at a time, at least 30s apart, and never faster than the failed run", () => {
+  const pace = (delay: number, finalDelay = delay) =>
+    retryPacing({ delay, finalDelay });
+  expect(pace(0)).toEqual({ concurrency: 1, delay: 30 });
+  expect(pace(45)).toEqual({ concurrency: 1, delay: 90 });
+  expect(pace(10, 120)).toEqual({ concurrency: 1, delay: 240 });
+  expect(pace(500)).toEqual({ concurrency: 1, delay: 600 });
 
-test("the slow resume hint adds --clean-failed only when a failure used up its attempts", () => {
-  const pace = { delay: 0, finalDelay: 0 };
-  expect(slowResumeFlags([{ retryable: true }], pace)).toBe(
+  const still = { delay: 0, finalDelay: 0 };
+  expect(slowResumeFlags([{ retryable: true }], still)).toBe(
     " --concurrency 1 --delay 30",
   );
   expect(
-    slowResumeFlags([{ retryable: true }, { retryable: false }], pace),
+    slowResumeFlags([{ retryable: true }, { retryable: false }], still),
   ).toBe(" --clean-failed --concurrency 1 --delay 30");
-});
-
-test("the slow resume hint never suggests a faster pace than the failed run", () => {
-  // The run's own gap was already 45s: resume at twice that, not 30s.
-  expect(
-    slowResumeFlags([{ retryable: true }], { delay: 45, finalDelay: 45 }),
-  ).toBe(" --concurrency 1 --delay 90");
-  // It slowed itself down to 120s: resume from there.
-  expect(
-    slowResumeFlags([{ retryable: true }], { delay: 10, finalDelay: 120 }),
-  ).toBe(" --concurrency 1 --delay 240");
-  expect(slowestPace({ delay: 10, finalDelay: 60 })).toEqual({ delay: 60 });
 });

@@ -13,7 +13,7 @@ export interface PacingFlags {
   requestTimeout?: number;
 }
 
-/** The settings an import runs with, and how they came about. */
+/** The settings an import runs with. */
 export interface ImportPacing {
   concurrency: number;
   /** Seconds between starting two hand-offs. */
@@ -21,66 +21,27 @@ export interface ImportPacing {
   requestTimeout: number;
   /** Set when the source's large-library profile applies to this many videos. */
   profile?: LargeLibraryProfile;
-  /** Profile values used because the user did not pass the flag, as flags. */
-  applied: string[];
-  /** Flags the user passed that are more aggressive than the profile recommends. */
-  riskier: Array<{ flag: string; value: number; recommended: number }>;
 }
 
-/**
- * Flags the user passed win; otherwise a large import from a source that
- * has a large-library profile gets that gentler profile, and anything else
- * the usual defaults.
- */
+/** Passed flags win; otherwise a large import takes the source's large-library profile, and anything else the usual defaults. */
 export function importPacing(
   plugin: Pick<SourcePlugin, "largeLibrary">,
   videoCount: number,
   flags: PacingFlags,
 ): ImportPacing {
   const profile = largeLibraryProfile(plugin, videoCount);
-  const defaultTimeout = DEFAULT_REQUEST_TIMEOUT / 1000;
-  const pacing: ImportPacing = {
+  return {
     concurrency:
       flags.concurrency ?? profile?.concurrency ?? DEFAULT_CONCURRENCY,
     delay: flags.delay ?? profile?.intervalSeconds ?? 0,
     requestTimeout:
       flags.requestTimeout ??
-      Math.max(profile?.requestTimeoutSeconds ?? 0, defaultTimeout),
+      Math.max(
+        profile?.requestTimeoutSeconds ?? 0,
+        DEFAULT_REQUEST_TIMEOUT / 1000,
+      ),
     profile,
-    applied: [],
-    riskier: [],
   };
-  if (!profile) return pacing;
-
-  const check = (
-    flag: string,
-    passed: number | undefined,
-    recommended: number,
-    riskierWhen: (passed: number) => boolean,
-  ) => {
-    if (passed === undefined) pacing.applied.push(`--${flag} ${recommended}`);
-    else if (riskierWhen(passed))
-      pacing.riskier.push({ flag, value: passed, recommended });
-  };
-  check(
-    "concurrency",
-    flags.concurrency,
-    profile.concurrency,
-    (v) => v > profile.concurrency,
-  );
-  check(
-    "delay",
-    flags.delay,
-    profile.intervalSeconds,
-    (v) => v < profile.intervalSeconds,
-  );
-  check(
-    "request-timeout",
-    flags.requestTimeout,
-    profile.requestTimeoutSeconds,
-    (v) => v < profile.requestTimeoutSeconds,
-  );
-  return pacing;
 }
 
 /** The video count a large-library profile is judged by: a resume counts the whole import, so its tail keeps the pace. */

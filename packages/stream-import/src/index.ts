@@ -78,14 +78,5 @@ export {
   isStalled,
   refreshMigrationState,
 } from "./status.ts";
-export {
-  BACKOFF_RECOVERY_SUCCESSES,
-  largeLibraryProfile,
-  MAX_BACKOFF_INTERVAL_MS,
-  MIN_BACKOFF_INTERVAL_MS,
-  Pacer,
-  SOURCE_REJECTED_MESSAGE,
-  SOURCE_REJECTION_STATUSES,
-  SourceRejectedError,
-} from "./throttle.ts";
+export { largeLibraryProfile, SourceRejectedError } from "./throttle.ts";
 export { parseBunnyDate } from "./time.ts";

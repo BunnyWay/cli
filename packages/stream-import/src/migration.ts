@@ -65,10 +65,8 @@ export interface MigrationOptions {
   cleanFailed?: boolean;
   /** Delete and fetch again videos stuck at zero bytes past the stall threshold. */
   retryStalled?: boolean;
-  /** Minimum gap between starting two new hand-offs to Bunny, across all workers; 0 (default) means no gap. */
+  /** Minimum gap between starting two new hand-offs to Bunny, across all workers; 0 (default) means no gap. The run widens it by itself when fetches fail with HTTP 422/503. */
   fetchIntervalMs?: number;
-  /** Widen that gap by itself when fetches start failing with HTTP 422/503 (default true). */
-  adaptiveThrottle?: boolean;
   /** Pauses the run: no new videos start, in-flight ones are abandoned for the next resume, and the state comes back `paused` instead of throwing. */
   signal?: AbortSignal;
   onProgress?: (
@@ -157,7 +155,6 @@ export class MigrationService {
   private deadCopies = new Map<string, string[]>();
   private cleanFailed = false;
   private pacer = new Pacer(0);
-  private adaptiveThrottle = true;
 
   /** The gap between hand-offs the last run ended with, in ms; larger than `fetchIntervalMs` when it slowed itself down. */
   get fetchIntervalMs(): number {
@@ -309,7 +306,6 @@ export class MigrationService {
     const { folderId, resume = false, wait = false, signal } = options;
     this.cleanFailed = Boolean(options.cleanFailed);
     this.pacer = new Pacer(Math.max(0, options.fetchIntervalMs ?? 0));
-    this.adaptiveThrottle = options.adaptiveThrottle !== false;
     const concurrency = Math.max(
       1,
       Math.floor(positiveOr(options.concurrency, DEFAULT_CONCURRENCY)),
@@ -1008,7 +1004,7 @@ export class MigrationService {
         result.status !== undefined &&
         SOURCE_REJECTION_STATUSES.has(result.status)
       ) {
-        const gap = this.adaptiveThrottle && this.pacer.backoff(turn);
+        const gap = this.pacer.backoff(turn);
         if (gap)
           this.logger.warn(
             `Videos are failing to import; slowing down to one new video every ${gap / 1000}s.`,
@@ -1017,7 +1013,7 @@ export class MigrationService {
       }
       throw new Error(result.error ?? "Failed to initiate fetch");
     }
-    const gap = this.adaptiveThrottle ? this.pacer.succeeded() : undefined;
+    const gap = this.pacer.succeeded();
     if (gap !== undefined)
       this.logger.info(
         gap > 0

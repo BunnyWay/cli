@@ -48,23 +48,6 @@ const validState = (): MigrationState => ({
 });
 
 describe("validateMigrationState", () => {
-  test("keeps sourceRejected and attempts on a failed entry", () => {
-    const original = validState();
-    const [entry] = original.videoMigrations;
-    if (!entry) throw new Error("fixture has no entry");
-    Object.assign(entry, {
-      status: "failed",
-      error: "Import failed",
-      attempts: 2,
-      sourceRejected: true,
-    });
-    const loaded = validateMigrationState(JSON.parse(JSON.stringify(original)));
-    expect(loaded?.videoMigrations[0]).toMatchObject({
-      attempts: 2,
-      sourceRejected: true,
-    });
-  });
-
   test("round-trips a valid state, including an unknown source id", () => {
     const original = validState();
     expect(

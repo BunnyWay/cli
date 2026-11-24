@@ -1,4 +1,4 @@
-import type { ImportPacing } from "@/tools/stream/index.ts";
+import type { ImportPacing, PacingFlags } from "@/tools/stream/index.ts";
 
 function duration(seconds: number): string {
   const minutes = Math.round(seconds / 60);
@@ -11,21 +11,45 @@ function duration(seconds: number): string {
 /** What to tell the user about a large import's pacing; empty when no profile applies. */
 export function pacingNotice(
   pacing: ImportPacing,
+  flags: PacingFlags,
   videoCount: number,
 ): { warn: string[]; info: string[] } {
-  if (!pacing.profile) return { warn: [], info: [] };
+  const { profile } = pacing;
+  if (!profile) return { warn: [], info: [] };
   const count = videoCount.toLocaleString("en-US");
-  const recommended = `--concurrency ${pacing.profile.concurrency} --delay ${pacing.profile.intervalSeconds} --request-timeout ${pacing.profile.requestTimeoutSeconds}`;
-  const warn = [
-    pacing.applied.length > 0
-      ? `Large library detected (${count} videos to import). To keep it reliable, this import is paced with: ${pacing.applied.join(" ")}`
-      : `Large library detected (${count} videos to import). Recommended settings: ${recommended}`,
+  const settings = [
+    {
+      flag: "concurrency",
+      passed: flags.concurrency,
+      recommended: profile.concurrency,
+    },
+    {
+      flag: "delay",
+      passed: flags.delay,
+      recommended: profile.intervalSeconds,
+    },
+    {
+      flag: "request-timeout",
+      passed: flags.requestTimeout,
+      recommended: profile.requestTimeoutSeconds,
+    },
   ];
-  for (const r of pacing.riskier) {
+  const asFlags = (list: typeof settings) =>
+    list.map((s) => `--${s.flag} ${s.recommended}`).join(" ");
+  const applied = settings.filter((s) => s.passed === undefined);
+  const warn = [
+    applied.length > 0
+      ? `Large library detected (${count} videos to import). To keep it reliable, this import is paced with: ${asFlags(applied)}`
+      : `Large library detected (${count} videos to import). Recommended settings: ${asFlags(settings)}`,
+  ];
+  for (const { flag, passed, recommended } of settings) {
+    if (passed === undefined) continue;
+    if (flag === "concurrency" ? passed <= recommended : passed >= recommended)
+      continue;
     warn.push(
-      r.flag === "request-timeout"
-        ? `--request-timeout ${r.value} is below the recommended ${r.recommended}; slow responses may time out.`
-        : `--${r.flag} ${r.value} is ${r.flag === "delay" ? "below" : "above"} the recommended ${r.recommended}; videos may fail to import (the import then slows down by itself).`,
+      flag === "request-timeout"
+        ? `--request-timeout ${passed} is below the recommended ${recommended}; slow responses may time out.`
+        : `--${flag} ${passed} is ${flag === "delay" ? "below" : "above"} the recommended ${recommended}; videos may fail to import (the import then slows down by itself).`,
     );
   }
   const info: string[] = [];
@@ -36,34 +60,20 @@ export function pacingNotice(
   return { warn, info };
 }
 
-/** The pace for retrying after fetches failed with HTTP 422/503: one at a time, at least 30s apart, and at least twice the last gap. */
-export function retryPacing(previous: { delay?: number }): {
+/** The pace for retrying after fetches failed with HTTP 422/503: one at a time, at least 30s apart, and twice the slowest gap the run reached. */
+export function retryPacing(pacing: { delay: number; finalDelay: number }): {
   concurrency: number;
   delay: number;
 } {
-  return {
-    concurrency: 1,
-    delay: Math.min(Math.max((previous.delay ?? 0) * 2, 30), 600),
-  };
+  const slowest = Math.max(pacing.delay, pacing.finalDelay);
+  return { concurrency: 1, delay: Math.min(Math.max(slowest * 2, 30), 600) };
 }
 
-/**
- * The flags to resume more slowly after fetches failed with HTTP 422/503. A
- * plain resume skips entries that used up their attempts (not `retryable`),
- * so `--clean-failed` comes along when any of them did.
- */
+/** The flags to resume more slowly; `--clean-failed` comes along when a failure used up its attempts, which a plain resume skips. */
 export function slowResumeFlags(
   rejected: ReadonlyArray<{ retryable: boolean }>,
   pacing: { delay: number; finalDelay: number },
 ): string {
   const exhausted = rejected.some((f) => !f.retryable);
-  const { delay } = retryPacing(slowestPace(pacing));
-  return `${exhausted ? " --clean-failed" : ""} --concurrency 1 --delay ${delay}`;
-}
-
-/** The slowest pace a run reached: its own gap, or the wider one it slowed itself down to. */
-export function slowestPace(pacing: { delay: number; finalDelay: number }): {
-  delay: number;
-} {
-  return { delay: Math.max(pacing.delay, pacing.finalDelay) };
+  return `${exhausted ? " --clean-failed" : ""} --concurrency 1 --delay ${retryPacing(pacing).delay}`;
 }

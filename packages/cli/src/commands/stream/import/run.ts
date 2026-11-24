@@ -34,12 +34,7 @@ import {
   streamImportRun,
 } from "@/tools/stream/index.ts";
 import { resolveImportLibrary } from "./library.ts";
-import {
-  pacingNotice,
-  retryPacing,
-  slowestPace,
-  slowResumeFlags,
-} from "./pacing.ts";
+import { pacingNotice, retryPacing, slowResumeFlags } from "./pacing.ts";
 
 interface ImportArgs {
   library?: string;
@@ -559,7 +554,7 @@ export const streamImportRunCommand = defineToolCommand({
     }
 
     if (output !== "json") {
-      const notice = pacingNotice(pacing, summary.newVideos);
+      const notice = pacingNotice(pacing, args, summary.newVideos);
       for (const line of notice.warn) logger.warn(line);
       for (const line of notice.info) logger.dim(line);
     }
@@ -624,7 +619,7 @@ export const streamImportRunCommand = defineToolCommand({
     const slower =
       result.failed.some((f) => f.retryable && f.sourceRejected) ||
       result.pacing.finalDelay > result.pacing.delay
-        ? retryPacing(slowestPace(result.pacing))
+        ? retryPacing(result.pacing)
         : undefined;
     const retry = await confirm(
       slower
