@@ -1,5 +1,14 @@
 # @bunny.net/stream-import-jwplayer
 
+## 0.1.1
+
+### Patch Changes
+
+- [#318](https://github.com/BunnyWay/cli/pull/318) [`b0ba261`](https://github.com/BunnyWay/cli/commit/b0ba261f4c1ce570e984c16c258a9ce54104782d) Thanks [@jamie-at-bunny](https://github.com/jamie-at-bunny)! - Require zod 4.6.6 or later to pick up the fix for GHSA-mrhx-c7xc-m3w5
+
+- Updated dependencies [[`b0ba261`](https://github.com/BunnyWay/cli/commit/b0ba261f4c1ce570e984c16c258a9ce54104782d), [`be1f590`](https://github.com/BunnyWay/cli/commit/be1f590051fc7d81a27f404857fdf4d45617d0c3)]:
+  - @bunny.net/stream-import@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
