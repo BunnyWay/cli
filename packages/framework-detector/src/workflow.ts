@@ -9,7 +9,7 @@ export const SITES_WORKFLOW_PATH = ".github/workflows/bunny-sites.yml";
 
 // Bump the tag when a new major of the action ships; the action wraps the CLI.
 export const DEPLOY_SITE_ACTION =
-  "BunnyWay/actions/deploy-site@deploy-site_0.1.0";
+  "BunnyWay/actions/deploy-site@deploy-site_0.1.2";
 
 // Toolchain setup + dependency install, without the build line. setup-node looks for the lockfile at the checkout root, so a nested project passes its own path.
 function jsSetup(
