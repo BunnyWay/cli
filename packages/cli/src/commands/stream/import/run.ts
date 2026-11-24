@@ -24,6 +24,8 @@ import { confirm, isInteractive, requireConfirmable } from "@/core/ui.ts";
 import {
   type ImportPlan,
   type ImportRun,
+  importPacing,
+  importSize,
   MAX_PLAN_LIMIT,
   requireSource,
   SOURCE_IDS,
@@ -33,7 +35,6 @@ import {
 } from "@/tools/stream/index.ts";
 import { resolveImportLibrary } from "./library.ts";
 import {
-  importPacing,
   pacingNotice,
   retryPacing,
   slowestPace,
@@ -491,6 +492,8 @@ export const streamImportRunCommand = defineToolCommand({
       (stepCtx, plugin) =>
         streamImportPlan.invoke(stepCtx, {
           ...targetFor(plugin.id),
+          concurrency: args.concurrency,
+          delay: args.delay,
           limit: MAX_PLAN_LIMIT,
         }),
     );
@@ -499,17 +502,7 @@ export const streamImportRunCommand = defineToolCommand({
     if (plan.folderFromSavedRun)
       logger.info(`Resuming the import of folder ${plan.folder}.`);
     // Sized to this import: a large one from a source with a large-library profile is paced unless the flags say otherwise.
-    // A resume is sized by the whole import, so the rest of a large one keeps its pace.
-    const importSize = args.resume
-      ? summary.newVideos + summary.alreadyMigrated + summary.processingOnBunny
-      : summary.newVideos;
-    const pacing = importPacing(plugin, importSize, args);
-    const pacingSummary = {
-      concurrency: pacing.concurrency,
-      delay: pacing.delay,
-      requestTimeout: pacing.requestTimeout,
-      largeLibrary: Boolean(pacing.profile),
-    };
+    const pacing = importPacing(plugin, importSize(summary, args.resume), args);
 
     // Every exit before the run prints this one shape; `outcome` says which exit it was.
     const printPlan = (outcome: "no_videos" | "nothing_new" | "dry_run") =>
@@ -523,7 +516,7 @@ export const streamImportRunCommand = defineToolCommand({
             dryRun,
             truncated: plan.truncated,
             summary,
-            pacing: pacingSummary,
+            pacing: plan.pacing,
           },
           null,
           2,
@@ -627,10 +620,12 @@ export const streamImportRunCommand = defineToolCommand({
     const retryable = result.failed.filter((f) => f.retryable).length;
     if (retryable === 0 || args.force || !isInteractive(args.output))
       return undefined;
-    // Fetches failed at this pace, so a retry goes one at a time with a wider gap.
-    const slower = result.failed.some((f) => f.retryable && f.sourceRejected)
-      ? retryPacing(slowestPace(result.pacing))
-      : undefined;
+    // Fetches failed at this pace, or the run slowed itself down, so a retry goes one at a time with a wider gap.
+    const slower =
+      result.failed.some((f) => f.retryable && f.sourceRejected) ||
+      result.pacing.finalDelay > result.pacing.delay
+        ? retryPacing(slowestPace(result.pacing))
+        : undefined;
     const retry = await confirm(
       slower
         ? `${retryable} videos failed. Retry them now, more slowly (one at a time, ${slower.delay}s apart)?`

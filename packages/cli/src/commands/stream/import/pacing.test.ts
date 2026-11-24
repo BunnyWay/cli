@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
-import { requireSource } from "@/tools/stream/index.ts";
+import { importPacing, requireSource } from "@/tools/stream/index.ts";
 import {
-  importPacing,
   pacingNotice,
   retryPacing,
   slowestPace,

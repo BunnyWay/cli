@@ -35,6 +35,7 @@ import {
   type ImportStatus,
   ImportStatusSchema,
 } from "./model.ts";
+import { importPacing, importSize, pacingSummary } from "./pacing.ts";
 import {
   engineLogger,
   type ImportSession,
@@ -56,6 +57,12 @@ import {
 } from "./state.ts";
 
 export * from "./model.ts";
+export {
+  type ImportPacing,
+  importPacing,
+  importSize,
+  type PacingFlags,
+} from "./pacing.ts";
 export { SourceCredentialsError } from "./session.ts";
 export { findSource, requireSource, SOURCE_IDS, SOURCES } from "./sources.ts";
 export {
@@ -140,6 +147,27 @@ const target = {
     ),
 };
 
+// Left out, both come from the source's large-library profile when the import is big enough for it.
+const pace = {
+  concurrency: z
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .optional()
+    .describe(
+      `Videos to hand to Bunny in parallel (default ${DEFAULT_CONCURRENCY}, or the source's large-library value for a big import).`,
+    ),
+  delay: z
+    .number()
+    .min(0)
+    .max(600)
+    .optional()
+    .describe(
+      "Minimum seconds between starting two hand-offs, across all workers (default 0, or the source's large-library value for a big import). The run also widens it by itself once fetches start failing with HTTP 422/503.",
+    ),
+};
+
 export const streamImportSources = defineTool({
   name: "stream.import.sources",
   title: "List import sources",
@@ -201,6 +229,7 @@ export const streamImportPlan = defineTool({
     "Discover a source's videos and compare them with a Stream library: how many exist, how many are already imported or still processing, and which would be imported. Changes nothing and writes no state; fails naming the environment variables a source still needs.",
   schema: z.strictObject({
     ...target,
+    ...pace,
     limit: z
       .number()
       .int()
@@ -244,6 +273,9 @@ export const streamImportPlan = defineTool({
         unsupportedList: summary.unsupportedList.slice(0, limit),
         failedForGoodList: summary.failedForGoodList.slice(0, limit),
       },
+      pacing: pacingSummary(
+        importPacing(session.plugin, importSize(summary, input.resume), input),
+      ),
     };
   },
 });
@@ -338,23 +370,7 @@ export const streamImportRun = defineTool({
     "Hand every not-yet-imported video from a source to a Stream library, tag it so a re-run skips it, and return once all are queued; Bunny then fetches and encodes them. Discovers the source afresh, so it may differ from an earlier plan. Resumable and idempotent; an aborted call returns with status `paused`. Progress is journaled locally; poll `stream.import.status` rather than setting `wait`. A resume skips failures a retry cannot fix or that failed 3 times. Deletes nothing unless `cleanFailed` or `retryStalled` is set, and then only copies Bunny failed or holds stuck at zero bytes.",
   schema: z.strictObject({
     ...target,
-    concurrency: z
-      .number()
-      .int()
-      .min(1)
-      .max(20)
-      .optional()
-      .describe(
-        `Videos to hand to Bunny in parallel (default ${DEFAULT_CONCURRENCY}).`,
-      ),
-    delay: z
-      .number()
-      .min(0)
-      .max(600)
-      .optional()
-      .describe(
-        "Minimum seconds between starting two hand-offs, across all workers (default 0). A gap makes a large import more reliable; the run also widens it by itself once fetches start failing with HTTP 422/503.",
-      ),
+    ...pace,
     videoTimeout: z
       .number()
       .int()
@@ -406,6 +422,7 @@ export const streamImportRun = defineTool({
       concurrency: input.concurrency ?? DEFAULT_CONCURRENCY,
       delay: input.delay ?? 0,
       requestTimeout: input.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT / 1000,
+      largeLibrary: false,
       finalDelay: input.delay ?? 0,
     };
     const opened: OpenedImport = {};
@@ -416,6 +433,22 @@ export const streamImportRun = defineTool({
     let fetched = 0;
     try {
       session = await openImport(ctx, input, { processingTimeoutMs, opened });
+      if (session.plugin.largeLibrary) {
+        // The run reuses this discovery, so sizing the import costs no extra requests.
+        const summary = await session.service.getSummary(session.folder, {
+          cleanFailed: input.cleanFailed,
+          retryStalled: input.retryStalled,
+        });
+        const sized = importPacing(
+          session.plugin,
+          importSize(summary, input.resume),
+          input,
+        );
+        pacing.concurrency = sized.concurrency;
+        pacing.delay = sized.delay;
+        pacing.finalDelay = sized.delay;
+        pacing.largeLibrary = Boolean(sized.profile);
+      }
       state = await session.service.runMigration({
         folderId: session.folder,
         concurrency: pacing.concurrency,
