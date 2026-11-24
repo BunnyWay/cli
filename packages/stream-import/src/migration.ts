@@ -893,13 +893,6 @@ export class MigrationService {
       migration.status = "failed";
       migration.error = safeErrorMessage(error, "Import failed");
       migration.sourceRejected = error instanceof SourceRejectedError;
-      if (migration.sourceRejected && this.adaptiveThrottle) {
-        const gap = this.pacer.backoff();
-        if (gap)
-          this.logger.warn(
-            `Videos are failing to import; slowing down to one new video every ${gap / 1000}s.`,
-          );
-      }
       this.logger.error(
         `Failed: ${stripAnsi(migration.videoName)} - ${migration.error}`,
       );
@@ -989,7 +982,7 @@ export class MigrationService {
     // Paced right before the hand-off, so a slow source lookup in another
     // worker cannot bunch two Bunny fetches together. Re-tags never get here.
     // A pause while waiting leaves the entry pending: nothing reached Bunny yet.
-    await this.pacer.turn(
+    const turn = await this.pacer.turn(
       runSignal ? AbortSignal.any([signal, runSignal]) : signal,
     );
     // Stopped while waiting: no request went to Bunny, so this was not an attempt.
@@ -1014,10 +1007,23 @@ export class MigrationService {
       if (
         result.status !== undefined &&
         SOURCE_REJECTION_STATUSES.has(result.status)
-      )
+      ) {
+        const gap = this.adaptiveThrottle && this.pacer.backoff(turn);
+        if (gap)
+          this.logger.warn(
+            `Videos are failing to import; slowing down to one new video every ${gap / 1000}s.`,
+          );
         throw new SourceRejectedError(result.status);
+      }
       throw new Error(result.error ?? "Failed to initiate fetch");
     }
+    const gap = this.adaptiveThrottle ? this.pacer.succeeded() : undefined;
+    if (gap !== undefined)
+      this.logger.info(
+        gap > 0
+          ? `Videos are importing again; speeding up to one new video every ${gap / 1000}s.`
+          : "Videos are importing again; back to full speed.",
+      );
 
     // Saved before the abort check and the metaTag write, so a pause or resume can never lose a video Bunny created.
     migration.pendingFetch = undefined;

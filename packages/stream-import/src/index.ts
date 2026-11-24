@@ -79,6 +79,7 @@ export {
   refreshMigrationState,
 } from "./status.ts";
 export {
+  BACKOFF_RECOVERY_SUCCESSES,
   largeLibraryProfile,
   MAX_BACKOFF_INTERVAL_MS,
   MIN_BACKOFF_INTERVAL_MS,

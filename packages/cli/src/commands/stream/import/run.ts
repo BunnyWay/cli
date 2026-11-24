@@ -499,7 +499,11 @@ export const streamImportRunCommand = defineToolCommand({
     if (plan.folderFromSavedRun)
       logger.info(`Resuming the import of folder ${plan.folder}.`);
     // Sized to this import: a large one from a source with a large-library profile is paced unless the flags say otherwise.
-    const pacing = importPacing(plugin, summary.newVideos, args);
+    // A resume is sized by the whole import, so the rest of a large one keeps its pace.
+    const importSize = args.resume
+      ? summary.newVideos + summary.alreadyMigrated + summary.processingOnBunny
+      : summary.newVideos;
+    const pacing = importPacing(plugin, importSize, args);
     const pacingSummary = {
       concurrency: pacing.concurrency,
       delay: pacing.delay,

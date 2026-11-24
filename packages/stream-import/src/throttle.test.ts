@@ -80,6 +80,21 @@ test("backoff starts at 15s, doubles, and stops at two minutes", () => {
   expect(pacer.interval).toBe(MAX_BACKOFF_INTERVAL_MS);
 });
 
+test("a burst of rejections backs off once, and the gap narrows again after 10 successes", async () => {
+  const { pacer } = fakePacer(0);
+  const turns = await Promise.all([pacer.turn(), pacer.turn(), pacer.turn()]);
+  expect(turns.map((turn) => pacer.backoff(turn))).toEqual([
+    15_000,
+    undefined,
+    undefined,
+  ]);
+  expect(pacer.backoff(await pacer.turn())).toBe(30_000);
+
+  const recovered = Array.from({ length: 20 }, () => pacer.succeeded());
+  expect(recovered.filter((gap) => gap !== undefined)).toEqual([15_000, 0]);
+  expect(pacer.interval).toBe(0);
+});
+
 test("a rejection carries the generic message and keeps the HTTP status", () => {
   const error = new SourceRejectedError(422);
   expect(error.message).toBe(
