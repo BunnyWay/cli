@@ -1,6 +1,6 @@
 ---
 name: bunny-cli
-description: Manage bunny.net resources from the command line (databases, DNS, Edge Storage, Edge Scripts, static sites, sandboxes, Stream video libraries and imports, authentication, and raw API requests) and query a Bunny Database from application code with `@bunny.net/database-client`. Use when working with bunny.net (pullzones, DNS zones/records, databases, Edge Storage zones and files, Edge Scripts, Magic Containers, static-site hosting/deploys, cloud sandboxes, Stream video libraries, uploads, collections, captions, and transcription, moving a video library into Bunny Stream from Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
+description: Manage bunny.net resources from the command line (databases, DNS, Edge Storage, Edge Scripts, static sites, container apps, sandboxes, Stream video libraries and imports, authentication, and raw API requests) and query a Bunny Database from application code with `@bunny.net/database-client`. Use when working with bunny.net (pullzones, DNS zones/records, databases, Edge Storage zones and files, Edge Scripts, Magic Containers apps (deploy from a Dockerfile or image, bunny.jsonc, container registries), static-site hosting/deploys, cloud sandboxes, Stream video libraries, uploads, collections, captions, and transcription, moving a video library into Bunny Stream from Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, or Brightcove), invoking the `bunny` CLI, or making authenticated API calls to api.bunny.net.
 ---
 
 # bunny.net CLI Skill
@@ -68,6 +68,11 @@ bunny sites deploy ./dist                             # deploy a directory and p
 bunny sites domains add example.com --wait            # custom production domain
 bunny sites deployments publish --previous --force    # instant rollback
 
+# deploy a container app (Magic Containers)
+bunny apps deploy                                     # walkthrough writes bunny.jsonc, then builds and deploys
+bunny apps deploy --dockerfile --region DE --output json   # unattended; generates a Dockerfile if missing
+bunny apps deploy ghcr.io/myorg/api:v1.2              # deploy a pre-built image
+
 # manage Bunny Stream video
 bunny stream libraries create my-library --link --save-env --no-add-videos   # link this directory, write .env
 bunny stream videos upload ./video.mp4 --title "Launch demo"
@@ -90,6 +95,7 @@ Use this to route to the correct reference file:
 - **DNS (zones, delegation checks, records, presets, BIND import/export, DNSSEC, logging, Scriptable DNS scripts)** -> `references/dns.md`
 - **Edge Scripts (init, create, deploy, link, stats, deployments/rollback, env vars, custom domains)** -> `references/scripts.md`
 - **Static sites (create, deploy, rollback, custom domains, GitHub Actions)** -> `references/sites.md`
+- **Container apps on Magic Containers (deploy from source or an image, bunny.jsonc, pull/push, env vars, endpoints, volumes, registries)** -> `references/apps.md`
 - **Edge Storage (zones, files, connection credentials, S3/FTP/HTTP, custom domains)** -> `references/storage.md`
 - **Sandboxes (create, exec, ssh, files list/cp, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
 - **Bunny Stream (libraries, player/security settings, video upload/fetch/embed/cleanup, captions, collections, encoding, transcription, smart titles/chapters)** -> `references/stream.md`
