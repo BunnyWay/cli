@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import prompts from "prompts";
+import { toStorageRegionOption } from "@/tools/storage/index.ts";
 import { promptSiteName, resolveSiteRegion } from "./provision.ts";
 
 test("promptSiteName normalizes and validates a passed name", async () => {
@@ -21,10 +22,14 @@ test("promptSiteName prompts when no name is passed and normalizes the answer", 
   expect(await promptSiteName(undefined, true)).toBe("prompted-name");
 });
 
-test("resolveSiteRegion pins the Edge (SSD) tier to DE", () => {
-  expect(resolveSiteRegion(undefined, "ssd")).toBeUndefined();
-  expect(resolveSiteRegion("de", "ssd")).toBe("DE");
-  expect(() => resolveSiteRegion("NY", "ssd")).toThrow(
-    "only available with DE",
+test("resolveSiteRegion rejects a region the tier cannot use", () => {
+  const catalog = [
+    toStorageRegionOption({ Code: "DE", Tier: 1, IsMainRegionSupported: true }),
+    toStorageRegionOption({ Code: "NY", Tier: 1 }),
+  ];
+  expect(resolveSiteRegion(catalog, undefined, "ssd")).toBeUndefined();
+  expect(resolveSiteRegion(catalog, "de", "ssd")).toBe("DE");
+  expect(() => resolveSiteRegion(catalog, "NY", "ssd")).toThrow(
+    "NY cannot be the storage region of Edge (SSD) sites",
   );
 });

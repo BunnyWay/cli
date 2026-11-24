@@ -130,7 +130,11 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     }
     const name = nameInput;
 
-    const regions = await resolveReplicationRegions(replicationRegions, output);
+    const regions = await resolveReplicationRegions(
+      toolContext(config, { verbose }),
+      replicationRegions,
+      output,
+    );
     const warnings = librarySettingsWarnings(args);
 
     // The encoding/transcribing flags are shared with `library update`; Name is

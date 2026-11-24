@@ -86,7 +86,7 @@ async function createImportLibrary(
   const name = typeof value === "string" ? value.trim() : "";
   if (!name) throw new UserError("A library name is required.");
 
-  const regions = await resolveReplicationRegions(undefined, output);
+  const regions = await resolveReplicationRegions(ctx, undefined, output);
   const library = await withSpinner("Creating video library...", () =>
     streamLibrariesCreate.invoke(ctx, { name, regions }),
   );

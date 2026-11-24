@@ -1,6 +1,13 @@
 import { regionName } from "@/commands/stream/regions.ts";
 import { UserError } from "@/core/errors.ts";
-import { confirmOrCancel, isInteractive, prompts } from "@/core/ui.ts";
+import {
+  confirmOrCancel,
+  isInteractive,
+  prompts,
+  withSpinner,
+} from "@/core/ui.ts";
+import type { ToolContext } from "@/tools/index.ts";
+import { storageRegionsList } from "@/tools/storage/index.ts";
 import {
   MAIN_REGION,
   parseReplicationRegions,
@@ -10,6 +17,7 @@ import {
 
 /** Replication regions from the flag, else asked for when interactive, else none. */
 export async function resolveReplicationRegions(
+  ctx: ToolContext,
   flag: string[] | undefined,
   output: string | undefined,
 ): Promise<string[]> {
@@ -22,13 +30,16 @@ export async function resolveReplicationRegions(
   if (answer === "cancel") throw new UserError("Creation cancelled.");
   if (answer === "no") return [];
 
+  const catalog = await withSpinner("Fetching regions...", () =>
+    storageRegionsList.invoke(ctx, {}),
+  );
   const { picked } = await prompts({
     type: "multiselect",
     name: "picked",
     message: "Replication regions (each adds storage cost; space to toggle):",
     choices: REGION_CODES.filter((code) => code !== MAIN_REGION).map(
       (code) => ({
-        title: `${regionName(code)} (${code})`,
+        title: `${regionName(catalog, code)} (${code})`,
         value: code,
         selected: SUGGESTED_REPLICATION_REGIONS.includes(code),
       }),
