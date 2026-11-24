@@ -34,8 +34,9 @@ import {
 import { detectFramework } from "./ci/frameworks.ts";
 import { loadSiteConfig, saveSiteConfig } from "./config.ts";
 import {
-  DEFAULT_KEEP_DEPLOYS,
+  AUTO_PRUNE_KEEP,
   type DeployRecord,
+  type DeployRetention,
   deployIdError,
   findDeploy,
   markCurrent,
@@ -240,7 +241,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     ],
     [
       "$0 sites deploy ./dist --keep 3",
-      "Publish, then delete older deploys beyond the newest 3",
+      "Publish, then keep only the newest 3 deploys (this run only)",
     ],
   ],
 
@@ -281,7 +282,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
         .option("keep", {
           type: "number",
           describe:
-            "After publishing, delete older deploys beyond the newest N (live and previous are always kept)",
+            "After publishing, keep only the newest N deploys for this run (live and previous are always kept); overrides sites.keep",
         })
         .option("spa", {
           type: "boolean",
@@ -292,7 +293,7 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
-    const keep =
+    const flagKeep =
       args.keep === undefined ? undefined : resolveKeepCount(args.keep);
     const siteConfig = loadSiteConfig();
     const root = siteConfig?.root ?? process.cwd();
@@ -334,6 +335,10 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     const firstDeploy = state.deploys.length === 0;
 
     let etag = site.etag;
+
+    // --keep applies to this run only; otherwise bunny.jsonc, then the site's recorded choice, decide what each deploy prunes.
+    const keep: DeployRetention | undefined =
+      flagKeep ?? siteConfig?.config.keep ?? state.keep;
 
     const preset = await detectFramework(root);
 
@@ -508,7 +513,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
               unchanged: true,
               live: promoted.confirmed,
               production: production ?? null,
-              ...(keep !== undefined && {
+              keep: keep ?? null,
+              ...(typeof keep === "number" && {
                 pruned: pruneResult?.pruned ?? [],
                 pruneFailures: pruneResult?.failures ?? [],
               }),
@@ -524,7 +530,12 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
       );
       if (production) logger.log(`  ${production}`);
 
-      await reportOrOfferPrune(pruneResult, keep, state, connection, output);
+      etag = await reportOrAskPrune(pruneResult, keep, {
+        state,
+        connection,
+        etag,
+        output,
+      });
 
       // The common repeat path after declining the first-deploy domain offer still gets the hint.
       if (!state.domain) logger.dim(DOMAIN_HINT);
@@ -611,7 +622,8 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
             unchanged: skipUpload,
             live: promoted.confirmed,
             production: production ?? null,
-            ...(keep !== undefined && {
+            keep: keep ?? null,
+            ...(typeof keep === "number" && {
               pruned: pruneResult?.pruned ?? [],
               pruneFailures: pruneResult?.failures ?? [],
             }),
@@ -637,7 +649,12 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
     if (production) logger.info(`Production: ${production}`);
     if (notFoundNote) logger.info(notFoundNote);
 
-    await reportOrOfferPrune(pruneResult, keep, state, connection, output);
+    etag = await reportOrAskPrune(pruneResult, keep, {
+      state,
+      connection,
+      etag,
+      output,
+    });
 
     // Domainless sites: the first deploy offers a custom production domain, later ones just hint.
     if (!state.domain) {
@@ -683,9 +700,9 @@ export const sitesDeployCommand = defineCommand<DeployArgs>({
 async function pruneWithKeep(
   connection: StorageZone,
   state: RemoteSiteState,
-  keep: number | undefined,
+  keep: DeployRetention | undefined,
 ): Promise<PruneResult | undefined> {
-  if (keep === undefined) return undefined;
+  if (typeof keep !== "number") return undefined;
   const victims = pruneVictims(
     state.deploys,
     keep,
@@ -698,22 +715,48 @@ async function pruneWithKeep(
   return safePrune(connection, victims, keep);
 }
 
-async function reportOrOfferPrune(
+// Returns the state etag, which moves when the site records its retention choice.
+async function reportOrAskPrune(
   pruneResult: PruneResult | undefined,
-  keep: number | undefined,
+  keep: DeployRetention | undefined,
+  opts: {
+    state: RemoteSiteState;
+    connection: StorageZone;
+    etag: string;
+    output: string | undefined;
+  },
+): Promise<string> {
+  if (pruneResult) reportPrune(pruneResult);
+  if (keep === undefined) return askAutoPrune(opts);
+  warnStorage(opts.state, keep, pruneResult?.pruned ?? []);
+  return opts.etag;
+}
+
+// Every deploy, pruned or not, says that deploys are full copies billed as storage.
+function warnStorage(
   state: RemoteSiteState,
-  connection: StorageZone,
-  output: string | undefined,
-): Promise<void> {
-  if (pruneResult) {
-    reportPrune(pruneResult);
-  } else if (keep === undefined) {
-    await offerPrune(state.deploys, state.current, state.previous, {
-      connection,
-      siteName: state.name,
-      interactive: isInteractive(output),
-    });
+  keep: DeployRetention | undefined,
+  pruned: string[],
+): void {
+  const stored = state.deploys.filter((d) => !pruned.includes(d.id));
+  const bytes = stored.reduce((sum, d) => sum + d.bytes, 0);
+  const summary = `Each deploy uploads to a new folder in storage you're billed for; ${stored.length} stored for ${state.name} (${formatBytes(bytes)}).`;
+  if (typeof keep === "number") {
+    const kept =
+      keep === AUTO_PRUNE_KEEP
+        ? "the live and previous deploys"
+        : `the newest ${keep} (plus live and previous)`;
+    logger.dim(
+      `${summary} Older ones are pruned after each deploy, keeping ${kept}.`,
+    );
+    return;
   }
+  logger.log();
+  logger.warn(
+    keep === "all"
+      ? `${summary} sites.keep is "all", so nothing is pruned and storage grows with every deploy.`
+      : `${summary} Nothing is pruned yet, so storage grows with every deploy.`,
+  );
 }
 
 async function safePrune(
@@ -746,46 +789,49 @@ function reportPrune({ pruned, failures }: PruneResult): void {
   }
 }
 
-async function offerPrune(
-  deploys: DeployRecord[],
-  current: string | undefined,
-  previous: string | undefined,
-  opts: {
-    connection: StorageZone;
-    siteName: string;
-    interactive: boolean;
-  },
-): Promise<void> {
-  const keep = DEFAULT_KEEP_DEPLOYS;
-  const victims = pruneVictims(deploys, keep, current, previous);
-  if (victims.length === 0) return;
+// Sites from before auto-prune choose once: an interactive deploy asks and records the answer; anything else prunes nothing and says how to choose.
+async function askAutoPrune(opts: {
+  state: RemoteSiteState;
+  connection: StorageZone;
+  etag: string;
+  output: string | undefined;
+}): Promise<string> {
+  const { state, connection } = opts;
+  warnStorage(state, undefined, []);
+  const victims = pruneVictims(
+    state.deploys,
+    AUTO_PRUNE_KEEP,
+    state.current,
+    state.previous,
+  );
 
-  const bytes = victims.reduce((sum, d) => sum + d.bytes, 0);
-  const summary = `${deploys.length} deploys are stored for ${opts.siteName}; each is a separate folder in storage you're billed for. ${victims.length} older one(s) (${formatBytes(bytes)}) can be pruned.`;
-
-  logger.log();
-  logger.warn(summary);
-
-  if (!opts.interactive) {
+  if (!isInteractive(opts.output)) {
     logger.dim(
-      `  Prune with: bunny sites deployments prune ${opts.siteName}, or pass --keep <n> to deploy`,
+      `  Deploys now prune automatically to the live and previous ones, but ${state.name} needs to opt in first: run bunny sites deploy in a terminal once, or set sites.keep in bunny.jsonc (0 keeps live and previous, "all" keeps everything).`,
     );
-
-    return;
+    return opts.etag;
   }
 
+  const bytes = victims.reduce((sum, d) => sum + d.bytes, 0);
   const proceed = await confirm(
-    `Delete them, keeping the newest ${keep} (live and previous are always kept)?`,
+    victims.length === 0
+      ? `Deploys now prune automatically, keeping only the live and previous ones. Turn this on for ${state.name}?`
+      : `Deploys now prune automatically, keeping only the live and previous ones. Delete ${victims.length} older deploy(s) (${formatBytes(bytes)}) now and after every deploy?`,
     { optional: true },
   );
 
+  state.keep = proceed ? AUTO_PRUNE_KEEP : "all";
+  const etag = await writeRemoteState(connection, state, opts.etag);
+
   if (!proceed) {
     logger.dim(
-      "  Prune later with: bunny sites deployments prune, or pass --keep <n> to deploy",
+      `  Keeping every deploy for ${state.name}. Set sites.keep in bunny.jsonc to change this, or prune by hand with bunny sites deployments prune.`,
     );
-
-    return;
+    return etag;
   }
 
-  reportPrune(await safePrune(opts.connection, victims, keep));
+  if (victims.length > 0) {
+    reportPrune(await safePrune(connection, victims, AUTO_PRUNE_KEEP));
+  }
+  return etag;
 }

@@ -1,7 +1,5 @@
 import { createCoreClient } from "@bunny.net/openapi-client";
 import { loadSiteConfig } from "@/commands/sites/config.ts";
-import { DEFAULT_KEEP_DEPLOYS } from "@/commands/sites/constants.ts";
-import { resolveKeepCount } from "@/commands/sites/deployments/prune.ts";
 import {
   type SiteSelectorArgs,
   selectSite,
@@ -24,8 +22,6 @@ import {
 interface CiInitArgs extends SiteSelectorArgs {
   framework?: string;
   force?: boolean;
-  keep?: number;
-  prune?: boolean;
 }
 
 // Scaffold `.github/workflows/bunny-sites.yml` via the BunnyWay/actions deploy-site action: pushes to main go live, and `workflow_dispatch` redeploys on demand.
@@ -39,8 +35,6 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
       "$0 sites ci init --site my-site --force",
       "Overwrite an existing workflow",
     ],
-    ["$0 sites ci init --keep 10", "Keep the 10 newest deploys after each run"],
-    ["$0 sites ci init --no-prune", "Never prune deploys from the workflow"],
   ],
 
   builder: (yargs) =>
@@ -54,23 +48,11 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
         type: "boolean",
         default: false,
         describe: "Overwrite an existing workflow file",
-      })
-      .option("keep", {
-        type: "number",
-        default: DEFAULT_KEEP_DEPLOYS,
-        describe:
-          "Deploys the workflow keeps after each run (live and previous are always kept)",
-      })
-      .option("prune", {
-        type: "boolean",
-        default: true,
-        describe: "Prune old deploys after each run; --no-prune leaves them",
       }),
 
   handler: async (args) => {
     const { profile, output, verbose, apiKey } = args;
     const interactive = isInteractive(output);
-    const keep = args.prune === false ? false : resolveKeepCount(args.keep);
 
     const config = resolveConfig(profile, apiKey, verbose);
     const coreClient = createCoreClient(clientOptions(config, verbose));
@@ -99,7 +81,6 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
       force: args.force,
       dir: siteConfig?.config.dir,
       build: siteConfig?.config.build,
-      keep,
     });
 
     if (output === "json") {
@@ -111,7 +92,6 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
             framework: result.preset.id,
             packageManager: result.packageManager,
             directory: result.dir,
-            keep: keep === false ? null : keep,
           },
           null,
           2,
@@ -128,11 +108,6 @@ export const sitesCiInitCommand = defineCommand<CiInitArgs>({
     logger.success(
       `Wrote ${result.path} (${result.preset.label}, deploys ${result.dir}).`,
     );
-    if (keep !== false) {
-      logger.dim(
-        `  Each run prunes old deploys, keeping the newest ${keep}; change with --keep or --no-prune.`,
-      );
-    }
     logger.log();
     await offerGitHubSecret({ apiKey: config.apiKey, root, interactive });
     logger.log();

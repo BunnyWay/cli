@@ -9,7 +9,7 @@ export const SITES_WORKFLOW_PATH = ".github/workflows/bunny-sites.yml";
 
 // Bump the tag when a new major of the action ships; the action wraps the CLI.
 export const DEPLOY_SITE_ACTION =
-  "BunnyWay/actions/deploy-site@deploy-site_0.1.0";
+  "BunnyWay/actions/deploy-site@deploy-site_0.1.2";
 
 // Toolchain setup + dependency install, without the build line. setup-node looks for the lockfile at the checkout root, so a nested project passes its own path.
 function jsSetup(
@@ -135,25 +135,6 @@ function buildSteps(
   }
 }
 
-function pruneStep(
-  site: string,
-  keep: number | undefined,
-  cliVersion: string | undefined,
-): string[] {
-  if (keep === undefined) return [];
-  const pkg = cliVersion ? `@bunny.net/cli@${cliVersion}` : "@bunny.net/cli";
-  return [
-    "",
-    `      # Each deploy is a separate folder in storage you're billed for; keep the newest ${keep} (live and previous are always kept).`,
-    "      - name: Prune old deploys",
-    `        run: npx --yes '${pkg}' sites deployments prune "$BUNNY_SITE" --keep ${keep} --force`,
-    "        continue-on-error: true",
-    "        env:",
-    `          BUNNY_SITE: ${JSON.stringify(site)}`,
-    "          BUNNYNET_API_KEY: ${{ secrets.BUNNYNET_API_KEY }}",
-  ];
-}
-
 /** Join a workflow-root-relative prefix onto a project-relative path, POSIX-style (these are YAML/GitHub paths, never local ones). */
 export function workflowPath(prefix: string | undefined, path: string): string {
   if (!prefix) return path;
@@ -172,9 +153,7 @@ export function renderSitesWorkflow(opts: {
   installDeps?: boolean;
   /** The branch that goes live on push; main unless the repository's default branch differs. */
   branch?: string;
-  /** Prune deploys beyond the newest N after each deploy; omitted means no prune step. */
-  keep?: number;
-  /** The exact `@bunny.net/cli` version the prune step runs. */
+  /** The `@bunny.net/cli` version the action runs; the action's own default predates deploy-time pruning. */
   cliVersion?: string;
 }): string {
   const { site, preset, packageManager, workingDirectory } = opts;
@@ -223,7 +202,9 @@ export function renderSitesWorkflow(opts: {
     `          site: ${JSON.stringify(site)}`,
     `          directory: ${JSON.stringify(workflowPath(workingDirectory, opts.dir ?? preset.dir))}`,
     "          api_key: ${{ secrets.BUNNYNET_API_KEY }}",
-    ...pruneStep(site, opts.keep, opts.cliVersion),
+    ...(opts.cliVersion
+      ? [`          cli_version: ${JSON.stringify(opts.cliVersion)}`]
+      : []),
   ];
   return `${lines.join("\n")}\n`;
 }

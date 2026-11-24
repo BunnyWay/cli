@@ -39,6 +39,7 @@ import {
   ASSET_BROWSER_TTL_SECONDS,
   ASSET_EXTENSION_GROUPS,
   ASSETS_RULE_DESC,
+  AUTO_PRUNE_KEEP,
   DEPLOY_HEADER,
   DEPLOYS_DIR,
   deployPrefix,
@@ -161,6 +162,7 @@ export async function writeRemoteState(
         ...state.deploys,
         ...remote.deploys.filter((d) => !ours.has(d.id) && !removed.has(d.id)),
       ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      state.keep ??= remote.keep;
       if (opts?.promotedTo) {
         // Our promote wins (it set CURRENT_DEPLOY last), and the concurrent writer's production deploy becomes the rollback target.
         state.current = opts.promotedTo;
@@ -680,6 +682,7 @@ export async function createSite(
     name,
     storageZoneId,
     pullZoneId: pullZone.Id,
+    keep: AUTO_PRUNE_KEEP,
     deploys: [],
   };
   // A fresh zone's credentials propagate asynchronously and refuse writes for the first seconds; retry briefly instead of failing the create.
@@ -817,6 +820,7 @@ export async function importSite(opts: {
       plan.pullZone.Hostnames?.find(
         (h) => !h.IsSystemHostname && h.Value && !h.Value.startsWith("*."),
       )?.Value ?? undefined,
+    keep: AUTO_PRUNE_KEEP,
     deploys: [],
   };
   // Storage has no create-if-absent, so recheck right before the write to narrow a concurrent import or create to the smallest window.
