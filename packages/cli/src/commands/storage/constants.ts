@@ -96,18 +96,6 @@ export function mainRegionChoices(
     .map(toRegion);
 }
 
-export function regionTierNote(
-  catalog: StorageRegionOption[],
-  code: string,
-): string {
-  const wanted = code.toUpperCase();
-  const hdd = catalog.find((r) => r.code === wanted && r.tier === "hdd");
-  if (!hdd) return "Edge (SSD), replication only";
-  if (!hdd.s3) return "No S3";
-
-  return "-";
-}
-
 export function sdkRegionKey(
   code: string | null | undefined,
 ): string | undefined {

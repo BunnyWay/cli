@@ -38,6 +38,6 @@ export const storageRegionsList = defineTool({
   resultSchema: z.array(StorageRegionOptionSchema),
   run: async (ctx): Promise<StorageRegionOption[]> => {
     ctx.progress("Fetching storage regions...");
-    return fetchStorageRegions(ctx.clients.core, ctx.signal);
+    return fetchStorageRegions(ctx.clients.publicCore, ctx.signal);
   },
 });

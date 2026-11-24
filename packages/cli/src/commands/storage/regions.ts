@@ -7,9 +7,6 @@ import {
 } from "@/tools/storage/index.ts";
 import {
   mainRegionChoices,
-  regionTierNote,
-  replicationChoices,
-  storageRegions,
   ZONE_TIER_CHOICES,
   type ZoneTierChoice,
 } from "./constants.ts";
@@ -19,21 +16,26 @@ interface RegionsArgs {
   s3?: boolean;
 }
 
+// One row per region and tier, since a region's roles and S3 support differ between tiers.
 function regionRows(catalog: StorageRegionOption[], { tier, s3 }: RegionsArgs) {
-  const scope = { tier, s3 };
-  const main = new Set(mainRegionChoices(catalog, scope).map((r) => r.code));
-  const replica = new Set(
-    replicationChoices(catalog, undefined, scope).map((r) => r.code),
-  );
-  const scoped = tier !== undefined || s3 !== undefined;
-
-  return storageRegions(catalog)
-    .filter((r) => !scoped || main.has(r.code) || replica.has(r.code))
-    .map((region) => ({
-      ...region,
-      main: main.has(region.code),
-      replication: replica.has(region.code),
-    }));
+  const tiers = tier ? [tier] : ZONE_TIER_CHOICES;
+  return tiers
+    .flatMap((rowTier) => {
+      const mains = mainRegionChoices(catalog, { tier: rowTier, s3 }).map(
+        (region) => region.code,
+      );
+      return catalog
+        .filter((region) => region.tier === rowTier && (!s3 || region.s3))
+        .map((region) => ({
+          code: region.code,
+          name: region.name,
+          tier: rowTier,
+          main: region.main,
+          replication: mains.some((code) => code !== region.code),
+          s3: region.s3,
+        }));
+    })
+    .sort((a, b) => a.code.localeCompare(b.code));
 }
 
 export const storageRegionsCommand = defineToolCommand({
@@ -68,13 +70,14 @@ export const storageRegionsCommand = defineToolCommand({
   render: (catalog, args) => {
     logger.log(
       formatTable(
-        ["Code", "Name", "Main", "Replication", "Notes"],
+        ["Code", "Name", "Tier", "Main", "Replication", "S3"],
         regionRows(catalog, args).map((region) => [
           region.code,
           region.name,
+          region.tier.toUpperCase(),
           region.main ? "yes" : "no",
           region.replication ? "yes" : "no",
-          regionTierNote(catalog, region.code),
+          region.s3 ? "yes" : "no",
         ]),
         args.output,
       ),

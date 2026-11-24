@@ -19,6 +19,8 @@ export type StreamClient = ReturnType<typeof createStreamClient>;
 /** API clients a tool may reach for. Created on first access, then reused. */
 export interface ToolClients {
   readonly core: CoreClient;
+  /** The core API without an API key, for its public endpoints. */
+  readonly publicCore: CoreClient;
   readonly db: DbClient;
   readonly mc: McClient;
   /** The OCI registry. Not generated from a spec, so it is hand-rolled in `registry/client.ts`. */
@@ -100,6 +102,23 @@ export function createToolContext(
   const clients: ToolClients = {
     get core() {
       return lazy("core", createCoreClient);
+    },
+    get publicCore() {
+      const injected = options.clients?.publicCore;
+      if (injected) return injected;
+      if (!cache.has("publicCore")) {
+        cache.set(
+          "publicCore",
+          createCoreClient({
+            apiKey: "",
+            baseUrl: options.apiUrl,
+            verbose: Boolean(options.onDebug),
+            userAgent: options.userAgent ?? DEFAULT_USER_AGENT,
+            onDebug: options.onDebug,
+          }),
+        );
+      }
+      return cache.get("publicCore") as CoreClient;
     },
     get db() {
       return lazy("db", createDbClient);

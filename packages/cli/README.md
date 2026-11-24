@@ -612,7 +612,7 @@ Manage Edge Storage through two resource groups: **`bunny storage zones`** (the 
 
 A storage zone only holds files; a **pull zone** is what serves them on the web. `zones create` offers to create one (origin set to the new storage zone) and then to add a custom domain, or pass `--pull-zone`/`--domain` to do it non-interactively. Custom domains live on the pull zone and are managed with `bunny storage zones domains`.
 
-The tier (`--tier hdd|ssd`, Standard or Edge), the main region, and S3 compatibility (`--s3`) are all fixed at creation, so `zones create` prompts for each of them when the flag is omitted. Edge (SSD) zones are always primaried in `DE`, so `--tier ssd` rejects any other `--region` rather than letting the API rewrite it silently; replication regions are unaffected. `zones list` reports the tier and S3 support per zone, and `zones show` reports both plus the S3 endpoint when it's enabled.
+The tier (`--tier hdd|ssd`, Standard or Edge), the main region, and S3 compatibility (`--s3`) are all fixed at creation, so `zones create` prompts for each of them when the flag is omitted. Edge (SSD) zones can only be primaried in the regions `storage regions --tier ssd` marks as main (today `DE`), so `--tier ssd` rejects any other `--region` rather than letting the API rewrite it silently; replication regions are unaffected. `zones list` reports the tier and S3 support per zone, and `zones show` reports both plus the S3 endpoint when it's enabled.
 
 After creating a zone, `create` offers to link the directory to it (`--link`/`--no-link`), to print connection details (`--connection http|ftp|s3`, optionally as a client config with `--format`), and to save those details to `.env` (`--save-env`). Credentials are shown in full there because they were explicitly asked for; `zones credentials` masks them by default.
 
@@ -637,8 +637,9 @@ bunny storage zones delete my-zone                     # confirms twice (yes/no,
 bunny storage link my-zone
 bunny storage unlink
 
-# List the available storage regions
+# List storage regions, one row per tier, with main, replication, and S3 support (no login needed)
 bunny storage regions
+bunny storage regions --tier ssd --s3
 
 # Connection credentials: HTTP API, FTP, or S3 (one zone password, shaped per protocol)
 bunny storage zones credentials my-zone                # pick a connection type, secret masked
