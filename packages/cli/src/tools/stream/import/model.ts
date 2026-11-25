@@ -56,6 +56,16 @@ export const ImportSummarySchema = z.object({
   failedForGoodList: z.array(UnsupportedVideoSchema),
 });
 
+export type ImportSummary = z.infer<typeof ImportSummarySchema>;
+
+/** Videos in parallel, seconds between hand-offs, seconds per request, and whether the source's large-library profile applies. */
+export const ImportPacingSchema = z.object({
+  concurrency: z.number(),
+  delay: z.number(),
+  requestTimeout: z.number(),
+  largeLibrary: z.boolean(),
+});
+
 export const ImportPlanSchema = z.object({
   library: StreamLibrarySchema,
   source: z.string(),
@@ -65,6 +75,8 @@ export const ImportPlanSchema = z.object({
   /** True when a summary list was cut to the input `limit`; the counts are never cut. */
   truncated: z.boolean(),
   summary: ImportSummarySchema,
+  /** The pace a run with the same input would use; a run opens with its own `requestTimeout`, so pass this one on. */
+  pacing: ImportPacingSchema,
 });
 
 export type ImportPlan = z.infer<typeof ImportPlanSchema>;
@@ -89,6 +101,8 @@ export const ImportRunSchema = z.object({
       error: z.string().nullable(),
       /** The source no longer lists it, so only restoring it there can bring it back. */
       missingAtSource: z.boolean(),
+      /** Failed with HTTP 422/503 from Bunny's fetch; a slower retry usually works. */
+      sourceRejected: z.boolean(),
       /** False when a resume will not retry it: a retry cannot fix it, or it has failed too often. */
       retryable: z.boolean(),
     }),
@@ -105,6 +119,11 @@ export const ImportRunSchema = z.object({
   warnings: z.array(z.string()),
   /** The local journal a resume or a status check reads; null when an aborted call never reached one. */
   statePath: z.string().nullable(),
+  /** The pace this run used. */
+  pacing: ImportPacingSchema.extend({
+    /** Seconds between hand-offs when the run ended; more than `delay` when it slowed itself down after failed fetches. */
+    finalDelay: z.number(),
+  }),
   elapsedMs: z.number(),
 });
 

@@ -137,9 +137,26 @@ export interface SourcePlugin<C = any> {
    * When false a host should reject a folder filter instead of silently doing nothing.
    */
   supportsFolders: boolean;
+  /**
+   * The settings a host should apply to an import of more than `threshold`
+   * videos, unless the user set them.
+   */
+  largeLibrary?: LargeLibraryProfile;
   credentials: CredentialField[];
   configSchema: ZodType<C>;
   createAdapter(config: C, ctx: SourceContext): SourceAdapter;
+}
+
+/** Gentler defaults for a big import from this source. */
+export interface LargeLibraryProfile {
+  /** Applies when an import would hand over more videos than this. */
+  threshold: number;
+  /** Videos handed to Bunny in parallel. */
+  concurrency: number;
+  /** Minimum seconds between starting two hand-offs, across all workers. */
+  intervalSeconds: number;
+  /** Seconds before one request to the source or Bunny gives up. */
+  requestTimeoutSeconds: number;
 }
 
 /** Injected into every adapter: the values that would otherwise be host globals. */
@@ -189,6 +206,8 @@ export interface VideoMigration {
   attempts?: number;
   /** Failed in a way a retry cannot fix (over Bunny's limits, a corrupt original, gone from the source). */
   permanent?: boolean;
+  /** The last attempt failed with HTTP 422/503 from Bunny's fetch; a slower retry usually works. */
+  sourceRejected?: boolean;
 }
 
 export interface MigrationState {

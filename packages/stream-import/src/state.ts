@@ -56,6 +56,7 @@ const videoMigration = z.object({
   pendingFetch: z.object({ title: z.string(), at: z.string() }).optional(),
   attempts: z.number().int().min(0).optional(),
   permanent: z.boolean().optional(),
+  sourceRejected: z.boolean().optional(),
 });
 
 // `source` is a plain string, not a closed enum, so a state file written with an extra source module still parses.
