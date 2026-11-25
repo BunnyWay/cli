@@ -68,6 +68,12 @@ export const streamLibraryShowCommand = defineCommand<LibraryShowArgs>({
             key: "Transcribing",
             value: lib.EnableTranscribing ? "Enabled" : "Disabled",
           },
+          { key: "Webhook URL", value: lib.WebhookUrl || "—" },
+          { key: "VAST ads", value: lib.VastTagUrl || "Off" },
+          {
+            key: "Watermark",
+            value: lib.HasWatermark ? "Set" : "None",
+          },
           { key: "Created", value: formatDateTime(lib.DateCreated) },
           { key: "Modified", value: formatDateTime(lib.DateModified) },
         ],

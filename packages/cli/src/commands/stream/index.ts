@@ -6,6 +6,7 @@ import { streamImportNamespace } from "./import/index.ts";
 import { streamLibraryNamespace } from "./library/index.ts";
 import { streamLibraryLinkCommand } from "./library/link.ts";
 import { streamLibraryUnlinkCommand } from "./library/unlink.ts";
+import { streamLiveNamespace } from "./live/index.ts";
 import { streamRegionsCommand } from "./regions.ts";
 import { streamCaptionsHiddenNamespace } from "./video/captions/index.ts";
 import { streamVideoNamespace } from "./video/index.ts";
@@ -15,10 +16,11 @@ import { streamVideoTranscribeCommand } from "./video/transcribe.ts";
 export const streamNamespace = withPreviewNotice(
   defineNamespace(
     "stream",
-    "Manage Stream video libraries and videos (preview).",
+    "Manage Stream video libraries, videos and live streams (preview).",
     [
       streamLibraryNamespace,
       streamVideoNamespace,
+      streamLiveNamespace,
       streamCollectionNamespace,
       streamImportNamespace,
       streamLibraryLinkCommand,

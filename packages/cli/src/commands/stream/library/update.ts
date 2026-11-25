@@ -29,16 +29,42 @@ interface LibraryUpdateArgs extends LibrarySettingsArgs {
   library?: string;
   force?: boolean;
   contentTagging?: boolean;
+  webhookUrl?: string;
   addReplicationRegions?: string[];
 }
 
 const FLAG_HINT =
-  "Pass at least one of --name, --encoding-tier, --jit/--no-jit, --codecs, --resolutions, --mp4-fallback, --early-play, --keep-original, --multi-audio, --content-tagging, --transcribing/--no-transcribing, --transcribing-languages, --transcribing-title, --transcribing-description, --transcribing-chapters, --transcribing-moments, --add-replication-regions.";
+  "Pass at least one of --name, --encoding-tier, --jit/--no-jit, --codecs, --resolutions, --mp4-fallback, --early-play, --keep-original, --multi-audio, --content-tagging, --webhook-url, --transcribing/--no-transcribing, --transcribing-languages, --transcribing-title, --transcribing-description, --transcribing-chapters, --transcribing-moments, --add-replication-regions.";
+
+/**
+ * The flags `update` sends: `--encoding-plan` without `--codecs` gets
+ * `--codecs x264`, so the codecs are always explicit with a plan. Returns the
+ * same object when nothing was added.
+ */
+export function planCodecs<T extends LibrarySettingsArgs>(args: T): T {
+  return args.encodingPlan !== undefined && args.codecs === undefined
+    ? { ...args, codecs: "x264" }
+    : args;
+}
+
+/** `--webhook-url`: an http(s) URL, or `none`/empty to remove it (sent as an empty string). */
+export function webhookUrlValue(value: string): string {
+  const url = value.trim();
+  if (url === "" || url.toLowerCase() === "none") return "";
+  if (!/^https?:\/\/\S+$/i.test(url)) {
+    throw new UserError(
+      `Invalid --webhook-url "${value}".`,
+      'Pass an http(s) URL, or "none" to remove the webhook.',
+    );
+  }
+  return url;
+}
 
 function hasAnyFlag(args: LibraryUpdateArgs): boolean {
   return (
     args.name !== undefined ||
     args.contentTagging !== undefined ||
+    args.webhookUrl !== undefined ||
     args.addReplicationRegions !== undefined ||
     hasLibrarySettingsFlags(args)
   );
@@ -178,6 +204,14 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
       "$0 stream libraries update my-library --content-tagging",
       "Turn on content tagging",
     ],
+    [
+      "$0 stream libraries update my-library --webhook-url https://example.com/hooks/stream",
+      "Send encoding and transcription status webhooks to a URL",
+    ],
+    [
+      "$0 stream libraries update my-library --webhook-url none",
+      "Stop sending webhooks",
+    ],
   ],
 
   builder: (yargs) =>
@@ -195,6 +229,11 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
           type: "boolean",
           describe:
             "Auto-categorise uploads with machine learning (update only; not accepted at create time)",
+        })
+        .option("webhook-url", {
+          type: "string",
+          describe:
+            'URL that receives status webhooks for every video (and live stream) in the library, signed with the read-only API key ("none" removes it)',
         })
         .option("add-replication-regions", {
           type: "string",
@@ -219,14 +258,21 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
       throw new UserError("No changes requested.", FLAG_HINT);
     }
 
+    // A plan sends its output codecs explicitly on update, as the dashboard
+    // does: H.264 (AVC) unless --codecs names them. (On create the API
+    // defaults to H.264 by itself.) The billing warning then counts them too.
+    const flags = planCodecs(args);
+
     // Parse and validate the flags before any network call.
     const fromFlags: VideoLibraryUpdateModel | undefined = hasFlags
-      ? librarySettingsFromFlags(args)
+      ? librarySettingsFromFlags(flags)
       : undefined;
     if (fromFlags && args.contentTagging !== undefined)
       fromFlags.EnableContentTagging = args.contentTagging;
+    if (fromFlags && args.webhookUrl !== undefined)
+      fromFlags.WebhookUrl = webhookUrlValue(args.webhookUrl);
     // Rejects contradictory flags before any network call; the warnings are printed later.
-    if (hasFlags) librarySettingsWarnings(args);
+    if (hasFlags) librarySettingsWarnings(flags);
     const addRegions = args.addReplicationRegions
       ?.flatMap((value) => parseCsvFlag(value))
       .filter(Boolean);
@@ -248,8 +294,12 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
 
     // Checked against the library's current state, so Early-Play advice is accurate.
     const warnings = hasFlags
-      ? librarySettingsWarnings(args, lib.KeepOriginalFiles ?? false)
+      ? librarySettingsWarnings(flags, lib.KeepOriginalFiles ?? false)
       : [];
+    if (flags !== args)
+      warnings.push(
+        "Output codecs set to H.264 (AVC) only, replacing the library's current ones; pass --codecs to enable others too.",
+      );
 
     // Flags take full precedence over the editor: a partial set of flags is a partial update.
     const settings: VideoLibraryUpdateModel =

@@ -9,6 +9,7 @@ import { createOriginErrorsClient } from "./origin-errors.ts";
 import { createShieldClient } from "./shield.ts";
 import { createStorageClient } from "./storage.ts";
 import { createStreamClient } from "./stream.ts";
+import { createStreamClient as createStreamLiveClient } from "./stream-live.ts";
 
 describe("root entrypoint", () => {
   test("exports authMiddleware for composing custom clients", () => {
@@ -29,6 +30,7 @@ describe("per-API entrypoints", () => {
     expect(createShieldClient).toBe(root.createShieldClient);
     expect(createStorageClient).toBe(root.createStorageClient);
     expect(createStreamClient).toBe(root.createStreamClient);
+    expect(createStreamLiveClient).toBe(root.createStreamClient);
   });
 
   test("core entrypoint carries the DNS scan corrections", () => {

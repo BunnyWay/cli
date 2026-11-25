@@ -17,7 +17,7 @@ import {
 import { formatPlayerSettings } from "./render.ts";
 
 const FLAG_HINT =
-  "Pass at least one of --language, --font, --color, --caption-color, --caption-background, --caption-size, --controls/--no-controls, --speeds, --custom-html, --heatmap, --remember-position, --compact-controls, --legacy-player, --player-version, --captions-in-playlist.";
+  "Pass at least one of --language, --font, --color, --caption-color, --caption-background, --caption-size, --controls/--no-controls, --speeds, --custom-html, --vast-url, --heatmap, --remember-position, --compact-controls, --legacy-player, --player-version, --captions-in-playlist.";
 
 /** Prefilled editor for the settings most worth prompting for; unchanged answers are dropped. */
 async function promptPlayerChanges(
@@ -108,6 +108,14 @@ export const streamLibraryPlayerUpdateCommand = defineToolCommand({
     [
       "$0 stream libraries player update my-library --no-controls",
       "Turn every player control off",
+    ],
+    [
+      "$0 stream libraries player update my-library --vast-url https://ads.example.com/vast.xml",
+      "Serve VAST video ads in the player",
+    ],
+    [
+      "$0 stream libraries player update my-library --vast-url none",
+      "Turn VAST ads off",
     ],
     ["$0 stream libraries player update my-library", "Edit interactively"],
   ],
