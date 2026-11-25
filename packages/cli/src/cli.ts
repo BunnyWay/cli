@@ -2,6 +2,7 @@ import chalk from "chalk";
 import type { CommandModule } from "yargs";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import { aiNamespace } from "./commands/ai/index.ts";
 import { apiCommand } from "./commands/api.ts";
 import { appsNamespace } from "./commands/apps/index.ts";
 import { authNamespace } from "./commands/auth/index.ts";
@@ -48,6 +49,7 @@ const commands: CommandModule[] = [
 
 // Experimental commands — registered but hidden from help and landing page
 const experimentalCommands: CommandModule[] = [
+  aiNamespace,
   registryNamespace,
   authNamespace,
   pzNamespace,
