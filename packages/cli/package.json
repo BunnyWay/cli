@@ -12,6 +12,7 @@
     "LICENSE"
   ],
   "devDependencies": {
+    "@bunny.net/cli-telemetry": "workspace:*",
     "@bunny.net/openapi-client": "workspace:*",
     "@bunny.net/config": "workspace:*",
     "@bunny.net/storage-sdk": "^0.3.1",
