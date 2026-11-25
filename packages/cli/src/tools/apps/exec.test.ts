@@ -57,7 +57,9 @@ test("fetchPods flattens pods out of their regions", async () => {
 
 test("apps.exec sends the pod name and the container's ID", async () => {
   const { mc, calls } = mcStub(() =>
-    Promise.resolve({ data: { url: "wss://exec.example/s/abc" } }),
+    Promise.resolve({
+      data: { url: "wss://exec.example/s/abc", token: "tok" },
+    }),
   );
   const ctx = createToolContext({ clients: { mc } });
 
@@ -78,12 +80,13 @@ test("apps.exec sends the pod name and the container's ID", async () => {
     pod: "app-de-1",
     container: { id: "ct-worker", name: "worker" },
     url: "wss://exec.example/s/abc",
+    token: "tok",
   });
 });
 
 test("apps.exec accepts a container ID", async () => {
   const { mc, calls } = mcStub(() =>
-    Promise.resolve({ data: { url: "wss://x" } }),
+    Promise.resolve({ data: { url: "wss://x", token: "tok" } }),
   );
   const ctx = createToolContext({ clients: { mc } });
   await appsExec.invoke(ctx, {
@@ -126,8 +129,11 @@ test("apps.exec explains a 403 as exec not being enabled", async () => {
   ).rejects.toThrow("Exec isn't available for this account.");
 });
 
-test("apps.exec fails when the API returns no URL", async () => {
-  const { mc } = mcStub(() => Promise.resolve({ data: {} }));
+test.each([
+  ["no URL", { token: "tok" }],
+  ["no token", { url: "wss://x" }],
+])("apps.exec fails when the API returns %s", async (_, data) => {
+  const { mc } = mcStub(() => Promise.resolve({ data }));
   const ctx = createToolContext({ clients: { mc } });
   await expect(
     appsExec.invoke(ctx, { app: "a", pod: "app-de-1", container: "api" }),

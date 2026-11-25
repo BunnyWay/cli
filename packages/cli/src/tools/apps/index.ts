@@ -1,4 +1,5 @@
-export { fetchApp } from "./app.ts";
+export type { AppSummary } from "./app.ts";
+export { appsList, fetchApp } from "./app.ts";
 export type { ExecSession, Pod, PodContainer } from "./exec.ts";
 export {
   appsExec,

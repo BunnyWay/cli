@@ -117,7 +117,7 @@ export function findContainer(pod: Pod, ref: string): PodContainer {
 // What ApiError says for a 404 whose body explains nothing.
 const NOT_FOUND_MESSAGE = "Not found.";
 
-// `POST /apps/{appId}/exec` is not in the public Magic Containers spec yet, so it is typed here by hand.
+// `POST /apps/{appId}/exec` has no generated types, so it is typed here by hand.
 interface ExecClient {
   POST(
     path: "/apps/{appId}/exec",
@@ -126,7 +126,7 @@ interface ExecClient {
       body: { podName: string; containerName: string };
       signal?: AbortSignal;
     },
-  ): Promise<{ data?: { url?: string } }>;
+  ): Promise<{ data?: { url?: string; token?: string } }>;
 }
 
 const ExecSessionSchema = z.object({
@@ -134,6 +134,7 @@ const ExecSessionSchema = z.object({
   pod: z.string(),
   container: z.object({ id: z.string(), name: z.string() }),
   url: z.string(),
+  token: z.string(),
 });
 
 export type ExecSession = z.infer<typeof ExecSessionSchema>;
@@ -142,14 +143,14 @@ export const appsExec = defineTool({
   name: "apps.exec",
   title: "Open an exec session",
   description:
-    'Start an interactive exec session in a running container of a Magic Containers app. Returns a short-lived WebSocket URL that carries the terminal: binary frames are stdin and output, and a text frame `{"type":"resize","cols":N,"rows":N}` sets the terminal size.',
+    'Start an interactive exec session in a running container of a Magic Containers app. Returns a short-lived WebSocket URL and token. Send the token as the first text frame; after that binary frames are stdin and output, and a text frame `{"type":"resize","cols":N,"rows":N}` sets the terminal size.',
   schema: z.strictObject({
     app: z.string().min(1).describe("App ID."),
     pod: z.string().min(1).describe("Pod (instance) name."),
     container: z.string().min(1).describe("Container name or ID."),
   }),
   kind: "write",
-  // The URL authorizes a shell in the container on its own.
+  // The token authorizes a shell in the container on its own.
   sensitive: true,
   resultSchema: ExecSessionSchema,
   examples: [
@@ -167,6 +168,7 @@ export const appsExec = defineTool({
     ctx.progress("Starting exec session...");
     const client = ctx.clients.mc as unknown as ExecClient;
     let url: string | undefined;
+    let token: string | undefined;
     try {
       // The API names the field containerName, but it takes the container's ID.
       const { data } = await client.POST("/apps/{appId}/exec", {
@@ -175,6 +177,7 @@ export const appsExec = defineTool({
         signal: ctx.signal,
       });
       url = data?.url;
+      token = data?.token;
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         throw new UserError(
@@ -198,12 +201,15 @@ export const appsExec = defineTool({
       throw error;
     }
 
-    if (!url) throw new UserError("The API did not return an exec session.");
+    if (!url || !token) {
+      throw new UserError("The API did not return an exec session.");
+    }
     return {
       app: input.app,
       pod: pod.name,
       container: { id: container.id, name: container.name },
       url,
+      token,
     };
   },
 });

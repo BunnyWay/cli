@@ -43,9 +43,13 @@ class FakeOutput extends EventEmitter implements TerminalOutput {
 }
 
 interface Received {
+  /** The first text frame, which the real endpoint reads as the session token. */
+  token?: string;
   text: string[];
   binary: string[];
 }
+
+const TOKEN = "session-token";
 
 let server: Server<undefined> | undefined;
 
@@ -70,8 +74,10 @@ function startServer(onOpen: (ws: ServerWebSocket<undefined>) => void) {
     websocket: {
       open: onOpen,
       message(_ws, message) {
-        if (typeof message === "string") received.text.push(message);
-        else received.binary.push(Buffer.from(message).toString());
+        if (typeof message === "string") {
+          if (received.token === undefined) received.token = message;
+          else received.text.push(message);
+        } else received.binary.push(Buffer.from(message).toString());
         notify();
       },
     },
@@ -93,7 +99,7 @@ test("bridges keystrokes, output, and resizes until the server closes", async ()
   });
   let opened = false;
 
-  const session = runExecSession(url, {
+  const session = runExecSession(url, TOKEN, {
     stdin,
     stdout,
     onOpen: () => {
@@ -103,6 +109,8 @@ test("bridges keystrokes, output, and resizes until the server closes", async ()
 
   await until(() => received.text.length === 1, changed);
   expect(opened).toBe(true);
+  // The token goes first: the endpoint rejects a session whose first frame is anything else.
+  expect(received.token).toBe(TOKEN);
   expect(stdin.raw).toEqual([true]);
   expect(JSON.parse(received.text[0] ?? "")).toEqual({
     type: "resize",
@@ -141,7 +149,7 @@ test("Ctrl-] sends what came before it, then disconnects", async () => {
   const stdout = new FakeOutput();
   const { url, received, changed } = startServer(() => {});
 
-  const session = runExecSession(url, { stdin, stdout });
+  const session = runExecSession(url, TOKEN, { stdin, stdout });
   await until(() => received.text.length === 1, changed);
 
   stdin.type([...Buffer.from("top"), DETACH_BYTE, ...Buffer.from("after")]);
@@ -162,7 +170,7 @@ test("Ctrl-C is forwarded as a byte, not handled locally", async () => {
     socket = ws;
   });
 
-  const session = runExecSession(url, { stdin, stdout });
+  const session = runExecSession(url, TOKEN, { stdin, stdout });
   await until(() => received.text.length === 1, changed);
   stdin.type([0x03]);
   await until(() => received.binary.length === 1, changed);
@@ -182,7 +190,7 @@ test("skips raw mode and resizes when not attached to a terminal", async () => {
     socket = ws;
   });
 
-  const session = runExecSession(url, { stdin, stdout });
+  const session = runExecSession(url, TOKEN, { stdin, stdout });
   // No resize frame announces the open socket, so wait for the input listener instead.
   while (stdin.listenerCount("data") === 0) await Bun.sleep(5);
   stdin.type("echo hi\n");
@@ -203,7 +211,7 @@ test("rejects when the socket can't be opened", async () => {
   });
 
   await expect(
-    runExecSession(`ws://localhost:${server.port}`, { stdin, stdout }),
+    runExecSession(`ws://localhost:${server.port}`, TOKEN, { stdin, stdout }),
   ).rejects.toThrow("Couldn't connect to the exec session.");
   expect(stdin.raw).toEqual([]);
 });
@@ -237,7 +245,7 @@ test("Ctrl-] returns at once even when the remote never acknowledges", async () 
   const stdin = new FakeInput();
   const stdout = new FakeOutput();
   try {
-    const session = runExecSession(peer.url, {
+    const session = runExecSession(peer.url, TOKEN, {
       stdin,
       stdout,
       closeGraceMs: 10,
@@ -260,7 +268,7 @@ test("gives up when the socket never opens", async () => {
   const stdin = new FakeInput();
   try {
     await expect(
-      runExecSession(peer.url, {
+      runExecSession(peer.url, TOKEN, {
         stdin,
         stdout: new FakeOutput(),
         connectTimeoutMs: 50,

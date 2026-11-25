@@ -164,6 +164,20 @@ export function assertVolumesNotSplit(
   );
 }
 
+/** The app this directory is linked to, if any: `.bunny/app.json`, then the legacy `app.id` in `bunny.jsonc` (deprecation-warned). */
+export function findLinkedAppId(): string | undefined {
+  const manifest = loadManifest<AppManifest>(APP_MANIFEST);
+  if (manifest.id) return manifest.id;
+
+  if (!configExists()) return undefined;
+  const config = loadConfig();
+  if (!config.app.id) return undefined;
+  logger.warn(
+    `\`app.id\` in bunny.jsonc is deprecated and will be removed in a future release. Run \`bunny apps link ${config.app.id}\` to migrate to .bunny/${APP_MANIFEST}.`,
+  );
+  return config.app.id;
+}
+
 /**
  * Resolve the active app ID.
  *
@@ -174,18 +188,8 @@ export function assertVolumesNotSplit(
 export function resolveAppId(explicit?: string): string {
   if (explicit) return explicit;
 
-  const manifest = loadManifest<AppManifest>(APP_MANIFEST);
-  if (manifest.id) return manifest.id;
-
-  if (configExists()) {
-    const config = loadConfig();
-    if (config.app.id) {
-      logger.warn(
-        `\`app.id\` in bunny.jsonc is deprecated and will be removed in a future release. Run \`bunny apps link ${config.app.id}\` to migrate to .bunny/${APP_MANIFEST}.`,
-      );
-      return config.app.id;
-    }
-  }
+  const linked = findLinkedAppId();
+  if (linked) return linked;
 
   throw new UserError(
     "No linked app.",

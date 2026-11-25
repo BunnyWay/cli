@@ -1,7 +1,87 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import promptsLib from "prompts";
 import { createToolContext, type McClient } from "@/tools/context.ts";
-import { resolveTarget } from "./exec.ts";
+import { endedNormally, resolveApp, resolveTarget } from "./exec.ts";
+
+// The repo itself is linked to an app, so app resolution runs from an empty directory.
+const originalCwd = process.cwd();
+let dir: string;
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "apps-exec-"));
+  process.chdir(dir);
+});
+afterEach(() => {
+  process.chdir(originalCwd);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+function appsStub(items: unknown[]) {
+  let fetched = 0;
+  const mc = {
+    GET: () => {
+      fetched++;
+      return Promise.resolve({ data: { items, cursor: null } });
+    },
+  } as unknown as McClient;
+  return {
+    ctx: createToolContext({ clients: { mc } }),
+    fetched: () => fetched,
+  };
+}
+
+const APPS = [
+  { id: "app-z", name: "zeta", status: "active" },
+  { id: "app-a", name: "alpha", status: "active" },
+];
+
+test("--id wins without an API call", async () => {
+  const { ctx, fetched } = appsStub(APPS);
+  expect(await resolveApp(ctx, "app-x", true)).toBe("app-x");
+  expect(fetched()).toBe(0);
+});
+
+test("uses the linked app without an API call", async () => {
+  mkdirSync(join(dir, ".bunny"));
+  writeFileSync(
+    join(dir, ".bunny", "app.json"),
+    JSON.stringify({ id: "app-linked" }),
+  );
+  const { ctx, fetched } = appsStub(APPS);
+  expect(await resolveApp(ctx, undefined, true)).toBe("app-linked");
+  expect(fetched()).toBe(0);
+});
+
+test("prompts for an app when none is linked", async () => {
+  const { ctx } = appsStub(APPS);
+  promptsLib.inject(["app-z"]);
+  expect(await resolveApp(ctx, undefined, true)).toBe("app-z");
+});
+
+test("asks for --id instead of prompting when it can't prompt", async () => {
+  const { ctx, fetched } = appsStub(APPS);
+  await expect(resolveApp(ctx, undefined, false)).rejects.toThrow(
+    "No linked app.",
+  );
+  expect(fetched()).toBe(0);
+});
+
+test("fails when the account has no apps", async () => {
+  const { ctx } = appsStub([]);
+  await expect(resolveApp(ctx, undefined, true)).rejects.toThrow(
+    "No apps found on this account.",
+  );
+});
+
+test("a cancelled app prompt stops the command", async () => {
+  const { ctx } = appsStub(APPS);
+  promptsLib.inject([new Error("cancelled")]);
+  await expect(resolveApp(ctx, undefined, true)).rejects.toThrow(
+    "An app is required.",
+  );
+});
 
 function mcWith(regions: unknown[]) {
   let fetched = 0;
@@ -118,4 +198,10 @@ test("still takes the only choices when it can't prompt", async () => {
     pod: "pod-b",
     container: "ct-api",
   });
+});
+
+test("a shell exit counts as a normal end, an error close does not", () => {
+  // 1006 is how a session can end when the remote shell exits.
+  expect([1000, 1005, 1006].every(endedNormally)).toBe(true);
+  expect([1008, 1011, 4000].some(endedNormally)).toBe(false);
 });

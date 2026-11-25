@@ -54,12 +54,15 @@ function terminate(socket: WebSocket): void {
 /**
  * Bridge the local terminal to an exec WebSocket until either side closes it.
  *
- * Stdin goes out as binary frames, output comes back as binary or text
- * frames, and a JSON text frame `{"type":"resize","cols","rows"}` sets the
- * remote terminal size.
+ * The token goes out first as a text frame: the URL carries no credential,
+ * and the server reads the first frame as the token, closing with 1008 if it
+ * is anything else. After that, stdin goes out as binary frames, output comes
+ * back as binary or text frames, and a JSON text frame
+ * `{"type":"resize","cols","rows"}` sets the remote terminal size.
  */
 export function runExecSession(
   url: string,
+  token: string,
   options: ExecSessionOptions = {},
 ): Promise<ExecSessionEnd> {
   const stdin = options.stdin ?? process.stdin;
@@ -160,6 +163,7 @@ export function runExecSession(
       if (settled) return;
       opened = true;
       clearTimeout(connectTimer);
+      socket.send(token);
       options.onOpen?.();
       // Raw mode sends every keystroke, Ctrl-C included, to the remote instead of this process.
       if (stdin.isTTY && stdin.setRawMode) {

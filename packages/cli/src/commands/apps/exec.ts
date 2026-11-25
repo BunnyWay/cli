@@ -3,19 +3,34 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { isInteractive, prompts, spinner } from "@/core/ui.ts";
 import {
+  type AppSummary,
   appsExec,
+  appsList,
   appsPodsList,
+  type ExecSession,
   findContainer,
   findPod,
   type Pod,
   type PodContainer,
 } from "@/tools/apps/index.ts";
 import type { ToolContext } from "@/tools/context.ts";
-import { resolveAppId } from "./config.ts";
+import { findLinkedAppId } from "./config.ts";
+import { runExecCommand } from "./exec-command.ts";
 import { runExecSession } from "./exec-session.ts";
+
+/**
+ * Close codes that mean the session ended on its own. Exiting the remote shell
+ * can end the session with 1006, the same code a network drop gives, so both
+ * count as a normal end.
+ */
+export function endedNormally(code: number): boolean {
+  return code === 1000 || code === 1005 || code === 1006;
+}
 
 interface ExecArgs {
   id?: string;
+  /** The command after a `--` separator, populated by yargs. */
+  "--"?: string[];
   pod?: string;
   container?: string;
 }
@@ -31,6 +46,54 @@ function choiceNeeded(what: "pod" | "container", options: string[]): UserError {
     `Pass --${what}: there's more than one to choose from.`,
     `Choose one of: ${options.join(", ")}.`,
   );
+}
+
+/** The app to open a shell in: --id, then the linked app, then a prompt listing the account's apps. */
+export async function resolveApp(
+  ctx: ToolContext,
+  explicit: string | undefined,
+  interactive: boolean,
+): Promise<string> {
+  if (explicit) return explicit;
+  const linked = findLinkedAppId();
+  if (linked) return linked;
+
+  if (!interactive) {
+    throw new UserError(
+      "No linked app.",
+      "Pass --id <app-id>, or run `bunny apps link` to link this directory.",
+    );
+  }
+
+  const spin = spinner("Fetching apps...");
+  spin.start();
+  let apps: AppSummary[];
+  try {
+    apps = await appsList.invoke(ctx, {});
+  } finally {
+    spin.stop();
+  }
+
+  if (apps.length === 0) {
+    throw new UserError(
+      "No apps found on this account.",
+      "Deploy one with `bunny apps deploy`.",
+    );
+  }
+
+  const { id } = await prompts({
+    type: "select",
+    name: "id",
+    message: "App:",
+    choices: apps.map((app) => ({
+      title: app.name,
+      description: [app.id, app.status].filter(Boolean).join(" · "),
+      value: app.id,
+    })),
+  });
+  if (id === undefined) throw new UserError("An app is required.");
+  logger.dim(`Tip: run \`bunny apps link ${id}\` to skip this next time.`);
+  return id;
 }
 
 async function pickPod(
@@ -131,16 +194,73 @@ export async function resolveTarget(
   return { pod: pod.name, container: container.id };
 }
 
+/**
+ * Run one command and exit with its status. Output streams to stdout as it
+ * arrives; with JSON it is collected and printed once with the exit code.
+ * Never prints the session token.
+ */
+async function runCommand(
+  session: ExecSession,
+  command: string[],
+  json: boolean,
+): Promise<void> {
+  const controller = new AbortController();
+  const interrupt = () => controller.abort();
+  process.once("SIGINT", interrupt);
+
+  let output = "";
+  let exitCode: number;
+  try {
+    exitCode = await runExecCommand(session.url, session.token, command, {
+      write: (text) => {
+        if (json) output += text;
+        else process.stdout.write(text);
+      },
+      size:
+        process.stdout.isTTY && process.stdout.columns && process.stdout.rows
+          ? { cols: process.stdout.columns, rows: process.stdout.rows }
+          : undefined,
+      signal: controller.signal,
+    });
+  } finally {
+    process.off("SIGINT", interrupt);
+  }
+
+  if (json) {
+    logger.log(
+      JSON.stringify(
+        {
+          app: session.app,
+          pod: session.pod,
+          container: session.container,
+          command,
+          exitCode,
+          output,
+        },
+        null,
+        2,
+      ),
+    );
+  }
+  process.exitCode = exitCode;
+}
+
 export const appsExecCommand = defineToolCommand({
   tool: appsExec,
   command: "exec",
-  describe: "Open an interactive shell in a running container.",
+  describe:
+    "Open an interactive shell in a running container, or run one command with `-- <command>`.",
   progress: "Starting exec session...",
   examples: [
     ["$0 apps exec", "Pick a pod and container, then open a shell"],
     [
       "$0 apps exec --pod <pod> --container api",
       "Open a shell in the api container of one pod",
+    ],
+    ["$0 apps exec -- whoami", "Run one command and print its output"],
+    [
+      "$0 apps exec --container api -- sh -c 'ls /app | head'",
+      "Run a pipeline through the container's shell",
     ],
     [
       "$0 apps exec --pod <pod> --container api --output json",
@@ -150,9 +270,10 @@ export const appsExecCommand = defineToolCommand({
 
   builder: (yargs) =>
     yargs
+      .parserConfiguration({ "populate--": true })
       .option("id", {
         type: "string",
-        describe: "App ID (defaults to the linked app)",
+        describe: "App ID (defaults to the linked app; prompts when none)",
       })
       .option("pod", {
         type: "string",
@@ -165,33 +286,34 @@ export const appsExecCommand = defineToolCommand({
 
   // Checked before any API call, so a piped run fails fast instead of starting a session nobody can type into.
   preRun: async (args: ExecArgs & { output?: string }) => {
-    if (args.output !== "json" && !process.stdin.isTTY) {
+    if (!args["--"] && args.output !== "json" && !process.stdin.isTTY) {
       throw new UserError(
         "apps exec needs an interactive terminal.",
-        "Run it from a terminal, or pass --output json to get the session URL for another client.",
+        "Run one command with `bunny apps exec -- <command>`, or pass --output json to get the session URL for another client.",
       );
     }
   },
 
   prepare: async (args: ExecArgs & { output?: string }, ctx) => {
-    const app = resolveAppId(args.id);
-    const target = await resolveTarget(
-      ctx,
-      app,
-      args,
-      isInteractive(args.output),
-    );
+    const interactive = isInteractive(args.output);
+    const app = await resolveApp(ctx, args.id, interactive);
+    const target = await resolveTarget(ctx, app, args, interactive);
     return { input: { app, ...target } };
   },
 
-  after: async (session, args) => {
+  after: async (session, args: ExecArgs & { output?: string }) => {
+    const command = args["--"];
+    if (command) {
+      await runCommand(session, command, args.output === "json");
+      return;
+    }
     if (args.output === "json") return;
 
     const spin = spinner("Connecting...");
     spin.start();
     let end: Awaited<ReturnType<typeof runExecSession>>;
     try {
-      end = await runExecSession(session.url, {
+      end = await runExecSession(session.url, session.token, {
         onOpen: () => {
           spin.stop();
           logger.dim(
@@ -204,7 +326,7 @@ export const appsExecCommand = defineToolCommand({
     }
 
     if (end.detached) logger.dim("\nDisconnected.");
-    else if (end.code === 1000 || end.code === 1005) {
+    else if (endedNormally(end.code)) {
       logger.dim("Session ended.");
     } else {
       // A dropped connection is a failure, so scripts and agents don't read it as success.
@@ -215,7 +337,8 @@ export const appsExecCommand = defineToolCommand({
     }
   },
 
-  // The session already took over the terminal; only JSON output prints the result.
-  emit: (_session, args) => args.output !== "json",
+  // The session or command already printed; only a bare session prints itself as JSON.
+  emit: (_session, args: ExecArgs & { output?: string }) =>
+    Boolean(args["--"]) || args.output !== "json",
   render: () => {},
 });

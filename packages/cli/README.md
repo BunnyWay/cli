@@ -1385,6 +1385,7 @@ bunny apps deploy --dockerfile             # build the local Dockerfile, push, a
 bunny apps scale --min 1 --max 3           # change scaling on the live app
 bunny apps regions set DE UK               # change where the app runs
 bunny apps exec                            # open a shell in a running container
+bunny apps exec -- whoami                  # run one command in it
 bunny apps pull                            # write the live app's settings to bunny.jsonc
 ```
 
