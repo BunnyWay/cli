@@ -1,5 +1,9 @@
 import chalk from "chalk";
 import type { Argv } from "yargs";
+import {
+  STREAM_MANIFEST,
+  type StreamLibraryManifest,
+} from "@/commands/stream/constants.ts";
 import { resolveLibraryRef } from "@/commands/stream/library/library-ref.ts";
 import { UserError } from "@/core/errors.ts";
 import {
@@ -9,6 +13,7 @@ import {
   formatTable,
   maskSecret,
 } from "@/core/format.ts";
+import { loadManifest } from "@/core/manifest.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 import type { ToolContext } from "@/tools/index.ts";
@@ -28,6 +33,33 @@ import {
 /** Live streaming is a closed preview: said once in every live command's help. */
 export const LIVE_PREVIEW_EPILOGUE =
   "Stream Live is in closed preview: it works on video libraries created during the preview, and features and limits may change before general availability. Docs: https://bunny.net/docs/stream/live";
+
+/**
+ * A stream reference for a follow-up command we print: the stream ID, plus
+ * `--lib` unless the library is the one linked in this directory, so the
+ * command works when pasted as it is.
+ */
+export function streamRef(streamId: string, libraryId: number): string {
+  const linked = loadManifest<StreamLibraryManifest>(STREAM_MANIFEST).id;
+  return Number(linked) === libraryId
+    ? streamId
+    : `${streamId} --lib ${libraryId}`;
+}
+
+/** How long ago the encoder last pinged: seconds while it's recent, then the largest whole unit. */
+export function formatPingAgo(ms: number | null): string {
+  if (ms == null) return "-";
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  for (const [unit, size] of [
+    ["d", 86_400],
+    ["h", 3_600],
+    ["m", 60],
+  ] as const) {
+    if (seconds >= size) return `${Math.floor(seconds / size)}${unit} ago`;
+  }
+  return `${seconds}s ago`;
+}
 
 export interface LiveTargetArgs {
   stream?: string;

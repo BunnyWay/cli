@@ -1,14 +1,9 @@
-import {
-  STREAM_MANIFEST,
-  type StreamLibraryManifest,
-} from "@/commands/stream/constants.ts";
 import { resolveConfig } from "@/config/index.ts";
 import { bunny } from "@/core/colors.ts";
 import { defineCommand } from "@/core/define-command.ts";
 import { errorMessage, UserError } from "@/core/errors.ts";
 import { formatDateTime, formatDuration } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
-import { loadManifest } from "@/core/manifest.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 import { extendToolContext } from "@/tools/context.ts";
@@ -27,6 +22,7 @@ import {
   maskIngest,
   resolveLiveLibrary,
   restreamEnv,
+  streamRef,
   withLibOption,
   withLiveSettingsOptions,
 } from "./shared.ts";
@@ -39,11 +35,13 @@ interface LiveCreateArgs extends LiveSettingsArgs {
 
 /**
  * The steps from a new stream to going live, as the docs' quickstart walks them.
- * `lib` is added to each command when the library isn't the linked one, so the
- * steps work when pasted as they are.
+ * `id` is the stream reference from {@link streamRef}, so the steps work when
+ * pasted as they are.
  */
-export function nextSteps(stream: LiveStream, lib?: number): string[] {
-  const id = lib === undefined ? stream.id : `${stream.id} --lib ${lib}`;
+export function nextSteps(
+  stream: LiveStream,
+  id: string = stream.id,
+): string[] {
   const steps = [
     `Reveal the key:   bunny stream live ingest ${id} --show-secret`,
     "Set up encoder:   paste the server and stream key into OBS (Settings > Stream > Custom) or vMix",
@@ -183,8 +181,7 @@ export const streamLiveCreateCommand = defineCommand<LiveCreateArgs>({
     }
     const shownIngest =
       ingest && (args.showSecret ? ingest : maskIngest(ingest));
-    const linked = loadManifest<StreamLibraryManifest>(STREAM_MANIFEST).id;
-    const lib = Number(linked) === library.id ? undefined : library.id;
+    const ref = streamRef(stream.id, library.id);
 
     if (output === "json") {
       logger.log(
@@ -230,13 +227,11 @@ export const streamLiveCreateCommand = defineCommand<LiveCreateArgs>({
       logger.warn(
         `The stream was created, but its encoder settings couldn't be fetched: ${ingestError}`,
       );
-      logger.dim(
-        `Get them with: bunny stream live ingest ${stream.id}${lib === undefined ? "" : ` --lib ${lib}`}`,
-      );
+      logger.dim(`Get them with: bunny stream live ingest ${ref}`);
     }
 
     logger.log();
     logger.log(bunny.bold("Next steps"));
-    for (const step of nextSteps(stream, lib)) logger.dim(`  ${step}`);
+    for (const step of nextSteps(stream, ref)) logger.dim(`  ${step}`);
   },
 });

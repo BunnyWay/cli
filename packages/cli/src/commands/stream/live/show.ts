@@ -6,6 +6,7 @@ import {
   formatLiveStreamDetails,
   LIVE_PREVIEW_EPILOGUE,
   resolveLiveTarget,
+  streamRef,
   withStreamPositional,
 } from "./shared.ts";
 
@@ -39,9 +40,10 @@ export const streamLiveShowCommand = defineToolCommand({
       logger.warn(`${stream.issues.length} issue(s) reported:`);
       logger.log(issues);
     }
+    const ref = streamRef(stream.id, stream.libraryId);
     logger.log();
     logger.dim(
-      `Encoder settings: bunny stream live ingest ${stream.id}  ·  Health: bunny stream live status ${stream.id}`,
+      `Encoder settings: bunny stream live ingest ${ref}  ·  Health: bunny stream live status ${ref}`,
     );
   },
 });

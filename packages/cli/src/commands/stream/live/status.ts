@@ -12,10 +12,12 @@ import {
   streamLiveStatus,
 } from "@/tools/stream/index.ts";
 import {
+  formatPingAgo,
   LIVE_PREVIEW_EPILOGUE,
   parseDuration,
   resolveLiveTarget,
   statusLabel,
+  streamRef,
   withStreamPositional,
 } from "./shared.ts";
 
@@ -34,15 +36,18 @@ function yesNo(
   return value ? yes : no;
 }
 
-/** What to do next, given the stream's state. */
-export function statusHint(report: LiveStatusReport): string | undefined {
+/** What to do next, given the stream's state. `ref` is the stream reference from {@link streamRef}. */
+export function statusHint(
+  report: LiveStatusReport,
+  ref: string = report.id,
+): string | undefined {
   if (
     report.status === "preview" ||
     (report.readyToStart && report.status !== "running")
   )
-    return `Encoder connected. Go live with: bunny stream live start ${report.id}`;
+    return `Encoder connected. Go live with: bunny stream live start ${ref}`;
   if (report.status === "created" || report.status === "scheduled")
-    return `Waiting for the encoder. Settings: bunny stream live ingest ${report.id}`;
+    return `Waiting for the encoder. Settings: bunny stream live ingest ${ref}`;
   if (report.status === "running" && report.disconnected)
     return "The encoder dropped: reconnect it to resume. An event ends after 30 minutes without an encoder.";
   return undefined;
@@ -69,10 +74,7 @@ export function formatStatus(
       { key: "Duration", value: formatDuration(report.durationSeconds) },
       {
         key: "Last ping",
-        value:
-          report.lastPingMs != null
-            ? `${(report.lastPingMs / 1000).toFixed(1)}s ago`
-            : "-",
+        value: formatPingAgo(report.lastPingMs),
       },
     ],
     output,
@@ -125,6 +127,7 @@ export const streamLiveStatusCommand = defineCommand<LiveStatusArgs>({
     });
     const { library, streamId } = await resolveLiveTarget(ctx, args);
     const input = { library: library.id, stream: streamId };
+    const ref = streamRef(streamId, library.id);
 
     const check = () =>
       withSpinner("Checking live stream...", () =>
@@ -138,7 +141,7 @@ export const streamLiveStatusCommand = defineCommand<LiveStatusArgs>({
     }
     if (!args.watch) {
       logger.log(formatStatus(report, output));
-      const hint = statusHint(report);
+      const hint = statusHint(report, ref);
       if (hint) logger.dim(hint);
       return;
     }
@@ -148,7 +151,7 @@ export const streamLiveStatusCommand = defineCommand<LiveStatusArgs>({
     for (;;) {
       if (process.stdout.isTTY) process.stdout.write("\x1b[2J\x1b[H");
       logger.log(formatStatus(current, output));
-      const hint = statusHint(current);
+      const hint = statusHint(current, ref);
       if (hint) logger.dim(hint);
       if (isFinished(current)) {
         logger.dim("The stream has ended.");

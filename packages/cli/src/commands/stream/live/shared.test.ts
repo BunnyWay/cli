@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { toLiveStream } from "@/tools/stream/index.ts";
 import { nextSteps } from "./create.ts";
 import {
+  formatPingAgo,
   liveSettingsFromFlags,
   maskIngest,
   maskSrtUrl,
@@ -9,7 +10,9 @@ import {
   parseRestream,
   parseTimeFlag,
   restreamEnv,
+  streamRef,
 } from "./shared.ts";
+import { statusHint } from "./status.ts";
 
 const NOW = Date.parse("2026-11-23T12:00:00Z");
 
@@ -154,10 +157,34 @@ test("next steps name the library unless it's the linked one", () => {
   expect(nextSteps(stream)).toContain(
     "Go live:          bunny stream live start abc",
   );
-  expect(nextSteps(stream, 12345)).toContain(
+  const ref = streamRef("abc", 12345);
+  expect(ref).toBe("abc --lib 12345");
+  expect(nextSteps(stream, ref)).toContain(
     "Go live:          bunny stream live start abc --lib 12345",
   );
-  expect(nextSteps(stream, 12345)).toContain(
+  expect(nextSteps(stream, ref)).toContain(
     "Reveal the key:   bunny stream live ingest abc --lib 12345 --show-secret",
   );
+});
+
+test("status hints carry the stream reference", () => {
+  const report = {
+    id: "abc",
+    status: "created",
+    readyToStart: false,
+  } as Parameters<typeof statusHint>[0];
+  expect(statusHint(report)).toBe(
+    "Waiting for the encoder. Settings: bunny stream live ingest abc",
+  );
+  expect(statusHint(report, "abc --lib 12345")).toBe(
+    "Waiting for the encoder. Settings: bunny stream live ingest abc --lib 12345",
+  );
+});
+
+test("formatPingAgo reads seconds while recent, then the largest unit", () => {
+  expect(formatPingAgo(null)).toBe("-");
+  expect(formatPingAgo(1200)).toBe("1s ago");
+  expect(formatPingAgo(45_000)).toBe("45s ago");
+  expect(formatPingAgo(125_000)).toBe("2m ago");
+  expect(formatPingAgo(584_184_000)).toBe("6d ago");
 });

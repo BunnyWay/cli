@@ -11,6 +11,7 @@ import {
   LIVE_PREVIEW_EPILOGUE,
   resolveLiveTarget,
   statusText,
+  streamRef,
   withStreamPositional,
 } from "./shared.ts";
 
@@ -82,6 +83,8 @@ export const streamLiveStartCommand = defineToolCommand({
       );
     if (stream.playbackUrl) logger.dim(`Playback (HLS): ${stream.playbackUrl}`);
     logger.dim("Playback is ready in 15-20 seconds.");
-    logger.dim(`Stop it with: bunny stream live stop ${stream.id}`);
+    logger.dim(
+      `Stop it with: bunny stream live stop ${streamRef(stream.id, stream.libraryId)}`,
+    );
   },
 });

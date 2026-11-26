@@ -12,6 +12,7 @@ import {
   LIVE_PREVIEW_EPILOGUE,
   maskIngest,
   resolveLiveTarget,
+  streamRef,
   withStreamPositional,
 } from "./shared.ts";
 
@@ -85,9 +86,9 @@ export const streamLiveRotateKeyCommand = defineToolCommand({
     if (ingest.warning) logger.warn(ingest.warning);
     logger.log(formatIngest(showSecret ? ingest : maskIngest(ingest), output));
     if (showSecret) logger.warn("Treat the stream key like a password.");
-    else
+    else if (ingest.streamId)
       logger.dim(
-        `Key masked. Reveal it with: bunny stream live ingest ${ingest.streamId} --show-secret`,
+        `Key masked. Reveal it with: bunny stream live ingest ${streamRef(ingest.streamId, ingest.libraryId)} --show-secret`,
       );
   },
 });
