@@ -54,6 +54,7 @@ bunny stream libraries create my-library --encoding-plan 1080p --codecs x264,av1
 bunny stream libraries create my-library --no-features   # no library features step (free encoding, no transcribing)
 bunny stream libraries create my-library --encoding-tier premium --codecs x264,vp9
 bunny stream libraries show my-library               # API keys are never printed here
+bunny stream libraries show my-library --show-secret   # webhook and VAST URLs in full; their query string and userinfo are redacted by default
 bunny stream libraries update my-library --resolutions 720p,1080p
 bunny stream libraries update my-library --transcribing --transcribing-languages en,de
 bunny stream libraries update my-library --encoding-tier premium --codecs x264,vp9   # paid; warns about billing

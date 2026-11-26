@@ -1,6 +1,7 @@
 import type { createCoreClient } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/generated/core.d.ts";
 import { UserError } from "@/core/errors.ts";
+import { redactUrl } from "@/core/format.ts";
 
 export type CoreClient = ReturnType<typeof createCoreClient>;
 export type VideoLibraryModel = components["schemas"]["VideoLibraryModel"];
@@ -18,11 +19,19 @@ export type SafeVideoLibrary = Omit<
 // leaks credentials; use `stream library credentials` to retrieve those on purpose.
 // ApiAccessKey is deprecated but carries the same value as ApiKey, so leaving it
 // in would leak the write-capable key right back out.
+// The webhook and VAST URLs can carry credentials in their userinfo or query
+// string, so those parts are redacted too unless `showSecret` asks for them.
 export function toSafeVideoLibrary(
   library: VideoLibraryModel,
+  { showSecret = false }: { showSecret?: boolean } = {},
 ): SafeVideoLibrary {
   const { ApiKey: _k, ReadOnlyApiKey: _r, ApiAccessKey: _a, ...safe } = library;
-  return safe;
+  if (showSecret) return safe;
+  return {
+    ...safe,
+    ...(safe.WebhookUrl ? { WebhookUrl: redactUrl(safe.WebhookUrl) } : {}),
+    ...(safe.VastTagUrl ? { VastTagUrl: redactUrl(safe.VastTagUrl) } : {}),
+  };
 }
 
 /** Fetch all Stream video libraries on the account, paginated and sorted by name. */

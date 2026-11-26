@@ -3,7 +3,7 @@ import { defineNamespace } from "@/core/define-namespace.ts";
 import { streamLibraryCreateCommand } from "./create.ts";
 import { streamLibraryCredentialsCommand } from "./credentials.ts";
 import { streamLibraryDeleteCommand } from "./delete.ts";
-import { streamLibraryGeoBlockingNamespace } from "./geo-blocking.ts";
+import { streamLibraryGeoBlockingNamespace } from "./geo-blocking/index.ts";
 import { streamLibraryLinkCommand } from "./link.ts";
 import { streamLibraryListCommand } from "./list.ts";
 import { streamLibraryPlayerNamespace } from "./player/index.ts";
@@ -11,7 +11,7 @@ import { streamLibrarySecurityNamespace } from "./security/index.ts";
 import { streamLibraryShowCommand } from "./show.ts";
 import { streamLibraryUnlinkCommand } from "./unlink.ts";
 import { streamLibraryUpdateCommand } from "./update.ts";
-import { streamLibraryWatermarkNamespace } from "./watermark.ts";
+import { streamLibraryWatermarkNamespace } from "./watermark/index.ts";
 
 const subcommands: CommandModule[] = [
   streamLibraryListCommand,
