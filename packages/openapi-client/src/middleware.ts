@@ -150,16 +150,16 @@ const extractors: Array<
 /** Longest plain-text error body used verbatim as the error message. */
 const MAX_TEXT_ERROR = 300;
 
-/**
- * A short `text/plain` error body, such as Stream's "Invalid thumbnail file size.",
- * or null. HTML (proxy error pages) and long bodies fall back to the status message.
- */
 /** `text` with whitespace collapsed, or null when empty or too long to be a message. */
 function shortText(text: string): string | null {
   const normalized = text.replace(/\s+/g, " ").trim();
   return normalized && normalized.length <= MAX_TEXT_ERROR ? normalized : null;
 }
 
+/**
+ * A short `text/plain` error body, such as Stream's "Invalid thumbnail file size.",
+ * or null. HTML (proxy error pages) and long bodies fall back to the status message.
+ */
 async function plainTextError(response: Response): Promise<string | null> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().startsWith("text/plain")) return null;
