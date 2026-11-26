@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
 import { toLiveStream } from "@/tools/stream/index.ts";
+import { bitrateSummary } from "./bitrate.ts";
 import { nextSteps, startFact } from "./create.ts";
+import { assertNoPublisher } from "./delete.ts";
 import {
   formatPingAgo,
   liveSettingsFromFlags,
   maskIngest,
+  maskRtmpOutput,
   maskSrtUrl,
   parseDuration,
   parseRtmpOutput,
@@ -86,6 +89,91 @@ test("a bad --rtmp-output value is echoed with its key masked", () => {
   expect(() => parseRtmpOutput("secret-key")).toThrow(
     'Invalid --rtmp-output "•••".',
   );
+});
+
+// A trailing slash made the whole value, key included, show up in the error.
+test("a trailing slash doesn't unmask the RTMP output key", () => {
+  expect(maskRtmpOutput("rtmps://a.rtmp.youtube.com/live2/real-key/")).toBe(
+    "rtmps://a.rtmp.youtube.com/live2/•••/",
+  );
+  expect(maskRtmpOutput("rtmps://a.rtmp.youtube.com/live2/real-key//")).toBe(
+    "rtmps://a.rtmp.youtube.com/live2/•••//",
+  );
+  let message = "";
+  try {
+    parseRtmpOutput("rtmps://a.rtmp.youtube.com/live2/real-key/");
+  } catch (err) {
+    message = (err as Error).message;
+  }
+  expect(message).toContain("Invalid --rtmp-output");
+  expect(message).not.toContain("real-key");
+});
+
+test("a scheduled start wins over auto-start in the next steps", () => {
+  const stream = toLiveStream({
+    videoLibraryId: 12345,
+    guid: "abc",
+    title: "Keynote",
+    autoStartOnIngestDetected: true,
+    scheduledStartTime: "2026-12-01T18:00:00Z",
+  } as Parameters<typeof toLiveStream>[0]);
+  const steps = nextSteps(stream);
+  expect(
+    steps.some((s) => s.startsWith("Go live:          automatic at")),
+  ).toBe(true);
+  expect(steps).toContain("Go live early:    bunny stream live start abc");
+  expect(steps.join("\n")).not.toContain(
+    "connecting the encoder takes it live",
+  );
+});
+
+test("bitrateSummary handles a history too long to spread into Math.min", () => {
+  const samples = Array.from({ length: 300_000 }, (_, i) => ({
+    time: "2026-11-26T00:00:00Z",
+    kbps: 1000 + (i % 1000),
+  }));
+  expect(bitrateSummary(samples)).toBe(
+    "avg 1,500 · min 1,000 · max 1,999 kbps (300000 samples)",
+  );
+  expect(bitrateSummary([])).toBe("No samples");
+});
+
+test("delete refuses while an encoder publishes, pointing at the way out", () => {
+  const health = {
+    id: "abc",
+    title: "Keynote",
+    status: "preview",
+    readyToStart: true,
+    primaryLive: true,
+    backupLive: false,
+    disconnected: false,
+    lastPingMs: 100,
+    durationSeconds: null,
+    bitrateKbps: null,
+    checkedAt: null,
+  } as Parameters<typeof assertNoPublisher>[0];
+  expect(() => assertNoPublisher(health, "abc")).toThrow(
+    "An encoder is still publishing to Keynote",
+  );
+  expect(() =>
+    assertNoPublisher({ ...health, status: "running" }, "abc --lib 1"),
+  ).toThrow("can't be deleted yet");
+  try {
+    assertNoPublisher({ ...health, status: "running" }, "abc --lib 1");
+  } catch (err) {
+    expect((err as { hint?: string }).hint).toContain(
+      "bunny stream live stop abc --lib 1",
+    );
+  }
+  expect(() =>
+    assertNoPublisher(
+      { ...health, primaryLive: false, backupLive: true },
+      "abc",
+    ),
+  ).toThrow();
+  expect(() =>
+    assertNoPublisher({ ...health, primaryLive: false }, "abc"),
+  ).not.toThrow();
 });
 
 test("liveSettingsFromFlags builds a sparse create body", () => {

@@ -574,8 +574,15 @@ export const LiveSettingsSchema = z.object({
 });
 export type LiveSettings = z.infer<typeof LiveSettingsSchema>;
 
-/** Checks every create and update shares, before any request. */
-export function assertLiveSettings(settings: LiveSettings): void {
+/**
+ * Checks every create and update shares, before any request. `defaultType` is
+ * the type when `settings.type` is left out: `event` on create; on update the
+ * stream's type is unknown here, so type-specific limits are left to the API.
+ */
+export function assertLiveSettings(
+  settings: LiveSettings,
+  defaultType?: StreamType,
+): void {
   if (settings.type === "channel" && settings.recordVod === true) {
     throw new UserError(
       "A channel can't record a VOD.",
@@ -601,7 +608,7 @@ export function assertLiveSettings(settings: LiveSettings): void {
   if (start !== undefined && end !== undefined && end <= start)
     throw new UserError("The scheduled end must be after the scheduled start.");
   if (
-    settings.type !== "channel" &&
+    (settings.type ?? defaultType) === "event" &&
     start !== undefined &&
     end !== undefined &&
     end - start > MAX_DVR_WINDOW_SECONDS * 1000

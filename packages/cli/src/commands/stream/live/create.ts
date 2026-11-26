@@ -61,16 +61,17 @@ export function nextSteps(
     "Set up encoder:   paste the server and stream key into OBS (Settings > Stream > Custom) or vMix",
     `Check health:     bunny stream live status ${id} --watch`,
   ];
-  if (stream.autoStart) {
-    steps.push(
-      "Go live:          auto-start is on, so connecting the encoder takes it live",
-    );
-  } else if (stream.scheduledStart) {
+  // A schedule wins over auto-start: a scheduled stream doesn't start before its time.
+  if (stream.scheduledStart) {
     steps.push(`Watch privately:  bunny stream live preview ${id}`);
     steps.push(
       `Go live:          automatic at ${formatDateTime(stream.scheduledStart)}`,
     );
     steps.push(`Go live early:    bunny stream live start ${id}`);
+  } else if (stream.autoStart) {
+    steps.push(
+      "Go live:          auto-start is on, so connecting the encoder takes it live",
+    );
   } else {
     steps.push(`Watch privately:  bunny stream live preview ${id}`);
     steps.push(`Go live:          bunny stream live start ${id}`);

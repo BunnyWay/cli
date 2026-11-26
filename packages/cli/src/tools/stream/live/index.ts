@@ -227,7 +227,8 @@ export const streamLiveCreate = defineTool({
     ],
   ],
   run: async (ctx, { library, title, ...settings }) => {
-    assertLiveSettings(settings);
+    // A stream is an event unless created as a channel.
+    assertLiveSettings(settings, "event");
     const client = await liveClient(ctx, library);
     ctx.progress("Creating live stream...");
     // null clears a field on update; on create it just means "not set".

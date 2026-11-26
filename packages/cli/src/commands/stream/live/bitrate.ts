@@ -13,12 +13,19 @@ import {
 
 type Sample = { time: string; kbps: number };
 
-function summary(samples: Sample[]): string {
+export function bitrateSummary(samples: Sample[]): string {
   if (samples.length === 0) return "No samples";
-  const values = samples.map((s) => s.kbps);
-  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  // One pass, no spread: a long-running channel's history can exceed the call-argument limit.
+  let sum = 0;
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const { kbps } of samples) {
+    sum += kbps;
+    if (kbps < min) min = kbps;
+    if (kbps > max) max = kbps;
+  }
   const fmt = (v: number) => Math.round(v).toLocaleString();
-  return `avg ${fmt(avg)} · min ${fmt(Math.min(...values))} · max ${fmt(Math.max(...values))} kbps (${samples.length} samples)`;
+  return `avg ${fmt(sum / samples.length)} · min ${fmt(min)} · max ${fmt(max)} kbps (${samples.length} samples)`;
 }
 
 export const streamLiveBitrateCommand = defineToolCommand({
@@ -82,8 +89,8 @@ export const streamLiveBitrateCommand = defineToolCommand({
     logger.log(
       formatKeyValue(
         [
-          { key: "Primary", value: summary(history.primary) },
-          { key: "Backup", value: summary(history.backup) },
+          { key: "Primary", value: bitrateSummary(history.primary) },
+          { key: "Backup", value: bitrateSummary(history.backup) },
         ],
         output,
       ),

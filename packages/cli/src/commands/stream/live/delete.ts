@@ -1,12 +1,33 @@
 import { defineToolCommand } from "@/core/define-tool-command.ts";
+import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
-import { streamLiveDelete, streamLiveGet } from "@/tools/stream/index.ts";
+import {
+  type LiveStatusReport,
+  streamLiveDelete,
+  streamLiveGet,
+  streamLiveStatus,
+} from "@/tools/stream/index.ts";
 import {
   LIVE_DOCS_EPILOGUE,
   resolveLiveTarget,
+  streamRef,
   withStreamPositional,
 } from "./shared.ts";
+
+/**
+ * The API refuses to delete a stream while an encoder publishes to it, so say
+ * what to do instead of confirming a delete that can't succeed.
+ */
+export function assertNoPublisher(health: LiveStatusReport, ref: string): void {
+  if (!health.primaryLive && !health.backupLive) return;
+  throw new UserError(
+    `An encoder is still publishing to ${health.title}, so it can't be deleted yet.`,
+    health.status === "running"
+      ? `End it first with \`bunny stream live stop ${ref}\`, which disconnects the encoder, then delete it.`
+      : "Stop the encoder (OBS, vMix, FFmpeg) publishing to it, then delete it.",
+  );
+}
 
 export const streamLiveDeleteCommand = defineToolCommand({
   tool: streamLiveDelete,
@@ -38,6 +59,10 @@ export const streamLiveDeleteCommand = defineToolCommand({
       hint: "Re-run with --force to delete non-interactively.",
     });
     const input = { library: library.id, stream: streamId };
+    const health = await withSpinner("Checking the encoder...", () =>
+      streamLiveStatus.invoke(ctx, input),
+    );
+    assertNoPublisher(health, streamRef(streamId, library.id));
     if (args.force)
       return { input, confirm: () => confirm("", { force: true }) };
 
@@ -46,7 +71,7 @@ export const streamLiveDeleteCommand = defineToolCommand({
     );
     if (stream.status === "running") {
       logger.warn(
-        `${stream.title} is live now: deleting it cuts off every viewer and the encoder.`,
+        `${stream.title} is live now: deleting it cuts off every viewer.`,
       );
     }
     // The VOD lives on the stream (there's no separate library video), so it goes too.

@@ -223,12 +223,17 @@ test("assertLiveSettings rejects a channel with a VOD and an event over 12 hours
   expect(() =>
     assertLiveSettings({ type: "channel", recordVod: true }),
   ).toThrow("can't record a VOD");
-  expect(() =>
-    assertLiveSettings({
-      scheduledStart: "2026-12-01T00:00:00Z",
-      scheduledEnd: "2026-12-01T13:00:00Z",
-    }),
-  ).toThrow("12 hours");
+  const thirteenHours = {
+    scheduledStart: "2026-12-01T00:00:00Z",
+    scheduledEnd: "2026-12-01T13:00:00Z",
+  };
+  // Create: an omitted type means an event.
+  expect(() => assertLiveSettings(thirteenHours, "event")).toThrow("12 hours");
+  expect(() => assertLiveSettings({ ...thirteenHours, type: "event" })).toThrow(
+    "12 hours",
+  );
+  // Update: an omitted type is the stream's current one, which may be a channel; the API decides.
+  expect(() => assertLiveSettings(thirteenHours)).not.toThrow();
   expect(() =>
     assertLiveSettings({
       type: "channel",

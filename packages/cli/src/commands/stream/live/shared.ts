@@ -252,11 +252,13 @@ export function clearable(
 /** A `--rtmp-output` value safe to echo: the last path segment, where the destination's key goes, masked. */
 export function maskRtmpOutput(value: string): string {
   const trimmed = value.trim();
-  const slash = trimmed.lastIndexOf("/");
+  // A trailing slash doesn't end the key: mask the last non-empty segment, keeping the slashes after it.
+  const body = trimmed.replace(/\/+$/, "");
+  const trailing = trimmed.slice(body.length);
+  const slash = body.lastIndexOf("/");
   // No path at all: the whole value may be a pasted key.
   if (slash === -1) return "•••";
-  if (slash === trimmed.length - 1) return trimmed;
-  return `${trimmed.slice(0, slash + 1)}•••`;
+  return `${body.slice(0, slash + 1)}•••${trailing}`;
 }
 
 /**
