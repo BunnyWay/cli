@@ -82,6 +82,7 @@ export const streamLiveRotateKeyCommand = defineToolCommand({
     const showSecret = args["show-secret"];
     const { output } = args;
     logger.success("Stream key rotated.");
+    if (ingest.warning) logger.warn(ingest.warning);
     logger.log(formatIngest(showSecret ? ingest : maskIngest(ingest), output));
     if (showSecret) logger.warn("Treat the stream key like a password.");
     else

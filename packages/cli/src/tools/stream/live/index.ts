@@ -431,8 +431,27 @@ export const streamLiveRotateKey = defineTool({
     );
     const model = requireModel(data, "regenerating its key");
     // SRT URLs carry the key, so read them back rather than reuse stale ones.
-    const endpoints = await fetchIngestEndpoints(ctx, client, library, stream);
-    return toLiveIngest(library, stream, model.streamKey, endpoints);
+    // The old key is already dead, so a failed read-back must not lose the new
+    // one: fall back to the RTMP(S) servers, which carry no key, and say so.
+    try {
+      const endpoints = await fetchIngestEndpoints(
+        ctx,
+        client,
+        library,
+        stream,
+      );
+      return toLiveIngest(library, stream, model.streamKey, endpoints);
+    } catch (err) {
+      if (ctx.signal?.aborted) throw err;
+      const endpoints = model.ingestEndpoints && {
+        ...model.ingestEndpoints,
+        srt: null,
+      };
+      return {
+        ...toLiveIngest(library, stream, model.streamKey, endpoints),
+        warning: `The key was rotated, but the ingest endpoints couldn't be read back (${err instanceof Error ? err.message : String(err)}), so SRT is left out. Run \`bunny stream live ingest ${stream}\` for the full settings.`,
+      };
+    }
   },
 });
 
@@ -697,15 +716,22 @@ export const streamLiveThumbnailRemove = defineTool({
   ): Promise<ThumbnailResult> => {
     const client = await liveClient(ctx, library);
     ctx.progress("Removing thumbnail...");
-    await orNotFound(stream, () =>
-      client.DELETE("/library/{libraryId}/live/{streamId}/thumbnail", {
+    try {
+      await client.DELETE("/library/{libraryId}/live/{streamId}/thumbnail", {
         params: {
           path: { libraryId: library, streamId: stream },
           query: { restoreLibraryDefault: restoreDefault },
         },
         signal: ctx.signal,
-      }),
-    );
+      });
+    } catch (err) {
+      if (!(err instanceof ApiError) || err.status !== 404) throw err;
+      // 404 means a missing stream or no custom thumbnail; tell them apart.
+      await fetchStream(ctx, client, library, stream);
+      throw new UserError(
+        `Live stream ${stream} has no custom thumbnail to remove.`,
+      );
+    }
     return { id: stream, thumbnail: "removed" };
   },
 });

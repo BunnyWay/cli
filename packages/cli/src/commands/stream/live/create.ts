@@ -1,13 +1,19 @@
+import {
+  STREAM_MANIFEST,
+  type StreamLibraryManifest,
+} from "@/commands/stream/constants.ts";
 import { resolveConfig } from "@/config/index.ts";
 import { bunny } from "@/core/colors.ts";
 import { defineCommand } from "@/core/define-command.ts";
-import { UserError } from "@/core/errors.ts";
+import { errorMessage, UserError } from "@/core/errors.ts";
 import { formatDateTime, formatDuration } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
+import { loadManifest } from "@/core/manifest.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
 import { extendToolContext } from "@/tools/context.ts";
 import {
+  type LiveIngest,
   type LiveStream,
   streamLiveCreate,
   streamLiveIngest,
@@ -31,9 +37,13 @@ interface LiveCreateArgs extends LiveSettingsArgs {
   showSecret?: boolean;
 }
 
-/** The steps from a new stream to going live, as the docs' quickstart walks them. */
-export function nextSteps(stream: LiveStream): string[] {
-  const id = stream.id;
+/**
+ * The steps from a new stream to going live, as the docs' quickstart walks them.
+ * `lib` is added to each command when the library isn't the linked one, so the
+ * steps work when pasted as they are.
+ */
+export function nextSteps(stream: LiveStream, lib?: number): string[] {
+  const id = lib === undefined ? stream.id : `${stream.id} --lib ${lib}`;
   const steps = [
     `Reveal the key:   bunny stream live ingest ${id} --show-secret`,
     "Set up encoder:   paste the server and stream key into OBS (Settings > Stream > Custom) or vMix",
@@ -157,13 +167,37 @@ export const streamLiveCreateCommand = defineCommand<LiveCreateArgs>({
         ...settings,
       }),
     );
-    const ingest = await withSpinner("Fetching ingest settings...", () =>
-      streamLiveIngest.invoke(ctx, { library: library.id, stream: stream.id }),
-    );
-    const shownIngest = args.showSecret ? ingest : maskIngest(ingest);
+    // The stream exists from here on, and create isn't idempotent: a failed
+    // ingest lookup is reported as a warning, never as a failed create.
+    let ingest: LiveIngest | null = null;
+    let ingestError: string | undefined;
+    try {
+      ingest = await withSpinner("Fetching ingest settings...", () =>
+        streamLiveIngest.invoke(ctx, {
+          library: library.id,
+          stream: stream.id,
+        }),
+      );
+    } catch (err) {
+      ingestError = errorMessage(err);
+    }
+    const shownIngest =
+      ingest && (args.showSecret ? ingest : maskIngest(ingest));
+    const linked = loadManifest<StreamLibraryManifest>(STREAM_MANIFEST).id;
+    const lib = Number(linked) === library.id ? undefined : library.id;
 
     if (output === "json") {
-      logger.log(JSON.stringify({ ...stream, ingest: shownIngest }, null, 2));
+      logger.log(
+        JSON.stringify(
+          {
+            ...stream,
+            ingest: shownIngest,
+            ...(ingestError ? { ingestError } : {}),
+          },
+          null,
+          2,
+        ),
+      );
       return;
     }
 
@@ -187,13 +221,22 @@ export const streamLiveCreateCommand = defineCommand<LiveCreateArgs>({
     logger.dim(facts.join(" · "));
 
     logger.log();
-    logger.log(bunny.bold("Encoder settings"));
-    logger.log(formatIngest(shownIngest, output));
-    if (args.showSecret) logger.warn("Treat the stream key like a password.");
-    for (const tip of ENCODER_TIPS) logger.dim(tip);
+    if (shownIngest) {
+      logger.log(bunny.bold("Encoder settings"));
+      logger.log(formatIngest(shownIngest, output));
+      if (args.showSecret) logger.warn("Treat the stream key like a password.");
+      for (const tip of ENCODER_TIPS) logger.dim(tip);
+    } else {
+      logger.warn(
+        `The stream was created, but its encoder settings couldn't be fetched: ${ingestError}`,
+      );
+      logger.dim(
+        `Get them with: bunny stream live ingest ${stream.id}${lib === undefined ? "" : ` --lib ${lib}`}`,
+      );
+    }
 
     logger.log();
     logger.log(bunny.bold("Next steps"));
-    for (const step of nextSteps(stream)) logger.dim(`  ${step}`);
+    for (const step of nextSteps(stream, lib)) logger.dim(`  ${step}`);
   },
 });

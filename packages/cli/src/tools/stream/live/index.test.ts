@@ -15,6 +15,7 @@ import {
   streamLiveList,
   streamLiveRotateKey,
   streamLiveStatus,
+  streamLiveThumbnailRemove,
   streamLiveUpdate,
   toLiveIngest,
   toLiveStream,
@@ -373,4 +374,59 @@ test("stream.live.status tolerates a missing bitrate sample", async () => {
     bitrateKbps: null,
     lastPingMs: 1200,
   });
+});
+
+test("stream.live.rotatekey keeps the new key when the endpoints can't be read back", async () => {
+  const { ctx } = setup({
+    "PUT /library/{libraryId}/live/{streamId}/regenerate-key": {
+      ...MODEL,
+      streamKey: "bunnylive_newkey",
+      ingestEndpoints: {
+        rtmps: {
+          primaryIngestUrl: "rtmps://global.rtmp.mediadelivery.net/live",
+        },
+        srt: { primaryIngestUrl: "srt://old?streamid=publish:live/oldkey" },
+      },
+    },
+    "GET /library/{libraryId}/live/ingest-endpoints": () => {
+      throw new ApiError("Bad Gateway", 502);
+    },
+  });
+  const ingest = await streamLiveRotateKey.invoke(ctx, {
+    library: 12345,
+    stream: MODEL.guid,
+  });
+  expect(ingest.streamKey).toBe("bunnylive_newkey");
+  expect(ingest.rtmps?.primary).toBe(
+    "rtmps://global.rtmp.mediadelivery.net/live",
+  );
+  expect(ingest.srt).toBeNull();
+  expect(ingest.warning).toContain("couldn't be read back");
+});
+
+test("stream.live.thumbnail.remove tells a missing thumbnail from a missing stream", async () => {
+  const notFound = () => {
+    throw new ApiError("Not Found", 404);
+  };
+  const noThumbnail = setup({
+    "DELETE /library/{libraryId}/live/{streamId}/thumbnail": notFound,
+    "GET /library/{libraryId}/live/{streamId}": MODEL,
+  });
+  await expect(
+    streamLiveThumbnailRemove.invoke(noThumbnail.ctx, {
+      library: 12345,
+      stream: MODEL.guid,
+    }),
+  ).rejects.toThrow("has no custom thumbnail to remove");
+
+  const noStream = setup({
+    "DELETE /library/{libraryId}/live/{streamId}/thumbnail": notFound,
+    "GET /library/{libraryId}/live/{streamId}": notFound,
+  });
+  await expect(
+    streamLiveThumbnailRemove.invoke(noStream.ctx, {
+      library: 12345,
+      stream: MODEL.guid,
+    }),
+  ).rejects.toThrow(`Live stream ${MODEL.guid} not found.`);
 });

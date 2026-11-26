@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { toLiveStream } from "@/tools/stream/index.ts";
+import { nextSteps } from "./create.ts";
 import {
   liveSettingsFromFlags,
   maskIngest,
@@ -39,6 +41,15 @@ test("parseRestream splits the stream key off the last path segment", () => {
   );
   expect(() => parseRestream("rtmp://example.com")).toThrow(
     "Invalid --restream",
+  );
+});
+
+test("a bad --restream value is echoed with its key masked", () => {
+  expect(() => parseRestream("https://example.com/live/secret-key")).toThrow(
+    'Invalid --restream "https://example.com/live/•••".',
+  );
+  expect(() => parseRestream("secret-key")).toThrow(
+    'Invalid --restream "•••".',
   );
 });
 
@@ -129,5 +140,24 @@ test("maskIngest hides the key, including inside SRT URLs", () => {
   expect(JSON.stringify(masked)).not.toContain("secretkey");
   expect(masked.rtmps?.primary).toBe(
     "rtmps://global.rtmp.mediadelivery.net/live",
+  );
+});
+
+test("next steps name the library unless it's the linked one", () => {
+  // nextSteps reads only the ID and auto-start.
+  const stream = toLiveStream({
+    videoLibraryId: 12345,
+    guid: "abc",
+    title: "Keynote",
+    autoStartOnIngestDetected: false,
+  } as Parameters<typeof toLiveStream>[0]);
+  expect(nextSteps(stream)).toContain(
+    "Go live:          bunny stream live start abc",
+  );
+  expect(nextSteps(stream, 12345)).toContain(
+    "Go live:          bunny stream live start abc --lib 12345",
+  );
+  expect(nextSteps(stream, 12345)).toContain(
+    "Reveal the key:   bunny stream live ingest abc --lib 12345 --show-secret",
   );
 });

@@ -235,6 +235,8 @@ export const LiveIngestSchema = z.object({
   rtmps: IngestPairSchema.nullable(),
   /** Null when SRT ingest isn't configured or the stream was auto-created. */
   srt: IngestPairSchema.nullable(),
+  /** Set when part of the settings couldn't be read, e.g. the endpoints right after a key rotation. */
+  warning: z.string().optional(),
 });
 export type LiveIngest = z.infer<typeof LiveIngestSchema>;
 

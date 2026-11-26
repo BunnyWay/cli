@@ -198,6 +198,16 @@ export function clearable(
   return trimmed === "" || trimmed.toLowerCase() === "none" ? null : trimmed;
 }
 
+/** A `--restream` value safe to echo: the last path segment, where the destination's key goes, masked. */
+export function maskRestream(value: string): string {
+  const trimmed = value.trim();
+  const slash = trimmed.lastIndexOf("/");
+  // No path at all: the whole value may be a pasted key.
+  if (slash === -1) return "•••";
+  if (slash === trimmed.length - 1) return trimmed;
+  return `${trimmed.slice(0, slash + 1)}•••`;
+}
+
 /**
  * A restream destination from one `--restream` value: the full RTMP(S) URL an
  * encoder would publish to, with the destination's stream key as the last path
@@ -211,7 +221,7 @@ export function parseRestream(value: string): {
   const match = /^(rtmps?:\/\/[^/\s]+(?:\/[^\s]*)?)\/([^/\s]+)$/i.exec(trimmed);
   if (!match?.[1] || !match[2]) {
     throw new UserError(
-      `Invalid --restream "${value}".`,
+      `Invalid --restream "${maskRestream(value)}".`,
       "Pass the destination's full RTMP(S) URL ending in its stream key, e.g. rtmps://a.rtmp.youtube.com/live2/<key>.",
     );
   }

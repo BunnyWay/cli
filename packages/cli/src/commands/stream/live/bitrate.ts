@@ -54,8 +54,14 @@ export const streamLiveBitrateCommand = defineToolCommand({
       .option("limit", {
         type: "number",
         default: 20,
-        describe: "Recent samples to list per encoder (text output)",
+        describe:
+          "Recent samples to list per encoder (text output; 0 for the summary only)",
       }),
+
+  preRun: async ({ limit }) => {
+    if (limit !== undefined && (!Number.isInteger(limit) || limit < 0))
+      throw new UserError("--limit must be a whole number, 0 or more.");
+  },
 
   prepare: async (args, ctx) => {
     if (args.since && args.from)
@@ -82,13 +88,15 @@ export const streamLiveBitrateCommand = defineToolCommand({
         output,
       ),
     );
+    const count = limit ?? 20;
+    // slice(-0) is slice(0), the whole history, so 0 needs its own case.
     const recent = (samples: Sample[]) =>
-      samples.slice(-Math.max(limit ?? 20, 0));
+      count === 0 ? [] : samples.slice(-count);
     for (const [label, samples] of [
       ["Primary", history.primary],
       ["Backup", history.backup],
     ] as const) {
-      if (samples.length === 0) continue;
+      if (recent(samples).length === 0) continue;
       logger.log();
       logger.log(`${label} encoder, latest ${recent(samples).length}:`);
       logger.log(
