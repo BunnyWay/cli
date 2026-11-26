@@ -24,13 +24,43 @@ test("parseDuration takes seconds or a unit suffix", () => {
   expect(() => parseDuration("soon", "dvr")).toThrow('Invalid --dvr "soon"');
 });
 
+test("parseDuration combines units, largest first", () => {
+  // 10h5m is the documented --expires maximum, so it must parse.
+  expect(parseDuration("10h5m", "expires")).toBe(36_300);
+  expect(parseDuration("10h05m", "expires")).toBe(36_300);
+  expect(parseDuration("1h30m", "dvr")).toBe(5400);
+  expect(parseDuration("1h 30m", "dvr")).toBe(5400);
+  expect(parseDuration("30 m", "dvr")).toBe(1800);
+  expect(parseDuration("1d2h3m4s", "dvr")).toBe(93_784);
+  for (const bad of ["5m10h", "1h1h", "1h30", "h", "-1h", ""]) {
+    expect(() => parseDuration(bad, "dvr")).toThrow(`Invalid --dvr "${bad}"`);
+  }
+});
+
 test("parseTimeFlag takes ISO 8601 or a time from now", () => {
   expect(parseTimeFlag("+30m", "start", NOW)).toBe("2026-11-23T12:30:00.000Z");
   expect(parseTimeFlag("2026-12-01T18:00:00Z", "start", NOW)).toBe(
     "2026-12-01T18:00:00.000Z",
   );
+  expect(parseTimeFlag("+1h30m", "start", NOW)).toBe(
+    "2026-11-23T13:30:00.000Z",
+  );
   expect(() => parseTimeFlag("tomorrow", "start", NOW)).toThrow(
     'Invalid --start "tomorrow"',
+  );
+});
+
+test("parseTimeFlag reads a date-time without an offset as UTC, whatever the local zone", () => {
+  // The flags say "ISO 8601 UTC"; Date alone would read this as local time.
+  expect(parseTimeFlag("2026-12-01T18:00", "start", NOW)).toBe(
+    "2026-12-01T18:00:00.000Z",
+  );
+  expect(parseTimeFlag("2026-12-01T18:00:00.5", "start", NOW)).toBe(
+    "2026-12-01T18:00:00.500Z",
+  );
+  // An explicit offset is honoured.
+  expect(parseTimeFlag("2026-12-01T18:00:00-05:00", "start", NOW)).toBe(
+    "2026-12-01T23:00:00.000Z",
   );
 });
 

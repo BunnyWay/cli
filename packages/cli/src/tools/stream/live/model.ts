@@ -160,6 +160,22 @@ function csv(value: string | null | undefined): string[] {
     .filter(Boolean);
 }
 
+/** An ISO 8601 date-time with no `Z` or `±hh:mm` offset, as the Live API sends them. */
+const NAIVE_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+
+/**
+ * Mark an API timestamp as UTC. The Live API sends UTC times without an offset
+ * (`2026-11-26T20:00:00`), which `Date` would read as local time: off by the
+ * viewer's UTC offset in text output, and not the ISO 8601 UTC JSON promises.
+ */
+export function utcTimestamp(value: string): string;
+export function utcTimestamp(value: string | null | undefined): string | null;
+export function utcTimestamp(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return NAIVE_DATE_TIME.test(trimmed) ? `${trimmed}Z` : trimmed;
+}
+
 export function toLiveStream(model: LiveStreamModel): LiveStream {
   const outputs = model.outputs ?? model.rtmpOutputs ?? [];
   const hasInput =
@@ -172,11 +188,11 @@ export function toLiveStream(model: LiveStreamModel): LiveStream {
     collectionId: model.collectionId || null,
     status: liveStatus(model.status),
     type: model.streamType === 1 ? "channel" : "event",
-    createdAt: model.dateCreated ?? null,
-    scheduledStart: model.scheduledStartTime ?? null,
-    scheduledEnd: model.scheduledEndTime ?? null,
-    startedAt: model.startedAt ?? null,
-    endedAt: model.endedAt ?? null,
+    createdAt: utcTimestamp(model.dateCreated),
+    scheduledStart: utcTimestamp(model.scheduledStartTime),
+    scheduledEnd: utcTimestamp(model.scheduledEndTime),
+    startedAt: utcTimestamp(model.startedAt),
+    endedAt: utcTimestamp(model.endedAt),
     durationSeconds: model.durationSeconds ?? null,
     autoStart: model.autoStartOnIngestDetected,
     recordVod: model.recordVod,
@@ -203,7 +219,7 @@ export function toLiveStream(model: LiveStreamModel): LiveStream {
       hasStreamKey: Boolean(output.streamKey),
     })),
     issues: (model.transcodingMessages ?? []).map((message) => ({
-      time: message.timeStamp ?? null,
+      time: utcTimestamp(message.timeStamp),
       level: SEVERITIES[message.level ?? 0] ?? "undefined",
       code: ISSUE_CODES[message.issueCode ?? 0] ?? String(message.issueCode),
       message: message.message ?? "",
@@ -324,7 +340,7 @@ export function toSamples(
   return (entries ?? [])
     .filter((entry) => entry.dateTime)
     .map((entry) => ({
-      time: entry.dateTime as string,
+      time: utcTimestamp(entry.dateTime as string),
       kbps: entry.value ?? 0,
     }));
 }

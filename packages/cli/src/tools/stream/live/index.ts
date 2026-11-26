@@ -32,6 +32,7 @@ import {
   toLiveIngest,
   toLiveStream,
   toSamples,
+  utcTimestamp,
 } from "./model.ts";
 
 export * from "./model.ts";
@@ -112,13 +113,30 @@ async function fetchStream(
   return data;
 }
 
-function requireModel(
+/**
+ * The live stream a mutating call answered with. The spec types these responses
+ * as a bare `LiveStreamModel`, but some (`stop`, in the preview API) wrap it in a
+ * `{ data, success, message }` envelope, so both shapes are accepted.
+ */
+export function requireModel(
   data: LiveStreamModel | undefined,
   action: string,
 ): LiveStreamModel {
-  if (!data)
+  const model = unwrapEnvelope(data);
+  if (!model)
     throw new UserError(`The API returned no live stream after ${action}.`);
-  return data;
+  return model;
+}
+
+function unwrapEnvelope(
+  data: LiveStreamModel | undefined,
+): LiveStreamModel | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  if ("guid" in data) return data;
+  const inner = (data as { data?: unknown }).data;
+  return inner && typeof inner === "object" && "guid" in inner
+    ? (inner as LiveStreamModel)
+    : undefined;
 }
 
 export const streamLiveList = defineTool({
@@ -496,7 +514,7 @@ export const streamLiveStatus = defineTool({
       lastPingMs: health?.lastPingAgo ?? null,
       durationSeconds: health?.duration ?? null,
       bitrateKbps: bitrate,
-      checkedAt: health?.statusTimeUtc ?? null,
+      checkedAt: utcTimestamp(health?.statusTimeUtc),
     };
   },
 });

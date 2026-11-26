@@ -15,10 +15,13 @@ import {
   streamLiveList,
   streamLiveRotateKey,
   streamLiveStatus,
+  streamLiveStop,
   streamLiveThumbnailRemove,
   streamLiveUpdate,
   toLiveIngest,
   toLiveStream,
+  toSamples,
+  utcTimestamp,
 } from "./index.ts";
 
 interface Call {
@@ -109,6 +112,54 @@ function setup(routes: Record<string, unknown | (() => unknown)>) {
   });
   return { ctx, calls, keys };
 }
+
+// The Live API sends UTC times without an offset; Date would read them as local time.
+test("utcTimestamp marks offset-less API times as UTC and leaves the rest alone", () => {
+  expect(utcTimestamp("2026-11-26T20:00:00")).toBe("2026-11-26T20:00:00Z");
+  expect(utcTimestamp("2026-11-26T16:18:51.118")).toBe(
+    "2026-11-26T16:18:51.118Z",
+  );
+  expect(utcTimestamp("2026-11-26T20:00")).toBe("2026-11-26T20:00Z");
+  expect(utcTimestamp("2026-11-26T20:00:00Z")).toBe("2026-11-26T20:00:00Z");
+  expect(utcTimestamp("2026-11-26T16:21:33.0068664Z")).toBe(
+    "2026-11-26T16:21:33.0068664Z",
+  );
+  expect(utcTimestamp("2026-11-26T20:00:00+01:00")).toBe(
+    "2026-11-26T20:00:00+01:00",
+  );
+  expect(utcTimestamp("2026-11-26")).toBe("2026-11-26");
+  expect(utcTimestamp(null)).toBeNull();
+  expect(utcTimestamp(undefined)).toBeNull();
+  expect(utcTimestamp("")).toBeNull();
+});
+
+test("toLiveStream and toSamples return API times as UTC", () => {
+  const stream = toLiveStream({
+    ...MODEL,
+    dateCreated: "2026-11-26T16:18:51.118",
+    scheduledStartTime: "2026-11-26T20:00:00",
+    scheduledEndTime: "2026-11-26T22:00:00",
+    startedAt: "2026-11-26T20:00:05.5",
+    endedAt: "2026-11-26T21:00:00",
+    transcodingMessages: [
+      { timeStamp: "2026-11-26T20:30:00", level: 2, issueCode: 20 },
+    ],
+  });
+  expect(stream).toMatchObject({
+    createdAt: "2026-11-26T16:18:51.118Z",
+    scheduledStart: "2026-11-26T20:00:00Z",
+    scheduledEnd: "2026-11-26T22:00:00Z",
+    startedAt: "2026-11-26T20:00:05.5Z",
+    endedAt: "2026-11-26T21:00:00Z",
+  });
+  expect(stream.issues[0]?.time).toBe("2026-11-26T20:30:00Z");
+  expect(Date.parse(stream.scheduledStart ?? "")).toBe(
+    Date.UTC(2026, 10, 26, 20, 0, 0),
+  );
+  expect(toSamples([{ dateTime: "2026-11-26T20:00:10", value: 3000 }])).toEqual(
+    [{ time: "2026-11-26T20:00:10Z", kbps: 3000 }],
+  );
+});
 
 test("toLiveStream normalizes the model and never carries a stream key", () => {
   const stream = toLiveStream(MODEL);
@@ -305,6 +356,40 @@ test("stream.live.update sends a merge patch and refuses an empty change", async
   await expect(
     streamLiveUpdate.invoke(ctx, { library: 12345, stream: MODEL.guid }),
   ).rejects.toThrow("No live stream changes requested.");
+});
+
+// The preview API wraps the stop response in a StatusModel envelope.
+test("stream.live.stop reads the stream from a { data } envelope or a bare model", async () => {
+  const ended = { ...MODEL, status: 5 };
+  for (const answer of [
+    { data: ended, success: true, statusCode: 200 },
+    ended,
+  ]) {
+    const { ctx } = setup({
+      "PUT /library/{libraryId}/live/{streamId}/stop": answer,
+    });
+    const stream = await streamLiveStop.invoke(ctx, {
+      library: 12345,
+      stream: MODEL.guid,
+    });
+    expect(stream).toMatchObject({
+      id: MODEL.guid,
+      title: "Keynote",
+      status: "ended",
+    });
+  }
+});
+
+test("stream.live.stop refuses a response with no live stream in it", async () => {
+  const { ctx } = setup({
+    "PUT /library/{libraryId}/live/{streamId}/stop": {
+      success: true,
+      statusCode: 200,
+    },
+  });
+  await expect(
+    streamLiveStop.invoke(ctx, { library: 12345, stream: MODEL.guid }),
+  ).rejects.toThrow("The API returned no live stream after stopping it.");
 });
 
 test("stream.live.ingest returns the key with the stream's endpoints", async () => {

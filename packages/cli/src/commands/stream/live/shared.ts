@@ -28,6 +28,7 @@ import {
   STREAM_TYPES,
   type StreamType,
   streamLiveList,
+  utcTimestamp,
 } from "@/tools/stream/index.ts";
 
 /** Live streaming is a closed preview: said once in every live command's help. */
@@ -175,31 +176,49 @@ export function statusLabel(status: LiveStatus): string {
   }
 }
 
+const DURATION_UNITS = { s: 1, m: 60, h: 3600, d: 86_400 } as const;
+// One or more `<number><unit>` parts, largest unit first: `2h`, `1h30m`, `10h5m`.
+const COMPOUND_DURATION = /^(?:\d+(?:\.\d+)?[smhd])+$/i;
+const DURATION_PART = /(\d+(?:\.\d+)?)([smhd])/gi;
+
 /**
  * A duration as seconds: a bare number is seconds; `s`, `m`, `h` and `d`
- * suffixes are accepted, so `90`, `30m` and `2h` all work.
+ * suffixes are accepted and combine, so `90`, `30m`, `2h` and `10h5m` all work.
  */
 export function parseDuration(value: string | number, flag: string): number {
   if (typeof value === "number") {
     if (Number.isFinite(value) && value >= 0) return Math.round(value);
   } else {
-    const match = /^\s*(\d+(?:\.\d+)?)\s*([smhd]?)\s*$/i.exec(value);
-    if (match) {
-      const unit = { "": 1, s: 1, m: 60, h: 3600, d: 86_400 }[
-        (match[2] ?? "").toLowerCase() as "" | "s" | "m" | "h" | "d"
-      ];
-      return Math.round(Number(match[1]) * unit);
+    const trimmed = value.replace(/\s+/g, "");
+    if (/^\d+(?:\.\d+)?$/.test(trimmed)) return Math.round(Number(trimmed));
+    if (COMPOUND_DURATION.test(trimmed)) {
+      const parts = [...trimmed.matchAll(DURATION_PART)];
+      const sizes = parts.map(
+        ([, , unit]) =>
+          DURATION_UNITS[
+            (unit ?? "s").toLowerCase() as keyof typeof DURATION_UNITS
+          ],
+      );
+      // Each unit once, largest first: `5m10h` and `1h1h` are typos, not durations.
+      if (sizes.every((size, i) => i === 0 || size < (sizes[i - 1] ?? 0))) {
+        const seconds = parts.reduce(
+          (total, [, amount], i) => total + Number(amount) * (sizes[i] ?? 0),
+          0,
+        );
+        return Math.round(seconds);
+      }
     }
   }
   throw new UserError(
     `Invalid --${flag} "${value}".`,
-    "Pass seconds, or a number with s, m, h or d, e.g. 30m or 2h.",
+    "Pass seconds, or a number with s, m, h or d, e.g. 30m, 2h or 1h30m.",
   );
 }
 
 /**
- * A point in time from a flag: ISO 8601 (a date alone means midnight UTC), or
- * `+<duration>` relative to now (`+15m`, `+2h`). Returned as ISO 8601 UTC.
+ * A point in time from a flag: ISO 8601 in UTC unless it carries an offset (a
+ * date alone means midnight UTC), or `+<duration>` relative to now (`+15m`,
+ * `+2h`). Returned as ISO 8601 UTC.
  */
 export function parseTimeFlag(
   value: string,
@@ -211,7 +230,8 @@ export function parseTimeFlag(
     return new Date(
       now + parseDuration(trimmed.slice(1), flag) * 1000,
     ).toISOString();
-  const parsed = Date.parse(trimmed);
+  // Without an offset, `Date` would read a date-time as local time; the flags take UTC.
+  const parsed = Date.parse(utcTimestamp(trimmed));
   if (!trimmed || Number.isNaN(parsed)) {
     throw new UserError(
       `Invalid --${flag} "${value}".`,

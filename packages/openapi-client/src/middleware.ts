@@ -131,9 +131,39 @@ const extractors: Array<
     b?.Message ? { message: b.Message, field: b.Field ?? undefined } : null,
 
   // StatusModel (Stream): lowercase `message`, which the Core extractor above misses.
-  (b) =>
-    typeof b?.message === "string" && b.message ? { message: b.message } : null,
+  // Stream Live puts the actual reason in `data` (a list of strings) under a generic
+  // `message` ("Invalid request"), so the reasons win when present.
+  (b) => {
+    const reasons = Array.isArray(b?.data)
+      ? b.data.filter(
+          (entry: unknown): entry is string =>
+            typeof entry === "string" && entry.trim().length > 0,
+        )
+      : [];
+    if (reasons.length > 0) return { message: reasons.join(" ") };
+    return typeof b?.message === "string" && b.message
+      ? { message: b.message }
+      : null;
+  },
 ];
+
+/** Longest plain-text error body used verbatim as the error message. */
+const MAX_TEXT_ERROR = 300;
+
+/**
+ * A short `text/plain` error body, such as Stream's "Invalid thumbnail file size.",
+ * or null. HTML (proxy error pages) and long bodies fall back to the status message.
+ */
+async function plainTextError(response: Response): Promise<string | null> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().startsWith("text/plain")) return null;
+  try {
+    const text = (await response.clone().text()).replace(/\s+/g, " ").trim();
+    return text && text.length <= MAX_TEXT_ERROR ? text : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Shared openapi-fetch middleware for all bunny.net API clients.
@@ -249,8 +279,18 @@ export function authMiddleware(options: ClientOptions): Middleware {
           null,
         );
 
+      // Only client errors: a 401 keeps its key hint, and a 5xx text body may be a stack trace.
+      const usesText =
+        !extracted &&
+        !body &&
+        response.status >= 400 &&
+        response.status < 500 &&
+        response.status !== 401;
+      const text = usesText ? await plainTextError(response) : null;
+
       throw new ApiError(
         extracted?.message ??
+          text ??
           STATUS_MESSAGES[response.status] ??
           `API request failed (${response.status}).`,
         response.status,
