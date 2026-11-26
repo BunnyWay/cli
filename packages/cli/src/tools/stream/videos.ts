@@ -12,9 +12,56 @@ const libraryId = z
 
 type StorageModel = StreamComponents["schemas"]["VideoStorageSizeModel"];
 
+const VIDEOS_PER_PAGE = 100;
+
+export const VideoSummarySchema = z.object({
+  guid: z.string(),
+  title: z.string(),
+  /** Encoding status code (0 created ... 4 finished, 5 error). */
+  status: z.number().nullable(),
+});
+export type VideoSummary = z.infer<typeof VideoSummarySchema>;
+
+export const streamVideosList = defineTool({
+  name: "stream.videos.list",
+  title: "List a library's videos",
+  description:
+    "List every video in a video library with its GUID, title and encoding status.",
+  schema: z.strictObject({ library: libraryId }),
+  kind: "read",
+  resultSchema: z.array(VideoSummarySchema),
+  run: async (ctx, { library: id }) => {
+    const { client } = await openStreamLibrary(ctx, id);
+    ctx.progress("Fetching videos...");
+    const videos: VideoSummary[] = [];
+    for (let page = 1; ; page++) {
+      const { data } = await client.GET("/library/{libraryId}/videos", {
+        params: {
+          path: { libraryId: id },
+          query: { page, itemsPerPage: VIDEOS_PER_PAGE },
+        },
+        signal: ctx.signal,
+      });
+      const items = data?.items ?? [];
+      for (const video of items)
+        videos.push({
+          guid: video.guid ?? "",
+          title: video.title ?? "",
+          status: video.status ?? null,
+        });
+      // A reported total is a ceiling; otherwise only a full page implies another.
+      const total = data?.totalItems;
+      if (total !== undefined && videos.length >= total) break;
+      if (items.length < (data?.itemsPerPage ?? VIDEOS_PER_PAGE)) break;
+    }
+    return videos.filter((video) => video.guid);
+  },
+});
+
 export const VideoStorageSchema = z.object({
   library: z.number(),
   video: z.string(),
+  title: z.string().nullable(),
   totalBytes: z.number(),
   renditions: z.array(
     z.object({
@@ -36,6 +83,7 @@ export function toVideoStorage(
   libraryId: number,
   video: string,
   model: StorageModel | null | undefined,
+  title: string | null = null,
 ): VideoStorage {
   const renditions = Object.entries(model?.encoded ?? {})
     .map(([key, r]) => {
@@ -60,6 +108,7 @@ export function toVideoStorage(
   return {
     library: libraryId,
     video,
+    title,
     totalBytes,
     renditions,
     ...parts,
@@ -81,15 +130,32 @@ export const streamVideoStorage = defineTool({
   run: async (ctx, { library: id, video }) => {
     const { client } = await openStreamLibrary(ctx, id);
     ctx.progress("Measuring storage...");
+    const path = { libraryId: id, videoId: video };
     try {
-      const { data } = await client.GET(
-        "/library/{libraryId}/videos/{videoId}/storage",
-        {
-          params: { path: { libraryId: id, videoId: video } },
+      const [details, storage] = await Promise.all([
+        client.GET("/library/{libraryId}/videos/{videoId}", {
+          params: { path },
           signal: ctx.signal,
-        },
+        }),
+        client.GET("/library/{libraryId}/videos/{videoId}/storage", {
+          params: { path },
+          signal: ctx.signal,
+        }),
+      ]);
+      // A 200 can still carry a failed status envelope; never report it as zero bytes.
+      const envelope = storage.data;
+      if (envelope?.success === false || !envelope?.data)
+        throw new UserError(
+          envelope?.message ||
+            `The storage size of video ${video} couldn't be read.`,
+          "Try again in a minute.",
+        );
+      return toVideoStorage(
+        id,
+        video,
+        envelope.data,
+        details.data?.title ?? null,
       );
-      return toVideoStorage(id, video, data?.data);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404)
         throw new UserError(`Video ${video} not found.`);
