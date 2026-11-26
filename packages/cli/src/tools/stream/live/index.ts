@@ -22,6 +22,7 @@ import {
   LiveStreamSchema,
   liveSettingsBody,
   liveStatus,
+  OutputInputSchema,
   PREVIEW_SIGNED_MAX_SECONDS,
   PREVIEWABLE_STATUSES,
   type PreviewAccess,
@@ -216,6 +217,16 @@ export const streamLiveCreate = defineTool({
   schema: LiveSettingsSchema.extend({
     library: libraryId,
     title: title.describe("Title, e.g. `Launch keynote`."),
+    // On create the API treats an empty list like an omitted one: the stream
+    // inherits the library's outputs. So [] can't mean "none" here; refuse it.
+    outputs: z
+      .array(OutputInputSchema)
+      .min(1)
+      .max(4)
+      .optional()
+      .describe(
+        "RTMP outputs, 1 to 4, each with the environment variable holding its stream key. Left out, the stream inherits the library's outputs, if any.",
+      ),
   }).strict(),
   kind: "write",
   resultSchema: LiveStreamSchema,
@@ -332,9 +343,9 @@ export const streamLiveStart = defineTool({
   name: "stream.live.start",
   title: "Start a live stream",
   description:
-    "Take a live stream public: viewers can watch it, and recording starts if `recordVod` is on. Overrides a scheduled start. Nothing published before the start is recorded, so start it while the encoder is publishing.",
+    "Take a live stream public: viewers can watch it, and recording starts if `recordVod` is on. Cannot be undone: a started stream can't go back to Preview or Scheduled, only be stopped. Overrides a scheduled start. Nothing published before the start is recorded, so start it while the encoder is publishing.",
   schema: z.strictObject({ library: libraryId, stream: streamId }),
-  kind: "write",
+  kind: "destructive",
   resultSchema: LiveStreamSchema,
   run: async (ctx, { library, stream }) => {
     const client = await liveClient(ctx, library);

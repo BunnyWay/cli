@@ -253,6 +253,10 @@ test("liveSettingsFromFlags rejects bad combinations before any request", () => 
   expect(() =>
     liveSettingsFromFlags({ start: "2020-01-01T00:00:00Z" }, "create", NOW),
   ).toThrow("must be in the future");
+  // An empty --rtmp-output would send [], which create reads as "inherit the library's".
+  expect(() =>
+    liveSettingsFromFlags({ "rtmp-output": [""] }, "create", NOW),
+  ).toThrow("at least one");
 });
 
 test("maskIngest hides the key, including inside SRT URLs", () => {

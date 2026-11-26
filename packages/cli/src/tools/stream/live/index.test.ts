@@ -14,6 +14,7 @@ import {
   streamLiveIngest,
   streamLiveList,
   streamLiveRotateKey,
+  streamLiveStart,
   streamLiveStatus,
   streamLiveStop,
   streamLiveThumbnailRemove,
@@ -273,6 +274,29 @@ test("stream.live.create takes no RTMP output key as input", () => {
       ],
     }),
   ).toThrow();
+});
+
+// On create the API reads an empty list as "inherit the library's outputs", so [] can't mean "none".
+test("stream.live.create refuses an empty output list; update takes it as clearing", () => {
+  expect(() =>
+    streamLiveCreate.schema.parse({
+      library: 12345,
+      title: "No restream",
+      outputs: [],
+    }),
+  ).toThrow();
+  expect(
+    streamLiveUpdate.schema.parse({
+      library: 12345,
+      stream: "abc",
+      outputs: [],
+    }).outputs,
+  ).toEqual([]);
+});
+
+test("stream.live.start and stop are destructive: neither can be undone", () => {
+  expect(streamLiveStart.kind).toBe("destructive");
+  expect(streamLiveStop.kind).toBe("destructive");
 });
 
 test("liveSettingsBody maps a DVR window of 0 to DVR off and keeps nulls", () => {

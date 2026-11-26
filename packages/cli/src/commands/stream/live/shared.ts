@@ -296,6 +296,13 @@ function rtmpOutputDestinations(
     values[0]?.toLowerCase() === "none"
   )
     return [];
+  if (values.length === 0)
+    throw new UserError(
+      "--rtmp-output needs at least one <url>/<key>.",
+      mode === "update"
+        ? 'Pass "none" to remove every output.'
+        : "Leave it out to use the video library's outputs, if any.",
+    );
   if (values.length > 4)
     throw new UserError("--rtmp-output takes at most 4 outputs.");
   return values.map(parseRtmpOutput);

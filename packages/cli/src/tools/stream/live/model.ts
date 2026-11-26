@@ -569,7 +569,7 @@ export const LiveSettingsSchema = z.object({
     .max(4)
     .optional()
     .describe(
-      "RTMP outputs, up to 4, each with the environment variable holding its stream key. Replaces the whole list; an empty list removes them all.",
+      "RTMP outputs, up to 4, each with the environment variable holding its stream key. Replaces the whole list; an empty list removes them all (update only).",
     ),
 });
 export type LiveSettings = z.infer<typeof LiveSettingsSchema>;

@@ -76,7 +76,7 @@ bunny stream videos list
 # live stream from Bunny Stream
 bunny stream live create "Launch keynote" --record-vod # prints the encoder server; key masked
 bunny stream live ingest <id> --show-secret            # stream key for OBS / vMix / FFmpeg
-bunny stream live start <id>                           # go public once the encoder publishes
+bunny stream live start <id> --force                   # go public once the encoder publishes (can't be undone)
 bunny stream live stop <id>                            # end it; the VOD, if on, is saved
 
 # import a video library into Bunny Stream

@@ -34,7 +34,7 @@ bunny stream live update <id> --start none --rtmp-output none     # "none" remov
 
 - `--type event` (default): at most 12 hours, ends 30 minutes after the encoder disconnects, can record a VOD (video on demand). `--type channel`: 24/7, survives disconnects, no VOD; `--type channel --record-vod` is refused.
 - `--dvr` takes `30m`, `2h` (max `12h`); `0` turns DVR off. `--start`/`--end` take ISO 8601 UTC or `+30m`. Scheduled streams show a countdown when the library's setting has it on; `--countdown`/`--no-countdown` override it.
-- `--rtmp-output` (RTMP outputs, as the dashboard calls them) is the destination's full RTMP(S) URL ending in its stream key; up to 4. On `update` it replaces the list.
+- `--rtmp-output` (RTMP outputs, as the dashboard calls them) is the destination's full RTMP(S) URL ending in its stream key; up to 4. On `update` it replaces the list. Left out on `create`, the stream inherits the library's outputs.
 - While live, only `--title`, `--description` and `--end` can change. `--type` changes only before the start, with no encoder connected.
 - Settings left out on `create` use the library's live defaults.
 

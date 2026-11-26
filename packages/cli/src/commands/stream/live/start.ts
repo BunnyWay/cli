@@ -25,10 +25,10 @@ export const streamLiveStartCommand = defineToolCommand({
     ["$0 stream live start 0f4e5d6c-...", "Go live once the encoder publishes"],
     [
       "$0 stream live start 0f4e5d6c-... --force",
-      "Start even when no encoder is publishing yet",
+      "Start without asking, even when no encoder is publishing yet",
     ],
   ],
-  epilogue: `Starting overrides a scheduled start. Nothing published before the start is recorded, so connect the encoder first and check it with \`bunny stream live status\`. Playback is ready 15-20 seconds after the start.\n\n${LIVE_DOCS_EPILOGUE}`,
+  epilogue: `Starting can't be undone: a live stream can't go back to Preview, only be stopped. It asks first; --force skips the question. Starting overrides a scheduled start. Nothing published before the start is recorded, so connect the encoder first and check it with \`bunny stream live status\`. Playback is ready 15-20 seconds after the start.\n\n${LIVE_DOCS_EPILOGUE}`,
   progress: "Starting live stream...",
 
   builder: (yargs) =>
@@ -58,7 +58,22 @@ export const streamLiveStartCommand = defineToolCommand({
         "Create a new live stream with `bunny stream live create`.",
       );
     }
-    if (health.primaryLive || health.backupLive) return { input };
+    // Going live can't be undone, so every start asks; --force skips it.
+    if (health.primaryLive || health.backupLive) {
+      requireConfirmable(args.output, {
+        force: args.force,
+        message: "Starting a live stream needs a confirmation prompt.",
+        hint: "Re-run with --force to start it non-interactively.",
+      });
+      return {
+        input,
+        confirm: () =>
+          confirm(
+            `Take ${health.title} public now? Viewers can watch it and VOD recording starts if it's on; it can't go back to Preview, only be stopped.`,
+            { force: args.force },
+          ),
+      };
+    }
 
     requireConfirmable(args.output, {
       force: args.force,
@@ -69,7 +84,7 @@ export const streamLiveStartCommand = defineToolCommand({
       input,
       confirm: () =>
         confirm(
-          `No encoder is publishing to ${health.title} yet, so viewers would see nothing and nothing is recorded until it connects. Start anyway?`,
+          `No encoder is publishing to ${health.title} yet, so viewers would see nothing and nothing is recorded until it connects. Start anyway? It can't go back to Preview, only be stopped.`,
           { force: args.force },
         ),
     };

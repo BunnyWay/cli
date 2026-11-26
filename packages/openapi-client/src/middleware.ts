@@ -154,12 +154,17 @@ const MAX_TEXT_ERROR = 300;
  * A short `text/plain` error body, such as Stream's "Invalid thumbnail file size.",
  * or null. HTML (proxy error pages) and long bodies fall back to the status message.
  */
+/** `text` with whitespace collapsed, or null when empty or too long to be a message. */
+function shortText(text: string): string | null {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  return normalized && normalized.length <= MAX_TEXT_ERROR ? normalized : null;
+}
+
 async function plainTextError(response: Response): Promise<string | null> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().startsWith("text/plain")) return null;
   try {
-    const text = (await response.clone().text()).replace(/\s+/g, " ").trim();
-    return text && text.length <= MAX_TEXT_ERROR ? text : null;
+    return shortText(await response.clone().text());
   } catch {
     return null;
   }
@@ -274,19 +279,26 @@ export function authMiddleware(options: ClientOptions): Middleware {
 
       const extracted =
         body &&
+        typeof body === "object" &&
         extractors.reduce<ReturnType<(typeof extractors)[0]>>(
           (found, fn) => found ?? fn(body),
           null,
         );
 
       // Only client errors: a 401 keeps its key hint, and a 5xx text body may be a stack trace.
+      // The text is a text/plain body, or a JSON body that is a bare string
+      // (Stream Live's 422 when a thumbnail URL can't be fetched).
       const usesText =
         !extracted &&
-        !body &&
+        (!body || typeof body === "string") &&
         response.status >= 400 &&
         response.status < 500 &&
         response.status !== 401;
-      const text = usesText ? await plainTextError(response) : null;
+      const text = !usesText
+        ? null
+        : typeof body === "string"
+          ? shortText(body)
+          : await plainTextError(response);
 
       throw new ApiError(
         extracted?.message ??

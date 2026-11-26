@@ -234,6 +234,33 @@ describe("authMiddleware onResponse", () => {
     expect(error.message).toBe("Invalid thumbnail file size.");
   });
 
+  test("uses a short JSON string body on a client error", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        new Response(
+          JSON.stringify("Could not fetch the thumbnail URL: 404."),
+          {
+            status: 422,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      ),
+    )) as ApiError;
+    expect(error.status).toBe(422);
+    expect(error.message).toBe("Could not fetch the thumbnail URL: 404.");
+    const server = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        new Response(JSON.stringify("boom"), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    )) as ApiError;
+    expect(server.message).toBe("Internal server error.");
+  });
+
   test("ignores a text/plain body on a 401 or 5xx, and an HTML body", async () => {
     const plain = (status: number) =>
       new Response("boom", {
