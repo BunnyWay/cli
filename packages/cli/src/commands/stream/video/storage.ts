@@ -1,9 +1,5 @@
-import {
-  resolveVideoInteractive,
-  streamLibraryContext,
-} from "@/commands/stream/context.ts";
-import { resolveConfig } from "@/config/index.ts";
-import { defineCommand } from "@/core/define-command.ts";
+import { resolveLibraryRef } from "@/commands/stream/library/library-ref.ts";
+import { defineToolCommand } from "@/core/define-tool-command.ts";
 import {
   formatBytes,
   formatDateTime,
@@ -11,15 +7,9 @@ import {
   formatTable,
 } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
-import { toolContext } from "@/core/tool-context.ts";
 import type { OutputFormat } from "@/core/types.ts";
-import { withSpinner } from "@/core/ui.ts";
 import { streamVideoStorage, type VideoStorage } from "@/tools/stream/index.ts";
-
-interface VideoStorageArgs {
-  video?: string;
-  lib?: string;
-}
+import { resolveVideoRef } from "./video-ref.ts";
 
 export function formatVideoStorage(
   storage: VideoStorage,
@@ -61,7 +51,8 @@ export function formatVideoStorage(
   return `${summary}\n\nRenditions:\n${renditions}`;
 }
 
-export const streamVideoStorageCommand = defineCommand<VideoStorageArgs>({
+export const streamVideoStorageCommand = defineToolCommand({
+  tool: streamVideoStorage,
   command: "storage [video]",
   aliases: ["size"],
   describe:
@@ -71,6 +62,7 @@ export const streamVideoStorageCommand = defineCommand<VideoStorageArgs>({
     ["$0 stream videos storage", "Pick a video interactively"],
     ["$0 stream videos storage 1a2b3c4d-... --output json", "JSON output"],
   ],
+  progress: "Measuring storage...",
 
   builder: (yargs) =>
     yargs
@@ -78,36 +70,20 @@ export const streamVideoStorageCommand = defineCommand<VideoStorageArgs>({
       .option("lib", {
         alias: "library",
         type: "string",
-        describe: "Video library ID (defaults to the linked library)",
+        describe: "Video library name or ID (defaults to the linked library)",
       }),
 
-  handler: async ({ video: ref, lib, profile, output, verbose, apiKey }) => {
-    const { client, libraryId } = await streamLibraryContext({
-      lib,
-      profile,
+  prepare: async ({ video, lib, output }, ctx) => {
+    const library = await resolveLibraryRef(ctx, lib, {
       output,
-      verbose,
-      apiKey,
       offerLink: true,
     });
-    const video = await resolveVideoInteractive(client, libraryId, ref, {
-      output,
-    });
-    const ctx = toolContext(resolveConfig(profile, apiKey, verbose), {
-      verbose,
-    });
-    const storage = await withSpinner("Measuring storage...", () =>
-      streamVideoStorage.invoke(ctx, {
-        library: libraryId,
-        video: video.guid,
-      }),
-    );
+    const guid = await resolveVideoRef(ctx, library.id, video, { output });
+    return { input: { library: library.id, video: guid } };
+  },
 
-    if (output === "json") {
-      logger.log(JSON.stringify(storage, null, 2));
-      return;
-    }
-    logger.log(`${video.title} (${video.guid})`);
+  render: (storage, { output }) => {
+    logger.log(`${storage.title ?? storage.video} (${storage.video})`);
     logger.log(formatVideoStorage(storage, output));
   },
 });
