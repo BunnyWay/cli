@@ -402,13 +402,13 @@ export const streamLiveIngest = defineTool({
   name: "stream.live.ingest",
   title: "Get live ingest settings",
   description:
-    "Get where an encoder publishes: RTMP, RTMPS and SRT primary and backup URLs, plus the stream key. Without `stream`, returns the library's auto-create ingest URLs, where publishing creates and starts a new stream, and the auto-create stream key (null when SRT isn't configured, since the API carries it only in the SRT URLs). The stream key is a publishing credential.",
+    "Get where an encoder publishes: RTMP, RTMPS and SRT primary and backup URLs, plus the stream key. Without `stream`, returns the auto-create ingest: the video library stream key and its URLs, where publishing creates and starts a new stream (the key is null when SRT isn't configured, since the API carries it only in the SRT URLs). The stream key is a publishing credential.",
   schema: z.strictObject({
     library: libraryId,
     stream: streamId
       .optional()
       .describe(
-        "Live stream ID; leave out for the library's auto-create ingest.",
+        "Live stream ID; leave out for the auto-create ingest (the video library stream key).",
       ),
   }),
   kind: "read",
@@ -631,7 +631,7 @@ export const streamLivePreviewSign = defineTool({
     if (!model.streamKey) {
       throw new UserError(
         `No stream key available to sign a preview for ${model.title}.`,
-        "Auto-created streams publish with the library key, and keys without Update permission get it redacted. Request preview access from the API (`stream.live.preview`) instead.",
+        "Auto-created streams publish with the video library stream key, and keys without Update permission get it redacted. Request preview access from the API (`stream.live.preview`) instead.",
       );
     }
     // The GUID as signed must be lowercase and hyphenated, as the API returns it.

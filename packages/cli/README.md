@@ -1328,7 +1328,7 @@ bunny stream live create "24/7 radio" --type channel --auto-start   # a 24/7 cha
 bunny stream live create "Simulcast" --rtmp-output rtmps://a.rtmp.youtube.com/live2/<key>   # also forward it to another platform
 bunny stream live ingest 0f4e5d6c-...                # RTMPS, RTMP and SRT servers; stream key masked
 bunny stream live ingest 0f4e5d6c-... --show-secret  # reveal the key to paste into the encoder
-bunny stream live ingest --auto-create --show-secret # library ingest: publishing creates and starts a new stream
+bunny stream live ingest --auto-create --show-secret # video library stream key: publishing creates and starts a new stream
 
 # Check before going live, then go live
 bunny stream live status 0f4e5d6c-... --watch        # encoder connections, bitrate, duration; refreshes until Ctrl-C
@@ -1354,8 +1354,8 @@ An **event** (the default `--type`) runs at most 12 hours and ends 30 minutes af
 
 **Private preview links** are token-protected, so a leaked link stops working when it expires. `live preview` offers two ways to get one, and both print a player URL (`https://player.mediadelivery.net/embed/{libraryId}/{streamId}?…`, or `/play/…` for a standalone page):
 
-- **Option 1, from the API (default, recommended):** requests access with the library key. The player query carries `previewToken` and `previewExpires`, plus the view `token` and `expires` when the library requires embed tokens, and the HLS playlist comes back CDN-signed when the library uses CDN token authentication. Access lasts 10 hours.
-- **Option 2, `--sign`:** signs the token locally with the stream key (HMAC-SHA256 over `/live/{streamId}/preview/{expires}`, base64url, prefixed `HS256-`), valid for `--expires` (default `1h`, at most `10h5m`). Rotating the stream key invalidates every token signed this way. It adds no view token, so on a library that requires embed tokens the CLI warns that you must add `token` and `expires` yourself. It returns no raw playlist, which would also need a CDN token; use the player URL. Auto-created streams, and API keys without Update permission, have no stream key to sign with.
+- **Option 1, from the API (default, recommended):** requests access with the library API key. The player query carries `previewToken` and `previewExpires`, plus the view `token` and `expires` when the library requires embed tokens, and the HLS playlist comes back CDN-signed when the library uses CDN token authentication. Access lasts 10 hours.
+- **Option 2, `--sign`:** signs the token locally with the stream key (HMAC-SHA256 over `/live/{streamId}/preview/{expires}`, base64url, prefixed `HS256-`), valid for `--expires` (default `1h`, at most `10h5m`). Rotating the stream key invalidates every token signed this way. It adds no view token, so on a library that requires embed tokens the CLI warns that you must add `token` and `expires` yourself. It returns no raw playlist, which would also need a CDN token; use the player URL. Auto-created streams (they publish with the video library stream key), and API keys without Update permission, have no stream key to sign with.
 
 Either way the stream must be Created, Scheduled or in Preview, and the link stops working when the stream goes public: the player then switches to the public playlist. An invalid or expired token is ignored rather than rejected, so the viewer simply sees the public, not-yet-live view; referrer and view-token checks still apply, and preview pages are never cached for other viewers.
 
@@ -1375,7 +1375,7 @@ The stream key is a publishing credential, so `create`, `ingest` and `rotate-key
 | `--title`                                             | `update`                                | New title (`create` takes it as its positional)                                                                   |
 | `--show-secret`                                       | `create`, `ingest`, `rotate-key`        | Print the stream key in full                                                                                      |
 | `--sign`, `--expires`                                 | `preview`                               | Option 2: sign the preview token with the stream key, valid for `--expires` (default `1h`, max `10h5m`)           |
-| `--auto-create`                                       | `ingest`                                | The library's auto-create ingest instead of one stream's                                                          |
+| `--auto-create`                                       | `ingest`                                | Auto-create: the video library stream key and its servers instead of one stream's                                 |
 | `--watch`, `-w`, `--interval`                         | `status`                                | Refresh until Ctrl-C or the stream ends (not with `--output json`)                                                |
 | `--search`, `--collection`, `--sort`                  | `list`                                  | Filter by title or ID and by collection; order by `date`, `title`, `status`, `started`, `ended` or `planned`      |
 | `--since`, `--from`, `--to`, `--limit`                | `bitrate`                               | Time range, and how many recent samples to list (0 for the summary only)                                          |

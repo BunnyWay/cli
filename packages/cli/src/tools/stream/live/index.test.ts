@@ -184,7 +184,7 @@ test("toLiveStream normalizes the model and never carries a stream key", () => {
   expect(JSON.stringify(stream)).not.toContain("yt-key");
 });
 
-test("toLiveIngest reads the auto-create key from the SRT URL for RTMP(S) encoders", () => {
+test("toLiveIngest reads the video library stream key from the SRT URL for RTMP(S) encoders", () => {
   const srt =
     "srt://global.srt.mediadelivery.net:8890?mode=caller&streamid=publish:live/auto%2Dkey123&latency=120000";
   const ingest = toLiveIngest(12345, null, null, {

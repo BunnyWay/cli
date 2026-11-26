@@ -25,7 +25,7 @@ export const streamLiveIngestCommand = defineToolCommand({
     ],
     [
       "$0 stream live ingest --auto-create --show-secret",
-      "The library's auto-create ingest: publishing creates and starts a stream",
+      "Auto-create: the video library stream key, where publishing creates and starts a stream",
     ],
   ],
   epilogue: `The stream key is a publishing credential: anyone holding it can broadcast to this stream. Rotate it with \`bunny stream live rotate-key\`.\n\n${LIVE_PREVIEW_EPILOGUE}`,
@@ -42,7 +42,7 @@ export const streamLiveIngestCommand = defineToolCommand({
         type: "boolean",
         default: false,
         describe:
-          "The library's auto-create ingest instead of one stream's (needs the full library API key)",
+          "Auto-create: the video library stream key and its servers instead of one stream's; publishing with it creates and starts a stream (needs the full library API key)",
       }),
 
   prepare: async (args, ctx) => {
@@ -65,7 +65,7 @@ export const streamLiveIngestCommand = defineToolCommand({
     logger.log();
     if (!ingest.streamId) {
       logger.warn(
-        "Anyone with the auto-create key can create and start live streams in this library.",
+        "Anyone with the video library stream key can create and start live streams in this library.",
       );
     }
     if (showSecret) logger.warn("Treat the stream key like a password.");

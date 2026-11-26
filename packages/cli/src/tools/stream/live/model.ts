@@ -238,13 +238,13 @@ const IngestPairSchema = z.object({
  */
 export const LiveIngestSchema = z.object({
   libraryId: z.number(),
-  /** The live stream, or null for the library's auto-create stream key. */
+  /** The live stream, or null for the video library stream key (auto-create). */
   streamId: z.string().nullable(),
   /**
    * The key to append to the RTMP(S) server URL. For the library's auto-create
-   * ingest it is the library's auto-create stream key, read from the SRT URLs
+   * ingest it is the video library stream key, read from the SRT URLs
    * (the API returns it nowhere else); null when SRT isn't configured, and for
-   * an auto-created stream, which publishes with the library's key.
+   * an auto-created stream, which publishes with the video library stream key.
    */
   streamKey: z.string().nullable(),
   rtmp: IngestPairSchema.nullable(),
@@ -287,7 +287,7 @@ export function toLiveIngest(
   endpoints: IngestEndpointsModel | null | undefined,
 ): LiveIngest {
   const srt = pair(endpoints?.srt);
-  // The auto-create endpoints carry the library's key only inside the SRT
+  // The auto-create endpoints carry the video library stream key only inside the SRT
   // URLs, yet RTMP(S) encoders need it as a separate stream key.
   const key =
     streamKey ||

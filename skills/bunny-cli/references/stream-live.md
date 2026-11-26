@@ -43,7 +43,7 @@ bunny stream live update <id> --start none --rtmp-output none     # "none" remov
 ```bash
 bunny stream live ingest <id>                        # key masked, also inside SRT URLs
 bunny stream live ingest <id> --show-secret --output json
-bunny stream live ingest --auto-create --show-secret # library ingest: publishing creates + starts a stream
+bunny stream live ingest --auto-create --show-secret # video library stream key: publishing creates + starts a stream
 bunny stream live rotate-key <id> --force            # connected encoders are disconnected
 ```
 

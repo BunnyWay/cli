@@ -604,8 +604,8 @@ export function formatIngest(
     output ?? "text",
   );
   const key = ingest.streamId
-    ? `\nStream key: ${ingest.streamKey ?? "(none: auto-created streams publish with the library key)"}`
-    : `\nAuto-create stream key: ${ingest.streamKey ?? "(not returned: the API only carries it in the SRT URLs, and SRT isn't configured for this library)"}`;
+    ? `\nStream key: ${ingest.streamKey ?? "(none: auto-created streams publish with the video library stream key)"}`
+    : `\nVideo library stream key: ${ingest.streamKey ?? "(not returned: the API only carries it in the SRT URLs, and SRT isn't configured for this library)"}`;
   return `${table}${key}`;
 }
 
