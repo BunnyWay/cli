@@ -11,6 +11,7 @@ import { streamVideoResolutionsCommand } from "./resolutions.ts";
 import { streamVideoShowCommand } from "./show.ts";
 import { streamVideoSmartCommand } from "./smart.ts";
 import { streamVideoStatsCommand } from "./stats.ts";
+import { streamVideoStorageCommand } from "./storage.ts";
 import { streamVideoThumbnailCommand } from "./thumbnail.ts";
 import { streamVideoTranscribeCommand } from "./transcribe.ts";
 import { streamVideoUpdateCommand } from "./update.ts";
@@ -24,6 +25,7 @@ const subcommands: CommandModule[] = [
   streamVideoUpdateCommand,
   streamVideoThumbnailCommand,
   streamVideoResolutionsCommand,
+  streamVideoStorageCommand,
   streamVideoCleanupCommand,
   streamVideoStatsCommand,
   streamVideoEmbedCommand,

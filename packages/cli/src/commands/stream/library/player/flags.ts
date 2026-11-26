@@ -20,6 +20,7 @@ export interface PlayerFlags {
   controls?: string | false;
   speeds?: string;
   customHtml?: string;
+  vastUrl?: string;
   heatmap?: boolean;
   rememberPosition?: boolean;
   compactControls?: boolean;
@@ -60,6 +61,11 @@ export function withPlayerOptions<T>(yargs: Argv<T>): Argv<T & PlayerFlags> {
     .option("custom-html", {
       type: "string",
       describe: "File with custom HTML/CSS for the player head",
+    })
+    .option("vast-url", {
+      type: "string",
+      describe:
+        'VAST ad tag URL to serve video ads in the player ("none" turns ads off)',
     })
     .option("heatmap", {
       type: "boolean",
@@ -130,6 +136,10 @@ export function playerChangesFromFlags(flags: PlayerFlags): PlayerChanges {
         `Could not read --custom-html file ${flags.customHtml}.`,
       );
     }
+  }
+  if (flags.vastUrl !== undefined) {
+    const vast = flags.vastUrl.trim();
+    changes.vastUrl = vast === "" || vast.toLowerCase() === "none" ? "" : vast;
   }
   if (flags.heatmap !== undefined) changes.heatmap = flags.heatmap;
   if (flags.rememberPosition !== undefined)

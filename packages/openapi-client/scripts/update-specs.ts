@@ -35,6 +35,10 @@ const specs = [
     out: "specs/storage.json",
   },
   {
+    // The Stream Live endpoints are not in this public spec yet. They live in
+    // specs/stream-live.json, cut by hand from the preview spec (which needs auth, so it
+    // is not fetched here). Once the public spec has `/library/{libraryId}/live/...`,
+    // delete stream-live.json and its redocly entry, and import live types from `./stream`.
     name: "stream",
     url: "https://video.bunnycdn.com/openapi/bunnynet-video-api.public.json",
     out: "specs/stream.json",

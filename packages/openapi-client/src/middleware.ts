@@ -34,7 +34,10 @@ const SECRET_KEY_RE =
   /^(.*key|.*password|.*secret|.*token|.*credentials?|.*authorization.*|.*cookie)$/i;
 
 const REDACTED = "[redacted]";
-const URL_SCHEME = /https?:\/\//i;
+// Any scheme, not just http(s): SRT ingest URLs carry a stream key in their query.
+const URL_SCHEME = /[a-z][a-z0-9+.-]*:\/\//i;
+// A `name=value` pair in a bare query string, such as Stream Live's `playerQueryParameters`.
+const QUERY_PARAM = /(^|[?&;])([^=&?;#\s]+)=([^&;#\s]*)/g;
 
 // A URL's query string is where pre-signed credentials live (X-Amz-Signature, bearer params), so it goes wholesale, as does any userinfo.
 function redactUrl(token: string): string {
@@ -56,14 +59,24 @@ function redactUrl(token: string): string {
   return `${token.slice(0, host)}${authority}${rest}`;
 }
 
+/** Redact the values of secret-named parameters in a query string without a URL (`previewToken=...&expires=...`). */
+function redactQueryParams(token: string): string {
+  if (!token.includes("=")) return token;
+  return token.replace(
+    QUERY_PARAM,
+    (pair, sep: string, name: string, value: string) =>
+      value && SECRET_KEY_RE.test(name) ? `${sep}${name}=${REDACTED}` : pair,
+  );
+}
+
 /**
  * Copy a parsed body with every secret-looking string value replaced.
  *
  * Verbose mode dumps request and response bodies, and those bodies carry real
  * credentials: a video library answers with its ApiKey, a storage zone with its
  * password, and a Stream fetch request with the origin's Authorization header.
- * Redacting is structural (by property name) so it holds for shapes this code
- * has never seen.
+ * Redacting is structural (by property name, and by parameter name inside a
+ * query string) so it holds for shapes this code has never seen.
  */
 export function redactSecrets(value: unknown, depth = 0): unknown {
   // Deeply nested or cyclic bodies are not worth walking; bail to a marker.
@@ -71,7 +84,10 @@ export function redactSecrets(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) {
     return value.map((entry) => redactSecrets(entry, depth + 1));
   }
-  if (typeof value === "string") return value.replace(/\S+/g, redactUrl);
+  if (typeof value === "string")
+    return value.replace(/\S+/g, (token) =>
+      redactQueryParams(redactUrl(token)),
+    );
   if (value === null || typeof value !== "object") return value;
 
   const out: Record<string, unknown> = {};

@@ -88,16 +88,17 @@ import type { components } from "@bunny.net/openapi-client/core";
 type DnsZone = components["schemas"]["DnsZoneModel"];
 ```
 
-| Entrypoint                                   | Exports                                              |
-| -------------------------------------------- | ---------------------------------------------------- |
-| `@bunny.net/openapi-client/core`             | `createCoreClient`, core spec types, DNS scan types  |
-| `@bunny.net/openapi-client/compute`          | `createComputeClient`, compute spec types            |
-| `@bunny.net/openapi-client/database`         | `createDbClient`, database spec types                |
-| `@bunny.net/openapi-client/magic-containers` | `createMcClient`, Magic Containers spec types        |
-| `@bunny.net/openapi-client/origin-errors`    | `createOriginErrorsClient`, origin-errors spec types |
-| `@bunny.net/openapi-client/shield`           | `createShieldClient`, shield spec types              |
-| `@bunny.net/openapi-client/storage`          | `createStorageClient`, storage spec types            |
-| `@bunny.net/openapi-client/stream`           | `createStreamClient`, stream spec types              |
+| Entrypoint                                   | Exports                                                                                       |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `@bunny.net/openapi-client/core`             | `createCoreClient`, core spec types, DNS scan types                                           |
+| `@bunny.net/openapi-client/compute`          | `createComputeClient`, compute spec types                                                     |
+| `@bunny.net/openapi-client/database`         | `createDbClient`, database spec types                                                         |
+| `@bunny.net/openapi-client/magic-containers` | `createMcClient`, Magic Containers spec types                                                 |
+| `@bunny.net/openapi-client/origin-errors`    | `createOriginErrorsClient`, origin-errors spec types                                          |
+| `@bunny.net/openapi-client/shield`           | `createShieldClient`, shield spec types                                                       |
+| `@bunny.net/openapi-client/storage`          | `createStorageClient`, storage spec types                                                     |
+| `@bunny.net/openapi-client/stream`           | `createStreamClient`, stream spec types                                                       |
+| `@bunny.net/openapi-client/stream-live`      | `createStreamClient`, Stream Live spec types (preview, until the public Stream spec has them) |
 
 The raw generated modules remain available at `@bunny.net/openapi-client/generated/<spec>.d.ts` for backwards compatibility.
 

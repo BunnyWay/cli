@@ -14,6 +14,11 @@ import {
   cliImportError,
   withImportSource,
 } from "@/commands/stream/import-setup.ts";
+import {
+  type LibraryFeatureArgs,
+  libraryFeaturesFromFlags,
+  withLibraryFeatureOptions,
+} from "@/commands/stream/library/features.ts";
 import { bunny } from "@/core/colors.ts";
 import { DONE, defineToolCommand } from "@/core/define-tool-command.ts";
 import { UserError } from "@/core/errors.ts";
@@ -36,7 +41,7 @@ import {
 import { resolveImportLibrary } from "./library.ts";
 import { pacingNotice, retryPacing, slowResumeFlags } from "./pacing.ts";
 
-interface ImportArgs {
+interface ImportArgs extends LibraryFeatureArgs {
   library?: string;
   source?: string;
   folder?: string;
@@ -348,88 +353,91 @@ export const streamImportRunCommand = defineToolCommand({
   epilogue: credentialsHelp(),
 
   builder: (yargs) => {
-    return yargs
-      .option("library", {
-        alias: "lib",
-        type: "string",
-        describe:
-          "Destination video library name or ID (defaults to the linked library)",
-      })
-      .option("source", {
-        alias: "s",
-        type: "string",
-        choices: SOURCE_IDS,
-        describe: "Source platform",
-      })
-      .option("folder", {
-        type: "string",
-        describe: "Import one source folder only (sources with folders)",
-      })
-      .option("dry-run", {
-        type: "boolean",
-        describe: "Show what would be imported without changing anything",
-      })
-      .option("resume", {
-        type: "boolean",
-        describe: "Continue the saved import for this source and library",
-      })
-      .option("wait", {
-        type: "boolean",
-        describe:
-          "Stay until Bunny has encoded every video (default: return once they are queued)",
-      })
-      .option("force", {
-        alias: "f",
-        type: "boolean",
-        describe: "Skip the confirmation prompt",
-      })
-      .option("concurrency", {
-        alias: "c",
-        type: "number",
-        describe: `Videos to hand to Bunny in parallel (1-20; default ${DEFAULT_CONCURRENCY}, lower for a large Vimeo import)`,
-      })
-      .option("delay", {
-        type: "number",
-        describe:
-          "Seconds between starting two videos (0-600; default 0, 10 for a large Vimeo import). Slows the import down",
-      })
-      .option("bucket", { type: "string", describe: "S3 bucket override" })
-      .option("prefix", { type: "string", describe: "S3 prefix override" })
-      .option("url-ttl", {
-        type: "number",
-        describe: `S3 pre-signed URL lifetime in seconds (${MIN_PRESIGNED_URL_TTL_SECONDS}-${MAX_PRESIGNED_URL_TTL_SECONDS})`,
-      })
-      .option("include-ts", {
-        type: "boolean",
-        describe:
-          "S3: import .ts files too (off by default: HLS buckets hold thousands of segments)",
-      })
-      .option("clean-failed", {
-        type: "boolean",
-        describe:
-          "Delete failed Bunny copies before importing again, and retry videos Bunny rejected",
-      })
-      .option("retry-stalled", {
-        type: "boolean",
-        describe:
-          "Delete and import again videos stuck at zero bytes on Bunny (see `status`)",
-      })
-      .option("request-timeout", {
-        type: "number",
-        describe: `Seconds before one HTTP request gives up (1-3600; default ${DEFAULT_REQUEST_TIMEOUT / 1000}, 120 for a large Vimeo import)`,
-      })
-      .option("video-timeout", {
-        type: "number",
-        default: IMPORT_FLAG_DEFAULTS.videoTimeout,
-        describe:
-          "Seconds before one video's hand-off to Bunny, or its encode wait with --wait, gives up (60-86400)",
-      })
-      .option("processing-timeout", {
-        type: "number",
-        default: IMPORT_FLAG_DEFAULTS.processingTimeout,
-        describe:
-          "With --wait: seconds to wait for Bunny to encode one video; raises --video-timeout when larger (60-86400)",
-      }) as Argv<ImportArgs>;
+    // The features step of a new library (see `resolveImportLibrary`) has its flags here too.
+    return withLibraryFeatureOptions(
+      yargs
+        .option("library", {
+          alias: "lib",
+          type: "string",
+          describe:
+            "Destination video library name or ID (defaults to the linked library)",
+        })
+        .option("source", {
+          alias: "s",
+          type: "string",
+          choices: SOURCE_IDS,
+          describe: "Source platform",
+        })
+        .option("folder", {
+          type: "string",
+          describe: "Import one source folder only (sources with folders)",
+        })
+        .option("dry-run", {
+          type: "boolean",
+          describe: "Show what would be imported without changing anything",
+        })
+        .option("resume", {
+          type: "boolean",
+          describe: "Continue the saved import for this source and library",
+        })
+        .option("wait", {
+          type: "boolean",
+          describe:
+            "Stay until Bunny has encoded every video (default: return once they are queued)",
+        })
+        .option("force", {
+          alias: "f",
+          type: "boolean",
+          describe: "Skip the confirmation prompt",
+        })
+        .option("concurrency", {
+          alias: "c",
+          type: "number",
+          describe: `Videos to hand to Bunny in parallel (1-20; default ${DEFAULT_CONCURRENCY}, lower for a large Vimeo import)`,
+        })
+        .option("delay", {
+          type: "number",
+          describe:
+            "Seconds between starting two videos (0-600; default 0, 10 for a large Vimeo import). Slows the import down",
+        })
+        .option("bucket", { type: "string", describe: "S3 bucket override" })
+        .option("prefix", { type: "string", describe: "S3 prefix override" })
+        .option("url-ttl", {
+          type: "number",
+          describe: `S3 pre-signed URL lifetime in seconds (${MIN_PRESIGNED_URL_TTL_SECONDS}-${MAX_PRESIGNED_URL_TTL_SECONDS})`,
+        })
+        .option("include-ts", {
+          type: "boolean",
+          describe:
+            "S3: import .ts files too (off by default: HLS buckets hold thousands of segments)",
+        })
+        .option("clean-failed", {
+          type: "boolean",
+          describe:
+            "Delete failed Bunny copies before importing again, and retry videos Bunny rejected",
+        })
+        .option("retry-stalled", {
+          type: "boolean",
+          describe:
+            "Delete and import again videos stuck at zero bytes on Bunny (see `status`)",
+        })
+        .option("request-timeout", {
+          type: "number",
+          describe: `Seconds before one HTTP request gives up (1-3600; default ${DEFAULT_REQUEST_TIMEOUT / 1000}, 120 for a large Vimeo import)`,
+        })
+        .option("video-timeout", {
+          type: "number",
+          default: IMPORT_FLAG_DEFAULTS.videoTimeout,
+          describe:
+            "Seconds before one video's hand-off to Bunny, or its encode wait with --wait, gives up (60-86400)",
+        })
+        .option("processing-timeout", {
+          type: "number",
+          default: IMPORT_FLAG_DEFAULTS.processingTimeout,
+          describe:
+            "With --wait: seconds to wait for Bunny to encode one video; raises --video-timeout when larger (60-86400)",
+        }),
+    ) as Argv<ImportArgs>;
   },
 
   preRun: async (args) => {
@@ -449,6 +457,7 @@ export const streamImportRunCommand = defineToolCommand({
       "--url-ttl",
     );
     // An argument error should not wait on a library lookup or a credential check.
+    libraryFeaturesFromFlags(args);
     if (args.source)
       assertFolderSupported(requireSource(args.source), args.folder);
   },
@@ -459,6 +468,7 @@ export const streamImportRunCommand = defineToolCommand({
       output,
       offerLink: !args.dryRun,
       offerCreate: !args.dryRun && !args.resume,
+      featureFlags: libraryFeaturesFromFlags(args),
     });
     const targetFor = (source: string) => ({
       library: String(library.id),

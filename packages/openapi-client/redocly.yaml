@@ -27,6 +27,10 @@ apis:
     root: ./specs/stream.json
     x-openapi-ts:
       output: ./src/generated/stream.d.ts
+  stream-live:
+    root: ./specs/stream-live.json
+    x-openapi-ts:
+      output: ./src/generated/stream-live.d.ts
   shield:
     root: ./specs/shield.json
     x-openapi-ts:
