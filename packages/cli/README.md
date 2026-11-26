@@ -1383,7 +1383,7 @@ The stream key is a publishing credential, so `create`, `ingest` and `rotate-key
 | `--file`, `--url`, `--remove`, `--no-restore-default` | `thumbnail`                             | Image to upload or download, or remove the custom one                                                              |
 | `--force`, `-f`                                       | `start`, `stop`, `rotate-key`, `delete` | Skip the prompts (required unattended); on `start`, start even with no encoder publishing                          |
 
-While a stream is live, only `--title`, `--description` and `--end` can change. Live encoding is billed per minute by the highest output resolution, with primary and backup encoders billed separately.
+While a stream is live, only `--title`, `--description` and `--end` can change. Live encoding is billed per minute by the highest output resolution: **SD $0.020**, **HD $0.030**, **UHD $0.090** per minute, with primary and backup encoders billed separately. `live stats` reports the encoding minutes.
 
 #### `bunny stream import`
 

@@ -62,6 +62,8 @@ bunny stream live show <id>                          # includes issues: failover
 bunny stream live stats --from 2026-11-01            # encoding minutes, primary vs backup
 ```
 
+Live encoding is billed per minute by the highest output resolution: SD $0.020, HD $0.030, UHD $0.090 per minute; primary and backup encoders are billed separately. `stats` reports encoding minutes per stream and resolution.
+
 Preview links are token-protected and only work while the stream is Created, Scheduled or in Preview; they stop when it goes public. Option 1 (default) includes the view token when the library needs one and a CDN-signed playlist. Option 2 (`--sign`, HMAC-SHA256 with the stream key) adds neither, and rotating the key invalidates it. An expired or forged token is ignored, not rejected: the viewer sees the public view.
 
 ## Anti-patterns
