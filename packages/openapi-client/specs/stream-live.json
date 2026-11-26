@@ -1,0 +1,3389 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Stream API: Live (preview)",
+    "termsOfService": "https://bunny.net/tos",
+    "contact": {
+      "name": "bunny.net",
+      "url": "https://docs.bunny.net",
+      "email": "support@bunny.net"
+    },
+    "version": "1.6.25",
+    "description": "The Stream Live endpoints from the preview Stream API spec. Kept separate from stream.json, which tracks the public spec, until Live reaches it."
+  },
+  "servers": [
+    {
+      "url": "https://video.bunnycdn.com"
+    }
+  ],
+  "paths": {
+    "/library/{libraryId}/live/statistics/encoding": {
+      "get": {
+        "tags": ["Live Statistics"],
+        "summary": "Get Live Encoding Statistics",
+        "description": "Returns live encoding seconds totals, a time-series chart (hourly or daily UTC), and breakdowns by live stream, codec, and resolution. Use hourly=true for hour buckets when the range falls within the last 30 days; older ranges automatically use daily buckets.",
+        "operationId": "LiveStatistics_GetEncodingStatistics",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "description": "Optional start of the time range (UTC). If omitted, the last 14 days are returned.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "description": "Optional end of the time range (UTC). If omitted, the current date is used.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "hourly",
+            "in": "query",
+            "description": "Optional. If true, returns hourly data when the range is within the last 30 days; otherwise daily (UTC). Default is daily.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 4
+          },
+          {
+            "name": "liveStreamGuids",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "description": "Optional live stream IDs to include. Repeat the query parameter for multiple values (max 50).",
+            "schema": {
+              "type": "array",
+              "nullable": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "x-position": 5
+          },
+          {
+            "name": "videoCodecs",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "description": "Optional video codecs to include: H264, VP9, HEVC, AV1. Repeat for multiple values.",
+            "schema": {
+              "type": "array",
+              "nullable": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "x-position": 6
+          },
+          {
+            "name": "resolutions",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "description": "Optional output heights to include: 240, 360, 480, 720, 1080, 1440, 2160. Repeat for multiple values.",
+            "schema": {
+              "type": "array",
+              "nullable": true,
+              "items": {
+                "type": "integer",
+                "format": "int32"
+              }
+            },
+            "x-position": 7
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returns live encoding duration statistics for the requested video library.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveEncodingStatisticsModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The date range or filters are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested video library was not found."
+          },
+          "503": {
+            "description": "ClickHouse live statistics are not available.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authentication failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/live/{streamId}": {
+      "get": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Get live stream by ID",
+        "description": "Gets details of a live stream contained in library by its ID.",
+        "operationId": "LiveStream_GetByStreamId",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The details of the requested live stream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStreamModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "put": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Update live stream",
+        "description": "Updates the live stream object with the specified parameters and returns it. While the live stream is running only the title, description and scheduled end time can be updated",
+        "operationId": "LiveStream_UpdateLiveStream",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLiveStreamModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "description": "The live stream was successfully updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStreamModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModelOfListOfString"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "deprecated": true,
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Patch live stream",
+        "description": "Applies a JSON merge patch (RFC 7396) to the live stream and returns it. An omitted property keeps its value and null removes it where the live stream allows that, for example the scheduled start or end time. While the live stream is running only the title, description and scheduled end time can be changed",
+        "operationId": "LiveStream_PatchLiveStream",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchLiveStreamModel"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchLiveStreamModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "description": "The live stream was successfully updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStreamModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModelOfListOfString"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Delete live stream",
+        "description": "Deletes the live stream object and all resources associated with it. This operation cannot be undone.",
+        "operationId": "LiveStream_DeleteStream",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The details of the requested live stream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStreamModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModelOfListOfString"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/live/{streamId}/play": {
+      "get": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Get live stream play data",
+        "description": "Returns playback URLs and player metadata for the live stream. For libraries with token authentication enabled, token and expires must be a valid signed pair or the request is rejected. If the library also has CDN token authentication enabled, the returned CDN URLs are signed.",
+        "operationId": "LiveStream_GetStreamPlayData",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "description": "Signed access token, required when the library has token authentication enabled.",
+            "schema": {
+              "type": "string",
+              "default": "",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "expires",
+            "in": "query",
+            "description": "Unix timestamp (seconds) the token is valid until, required when the library has token authentication enabled.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 0
+            },
+            "x-position": 4
+          },
+          {
+            "name": "previewToken",
+            "in": "query",
+            "description": "Preview token from the preview access endpoint. Before the stream goes public, a valid token makes the response return the signed preview playlist. An invalid token is ignored.",
+            "schema": {
+              "type": "string",
+              "default": "",
+              "nullable": true
+            },
+            "x-position": 5
+          },
+          {
+            "name": "previewExpires",
+            "in": "query",
+            "description": "Unix timestamp (seconds) the preview token is valid until.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 0
+            },
+            "x-position": 6
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The play data of the requested live stream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStreamPlayDataModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/library/{libraryId}/live/{streamId}/preview": {
+      "get": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Get live stream preview access",
+        "description": "Returns the signed playlist URL and player parameters that let the stream owner watch the stream before it goes public. The access lasts 10 hours or until the stream goes public, whichever comes first.",
+        "operationId": "LiveStream_GetPreviewAccess",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed access for watching the live stream before it goes public",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStreamPreviewAccessModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "409": {
+            "description": "The live stream is already public or has finished, so it has no preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/live": {
+      "post": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Create new live stream",
+        "description": "Creates a new live stream object with the specified parameters and returns it",
+        "operationId": "LiveStream_Create",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLiveStreamModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "The live stream was successfully created and returned as the response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStreamModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModelOfListOfString"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The account is on the free trial and has not linked a payment card",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The concurrent live stream limit was reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "404": {
+            "description": "The requested video library was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "get": {
+        "tags": ["Manage Live Streams"],
+        "summary": "List streams",
+        "description": "Returns a list of streams associated with this library and collection, if passed. search matches the stream GUID or title, case-insensitive.",
+        "operationId": "LiveStream_List",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "The page number to return, 1-based; values below 1 are treated as 1.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            },
+            "x-position": 2
+          },
+          {
+            "name": "itemsPerPage",
+            "in": "query",
+            "description": "The number of items to return per page, clamped to a range of 10-1000.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            },
+            "x-position": 3
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Filters streams by title or stream GUID, case-insensitive substring match.",
+            "schema": {
+              "type": "string",
+              "default": "",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "orderBy",
+            "in": "query",
+            "description": "The field to order by. Possible values: date, title, status, started, ended, planned — any other value is rejected with 400",
+            "schema": {
+              "type": "string",
+              "default": "date",
+              "nullable": true
+            },
+            "x-position": 5
+          },
+          {
+            "name": "collectionId",
+            "in": "query",
+            "description": "Filters streams by collection ID.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 6
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The list of live streams associated with this library",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginationListOfLiveStreamModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested library was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/live/ingest-endpoints": {
+      "get": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Get ingest endpoints",
+        "description": "Returns the RTMP, RTMPS and SRT ingest endpoints for publishing to the live stream given by liveStreamId, or, without liveStreamId, with the library's auto-create stream key. Append the stream key to the RTMP and RTMPS URLs; the SRT URLs already carry it. SRT is null when SRT ingest is not configured, when the library has no auto-create stream key, or for an auto-created live stream, which is published with the library's key. The auto-create endpoints are returned whether or not auto-create is turned on, and need the full API key.",
+        "operationId": "LiveStream_GetIngestEndpoints",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "liveStreamId",
+            "in": "query",
+            "description": "The unique ID of the live stream. Leave it out for the library's auto-create stream key.",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The ingest endpoints for the live stream, or for the library's auto-create stream key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestEndpoints"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request was invalid"
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/live/{streamId}/start": {
+      "put": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Start live stream",
+        "description": "Marks the stream as started, allowing viewers to view the stream.",
+        "operationId": "LiveStream_StartStream",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The details of the started live stream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStreamModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModelOfListOfString"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "description": "The stream could not be started right now. The stream is unchanged and the request can be retried.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModelOfListOfString"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/live/{streamId}/stop": {
+      "put": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Stop live stream",
+        "description": "Stops the stream, if publishing is still ongoing, it will be stopped by the ingest server. If 'RecordVod' was set to true, the stream will be converted to a regular video as a VOD.This operation cannot be undone.",
+        "operationId": "LiveStream_StopStream",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The details of the requested live stream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStreamModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModelOfListOfString"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/live/{streamId}/regenerate-key": {
+      "put": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Regenerate stream key",
+        "description": "Regenerates the stream key for the live stream. This operation is not allowed for streams that ended. If the stream is currently live, the active publishers (primary and backup) are disconnected within a few seconds and the previous key stops working. The stream is not ended: publish with the new key within the reconnect window to resume the same live stream, recording and DVR window. Other settings cannot be changed while the stream is live.",
+        "operationId": "LiveStream_RegenerateStreamKey",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The details of the live stream with regenerated stream key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStreamModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModelOfListOfString"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/live/{streamId}/bitrate-history": {
+      "get": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Get live stream bitrate history",
+        "description": "Returns recorded bitrate samples for the live stream, optionally constrained to a time range using startTime and endTime.",
+        "operationId": "LiveStream_GetBitrateHistory",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "startTime",
+            "in": "query",
+            "description": "Filter bitrate samples recorded at or after this UTC timestamp.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "endTime",
+            "in": "query",
+            "description": "Filter bitrate samples recorded at or before this UTC timestamp.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 4
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The bitrate history for the requested live stream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BitrateHistoryResponseModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/live/{streamId}/current-bitrate": {
+      "get": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Get live stream current bitrate",
+        "description": "Returns the most recent bitrate sample for the live stream's primary ingest.",
+        "operationId": "LiveStream_GetLatestBitrate",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The latest bitrate sample",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedisBitrateEntry"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found, or no bitrate sample is available yet"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/live/{streamId}/thumbnail": {
+      "post": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Set Thumbnail",
+        "description": "Sets the live stream's thumbnail. If thumbnailUrl is omitted, the thumbnail is read from the request body as a raw image upload. Otherwise, thumbnailUrl is fetched by the server as a URL, so it must point to a reachable, publicly accessible image.",
+        "operationId": "LiveStream_SetThumbnail",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "thumbnailUrl",
+            "in": "query",
+            "description": "Optional URL for the server to fetch the thumbnail from. Omit to upload a raw image in the request body instead.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "description": "Optional thumbnail file to upload",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "nullable": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The thumbnail was successfully set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request or URL was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The thumbnailUrl was blocked by outbound URL validation, or the operation was rejected by a video/library restriction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unable to fetch thumbnail from origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Delete Thumbnail",
+        "description": "Removes the custom thumbnail from the live stream. When restoreLibraryDefault is true and the library has a default live thumbnail set, the stream will use that instead of having no thumbnail.",
+        "operationId": "LiveStream_DeleteThumbnail",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "restoreLibraryDefault",
+            "in": "query",
+            "description": "When true and the library has a default live thumbnail, the stream will be set to use that thumbnail after removal. When false or no library default exists, the stream will have no thumbnail.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The thumbnail was successfully deleted"
+          },
+          "404": {
+            "description": "The requested stream was not found or no custom thumbnail is set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/live/{streamId}/thumbnails": {
+      "get": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Get live stream thumbnails",
+        "description": "Returns recent generated thumbnail object paths for the specified live stream. You can limit the number of results and optionally constrain by a time range using 'from' and 'to' in UTC.",
+        "operationId": "LiveStream_GetThumbnails",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of thumbnails to return. Default: 5",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 5
+            },
+            "x-position": 3
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Filter thumbnails created at or after this UTC timestamp",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Filter thumbnails created at or before this UTC timestamp",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 5
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of thumbnail object paths (most recent first)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ThumbnailListResponseModel"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    },
+    "/library/{libraryId}/live/{streamId}/status": {
+      "get": {
+        "tags": ["Manage Live Streams"],
+        "summary": "Get live stream status",
+        "description": "Returns the current status of the specified live stream.",
+        "operationId": "LiveStream_GetStreamStatus",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the video library.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "description": "The unique ID of the live stream.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The current status of the live stream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStreamStatusModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested live stream was not found"
+          },
+          "401": {
+            "description": "The request authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request authorization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "AccessKey": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BitrateHistoryResponseModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "primary": {
+            "type": "array",
+            "description": "Bitrate samples for the primary ingest over the requested range, averaged into short fixed-width buckets. Null (not an empty list) if no data was recorded for the primary ingest in that range.",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/RedisBitrateEntry"
+            }
+          },
+          "backup": {
+            "type": "array",
+            "description": "Bitrate samples for the backup ingest over the requested range, averaged into short fixed-width buckets. Null (not an empty list) if no data was recorded for the backup ingest in that range.",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/RedisBitrateEntry"
+            }
+          }
+        }
+      },
+      "CreateLiveStreamModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the live stream. Required — the request is rejected if left blank.",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "description": "The description of the live stream",
+            "nullable": true
+          },
+          "collectionId": {
+            "type": "string",
+            "description": "The ID of the collection where the live stream belongs. Must be the ID of an existing collection in this video library.",
+            "nullable": true
+          },
+          "dvrEnabled": {
+            "type": "boolean",
+            "description": "Determines if DVR is enabled for the live stream, defaults to the video library setting",
+            "nullable": true
+          },
+          "dvrWindowSeconds": {
+            "type": "integer",
+            "description": "The DVR window size in seconds, required when DvrEnabled is true, max is 12 hours, defaults to the video library setting",
+            "format": "int32",
+            "maximum": 43200.0,
+            "minimum": 1.0,
+            "nullable": true
+          },
+          "recordVod": {
+            "type": "boolean",
+            "description": "Determines if a VOD recording should be created for the live stream, defaults to the video library setting",
+            "nullable": true
+          },
+          "streamType": {
+            "description": "The type of the live stream, defaults to Event (0). Channel (1) creates a 24/7 live stream: it never records a VOD, has no maximum publishing duration and stays restartable without a time limit after the publisher disconnects: reconnect with the same stream key. A Channel cannot be combined with RecordVod=true, and can be scheduled like an Event. The type can be changed by an update until the stream starts, while no publisher is connected. RecordVod defaults to false for a Channel, regardless of the video library setting.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiveStreamType"
+              }
+            ]
+          },
+          "autoStartOnIngestDetected": {
+            "type": "boolean",
+            "description": "Determines if the live stream should start automatically when ingest is detected, defaults to the video library setting. A scheduled stream is not started before its scheduled start time.",
+            "nullable": true
+          },
+          "scheduledStartTime": {
+            "type": "string",
+            "description": "The scheduled start time of the live stream (optional, UTC). Must be in the future.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "scheduledEndTime": {
+            "type": "string",
+            "description": "The scheduled end time of the live stream (optional, UTC). Automatically stops the stream if it is running past that time. Must be in the future and after ScheduledStartTime when both are set. For an Event (0) with a ScheduledStartTime, must be at most 12 hours after it; a Channel (1) has no such limit.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "public": {
+            "type": "boolean",
+            "description": "Determines if the live stream is publicly accessible, defaults to true"
+          },
+          "enableCountdown": {
+            "type": "boolean",
+            "description": "Determines if countdown should be shown in player before the stream start, if it was scheduled, defaults to the video library setting. Only usable when ScheduledStartTime is set in this request; the library default is only inherited for scheduled streams, and enabling it on an instant stream is rejected.",
+            "nullable": true
+          },
+          "outputs": {
+            "type": "array",
+            "description": "A list of outputs that the incoming stream will be forwarded to. If omitted or empty, inherits the outputs configured at the video library level, if any. How many outputs are allowed depends on the account billing standing: fewer during the free trial without a linked payment card. Takes precedence over the deprecated RtmpOutputs when both are sent.",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/RtmpOutput"
+            }
+          },
+          "rtmpOutputs": {
+            "type": "array",
+            "description": "Deprecated, replaced by Outputs. Only read when Outputs is omitted.",
+            "deprecated": true,
+            "x-deprecatedMessage": "Replaced by Outputs, kept for backwards compatibility.",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/RtmpOutput"
+            }
+          },
+          "preStreamTrailerVideoId": {
+            "type": "string",
+            "description": "GUID of an existing, non-deleted video in this library to play before the stream starts. Defaults to the video library's configured trailer video if omitted.",
+            "nullable": true
+          }
+        }
+      },
+      "IngestEndpoints": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rtmp": {
+            "description": "The ingest endpoints of the live stream to use with RTMP",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RtmpIngestEndpointConfig"
+              }
+            ]
+          },
+          "rtmps": {
+            "description": "The ingest endpoints of the live stream to use with RTMPS",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RtmpIngestEndpointConfig"
+              }
+            ]
+          },
+          "srt": {
+            "description": "The ingest endpoints of the live stream to use with SRT",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SrtIngestEndpointConfig"
+              }
+            ]
+          }
+        }
+      },
+      "IssueCodes": {
+        "type": "integer",
+        "description": "",
+        "oneOf": [
+          {
+            "title": "Undefined",
+            "type": "integer",
+            "description": "Shouldn't be used",
+            "enum": [0]
+          },
+          {
+            "title": "StreamLengthsDifference",
+            "type": "integer",
+            "description": "Marks that there is a mismatch between lengths of audio and video streams in the transcoded file",
+            "enum": [1]
+          },
+          {
+            "title": "TranscodingWarnings",
+            "type": "integer",
+            "description": "Marks that transcoding completed with warnings",
+            "enum": [2]
+          },
+          {
+            "title": "IncompatibleResolution",
+            "type": "integer",
+            "description": "Marks that original video file has incompatible resolution or isn't a video stream",
+            "enum": [3]
+          },
+          {
+            "title": "InvalidFramerate",
+            "type": "integer",
+            "description": "Marks that original video file has invalid framerate",
+            "enum": [4]
+          },
+          {
+            "title": "VideoExceededMaxDuration",
+            "type": "integer",
+            "description": "Marks that video stream exceeded max duration",
+            "enum": [5]
+          },
+          {
+            "title": "AudioExceededMaxDuration",
+            "type": "integer",
+            "description": "Marks that audio stream exceeded max duration",
+            "enum": [6]
+          },
+          {
+            "title": "OriginalCorrupted",
+            "type": "integer",
+            "description": "Marks that video file is corrupted and couldn't be processed properly",
+            "enum": [7]
+          },
+          {
+            "title": "TranscriptionFailed",
+            "type": "integer",
+            "description": "Marks that video transcription finished with errors and might not be complete",
+            "enum": [8]
+          },
+          {
+            "title": "JitIncompatible",
+            "type": "integer",
+            "description": "Marks that video file is not compatible with JIT encoding",
+            "enum": [9]
+          },
+          {
+            "title": "JitFailed",
+            "type": "integer",
+            "description": "Marks that video failed JIT encoding",
+            "enum": [10]
+          },
+          {
+            "title": "CaptionGenerationFailed",
+            "type": "integer",
+            "description": "Marks that captions generation failed",
+            "enum": [11]
+          },
+          {
+            "title": "UnsupportedFileType",
+            "type": "integer",
+            "description": "Marks that the uploaded or fetched file is not video or audio, for example a photo or a document",
+            "enum": [12]
+          },
+          {
+            "title": "LiveNoEncoderCapacity",
+            "type": "integer",
+            "description": "Marks that a publish attempt was refused because the ingest region had no free live encoder",
+            "enum": [13]
+          },
+          {
+            "title": "LiveStreamBlocked",
+            "type": "integer",
+            "description": "Marks that the live stream was blocked, or a publish attempt was refused because it is blocked",
+            "enum": [14]
+          },
+          {
+            "title": "LiveTooManyIngests",
+            "type": "integer",
+            "description": "Marks that a publish attempt was refused because a primary and a backup ingest were already connected",
+            "enum": [15]
+          },
+          {
+            "title": "LiveRegionConflict",
+            "type": "integer",
+            "description": "Marks that a publish attempt was refused because its ingest region conflicts with the stream's region",
+            "enum": [16]
+          },
+          {
+            "title": "LivePublishAfterEnd",
+            "type": "integer",
+            "description": "Marks that a publish attempt was refused because the live stream had already ended",
+            "enum": [17]
+          },
+          {
+            "title": "LiveMediaStalled",
+            "type": "integer",
+            "description": "Marks that the live output stopped advancing while the publisher stayed connected",
+            "enum": [18]
+          },
+          {
+            "title": "LiveEncoderLost",
+            "type": "integer",
+            "description": "Marks that the live encoder was lost",
+            "enum": [19]
+          },
+          {
+            "title": "LiveFailedOverToBackup",
+            "type": "integer",
+            "description": "Marks that the live stream failed over to its backup ingest",
+            "enum": [20]
+          },
+          {
+            "title": "LiveIngestRejected",
+            "type": "integer",
+            "description": "Marks that the ingest disconnected the publisher because publishing was no longer permitted",
+            "enum": [21]
+          },
+          {
+            "title": "LiveIngestTimeout",
+            "type": "integer",
+            "description": "Marks that the ingest disconnected a publisher that never sent a usable stream",
+            "enum": [22]
+          },
+          {
+            "title": "LiveMaxDurationReached",
+            "type": "integer",
+            "description": "Marks that the live stream was stopped at the maximum publishing duration",
+            "enum": [23]
+          },
+          {
+            "title": "LiveLibraryDisabled",
+            "type": "integer",
+            "description": "Marks that the live stream was stopped because its video library can no longer stream",
+            "enum": [24]
+          },
+          {
+            "title": "LiveDisconnectTimeout",
+            "type": "integer",
+            "description": "Marks that the live stream was stopped because the publisher did not reconnect in time",
+            "enum": [25]
+          }
+        ]
+      },
+      "LiveEncodingBreakdownModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "totalEncodingSeconds": {
+            "type": "integer",
+            "description": "The total number of live encoding seconds in the selected period.",
+            "format": "int64"
+          },
+          "encodingSecondsChart": {
+            "type": "object",
+            "description": "Live encoding seconds over time for the selected period, grouped hourly or daily in UTC.",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "encodingSecondsByLiveStream": {
+            "type": "object",
+            "description": "Live encoding seconds grouped by live stream ID.",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "encodingSecondsByVideoCodec": {
+            "type": "object",
+            "description": "Live encoding seconds grouped by output video codec.",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "encodingSecondsByResolution": {
+            "type": "object",
+            "description": "Live encoding seconds grouped by output resolution.",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "LiveEncodingStatisticsModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "hourly": {
+            "type": "boolean",
+            "description": "Indicates whether the chart uses hourly or daily UTC buckets."
+          },
+          "total": {
+            "description": "Combined primary and backup live encoding statistics for the selected period.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiveEncodingBreakdownModel"
+              }
+            ]
+          },
+          "primary": {
+            "description": "Live encoding statistics for the primary ingest encoder, as assigned by the encoding pipeline for each live stream. This reflects the actual primary/backup ingest role, not which encoder ran longest.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiveEncodingBreakdownModel"
+              }
+            ]
+          },
+          "backup": {
+            "description": "Live encoding statistics for the backup ingest encoder(s), as assigned by the encoding pipeline. Zero for live streams that never used backup ingest.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiveEncodingBreakdownModel"
+              }
+            ]
+          }
+        }
+      },
+      "LiveStreamModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "videoLibraryId",
+          "guid",
+          "title",
+          "public",
+          "status",
+          "dateCreated",
+          "streamKey",
+          "playbackUrlHls",
+          "dvrEnabled",
+          "recordVod",
+          "autoStartOnIngestDetected",
+          "availableResolutions"
+        ],
+        "properties": {
+          "videoLibraryId": {
+            "type": "integer",
+            "description": "The ID of the video library that the live stream belongs to",
+            "format": "int64"
+          },
+          "guid": {
+            "type": "string",
+            "description": "The unique ID of the live stream",
+            "format": "guid",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "description": "The title of the live stream",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "description": "The description of the live stream",
+            "nullable": true
+          },
+          "category": {
+            "type": "string",
+            "description": "The category of the live stream",
+            "nullable": true
+          },
+          "collectionId": {
+            "type": "string",
+            "description": "The ID of the collection where the live stream belongs",
+            "nullable": true
+          },
+          "public": {
+            "type": "boolean",
+            "description": "Determines if the live stream is publicly accessible"
+          },
+          "status": {
+            "description": "The status of the live stream. See LiveStreamStatus.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiveStreamStatus"
+              }
+            ]
+          },
+          "dateCreated": {
+            "type": "string",
+            "description": "The date when the live stream was created",
+            "format": "date-time",
+            "minLength": 1
+          },
+          "scheduledStartTime": {
+            "type": "string",
+            "description": "The scheduled start time of the live stream (optional)",
+            "format": "date-time",
+            "nullable": true
+          },
+          "scheduledEndTime": {
+            "type": "string",
+            "description": "The scheduled end time of the live stream (optional)",
+            "format": "date-time",
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "The date and time when the live stream publishing started",
+            "format": "date-time",
+            "nullable": true
+          },
+          "endedAt": {
+            "type": "string",
+            "description": "The date and time when the live stream publishing ended",
+            "format": "date-time",
+            "nullable": true
+          },
+          "durationSeconds": {
+            "type": "integer",
+            "description": "The final duration of the live stream in seconds, set once the stream has ended. Null while the stream is scheduled or running — use the status endpoint's Duration for the live elapsed time.",
+            "format": "int32",
+            "nullable": true
+          },
+          "streamKey": {
+            "type": "string",
+            "description": "The secret key required to authenticate publishing to this stream. Treat as a credential; can be rotated via the regenerate-stream-key endpoint, which immediately invalidates the old value and interrupts an active publisher. Empty for a stream auto-created by publishing with the library's auto-create stream key, which is published with that key."
+          },
+          "playbackUrlHls": {
+            "type": "string",
+            "description": "The HLS playback URL of the live stream",
+            "minLength": 1
+          },
+          "dvrEnabled": {
+            "type": "boolean",
+            "description": "Determines if DVR is enabled for the live stream"
+          },
+          "dvrWindowSeconds": {
+            "type": "integer",
+            "description": "The DVR window size in seconds, required when DvrEnabled is true",
+            "format": "int32",
+            "nullable": true
+          },
+          "recordVod": {
+            "type": "boolean",
+            "description": "Determines if a VOD recording should be created for the live stream"
+          },
+          "streamType": {
+            "description": "The type of the live stream: Event (0) is a regular stream, Channel (1) is a 24/7 stream that never records a VOD, has no maximum publishing duration and stays restartable without a time limit after the publisher disconnects. Can be changed by an update until the stream starts, while no publisher is connected.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiveStreamType"
+              }
+            ]
+          },
+          "autoStartOnIngestDetected": {
+            "type": "boolean",
+            "description": "Determines if the live stream should start automatically when ingest is detected"
+          },
+          "availableResolutions": {
+            "type": "string",
+            "description": "Comma-separated list of resolution labels that have finished encoding and are ready to play (e.g. \"1080p,720p\"). Empty or null until the first rendition is available.",
+            "minLength": 1
+          },
+          "width": {
+            "type": "integer",
+            "description": "The input video width in pixels",
+            "format": "int32",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "description": "The input video height in pixels",
+            "format": "int32",
+            "nullable": true
+          },
+          "framerate": {
+            "type": "number",
+            "description": "The framerate of the input stream",
+            "format": "double",
+            "nullable": true
+          },
+          "peakConcurrentViewers": {
+            "type": "integer",
+            "description": "The peak number of concurrent viewers",
+            "format": "int32",
+            "nullable": true
+          },
+          "totalViewerSeconds": {
+            "type": "integer",
+            "description": "The total viewer watch time in seconds",
+            "format": "int64",
+            "nullable": true
+          },
+          "thumbnailFileName": {
+            "type": "string",
+            "description": "The file name of the thumbnail inside of the storage",
+            "nullable": true
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "description": "The CDN URL of the thumbnail",
+            "nullable": true
+          },
+          "thumbnailUpdatedAt": {
+            "type": "string",
+            "description": "The date and time when the thumbnail was last updated",
+            "format": "date-time",
+            "nullable": true
+          },
+          "enableCountdown": {
+            "type": "boolean",
+            "description": "Determines if countdown should be shown in player before the stream start, if it was scheduled",
+            "nullable": true
+          },
+          "outputs": {
+            "type": "array",
+            "description": "A list of outputs that the incoming stream will be forwarded to",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/RtmpOutput"
+            }
+          },
+          "rtmpOutputs": {
+            "type": "array",
+            "description": "Deprecated, replaced by Outputs. Carries the same list.",
+            "deprecated": true,
+            "x-deprecatedMessage": "Replaced by Outputs, kept for backwards compatibility.",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/RtmpOutput"
+            }
+          },
+          "preStreamTrailerVideoId": {
+            "type": "string",
+            "description": "Video ID of the trailer that will be played before the live stream starts",
+            "nullable": true
+          },
+          "ingestEndpoints": {
+            "description": "The ingest endpoint URLs available for publishing this stream",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IngestEndpoints"
+              }
+            ]
+          },
+          "transcodingMessages": {
+            "type": "array",
+            "description": "Problems the live stream ran into, oldest first: refused publish attempts, blocks, interrupted output, failovers and abnormal stops. Every occurrence is listed, up to the newest 50; a resolved problem stays listed. See TranscodingMessageModel and IssueCodes.",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TranscodingMessageModel"
+            }
+          }
+        }
+      },
+      "LiveStreamPlayDataModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "isDisconnected": {
+            "type": "boolean",
+            "description": "Whether an active stream is waiting for playable live media, including startup and reconnection. False when a live origin is eligible for delivery or the stream is inactive; null when availability cannot be determined.",
+            "nullable": true
+          },
+          "liveStream": {
+            "description": "Live stream data.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PublicLiveStreamModel"
+              }
+            ]
+          },
+          "libraryName": {
+            "type": "string",
+            "description": "The name of the video library.",
+            "nullable": true
+          },
+          "pullZoneId": {
+            "type": "integer",
+            "description": "The pull zone ID backing the video library's CDN delivery.",
+            "format": "int64"
+          },
+          "captionsPath": {
+            "type": "string",
+            "description": "CDN URL of the directory containing the live stream's caption (.vtt) files.",
+            "nullable": true
+          },
+          "seekPath": {
+            "type": "string",
+            "description": "CDN URL of the directory containing the live stream's seek/scrub thumbnail sprites.",
+            "nullable": true
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "description": "CDN URL of the live stream's thumbnail image.",
+            "nullable": true
+          },
+          "fallbackUrl": {
+            "type": "string",
+            "description": "CDN URL prefix for the live stream's MP4 fallback renditions.",
+            "nullable": true
+          },
+          "videoPlaylistUrl": {
+            "type": "string",
+            "description": "CDN URL of the live stream's HLS playlist.",
+            "nullable": true
+          },
+          "previewAuthorized": {
+            "type": "boolean",
+            "description": "Whether the request carried a valid preview token, so VideoPlaylistUrl points at the stream owner's signed preview path instead of the public playlist."
+          },
+          "originalUrl": {
+            "type": "string",
+            "description": "CDN URL of the original ingest source. Only populated when the library allows early/original playback.",
+            "nullable": true
+          },
+          "previewUrl": {
+            "type": "string",
+            "description": "CDN URL of the live stream's animated preview (scrub thumbnail).",
+            "nullable": true
+          },
+          "controls": {
+            "type": "string",
+            "description": "Comma-separated list of player control identifiers enabled for this library.",
+            "nullable": true
+          },
+          "enableDRM": {
+            "type": "boolean",
+            "description": "Whether DRM protection is enabled for this live stream."
+          },
+          "drmVersion": {
+            "type": "integer",
+            "description": "DRM protection tier applied to this stream, as an integer cast of the Basic/Enterprise tier enum. Only relevant when EnableDRM is true.",
+            "format": "int32"
+          },
+          "playerKeyColor": {
+            "type": "string",
+            "description": "The player's accent/key color, as a CSS color value.",
+            "nullable": true
+          },
+          "vastTagUrl": {
+            "type": "string",
+            "description": "VAST ad tag URL used to serve ads in the player; empty when ads are disabled.",
+            "nullable": true
+          },
+          "viAiPublisherId": {
+            "type": "string",
+            "description": "Publisher ID for the vi.ai advertising integration; ads are enabled in the player when this is non-empty.",
+            "nullable": true
+          },
+          "captionsFontSize": {
+            "type": "integer",
+            "description": "Caption font size in pixels.",
+            "format": "int32"
+          },
+          "captionsFontColor": {
+            "type": "string",
+            "description": "CSS color value for the caption text.",
+            "nullable": true
+          },
+          "captionsBackground": {
+            "type": "string",
+            "description": "CSS color value for the caption background.",
+            "nullable": true
+          },
+          "uiLanguage": {
+            "type": "string",
+            "description": "Locale code for the player's UI language (e.g. \"en\").",
+            "nullable": true
+          },
+          "allowEarlyPlay": {
+            "type": "boolean",
+            "description": "Whether the stream can be played from the original ingest source before HLS renditions are ready."
+          },
+          "tokenAuthEnabled": {
+            "type": "boolean",
+            "description": "Whether the library's CDN delivery requires signed URLs for playback assets (segments, manifests, thumbnails, etc.). This is a separate setting from whether this endpoint itself required a token to return data."
+          },
+          "enableMP4Fallback": {
+            "type": "boolean",
+            "description": "Whether MP4 fallback renditions are available for players that cannot use HLS."
+          },
+          "showHeatmap": {
+            "type": "boolean",
+            "description": "Whether the attention heatmap is enabled for this library's player."
+          },
+          "fontFamily": {
+            "type": "string",
+            "description": "CSS font-family value used by the player.",
+            "nullable": true
+          },
+          "playbackSpeeds": {
+            "type": "string",
+            "description": "Comma-separated list of playback speed multipliers offered to the viewer (e.g. \"0.5,1,1.5,2\").",
+            "nullable": true
+          },
+          "widevineMinClientSecurityLevel": {
+            "type": "integer",
+            "description": "Minimum required Widevine client security level (1-3). Ignored (always null here) when WidevineSdOnlyForL3 is enabled, since that setting takes precedence.",
+            "format": "int32",
+            "nullable": true
+          },
+          "widevineEmeRobustness": {
+            "type": "string",
+            "description": "EME robustness string corresponding to WidevineMinClientSecurityLevel (e.g. \"SW_SECURE_CRYPTO\", \"HW_SECURE_DECODE\"); null when no minimum level applies.",
+            "nullable": true
+          },
+          "widevineSdOnlyForL3": {
+            "type": "boolean",
+            "description": "When true, Widevine L3 (software-only) clients are capped to SD playback while stronger clients play at full quality; overrides WidevineMinClientSecurityLevel when both are set."
+          },
+          "maxSoftwareWidevineResolution": {
+            "type": "integer",
+            "description": "Maximum vertical resolution allowed for software (L3) Widevine clients when WidevineSdOnlyForL3 is enabled; null otherwise.",
+            "format": "int32",
+            "nullable": true
+          },
+          "zoneTier": {
+            "type": "integer",
+            "description": "Pull zone tier associated with this video library (integer enum value).",
+            "format": "int32",
+            "nullable": true
+          },
+          "rememberPlayerPosition": {
+            "type": "boolean",
+            "description": "Whether the player resumes from the viewer's last watched position."
+          },
+          "customCss": {
+            "type": "string",
+            "description": "Custom CSS injected into the player. Only populated when the caller explicitly requests it.",
+            "nullable": true
+          },
+          "exposeVideoMetadata": {
+            "type": "boolean",
+            "description": "Whether JSON-LD structured data (schema.org VideoObject markup) is rendered for this live stream, e.g. for SEO."
+          },
+          "enableCompactControls": {
+            "type": "boolean",
+            "description": "Whether the player uses a compact control bar layout."
+          }
+        }
+      },
+      "LiveStreamPreviewAccessModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "playlistUrl": {
+            "type": "string",
+            "description": "CDN URL of the signed preview HLS playlist. It stops working once the stream goes public or the token expires.",
+            "nullable": true
+          },
+          "playerQueryParameters": {
+            "type": "string",
+            "description": "Query string to add to the player embed URL so it plays the signed preview, without a leading '?'. Includes the view token when the library requires one.",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "When the preview access expires. Request new access after this time.",
+            "format": "date-time"
+          }
+        }
+      },
+      "LiveStreamStatus": {
+        "type": "integer",
+        "description": "",
+        "oneOf": [
+          {
+            "title": "Unknown",
+            "type": "integer",
+            "enum": [0]
+          },
+          {
+            "title": "Created",
+            "type": "integer",
+            "description": "Live stream was just created",
+            "enum": [1]
+          },
+          {
+            "title": "Scheduled",
+            "type": "integer",
+            "description": "Live stream was scheduled to start at time set in 'ScheduledStartTime' (UTC). Publishing can be started earlier but stream will be watchable only after this time",
+            "enum": [2]
+          },
+          {
+            "title": "Preview",
+            "type": "integer",
+            "description": "Publishing has started but stream was not started from within the dashboard, meaning it can be viewed only from the preview player in dashboard",
+            "enum": [3]
+          },
+          {
+            "title": "Running",
+            "type": "integer",
+            "description": "Stream was started from the dashboard, publishing has started and stream is live",
+            "enum": [4]
+          },
+          {
+            "title": "Ended",
+            "type": "integer",
+            "description": "Stream was finished and publishing is no longer possible",
+            "enum": [5]
+          },
+          {
+            "title": "VodProcessing",
+            "type": "integer",
+            "description": "Stream has ended and is currently processing the VOD output",
+            "enum": [6]
+          },
+          {
+            "title": "Error",
+            "type": "integer",
+            "description": "Stream encountered an error during live publishing or ingest",
+            "enum": [7]
+          }
+        ]
+      },
+      "LiveStreamStatusModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "isDisconnected": {
+            "type": "boolean",
+            "description": "Whether an active stream is waiting for playable live media, including startup and reconnection. False when a live origin is eligible for delivery or the stream is inactive; null when availability cannot be determined.",
+            "nullable": true
+          },
+          "readyToStart": {
+            "type": "boolean",
+            "description": "Determines if the stream is ready to start based on live status"
+          },
+          "primaryLive": {
+            "type": "boolean",
+            "description": "Determines if the primary ingest is live"
+          },
+          "backupLive": {
+            "type": "boolean",
+            "description": "Determines if the backup ingest is live"
+          },
+          "lastPingAgo": {
+            "type": "integer",
+            "description": "The number of milliseconds since the last ping, if available",
+            "format": "int64",
+            "nullable": true
+          },
+          "duration": {
+            "type": "integer",
+            "description": "The stream's duration in seconds: the elapsed time so far while it is running, and the final recorded length once it has ended (matching LiveStreamModel.DurationSeconds, falling back to the interval between StartedAt and EndedAt). Null for a stream that never started.",
+            "format": "int32",
+            "nullable": true
+          },
+          "statusTimeUtc": {
+            "type": "string",
+            "description": "The UTC time when the status is read",
+            "format": "date-time"
+          }
+        }
+      },
+      "LiveStreamType": {
+        "type": "integer",
+        "description": "",
+        "oneOf": [
+          {
+            "title": "Event",
+            "type": "integer",
+            "description": "A regular live stream with a start and an end, optionally recorded as a VOD",
+            "enum": [0]
+          },
+          {
+            "title": "Channel",
+            "type": "integer",
+            "description": "A 24/7 live stream: it never records a VOD, has no maximum publishing duration and stays restartable without a time limit after the publisher disconnects",
+            "enum": [1]
+          }
+        ]
+      },
+      "PaginationListOfLiveStreamModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "totalItems": {
+            "type": "integer",
+            "description": "The total number of items across all pages matching the query, not just the current page.",
+            "format": "int64"
+          },
+          "currentPage": {
+            "type": "integer",
+            "description": "The current page number of the result set (1-based).",
+            "format": "int64"
+          },
+          "itemsPerPage": {
+            "type": "integer",
+            "description": "The effective page size after clamping the requested value; the last page may contain fewer items.",
+            "format": "int32"
+          },
+          "items": {
+            "type": "array",
+            "description": "The items on the current page, in the order returned by the query; an empty list if no results match.",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/LiveStreamModel"
+            }
+          }
+        }
+      },
+      "PatchLiveStreamModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the live stream, left unchanged when omitted. Cannot be null or blank.",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "description": "The description of the live stream, left unchanged when omitted. Null removes it.",
+            "nullable": true
+          },
+          "collectionId": {
+            "type": "string",
+            "description": "The ID of the collection where the live stream belongs, left unchanged when omitted. Null removes the stream from its collection. Must reference an existing collection in this library.",
+            "nullable": true
+          },
+          "dvrEnabled": {
+            "type": "boolean",
+            "description": "Determines if DVR is enabled for the live stream, left unchanged when omitted. Cannot be null.",
+            "nullable": true
+          },
+          "dvrWindowSeconds": {
+            "type": "integer",
+            "description": "The DVR window size in seconds, required when DvrEnabled is true, max is 12 hours, left unchanged when omitted. Cannot be null.",
+            "format": "int32",
+            "maximum": 43200.0,
+            "minimum": 1.0,
+            "nullable": true
+          },
+          "recordVod": {
+            "type": "boolean",
+            "description": "Determines if a VOD recording should be created for the live stream, left unchanged when omitted. Cannot be null.",
+            "nullable": true
+          },
+          "streamType": {
+            "description": "The type of the live stream: Event (0) or Channel (1), left unchanged when omitted. Cannot be null. Can only be changed before the stream has started and while no publisher is connected. Changing to a Channel is rejected while the stream records a VOD: set RecordVod to false first or in the same request.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiveStreamType"
+              }
+            ]
+          },
+          "autoStartOnIngestDetected": {
+            "type": "boolean",
+            "description": "Determines if the live stream should start automatically when ingest is detected, left unchanged when omitted. Cannot be null. A scheduled stream is not started before its scheduled start time.",
+            "nullable": true
+          },
+          "scheduledStartTime": {
+            "type": "string",
+            "description": "The scheduled start time of the live stream (UTC), left unchanged when omitted. If changed, must be in the future. Null removes it before the stream runs: the stream is no longer started automatically, its countdown is disabled, and a Scheduled stream becomes Created, or Preview while a publisher is connected. Cannot be removed while running.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "scheduledEndTime": {
+            "type": "string",
+            "description": "The scheduled end time of the live stream (UTC), left unchanged when omitted. Automatically stops the stream if it is running when the scheduled job executes. Can be changed or removed while running. Null removes it, so the stream is no longer stopped automatically. If changed, must be in the future and after the (effective) scheduled start time. For an Event with a scheduled start time, must be at most 12 hours after it.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "public": {
+            "type": "boolean",
+            "description": "Determines if the live stream is publicly accessible, left unchanged when omitted. Cannot be null.",
+            "nullable": true
+          },
+          "enableCountdown": {
+            "type": "boolean",
+            "description": "Determines if countdown should be shown in player before the stream start, if it was scheduled, left unchanged when omitted. Cannot be null. Can only be enabled if the stream has (or is given in the same request) a scheduled start time.",
+            "nullable": true
+          },
+          "preStreamTrailerVideoId": {
+            "type": "string",
+            "description": "GUID of an existing, non-deleted video in this library to play before the stream starts, left unchanged when omitted. Null removes the trailer.",
+            "nullable": true
+          },
+          "outputs": {
+            "type": "array",
+            "description": "A list of outputs that the incoming stream will be forwarded to, left unchanged when omitted. This replaces the entire existing list: null or an empty array removes all outputs. How many outputs are allowed depends on the account billing standing: fewer during the free trial without a linked payment card. An unchanged list is always accepted.",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/RtmpOutput"
+            }
+          }
+        }
+      },
+      "PublicLiveStreamModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "videoLibraryId",
+          "guid",
+          "title",
+          "public",
+          "status",
+          "dateCreated",
+          "playbackUrlHls",
+          "dvrEnabled",
+          "recordVod",
+          "autoStartOnIngestDetected",
+          "availableResolutions"
+        ],
+        "properties": {
+          "videoLibraryId": {
+            "type": "integer",
+            "description": "The ID of the video library that the live stream belongs to",
+            "format": "int64"
+          },
+          "guid": {
+            "type": "string",
+            "description": "The unique ID of the live stream",
+            "format": "guid",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "description": "The title of the live stream",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "description": "The description of the live stream",
+            "nullable": true
+          },
+          "category": {
+            "type": "string",
+            "description": "The category of the live stream",
+            "nullable": true
+          },
+          "collectionId": {
+            "type": "string",
+            "description": "The ID of the collection where the live stream belongs",
+            "nullable": true
+          },
+          "public": {
+            "type": "boolean",
+            "description": "Determines if the live stream is publicly accessible"
+          },
+          "status": {
+            "description": "The status of the live stream. See LiveStreamStatus.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiveStreamStatus"
+              }
+            ]
+          },
+          "dateCreated": {
+            "type": "string",
+            "description": "The date when the live stream was created",
+            "format": "date-time",
+            "minLength": 1
+          },
+          "scheduledStartTime": {
+            "type": "string",
+            "description": "The scheduled start time of the live stream (optional)",
+            "format": "date-time",
+            "nullable": true
+          },
+          "scheduledEndTime": {
+            "type": "string",
+            "description": "The scheduled end time of the live stream (optional)",
+            "format": "date-time",
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "The date and time when the live stream publishing started",
+            "format": "date-time",
+            "nullable": true
+          },
+          "endedAt": {
+            "type": "string",
+            "description": "The date and time when the live stream publishing ended",
+            "format": "date-time",
+            "nullable": true
+          },
+          "durationSeconds": {
+            "type": "integer",
+            "description": "The final duration of the live stream in seconds, set once the stream has ended. Null while the stream is scheduled or running — use the status endpoint's Duration for the live elapsed time.",
+            "format": "int32",
+            "nullable": true
+          },
+          "playbackUrlHls": {
+            "type": "string",
+            "description": "The HLS playback URL of the live stream",
+            "minLength": 1
+          },
+          "dvrEnabled": {
+            "type": "boolean",
+            "description": "Determines if DVR is enabled for the live stream"
+          },
+          "dvrWindowSeconds": {
+            "type": "integer",
+            "description": "The DVR window size in seconds, required when DvrEnabled is true",
+            "format": "int32",
+            "nullable": true
+          },
+          "recordVod": {
+            "type": "boolean",
+            "description": "Determines if a VOD recording should be created for the live stream"
+          },
+          "streamType": {
+            "description": "The type of the live stream: Event (0) is a regular stream, Channel (1) is a 24/7 stream that never records a VOD, has no maximum publishing duration and stays restartable without a time limit after the publisher disconnects. Can be changed by an update until the stream starts, while no publisher is connected.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiveStreamType"
+              }
+            ]
+          },
+          "autoStartOnIngestDetected": {
+            "type": "boolean",
+            "description": "Determines if the live stream should start automatically when ingest is detected"
+          },
+          "availableResolutions": {
+            "type": "string",
+            "description": "Comma-separated list of resolution labels that have finished encoding and are ready to play (e.g. \"1080p,720p\"). Empty or null until the first rendition is available.",
+            "minLength": 1
+          },
+          "width": {
+            "type": "integer",
+            "description": "The input video width in pixels",
+            "format": "int32",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "description": "The input video height in pixels",
+            "format": "int32",
+            "nullable": true
+          },
+          "framerate": {
+            "type": "number",
+            "description": "The framerate of the input stream",
+            "format": "double",
+            "nullable": true
+          },
+          "peakConcurrentViewers": {
+            "type": "integer",
+            "description": "The peak number of concurrent viewers",
+            "format": "int32",
+            "nullable": true
+          },
+          "totalViewerSeconds": {
+            "type": "integer",
+            "description": "The total viewer watch time in seconds",
+            "format": "int64",
+            "nullable": true
+          },
+          "thumbnailFileName": {
+            "type": "string",
+            "description": "The file name of the thumbnail inside of the storage",
+            "nullable": true
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "description": "The CDN URL of the thumbnail",
+            "nullable": true
+          },
+          "thumbnailUpdatedAt": {
+            "type": "string",
+            "description": "The date and time when the thumbnail was last updated",
+            "format": "date-time",
+            "nullable": true
+          },
+          "enableCountdown": {
+            "type": "boolean",
+            "description": "Determines if countdown should be shown in player before the stream start, if it was scheduled",
+            "nullable": true
+          },
+          "preStreamTrailerVideoId": {
+            "type": "string",
+            "description": "Video ID of the trailer that will be played before the live stream starts",
+            "nullable": true
+          }
+        }
+      },
+      "RedisBitrateEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dateTime": {
+            "type": "string",
+            "description": "UTC timestamp of this sample.",
+            "format": "date-time"
+          },
+          "value": {
+            "type": "number",
+            "description": "The bitrate value for this sample, in kilobits per second (kbps).",
+            "format": "double"
+          }
+        }
+      },
+      "RtmpIngestEndpointConfig": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "primaryIngestUrl": {
+            "type": "string",
+            "description": "The primary ingest URL of the live stream, combine with StreamKey to create the full ingest URL",
+            "nullable": true
+          },
+          "backupIngestUrl": {
+            "type": "string",
+            "description": "The backup ingest URL of the live stream, combine with StreamKey to create the full ingest URL",
+            "nullable": true
+          }
+        }
+      },
+      "RtmpOutput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "description": "Output endpoint URL",
+            "format": "uri",
+            "nullable": true
+          },
+          "streamKey": {
+            "type": "string",
+            "description": "The stream key to append to the RTMP output endpoint URL when forwarding the stream.",
+            "nullable": true
+          }
+        }
+      },
+      "Severity": {
+        "type": "integer",
+        "description": "",
+        "oneOf": [
+          {
+            "title": "Undefined",
+            "type": "integer",
+            "description": "Shouldn't be used",
+            "enum": [0]
+          },
+          {
+            "title": "Information",
+            "type": "integer",
+            "description": "An info message to the user, shouldn't break anythying",
+            "enum": [1]
+          },
+          {
+            "title": "Warning",
+            "type": "integer",
+            "description": "A warning message, for example that the transcoded video may break when playing",
+            "enum": [2]
+          },
+          {
+            "title": "Error",
+            "type": "integer",
+            "description": "An error, meaning that the video will most likely not be playable",
+            "enum": [3]
+          }
+        ]
+      },
+      "SrtIngestEndpointConfig": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "primaryIngestUrl": {
+            "type": "string",
+            "description": "The full primary ingest URL of the live stream, including the StreamKey",
+            "nullable": true
+          },
+          "backupIngestUrl": {
+            "type": "string",
+            "description": "The full backup ingest URL of the live stream, including the StreamKey",
+            "nullable": true
+          }
+        }
+      },
+      "StatusModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Determines if the request was successful"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable message describing the result, typically populated with error details when Success is false.",
+            "nullable": true
+          },
+          "statusCode": {
+            "type": "integer",
+            "description": "The HTTP status code corresponding to the result of the request.",
+            "format": "int32"
+          }
+        }
+      },
+      "StatusModelOfListOfString": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/StatusModel"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "type": "array",
+                "description": "The response payload. Some endpoints also populate this with error details when Success is false — see the endpoint's own response documentation.",
+                "nullable": true,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ThumbnailListResponseModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The storage-relative object path of the thumbnail (not a full URL) — prepend the pull zone hostname to build a playable URL.",
+            "nullable": true
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "UTC time the thumbnail was created. Results are returned most-recent-first.",
+            "format": "date-time"
+          }
+        }
+      },
+      "TranscodingMessageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "timeStamp": {
+            "type": "string",
+            "description": "Date and time when this message was added (UTC).",
+            "format": "date-time"
+          },
+          "level": {
+            "description": "Message severity. See Severity.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Severity"
+              }
+            ]
+          },
+          "issueCode": {
+            "description": "Issue code identifying the specific transcoding problem. See IssueCodes.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IssueCodes"
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable description of the issue.",
+            "nullable": true
+          },
+          "value": {
+            "type": "string",
+            "description": "Additional context value for the issue, if applicable; otherwise empty.",
+            "nullable": true
+          }
+        }
+      },
+      "UpdateLiveStreamModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the live stream. Required on every update request, even one that only changes other fields — the request is rejected if left blank.",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "description": "The description of the live stream",
+            "nullable": true
+          },
+          "collectionId": {
+            "type": "string",
+            "description": "The ID of the collection where the live stream belongs. Omit/null to leave the current collection unchanged; send an empty string to remove the stream from its collection. Must reference an existing collection in this library.",
+            "nullable": true
+          },
+          "dvrEnabled": {
+            "type": "boolean",
+            "description": "Determines if DVR is enabled for the live stream, left unchanged when omitted",
+            "nullable": true
+          },
+          "dvrWindowSeconds": {
+            "type": "integer",
+            "description": "The DVR window size in seconds, required when DvrEnabled is true, max is 12 hours, left unchanged when omitted",
+            "format": "int32",
+            "maximum": 43200.0,
+            "minimum": 1.0,
+            "nullable": true
+          },
+          "recordVod": {
+            "type": "boolean",
+            "description": "Determines if a VOD recording should be created for the live stream, left unchanged when omitted",
+            "nullable": true
+          },
+          "streamType": {
+            "description": "The type of the live stream: Event (0) or Channel (1), left unchanged when omitted. Can only be changed before the stream has started and while no publisher is connected. Changing to a Channel is rejected while the stream records a VOD: set RecordVod to false first or in the same request.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiveStreamType"
+              }
+            ]
+          },
+          "autoStartOnIngestDetected": {
+            "type": "boolean",
+            "description": "Determines if the live stream should start automatically when ingest is detected, left unchanged when omitted. A scheduled stream is not started before its scheduled start time.",
+            "nullable": true
+          },
+          "scheduledStartTime": {
+            "type": "string",
+            "description": "The scheduled start time of the live stream (optional, UTC). If changed, must be in the future.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "scheduledEndTime": {
+            "type": "string",
+            "description": "The scheduled end time of the live stream (optional, UTC). Automatically stops the stream if it is running when the scheduled job executes. Can be changed while running. If changed, must be in the future and after the (effective) scheduled start time. Omit/null to leave unchanged.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "public": {
+            "type": "boolean",
+            "description": "Determines if the live stream is publicly accessible, left unchanged when omitted",
+            "nullable": true
+          },
+          "enableCountdown": {
+            "type": "boolean",
+            "description": "Determines if countdown should be shown in player before the stream start, if it was scheduled, left unchanged when omitted. Can only be enabled if the stream has (or is given in the same request) a scheduled start time.",
+            "nullable": true
+          },
+          "preStreamTrailerVideoId": {
+            "type": "string",
+            "description": "GUID of an existing, non-deleted video in this library to play before the stream starts. Omit/null to leave the current trailer unchanged; send an empty string to remove it.",
+            "nullable": true
+          },
+          "outputs": {
+            "type": "array",
+            "description": "A list of outputs that the incoming stream will be forwarded to. This replaces the entire existing list: omit/null to leave outputs unchanged, or send an empty array to remove all outputs. How many outputs are allowed depends on the account billing standing: fewer during the free trial without a linked payment card. An unchanged list is always accepted. Takes precedence over the deprecated RtmpOutputs when both are sent.",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/RtmpOutput"
+            }
+          },
+          "rtmpOutputs": {
+            "type": "array",
+            "description": "Deprecated, replaced by Outputs. Only read when Outputs is omitted.",
+            "deprecated": true,
+            "x-deprecatedMessage": "Replaced by Outputs, kept for backwards compatibility.",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/RtmpOutput"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "AccessKey": {
+        "type": "apiKey",
+        "description": "AccessKey based authentication",
+        "name": "AccessKey",
+        "in": "header"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Live Statistics"
+    },
+    {
+      "name": "Manage Live Streams"
+    }
+  ]
+}

@@ -34,7 +34,10 @@ const SECRET_KEY_RE =
   /^(.*key|.*password|.*secret|.*token|.*credentials?|.*authorization.*|.*cookie)$/i;
 
 const REDACTED = "[redacted]";
-const URL_SCHEME = /https?:\/\//i;
+// Any scheme, not just http(s): SRT ingest URLs carry a stream key in their query.
+const URL_SCHEME = /[a-z][a-z0-9+.-]*:\/\//i;
+// A `name=value` pair in a bare query string, such as Stream Live's `playerQueryParameters`.
+const QUERY_PARAM = /(^|[?&;])([^=&?;#\s]+)=([^&;#\s]*)/g;
 
 // A URL's query string is where pre-signed credentials live (X-Amz-Signature, bearer params), so it goes wholesale, as does any userinfo.
 function redactUrl(token: string): string {
@@ -56,14 +59,24 @@ function redactUrl(token: string): string {
   return `${token.slice(0, host)}${authority}${rest}`;
 }
 
+/** Redact the values of secret-named parameters in a query string without a URL (`previewToken=...&expires=...`). */
+function redactQueryParams(token: string): string {
+  if (!token.includes("=")) return token;
+  return token.replace(
+    QUERY_PARAM,
+    (pair, sep: string, name: string, value: string) =>
+      value && SECRET_KEY_RE.test(name) ? `${sep}${name}=${REDACTED}` : pair,
+  );
+}
+
 /**
  * Copy a parsed body with every secret-looking string value replaced.
  *
  * Verbose mode dumps request and response bodies, and those bodies carry real
  * credentials: a video library answers with its ApiKey, a storage zone with its
  * password, and a Stream fetch request with the origin's Authorization header.
- * Redacting is structural (by property name) so it holds for shapes this code
- * has never seen.
+ * Redacting is structural (by property name, and by parameter name inside a
+ * query string) so it holds for shapes this code has never seen.
  */
 export function redactSecrets(value: unknown, depth = 0): unknown {
   // Deeply nested or cyclic bodies are not worth walking; bail to a marker.
@@ -71,7 +84,10 @@ export function redactSecrets(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) {
     return value.map((entry) => redactSecrets(entry, depth + 1));
   }
-  if (typeof value === "string") return value.replace(/\S+/g, redactUrl);
+  if (typeof value === "string")
+    return value.replace(/\S+/g, (token) =>
+      redactQueryParams(redactUrl(token)),
+    );
   if (value === null || typeof value !== "object") return value;
 
   const out: Record<string, unknown> = {};
@@ -115,9 +131,44 @@ const extractors: Array<
     b?.Message ? { message: b.Message, field: b.Field ?? undefined } : null,
 
   // StatusModel (Stream): lowercase `message`, which the Core extractor above misses.
-  (b) =>
-    typeof b?.message === "string" && b.message ? { message: b.message } : null,
+  // Stream Live puts the actual reason in `data` (a list of strings) under a generic
+  // `message` ("Invalid request"), so the reasons win when present.
+  (b) => {
+    const reasons = Array.isArray(b?.data)
+      ? b.data.filter(
+          (entry: unknown): entry is string =>
+            typeof entry === "string" && entry.trim().length > 0,
+        )
+      : [];
+    if (reasons.length > 0) return { message: reasons.join(" ") };
+    return typeof b?.message === "string" && b.message
+      ? { message: b.message }
+      : null;
+  },
 ];
+
+/** Longest plain-text error body used verbatim as the error message. */
+const MAX_TEXT_ERROR = 300;
+
+/** `text` with whitespace collapsed, or null when empty or too long to be a message. */
+function shortText(text: string): string | null {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  return normalized && normalized.length <= MAX_TEXT_ERROR ? normalized : null;
+}
+
+/**
+ * A short `text/plain` error body, such as Stream's "Invalid thumbnail file size.",
+ * or null. HTML (proxy error pages) and long bodies fall back to the status message.
+ */
+async function plainTextError(response: Response): Promise<string | null> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().startsWith("text/plain")) return null;
+  try {
+    return shortText(await response.clone().text());
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Shared openapi-fetch middleware for all bunny.net API clients.
@@ -228,13 +279,30 @@ export function authMiddleware(options: ClientOptions): Middleware {
 
       const extracted =
         body &&
+        typeof body === "object" &&
         extractors.reduce<ReturnType<(typeof extractors)[0]>>(
           (found, fn) => found ?? fn(body),
           null,
         );
 
+      // Only client errors: a 401 keeps its key hint, and a 5xx text body may be a stack trace.
+      // The text is a text/plain body, or a JSON body that is a bare string
+      // (Stream Live's 422 when a thumbnail URL can't be fetched).
+      const usesText =
+        !extracted &&
+        (!body || typeof body === "string") &&
+        response.status >= 400 &&
+        response.status < 500 &&
+        response.status !== 401;
+      const text = !usesText
+        ? null
+        : typeof body === "string"
+          ? shortText(body)
+          : await plainTextError(response);
+
       throw new ApiError(
         extracted?.message ??
+          text ??
           STATUS_MESSAGES[response.status] ??
           `API request failed (${response.status}).`,
         response.status,

@@ -174,6 +174,7 @@ export function printNextSteps(library: VideoLibraryModel): void {
   logger.dim(
     `  Import videos:   bunny stream import --library ${id} --source <platform>`,
   );
+  logger.dim(`  Go live:         bunny stream live create --lib ${id}`);
   logger.dim(`  Credentials:     bunny stream libraries credentials ${id}`);
   logger.dim(`  Examples:        ${examplesUrl("stream")}`);
 }

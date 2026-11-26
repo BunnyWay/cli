@@ -25,6 +25,9 @@ import streamMd from "@skills/bunny-cli/references/stream.md" with {
 import streamImportMd from "@skills/bunny-cli/references/stream-import.md" with {
   type: "text",
 };
+import streamLiveMd from "@skills/bunny-cli/references/stream-live.md" with {
+  type: "text",
+};
 import skillMd from "@skills/bunny-cli/SKILL.md" with { type: "text" };
 import type { ProjectSkill } from "@/core/agent-skill.ts";
 
@@ -57,5 +60,6 @@ export const BUNNY_CLI_SKILL: ProjectSkill = {
     "references/storage.md": storageMd,
     "references/stream.md": streamMd,
     "references/stream-import.md": streamImportMd,
+    "references/stream-live.md": streamLiveMd,
   },
 };

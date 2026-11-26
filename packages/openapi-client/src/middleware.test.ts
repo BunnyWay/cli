@@ -170,6 +170,123 @@ describe("authMiddleware onResponse", () => {
     expect(error.message).toBe("URL validation failed");
   });
 
+  // Stream Live answers 400s with a generic message and the real reason in `data`.
+  test("prefers the Stream StatusModel's data reasons over its generic message", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        jsonResponse(
+          {
+            data: [
+              "Cannot delete live stream while a publisher is connected, stop publishing to it first",
+            ],
+            success: false,
+            message: "Invalid request",
+            statusCode: 400,
+          },
+          400,
+        ),
+      ),
+    )) as ApiError;
+    expect(error.status).toBe(400);
+    expect(error.message).toBe(
+      "Cannot delete live stream while a publisher is connected, stop publishing to it first",
+    );
+  });
+
+  test("joins several data reasons and ignores non-string entries", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        jsonResponse(
+          {
+            data: ["Title is required.", 42, "", "DVR window is too long."],
+            message: "Invalid request",
+          },
+          400,
+        ),
+      ),
+    )) as ApiError;
+    expect(error.message).toBe("Title is required. DVR window is too long.");
+  });
+
+  test("keeps the message when data is not a list of reasons", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        jsonResponse({ data: { id: 1 }, message: "Invalid request" }, 400),
+      ),
+    )) as ApiError;
+    expect(error.message).toBe("Invalid request");
+  });
+
+  test("uses a short text/plain body on a client error", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        new Response("Invalid thumbnail file size.", {
+          status: 400,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        }),
+      ),
+    )) as ApiError;
+    expect(error.status).toBe(400);
+    expect(error.message).toBe("Invalid thumbnail file size.");
+  });
+
+  test("uses a short JSON string body on a client error", async () => {
+    const error = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        new Response(
+          JSON.stringify("Could not fetch the thumbnail URL: 404."),
+          {
+            status: 422,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      ),
+    )) as ApiError;
+    expect(error.status).toBe(422);
+    expect(error.message).toBe("Could not fetch the thumbnail URL: 404.");
+    const server = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        new Response(JSON.stringify("boom"), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    )) as ApiError;
+    expect(server.message).toBe("Internal server error.");
+  });
+
+  test("ignores a text/plain body on a 401 or 5xx, and an HTML body", async () => {
+    const plain = (status: number) =>
+      new Response("boom", {
+        status,
+        headers: { "content-type": "text/plain" },
+      });
+    const unauthorized = (await captureError(
+      runResponse({ apiKey: "k" }, plain(401)),
+    )) as ApiError;
+    expect(unauthorized.message).toBe("Unauthorized. Check your API key.");
+    const server = (await captureError(
+      runResponse({ apiKey: "k" }, plain(500)),
+    )) as ApiError;
+    expect(server.message).toBe("Internal server error.");
+    const html = (await captureError(
+      runResponse(
+        { apiKey: "k" },
+        new Response("<html>Bad gateway</html>", {
+          status: 400,
+          headers: { "content-type": "text/html" },
+        }),
+      ),
+    )) as ApiError;
+    expect(html.message).toBe("API request failed (400).");
+  });
+
   test("uses a friendly status message for an empty error body", async () => {
     const error = (await captureError(
       runResponse({ apiKey: "k" }, new Response(null, { status: 401 })),
@@ -282,6 +399,24 @@ test("verbose response body dumps are redacted", async () => {
   expect(dump).toContain("my-library");
   expect(dump).not.toContain("rw-secret");
   expect(dump).toContain("[redacted]");
+});
+
+test("redactSecrets redacts secret parameters in bare query strings and any URL scheme's query", () => {
+  const out = redactSecrets({
+    playerQueryParameters:
+      "previewToken=HS256-preview-secret&previewExpires=1800000000&token=view-secret&expires=1800000000",
+    srt: "srt://global.srt.mediadelivery.net:8890?streamid=publish:live/key-secret",
+    note: "a=b and plain text",
+  });
+  const dump = JSON.stringify(out);
+  expect(dump).not.toContain("preview-secret");
+  expect(dump).not.toContain("view-secret");
+  expect(dump).not.toContain("key-secret");
+  expect(out).toMatchObject({
+    playerQueryParameters:
+      "previewToken=[redacted]&previewExpires=1800000000&token=[redacted]&expires=1800000000",
+    note: "a=b and plain text",
+  });
 });
 
 test("verbose request body dumps are redacted and read from a clone", async () => {

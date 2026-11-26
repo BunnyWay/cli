@@ -73,6 +73,12 @@ bunny stream libraries create my-library --link --save-env --no-add-videos   # l
 bunny stream videos upload ./video.mp4 --title "Launch demo"
 bunny stream videos list
 
+# live stream from Bunny Stream
+bunny stream live create "Launch keynote" --record-vod # prints the encoder server; key masked
+bunny stream live ingest <id> --show-secret            # stream key for OBS / vMix / FFmpeg
+bunny stream live start <id> --force                   # go public once the encoder publishes (can't be undone)
+bunny stream live stop <id>                            # end it; the VOD, if on, is saved
+
 # import a video library into Bunny Stream
 bunny stream import list --source vimeo                        # browse folders first
 bunny stream import --library 12345 --source vimeo --dry-run   # plan first
@@ -93,6 +99,7 @@ Use this to route to the correct reference file:
 - **Edge Storage (zones, files, connection credentials, S3/FTP/HTTP, custom domains)** -> `references/storage.md`
 - **Sandboxes (create, exec, ssh, files list/cp, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
 - **Bunny Stream (libraries, player/security settings, video upload/fetch/embed/cleanup, captions, collections, encoding, transcription, smart titles/chapters)** -> `references/stream.md`
+- **Bunny Stream live streaming (create a live stream, encoder/ingest settings and stream keys, go live, status/bitrate monitoring, stop and save a VOD, RTMP outputs)** -> `references/stream-live.md`
 - **Import a video library into Bunny Stream (Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, Brightcove; browse, dry run, resume, status)** -> `references/stream-import.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)

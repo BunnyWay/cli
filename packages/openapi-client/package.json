@@ -72,6 +72,10 @@
       "types": "./dist/stream.d.ts",
       "import": "./dist/stream.js"
     },
+    "./stream-live": {
+      "types": "./dist/stream-live.d.ts",
+      "import": "./dist/stream-live.js"
+    },
     "./generated/*": "./dist/generated/*"
   },
   "files": [

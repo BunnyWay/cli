@@ -1,0 +1,355 @@
+import { expect, test } from "bun:test";
+import { toLiveStream } from "@/tools/stream/index.ts";
+import { bitrateSummary } from "./bitrate.ts";
+import { nextSteps, startFact } from "./create.ts";
+import { assertNoPublisher } from "./delete.ts";
+import {
+  formatPingAgo,
+  liveSettingsFromFlags,
+  maskIngest,
+  maskRtmpOutput,
+  maskSrtUrl,
+  parseDuration,
+  parseRtmpOutput,
+  parseTimeFlag,
+  rtmpOutputEnv,
+  streamRef,
+} from "./shared.ts";
+import { statusHint } from "./status.ts";
+
+const NOW = Date.parse("2026-11-23T12:00:00Z");
+
+test("parseDuration takes seconds or a unit suffix", () => {
+  expect(parseDuration("90", "dvr")).toBe(90);
+  expect(parseDuration("30m", "dvr")).toBe(1800);
+  expect(parseDuration("2h", "dvr")).toBe(7200);
+  expect(parseDuration("1.5h", "dvr")).toBe(5400);
+  expect(() => parseDuration("soon", "dvr")).toThrow('Invalid --dvr "soon"');
+});
+
+test("parseDuration combines units, largest first", () => {
+  // 10h5m is the documented --expires maximum, so it must parse.
+  expect(parseDuration("10h5m", "expires")).toBe(36_300);
+  expect(parseDuration("10h05m", "expires")).toBe(36_300);
+  expect(parseDuration("1h30m", "dvr")).toBe(5400);
+  expect(parseDuration("1h 30m", "dvr")).toBe(5400);
+  expect(parseDuration("30 m", "dvr")).toBe(1800);
+  expect(parseDuration("1d2h3m4s", "dvr")).toBe(93_784);
+  for (const bad of ["5m10h", "1h1h", "1h30", "h", "-1h", ""]) {
+    expect(() => parseDuration(bad, "dvr")).toThrow(`Invalid --dvr "${bad}"`);
+  }
+});
+
+test("parseTimeFlag takes ISO 8601 or a time from now", () => {
+  expect(parseTimeFlag("+30m", "start", NOW)).toBe("2026-11-23T12:30:00.000Z");
+  expect(parseTimeFlag("2026-12-01T18:00:00Z", "start", NOW)).toBe(
+    "2026-12-01T18:00:00.000Z",
+  );
+  expect(parseTimeFlag("+1h30m", "start", NOW)).toBe(
+    "2026-11-23T13:30:00.000Z",
+  );
+  expect(() => parseTimeFlag("tomorrow", "start", NOW)).toThrow(
+    'Invalid --start "tomorrow"',
+  );
+});
+
+test("parseTimeFlag reads a date-time without an offset as UTC, whatever the local zone", () => {
+  // The flags say "ISO 8601 UTC"; Date alone would read this as local time.
+  expect(parseTimeFlag("2026-12-01T18:00", "start", NOW)).toBe(
+    "2026-12-01T18:00:00.000Z",
+  );
+  expect(parseTimeFlag("2026-12-01T18:00:00.5", "start", NOW)).toBe(
+    "2026-12-01T18:00:00.500Z",
+  );
+  // An explicit offset is honoured.
+  expect(parseTimeFlag("2026-12-01T18:00:00-05:00", "start", NOW)).toBe(
+    "2026-12-01T23:00:00.000Z",
+  );
+});
+
+test("parseRtmpOutput splits the stream key off the last path segment", () => {
+  expect(parseRtmpOutput("rtmps://a.rtmp.youtube.com/live2/abcd-1234")).toEqual(
+    {
+      endpoint: "rtmps://a.rtmp.youtube.com/live2",
+      streamKey: "abcd-1234",
+    },
+  );
+  expect(() => parseRtmpOutput("https://example.com/live/key")).toThrow(
+    "Invalid --rtmp-output",
+  );
+  expect(() => parseRtmpOutput("rtmp://example.com")).toThrow(
+    "Invalid --rtmp-output",
+  );
+});
+
+test("a bad --rtmp-output value is echoed with its key masked", () => {
+  expect(() => parseRtmpOutput("https://example.com/live/secret-key")).toThrow(
+    'Invalid --rtmp-output "https://example.com/live/•••".',
+  );
+  expect(() => parseRtmpOutput("secret-key")).toThrow(
+    'Invalid --rtmp-output "•••".',
+  );
+});
+
+// A trailing slash made the whole value, key included, show up in the error.
+test("a trailing slash doesn't unmask the RTMP output key", () => {
+  expect(maskRtmpOutput("rtmps://a.rtmp.youtube.com/live2/real-key/")).toBe(
+    "rtmps://a.rtmp.youtube.com/live2/•••/",
+  );
+  expect(maskRtmpOutput("rtmps://a.rtmp.youtube.com/live2/real-key//")).toBe(
+    "rtmps://a.rtmp.youtube.com/live2/•••//",
+  );
+  let message = "";
+  try {
+    parseRtmpOutput("rtmps://a.rtmp.youtube.com/live2/real-key/");
+  } catch (err) {
+    message = (err as Error).message;
+  }
+  expect(message).toContain("Invalid --rtmp-output");
+  expect(message).not.toContain("real-key");
+});
+
+test("a scheduled start wins over auto-start in the next steps", () => {
+  const stream = toLiveStream({
+    videoLibraryId: 12345,
+    guid: "abc",
+    title: "Keynote",
+    autoStartOnIngestDetected: true,
+    scheduledStartTime: "2026-12-01T18:00:00Z",
+  } as Parameters<typeof toLiveStream>[0]);
+  const steps = nextSteps(stream);
+  expect(
+    steps.some((s) => s.startsWith("Go live:          automatic at")),
+  ).toBe(true);
+  expect(steps).toContain("Go live early:    bunny stream live start abc");
+  expect(steps.join("\n")).not.toContain(
+    "connecting the encoder takes it live",
+  );
+});
+
+test("bitrateSummary handles a history too long to spread into Math.min", () => {
+  const samples = Array.from({ length: 300_000 }, (_, i) => ({
+    time: "2026-11-26T00:00:00Z",
+    kbps: 1000 + (i % 1000),
+  }));
+  expect(bitrateSummary(samples)).toBe(
+    "avg 1,500 · min 1,000 · max 1,999 kbps (300000 samples)",
+  );
+  expect(bitrateSummary([])).toBe("No samples");
+});
+
+test("delete refuses while an encoder publishes, pointing at the way out", () => {
+  const health = {
+    id: "abc",
+    title: "Keynote",
+    status: "preview",
+    readyToStart: true,
+    primaryLive: true,
+    backupLive: false,
+    disconnected: false,
+    lastPingMs: 100,
+    durationSeconds: null,
+    bitrateKbps: null,
+    checkedAt: null,
+  } as Parameters<typeof assertNoPublisher>[0];
+  expect(() => assertNoPublisher(health, "abc")).toThrow(
+    "An encoder is still publishing to Keynote",
+  );
+  expect(() =>
+    assertNoPublisher({ ...health, status: "running" }, "abc --lib 1"),
+  ).toThrow("can't be deleted yet");
+  try {
+    assertNoPublisher({ ...health, status: "running" }, "abc --lib 1");
+  } catch (err) {
+    expect((err as { hint?: string }).hint).toContain(
+      "bunny stream live stop abc --lib 1",
+    );
+  }
+  expect(() =>
+    assertNoPublisher(
+      { ...health, primaryLive: false, backupLive: true },
+      "abc",
+    ),
+  ).toThrow();
+  expect(() =>
+    assertNoPublisher({ ...health, primaryLive: false }, "abc"),
+  ).not.toThrow();
+});
+
+test("liveSettingsFromFlags builds a sparse create body", () => {
+  expect(
+    liveSettingsFromFlags(
+      {
+        type: "event",
+        "record-vod": true,
+        dvr: "1h",
+        start: "+30m",
+        "rtmp-output": ["rtmp://live.twitch.tv/app/live_123"],
+      },
+      "create",
+      NOW,
+    ),
+  ).toEqual({
+    type: "event",
+    recordVod: true,
+    dvrWindowSeconds: 3600,
+    scheduledStart: "2026-11-23T12:30:00.000Z",
+    outputs: [
+      {
+        endpoint: "rtmp://live.twitch.tv/app",
+        streamKeyEnv: "BUNNY_STREAM_RTMP_OUTPUT_KEY_1",
+      },
+    ],
+  });
+});
+
+test("RTMP output keys go to the environment, never into the settings", () => {
+  const args = {
+    "rtmp-output": [
+      "rtmp://live.twitch.tv/app/live_123",
+      "rtmps://a.rtmp.youtube.com/live2/yt-key",
+    ],
+  };
+  const settings = liveSettingsFromFlags(args, "create", NOW);
+  expect(JSON.stringify(settings)).not.toContain("live_123");
+  expect(JSON.stringify(settings)).not.toContain("yt-key");
+  expect(rtmpOutputEnv(args, "create")).toEqual({
+    BUNNY_STREAM_RTMP_OUTPUT_KEY_1: "live_123",
+    BUNNY_STREAM_RTMP_OUTPUT_KEY_2: "yt-key",
+  });
+  expect(rtmpOutputEnv({ "rtmp-output": ["none"] }, "update")).toEqual({});
+  expect(rtmpOutputEnv({}, "update")).toEqual({});
+});
+
+test('liveSettingsFromFlags treats "none" as clearing on update only', () => {
+  expect(
+    liveSettingsFromFlags(
+      {
+        start: "none",
+        "pre-stream-trailer": "none",
+        "rtmp-output": ["none"],
+      },
+      "update",
+      NOW,
+    ),
+  ).toEqual({
+    scheduledStart: null,
+    preStreamTrailerVideoId: null,
+    outputs: [],
+  });
+});
+
+test("liveSettingsFromFlags rejects bad combinations before any request", () => {
+  expect(() =>
+    liveSettingsFromFlags(
+      { type: "channel", "record-vod": true },
+      "create",
+      NOW,
+    ),
+  ).toThrow("can't record a VOD");
+  expect(() => liveSettingsFromFlags({ dvr: "13h" }, "create", NOW)).toThrow(
+    "at most 12h",
+  );
+  expect(() =>
+    liveSettingsFromFlags({ start: "2020-01-01T00:00:00Z" }, "create", NOW),
+  ).toThrow("must be in the future");
+  // An empty --rtmp-output would send [], which create reads as "inherit the library's".
+  expect(() =>
+    liveSettingsFromFlags({ "rtmp-output": [""] }, "create", NOW),
+  ).toThrow("at least one");
+});
+
+test("maskIngest hides the key, including inside SRT URLs", () => {
+  const key = "bunnylive_secretkey123456";
+  const srt = `srt://global.srt.mediadelivery.net:8890?mode=caller&streamid=publish:live/${key}&latency=120000`;
+  expect(maskSrtUrl(srt)).not.toContain("secretkey");
+  expect(maskSrtUrl(srt)).toContain("3456&latency=120000");
+
+  const masked = maskIngest({
+    libraryId: 1,
+    streamId: "abc",
+    streamKey: key,
+    rtmp: null,
+    rtmps: {
+      primary: "rtmps://global.rtmp.mediadelivery.net/live",
+      backup: null,
+    },
+    srt: { primary: srt, backup: null },
+  });
+  expect(JSON.stringify(masked)).not.toContain("secretkey");
+  expect(masked.rtmps?.primary).toBe(
+    "rtmps://global.rtmp.mediadelivery.net/live",
+  );
+});
+
+test("next steps name the library unless it's the linked one", () => {
+  // nextSteps reads the ID, auto-start and the scheduled start.
+  const stream = toLiveStream({
+    videoLibraryId: 12345,
+    guid: "abc",
+    title: "Keynote",
+    autoStartOnIngestDetected: false,
+  } as Parameters<typeof toLiveStream>[0]);
+  expect(nextSteps(stream)).toContain(
+    "Go live:          bunny stream live start abc",
+  );
+  const ref = streamRef("abc", 12345);
+  expect(ref).toBe("abc --lib 12345");
+  expect(nextSteps(stream, ref)).toContain(
+    "Go live:          bunny stream live start abc --lib 12345",
+  );
+  expect(nextSteps(stream, ref)).toContain(
+    "Reveal the key:   bunny stream live ingest abc --lib 12345 --show-secret",
+  );
+});
+
+// A scheduled stream goes live by itself; the summary and steps must not say it waits for `live start`.
+test("startFact and nextSteps describe how the stream goes live", () => {
+  const base = {
+    videoLibraryId: 12345,
+    guid: "abc",
+    title: "Keynote",
+    autoStartOnIngestDetected: false,
+  } as Parameters<typeof toLiveStream>[0];
+
+  const manual = toLiveStream(base);
+  expect(startFact(manual)).toBe("starts when you run `live start`");
+
+  const auto = toLiveStream({ ...base, autoStartOnIngestDetected: true });
+  expect(startFact(auto)).toBe("starts when the encoder connects");
+
+  const scheduled = toLiveStream({
+    ...base,
+    scheduledStartTime: "2026-12-01T18:00:00",
+  });
+  expect(startFact(scheduled)).toMatch(/^starts by itself at Dec 0?1, 2026 /);
+  expect(startFact(scheduled)).not.toContain("live start");
+  const steps = nextSteps(scheduled);
+  expect(
+    steps.some((step) => step.startsWith("Go live:          automatic at")),
+  ).toBe(true);
+  expect(steps).toContain("Go live early:    bunny stream live start abc");
+  expect(steps).not.toContain("Go live:          bunny stream live start abc");
+});
+
+test("status hints carry the stream reference", () => {
+  const report = {
+    id: "abc",
+    status: "created",
+    readyToStart: false,
+  } as Parameters<typeof statusHint>[0];
+  expect(statusHint(report)).toBe(
+    "Waiting for the encoder. Settings: bunny stream live ingest abc",
+  );
+  expect(statusHint(report, "abc --lib 12345")).toBe(
+    "Waiting for the encoder. Settings: bunny stream live ingest abc --lib 12345",
+  );
+});
+
+test("formatPingAgo reads seconds while recent, then the largest unit", () => {
+  expect(formatPingAgo(null)).toBe("-");
+  expect(formatPingAgo(1200)).toBe("1s ago");
+  expect(formatPingAgo(45_000)).toBe("45s ago");
+  expect(formatPingAgo(125_000)).toBe("2m ago");
+  expect(formatPingAgo(584_184_000)).toBe("6d ago");
+});
