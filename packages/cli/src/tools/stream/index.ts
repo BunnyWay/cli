@@ -36,7 +36,9 @@ import {
   type VideoLibraryUpdateModel,
 } from "./model.ts";
 
+export * from "./countries.ts";
 export * from "./import/index.ts";
+export * from "./library-extras.ts";
 export * from "./model.ts";
 
 const libraryId = z
