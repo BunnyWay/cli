@@ -1348,7 +1348,7 @@ bunny stream live rotate-key 0f4e5d6c-...            # new stream key; connected
 bunny stream live delete 0f4e5d6c-...                # confirms first; --force skips it. Deletes its VOD too
 ```
 
-A stream starts in **Created** (or **Scheduled**). When an encoder connects it enters **Preview**: only you can see it (`live preview`) and nothing is recorded. `live start` takes it **Live**; with `--auto-start`, connecting the encoder does that instead. A stream with `--start` goes **Live** by itself at that time (an encoder connected earlier leaves it in Scheduled); `live start` before then takes it live early. `live stop` ends it for good, disconnecting the encoder and, for an event with `--record-vod`, saving everything after the start as a VOD, which plays from the stream's own player and playback URL. Playback is ready 15-20 seconds after the encoder connects and after the start.
+A stream starts in **Created** (or **Scheduled**). When an encoder connects it enters **Preview**: only you can see it (`live preview`) and nothing is recorded, but live encoding is already running and billed. `live start` takes it **Live**; with `--auto-start`, connecting the encoder does that instead. A stream with `--start` goes **Live** by itself at that time (an encoder connected earlier leaves it in Scheduled); `live start` before then takes it live early. `live stop` ends it for good, disconnecting the encoder and, for an event with `--record-vod`, saving everything after the start as a VOD, which plays from the stream's own player and playback URL. Playback is ready 15-20 seconds after the encoder connects and after the start.
 
 An **event** (the default `--type`) runs at most 12 hours and ends 30 minutes after its encoder disconnects; it can record a VOD with `--record-vod`. A **channel** runs 24/7 with no time limit, survives disconnects (reconnect with the same key), and never records a VOD, so `--type channel --record-vod` is refused before any request. Settings you leave out on `create` use the library's live defaults.
 
@@ -1383,7 +1383,7 @@ The stream key is a publishing credential, so `create`, `ingest` and `rotate-key
 | `--file`, `--url`, `--remove`, `--no-restore-default` | `thumbnail`                             | Image to upload or download, or remove the custom one                                                              |
 | `--force`, `-f`                                       | `start`, `stop`, `rotate-key`, `delete` | Skip the prompts (required unattended); on `start`, start even with no encoder publishing                          |
 
-While a stream is live, only `--title`, `--description` and `--end` can change. Live encoding is billed per minute by the highest output resolution: **SD $0.020**, **HD $0.030**, **UHD $0.090** per minute, with primary and backup encoders billed separately. `live stats` reports the encoding minutes.
+While a stream is live, only `--title`, `--description` and `--end` can change. Live encoding is billed per minute while an encoder is publishing, in Preview as well as Live, by the highest output resolution: **SD $0.020**, **HD $0.030**, **UHD $0.090** per minute, with primary and backup encoders billed separately. `live stats` reports the encoding minutes.
 
 #### `bunny stream import`
 

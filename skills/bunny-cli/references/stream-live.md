@@ -9,7 +9,7 @@ Every command takes `--lib` (alias `--library`, name or ID; defaults to the link
 ```bash
 bunny stream live create "Launch keynote" --lib 12345 --output json   # note the id
 bunny stream live ingest <id> --show-secret          # server URLs + stream key for the encoder
-# ...encoder connects: status Preview (private, nothing recorded)...
+# ...encoder connects: status Preview (private, nothing recorded, encoding billed)...
 bunny stream live status <id>                        # primaryLive / readyToStart / bitrate
 bunny stream live start <id> --force                 # public; VOD recording starts if --record-vod
 bunny stream live stop <id> --force                  # ends for good; the VOD, if on, is saved
@@ -62,7 +62,7 @@ bunny stream live show <id>                          # includes issues: failover
 bunny stream live stats --from 2026-11-01            # encoding minutes, primary vs backup
 ```
 
-Live encoding is billed per minute by the highest output resolution: SD $0.020, HD $0.030, UHD $0.090 per minute; primary and backup encoders are billed separately. `stats` reports encoding minutes per stream and resolution.
+Live encoding is billed per minute while an encoder is publishing, in Preview as well as Live, by the highest output resolution: SD $0.020, HD $0.030, UHD $0.090 per minute; primary and backup encoders are billed separately. `stats` reports encoding minutes per stream and resolution.
 
 Preview links are token-protected and only work while the stream is Created, Scheduled or in Preview; they stop when it goes public. Option 1 (default) includes the view token when the library needs one and a CDN-signed playlist. Option 2 (`--sign`, HMAC-SHA256 with the stream key) adds neither, and rotating the key invalidates it. An expired or forged token is ignored, not rejected: the viewer sees the public view.
 
@@ -70,6 +70,7 @@ Preview links are token-protected and only work while the stream is Created, Sch
 
 - Don't `start` before the encoder publishes and expect a full recording: only what comes after the start is recorded.
 - Don't `stop` to tidy up a stream that never went live: `stop` refuses it; use `delete`.
+- Don't leave an encoder publishing to a stream in Preview you aren't using: Preview is billed like Live.
 - Don't `delete` a stream whose VOD you want to keep: the VOD is part of the stream (it plays from the stream's player, not as a library video) and is deleted with it.
 - Don't print stream keys into logs or CI output without need: `--show-secret` is the only way they appear.
 - Accounts have a limit on concurrent live streams; `create` fails with a clear error past it, so delete streams you no longer need.

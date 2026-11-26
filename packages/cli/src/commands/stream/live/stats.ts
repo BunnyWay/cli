@@ -33,7 +33,7 @@ export const streamLiveStatsCommand = defineToolCommand({
     ],
   ],
   // Amounts are written "USD 0.020": yargs replaces "$0" in help text with the program name.
-  epilogue: `Live encoding is billed per minute by the highest output resolution: SD USD 0.020, HD USD 0.030, UHD USD 0.090 per minute. Primary and backup encoders are billed separately.\n\n${LIVE_DOCS_EPILOGUE}`,
+  epilogue: `Live encoding is billed per minute while an encoder is publishing, in Preview as well as Live, by the highest output resolution: SD USD 0.020, HD USD 0.030, UHD USD 0.090 per minute. Primary and backup encoders are billed separately.\n\n${LIVE_DOCS_EPILOGUE}`,
   progress: "Fetching live statistics...",
 
   builder: (yargs) =>

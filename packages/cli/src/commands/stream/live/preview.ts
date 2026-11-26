@@ -98,7 +98,7 @@ export const streamLivePreviewCommand = defineCommand<LivePreviewArgs>({
       "JSON, including playerQuery for your own player integration",
     ],
   ],
-  epilogue: `Option 1 (default) asks the API for preview access: it works with the library API key or its read-only key, includes the view token when the library requires one, returns a CDN-signed playlist, and lasts 10 hours. Option 2 (--sign) signs a token with the stream key (HMAC-SHA256), so it needs no preview request, expires when you choose (up to 10h05m), and stops working when the key is rotated; it adds no view token or playlist. Either way the stream must be Created, Scheduled or in Preview, and access ends when it goes public.\n\n${LIVE_DOCS_EPILOGUE}`,
+  epilogue: `Option 1 (default) asks the API for preview access: it works with the library API key or its read-only key, includes the view token when the library requires one, returns a CDN-signed playlist, and lasts 10 hours. Option 2 (--sign) signs a token with the stream key (HMAC-SHA256), so it needs no preview request, expires when you choose (up to 10h05m), and stops working when the key is rotated; it adds no view token or playlist. Either way the stream must be Created, Scheduled or in Preview, and access ends when it goes public. Preview is billed like Live: encoding runs while the encoder publishes, whether or not anyone is watching.\n\n${LIVE_DOCS_EPILOGUE}`,
 
   builder: (yargs) =>
     withStreamPositional(yargs)
