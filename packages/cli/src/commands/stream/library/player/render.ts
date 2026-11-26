@@ -37,6 +37,7 @@ export function formatPlayerSettings(
       },
       { key: "Captions in playlist", value: onOff(player.captionsInPlaylist) },
       { key: "Custom HTML", value: player.customHtml ? "Set" : "None" },
+      { key: "VAST ads", value: player.vastUrl ?? "Off" },
     ],
     output,
   );

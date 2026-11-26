@@ -178,6 +178,8 @@ export const PlayerSettingsSchema = z.object({
   controls: z.array(z.string()),
   speeds: z.array(z.string()),
   customHtml: z.string().nullable(),
+  /** VAST ad tag the player requests ads from; null when ads are off. */
+  vastUrl: z.string().nullable(),
   heatmap: z.boolean(),
   rememberPosition: z.boolean(),
   compactControls: z.boolean(),
@@ -202,6 +204,13 @@ export const PlayerChangesSchema = z.strictObject({
     .optional(),
   speeds: z.array(speed).min(1).optional(),
   customHtml: z.string().optional(),
+  /** VAST ad tag URL (http or https); an empty string turns ads off. */
+  vastUrl: z
+    .union([
+      z.literal(""),
+      z.string().regex(/^https?:\/\/\S+$/i, "Use an http(s) VAST tag URL."),
+    ])
+    .optional(),
   heatmap: z.boolean().optional(),
   rememberPosition: z.boolean().optional(),
   compactControls: z.boolean().optional(),
@@ -254,6 +263,7 @@ export function toPlayerSettings(library: VideoLibraryModel): PlayerSettings {
     controls: controlsOff ? [] : csv(library.Controls),
     speeds: csv(library.PlaybackSpeeds),
     customHtml: library.CustomHTML || null,
+    vastUrl: library.VastTagUrl || null,
     heatmap: library.ShowHeatmap ?? false,
     rememberPosition: library.RememberPlayerPosition ?? false,
     compactControls: library.EnableCompactControls ?? false,
@@ -285,6 +295,7 @@ export function playerUpdateBody(
   if (changes.speeds !== undefined)
     body.PlaybackSpeeds = [...new Set(changes.speeds)].join(",");
   if (changes.customHtml !== undefined) body.CustomHTML = changes.customHtml;
+  if (changes.vastUrl !== undefined) body.VastTagUrl = changes.vastUrl;
   if (changes.heatmap !== undefined) body.ShowHeatmap = changes.heatmap;
   if (changes.rememberPosition !== undefined)
     body.RememberPlayerPosition = changes.rememberPosition;

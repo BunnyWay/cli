@@ -88,6 +88,13 @@ Run `bunny stream libraries <command> --help` for every flag. The ones with cons
 bunny stream libraries player show my-library
 bunny stream libraries player update my-library --color "#FF7755" --speeds 0.5,1.0,1.15,2.0 --heatmap
 bunny stream libraries player update my-library --no-controls
+bunny stream libraries player update my-library --vast-url https://ads.example.com/vast.xml   # VAST ads; "none" turns them off
+bunny stream libraries update my-library --webhook-url https://example.com/hooks   # "none" removes it
+bunny stream libraries watermark set my-library --file logo.png --left 85 --top 5 --width 10   # new uploads only
+bunny stream libraries geo-blocking update my-library --block CN,RU   # or --unblock, --set, --allow-only GB,IE, --clear
+bunny stream libraries geo-blocking countries        # 249 supported codes (GB not UK, XK for Kosovo)
+bunny stream libraries geo-blocking update my-library --allow-only --preset eea-uk   # presets: continents, eu, eea, eea-uk, regions
+bunny stream libraries geo-blocking presets          # every preset and its countries
 bunny stream libraries player reset my-library       # dashboard defaults; confirms first
 bunny stream libraries security show my-library      # token key masked
 bunny stream libraries security update my-library --embed-token --block-direct-access --allow-referrer example.com

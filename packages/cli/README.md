@@ -1167,6 +1167,16 @@ bunny stream libraries security show my-library      # domains, tokens, direct p
 bunny stream libraries security update my-library --embed-token --block-direct-access --allow-referrer example.com
 bunny stream libraries security update my-library --drm-basic   # MediaCage Basic DRM
 bunny stream libraries security show my-library --rotate   # reset the token key (confirms first); signed URLs stop working
+bunny stream libraries player update my-library --vast-url https://ads.example.com/vast.xml   # VAST video ads ("none" turns them off)
+bunny stream libraries update my-library --webhook-url https://example.com/hooks/stream   # status webhooks ("none" removes it)
+bunny stream libraries watermark set my-library --file logo.png --left 85 --top 5 --width 10   # burned into new uploads
+bunny stream libraries watermark show my-library
+bunny stream libraries watermark remove my-library   # confirms first; existing videos keep theirs
+bunny stream libraries geo-blocking update my-library --block CN,RU   # also --unblock, --set, --allow-only GB,IE, --clear
+bunny stream libraries geo-blocking show my-library
+bunny stream libraries geo-blocking countries        # the 249 supported countries and codes
+bunny stream libraries geo-blocking update my-library --allow-only --preset eea-uk   # deliver only inside the EEA and the UK
+bunny stream libraries geo-blocking presets          # continents, EU/EEA/EEA+UK and regional presets, with their countries
 bunny stream libraries delete my-library             # confirms with the video count; --force skips it
 
 # Link the working directory to a library so video commands can omit it (also `libraries link` / `unlink`)
@@ -1243,6 +1253,7 @@ Library flags (`bunny stream libraries ...`):
 | `--add-replication-regions`                                                                               | `update`                                             | Add regions later; add-only, since regions can't be removed                                                                                                            |
 | `--mp4-fallback`, `--early-play`, `--keep-original`, `--multi-audio` (and `--no-` forms)                  | `create`, `update`                                   | Encoding settings; `--early-play` needs originals and exposes them                                                                                                     |
 | `--content-tagging` / `--no-content-tagging`                                                              | `update`                                             | Machine-learning content tagging (not accepted at create time)                                                                                                         |
+| `--webhook-url`                                                                                           | `update`                                             | URL that receives status webhooks for the library's videos and live streams; `none` removes it                                                                         |
 | `--player-version` (`1` \| `2`)                                                                           | `create`                                             | Player to start with: 1 = legacy, 2 = current                                                                                                                          |
 | `--encoding-tier` (`free` \| `premium`)                                                                   | `create`, `update`                                   | Encoding tier; premium adds JIT encoding and extra codecs                                                                                                              |
 | `--encoding-plan` (`1080p` \| `4k`)                                                                       | `create`, `update`                                   | Premium plan: premium tier, resolutions up to 1080p ($0.05/min) or 2160p ($0.15/min), and Early-Play, as the dashboard does; `--resolutions` and `--no-early-play` win |
@@ -1269,6 +1280,7 @@ Player flags (`bunny stream libraries player update`):
 | `--controls`                                                                       | Controls to show, comma-separated; alone it restores the defaults; `--no-controls` turns every control off |
 | `--speeds`                                                                         | Playback speeds, comma-separated: presets 0.25–4 or custom values like 1.15                                |
 | `--custom-html`                                                                    | File with custom HTML/CSS for the player head                                                              |
+| `--vast-url`                                                                       | VAST ad tag URL for video ads in the player; `none` turns ads off                                          |
 | `--heatmap`, `--remember-position`, `--compact-controls`, `--captions-in-playlist` | On/off toggles (with `--no-` forms)                                                                        |
 | `--legacy-player` / `--no-legacy-player`, `--player-version`                       | Legacy (1) or current (2) player                                                                           |
 
@@ -1286,6 +1298,10 @@ Security flags (`bunny stream libraries security update`):
 | `--drm-basic`                                   | MediaCage Basic DRM; libraries on Enterprise DRM are refused             |
 
 All boolean flags take `--no-` forms. `security update` sends the settings in one request, then each domain change on its own; changes already in place are skipped, and if one fails the command stops, reports what landed, and exits non-zero, so re-running the same command is safe. CDN token state and the token key are read from the library's linked Pull Zone. `security show --rotate` resets the token key used for both CDN and embed view tokens, after a confirmation that `--force` skips; every signed URL issued with the old key stops working. `videos embed` signs with that key when embed tokens are on.
+
+**Watermark** (`libraries watermark show | set | remove`): `set --file <image>` uploads the image, and `--left`, `--top`, `--width`, `--height` place it as whole percentages (0-100) of the frame; positioning alone needs a watermark already uploaded. It is burned in while encoding, so it applies to videos uploaded afterwards; existing videos keep what they were encoded with. `remove` confirms first (`--force` skips it).
+
+**Geo-blocking** (`libraries geo-blocking show | update | countries | presets`, alias `geo`): refuses delivery of video files, playlists and thumbnails to countries detected from the viewer's IP (VPNs and proxies can get around it). `update` takes exactly one mode: `--block` and/or `--unblock` edit the current list, `--set` replaces it, `--allow-only` blocks every other supported country, and `--clear` turns it off. `--preset` (repeatable) adds a preset's countries to the list of whichever mode you pass, or to the block list on its own, as the dashboard's presets do: continents (`africa`, `asia`, `europe`, `north-america`, `oceania`, `south-america`), data protection (`eu`, `eea`, `eea-uk`) and regions (`apac`, `anz`, `benelux`, `dach`, `latam`, `mena`, `nordics`, `uk-ireland`, `us-canada`); `presets` lists each one's countries. So `--allow-only --preset eea-uk` delivers only inside the EEA and the UK. Codes are ISO 3166-1 alpha-2 from the [supported list](https://bunny.net/docs/stream/geo-blocking#supported-countries-and-codes): `GB` for the United Kingdom (`UK` is accepted), `XK` for Kosovo; anything else is refused before any request. `countries` prints all 249 (`--output json` or `csv` for scripts). The list is stored on the library's linked Pull Zone as `BlockedCountries`, so `--allow-only` is saved as a block list of every other country, and `show` reports it as "allowing only" when that reads shorter.
 
 Video flags (`bunny stream videos ...`):
 

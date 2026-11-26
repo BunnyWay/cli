@@ -29,11 +29,12 @@ interface LibraryUpdateArgs extends LibrarySettingsArgs {
   library?: string;
   force?: boolean;
   contentTagging?: boolean;
+  webhookUrl?: string;
   addReplicationRegions?: string[];
 }
 
 const FLAG_HINT =
-  "Pass at least one of --name, --encoding-tier, --jit/--no-jit, --codecs, --resolutions, --mp4-fallback, --early-play, --keep-original, --multi-audio, --content-tagging, --transcribing/--no-transcribing, --transcribing-languages, --transcribing-title, --transcribing-description, --transcribing-chapters, --transcribing-moments, --add-replication-regions.";
+  "Pass at least one of --name, --encoding-tier, --jit/--no-jit, --codecs, --resolutions, --mp4-fallback, --early-play, --keep-original, --multi-audio, --content-tagging, --webhook-url, --transcribing/--no-transcribing, --transcribing-languages, --transcribing-title, --transcribing-description, --transcribing-chapters, --transcribing-moments, --add-replication-regions.";
 
 /**
  * The flags `update` sends: `--encoding-plan` without `--codecs` gets
@@ -46,10 +47,24 @@ export function planCodecs<T extends LibrarySettingsArgs>(args: T): T {
     : args;
 }
 
+/** `--webhook-url`: an http(s) URL, or `none`/empty to remove it (sent as an empty string). */
+export function webhookUrlValue(value: string): string {
+  const url = value.trim();
+  if (url === "" || url.toLowerCase() === "none") return "";
+  if (!/^https?:\/\/\S+$/i.test(url)) {
+    throw new UserError(
+      `Invalid --webhook-url "${value}".`,
+      'Pass an http(s) URL, or "none" to remove the webhook.',
+    );
+  }
+  return url;
+}
+
 function hasAnyFlag(args: LibraryUpdateArgs): boolean {
   return (
     args.name !== undefined ||
     args.contentTagging !== undefined ||
+    args.webhookUrl !== undefined ||
     args.addReplicationRegions !== undefined ||
     hasLibrarySettingsFlags(args)
   );
@@ -189,6 +204,14 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
       "$0 stream libraries update my-library --content-tagging",
       "Turn on content tagging",
     ],
+    [
+      "$0 stream libraries update my-library --webhook-url https://example.com/hooks/stream",
+      "Send encoding and transcription status webhooks to a URL",
+    ],
+    [
+      "$0 stream libraries update my-library --webhook-url none",
+      "Stop sending webhooks",
+    ],
   ],
 
   builder: (yargs) =>
@@ -206,6 +229,11 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
           type: "boolean",
           describe:
             "Auto-categorise uploads with machine learning (update only; not accepted at create time)",
+        })
+        .option("webhook-url", {
+          type: "string",
+          describe:
+            'URL that receives status webhooks for every video (and live stream) in the library, signed with the read-only API key ("none" removes it)',
         })
         .option("add-replication-regions", {
           type: "string",
@@ -241,6 +269,8 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
       : undefined;
     if (fromFlags && args.contentTagging !== undefined)
       fromFlags.EnableContentTagging = args.contentTagging;
+    if (fromFlags && args.webhookUrl !== undefined)
+      fromFlags.WebhookUrl = webhookUrlValue(args.webhookUrl);
     // Rejects contradictory flags before any network call; the warnings are printed later.
     if (hasFlags) librarySettingsWarnings(flags);
     const addRegions = args.addReplicationRegions
