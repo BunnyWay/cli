@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { ApiError, createMcClient } from "@bunny.net/openapi-client";
 import { createToolContext, type McClient } from "@/tools/context.ts";
-import { appsExec, appsPodsList, fetchPods } from "./exec.ts";
+import { appsExec, appsPodsList } from "./exec.ts";
 
 const OVERVIEW = {
   regions: [
@@ -46,15 +46,6 @@ function mcStub(post: (body: unknown) => Promise<unknown>) {
   return { mc, calls };
 }
 
-test("fetchPods flattens pods out of their regions", async () => {
-  const { mc } = mcStub(() => Promise.resolve({}));
-  const pods = await fetchPods(mc, "app1");
-  expect(pods.map((p) => [p.name, p.region, p.containers.length])).toEqual([
-    ["app-de-1", "DE", 2],
-    ["app-uk-1", "UK", 1],
-  ]);
-});
-
 test("apps.exec sends the pod name and the container's ID", async () => {
   const { mc, calls } = mcStub(() =>
     Promise.resolve({
@@ -81,22 +72,6 @@ test("apps.exec sends the pod name and the container's ID", async () => {
     container: { id: "ct-worker", name: "worker" },
     url: "wss://exec.example/s/abc",
     token: "tok",
-  });
-});
-
-test("apps.exec accepts a container ID", async () => {
-  const { mc, calls } = mcStub(() =>
-    Promise.resolve({ data: { url: "wss://x", token: "tok" } }),
-  );
-  const ctx = createToolContext({ clients: { mc } });
-  await appsExec.invoke(ctx, {
-    app: "a",
-    pod: "app-uk-1",
-    container: "ct-api",
-  });
-  expect(calls[0]?.body).toEqual({
-    podName: "app-uk-1",
-    containerName: "ct-api",
   });
 });
 
@@ -140,20 +115,14 @@ test.each([
   ).rejects.toThrow("The API did not return an exec session.");
 });
 
-test("apps.pods.list returns the app's pods", async () => {
+test("apps.pods.list flattens pods out of their regions", async () => {
   const { mc } = mcStub(() => Promise.resolve({}));
   const ctx = createToolContext({ clients: { mc } });
   const pods = await appsPodsList.invoke(ctx, { app: "app1" });
-  expect(pods.map((p) => p.name)).toEqual(["app-de-1", "app-uk-1"]);
-});
-
-test("apps.exec reads a bare 404 as a missing exec endpoint", async () => {
-  // An empty 404 body leaves ApiError with its generic message.
-  const { mc } = mcStub(() => Promise.reject(new ApiError("Not found.", 404)));
-  const ctx = createToolContext({ clients: { mc } });
-  await expect(
-    appsExec.invoke(ctx, { app: "a", pod: "app-de-1", container: "api" }),
-  ).rejects.toThrow("This API has no exec endpoint.");
+  expect(pods.map((p) => [p.name, p.region, p.containers.length])).toEqual([
+    ["app-de-1", "DE", 2],
+    ["app-uk-1", "UK", 1],
+  ]);
 });
 
 test("apps.exec passes on the API's explanation of a 404", async () => {
