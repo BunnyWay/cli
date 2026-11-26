@@ -37,7 +37,7 @@ export const LIVE_STATUS_LABELS: Record<LiveStatus, string> = {
   preview: "Preview",
   running: "Live",
   ended: "Ended",
-  vodProcessing: "Processing recording",
+  vodProcessing: "Processing VOD",
   error: "Error",
 };
 
@@ -134,7 +134,7 @@ export const LiveStreamSchema = z.object({
     windowSeconds: z.number().nullable(),
   }),
   countdown: z.boolean(),
-  trailerVideoId: z.string().nullable(),
+  preStreamTrailerVideoId: z.string().nullable(),
   playbackUrl: z.string().nullable(),
   thumbnailUrl: z.string().nullable(),
   resolutions: z.array(z.string()),
@@ -201,7 +201,7 @@ export function toLiveStream(model: LiveStreamModel): LiveStream {
       windowSeconds: model.dvrWindowSeconds ?? null,
     },
     countdown: model.enableCountdown ?? false,
-    trailerVideoId: model.preStreamTrailerVideoId || null,
+    preStreamTrailerVideoId: model.preStreamTrailerVideoId || null,
     playbackUrl: model.playbackUrlHls || null,
     thumbnailUrl: model.thumbnailUrl || null,
     resolutions: csv(model.availableResolutions),
@@ -520,13 +520,13 @@ export const LiveSettingsSchema = z.object({
     .enum(STREAM_TYPES)
     .optional()
     .describe(
-      "`event` (default) ends after 12 hours and can be recorded; `channel` runs 24/7, survives disconnects, and is never recorded.",
+      "`event` (default) ends after 12 hours and can record a VOD; `channel` runs 24/7, survives disconnects, and never records a VOD.",
     ),
   recordVod: z
     .boolean()
     .optional()
     .describe(
-      "Save the stream as a video when it stops. Not allowed for a channel.",
+      "Save the stream as a VOD (video on demand) when it stops. Not allowed for a channel.",
     ),
   autoStart: z
     .boolean()
@@ -557,12 +557,12 @@ export const LiveSettingsSchema = z.object({
     .describe(
       "Show a countdown in the player before a scheduled start. Left out, a scheduled stream uses the library's setting.",
     ),
-  trailerVideoId: z
+  preStreamTrailerVideoId: z
     .string()
     .nullable()
     .optional()
     .describe(
-      "Video GUID to loop before the stream starts; null removes it (update only).",
+      "Pre-stream trailer: video GUID to loop before the stream starts; null removes it (update only).",
     ),
   outputs: z
     .array(OutputInputSchema)
@@ -578,8 +578,8 @@ export type LiveSettings = z.infer<typeof LiveSettingsSchema>;
 export function assertLiveSettings(settings: LiveSettings): void {
   if (settings.type === "channel" && settings.recordVod === true) {
     throw new UserError(
-      "A channel can't be recorded.",
-      "Channels run 24/7 and never record a video; drop `recordVod` or use the `event` type.",
+      "A channel can't record a VOD.",
+      "Channels run 24/7 and never record a VOD; drop `recordVod` or use the `event` type.",
     );
   }
   const start = settings.scheduledStart
@@ -639,8 +639,8 @@ export function liveSettingsBody(
     body.scheduledEndTime = settings.scheduledEnd;
   if (settings.countdown !== undefined)
     body.enableCountdown = settings.countdown;
-  if (settings.trailerVideoId !== undefined)
-    body.preStreamTrailerVideoId = settings.trailerVideoId;
+  if (settings.preStreamTrailerVideoId !== undefined)
+    body.preStreamTrailerVideoId = settings.preStreamTrailerVideoId;
   if (settings.outputs !== undefined)
     body.outputs = resolveOutputs(settings.outputs, env);
   return body;

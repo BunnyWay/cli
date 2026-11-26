@@ -197,7 +197,7 @@ export const streamLiveGet = defineTool({
   name: "stream.live.get",
   title: "Get a live stream",
   description:
-    "Get one live stream: status, schedule, recording, DVR, playback URL, RTMP outputs and any issues it ran into. Never includes the stream key.",
+    "Get one live stream: status, schedule, VOD, DVR, playback URL, RTMP outputs and any issues it ran into. Never includes the stream key.",
   schema: z.strictObject({ library: libraryId, stream: streamId }),
   kind: "read",
   resultSchema: LiveStreamSchema,
@@ -310,7 +310,7 @@ export const streamLiveDelete = defineTool({
   name: "stream.live.delete",
   title: "Delete a live stream",
   description:
-    "Delete a live stream and everything attached to it. Cannot be undone. A recording already saved as a video stays in the library.",
+    "Delete a live stream and everything attached to it. Cannot be undone. Its VOD, if it has one, is deleted with it: the VOD is part of the stream, not a separate video in the library.",
   schema: z.strictObject({ library: libraryId, stream: streamId }),
   kind: "destructive",
   resultSchema: DeletedLiveStreamSchema,
@@ -362,7 +362,7 @@ export const streamLiveStop = defineTool({
   name: "stream.live.stop",
   title: "Stop a live stream",
   description:
-    "End a running live stream: the encoder is disconnected and, with `recordVod` on, the recording is saved as a video. Cannot be undone; an ended stream can't be restarted.",
+    "End a running live stream: the encoder is disconnected and, with `recordVod` on, the VOD is saved. Cannot be undone; an ended stream can't be restarted.",
   schema: z.strictObject({ library: libraryId, stream: streamId }),
   kind: "destructive",
   resultSchema: LiveStreamSchema,

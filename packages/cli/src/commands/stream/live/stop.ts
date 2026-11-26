@@ -15,7 +15,7 @@ export const streamLiveStopCommand = defineToolCommand({
   command: "stop [stream]",
   aliases: ["end"],
   describe:
-    "End a live stream: the encoder is disconnected and the recording, if on, is saved as a video. Cannot be undone.",
+    "End a live stream: the encoder is disconnected and the VOD, if on, is saved. Cannot be undone.",
   examples: [
     ["$0 stream live stop 0f4e5d6c-...", "End a live stream"],
     ["$0 stream live stop 0f4e5d6c-... --force", "Skip the confirmation"],
@@ -58,8 +58,8 @@ export const streamLiveStopCommand = defineToolCommand({
     });
     const recording =
       stream.type === "event" && stream.recordVod
-        ? "The recording is saved as a video"
-        : "Nothing is recorded";
+        ? "The VOD is saved"
+        : "No VOD is recorded";
     return {
       input,
       confirm: () =>
@@ -77,7 +77,7 @@ export const streamLiveStopCommand = defineToolCommand({
       (stream.type === "event" && stream.recordVod)
     ) {
       logger.dim(
-        "The recording is being processed into a video; it appears in `bunny stream videos list` when ready.",
+        "The VOD is being processed; when ready, it plays from this stream's player and playback URL.",
       );
     }
   },

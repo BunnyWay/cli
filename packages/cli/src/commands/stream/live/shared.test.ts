@@ -93,7 +93,7 @@ test("liveSettingsFromFlags builds a sparse create body", () => {
     liveSettingsFromFlags(
       {
         type: "event",
-        record: true,
+        "record-vod": true,
         dvr: "1h",
         start: "+30m",
         "rtmp-output": ["rtmp://live.twitch.tv/app/live_123"],
@@ -136,17 +136,29 @@ test("RTMP output keys go to the environment, never into the settings", () => {
 test('liveSettingsFromFlags treats "none" as clearing on update only', () => {
   expect(
     liveSettingsFromFlags(
-      { start: "none", trailer: "none", "rtmp-output": ["none"] },
+      {
+        start: "none",
+        "pre-stream-trailer": "none",
+        "rtmp-output": ["none"],
+      },
       "update",
       NOW,
     ),
-  ).toEqual({ scheduledStart: null, trailerVideoId: null, outputs: [] });
+  ).toEqual({
+    scheduledStart: null,
+    preStreamTrailerVideoId: null,
+    outputs: [],
+  });
 });
 
 test("liveSettingsFromFlags rejects bad combinations before any request", () => {
   expect(() =>
-    liveSettingsFromFlags({ type: "channel", record: true }, "create", NOW),
-  ).toThrow("can't be recorded");
+    liveSettingsFromFlags(
+      { type: "channel", "record-vod": true },
+      "create",
+      NOW,
+    ),
+  ).toThrow("can't record a VOD");
   expect(() => liveSettingsFromFlags({ dvr: "13h" }, "create", NOW)).toThrow(
     "at most 12h",
   );

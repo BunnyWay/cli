@@ -327,13 +327,13 @@ export interface LiveSettingsArgs {
   description?: string;
   collection?: string;
   type?: string;
-  record?: boolean;
+  "record-vod"?: boolean;
   autoStart?: boolean;
   dvr?: string;
   start?: string;
   end?: string;
   countdown?: boolean;
-  trailer?: string;
+  "pre-stream-trailer"?: string;
   "rtmp-output"?: string[];
 }
 
@@ -356,13 +356,13 @@ export function withLiveSettingsOptions<T>(
       choices: [...STREAM_TYPES],
       describe:
         mode === "create"
-          ? "event (default): up to 12 hours, can be recorded; channel: 24/7, survives disconnects, never recorded"
+          ? "event (default): up to 12 hours, can record a VOD; channel: 24/7, survives disconnects, no VOD"
           : "Change the type (only before the stream starts, with no encoder connected)",
     })
-    .option("record", {
+    .option("record-vod", {
       type: "boolean",
       describe:
-        "Save the stream as a video when it stops (--no-record turns it off; channels are never recorded)",
+        "Save the stream as a VOD (video on demand) when it stops (--no-record-vod turns it off; channels never record a VOD)",
     })
     .option("auto-start", {
       type: "boolean",
@@ -386,9 +386,9 @@ export function withLiveSettingsOptions<T>(
       describe:
         "Show a countdown in the player before a scheduled start (default: the library's setting; --no-countdown turns it off)",
     })
-    .option("trailer", {
+    .option("pre-stream-trailer", {
       type: "string",
-      describe: `Video GUID to loop before the stream starts${clear}`,
+      describe: `Pre-stream trailer: video GUID to loop before the stream starts${clear}`,
     })
     .option("rtmp-output", {
       type: "string",
@@ -411,11 +411,11 @@ export function liveSettingsFromFlags(
   if (description !== undefined) settings.description = description;
   const collection = optional(args.collection);
   if (collection !== undefined) settings.collectionId = collection;
-  const trailer = optional(args.trailer);
-  if (trailer !== undefined) settings.trailerVideoId = trailer;
+  const trailer = optional(args["pre-stream-trailer"]);
+  if (trailer !== undefined) settings.preStreamTrailerVideoId = trailer;
 
   if (args.type !== undefined) settings.type = args.type as StreamType;
-  if (args.record !== undefined) settings.recordVod = args.record;
+  if (args["record-vod"] !== undefined) settings.recordVod = args["record-vod"];
   if (args.autoStart !== undefined) settings.autoStart = args.autoStart;
   if (args.countdown !== undefined) settings.countdown = args.countdown;
 
@@ -456,8 +456,8 @@ export function liveSettingsFromFlags(
 
   if (settings.type === "channel" && settings.recordVod === true) {
     throw new UserError(
-      "A channel can't be recorded.",
-      "Drop --record, or use --type event.",
+      "A channel can't record a VOD.",
+      "Drop --record-vod, or use --type event.",
     );
   }
   return settings;
@@ -469,10 +469,10 @@ function dash(value: string | number | null | undefined): string {
     : String(value);
 }
 
-/** Recording, as one phrase: "on", "off", or "never (channel)". */
+/** VOD recording, as one phrase: "on", "off", or "never (channel)". */
 function recordingText(stream: LiveStream): string {
   if (stream.type === "channel") return "Never (channel)";
-  return stream.recordVod ? "On, saved as a video when it stops" : "Off";
+  return stream.recordVod ? "On, saved when the stream stops" : "Off";
 }
 
 export function formatLiveStreamDetails(
@@ -513,7 +513,7 @@ export function formatLiveStreamDetails(
       key: "Auto-start",
       value: stream.autoStart ? "On encoder connect" : "Off",
     },
-    { key: "Recording", value: recordingText(stream) },
+    { key: "VOD", value: recordingText(stream) },
     {
       key: "DVR",
       value: stream.dvr.enabled
@@ -521,7 +521,7 @@ export function formatLiveStreamDetails(
         : "Off",
     },
     { key: "Countdown", value: stream.countdown ? "On" : "Off" },
-    { key: "Trailer video", value: dash(stream.trailerVideoId) },
+    { key: "Pre-stream trailer", value: dash(stream.preStreamTrailerVideoId) },
     { key: "Playback (HLS)", value: dash(stream.playbackUrl) },
     { key: "Resolutions", value: stream.resolutions.join(", ") || "-" },
     {

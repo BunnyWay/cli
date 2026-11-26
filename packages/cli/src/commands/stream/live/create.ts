@@ -91,8 +91,8 @@ export const streamLiveCreateCommand = defineCommand<LiveCreateArgs>({
     ],
     ["$0 stream live create", "Interactive: prompts for the title and type"],
     [
-      '$0 stream live create "Launch keynote" --record --dvr 1h --start +30m --countdown',
-      "Recorded, 1-hour DVR, scheduled in 30 minutes with a countdown",
+      '$0 stream live create "Launch keynote" --record-vod --dvr 1h --start +30m --countdown',
+      "VOD on, 1-hour DVR, scheduled in 30 minutes with a countdown",
     ],
     [
       '$0 stream live create "24/7 radio" --type channel --auto-start',
@@ -156,12 +156,12 @@ export const streamLiveCreateCommand = defineCommand<LiveCreateArgs>({
         choices: [
           {
             title: "Event",
-            description: "Up to 12 hours, can be recorded as a video",
+            description: "Up to 12 hours, can record a VOD",
             value: "event" as const,
           },
           {
             title: "Channel (24/7)",
-            description: "No time limit, survives disconnects, never recorded",
+            description: "No time limit, survives disconnects, no VOD",
             value: "channel" as const,
           },
         ],
@@ -224,10 +224,10 @@ export const streamLiveCreateCommand = defineCommand<LiveCreateArgs>({
     const facts = [
       stream.type === "channel" ? "Channel (24/7)" : "Event",
       stream.type === "channel"
-        ? "not recorded"
+        ? "no VOD"
         : stream.recordVod
-          ? "recorded"
-          : "not recorded",
+          ? "VOD on"
+          : "no VOD",
       stream.dvr.enabled
         ? `DVR ${formatDuration(stream.dvr.windowSeconds)}`
         : "no DVR",

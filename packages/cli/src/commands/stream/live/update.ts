@@ -28,7 +28,7 @@ export const streamLiveUpdateCommand = defineToolCommand({
       "Drop the scheduled start",
     ],
     [
-      "$0 stream live update 0f4e5d6c-... --type channel --no-record",
+      "$0 stream live update 0f4e5d6c-... --type channel --no-record-vod",
       "Turn an event into a 24/7 channel",
     ],
     [
@@ -56,7 +56,7 @@ export const streamLiveUpdateCommand = defineToolCommand({
     if (!title && Object.keys(settings).length === 0) {
       throw new UserError(
         "Nothing to change.",
-        "Pass at least one setting, e.g. --title, --end or --record. See --help.",
+        "Pass at least one setting, e.g. --title, --end or --record-vod. See --help.",
       );
     }
     const { library, streamId } = await resolveLiveTarget(ctx, args);

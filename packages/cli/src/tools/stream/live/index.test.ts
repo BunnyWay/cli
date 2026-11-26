@@ -219,10 +219,10 @@ test("toLiveIngest keeps only the protocols the API returned", () => {
   expect(ingest.srt).toBeNull();
 });
 
-test("assertLiveSettings rejects a recorded channel and an event over 12 hours", () => {
+test("assertLiveSettings rejects a channel with a VOD and an event over 12 hours", () => {
   expect(() =>
     assertLiveSettings({ type: "channel", recordVod: true }),
-  ).toThrow("can't be recorded");
+  ).toThrow("can't record a VOD");
   expect(() =>
     assertLiveSettings({
       scheduledStart: "2026-12-01T00:00:00Z",

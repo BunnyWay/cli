@@ -11,8 +11,8 @@ bunny stream live create "Launch keynote" --lib 12345 --output json   # note the
 bunny stream live ingest <id> --show-secret          # server URLs + stream key for the encoder
 # ...encoder connects: status Preview (private, nothing recorded)...
 bunny stream live status <id>                        # primaryLive / readyToStart / bitrate
-bunny stream live start <id> --force                 # public; recording starts if --record
-bunny stream live stop <id> --force                  # ends for good; recording becomes a video
+bunny stream live start <id> --force                 # public; VOD recording starts if --record-vod
+bunny stream live stop <id> --force                  # ends for good; the VOD, if on, is saved
 ```
 
 Statuses: `created`, `scheduled`, `preview` (encoder connected, not public), `running` (live), `ended`, `vodProcessing`, `error`.
@@ -25,14 +25,14 @@ Statuses: `created`, `scheduled`, `preview` (encoder connected, not public), `ru
 ## Create and update
 
 ```bash
-bunny stream live create "Keynote" --record --dvr 1h --start +30m --end +3h --countdown
+bunny stream live create "Keynote" --record-vod --dvr 1h --start +30m --end +3h --countdown
 bunny stream live create "24/7 radio" --type channel --auto-start
 bunny stream live create "Simulcast" --rtmp-output rtmps://a.rtmp.youtube.com/live2/<key>
 bunny stream live update <id> --title "Keynote (day 2)" --end +1h
 bunny stream live update <id> --start none --rtmp-output none     # "none" removes a value
 ```
 
-- `--type event` (default): at most 12 hours, ends 30 minutes after the encoder disconnects, can be recorded. `--type channel`: 24/7, survives disconnects, never recorded; `--type channel --record` is refused.
+- `--type event` (default): at most 12 hours, ends 30 minutes after the encoder disconnects, can record a VOD (video on demand). `--type channel`: 24/7, survives disconnects, no VOD; `--type channel --record-vod` is refused.
 - `--dvr` takes `30m`, `2h` (max `12h`); `0` turns DVR off. `--start`/`--end` take ISO 8601 UTC or `+30m`. Scheduled streams show a countdown when the library's setting has it on; `--countdown`/`--no-countdown` override it.
 - `--rtmp-output` (RTMP outputs, as the dashboard calls them) is the destination's full RTMP(S) URL ending in its stream key; up to 4. On `update` it replaces the list.
 - While live, only `--title`, `--description` and `--end` can change. `--type` changes only before the start, with no encoder connected.
@@ -68,6 +68,7 @@ Preview links are token-protected and only work while the stream is Created, Sch
 
 - Don't `start` before the encoder publishes and expect a full recording: only what comes after the start is recorded.
 - Don't `stop` to tidy up a stream that never went live: `stop` refuses it; use `delete`.
+- Don't `delete` a stream whose VOD you want to keep: the VOD is part of the stream (it plays from the stream's player, not as a library video) and is deleted with it.
 - Don't print stream keys into logs or CI output without need: `--show-secret` is the only way they appear.
 - Don't use a pre-preview video library: live works only on libraries created during the preview.
 - Concurrency during the preview is 3 live streams per account; `create` fails with a clear error past that.

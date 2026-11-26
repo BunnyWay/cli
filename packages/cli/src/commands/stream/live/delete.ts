@@ -12,7 +12,8 @@ export const streamLiveDeleteCommand = defineToolCommand({
   tool: streamLiveDelete,
   command: "delete [stream]",
   aliases: ["rm", "remove"],
-  describe: "Delete a live stream. Cannot be undone.",
+  describe:
+    "Delete a live stream, and its VOD if it has one. Cannot be undone.",
   examples: [
     ["$0 stream live delete 0f4e5d6c-...", "Delete a live stream"],
     ["$0 stream live delete 0f4e5d6c-... --force", "Skip the confirmation"],
@@ -48,10 +49,19 @@ export const streamLiveDeleteCommand = defineToolCommand({
         `${stream.title} is live now: deleting it cuts off every viewer and the encoder.`,
       );
     }
+    // The VOD lives on the stream (there's no separate library video), so it goes too.
+    const hasVod =
+      stream.type === "event" &&
+      stream.recordVod &&
+      (stream.status === "ended" || stream.status === "vodProcessing");
     return {
       input,
       confirm: () =>
-        confirm(`Delete live stream ${stream.title}? This cannot be undone.`),
+        confirm(
+          hasVod
+            ? `Delete live stream ${stream.title} and its VOD? This cannot be undone.`
+            : `Delete live stream ${stream.title}? This cannot be undone.`,
+        ),
     };
   },
 

@@ -1318,12 +1318,12 @@ Paid video command flags (`bunny stream videos ...`):
 
 > **Closed preview**: Stream Live works on video libraries created during the preview, and its API, limits and pricing may change before general availability. See the [Stream Live docs](https://bunny.net/docs/stream/live).
 
-Create a live stream, point an encoder (OBS, vMix, FFmpeg, hardware) at it, go live, watch its health, and end it, optionally saving the recording as a video. Every command takes `--lib`/`--library` and the live stream ID as an optional positional; without an ID, a terminal offers a picker (filtered to the streams the command applies to, such as only running ones for `stop`), and unattended runs error with a hint.
+Create a live stream, point an encoder (OBS, vMix, FFmpeg, hardware) at it, go live, watch its health, and end it, optionally saving it as a VOD (video on demand). Every command takes `--lib`/`--library` and the live stream ID as an optional positional; without an ID, a terminal offers a picker (filtered to the streams the command applies to, such as only running ones for `stop`), and unattended runs error with a hint.
 
 ```bash
 # Create, then connect the encoder
 bunny stream live create "Launch keynote"            # interactive: prompts for the title and the type when omitted
-bunny stream live create "Launch keynote" --record --dvr 1h --start +30m --countdown   # recorded, 1-hour DVR, scheduled with a countdown
+bunny stream live create "Launch keynote" --record-vod --dvr 1h --start +30m --countdown   # VOD on, 1-hour DVR, scheduled with a countdown
 bunny stream live create "24/7 radio" --type channel --auto-start   # a 24/7 channel that goes live whenever the encoder connects
 bunny stream live create "Simulcast" --rtmp-output rtmps://a.rtmp.youtube.com/live2/<key>   # also forward it to another platform
 bunny stream live ingest 0f4e5d6c-...                # RTMPS, RTMP and SRT servers; stream key masked
@@ -1339,18 +1339,18 @@ bunny stream live start 0f4e5d6c-...                 # take it public; asks firs
 # While live, and after
 bunny stream live update 0f4e5d6c-... --end +1h      # stop it automatically in an hour
 bunny stream live bitrate 0f4e5d6c-... --since 15m   # ingest bitrate history, primary and backup
-bunny stream live stop 0f4e5d6c-...                  # end it; the recording, if on, becomes a video. Can't be undone
+bunny stream live stop 0f4e5d6c-...                  # end it; the VOD, if on, is saved. Can't be undone
 bunny stream live list                               # ID, title, status, type, schedule, duration
 bunny stream live show 0f4e5d6c-...                  # settings, playback URL, RTMP outputs, and any issues it ran into
 bunny stream live stats --from 2026-11-01            # live encoding minutes by encoder, stream, codec and resolution
 bunny stream live thumbnail 0f4e5d6c-... --file ./poster.jpg
 bunny stream live rotate-key 0f4e5d6c-...            # new stream key; connected encoders are disconnected
-bunny stream live delete 0f4e5d6c-...                # confirms first; --force skips it
+bunny stream live delete 0f4e5d6c-...                # confirms first; --force skips it. Deletes its VOD too
 ```
 
-A stream starts in **Created** (or **Scheduled**). When an encoder connects it enters **Preview**: only you can see it (`live preview`) and nothing is recorded. `live start` takes it **Live**; with `--auto-start`, connecting the encoder does that instead. A stream with `--start` goes **Live** by itself at that time (an encoder connected earlier leaves it in Scheduled); `live start` before then takes it live early. `live stop` ends it for good, disconnecting the encoder and, for a recorded event, saving everything after the start as a video. Playback is ready 15-20 seconds after the encoder connects and after the start.
+A stream starts in **Created** (or **Scheduled**). When an encoder connects it enters **Preview**: only you can see it (`live preview`) and nothing is recorded. `live start` takes it **Live**; with `--auto-start`, connecting the encoder does that instead. A stream with `--start` goes **Live** by itself at that time (an encoder connected earlier leaves it in Scheduled); `live start` before then takes it live early. `live stop` ends it for good, disconnecting the encoder and, for an event with `--record-vod`, saving everything after the start as a VOD, which plays from the stream's own player and playback URL. Playback is ready 15-20 seconds after the encoder connects and after the start.
 
-An **event** (the default `--type`) runs at most 12 hours and ends 30 minutes after its encoder disconnects; it can be recorded with `--record`. A **channel** runs 24/7 with no time limit, survives disconnects (reconnect with the same key), and is never recorded, so `--type channel --record` is refused before any request. Settings you leave out on `create` use the library's live defaults.
+An **event** (the default `--type`) runs at most 12 hours and ends 30 minutes after its encoder disconnects; it can record a VOD with `--record-vod`. A **channel** runs 24/7 with no time limit, survives disconnects (reconnect with the same key), and never records a VOD, so `--type channel --record-vod` is refused before any request. Settings you leave out on `create` use the library's live defaults.
 
 **Private preview links** are token-protected, so a leaked link stops working when it expires. `live preview` offers two ways to get one, and both print a player URL (`https://player.mediadelivery.net/embed/{libraryId}/{streamId}?…`, or `/play/…` for a standalone page):
 
@@ -1361,27 +1361,27 @@ Either way the stream must be Created, Scheduled or in Preview, and the link sto
 
 The stream key is a publishing credential, so `create`, `ingest` and `rotate-key` mask it, including inside SRT URLs, which carry it, unless you pass `--show-secret`, in every output format. For RTMP and RTMPS, the encoder takes the server and the stream key as two fields; SRT takes the whole URL. `live show` and `live list` never include the key, and report RTMP outputs without theirs. The encoder must send H.264 (8-bit 4:2:0) with stereo AAC at 48 kHz, at constant bitrate with a 2-second keyframe interval; `create` and `ingest` print those settings.
 
-| Flag                                                  | Commands                                | Description                                                                                                       |
-| ----------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `--type` (`event` \| `channel`)                       | `create`, `update`                      | Event (up to 12 h, can be recorded) or 24/7 channel; on `update`, only before the start with no encoder connected |
-| `--record` / `--no-record`                            | `create`, `update`                      | Save the stream as a video when it stops (events only)                                                            |
-| `--auto-start` / `--no-auto-start`                    | `create`, `update`                      | Go live as soon as an encoder connects, skipping preview                                                          |
-| `--dvr`                                               | `create`, `update`                      | DVR (rewind) window, e.g. `30m` or `2h`, up to `12h`; `0` turns it off                                            |
-| `--start`, `--end`                                    | `create`, `update`                      | Scheduled start and end (the end stops the stream): ISO 8601 UTC or `+30m` from now; `none` removes on `update`   |
-| `--countdown` / `--no-countdown`                      | `create`, `update`                      | Countdown in the player before a scheduled start; scheduled streams default to the library's setting              |
-| `--trailer`                                           | `create`, `update`                      | Video GUID to loop before the stream starts; `none` removes on `update`                                           |
-| `--rtmp-output`                                       | `create`, `update`                      | Forward to another platform: its RTMP(S) URL ending in the stream key; repeatable, up to 4; `none` removes all    |
-| `--description`, `--collection`                       | `create`, `update`                      | Description and collection ID; `none` removes on `update`                                                         |
-| `--title`                                             | `update`                                | New title (`create` takes it as its positional)                                                                   |
-| `--show-secret`                                       | `create`, `ingest`, `rotate-key`        | Print the stream key in full                                                                                      |
-| `--sign`, `--expires`                                 | `preview`                               | Option 2: sign the preview token with the stream key, valid for `--expires` (default `1h`, max `10h5m`)           |
-| `--auto-create`                                       | `ingest`                                | Auto-create: the video library stream key and its servers instead of one stream's                                 |
-| `--watch`, `-w`, `--interval`                         | `status`                                | Refresh until Ctrl-C or the stream ends (not with `--output json`)                                                |
-| `--search`, `--collection`, `--sort`                  | `list`                                  | Filter by title or ID and by collection; order by `date`, `title`, `status`, `started`, `ended` or `planned`      |
-| `--since`, `--from`, `--to`, `--limit`                | `bitrate`                               | Time range, and how many recent samples to list (0 for the summary only)                                          |
-| `--from`, `--to`, `--hourly`, `--stream`              | `stats`                                 | Range (14 days by default), hourly buckets, and up to 50 stream IDs                                               |
-| `--file`, `--url`, `--remove`, `--no-restore-default` | `thumbnail`                             | Image to upload or download, or remove the custom one                                                             |
-| `--force`, `-f`                                       | `start`, `stop`, `rotate-key`, `delete` | Skip the prompts (required unattended); on `start`, start even with no encoder publishing                         |
+| Flag                                                  | Commands                                | Description                                                                                                        |
+| ----------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `--type` (`event` \| `channel`)                       | `create`, `update`                      | Event (up to 12 h, can record a VOD) or 24/7 channel; on `update`, only before the start with no encoder connected |
+| `--record-vod` / `--no-record-vod`                    | `create`, `update`                      | Save the stream as a VOD (video on demand) when it stops (events only)                                             |
+| `--auto-start` / `--no-auto-start`                    | `create`, `update`                      | Go live as soon as an encoder connects, skipping preview                                                           |
+| `--dvr`                                               | `create`, `update`                      | DVR (rewind) window, e.g. `30m` or `2h`, up to `12h`; `0` turns it off                                             |
+| `--start`, `--end`                                    | `create`, `update`                      | Scheduled start and end (the end stops the stream): ISO 8601 UTC or `+30m` from now; `none` removes on `update`    |
+| `--countdown` / `--no-countdown`                      | `create`, `update`                      | Countdown in the player before a scheduled start; scheduled streams default to the library's setting               |
+| `--pre-stream-trailer`                                | `create`, `update`                      | Pre-stream trailer: video GUID to loop before the stream starts; `none` removes on `update`                        |
+| `--rtmp-output`                                       | `create`, `update`                      | Forward to another platform: its RTMP(S) URL ending in the stream key; repeatable, up to 4; `none` removes all     |
+| `--description`, `--collection`                       | `create`, `update`                      | Description and collection ID; `none` removes on `update`                                                          |
+| `--title`                                             | `update`                                | New title (`create` takes it as its positional)                                                                    |
+| `--show-secret`                                       | `create`, `ingest`, `rotate-key`        | Print the stream key in full                                                                                       |
+| `--sign`, `--expires`                                 | `preview`                               | Option 2: sign the preview token with the stream key, valid for `--expires` (default `1h`, max `10h5m`)            |
+| `--auto-create`                                       | `ingest`                                | Auto-create: the video library stream key and its servers instead of one stream's                                  |
+| `--watch`, `-w`, `--interval`                         | `status`                                | Refresh until Ctrl-C or the stream ends (not with `--output json`)                                                 |
+| `--search`, `--collection`, `--sort`                  | `list`                                  | Filter by title or ID and by collection; order by `date`, `title`, `status`, `started`, `ended` or `planned`       |
+| `--since`, `--from`, `--to`, `--limit`                | `bitrate`                               | Time range, and how many recent samples to list (0 for the summary only)                                           |
+| `--from`, `--to`, `--hourly`, `--stream`              | `stats`                                 | Range (14 days by default), hourly buckets, and up to 50 stream IDs                                                |
+| `--file`, `--url`, `--remove`, `--no-restore-default` | `thumbnail`                             | Image to upload or download, or remove the custom one                                                              |
+| `--force`, `-f`                                       | `start`, `stop`, `rotate-key`, `delete` | Skip the prompts (required unattended); on `start`, start even with no encoder publishing                          |
 
 While a stream is live, only `--title`, `--description` and `--end` can change. During the closed preview an account can run 3 live streams at once; live encoding is free, and the proposed pricing is per minute by the highest output resolution, with primary and backup encoders billed separately.
 

@@ -20,7 +20,7 @@ export const streamLiveStartCommand = defineToolCommand({
   command: "start [stream]",
   aliases: ["go-live"],
   describe:
-    "Take a live stream public: viewers can watch, and recording starts if it's on.",
+    "Take a live stream public: viewers can watch, and VOD recording starts if it's on.",
   examples: [
     ["$0 stream live start 0f4e5d6c-...", "Go live once the encoder publishes"],
     [
@@ -78,9 +78,7 @@ export const streamLiveStartCommand = defineToolCommand({
   render: (stream) => {
     logger.success(`${stream.title} is live.`);
     if (stream.recordVod && stream.type === "event")
-      logger.dim(
-        "Recording: on. It is saved as a video when you stop the stream.",
-      );
+      logger.dim("VOD: on. It is saved when you stop the stream.");
     if (stream.playbackUrl) logger.dim(`Playback (HLS): ${stream.playbackUrl}`);
     logger.dim("Playback is ready in 15-20 seconds.");
     logger.dim(
