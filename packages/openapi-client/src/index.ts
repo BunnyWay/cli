@@ -12,6 +12,7 @@ export { createMcClient } from "./mc-client.ts";
 export {
   authMiddleware,
   type ClientOptions,
+  NOT_FOUND_MESSAGE,
   UNAUTHORIZED_MESSAGE,
 } from "./middleware.ts";
 export { createOriginErrorsClient } from "./origin-errors-client.ts";

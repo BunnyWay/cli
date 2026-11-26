@@ -1,4 +1,8 @@
-import { ApiError, UserError } from "@bunny.net/openapi-client";
+import {
+  ApiError,
+  NOT_FOUND_MESSAGE,
+  UserError,
+} from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/magic-containers";
 import { z } from "zod";
 import type { McClient } from "@/tools/context.ts";
@@ -114,9 +118,6 @@ export function findContainer(pod: Pod, ref: string): PodContainer {
   );
 }
 
-// What ApiError says for a 404 whose body explains nothing.
-const NOT_FOUND_MESSAGE = "Not found.";
-
 // `POST /apps/{appId}/exec` has no generated types, so it is typed here by hand.
 interface ExecClient {
   POST(
@@ -186,7 +187,7 @@ export const appsExec = defineTool({
         );
       }
       if (error instanceof ApiError && error.status === 404) {
-        // The pod was just listed, so a bare 404 (no problem body, hence the generic message) means the route itself is missing.
+        // The pod was just listed, so a 404 with no body (ApiError falls back to NOT_FOUND_MESSAGE) means the route is missing.
         if (error.message === NOT_FOUND_MESSAGE) {
           throw new UserError(
             "This API has no exec endpoint.",

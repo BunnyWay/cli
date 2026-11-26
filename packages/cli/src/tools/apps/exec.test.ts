@@ -168,7 +168,7 @@ test("apps.exec passes on the API's explanation of a 404", async () => {
   );
 });
 
-// Runs through the real middleware: the bare-404 check keys off its fallback wording, so this fails if that wording drifts.
+// Runs through the real middleware, so it covers the empty-body fallback message the check relies on.
 test("apps.exec reads a real empty 404 as a missing exec endpoint", async () => {
   const server = Bun.serve({
     port: 0,
