@@ -142,3 +142,37 @@ test("aborting sends Ctrl-C and resolves with 130", async () => {
   expect(await run).toBe(130);
   while (!received.includes("\x03")) await Bun.sleep(5);
 });
+
+test("aborting before the socket opens leaves no session open", async () => {
+  const controller = new AbortController();
+  let opened = 0;
+  let closed = 0;
+  server = Bun.serve({
+    port: 0,
+    fetch(req, srv) {
+      return srv.upgrade(req) ? undefined : new Response("no", { status: 400 });
+    },
+    websocket: {
+      open() {
+        opened++;
+      },
+      message() {},
+      close() {
+        closed++;
+      },
+    },
+  });
+
+  const run = runExecCommand(
+    `ws://localhost:${server.port}`,
+    "tok",
+    ["whoami"],
+    { write: () => {}, signal: controller.signal, nonce: "n" },
+  );
+  controller.abort();
+
+  expect(await run).toBe(130);
+  // Give a socket that connected anyway time to open, then require it closed.
+  await Bun.sleep(200);
+  expect(closed).toBe(opened);
+});

@@ -121,7 +121,9 @@ export function runExecCommand(
       settled = true;
       clearTimeout(connectTimer);
       options.signal?.removeEventListener("abort", onAbort);
+      // Also abandons a socket still connecting, e.g. Ctrl-C before it opened, so it can't keep the process alive.
       if (socket.readyState === WebSocket.OPEN) socket.close(1000, "done");
+      else if (socket.readyState === WebSocket.CONNECTING) socket.close();
       if (outcome instanceof UserError) reject(outcome);
       else resolve(outcome);
     };
@@ -143,7 +145,11 @@ export function runExecCommand(
     }, options.connectTimeoutMs ?? CONNECT_TIMEOUT_MS);
 
     socket.addEventListener("open", () => {
-      if (settled) return;
+      // Settled while connecting: close the socket that opened anyway.
+      if (settled) {
+        socket.close(1000, "cancelled");
+        return;
+      }
       opened = true;
       clearTimeout(connectTimer);
       socket.send(token);
