@@ -4,7 +4,7 @@ import { logger } from "@/core/logger.ts";
 import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
 import { streamLiveGet, streamLiveStop } from "@/tools/stream/index.ts";
 import {
-  LIVE_PREVIEW_EPILOGUE,
+  LIVE_DOCS_EPILOGUE,
   resolveLiveTarget,
   statusText,
   withStreamPositional,
@@ -20,7 +20,7 @@ export const streamLiveStopCommand = defineToolCommand({
     ["$0 stream live stop 0f4e5d6c-...", "End a live stream"],
     ["$0 stream live stop 0f4e5d6c-... --force", "Skip the confirmation"],
   ],
-  epilogue: `Only a running stream can be stopped. To drop one that never went live, use \`bunny stream live delete\`.\n\n${LIVE_PREVIEW_EPILOGUE}`,
+  epilogue: `Only a running stream can be stopped. To drop one that never went live, use \`bunny stream live delete\`.\n\n${LIVE_DOCS_EPILOGUE}`,
   progress: "Stopping live stream...",
 
   builder: (yargs) =>

@@ -4,7 +4,7 @@ import { streamLiveIngest } from "@/tools/stream/index.ts";
 import {
   ENCODER_TIPS,
   formatIngest,
-  LIVE_PREVIEW_EPILOGUE,
+  LIVE_DOCS_EPILOGUE,
   maskIngest,
   resolveLiveLibrary,
   resolveLiveTarget,
@@ -28,7 +28,7 @@ export const streamLiveIngestCommand = defineToolCommand({
       "Auto-create: the video library stream key, where publishing creates and starts a stream",
     ],
   ],
-  epilogue: `The stream key is a publishing credential: anyone holding it can broadcast to this stream. Rotate it with \`bunny stream live rotate-key\`.\n\n${LIVE_PREVIEW_EPILOGUE}`,
+  epilogue: `The stream key is a publishing credential: anyone holding it can broadcast to this stream. Rotate it with \`bunny stream live rotate-key\`.\n\n${LIVE_DOCS_EPILOGUE}`,
   progress: "Fetching ingest settings...",
 
   builder: (yargs) =>

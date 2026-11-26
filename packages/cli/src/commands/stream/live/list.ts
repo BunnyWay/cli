@@ -3,7 +3,7 @@ import { formatDateTime, formatDuration, formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { streamLiveList } from "@/tools/stream/index.ts";
 import {
-  LIVE_PREVIEW_EPILOGUE,
+  LIVE_DOCS_EPILOGUE,
   resolveLiveLibrary,
   statusLabel,
   withLibOption,
@@ -20,7 +20,7 @@ export const streamLiveListCommand = defineToolCommand({
     ["$0 stream live list --search keynote", "Filter by title or ID"],
     ["$0 stream live list --sort planned", "Order by scheduled start"],
   ],
-  epilogue: LIVE_PREVIEW_EPILOGUE,
+  epilogue: LIVE_DOCS_EPILOGUE,
   progress: "Fetching live streams...",
 
   builder: (yargs) =>

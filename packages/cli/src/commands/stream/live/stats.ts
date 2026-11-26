@@ -3,7 +3,7 @@ import { formatKeyValue, formatTable } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { streamLiveStats } from "@/tools/stream/index.ts";
 import {
-  LIVE_PREVIEW_EPILOGUE,
+  LIVE_DOCS_EPILOGUE,
   parseTimeFlag,
   resolveLiveLibrary,
   withLibOption,
@@ -32,7 +32,7 @@ export const streamLiveStatsCommand = defineToolCommand({
       "One stream, hourly",
     ],
   ],
-  epilogue: `Live encoding is billed per minute by the highest output resolution, and primary and backup encoders are billed separately.\n\n${LIVE_PREVIEW_EPILOGUE}`,
+  epilogue: `Live encoding is billed per minute by the highest output resolution, and primary and backup encoders are billed separately.\n\n${LIVE_DOCS_EPILOGUE}`,
   progress: "Fetching live statistics...",
 
   builder: (yargs) =>

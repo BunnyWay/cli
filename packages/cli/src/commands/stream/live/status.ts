@@ -13,7 +13,7 @@ import {
 } from "@/tools/stream/index.ts";
 import {
   formatPingAgo,
-  LIVE_PREVIEW_EPILOGUE,
+  LIVE_DOCS_EPILOGUE,
   parseDuration,
   resolveLiveTarget,
   statusLabel,
@@ -94,7 +94,7 @@ export const streamLiveStatusCommand = defineCommand<LiveStatusArgs>({
     ],
     ["$0 stream live status 0f4e5d6c-... --output json", "JSON output"],
   ],
-  epilogue: LIVE_PREVIEW_EPILOGUE,
+  epilogue: LIVE_DOCS_EPILOGUE,
 
   builder: (yargs) =>
     withStreamPositional(yargs)

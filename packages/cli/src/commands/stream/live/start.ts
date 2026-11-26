@@ -8,7 +8,7 @@ import {
   streamLiveStatus,
 } from "@/tools/stream/index.ts";
 import {
-  LIVE_PREVIEW_EPILOGUE,
+  LIVE_DOCS_EPILOGUE,
   resolveLiveTarget,
   statusText,
   streamRef,
@@ -28,7 +28,7 @@ export const streamLiveStartCommand = defineToolCommand({
       "Start even when no encoder is publishing yet",
     ],
   ],
-  epilogue: `Starting overrides a scheduled start. Nothing published before the start is recorded, so connect the encoder first and check it with \`bunny stream live status\`. Playback is ready 15-20 seconds after the start.\n\n${LIVE_PREVIEW_EPILOGUE}`,
+  epilogue: `Starting overrides a scheduled start. Nothing published before the start is recorded, so connect the encoder first and check it with \`bunny stream live status\`. Playback is ready 15-20 seconds after the start.\n\n${LIVE_DOCS_EPILOGUE}`,
   progress: "Starting live stream...",
 
   builder: (yargs) =>

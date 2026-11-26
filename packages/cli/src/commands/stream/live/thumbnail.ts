@@ -11,7 +11,7 @@ import {
   streamLiveThumbnailSet,
 } from "@/tools/stream/index.ts";
 import {
-  LIVE_PREVIEW_EPILOGUE,
+  LIVE_DOCS_EPILOGUE,
   resolveLiveTarget,
   withStreamPositional,
 } from "./shared.ts";
@@ -47,7 +47,7 @@ export const streamLiveThumbnailCommand = defineCommand<LiveThumbnailArgs>({
       "Remove it without the confirmation",
     ],
   ],
-  epilogue: LIVE_PREVIEW_EPILOGUE,
+  epilogue: LIVE_DOCS_EPILOGUE,
 
   builder: (yargs) =>
     withStreamPositional(yargs)

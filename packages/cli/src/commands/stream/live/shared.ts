@@ -31,9 +31,8 @@ import {
   utcTimestamp,
 } from "@/tools/stream/index.ts";
 
-/** Live streaming is a closed preview: said once in every live command's help. */
-export const LIVE_PREVIEW_EPILOGUE =
-  "Stream Live is in closed preview: it works on video libraries created during the preview, and features and limits may change before general availability. Docs: https://bunny.net/docs/stream/live";
+/** The Stream Live docs link: said once in every live command's help. */
+export const LIVE_DOCS_EPILOGUE = "Docs: https://bunny.net/docs/stream/live";
 
 /**
  * A stream reference for a follow-up command we print: the stream ID, plus

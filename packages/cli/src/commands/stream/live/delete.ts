@@ -3,7 +3,7 @@ import { logger } from "@/core/logger.ts";
 import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
 import { streamLiveDelete, streamLiveGet } from "@/tools/stream/index.ts";
 import {
-  LIVE_PREVIEW_EPILOGUE,
+  LIVE_DOCS_EPILOGUE,
   resolveLiveTarget,
   withStreamPositional,
 } from "./shared.ts";
@@ -18,7 +18,7 @@ export const streamLiveDeleteCommand = defineToolCommand({
     ["$0 stream live delete 0f4e5d6c-...", "Delete a live stream"],
     ["$0 stream live delete 0f4e5d6c-... --force", "Skip the confirmation"],
   ],
-  epilogue: LIVE_PREVIEW_EPILOGUE,
+  epilogue: LIVE_DOCS_EPILOGUE,
   progress: "Deleting live stream...",
 
   builder: (yargs) =>

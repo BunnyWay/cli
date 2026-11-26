@@ -1,6 +1,6 @@
 # Stream Live Commands
 
-`bunny stream live` creates and runs live streams in a Stream video library. It is a **closed preview**: it works on video libraries created during the preview, and features, limits and pricing may change. Docs: https://bunny.net/docs/stream/live
+`bunny stream live` creates and runs live streams in a Stream video library. Docs: https://bunny.net/docs/stream/live
 
 Every command takes `--lib` (alias `--library`, name or ID; defaults to the linked library) and the live stream ID as an optional positional. Without an ID a terminal shows a picker; unattended runs (`--output json`, no TTY, `--force`) need the ID.
 
@@ -70,5 +70,4 @@ Preview links are token-protected and only work while the stream is Created, Sch
 - Don't `stop` to tidy up a stream that never went live: `stop` refuses it; use `delete`.
 - Don't `delete` a stream whose VOD you want to keep: the VOD is part of the stream (it plays from the stream's player, not as a library video) and is deleted with it.
 - Don't print stream keys into logs or CI output without need: `--show-secret` is the only way they appear.
-- Don't use a pre-preview video library: live works only on libraries created during the preview.
-- Concurrency during the preview is 3 live streams per account; `create` fails with a clear error past that.
+- Accounts have a limit on concurrent live streams; `create` fails with a clear error past it, so delete streams you no longer need.

@@ -73,7 +73,7 @@ bunny stream libraries create my-library --link --save-env --no-add-videos   # l
 bunny stream videos upload ./video.mp4 --title "Launch demo"
 bunny stream videos list
 
-# live stream from Bunny Stream (closed preview)
+# live stream from Bunny Stream
 bunny stream live create "Launch keynote" --record-vod # prints the encoder server; key masked
 bunny stream live ingest <id> --show-secret            # stream key for OBS / vMix / FFmpeg
 bunny stream live start <id>                           # go public once the encoder publishes

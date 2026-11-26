@@ -4,7 +4,7 @@ import { logger } from "@/core/logger.ts";
 import { streamLiveUpdate } from "@/tools/stream/index.ts";
 import {
   formatLiveStreamDetails,
-  LIVE_PREVIEW_EPILOGUE,
+  LIVE_DOCS_EPILOGUE,
   liveSettingsFromFlags,
   resolveLiveTarget,
   rtmpOutputEnv,
@@ -36,7 +36,7 @@ export const streamLiveUpdateCommand = defineToolCommand({
       "Remove all RTMP outputs",
     ],
   ],
-  epilogue: `While a stream is live only --title, --description and --end can change. --type changes only before the stream starts, with no encoder connected.\n\n${LIVE_PREVIEW_EPILOGUE}`,
+  epilogue: `While a stream is live only --title, --description and --end can change. --type changes only before the stream starts, with no encoder connected.\n\n${LIVE_DOCS_EPILOGUE}`,
   progress: "Updating live stream...",
 
   builder: (yargs) =>

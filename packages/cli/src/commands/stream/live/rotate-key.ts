@@ -9,7 +9,7 @@ import {
 } from "@/tools/stream/index.ts";
 import {
   formatIngest,
-  LIVE_PREVIEW_EPILOGUE,
+  LIVE_DOCS_EPILOGUE,
   maskIngest,
   resolveLiveTarget,
   streamRef,
@@ -29,7 +29,7 @@ export const streamLiveRotateKeyCommand = defineToolCommand({
       "Rotate without asking and print the new key",
     ],
   ],
-  epilogue: `A running stream is not ended: publish with the new key within the reconnect window to carry on with the same stream, recording and DVR. The SRT URLs change too, since they carry the key, and every preview token signed with the old key (live preview --sign) stops working.\n\n${LIVE_PREVIEW_EPILOGUE}`,
+  epilogue: `A running stream is not ended: publish with the new key within the reconnect window to carry on with the same stream, recording and DVR. The SRT URLs change too, since they carry the key, and every preview token signed with the old key (live preview --sign) stops working.\n\n${LIVE_DOCS_EPILOGUE}`,
   progress: "Regenerating the stream key...",
 
   builder: (yargs) =>

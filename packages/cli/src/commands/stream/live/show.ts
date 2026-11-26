@@ -4,7 +4,7 @@ import { streamLiveGet } from "@/tools/stream/index.ts";
 import {
   formatIssues,
   formatLiveStreamDetails,
-  LIVE_PREVIEW_EPILOGUE,
+  LIVE_DOCS_EPILOGUE,
   resolveLiveTarget,
   streamRef,
   withStreamPositional,
@@ -20,7 +20,7 @@ export const streamLiveShowCommand = defineToolCommand({
     ["$0 stream live show", "Pick a live stream interactively"],
     ["$0 stream live show 0f4e5d6c-... --output json", "JSON output"],
   ],
-  epilogue: LIVE_PREVIEW_EPILOGUE,
+  epilogue: LIVE_DOCS_EPILOGUE,
   progress: "Fetching live stream...",
 
   builder: (yargs) => withStreamPositional(yargs),

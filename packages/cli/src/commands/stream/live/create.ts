@@ -16,7 +16,7 @@ import {
 import {
   ENCODER_TIPS,
   formatIngest,
-  LIVE_PREVIEW_EPILOGUE,
+  LIVE_DOCS_EPILOGUE,
   type LiveSettingsArgs,
   liveSettingsFromFlags,
   maskIngest,
@@ -107,7 +107,7 @@ export const streamLiveCreateCommand = defineCommand<LiveCreateArgs>({
       "For scripts: JSON including the stream key",
     ],
   ],
-  epilogue: `Settings you leave out use the library's live defaults. Events end after 12 hours, or 30 minutes after the encoder disconnects; channels run until stopped.\n\n${LIVE_PREVIEW_EPILOGUE}`,
+  epilogue: `Settings you leave out use the library's live defaults. Events end after 12 hours, or 30 minutes after the encoder disconnects; channels run until stopped.\n\n${LIVE_DOCS_EPILOGUE}`,
 
   builder: (yargs) =>
     withLiveSettingsOptions(

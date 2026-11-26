@@ -7,7 +7,7 @@ All Stream commands live under `bunny stream`, split into resource groups:
 - **`bunny stream collections`** (alias `collection`) manages groups of videos within a library.
 - **`bunny stream link`** and **`bunny stream unlink`** mirror `libraries link` and `libraries unlink`.
 - **`bunny stream regions`** lists the region codes a library can replicate to.
-- **`bunny stream live`** creates and runs live streams (closed preview); see `stream-live.md`.
+- **`bunny stream live`** creates and runs live streams; see `stream-live.md`.
 - **`bunny stream import`** moves a library in from another platform; see `stream-import.md`.
 
 Each library carries its own Stream API key for the video-level API. Video commands resolve it from the library automatically, so there is nothing extra to configure; the key is never printed unless you ask for it with `libraries credentials`.

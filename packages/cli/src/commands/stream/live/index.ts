@@ -17,7 +17,7 @@ import { streamLiveUpdateCommand } from "./update.ts";
 // Ordered as the lifecycle runs: create, connect, go live, monitor, end.
 export const streamLiveNamespace = defineNamespace(
   "live",
-  "Create, broadcast and manage live streams (closed preview).",
+  "Create, broadcast and manage live streams.",
   [
     streamLiveCreateCommand,
     streamLiveListCommand,
