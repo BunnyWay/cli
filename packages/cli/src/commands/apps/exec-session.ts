@@ -51,15 +51,7 @@ export function terminate(socket: WebSocket): void {
   (socket as WebSocket & { terminate?: () => void }).terminate?.();
 }
 
-/**
- * Bridge the local terminal to an exec WebSocket until either side closes it.
- *
- * The token goes out first as a text frame: the URL carries no credential,
- * and the server reads the first frame as the token, closing with 1008 if it
- * is anything else. After that, stdin goes out as binary frames, output comes
- * back as binary or text frames, and a JSON text frame
- * `{"type":"resize","cols","rows"}` sets the remote terminal size.
- */
+/** Bridge the local terminal to an exec WebSocket until either side closes it; the token must be the first frame. */
 export function runExecSession(
   url: string,
   token: string,

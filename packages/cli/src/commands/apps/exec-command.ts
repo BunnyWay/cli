@@ -2,14 +2,7 @@ import { randomBytes } from "node:crypto";
 import { UserError } from "@/core/errors.ts";
 import { CONNECT_TIMEOUT_MS, terminate } from "./exec-session.ts";
 
-/*
- * An exec session is an interactive shell, so a one-off command is typed into
- * it, wrapped in markers the shell prints around it. The markers are written
- * as `\036` escapes, so the shell's echo of the typed line (and its prompt)
- * never contains the real marker bytes; only printf's output does. Everything
- * outside the markers is dropped, and the end marker carries the command's
- * exit status.
- */
+// A session is a shell, so a command is typed into it between printf markers; typed as `\036` escapes, they never match the shell's echo.
 
 const RS = "\x1e";
 
@@ -25,11 +18,7 @@ export function commandLine(argv: string[], nonce: string): string {
   return `printf '\\036B${nonce}\\036'; ${argv.map(shellQuote).join(" ")}; printf '\\036E${nonce}:%d\\036' $?; exit\r`;
 }
 
-/**
- * Pulls the command's output out of the terminal stream, which also carries
- * the prompt and the echo of the typed line. Feed it decoded text as it
- * arrives; it returns what can be printed so far and, once seen, the exit code.
- */
+/** Pulls the command's output and exit code out of the terminal stream, which also carries the prompt and the echo. */
 export class MarkedOutput {
   private readonly begin: string;
   private readonly end: string;

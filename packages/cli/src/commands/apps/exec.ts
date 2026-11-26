@@ -18,11 +18,7 @@ import { findLinkedAppId } from "./config.ts";
 import { runExecCommand } from "./exec-command.ts";
 import { runExecSession } from "./exec-session.ts";
 
-/**
- * Close codes that mean the session ended on its own. Exiting the remote shell
- * can end the session with 1006, the same code a network drop gives, so both
- * count as a normal end.
- */
+/** Close codes that end a session normally; 1006 is included because exiting the shell can't be told apart from a network drop. */
 export function endedNormally(code: number): boolean {
   return code === 1000 || code === 1005 || code === 1006;
 }
@@ -194,11 +190,7 @@ export async function resolveTarget(
   return { pod: pod.name, container: container.id };
 }
 
-/**
- * Run one command and exit with its status. Output streams to stdout as it
- * arrives; with JSON it is collected and printed once with the exit code.
- * Never prints the session token.
- */
+/** Run one command and exit with its status; JSON output collects it and never includes the token. */
 async function runCommand(
   session: ExecSession,
   command: string[],
@@ -329,7 +321,7 @@ export const appsExecCommand = defineToolCommand({
     else if (endedNormally(end.code)) {
       logger.dim("Session ended.");
     } else {
-      // A dropped connection is a failure, so scripts and agents don't read it as success.
+      // Only error closes like 1008 fail; a dropped connection (1006) already counted as a normal end above.
       throw new UserError(
         `Session closed unexpectedly (${end.code}${end.reason ? `: ${end.reason}` : ""}).`,
         "Run the command again to reconnect.",
