@@ -6,6 +6,7 @@ import {
   parseDuration,
   parseRestream,
   parseTimeFlag,
+  restreamEnv,
 } from "./shared.ts";
 
 const NOW = Date.parse("2026-11-23T12:00:00Z");
@@ -59,8 +60,31 @@ test("liveSettingsFromFlags builds a sparse create body", () => {
     recordVod: true,
     dvrWindowSeconds: 3600,
     scheduledStart: "2026-11-23T12:30:00.000Z",
-    outputs: [{ endpoint: "rtmp://live.twitch.tv/app", streamKey: "live_123" }],
+    outputs: [
+      {
+        endpoint: "rtmp://live.twitch.tv/app",
+        streamKeyEnv: "BUNNY_STREAM_RESTREAM_KEY_1",
+      },
+    ],
   });
+});
+
+test("restream keys go to the environment, never into the settings", () => {
+  const args = {
+    restream: [
+      "rtmp://live.twitch.tv/app/live_123",
+      "rtmps://a.rtmp.youtube.com/live2/yt-key",
+    ],
+  };
+  const settings = liveSettingsFromFlags(args, "create", NOW);
+  expect(JSON.stringify(settings)).not.toContain("live_123");
+  expect(JSON.stringify(settings)).not.toContain("yt-key");
+  expect(restreamEnv(args, "create")).toEqual({
+    BUNNY_STREAM_RESTREAM_KEY_1: "live_123",
+    BUNNY_STREAM_RESTREAM_KEY_2: "yt-key",
+  });
+  expect(restreamEnv({ restream: ["none"] }, "update")).toEqual({});
+  expect(restreamEnv({}, "update")).toEqual({});
 });
 
 test('liveSettingsFromFlags treats "none" as clearing on update only', () => {

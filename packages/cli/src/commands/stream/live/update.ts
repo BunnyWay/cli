@@ -7,6 +7,7 @@ import {
   LIVE_PREVIEW_EPILOGUE,
   liveSettingsFromFlags,
   resolveLiveTarget,
+  restreamEnv,
   withLiveSettingsOptions,
   withStreamPositional,
 } from "./shared.ts";
@@ -58,6 +59,8 @@ export const streamLiveUpdateCommand = defineToolCommand({
     const { library, streamId } = await resolveLiveTarget(ctx, args);
     return {
       input: { library: library.id, stream: streamId, title, ...settings },
+      // Restream keys reach the tool through the environment, never as input.
+      env: restreamEnv(args, "update"),
     };
   },
 

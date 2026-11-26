@@ -6,6 +6,7 @@ import { formatDateTime, formatDuration } from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { isInteractive, prompts, withSpinner } from "@/core/ui.ts";
+import { extendToolContext } from "@/tools/context.ts";
 import {
   type LiveStream,
   streamLiveCreate,
@@ -19,6 +20,7 @@ import {
   liveSettingsFromFlags,
   maskIngest,
   resolveLiveLibrary,
+  restreamEnv,
   withLibOption,
   withLiveSettingsOptions,
 } from "./shared.ts";
@@ -144,8 +146,16 @@ export const streamLiveCreateCommand = defineCommand<LiveCreateArgs>({
       output,
       offerLink: true,
     });
+    // Restream keys reach the tool through the environment, never as input.
+    const createCtx = extendToolContext(ctx, {
+      env: restreamEnv(args, "create"),
+    });
     const stream = await withSpinner("Creating live stream...", () =>
-      streamLiveCreate.invoke(ctx, { library: library.id, title, ...settings }),
+      streamLiveCreate.invoke(createCtx, {
+        library: library.id,
+        title,
+        ...settings,
+      }),
     );
     const ingest = await withSpinner("Fetching ingest settings...", () =>
       streamLiveIngest.invoke(ctx, { library: library.id, stream: stream.id }),

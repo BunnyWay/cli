@@ -5,7 +5,7 @@ import { defineCommand } from "@/core/define-command.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { toolContext } from "@/core/tool-context.ts";
-import { withSpinner } from "@/core/ui.ts";
+import { confirm, requireConfirmable, withSpinner } from "@/core/ui.ts";
 import {
   streamLiveThumbnailRemove,
   streamLiveThumbnailSet,
@@ -23,6 +23,7 @@ interface LiveThumbnailArgs {
   file?: string;
   remove?: boolean;
   restoreDefault?: boolean;
+  force?: boolean;
 }
 
 export const streamLiveThumbnailCommand = defineCommand<LiveThumbnailArgs>({
@@ -39,7 +40,11 @@ export const streamLiveThumbnailCommand = defineCommand<LiveThumbnailArgs>({
     ],
     [
       "$0 stream live thumbnail 0f4e5d6c-... --remove",
-      "Back to the library default",
+      "Back to the library default (confirms first)",
+    ],
+    [
+      "$0 stream live thumbnail 0f4e5d6c-... --remove --force",
+      "Remove it without the confirmation",
     ],
   ],
   epilogue: LIVE_PREVIEW_EPILOGUE,
@@ -61,6 +66,12 @@ export const streamLiveThumbnailCommand = defineCommand<LiveThumbnailArgs>({
         default: true,
         describe:
           "With --remove, fall back to the library's default live thumbnail (--no-restore-default for none)",
+      })
+      .option("force", {
+        alias: "f",
+        type: "boolean",
+        default: false,
+        describe: "With --remove, skip the confirmation prompt",
       }),
 
   preRun: async ({ remove, url, file }) => {
@@ -79,6 +90,21 @@ export const streamLiveThumbnailCommand = defineCommand<LiveThumbnailArgs>({
 
     let result: Awaited<ReturnType<typeof streamLiveThumbnailSet.invoke>>;
     if (args.remove) {
+      // The custom image is deleted for good, so this confirms like the other irreversible live commands.
+      requireConfirmable(output, {
+        force: args.force,
+        message:
+          "Removing a live stream thumbnail needs a confirmation prompt.",
+        hint: "Re-run with --force to remove it non-interactively.",
+      });
+      const confirmed = await confirm(
+        "Remove this live stream's custom thumbnail? The image can't be restored.",
+        { force: args.force },
+      );
+      if (!confirmed) {
+        logger.log("Cancelled.");
+        return;
+      }
       result = await withSpinner("Removing thumbnail...", () =>
         streamLiveThumbnailRemove.invoke(ctx, {
           ...target,

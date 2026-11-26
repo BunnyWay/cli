@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { UserError } from "@bunny.net/openapi-client";
 import type { components } from "@bunny.net/openapi-client/stream-live";
 import { z } from "zod";
+import type { ToolEnv } from "@/tools/context.ts";
 
 export type LiveStreamModel = components["schemas"]["LiveStreamModel"];
 export type CreateLiveStreamModel =
@@ -223,7 +224,12 @@ export const LiveIngestSchema = z.object({
   libraryId: z.number(),
   /** The live stream, or null for the library's auto-create stream key. */
   streamId: z.string().nullable(),
-  /** Null for an auto-created stream (it publishes with the library key) and for the library itself, whose key the API doesn't return. */
+  /**
+   * The key to append to the RTMP(S) server URL. For the library's auto-create
+   * ingest it is the library's auto-create stream key, read from the SRT URLs
+   * (the API returns it nowhere else); null when SRT isn't configured, and for
+   * an auto-created stream, which publishes with the library's key.
+   */
   streamKey: z.string().nullable(),
   rtmp: IngestPairSchema.nullable(),
   rtmps: IngestPairSchema.nullable(),
@@ -245,19 +251,38 @@ function pair(
   };
 }
 
+/** The stream key an SRT URL carries in `streamid=publish:live/<key>`; null when it has none. */
+export function srtStreamKey(url: string | null | undefined): string | null {
+  const match = url ? /[?&]streamid=publish:live\/([^&#]+)/i.exec(url) : null;
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 export function toLiveIngest(
   libraryId: number,
   streamId: string | null,
   streamKey: string | null,
   endpoints: IngestEndpointsModel | null | undefined,
 ): LiveIngest {
+  const srt = pair(endpoints?.srt);
+  // The auto-create endpoints carry the library's key only inside the SRT
+  // URLs, yet RTMP(S) encoders need it as a separate stream key.
+  const key =
+    streamKey ||
+    (streamId === null
+      ? (srtStreamKey(srt?.primary) ?? srtStreamKey(srt?.backup))
+      : null);
   return {
     libraryId,
     streamId,
-    streamKey: streamKey || null,
+    streamKey: key || null,
     rtmp: pair(endpoints?.rtmp),
     rtmps: pair(endpoints?.rtmps),
-    srt: pair(endpoints?.srt),
+    srt,
   };
 }
 
@@ -412,17 +437,52 @@ export function toLiveEncodingStats(
   };
 }
 
-/** A restream destination as the API takes it. */
-export const OutputInputSchema = z.object({
+/**
+ * A restream destination. Its stream key is a credential for another
+ * platform, so it is never input: the input names the environment variable
+ * that holds it, and the tool reads it from `ctx.env`.
+ */
+export const OutputInputSchema = z.strictObject({
   endpoint: z
     .string()
     .trim()
     .regex(/^rtmps?:\/\//i, "must start with rtmp:// or rtmps://")
     .describe(
-      "Destination ingest URL, e.g. `rtmps://a.rtmp.youtube.com/live2`.",
+      "Destination ingest URL without the key, e.g. `rtmps://a.rtmp.youtube.com/live2`.",
     ),
-  streamKey: z.string().trim().min(1).describe("The destination's stream key."),
+  streamKeyEnv: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "must be an environment variable name")
+    .describe(
+      "Name of the environment variable that holds the destination's stream key, e.g. `YOUTUBE_STREAM_KEY`. The key itself is never input.",
+    ),
 });
+export type OutputInput = z.infer<typeof OutputInputSchema>;
+
+/** Restream destinations as the API takes them, with each key read from the environment. */
+export function resolveOutputs(
+  outputs: readonly OutputInput[],
+  env: ToolEnv,
+): Array<{ endpoint: string; streamKey: string }> {
+  const missing = [
+    ...new Set(
+      outputs
+        .filter((o) => !env[o.streamKeyEnv]?.trim())
+        .map((o) => o.streamKeyEnv),
+    ),
+  ];
+  if (missing.length > 0) {
+    throw new UserError(
+      `Missing restream stream key${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}.`,
+      `Set ${missing.join(", ")} in the environment to the destination's stream key.`,
+    );
+  }
+  return outputs.map((o) => ({
+    endpoint: o.endpoint,
+    streamKey: (env[o.streamKeyEnv] ?? "").trim(),
+  }));
+}
 
 /** The settings `stream.live.create` and `stream.live.update` share. */
 export const LiveSettingsSchema = z.object({
@@ -489,7 +549,7 @@ export const LiveSettingsSchema = z.object({
     .max(4)
     .optional()
     .describe(
-      "Restream destinations, up to 4. Replaces the whole list; an empty list removes them all.",
+      "Restream destinations, up to 4, each with the environment variable holding its stream key. Replaces the whole list; an empty list removes them all.",
     ),
 });
 export type LiveSettings = z.infer<typeof LiveSettingsSchema>;
@@ -534,7 +594,10 @@ export function assertLiveSettings(settings: LiveSettings): void {
 }
 
 /** Map settings to the API's field names, sending only what was given. */
-export function liveSettingsBody(settings: LiveSettings): PatchLiveStreamModel {
+export function liveSettingsBody(
+  settings: LiveSettings,
+  env: ToolEnv = {},
+): PatchLiveStreamModel {
   const body: PatchLiveStreamModel = {};
   if (settings.description !== undefined)
     body.description = settings.description;
@@ -558,6 +621,7 @@ export function liveSettingsBody(settings: LiveSettings): PatchLiveStreamModel {
     body.enableCountdown = settings.countdown;
   if (settings.trailerVideoId !== undefined)
     body.preStreamTrailerVideoId = settings.trailerVideoId;
-  if (settings.outputs !== undefined) body.outputs = settings.outputs;
+  if (settings.outputs !== undefined)
+    body.outputs = resolveOutputs(settings.outputs, env);
   return body;
 }

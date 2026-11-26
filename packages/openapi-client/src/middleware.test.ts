@@ -284,6 +284,24 @@ test("verbose response body dumps are redacted", async () => {
   expect(dump).toContain("[redacted]");
 });
 
+test("redactSecrets redacts secret parameters in bare query strings and any URL scheme's query", () => {
+  const out = redactSecrets({
+    playerQueryParameters:
+      "previewToken=HS256-preview-secret&previewExpires=1800000000&token=view-secret&expires=1800000000",
+    srt: "srt://global.srt.mediadelivery.net:8890?streamid=publish:live/key-secret",
+    note: "a=b and plain text",
+  });
+  const dump = JSON.stringify(out);
+  expect(dump).not.toContain("preview-secret");
+  expect(dump).not.toContain("view-secret");
+  expect(dump).not.toContain("key-secret");
+  expect(out).toMatchObject({
+    playerQueryParameters:
+      "previewToken=[redacted]&previewExpires=1800000000&token=[redacted]&expires=1800000000",
+    note: "a=b and plain text",
+  });
+});
+
 test("verbose request body dumps are redacted and read from a clone", async () => {
   const logs: string[] = [];
   const { request, reads } = spyRequest(

@@ -3,7 +3,7 @@ import { ApiError, UserError } from "@bunny.net/openapi-client";
 import { z } from "zod";
 import type { StreamClient, ToolContext } from "@/tools/context.ts";
 import { defineTool } from "@/tools/define-tool.ts";
-import { fetchLibrary } from "../api.ts";
+import { fetchLibrary } from "@/tools/stream/api.ts";
 import {
   assertLiveSettings,
   type BitrateHistory,
@@ -214,7 +214,9 @@ export const streamLiveCreate = defineTool({
     ctx.progress("Creating live stream...");
     // null clears a field on update; on create it just means "not set".
     const body = Object.fromEntries(
-      Object.entries(liveSettingsBody(settings)).filter(([, v]) => v !== null),
+      Object.entries(liveSettingsBody(settings, ctx.env)).filter(
+        ([, v]) => v !== null,
+      ),
     );
     try {
       const { data } = await client.POST("/library/{libraryId}/live", {
@@ -261,7 +263,10 @@ export const streamLiveUpdate = defineTool({
   ],
   run: async (ctx, { library, stream, title, ...settings }) => {
     assertLiveSettings(settings);
-    const body = { ...liveSettingsBody(settings), ...(title ? { title } : {}) };
+    const body = {
+      ...liveSettingsBody(settings, ctx.env),
+      ...(title ? { title } : {}),
+    };
     if (Object.keys(body).length === 0)
       throw new UserError("No live stream changes requested.");
     const client = await liveClient(ctx, library);
@@ -379,7 +384,7 @@ export const streamLiveIngest = defineTool({
   name: "stream.live.ingest",
   title: "Get live ingest settings",
   description:
-    "Get where an encoder publishes: RTMP, RTMPS and SRT primary and backup URLs, plus the stream key. Without `stream`, returns the library's auto-create ingest URLs, where publishing creates and starts a new stream. The stream key is a publishing credential.",
+    "Get where an encoder publishes: RTMP, RTMPS and SRT primary and backup URLs, plus the stream key. Without `stream`, returns the library's auto-create ingest URLs, where publishing creates and starts a new stream, and the auto-create stream key (null when SRT isn't configured, since the API carries it only in the SRT URLs). The stream key is a publishing credential.",
   schema: z.strictObject({
     library: libraryId,
     stream: streamId
@@ -673,7 +678,7 @@ export const streamLiveThumbnailRemove = defineTool({
   name: "stream.live.thumbnail.remove",
   title: "Remove a live stream thumbnail",
   description:
-    "Remove a live stream's custom thumbnail, falling back to the library's default live thumbnail when `restoreDefault` is set and one exists.",
+    "Remove a live stream's custom thumbnail, falling back to the library's default live thumbnail when `restoreDefault` is set and one exists. The custom image is deleted and can't be restored; set it again to bring it back.",
   schema: z.strictObject({
     library: libraryId,
     stream: streamId,
@@ -684,7 +689,7 @@ export const streamLiveThumbnailRemove = defineTool({
         "Use the library's default live thumbnail afterwards, if it has one.",
       ),
   }),
-  kind: "write",
+  kind: "destructive",
   resultSchema: ThumbnailResultSchema,
   run: async (
     ctx,

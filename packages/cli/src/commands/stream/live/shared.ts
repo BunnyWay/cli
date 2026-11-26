@@ -218,6 +218,48 @@ export function parseRestream(value: string): {
   return { endpoint: match[1], streamKey: match[2] };
 }
 
+/** `--restream` values as destinations: [] for "none" on update, undefined when the flag isn't passed. */
+function restreamDestinations(
+  args: Pick<LiveSettingsArgs, "restream">,
+  mode: "create" | "update",
+): Array<{ endpoint: string; streamKey: string }> | undefined {
+  if (args.restream === undefined) return undefined;
+  const values = args.restream
+    .flatMap((v) => String(v).split(/\s+/))
+    .filter(Boolean);
+  if (
+    mode === "update" &&
+    values.length === 1 &&
+    values[0]?.toLowerCase() === "none"
+  )
+    return [];
+  if (values.length > 4)
+    throw new UserError("--restream takes at most 4 destinations.");
+  return values.map(parseRestream);
+}
+
+/** The environment variable that carries the stream key of the nth `--restream` destination to the tool. */
+export function restreamKeyEnv(index: number): string {
+  return `BUNNY_STREAM_RESTREAM_KEY_${index + 1}`;
+}
+
+/**
+ * The `--restream` stream keys, keyed by the variables `liveSettingsFromFlags`
+ * names in the tool input. Third-party keys never go in tool input; the command
+ * layers this over the environment for the one invocation.
+ */
+export function restreamEnv(
+  args: Pick<LiveSettingsArgs, "restream">,
+  mode: "create" | "update",
+): Record<string, string> {
+  return Object.fromEntries(
+    (restreamDestinations(args, mode) ?? []).map((d, i) => [
+      restreamKeyEnv(i),
+      d.streamKey,
+    ]),
+  );
+}
+
 /** Flags shared by `live create` and `live update`. */
 export interface LiveSettingsArgs {
   description?: string;
@@ -341,21 +383,12 @@ export function liveSettingsFromFlags(
     }
   }
 
-  if (args.restream !== undefined) {
-    const values = args.restream
-      .flatMap((v) => String(v).split(/\s+/))
-      .filter(Boolean);
-    if (
-      mode === "update" &&
-      values.length === 1 &&
-      values[0]?.toLowerCase() === "none"
-    ) {
-      settings.outputs = [];
-    } else {
-      if (values.length > 4)
-        throw new UserError("--restream takes at most 4 destinations.");
-      settings.outputs = values.map(parseRestream);
-    }
+  const destinations = restreamDestinations(args, mode);
+  if (destinations !== undefined) {
+    settings.outputs = destinations.map((d, i) => ({
+      endpoint: d.endpoint,
+      streamKeyEnv: restreamKeyEnv(i),
+    }));
   }
 
   if (settings.type === "channel" && settings.recordVod === true) {
@@ -509,7 +542,7 @@ export function formatIngest(
   );
   const key = ingest.streamId
     ? `\nStream key: ${ingest.streamKey ?? "(none: auto-created streams publish with the library key)"}`
-    : "";
+    : `\nAuto-create stream key: ${ingest.streamKey ?? "(not returned: the API only carries it in the SRT URLs, and SRT isn't configured for this library)"}`;
   return `${table}${key}`;
 }
 

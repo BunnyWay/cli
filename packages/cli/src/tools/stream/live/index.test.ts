@@ -132,6 +132,25 @@ test("toLiveStream normalizes the model and never carries a stream key", () => {
   expect(JSON.stringify(stream)).not.toContain("yt-key");
 });
 
+test("toLiveIngest reads the auto-create key from the SRT URL for RTMP(S) encoders", () => {
+  const srt =
+    "srt://global.srt.mediadelivery.net:8890?mode=caller&streamid=publish:live/auto%2Dkey123&latency=120000";
+  const ingest = toLiveIngest(12345, null, null, {
+    rtmps: {
+      primaryIngestUrl: "rtmps://global.rtmp.mediadelivery.net/live",
+      backupIngestUrl: null,
+    },
+    srt: { primaryIngestUrl: srt, backupIngestUrl: null },
+  });
+  expect(ingest.streamKey).toBe("auto-key123");
+  // A per-stream ingest never borrows the key from SRT, and no SRT means no key.
+  expect(
+    toLiveIngest(12345, "abc", null, { srt: { primaryIngestUrl: srt } })
+      .streamKey,
+  ).toBeNull();
+  expect(toLiveIngest(12345, null, null, { srt: null }).streamKey).toBeNull();
+});
+
 test("toLiveIngest keeps only the protocols the API returned", () => {
   const ingest = toLiveIngest(12345, "abc", "key", {
     rtmps: {
@@ -165,6 +184,38 @@ test("assertLiveSettings rejects a recorded channel and an event over 12 hours",
       scheduledEnd: "2026-12-03T00:00:00Z",
     }),
   ).not.toThrow();
+});
+
+test("liveSettingsBody reads restream keys from the environment and names missing ones", () => {
+  const outputs = [
+    {
+      endpoint: "rtmps://a.rtmp.youtube.com/live2",
+      streamKeyEnv: "YOUTUBE_STREAM_KEY",
+    },
+  ];
+  expect(
+    liveSettingsBody({ outputs }, { YOUTUBE_STREAM_KEY: "yt-key" }),
+  ).toEqual({
+    outputs: [
+      { endpoint: "rtmps://a.rtmp.youtube.com/live2", streamKey: "yt-key" },
+    ],
+  });
+  expect(() => liveSettingsBody({ outputs }, {})).toThrow(
+    "Missing restream stream key: YOUTUBE_STREAM_KEY.",
+  );
+  expect(liveSettingsBody({ outputs: [] })).toEqual({ outputs: [] });
+});
+
+test("stream.live.create takes no restream key as input", () => {
+  expect(() =>
+    streamLiveCreate.schema.parse({
+      library: 12345,
+      title: "Simulcast",
+      outputs: [
+        { endpoint: "rtmps://a.rtmp.youtube.com/live2", streamKey: "yt-key" },
+      ],
+    }),
+  ).toThrow();
 });
 
 test("liveSettingsBody maps a DVR window of 0 to DVR off and keeps nulls", () => {
