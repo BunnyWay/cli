@@ -250,7 +250,7 @@ bunny apps scale --max 5
 
 Open an interactive shell in a running container. It uses the app this directory is linked to; with no `--id` and no linked app, it lists your account's apps to pick from. Without `--pod` or `--container`, it lists the app's pods and the pod's containers to pick from; when there is only one, it picks it for you. Everything you type goes to the container, Ctrl-C included. Press Ctrl-] to disconnect from this side.
 
-Put a command after `--` to run just that instead of opening a shell. Its output streams to stdout and the CLI exits with the command's exit code, so it works in scripts and doesn't need a terminal (pass `--pod` and `--container` there when there's more than one). The arguments reach the container as given, without being expanded by its shell; for pipes, redirects, or variables, use `sh -c '...'`. The command runs in a terminal, so its stderr arrives mixed into stdout, and it gets no input. Ctrl-C stops it.
+Put a command after `--` to run just that instead of opening a shell. Its output streams to stdout and the CLI exits with the command's exit code, so it works in scripts and doesn't need a terminal (pass `--pod` and `--container` there when there's more than one). The arguments reach the container as given, without being expanded by its shell; for pipes, redirects, or variables, use `sh -c '...'`. The command runs in a remote terminal: its stderr arrives mixed into stdout, and tools that color their output keep doing so when you pipe it. Nothing is sent to its input, so a command that reads input or prompts (a bare `cat`, `apt install` without `-y`) waits until you press Ctrl-C; in scripts, pass flags that skip prompts or use `sh -c '... </dev/null'`. Ctrl-C stops it.
 
 ```bash
 bunny apps exec
