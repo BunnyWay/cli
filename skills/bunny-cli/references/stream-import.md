@@ -10,6 +10,8 @@
 2. `.bunny/stream.json` (the directory's linked library, written by `bunny stream link`; see `stream.md`)
 3. Interactive picker, which offers to link the directory (never on `--dry-run`)
 
+The picker can create a new library, asking for its name, replication regions and library features. The features step takes flags: `--encoding-plan 1080p|4k`, `--codecs x264,av1` (needs a plan), `--transcribing-languages en,de` (turns transcribing on) with `--transcribing-title|description|chapters|moments`, or `--no-features`. They skip straight to creating a new library and are refused with `--library`, a linked directory, `--dry-run` or `--resume`. Unattended, create the library first with `bunny stream libraries create` and pass `--library`.
+
 The library's own Stream API key is read from the account automatically and never printed.
 
 ## Source credentials

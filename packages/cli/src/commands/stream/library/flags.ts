@@ -109,7 +109,7 @@ export function parseCsvFlag(value: string): string[] {
 }
 
 /** Validate a CSV flag against a fixed set, preserving the caller's order. */
-function parseChoiceCsv(
+export function parseChoiceCsv(
   flag: string,
   value: string,
   choices: readonly string[],

@@ -14,6 +14,7 @@ import {
   featureBillingWarnings,
   formatEncodingOptions,
   formatLanguageColumns,
+  libraryFeaturesFromFlags,
   premiumCostText,
   promptLibraryFeatures,
 } from "./features.ts";
@@ -301,4 +302,63 @@ test("update with --encoding-plan sends the codecs explicitly, H.264 unless --co
   expect(planCodecs(explicit)).toBe(explicit);
   const noPlan = { resolutions: "720p" };
   expect(planCodecs(noPlan)).toBe(noPlan);
+});
+
+test("libraryFeaturesFromFlags leaves the step to the prompt when no flag answers it", () => {
+  expect(libraryFeaturesFromFlags({})).toBeUndefined();
+  expect(libraryFeaturesFromFlags({ features: true })).toBeUndefined();
+  expect(libraryFeaturesFromFlags({ features: false })).toEqual({
+    features: undefined,
+    flags: ["--no-features"],
+  });
+});
+
+test("libraryFeaturesFromFlags builds what the prompt would choose", () => {
+  expect(
+    libraryFeaturesFromFlags({
+      encodingPlan: "4K",
+      codecs: "x264,AV1,x264",
+      transcribingLanguages: "en, DE",
+      transcribingChapters: true,
+    }),
+  ).toEqual({
+    features: {
+      premium: "4k",
+      codecs: ["x264", "av1"],
+      transcribing: {
+        languages: ["en", "de"],
+        title: false,
+        description: false,
+        chapters: true,
+        moments: false,
+      },
+    },
+    flags: [
+      "--encoding-plan",
+      "--codecs",
+      "--transcribing-languages",
+      "--transcribing-chapters",
+    ],
+  });
+  expect(libraryFeaturesFromFlags({ encodingPlan: "1080p" })?.features).toEqual(
+    { premium: "1080p" },
+  );
+});
+
+test("libraryFeaturesFromFlags refuses combinations the step can't produce", () => {
+  expect(() => libraryFeaturesFromFlags({ codecs: "av1" })).toThrow(
+    "--codecs needs --encoding-plan",
+  );
+  expect(() =>
+    libraryFeaturesFromFlags({ encodingPlan: "1080p", codecs: "mpeg2" }),
+  ).toThrow("Invalid --codecs");
+  expect(() => libraryFeaturesFromFlags({ transcribingTitle: true })).toThrow(
+    "--transcribing-title need --transcribing-languages",
+  );
+  expect(() =>
+    libraryFeaturesFromFlags({ transcribingLanguages: " , " }),
+  ).toThrow("at least one language");
+  expect(() =>
+    libraryFeaturesFromFlags({ features: false, encodingPlan: "4k" }),
+  ).toThrow("--no-features can't be combined with --encoding-plan");
 });

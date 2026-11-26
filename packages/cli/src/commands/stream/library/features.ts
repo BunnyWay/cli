@@ -1,3 +1,4 @@
+import type { Argv } from "yargs";
 import { bunny } from "@/core/colors.ts";
 import { UserError } from "@/core/errors.ts";
 import { formatTable } from "@/core/format.ts";
@@ -18,6 +19,7 @@ import {
   TRANSCRIBING_LANGUAGES,
   TRANSCRIBING_PRICE_PER_MINUTE,
 } from "@/tools/stream/index.ts";
+import { CODEC_CHOICES, parseChoiceCsv, parseCsvFlag } from "./flags.ts";
 
 const usd = formatUsd;
 
@@ -173,7 +175,8 @@ async function transcribingLanguages(
  * and their ISO 639-1 codes are listed, then an offer to enable it and, on
  * yes, the target languages and the smart-generate fields it includes. Both
  * offers default to no, so pressing Enter keeps free encoding with
- * transcribing off. Every choice has a flag on `stream libraries create`.
+ * transcribing off. Every choice has a flag: the encoding and transcribing
+ * flags on `stream libraries create`, `withLibraryFeatureOptions` on `stream import`.
  *
  * Interactive only: returns undefined without asking when there is no terminal.
  */
@@ -323,4 +326,156 @@ export async function promptLibraryFeatures(
   }
 
   return features.premium || features.transcribing ? features : undefined;
+}
+
+/**
+ * Flags that answer the library features step where only that step is asked
+ * for a new library (`stream import`). `stream libraries create` takes the
+ * broader encoding and transcribing flags in `flags.ts` instead.
+ */
+export interface LibraryFeatureArgs {
+  features?: boolean;
+  encodingPlan?: string;
+  codecs?: string;
+  transcribingLanguages?: string;
+  transcribingTitle?: boolean;
+  transcribingDescription?: boolean;
+  transcribingChapters?: boolean;
+  transcribingMoments?: boolean;
+}
+
+const SMART_FLAGS = [
+  ["transcribingTitle", "title", "--transcribing-title"],
+  ["transcribingDescription", "description", "--transcribing-description"],
+  ["transcribingChapters", "chapters", "--transcribing-chapters"],
+  ["transcribingMoments", "moments", "--transcribing-moments"],
+] as const;
+
+/** The feature flags that were passed, by name, for error messages. */
+function passedFeatureFlags(args: LibraryFeatureArgs): string[] {
+  const passed: string[] = [];
+  if (args.encodingPlan !== undefined) passed.push("--encoding-plan");
+  if (args.codecs !== undefined) passed.push("--codecs");
+  if (args.transcribingLanguages !== undefined)
+    passed.push("--transcribing-languages");
+  for (const [key, , flag] of SMART_FLAGS)
+    if (args[key] !== undefined) passed.push(flag);
+  return passed;
+}
+
+/**
+ * The features step as answered by flags, or undefined when no flag answered
+ * it (so it is asked). `features` is undefined for free encoding with
+ * transcribing off, which `--no-features` also chooses.
+ *
+ * Throws on combinations the step can't produce, so a bad flag fails before
+ * anything is prompted for or created.
+ */
+export function libraryFeaturesFromFlags(
+  args: LibraryFeatureArgs,
+): { features: LibraryFeatures | undefined; flags: string[] } | undefined {
+  const flags = passedFeatureFlags(args);
+  if (args.features === false) {
+    if (flags.length > 0)
+      throw new UserError(
+        `--no-features can't be combined with ${flags.join(", ")}.`,
+      );
+    return { features: undefined, flags: ["--no-features"] };
+  }
+  if (flags.length === 0) return undefined;
+
+  const features: LibraryFeatures = {};
+  if (args.encodingPlan !== undefined) {
+    const plan = args.encodingPlan.trim().toLowerCase() as PremiumPlan;
+    if (!(plan in PREMIUM_PLANS))
+      throw new UserError(
+        `Invalid --encoding-plan "${args.encodingPlan}".`,
+        `Valid values: ${Object.keys(PREMIUM_PLANS).join(", ")}.`,
+      );
+    features.premium = plan;
+  }
+  if (args.codecs !== undefined) {
+    if (!features.premium)
+      throw new UserError(
+        "--codecs needs --encoding-plan: free encoding is H.264 only.",
+        "Add --encoding-plan 1080p or --encoding-plan 4k.",
+      );
+    features.codecs = parseChoiceCsv(
+      "codecs",
+      args.codecs,
+      CODEC_CHOICES,
+    ) as OutputCodec[];
+  }
+
+  const smartPassed = SMART_FLAGS.filter(([key]) => args[key] !== undefined);
+  if (args.transcribingLanguages !== undefined) {
+    const languages = parseCsvFlag(args.transcribingLanguages.toLowerCase());
+    if (languages.length === 0)
+      throw new UserError(
+        "--transcribing-languages needs at least one language.",
+        "Pass ISO 639-1 codes, e.g. --transcribing-languages en,de.",
+      );
+    features.transcribing = { languages: [...new Set(languages)] };
+    for (const [key, field] of SMART_FLAGS)
+      features.transcribing[field] = args[key] ?? false;
+  } else if (smartPassed.length > 0) {
+    throw new UserError(
+      `${smartPassed.map(([, , flag]) => flag).join(", ")} need --transcribing-languages.`,
+      "Transcribing is turned on by choosing its languages, e.g. --transcribing-languages en,de.",
+    );
+  }
+
+  return {
+    features: features.premium || features.transcribing ? features : undefined,
+    flags,
+  };
+}
+
+/**
+ * Register the flag equivalents of the library features step, for a command
+ * that asks only that step when it creates a library (`stream import`).
+ */
+export function withLibraryFeatureOptions<T>(yargs: Argv<T>): Argv<T> {
+  return yargs
+    .option("features", {
+      type: "boolean",
+      describe:
+        "New library: ask which library features to enable; on by default in a terminal unless a feature flag is passed. --no-features keeps free encoding with transcribing off",
+    })
+    .option("encoding-plan", {
+      type: "string",
+      choices: Object.keys(PREMIUM_PLANS),
+      describe: `New library: premium encoding plan, ${(
+        Object.keys(PREMIUM_PLANS) as PremiumPlan[]
+      )
+        .map(
+          (key) =>
+            `${key} (${usd(PREMIUM_PLANS[key].pricePerMinute)}/min per codec, up to ${PREMIUM_PLANS[key].resolutions.at(-1)})`,
+        )
+        .join(" or ")}`,
+    })
+    .option("codecs", {
+      type: "string",
+      describe: `New library, with --encoding-plan: output codecs, comma-separated: ${CODEC_CHOICES.join(", ")} (default x264)`,
+    })
+    .option("transcribing-languages", {
+      type: "string",
+      describe: `New library: turn on transcribing (${usd(TRANSCRIBING_PRICE_PER_MINUTE)}/min per language) to these ISO 639-1 codes, comma-separated (e.g. en,de)`,
+    })
+    .option("transcribing-title", {
+      type: "boolean",
+      describe: "New library, with transcribing: smart generate video titles",
+    })
+    .option("transcribing-description", {
+      type: "boolean",
+      describe: "New library, with transcribing: smart generate descriptions",
+    })
+    .option("transcribing-chapters", {
+      type: "boolean",
+      describe: "New library, with transcribing: smart generate chapters",
+    })
+    .option("transcribing-moments", {
+      type: "boolean",
+      describe: "New library, with transcribing: smart generate moments",
+    }) as Argv<T>;
 }
