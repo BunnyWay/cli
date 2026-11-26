@@ -36,6 +36,7 @@ import {
 
 export * from "./import/index.ts";
 export * from "./model.ts";
+export * from "./video-storage.ts";
 
 const libraryId = z
   .number()

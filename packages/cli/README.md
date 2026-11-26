@@ -1181,6 +1181,7 @@ bunny stream videos update 1a2b3c4d-... --title "Launch demo"   # prompts for th
 bunny stream videos update 1a2b3c4d-... --chapters '[{"title":"Intro","start":0,"end":30}]'
 bunny stream videos thumbnail 1a2b3c4d-... --file ./thumb.jpg   # or --url for bunny.net to download it
 bunny stream videos resolutions 1a2b3c4d-...        # what is configured, encoded, and stored
+bunny stream videos storage 1a2b3c4d-...            # bytes per rendition, original, MP4 fallback, thumbnails, previews
 bunny stream videos cleanup 1a2b3c4d-... --non-configured --dry-run   # preview a rendition cleanup
 bunny stream videos stats 1a2b3c4d-...              # views and watch time (--heatmap, --play-data)
 bunny stream videos embed 1a2b3c4d-... --expires 1h   # player embed URL, signed when embed tokens are on
