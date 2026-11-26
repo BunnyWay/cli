@@ -49,8 +49,11 @@ bunny stream videos update 1a2b3c4d-... --collection 8a7b6c5d-...
 bunny stream libraries list                          # ID, name, videos, storage, traffic, replication regions
 bunny stream libraries create my-library             # stored in DE; asks about replicas in a terminal, none otherwise
 bunny stream libraries create my-library --replication-regions NY,SG   # DE alone means no replication
+bunny stream libraries create my-library --encoding-plan 1080p --codecs x264,av1   # premium plan; skips the features prompt
+bunny stream libraries create my-library --no-features   # no library features step (free encoding, no transcribing)
 bunny stream libraries create my-library --encoding-tier premium --codecs x264,vp9
 bunny stream libraries show my-library               # API keys are never printed here
+bunny stream libraries show my-library --show-secret   # webhook and VAST URLs in full; their query string and userinfo are redacted by default
 bunny stream libraries update my-library --resolutions 720p,1080p
 bunny stream libraries update my-library --transcribing --transcribing-languages en,de
 bunny stream libraries update my-library --encoding-tier premium --codecs x264,vp9   # paid; warns about billing
@@ -65,12 +68,13 @@ bunny stream link my-library                         # same as `libraries link`
 bunny stream unlink
 ```
 
-`create` takes the name as its positional. After creating, it offers to link the directory, save `BUNNY_STREAM_LIBRARY_ID` and `BUNNY_STREAM_API_KEY` to `.env` (the names the Stream examples read), and add videos by importing from another platform or uploading a file. `--link`/`--no-link` and `--save-env`/`--no-save-env` answer the first two, `--no-add-videos` skips the third; non-interactive runs skip anything a flag does not set.
+`create` takes the name as its positional. In a terminal it asks for the replication regions, then library features: it lists the premium plans (1080p $0.05/min or 4K $0.15/min, each per output codec: two codecs double the rate) and output codecs (`x264` free; `av1`, `hevc`, `vp9` premium) and offers the upgrade, then lists the transcribing languages with their ISO 639-1 codes and offers transcribing ($0.10/min per language, smart generate included); both offers default to no; any encoding or transcribing flag answers that step, and `--no-features` skips it. After creating, it offers to link the directory, save `BUNNY_STREAM_LIBRARY_ID` and `BUNNY_STREAM_API_KEY` to `.env` (the names the Stream examples read), and add videos by importing from another platform or uploading a file. `--link`/`--no-link` and `--save-env`/`--no-save-env` answer the first two, `--no-add-videos` skips the third; non-interactive runs skip anything a flag does not set.
 
 `update` sends only the flags you pass. With no flags it opens an interactive editor (name, resolutions, transcribing, keep original, MP4 fallback, content tagging); unattended runs need at least one flag. Rename with `update --name`.
 
 Run `bunny stream libraries <command> --help` for every flag. The ones with consequences:
 
+- Premium encoding is billed per minute, per output codec, at the rate of the highest enabled resolution: $0.15 (1440p-2160p), $0.05 (720p-1080p), $0.025 (240p-480p); `--codecs x264,av1` on the 1080p plan = $0.10/min. `--encoding-plan 1080p|4k` sets premium, the matching resolutions and Early-Play, which exposes the originals (`--no-early-play` keeps it off). One plan at a time.
 - `--encoding-tier premium` bills per output codec per minute. `--codecs` other than `x264`, and `--jit`, need it.
 - `--early-play` needs `--keep-original` and exposes the originals.
 - `--transcribing` bills per use on every new upload and re-encode.
@@ -84,6 +88,13 @@ Run `bunny stream libraries <command> --help` for every flag. The ones with cons
 bunny stream libraries player show my-library
 bunny stream libraries player update my-library --color "#FF7755" --speeds 0.5,1.0,1.15,2.0 --heatmap
 bunny stream libraries player update my-library --no-controls
+bunny stream libraries player update my-library --vast-url https://ads.example.com/vast.xml   # VAST ads; "none" turns them off
+bunny stream libraries update my-library --webhook-url https://example.com/hooks   # "none" removes it
+bunny stream libraries watermark set my-library --file logo.png --left 85 --top 5 --width 10   # new uploads only
+bunny stream libraries geo-blocking update my-library --block CN,RU   # or --unblock, --set, --allow-only GB,IE, --clear
+bunny stream libraries geo-blocking countries        # 249 supported codes (GB not UK, XK for Kosovo)
+bunny stream libraries geo-blocking update my-library --allow-only --preset eea-uk   # presets: continents, eu, eea, eea-uk, regions
+bunny stream libraries geo-blocking presets          # every preset and its countries
 bunny stream libraries player reset my-library       # dashboard defaults; confirms first
 bunny stream libraries security show my-library      # token key masked
 bunny stream libraries security update my-library --embed-token --block-direct-access --allow-referrer example.com

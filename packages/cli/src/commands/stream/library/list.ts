@@ -34,7 +34,13 @@ export const streamLibraryListCommand = defineCommand({
     }
 
     if (output === "json") {
-      logger.log(JSON.stringify(libraries.map(toSafeVideoLibrary), null, 2));
+      logger.log(
+        JSON.stringify(
+          libraries.map((library) => toSafeVideoLibrary(library)),
+          null,
+          2,
+        ),
+      );
       return;
     }
 
