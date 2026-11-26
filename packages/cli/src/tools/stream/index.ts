@@ -41,6 +41,7 @@ export * from "./import/index.ts";
 export * from "./library-extras.ts";
 export * from "./live/index.ts";
 export * from "./model.ts";
+export * from "./video-storage.ts";
 
 const libraryId = z
   .number()

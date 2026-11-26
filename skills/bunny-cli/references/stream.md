@@ -120,6 +120,7 @@ bunny stream videos update 1a2b3c4d-... --chapters '[{"title":"Intro","start":0,
 bunny stream videos update 1a2b3c4d-... --collection ""   # remove from its collection
 bunny stream videos thumbnail 1a2b3c4d-... --file ./thumb.jpg   # or --url
 bunny stream videos resolutions 1a2b3c4d-...        # configured, encoded, and stored
+bunny stream videos storage 1a2b3c4d-...            # bytes per rendition, original, MP4 fallback, previews
 bunny stream videos cleanup 1a2b3c4d-... --non-configured --dry-run
 bunny stream videos stats 1a2b3c4d-... --from 2026-01-01 --to 2026-01-31
 bunny stream videos embed 1a2b3c4d-... --expires 30m   # signed when embed tokens are on
