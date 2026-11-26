@@ -10,8 +10,10 @@ import {
   DRM_ENTERPRISE,
   type Language,
   LanguageSchema,
+  LibraryFeaturesSchema,
   type LibrarySummary,
   LibrarySummarySchema,
+  libraryFeaturesBody,
   MAIN_REGION,
   PlayerChangesSchema,
   type PlayerSettings,
@@ -180,7 +182,7 @@ export const streamLibrariesResolve = defineTool({
 export const streamLibrariesCreate = defineTool({
   name: "stream.libraries.create",
   title: "Create a video library",
-  description: `Create a Stream video library stored in ${MAIN_REGION}, optionally replicated to other regions. Replicas can't be removed once added.`,
+  description: `Create a Stream video library stored in ${MAIN_REGION}, optionally replicated to other regions. Replicas can't be removed once added. Features turn on premium encoding and transcribing, which are billed per minute.`,
   schema: z.strictObject({
     name: z
       .string()
@@ -191,17 +193,28 @@ export const streamLibrariesCreate = defineTool({
       .array(z.string())
       .optional()
       .describe('Replication region codes besides DE, e.g. `["NY", "SG"]`.'),
+    features: LibraryFeaturesSchema.optional(),
   }),
   kind: "write",
   resultSchema: LibrarySummarySchema,
-  examples: [[{ name: "my-library" }, "Create a library stored in DE only"]],
-  run: async (ctx, { name, regions }): Promise<LibrarySummary> => {
+  examples: [
+    [{ name: "my-library" }, "Create a library stored in DE only"],
+    [
+      {
+        name: "my-library",
+        features: { premium: "1080p", codecs: ["x264", "av1"] },
+      },
+      "Create with 1080p premium encoding and AV1",
+    ],
+  ],
+  run: async (ctx, { name, regions, features }): Promise<LibrarySummary> => {
     const replicas = parseReplicationRegions(regions ?? []);
+    const settings = libraryFeaturesBody(features);
 
     ctx.progress("Creating video library...");
 
     const { data } = await ctx.clients.core.POST("/videolibrary", {
-      body: { Name: name, ReplicationRegions: replicas },
+      body: { ...settings, Name: name, ReplicationRegions: replicas },
       signal: ctx.signal,
     });
 

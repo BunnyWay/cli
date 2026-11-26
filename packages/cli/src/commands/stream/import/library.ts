@@ -3,6 +3,11 @@ import {
   type StreamLibraryManifest,
 } from "@/commands/stream/constants.ts";
 import { writeStreamManifest } from "@/commands/stream/interactive.ts";
+import {
+  describeFeatures,
+  featureBillingWarnings,
+  promptLibraryFeatures,
+} from "@/commands/stream/library/features.ts";
 import { resolveReplicationRegions } from "@/commands/stream/library/replication-regions.ts";
 import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
@@ -86,12 +91,16 @@ async function createImportLibrary(
   const name = typeof value === "string" ? value.trim() : "";
   if (!name) throw new UserError("A library name is required.");
 
+  // The same two steps as `stream libraries create`: regions, then features.
   const regions = await resolveReplicationRegions(undefined, output);
+  const features = await promptLibraryFeatures(ctx, output);
   const library = await withSpinner("Creating video library...", () =>
-    streamLibrariesCreate.invoke(ctx, { name, regions }),
+    streamLibrariesCreate.invoke(ctx, { name, regions, features }),
   );
 
   logger.success(`Created video library ${library.name} (ID: ${library.id}).`);
+  for (const line of describeFeatures(features)) logger.dim(`Enabled: ${line}`);
+  for (const warning of featureBillingWarnings(features)) logger.warn(warning);
 
   return library;
 }

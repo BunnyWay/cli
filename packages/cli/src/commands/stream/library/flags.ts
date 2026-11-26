@@ -1,6 +1,14 @@
 import type { Argv } from "yargs";
 import type { VideoLibraryUpdateModel } from "@/commands/stream/api.ts";
 import { UserError } from "@/core/errors.ts";
+import {
+  formatUsd,
+  PREMIUM_PLAN_CHOICES,
+  PREMIUM_PLANS,
+  PREMIUM_PRICE_SUMMARY,
+  type PremiumPlan,
+  premiumTierFor,
+} from "@/tools/stream/index.ts";
 
 /**
  * Encoding and transcribing flags, shared by `library create` and `library update`.
@@ -11,6 +19,7 @@ import { UserError } from "@/core/errors.ts";
 export interface LibrarySettingsArgs {
   name?: string;
   encodingTier?: string;
+  encodingPlan?: string;
   jit?: boolean;
   codecs?: string;
   resolutions?: string;
@@ -80,6 +89,17 @@ function encodingTierValue(value: string): 0 | 1 {
   return tier;
 }
 
+function premiumPlanValue(value: string): PremiumPlan {
+  const plan = value.trim().toLowerCase() as PremiumPlan;
+  if (!PREMIUM_PLAN_CHOICES.includes(plan)) {
+    throw new UserError(
+      `Invalid --encoding-plan "${value}".`,
+      `Valid values: ${PREMIUM_PLAN_CHOICES.join(", ")}.`,
+    );
+  }
+  return plan;
+}
+
 /** Split a comma-separated flag value into trimmed, non-empty entries. */
 export function parseCsvFlag(value: string): string[] {
   return value
@@ -115,6 +135,7 @@ function parseChoiceCsv(
 export function hasLibrarySettingsFlags(args: LibrarySettingsArgs): boolean {
   return (
     args.encodingTier !== undefined ||
+    args.encodingPlan !== undefined ||
     args.jit !== undefined ||
     args.codecs !== undefined ||
     args.resolutions !== undefined ||
@@ -147,6 +168,21 @@ export function librarySettingsFromFlags(
 
   if (args.encodingTier !== undefined)
     settings.EncodingTier = encodingTierValue(args.encodingTier);
+  if (args.encodingPlan !== undefined) {
+    const plan = premiumPlanValue(args.encodingPlan);
+    if (settings.EncodingTier === 0) {
+      throw new UserError(
+        "--encoding-plan is a premium plan, so it can't be combined with --encoding-tier free.",
+      );
+    }
+    settings.EncodingTier = 1;
+    // An explicit --resolutions (below) still wins over the plan's ladder.
+    settings.EnabledResolutions = PREMIUM_PLANS[plan].resolutions.join(",");
+    // The dashboard turns on Early-Play (instant playback) with a plan. It
+    // needs the originals, so --no-keep-original leaves it off, and an
+    // explicit --early-play/--no-early-play (below) wins.
+    if (args.keepOriginal !== false) settings.AllowEarlyPlay = true;
+  }
   if (args.jit !== undefined) settings.JitEncodingEnabled = args.jit;
   if (args.codecs !== undefined) {
     settings.OutputCodecs = parseChoiceCsv(
@@ -197,8 +233,7 @@ export function librarySettingsFromFlags(
   return settings;
 }
 
-export const PREMIUM_BILLING_NOTE =
-  "Premium encoding is billed per output codec per minute of encoded video.";
+export const PREMIUM_BILLING_NOTE = `Premium encoding is billed per minute of encoded video, for every output codec, at the rate of the highest enabled resolution: ${PREMIUM_PRICE_SUMMARY}.`;
 
 /**
  * One-line warnings for encoding flags with side effects, mirroring the
@@ -231,13 +266,51 @@ export function librarySettingsWarnings(
       "Without original files, Early-Play and `bunny stream videos encode` stop working for new uploads.",
     );
   }
+  const plan =
+    args.encodingPlan !== undefined
+      ? premiumPlanValue(args.encodingPlan)
+      : undefined;
   if (
-    args.encodingTier !== undefined &&
-    encodingTierValue(args.encodingTier) === 1
+    plan !== undefined ||
+    (args.encodingTier !== undefined &&
+      encodingTierValue(args.encodingTier) === 1)
   ) {
-    warnings.push(PREMIUM_BILLING_NOTE);
+    warnings.push(premiumBillingWarning(args, plan));
+    if (plan && args.earlyPlay === undefined && args.keepOriginal !== false)
+      warnings.push(
+        "The plan turns on Early-Play (instant playback), which publicly exposes the original video files; --no-early-play keeps it off.",
+      );
   }
   return warnings;
+}
+
+/**
+ * The premium price these flags lead to. Billing follows the highest enabled
+ * resolution and counts every output codec, so the rate is exact when the
+ * ladder is known (from --resolutions, else the plan) and the total when
+ * --codecs is given too. On `update` without those flags the library's own
+ * ladder and codecs apply, which the flags can't see.
+ */
+function premiumBillingWarning(
+  args: LibrarySettingsArgs,
+  plan: PremiumPlan | undefined,
+): string {
+  const ladder =
+    args.resolutions !== undefined
+      ? parseCsvFlag(args.resolutions.toLowerCase())
+      : plan
+        ? PREMIUM_PLANS[plan].resolutions
+        : undefined;
+  const tier = ladder ? premiumTierFor(ladder) : undefined;
+  if (!tier) return PREMIUM_BILLING_NOTE;
+  const codecs =
+    args.codecs !== undefined
+      ? new Set(parseCsvFlag(args.codecs.toLowerCase())).size
+      : 0;
+  const per = formatUsd(tier.pricePerMinute);
+  return codecs > 0
+    ? `Premium encoding is billed at ${formatUsd(tier.pricePerMinute * codecs)} per minute of encoded video (${per} for a ${tier.top} top resolution × ${codecs} codec${codecs === 1 ? "" : "s"}).`
+    : `Premium encoding is billed at ${per} per minute of encoded video for each output codec (${tier.top} top resolution).`;
 }
 
 /** Register the shared encoding/transcribing flags on a command's builder. */
@@ -247,6 +320,12 @@ export function withLibrarySettingsOptions(yargs: Argv): Argv {
       type: "string",
       choices: ENCODING_TIER_CHOICES,
       describe: "Encoding tier; premium adds JIT encoding and extra codecs",
+    })
+    .option("encoding-plan", {
+      type: "string",
+      choices: PREMIUM_PLAN_CHOICES,
+      describe:
+        "Premium encoding plan: 1080p ($0.05/min, up to 1080p) or 4k ($0.15/min, up to 2160p); sets the premium tier and its resolutions",
     })
     .option("jit", {
       type: "boolean",
@@ -268,7 +347,7 @@ export function withLibrarySettingsOptions(yargs: Argv): Argv {
     .option("transcribing-languages", {
       type: "string",
       describe:
-        "Caption languages to transcribe to, comma-separated (e.g. en,de)",
+        "Caption languages to transcribe to, ISO 639-1 codes, comma-separated (e.g. en,de); supported list: https://bunny.net/docs/stream/transcribing#supported-languages-and-iso-639-1-language-codes",
     })
     .option("transcribing-title", {
       type: "boolean",

@@ -429,3 +429,261 @@ export function toStreamLibrary(library: VideoLibraryModel): StreamLibrary {
     videoCount: library.VideoCount ?? 0,
   };
 }
+
+/**
+ * Premium encoding plans, as the dashboard's "Enable video library features"
+ * step offers them. One plan or the other, never both. Picking one sends what
+ * the dashboard sends to Add Video Library: EncodingTier 1 (Premium), the
+ * plan's EnabledResolutions, AllowEarlyPlay (instant playback with
+ * just-in-time encoding), and OutputCodecs, with H.264 (AVC) on by default.
+ * The plan is the highest resolution enabled, which the per-minute price follows.
+ */
+export const PREMIUM_PLANS = {
+  "1080p": {
+    label: "1080p",
+    pricePerMinute: 0.05,
+    resolutions: ["240p", "360p", "480p", "720p", "1080p"],
+  },
+  "4k": {
+    label: "4K",
+    pricePerMinute: 0.15,
+    resolutions: ["240p", "360p", "480p", "720p", "1080p", "1440p", "2160p"],
+  },
+} as const;
+export type PremiumPlan = keyof typeof PREMIUM_PLANS;
+export const PREMIUM_PLAN_CHOICES = Object.keys(PREMIUM_PLANS) as PremiumPlan[];
+
+/** Output codecs by API name; H.264 is the only one free encoding produces. */
+export const OUTPUT_CODECS = {
+  x264: { label: "H.264 (AVC)", premium: false },
+  av1: { label: "AV1", premium: true },
+  hevc: { label: "H.265 (HEVC)", premium: true },
+  vp9: { label: "VP9", premium: true },
+} as const;
+
+/**
+ * Transcribing output languages (ISO 639-1), as documented at
+ * https://bunny.net/docs/stream/transcribing#supported-languages-and-iso-639-1-language-codes.
+ * The live list (`GET /videolibrary/languages`) is authoritative; this is the
+ * fallback when it can't be fetched.
+ */
+export const TRANSCRIBING_LANGUAGES: ReadonlyArray<{
+  code: string;
+  name: string;
+}> = [
+  { name: "Arabic", code: "ar" },
+  { name: "Armenian", code: "hy" },
+  { name: "Azerbaijani", code: "az" },
+  { name: "Belarusian", code: "be" },
+  { name: "Bosnian", code: "bs" },
+  { name: "Bulgarian", code: "bg" },
+  { name: "Catalan", code: "ca" },
+  { name: "Chinese", code: "zh" },
+  { name: "Croatian", code: "hr" },
+  { name: "Czech", code: "cs" },
+  { name: "Danish", code: "da" },
+  { name: "Dutch", code: "nl" },
+  { name: "English", code: "en" },
+  { name: "Estonian", code: "et" },
+  { name: "Finnish", code: "fi" },
+  { name: "French", code: "fr" },
+  { name: "Galician", code: "gl" },
+  { name: "German", code: "de" },
+  { name: "Greek", code: "el" },
+  { name: "Hebrew", code: "he" },
+  { name: "Hindi", code: "hi" },
+  { name: "Hungarian", code: "hu" },
+  { name: "Icelandic", code: "is" },
+  { name: "Indonesian", code: "id" },
+  { name: "Italian", code: "it" },
+  { name: "Japanese", code: "ja" },
+  { name: "Kannada", code: "kn" },
+  { name: "Kazakh", code: "kk" },
+  { name: "Korean", code: "ko" },
+  { name: "Latvian", code: "lv" },
+  { name: "Lithuanian", code: "lt" },
+  { name: "Macedonian", code: "mk" },
+  { name: "Malay", code: "ms" },
+  { name: "Maori", code: "mi" },
+  { name: "Marathi", code: "mr" },
+  { name: "Nepali", code: "ne" },
+  { name: "Norwegian", code: "no" },
+  { name: "Persian", code: "fa" },
+  { name: "Polish", code: "pl" },
+  { name: "Portuguese", code: "pt" },
+  { name: "Romanian", code: "ro" },
+  { name: "Russian", code: "ru" },
+  { name: "Serbian", code: "sr" },
+  { name: "Slovak", code: "sk" },
+  { name: "Slovenian", code: "sl" },
+  { name: "Spanish", code: "es" },
+  { name: "Swahili", code: "sw" },
+  { name: "Swedish", code: "sv" },
+  { name: "Tagalog", code: "tl" },
+  { name: "Tamil", code: "ta" },
+  { name: "Thai", code: "th" },
+  { name: "Turkish", code: "tr" },
+  { name: "Ukrainian", code: "uk" },
+  { name: "Urdu", code: "ur" },
+  { name: "Vietnamese", code: "vi" },
+  { name: "Welsh", code: "cy" },
+];
+export type OutputCodec = keyof typeof OUTPUT_CODECS;
+
+/**
+ * Premium encoding is billed by the highest resolution in the library's
+ * ladder, per minute of encoded video and per output codec.
+ */
+export const PREMIUM_PRICE_TIERS = [
+  {
+    label: "1440p-2160p",
+    resolutions: ["2160p", "1440p"],
+    pricePerMinute: 0.15,
+  },
+  { label: "720p-1080p", resolutions: ["1080p", "720p"], pricePerMinute: 0.05 },
+  {
+    label: "240p-480p",
+    resolutions: ["480p", "360p", "240p"],
+    pricePerMinute: 0.025,
+  },
+] as const;
+
+/** US dollars with cents, or tenths of a cent when the amount has them: $0.05, $0.025, $1.20. */
+export function formatUsd(amount: number): string {
+  const cents = amount * 100;
+  const whole = Math.abs(Math.round(cents) - cents) < 1e-9;
+  return `$${amount.toFixed(whole ? 2 : 3)}`;
+}
+
+/** "$0.15 (1440p-2160p), $0.05 (720p-1080p), $0.025 (240p-480p)". */
+export const PREMIUM_PRICE_SUMMARY = PREMIUM_PRICE_TIERS.map(
+  (t) => `$${t.pricePerMinute} (${t.label})`,
+).join(", ");
+
+/** The highest resolution enabled and the per-codec price it bills at; undefined for an empty ladder. */
+export function premiumTierFor(
+  resolutions: readonly string[],
+): { top: string; pricePerMinute: number } | undefined {
+  const enabled = new Set(resolutions.map((r) => r.trim().toLowerCase()));
+  for (const tier of PREMIUM_PRICE_TIERS) {
+    const top = tier.resolutions.find((r) => enabled.has(r));
+    if (top) return { top, pricePerMinute: tier.pricePerMinute };
+  }
+  return undefined;
+}
+
+/**
+ * What a premium plan costs per minute of encoded video: the plan's rate for
+ * every output codec enabled, so two codecs on the 1080p plan cost $0.10/min.
+ */
+export function premiumRatePerMinute(
+  plan: PremiumPlan,
+  codecCount: number,
+): number {
+  return PREMIUM_PLANS[plan].pricePerMinute * Math.max(codecCount, 1);
+}
+
+/** Transcribing price per caption language per minute, in US dollars. */
+export const TRANSCRIBING_PRICE_PER_MINUTE = 0.1;
+
+export const LibraryFeaturesSchema = z
+  .strictObject({
+    premium: z
+      .enum(PREMIUM_PLAN_CHOICES as [PremiumPlan, ...PremiumPlan[]])
+      .optional()
+      .describe(
+        "Premium encoding plan, one of `1080p` ($0.05/min, up to 1080p) or `4k` ($0.15/min, up to 2160p). Adds encoding priority, AV1/H.265/VP9 and instant playback with just-in-time encoding (Early-Play, which exposes the originals). Left out: free encoding.",
+      ),
+    codecs: z
+      .array(
+        z.enum(Object.keys(OUTPUT_CODECS) as [OutputCodec, ...OutputCodec[]]),
+      )
+      .min(1)
+      .optional()
+      .describe(
+        'Output codecs, e.g. `["x264", "av1"]`; all but x264 need a premium plan. With a plan, defaults to `["x264"]`.',
+      ),
+    transcribing: z
+      .strictObject({
+        languages: z
+          .array(z.string().trim().min(2))
+          .min(1)
+          .describe(
+            'Caption languages, ISO 639-1, e.g. `["en", "de"]`. The spoken language is detected.',
+          ),
+        title: z
+          .boolean()
+          .default(false)
+          .describe("Smart generate: video titles."),
+        description: z
+          .boolean()
+          .default(false)
+          .describe("Smart generate: descriptions."),
+        chapters: z
+          .boolean()
+          .default(false)
+          .describe("Smart generate: chapters."),
+        moments: z
+          .boolean()
+          .default(false)
+          .describe("Smart generate: moments."),
+      })
+      .optional()
+      .describe(
+        "AI captions ($0.10/min per language), with smart generate included.",
+      ),
+  })
+  .describe("Library features: premium encoding and transcribing.");
+export type LibraryFeatures = z.input<typeof LibraryFeaturesSchema>;
+
+/** The create/update body for a set of library features; empty when none were chosen. */
+export function libraryFeaturesBody(
+  features: LibraryFeatures | undefined,
+): Pick<
+  VideoLibraryUpdateModel,
+  | "EncodingTier"
+  | "EnabledResolutions"
+  | "AllowEarlyPlay"
+  | "OutputCodecs"
+  | "EnableTranscribing"
+  | "TranscribingCaptionLanguages"
+  | "EnableTranscribingTitleGeneration"
+  | "EnableTranscribingDescriptionGeneration"
+  | "EnableTranscribingChaptersGeneration"
+  | "EnableTranscribingMomentsGeneration"
+> {
+  if (!features) return {};
+  const codecs = features.codecs ?? [];
+  const premiumCodecs = codecs.filter((codec) => OUTPUT_CODECS[codec].premium);
+  if (!features.premium && premiumCodecs.length > 0) {
+    throw new UserError(
+      `${premiumCodecs.map((c) => OUTPUT_CODECS[c].label).join(", ")} need premium encoding.`,
+      "Choose a premium plan (1080p or 4K), or keep H.264 only.",
+    );
+  }
+  const body: ReturnType<typeof libraryFeaturesBody> = {};
+  if (features.premium) {
+    body.EncodingTier = 1;
+    body.EnabledResolutions =
+      PREMIUM_PLANS[features.premium].resolutions.join(",");
+    body.AllowEarlyPlay = true;
+    // AVC is on by default, as in the dashboard.
+    body.OutputCodecs = [...new Set(codecs.length ? codecs : ["x264"])].join(
+      ",",
+    );
+  } else if (codecs.length > 0) {
+    body.OutputCodecs = [...new Set(codecs)].join(",");
+  }
+  const t = features.transcribing;
+  if (t) {
+    body.EnableTranscribing = true;
+    body.TranscribingCaptionLanguages = [
+      ...new Set(t.languages.map((l) => l.toLowerCase())),
+    ];
+    body.EnableTranscribingTitleGeneration = t.title ?? false;
+    body.EnableTranscribingDescriptionGeneration = t.description ?? false;
+    body.EnableTranscribingChaptersGeneration = t.chapters ?? false;
+    body.EnableTranscribingMomentsGeneration = t.moments ?? false;
+  }
+  return body;
+}
