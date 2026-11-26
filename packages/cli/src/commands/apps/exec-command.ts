@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { UserError } from "@/core/errors.ts";
+import { CONNECT_TIMEOUT_MS, terminate } from "./exec-session.ts";
 
 /*
  * An exec session is an interactive shell, so a one-off command is typed into
@@ -11,7 +12,6 @@ import { UserError } from "@/core/errors.ts";
  */
 
 const RS = "\x1e";
-const CONNECT_TIMEOUT_MS = 15_000;
 
 /** Quote one argument for a POSIX shell. */
 export function shellQuote(arg: string): string {
@@ -141,7 +141,7 @@ export function runExecCommand(
           "Check your connection and try again.",
         ),
       );
-      (socket as WebSocket & { terminate?: () => void }).terminate?.();
+      terminate(socket);
     }, options.connectTimeoutMs ?? CONNECT_TIMEOUT_MS);
 
     socket.addEventListener("open", () => {

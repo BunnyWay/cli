@@ -3,7 +3,7 @@ import { UserError } from "@/core/errors.ts";
 /** Ctrl-]: closes the session from this side, for a remote that stops answering. Same key as telnet. */
 export const DETACH_BYTE = 0x1d;
 
-const CONNECT_TIMEOUT_MS = 15_000;
+export const CONNECT_TIMEOUT_MS = 15_000;
 // How long a detach waits for the server to acknowledge the close before dropping the socket.
 const CLOSE_GRACE_MS = 1_000;
 
@@ -47,7 +47,7 @@ export interface ExecSessionEnd {
 }
 
 // Bun's client WebSocket can drop the connection without a close handshake, but its types omit it.
-function terminate(socket: WebSocket): void {
+export function terminate(socket: WebSocket): void {
   (socket as WebSocket & { terminate?: () => void }).terminate?.();
 }
 
