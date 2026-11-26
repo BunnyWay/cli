@@ -5,6 +5,7 @@ import {
   formatTable,
   formatTimeAgo,
   maskSecret,
+  redactUrl,
 } from "./format.ts";
 
 describe("formatTable", () => {
@@ -146,4 +147,28 @@ test("formatTimeAgo uses the largest whole unit", () => {
   expect(formatTimeAgo("2026-01-01T00:00:00Z", now)).toBe("3d ago");
   expect(formatTimeAgo("2026-01-03T18:30:00Z", now)).toBe("5h ago");
   expect(formatTimeAgo("2026-01-03T23:59:30Z", now)).toBe("just now");
+});
+
+describe("redactUrl", () => {
+  test("masks the query string", () => {
+    expect(redactUrl("https://ads.example.com/vast?token=abc&id=1")).toBe(
+      "https://ads.example.com/vast?•••",
+    );
+  });
+
+  test("masks userinfo", () => {
+    expect(redactUrl("https://user:pass@hooks.example.com/bunny")).toBe(
+      "https://•••@hooks.example.com/bunny",
+    );
+  });
+
+  test("leaves a URL without credentials as it was", () => {
+    expect(redactUrl("https://hooks.example.com/bunny#frag")).toBe(
+      "https://hooks.example.com/bunny#frag",
+    );
+  });
+
+  test("returns a value that is not a URL unchanged", () => {
+    expect(redactUrl("not a url")).toBe("not a url");
+  });
 });

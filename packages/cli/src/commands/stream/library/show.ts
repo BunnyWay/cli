@@ -4,11 +4,17 @@ import { resolveLibraryInteractive } from "@/commands/stream/interactive.ts";
 import { resolveConfig } from "@/config/index.ts";
 import { clientOptions } from "@/core/client-options.ts";
 import { defineCommand } from "@/core/define-command.ts";
-import { formatBytes, formatDateTime, formatKeyValue } from "@/core/format.ts";
+import {
+  formatBytes,
+  formatDateTime,
+  formatKeyValue,
+  redactUrl,
+} from "@/core/format.ts";
 import { logger } from "@/core/logger.ts";
 
 interface LibraryShowArgs {
   library?: string;
+  showSecret?: boolean;
 }
 
 export const streamLibraryShowCommand = defineCommand<LibraryShowArgs>({
@@ -18,15 +24,33 @@ export const streamLibraryShowCommand = defineCommand<LibraryShowArgs>({
     ["$0 stream libraries show my-library", "Show library details"],
     ["$0 stream libraries show 12345", "Show a library by ID"],
     ["$0 stream libraries show my-library --output json", "JSON output"],
+    [
+      "$0 stream libraries show my-library --show-secret",
+      "Show the webhook and VAST URLs in full",
+    ],
   ],
 
   builder: (yargs) =>
-    yargs.positional("library", {
-      type: "string",
-      describe: "Video library name or ID",
-    }),
+    yargs
+      .positional("library", {
+        type: "string",
+        describe: "Video library name or ID",
+      })
+      .option("show-secret", {
+        type: "boolean",
+        default: false,
+        describe:
+          "Show the webhook and VAST URLs in full (their query string and userinfo are redacted by default)",
+      }),
 
-  handler: async ({ library, profile, output, verbose, apiKey }) => {
+  handler: async ({
+    library,
+    showSecret,
+    profile,
+    output,
+    verbose,
+    apiKey,
+  }) => {
     const config = resolveConfig(profile, apiKey, verbose);
     const client = createCoreClient(clientOptions(config, verbose));
 
@@ -36,12 +60,16 @@ export const streamLibraryShowCommand = defineCommand<LibraryShowArgs>({
     });
 
     if (output === "json") {
-      logger.log(JSON.stringify(toSafeVideoLibrary(lib), null, 2));
+      logger.log(
+        JSON.stringify(toSafeVideoLibrary(lib, { showSecret }), null, 2),
+      );
       return;
     }
 
     // No output format prints the raw keys; `bunny stream libraries credentials`
     // is the deliberate way to retrieve them.
+    const url = (value: string | null | undefined) =>
+      value && !showSecret ? redactUrl(value) : value;
     logger.log(
       formatKeyValue(
         [
@@ -68,8 +96,8 @@ export const streamLibraryShowCommand = defineCommand<LibraryShowArgs>({
             key: "Transcribing",
             value: lib.EnableTranscribing ? "Enabled" : "Disabled",
           },
-          { key: "Webhook URL", value: lib.WebhookUrl || "—" },
-          { key: "VAST ads", value: lib.VastTagUrl || "Off" },
+          { key: "Webhook URL", value: url(lib.WebhookUrl) || "—" },
+          { key: "VAST ads", value: url(lib.VastTagUrl) || "Off" },
           {
             key: "Watermark",
             value: lib.HasWatermark ? "Set" : "None",

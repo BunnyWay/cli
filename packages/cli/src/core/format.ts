@@ -174,6 +174,24 @@ export function maskSecret(secret: string): string {
   return `${"•".repeat(Math.max(secret.length - 4, 4))}${tail}`;
 }
 
+/**
+ * A URL with any credentials it carries masked: userinfo and the whole query
+ * string, where signed tokens and API keys live (the same parts the SDK's
+ * verbose logging redacts). Host and path stay readable. Anything that does
+ * not parse as a URL comes back unchanged.
+ */
+export function redactUrl(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return value;
+  }
+  const userinfo = url.username || url.password ? "•••@" : "";
+  const query = url.search ? "?•••" : "";
+  return `${url.protocol}//${userinfo}${url.host}${url.pathname}${query}${url.hash}`;
+}
+
 /** A length in seconds as `m:ss`, or `h:mm:ss` from an hour; "-" when unknown. */
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return "-";

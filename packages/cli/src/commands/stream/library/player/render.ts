@@ -1,4 +1,4 @@
-import { formatKeyValue } from "@/core/format.ts";
+import { formatKeyValue, redactUrl } from "@/core/format.ts";
 import type { OutputFormat } from "@/core/types.ts";
 import type { PlayerSettings } from "@/tools/stream/index.ts";
 
@@ -6,10 +6,21 @@ function onOff(value: boolean): string {
   return value ? "On" : "Off";
 }
 
+/** The settings with the VAST URL's credentials (userinfo, query) redacted unless `showSecret`. */
+export function safePlayerSettings(
+  player: PlayerSettings,
+  showSecret = false,
+): PlayerSettings {
+  if (showSecret || !player.vastUrl) return player;
+  return { ...player, vastUrl: redactUrl(player.vastUrl) };
+}
+
 export function formatPlayerSettings(
   player: PlayerSettings,
   output: OutputFormat,
+  showSecret = false,
 ): string {
+  player = safePlayerSettings(player, showSecret);
   return formatKeyValue(
     [
       { key: "Library ID", value: String(player.library) },

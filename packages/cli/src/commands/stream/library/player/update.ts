@@ -14,7 +14,7 @@ import {
   playerChangesFromFlags,
   withPlayerOptions,
 } from "./flags.ts";
-import { formatPlayerSettings } from "./render.ts";
+import { formatPlayerSettings, safePlayerSettings } from "./render.ts";
 
 const FLAG_HINT =
   "Pass at least one of --language, --font, --color, --caption-color, --caption-background, --caption-size, --controls/--no-controls, --speeds, --custom-html, --vast-url, --heatmap, --remember-position, --compact-controls, --legacy-player, --player-version, --captions-in-playlist.";
@@ -149,6 +149,8 @@ export const streamLibraryPlayerUpdateCommand = defineToolCommand({
     }
     return { input: { library: lib.id, changes } };
   },
+
+  json: (player) => safePlayerSettings(player),
 
   render: (player, { output }) => {
     logger.success(
