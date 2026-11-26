@@ -27,14 +27,14 @@ Statuses: `created`, `scheduled`, `preview` (encoder connected, not public), `ru
 ```bash
 bunny stream live create "Keynote" --record --dvr 1h --start +30m --end +3h --countdown
 bunny stream live create "24/7 radio" --type channel --auto-start
-bunny stream live create "Simulcast" --restream rtmps://a.rtmp.youtube.com/live2/<key>
+bunny stream live create "Simulcast" --rtmp-output rtmps://a.rtmp.youtube.com/live2/<key>
 bunny stream live update <id> --title "Keynote (day 2)" --end +1h
-bunny stream live update <id> --start none --restream none     # "none" removes a value
+bunny stream live update <id> --start none --rtmp-output none     # "none" removes a value
 ```
 
 - `--type event` (default): at most 12 hours, ends 30 minutes after the encoder disconnects, can be recorded. `--type channel`: 24/7, survives disconnects, never recorded; `--type channel --record` is refused.
 - `--dvr` takes `30m`, `2h` (max `12h`); `0` turns DVR off. `--start`/`--end` take ISO 8601 UTC or `+30m`. Scheduled streams show a countdown when the library's setting has it on; `--countdown`/`--no-countdown` override it.
-- `--restream` is the destination's full RTMP(S) URL ending in its stream key; up to 4. On `update` it replaces the list.
+- `--rtmp-output` (RTMP outputs, as the dashboard calls them) is the destination's full RTMP(S) URL ending in its stream key; up to 4. On `update` it replaces the list.
 - While live, only `--title`, `--description` and `--end` can change. `--type` changes only before the start, with no encoder connected.
 - Settings left out on `create` use the library's live defaults.
 

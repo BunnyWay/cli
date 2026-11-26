@@ -456,7 +456,7 @@ export function toLiveEncodingStats(
 }
 
 /**
- * A restream destination. Its stream key is a credential for another
+ * An RTMP output. Its stream key is a credential for another
  * platform, so it is never input: the input names the environment variable
  * that holds it, and the tool reads it from `ctx.env`.
  */
@@ -478,7 +478,7 @@ export const OutputInputSchema = z.strictObject({
 });
 export type OutputInput = z.infer<typeof OutputInputSchema>;
 
-/** Restream destinations as the API takes them, with each key read from the environment. */
+/** RTMP outputs as the API takes them, with each key read from the environment. */
 export function resolveOutputs(
   outputs: readonly OutputInput[],
   env: ToolEnv,
@@ -492,7 +492,7 @@ export function resolveOutputs(
   ];
   if (missing.length > 0) {
     throw new UserError(
-      `Missing restream stream key${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}.`,
+      `Missing RTMP output stream key${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}.`,
       `Set ${missing.join(", ")} in the environment to the destination's stream key.`,
     );
   }
@@ -569,7 +569,7 @@ export const LiveSettingsSchema = z.object({
     .max(4)
     .optional()
     .describe(
-      "Restream destinations, up to 4, each with the environment variable holding its stream key. Replaces the whole list; an empty list removes them all.",
+      "RTMP outputs, up to 4, each with the environment variable holding its stream key. Replaces the whole list; an empty list removes them all.",
     ),
 });
 export type LiveSettings = z.infer<typeof LiveSettingsSchema>;

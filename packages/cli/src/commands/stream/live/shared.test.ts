@@ -7,9 +7,9 @@ import {
   maskIngest,
   maskSrtUrl,
   parseDuration,
-  parseRestream,
+  parseRtmpOutput,
   parseTimeFlag,
-  restreamEnv,
+  rtmpOutputEnv,
   streamRef,
 } from "./shared.ts";
 import { statusHint } from "./status.ts";
@@ -64,25 +64,27 @@ test("parseTimeFlag reads a date-time without an offset as UTC, whatever the loc
   );
 });
 
-test("parseRestream splits the stream key off the last path segment", () => {
-  expect(parseRestream("rtmps://a.rtmp.youtube.com/live2/abcd-1234")).toEqual({
-    endpoint: "rtmps://a.rtmp.youtube.com/live2",
-    streamKey: "abcd-1234",
-  });
-  expect(() => parseRestream("https://example.com/live/key")).toThrow(
-    "Invalid --restream",
+test("parseRtmpOutput splits the stream key off the last path segment", () => {
+  expect(parseRtmpOutput("rtmps://a.rtmp.youtube.com/live2/abcd-1234")).toEqual(
+    {
+      endpoint: "rtmps://a.rtmp.youtube.com/live2",
+      streamKey: "abcd-1234",
+    },
   );
-  expect(() => parseRestream("rtmp://example.com")).toThrow(
-    "Invalid --restream",
+  expect(() => parseRtmpOutput("https://example.com/live/key")).toThrow(
+    "Invalid --rtmp-output",
+  );
+  expect(() => parseRtmpOutput("rtmp://example.com")).toThrow(
+    "Invalid --rtmp-output",
   );
 });
 
-test("a bad --restream value is echoed with its key masked", () => {
-  expect(() => parseRestream("https://example.com/live/secret-key")).toThrow(
-    'Invalid --restream "https://example.com/live/•••".',
+test("a bad --rtmp-output value is echoed with its key masked", () => {
+  expect(() => parseRtmpOutput("https://example.com/live/secret-key")).toThrow(
+    'Invalid --rtmp-output "https://example.com/live/•••".',
   );
-  expect(() => parseRestream("secret-key")).toThrow(
-    'Invalid --restream "•••".',
+  expect(() => parseRtmpOutput("secret-key")).toThrow(
+    'Invalid --rtmp-output "•••".',
   );
 });
 
@@ -94,7 +96,7 @@ test("liveSettingsFromFlags builds a sparse create body", () => {
         record: true,
         dvr: "1h",
         start: "+30m",
-        restream: ["rtmp://live.twitch.tv/app/live_123"],
+        "rtmp-output": ["rtmp://live.twitch.tv/app/live_123"],
       },
       "create",
       NOW,
@@ -107,15 +109,15 @@ test("liveSettingsFromFlags builds a sparse create body", () => {
     outputs: [
       {
         endpoint: "rtmp://live.twitch.tv/app",
-        streamKeyEnv: "BUNNY_STREAM_RESTREAM_KEY_1",
+        streamKeyEnv: "BUNNY_STREAM_RTMP_OUTPUT_KEY_1",
       },
     ],
   });
 });
 
-test("restream keys go to the environment, never into the settings", () => {
+test("RTMP output keys go to the environment, never into the settings", () => {
   const args = {
-    restream: [
+    "rtmp-output": [
       "rtmp://live.twitch.tv/app/live_123",
       "rtmps://a.rtmp.youtube.com/live2/yt-key",
     ],
@@ -123,18 +125,18 @@ test("restream keys go to the environment, never into the settings", () => {
   const settings = liveSettingsFromFlags(args, "create", NOW);
   expect(JSON.stringify(settings)).not.toContain("live_123");
   expect(JSON.stringify(settings)).not.toContain("yt-key");
-  expect(restreamEnv(args, "create")).toEqual({
-    BUNNY_STREAM_RESTREAM_KEY_1: "live_123",
-    BUNNY_STREAM_RESTREAM_KEY_2: "yt-key",
+  expect(rtmpOutputEnv(args, "create")).toEqual({
+    BUNNY_STREAM_RTMP_OUTPUT_KEY_1: "live_123",
+    BUNNY_STREAM_RTMP_OUTPUT_KEY_2: "yt-key",
   });
-  expect(restreamEnv({ restream: ["none"] }, "update")).toEqual({});
-  expect(restreamEnv({}, "update")).toEqual({});
+  expect(rtmpOutputEnv({ "rtmp-output": ["none"] }, "update")).toEqual({});
+  expect(rtmpOutputEnv({}, "update")).toEqual({});
 });
 
 test('liveSettingsFromFlags treats "none" as clearing on update only', () => {
   expect(
     liveSettingsFromFlags(
-      { start: "none", trailer: "none", restream: ["none"] },
+      { start: "none", trailer: "none", "rtmp-output": ["none"] },
       "update",
       NOW,
     ),

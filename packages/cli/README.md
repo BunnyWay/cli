@@ -1325,7 +1325,7 @@ Create a live stream, point an encoder (OBS, vMix, FFmpeg, hardware) at it, go l
 bunny stream live create "Launch keynote"            # interactive: prompts for the title and the type when omitted
 bunny stream live create "Launch keynote" --record --dvr 1h --start +30m --countdown   # recorded, 1-hour DVR, scheduled with a countdown
 bunny stream live create "24/7 radio" --type channel --auto-start   # a 24/7 channel that goes live whenever the encoder connects
-bunny stream live create "Simulcast" --restream rtmps://a.rtmp.youtube.com/live2/<key>   # also forward it to another platform
+bunny stream live create "Simulcast" --rtmp-output rtmps://a.rtmp.youtube.com/live2/<key>   # also forward it to another platform
 bunny stream live ingest 0f4e5d6c-...                # RTMPS, RTMP and SRT servers; stream key masked
 bunny stream live ingest 0f4e5d6c-... --show-secret  # reveal the key to paste into the encoder
 bunny stream live ingest --auto-create --show-secret # library ingest: publishing creates and starts a new stream
@@ -1341,7 +1341,7 @@ bunny stream live update 0f4e5d6c-... --end +1h      # stop it automatically in 
 bunny stream live bitrate 0f4e5d6c-... --since 15m   # ingest bitrate history, primary and backup
 bunny stream live stop 0f4e5d6c-...                  # end it; the recording, if on, becomes a video. Can't be undone
 bunny stream live list                               # ID, title, status, type, schedule, duration
-bunny stream live show 0f4e5d6c-...                  # settings, playback URL, restream targets, and any issues it ran into
+bunny stream live show 0f4e5d6c-...                  # settings, playback URL, RTMP outputs, and any issues it ran into
 bunny stream live stats --from 2026-11-01            # live encoding minutes by encoder, stream, codec and resolution
 bunny stream live thumbnail 0f4e5d6c-... --file ./poster.jpg
 bunny stream live rotate-key 0f4e5d6c-...            # new stream key; connected encoders are disconnected
@@ -1359,7 +1359,7 @@ An **event** (the default `--type`) runs at most 12 hours and ends 30 minutes af
 
 Either way the stream must be Created, Scheduled or in Preview, and the link stops working when the stream goes public: the player then switches to the public playlist. An invalid or expired token is ignored rather than rejected, so the viewer simply sees the public, not-yet-live view; referrer and view-token checks still apply, and preview pages are never cached for other viewers.
 
-The stream key is a publishing credential, so `create`, `ingest` and `rotate-key` mask it, including inside SRT URLs, which carry it, unless you pass `--show-secret`, in every output format. For RTMP and RTMPS, the encoder takes the server and the stream key as two fields; SRT takes the whole URL. `live show` and `live list` never include the key, and report restream destinations without theirs. The encoder must send H.264 (8-bit 4:2:0) with stereo AAC at 48 kHz, at constant bitrate with a 2-second keyframe interval; `create` and `ingest` print those settings.
+The stream key is a publishing credential, so `create`, `ingest` and `rotate-key` mask it, including inside SRT URLs, which carry it, unless you pass `--show-secret`, in every output format. For RTMP and RTMPS, the encoder takes the server and the stream key as two fields; SRT takes the whole URL. `live show` and `live list` never include the key, and report RTMP outputs without theirs. The encoder must send H.264 (8-bit 4:2:0) with stereo AAC at 48 kHz, at constant bitrate with a 2-second keyframe interval; `create` and `ingest` print those settings.
 
 | Flag                                                  | Commands                                | Description                                                                                                       |
 | ----------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -1370,7 +1370,7 @@ The stream key is a publishing credential, so `create`, `ingest` and `rotate-key
 | `--start`, `--end`                                    | `create`, `update`                      | Scheduled start and end (the end stops the stream): ISO 8601 UTC or `+30m` from now; `none` removes on `update`   |
 | `--countdown` / `--no-countdown`                      | `create`, `update`                      | Countdown in the player before a scheduled start; scheduled streams default to the library's setting              |
 | `--trailer`                                           | `create`, `update`                      | Video GUID to loop before the stream starts; `none` removes on `update`                                           |
-| `--restream`                                          | `create`, `update`                      | Forward to another platform: its RTMP(S) URL ending in the stream key; repeatable, up to 4; `none` removes all    |
+| `--rtmp-output`                                       | `create`, `update`                      | Forward to another platform: its RTMP(S) URL ending in the stream key; repeatable, up to 4; `none` removes all    |
 | `--description`, `--collection`                       | `create`, `update`                      | Description and collection ID; `none` removes on `update`                                                         |
 | `--title`                                             | `update`                                | New title (`create` takes it as its positional)                                                                   |
 | `--show-secret`                                       | `create`, `ingest`, `rotate-key`        | Print the stream key in full                                                                                      |

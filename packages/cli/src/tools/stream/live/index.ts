@@ -197,7 +197,7 @@ export const streamLiveGet = defineTool({
   name: "stream.live.get",
   title: "Get a live stream",
   description:
-    "Get one live stream: status, schedule, recording, DVR, playback URL, restream outputs and any issues it ran into. Never includes the stream key.",
+    "Get one live stream: status, schedule, recording, DVR, playback URL, RTMP outputs and any issues it ran into. Never includes the stream key.",
   schema: z.strictObject({ library: libraryId, stream: streamId }),
   kind: "read",
   resultSchema: LiveStreamSchema,

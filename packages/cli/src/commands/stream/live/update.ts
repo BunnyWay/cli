@@ -7,7 +7,7 @@ import {
   LIVE_PREVIEW_EPILOGUE,
   liveSettingsFromFlags,
   resolveLiveTarget,
-  restreamEnv,
+  rtmpOutputEnv,
   withLiveSettingsOptions,
   withStreamPositional,
 } from "./shared.ts";
@@ -31,7 +31,10 @@ export const streamLiveUpdateCommand = defineToolCommand({
       "$0 stream live update 0f4e5d6c-... --type channel --no-record",
       "Turn an event into a 24/7 channel",
     ],
-    ["$0 stream live update 0f4e5d6c-... --restream none", "Stop restreaming"],
+    [
+      "$0 stream live update 0f4e5d6c-... --rtmp-output none",
+      "Remove all RTMP outputs",
+    ],
   ],
   epilogue: `While a stream is live only --title, --description and --end can change. --type changes only before the stream starts, with no encoder connected.\n\n${LIVE_PREVIEW_EPILOGUE}`,
   progress: "Updating live stream...",
@@ -59,8 +62,8 @@ export const streamLiveUpdateCommand = defineToolCommand({
     const { library, streamId } = await resolveLiveTarget(ctx, args);
     return {
       input: { library: library.id, stream: streamId, title, ...settings },
-      // Restream keys reach the tool through the environment, never as input.
-      env: restreamEnv(args, "update"),
+      // RTMP output keys reach the tool through the environment, never as input.
+      env: rtmpOutputEnv(args, "update"),
     };
   },
 

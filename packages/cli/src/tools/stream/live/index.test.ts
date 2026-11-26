@@ -238,7 +238,7 @@ test("assertLiveSettings rejects a recorded channel and an event over 12 hours",
   ).not.toThrow();
 });
 
-test("liveSettingsBody reads restream keys from the environment and names missing ones", () => {
+test("liveSettingsBody reads RTMP output keys from the environment and names missing ones", () => {
   const outputs = [
     {
       endpoint: "rtmps://a.rtmp.youtube.com/live2",
@@ -253,12 +253,12 @@ test("liveSettingsBody reads restream keys from the environment and names missin
     ],
   });
   expect(() => liveSettingsBody({ outputs }, {})).toThrow(
-    "Missing restream stream key: YOUTUBE_STREAM_KEY.",
+    "Missing RTMP output stream key: YOUTUBE_STREAM_KEY.",
   );
   expect(liveSettingsBody({ outputs: [] })).toEqual({ outputs: [] });
 });
 
-test("stream.live.create takes no restream key as input", () => {
+test("stream.live.create takes no RTMP output key as input", () => {
   expect(() =>
     streamLiveCreate.schema.parse({
       library: 12345,

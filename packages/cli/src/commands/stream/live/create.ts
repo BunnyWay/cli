@@ -21,7 +21,7 @@ import {
   liveSettingsFromFlags,
   maskIngest,
   resolveLiveLibrary,
-  restreamEnv,
+  rtmpOutputEnv,
   streamRef,
   withLibOption,
   withLiveSettingsOptions,
@@ -99,7 +99,7 @@ export const streamLiveCreateCommand = defineCommand<LiveCreateArgs>({
       "A 24/7 channel that goes live whenever the encoder connects",
     ],
     [
-      '$0 stream live create "Simulcast" --restream rtmps://a.rtmp.youtube.com/live2/<key>',
+      '$0 stream live create "Simulcast" --rtmp-output rtmps://a.rtmp.youtube.com/live2/<key>',
       "Also send it to YouTube",
     ],
     [
@@ -174,9 +174,9 @@ export const streamLiveCreateCommand = defineCommand<LiveCreateArgs>({
       output,
       offerLink: true,
     });
-    // Restream keys reach the tool through the environment, never as input.
+    // RTMP output keys reach the tool through the environment, never as input.
     const createCtx = extendToolContext(ctx, {
-      env: restreamEnv(args, "create"),
+      env: rtmpOutputEnv(args, "create"),
     });
     const stream = await withSpinner("Creating live stream...", () =>
       streamLiveCreate.invoke(createCtx, {

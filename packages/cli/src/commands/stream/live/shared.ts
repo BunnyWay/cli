@@ -250,8 +250,8 @@ export function clearable(
   return trimmed === "" || trimmed.toLowerCase() === "none" ? null : trimmed;
 }
 
-/** A `--restream` value safe to echo: the last path segment, where the destination's key goes, masked. */
-export function maskRestream(value: string): string {
+/** A `--rtmp-output` value safe to echo: the last path segment, where the destination's key goes, masked. */
+export function maskRtmpOutput(value: string): string {
   const trimmed = value.trim();
   const slash = trimmed.lastIndexOf("/");
   // No path at all: the whole value may be a pasted key.
@@ -261,11 +261,11 @@ export function maskRestream(value: string): string {
 }
 
 /**
- * A restream destination from one `--restream` value: the full RTMP(S) URL an
+ * An RTMP output from one `--rtmp-output` value: the full RTMP(S) URL an
  * encoder would publish to, with the destination's stream key as the last path
  * segment (`rtmps://a.rtmp.youtube.com/live2/abcd-1234`).
  */
-export function parseRestream(value: string): {
+export function parseRtmpOutput(value: string): {
   endpoint: string;
   streamKey: string;
 } {
@@ -273,20 +273,20 @@ export function parseRestream(value: string): {
   const match = /^(rtmps?:\/\/[^/\s]+(?:\/[^\s]*)?)\/([^/\s]+)$/i.exec(trimmed);
   if (!match?.[1] || !match[2]) {
     throw new UserError(
-      `Invalid --restream "${maskRestream(value)}".`,
+      `Invalid --rtmp-output "${maskRtmpOutput(value)}".`,
       "Pass the destination's full RTMP(S) URL ending in its stream key, e.g. rtmps://a.rtmp.youtube.com/live2/<key>.",
     );
   }
   return { endpoint: match[1], streamKey: match[2] };
 }
 
-/** `--restream` values as destinations: [] for "none" on update, undefined when the flag isn't passed. */
-function restreamDestinations(
-  args: Pick<LiveSettingsArgs, "restream">,
+/** `--rtmp-output` values as outputs: [] for "none" on update, undefined when the flag isn't passed. */
+function rtmpOutputDestinations(
+  args: Pick<LiveSettingsArgs, "rtmp-output">,
   mode: "create" | "update",
 ): Array<{ endpoint: string; streamKey: string }> | undefined {
-  if (args.restream === undefined) return undefined;
-  const values = args.restream
+  if (args["rtmp-output"] === undefined) return undefined;
+  const values = args["rtmp-output"]
     .flatMap((v) => String(v).split(/\s+/))
     .filter(Boolean);
   if (
@@ -296,27 +296,27 @@ function restreamDestinations(
   )
     return [];
   if (values.length > 4)
-    throw new UserError("--restream takes at most 4 destinations.");
-  return values.map(parseRestream);
+    throw new UserError("--rtmp-output takes at most 4 outputs.");
+  return values.map(parseRtmpOutput);
 }
 
-/** The environment variable that carries the stream key of the nth `--restream` destination to the tool. */
-export function restreamKeyEnv(index: number): string {
-  return `BUNNY_STREAM_RESTREAM_KEY_${index + 1}`;
+/** The environment variable that carries the stream key of the nth `--rtmp-output` output to the tool. */
+export function rtmpOutputKeyEnv(index: number): string {
+  return `BUNNY_STREAM_RTMP_OUTPUT_KEY_${index + 1}`;
 }
 
 /**
- * The `--restream` stream keys, keyed by the variables `liveSettingsFromFlags`
+ * The `--rtmp-output` stream keys, keyed by the variables `liveSettingsFromFlags`
  * names in the tool input. Third-party keys never go in tool input; the command
  * layers this over the environment for the one invocation.
  */
-export function restreamEnv(
-  args: Pick<LiveSettingsArgs, "restream">,
+export function rtmpOutputEnv(
+  args: Pick<LiveSettingsArgs, "rtmp-output">,
   mode: "create" | "update",
 ): Record<string, string> {
   return Object.fromEntries(
-    (restreamDestinations(args, mode) ?? []).map((d, i) => [
-      restreamKeyEnv(i),
+    (rtmpOutputDestinations(args, mode) ?? []).map((d, i) => [
+      rtmpOutputKeyEnv(i),
       d.streamKey,
     ]),
   );
@@ -334,7 +334,7 @@ export interface LiveSettingsArgs {
   end?: string;
   countdown?: boolean;
   trailer?: string;
-  restream?: string[];
+  "rtmp-output"?: string[];
 }
 
 export function withLiveSettingsOptions<T>(
@@ -390,10 +390,10 @@ export function withLiveSettingsOptions<T>(
       type: "string",
       describe: `Video GUID to loop before the stream starts${clear}`,
     })
-    .option("restream", {
+    .option("rtmp-output", {
       type: "string",
       array: true,
-      describe: `Also send the stream to another platform: its full RTMP(S) URL ending in the stream key (repeatable, up to 4${mode === "update" ? '; replaces the current list, "none" removes all' : ""})`,
+      describe: `Forward the stream to another platform's ingest: its full RTMP(S) URL ending in the stream key (repeatable, up to 4${mode === "update" ? '; replaces the current list, "none" removes all' : ""})`,
     });
 }
 
@@ -446,11 +446,11 @@ export function liveSettingsFromFlags(
     }
   }
 
-  const destinations = restreamDestinations(args, mode);
+  const destinations = rtmpOutputDestinations(args, mode);
   if (destinations !== undefined) {
     settings.outputs = destinations.map((d, i) => ({
       endpoint: d.endpoint,
-      streamKeyEnv: restreamKeyEnv(i),
+      streamKeyEnv: rtmpOutputKeyEnv(i),
     }));
   }
 
@@ -539,7 +539,7 @@ export function formatLiveStreamDetails(
           : "-",
     },
     {
-      key: "Restream to",
+      key: "RTMP outputs",
       value: stream.outputs.map((o) => o.endpoint).join("\n") || "-",
     },
   ];

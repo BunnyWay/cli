@@ -99,7 +99,7 @@ Use this to route to the correct reference file:
 - **Edge Storage (zones, files, connection credentials, S3/FTP/HTTP, custom domains)** -> `references/storage.md`
 - **Sandboxes (create, exec, ssh, files list/cp, public URLs, persistent env vars, Claude Code auth)** -> `references/sandbox.md`
 - **Bunny Stream (libraries, player/security settings, video upload/fetch/embed/cleanup, captions, collections, encoding, transcription, smart titles/chapters)** -> `references/stream.md`
-- **Bunny Stream live streaming (create a live stream, encoder/ingest settings and stream keys, go live, status/bitrate monitoring, stop and record, restream)** -> `references/stream-live.md`
+- **Bunny Stream live streaming (create a live stream, encoder/ingest settings and stream keys, go live, status/bitrate monitoring, stop and record, RTMP outputs)** -> `references/stream-live.md`
 - **Import a video library into Bunny Stream (Vimeo, S3, Wistia, Mux, Cloudflare Stream, JW Player, Brightcove; browse, dry run, resume, status)** -> `references/stream-import.md`
 - **Make raw API requests** -> `references/api.md`
 - **CLI doesn't have a command for it** -> use `bunny api` as a fallback (see `references/api.md`)
