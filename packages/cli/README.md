@@ -1178,6 +1178,7 @@ bunny stream libraries geo-blocking show my-library
 bunny stream libraries geo-blocking countries        # the 249 supported countries and codes
 bunny stream libraries geo-blocking update my-library --allow-only --preset eea-uk   # deliver only inside the EEA and the UK
 bunny stream libraries geo-blocking presets          # continents, EU/EEA/EEA+UK and regional presets, with their countries
+bunny stream libraries usage my-library --from 2026-11-01   # billable encoding, transcribing, DRM and live usage, with estimates
 bunny stream libraries delete my-library             # confirms with the video count; --force skips it
 
 # Link the working directory to a library so video commands can omit it (also `libraries link` / `unlink`)
@@ -1305,6 +1306,8 @@ All boolean flags take `--no-` forms. `security update` sends the settings in on
 **Watermark** (`libraries watermark show | set | remove`): `set --file <image>` uploads the image, and `--left`, `--top`, `--width`, `--height` place it as whole percentages (0-100) of the frame; positioning alone needs a watermark already uploaded. It is burned in while encoding, so it applies to videos uploaded afterwards; existing videos keep what they were encoded with. `remove` confirms first (`--force` skips it).
 
 **Geo-blocking** (`libraries geo-blocking show | update | countries | presets`, alias `geo`): refuses delivery of video files, playlists and thumbnails to countries detected from the viewer's IP (VPNs and proxies can get around it). `update` takes exactly one mode: `--block` and/or `--unblock` edit the current list, `--set` replaces it, `--allow-only` blocks every other supported country, and `--clear` turns it off. `--preset` (repeatable) adds a preset's countries to the list of whichever mode you pass, or to the block list on its own, as the dashboard's presets do: continents (`africa`, `asia`, `europe`, `north-america`, `oceania`, `south-america`), data protection (`eu`, `eea`, `eea-uk`) and regions (`apac`, `anz`, `benelux`, `dach`, `latam`, `mena`, `nordics`, `uk-ireland`, `us-canada`); `presets` lists each one's countries. So `--allow-only --preset eea-uk` delivers only inside the EEA and the UK. Codes are ISO 3166-1 alpha-2 from the [supported list](https://bunny.net/docs/stream/geo-blocking#supported-countries-and-codes): `GB` for the United Kingdom (`UK` is accepted), `XK` for Kosovo; anything else is refused before any request. `countries` prints all 249 (`--output json` or `csv` for scripts). The list is stored on the library's linked Pull Zone as `BlockedCountries`, so `--allow-only` is saved as a block list of every other country, and `show` reports it as "allowing only" when that reads shorter.
+
+**Usage** (`libraries usage`): billable usage over `--from`/`--to` (14 days by default): premium and free encoding minutes (billable minutes count each codec and are weighted by resolution: x0.5 below 720p, x1 up to 1080p, x3 above), transcribing minutes, DRM licenses issued and live encoding minutes, with cost estimates for premium encoding (billable minutes x $0.05) and transcribing ($0.10 per minute). Sections the API can't return right now are listed as unavailable rather than failing the command. Estimates only; the invoice is authoritative.
 
 Video flags (`bunny stream videos ...`):
 

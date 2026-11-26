@@ -96,6 +96,7 @@ bunny stream libraries geo-blocking update my-library --block CN,RU   # or --unb
 bunny stream libraries geo-blocking countries        # 249 supported codes (GB not UK, XK for Kosovo)
 bunny stream libraries geo-blocking update my-library --allow-only --preset eea-uk   # presets: continents, eu, eea, eea-uk, regions
 bunny stream libraries geo-blocking presets          # every preset and its countries
+bunny stream libraries usage my-library --from 2026-11-01   # billable encoding/transcribing/DRM/live, with estimates
 bunny stream libraries player reset my-library       # dashboard defaults; confirms first
 bunny stream libraries security show my-library      # token key masked
 bunny stream libraries security update my-library --embed-token --block-direct-access --allow-referrer example.com

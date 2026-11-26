@@ -11,6 +11,7 @@ import { streamLibrarySecurityNamespace } from "./security/index.ts";
 import { streamLibraryShowCommand } from "./show.ts";
 import { streamLibraryUnlinkCommand } from "./unlink.ts";
 import { streamLibraryUpdateCommand } from "./update.ts";
+import { streamLibraryUsageCommand } from "./usage.ts";
 import { streamLibraryWatermarkNamespace } from "./watermark/index.ts";
 
 const subcommands: CommandModule[] = [
@@ -26,6 +27,7 @@ const subcommands: CommandModule[] = [
   streamLibrarySecurityNamespace,
   streamLibraryGeoBlockingNamespace,
   streamLibraryWatermarkNamespace,
+  streamLibraryUsageCommand,
 ];
 
 export const streamLibraryNamespace = defineNamespace(

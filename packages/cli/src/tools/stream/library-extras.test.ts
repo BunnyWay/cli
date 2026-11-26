@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { ApiError } from "@bunny.net/openapi-client";
 import {
   type CoreClient,
   createToolContext,
@@ -12,6 +13,7 @@ import {
   parseCountryCodes,
   playerUpdateBody,
   streamGeoBlockingUpdate,
+  streamLibraryUsage,
   streamWatermarkSet,
   toPlayerSettings,
 } from "./index.ts";
@@ -227,4 +229,34 @@ test("VAST tag URL round-trips through the player settings", () => {
     "https://a/v",
   );
   expect(toPlayerSettings({ VastTagUrl: "" }).vastUrl).toBeNull();
+});
+
+test("usage estimates costs and reports sections it couldn't read", async () => {
+  const { ctx } = setup({
+    "GET /library/{libraryId}/statistics/encoding": {
+      premium: {
+        normalizedTotal: 1200,
+        outputTotal: 600,
+        byVideoCodec: { AV1: { normalized: 1200, output: 600 } },
+      },
+      free: { normalizedTotal: 0, outputTotal: 300 },
+    },
+    "GET /videolibrary/{id}/transcribing/statistics": {
+      TotalTranscriptionSeconds: 600,
+    },
+    "GET /videolibrary/{id}/drm/statistics": { TotalLicensesIssued: 42 },
+    "GET /library/{libraryId}/live/statistics/encoding": () => {
+      throw new ApiError("Unavailable", 503);
+    },
+  });
+  const usage = await streamLibraryUsage.invoke(ctx, { library: 12345 });
+  expect(usage.encoding?.estimatedCost).toBe(1); // 20 billable min x $0.05
+  expect(usage.encoding?.premium.byCodec.AV1).toEqual({
+    billable: 1200,
+    output: 600,
+  });
+  expect(usage.transcribing).toEqual({ seconds: 600, estimatedCost: 1 });
+  expect(usage.drm).toEqual({ licenses: 42 });
+  expect(usage.live).toBeNull();
+  expect(usage.unavailable).toEqual({ live: "not available right now" });
 });
