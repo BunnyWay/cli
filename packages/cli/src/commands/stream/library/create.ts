@@ -11,7 +11,12 @@ import { UserError } from "@/core/errors.ts";
 import { logger } from "@/core/logger.ts";
 import { toolContext } from "@/core/tool-context.ts";
 import { isInteractive, prompts, spinner } from "@/core/ui.ts";
-import { allRegions, MAIN_REGION, REGION_CODES } from "@/tools/stream/index.ts";
+import {
+  allRegions,
+  libraryFeaturesBody,
+  MAIN_REGION,
+  REGION_CODES,
+} from "@/tools/stream/index.ts";
 import {
   ENV_STREAM_API_KEY,
   ENV_STREAM_CDN_HOSTNAME,
@@ -22,6 +27,12 @@ import {
   printNextSteps,
 } from "./create-next-steps.ts";
 import {
+  describeFeatures,
+  featureBillingWarnings,
+  promptLibraryFeatures,
+} from "./features.ts";
+import {
+  hasLibrarySettingsFlags,
   type LibrarySettingsArgs,
   librarySettingsFromFlags,
   librarySettingsWarnings,
@@ -33,6 +44,7 @@ import { resolveReplicationRegions } from "./replication-regions.ts";
 interface LibraryCreateArgs extends LibrarySettingsArgs {
   replicationRegions?: string[];
   playerVersion?: number;
+  features?: boolean;
   link?: boolean;
   saveEnv?: boolean;
   addVideos?: boolean;
@@ -54,8 +66,16 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
       "Keep everything in DE without asking about replication",
     ],
     [
+      "$0 stream libraries create my-library --encoding-plan 1080p --codecs x264,av1",
+      "Create with 1080p premium encoding and AV1 (no features prompt)",
+    ],
+    [
       "$0 stream libraries create my-library --encoding-tier premium --codecs x264,vp9",
       "Create with premium encoding and extra codecs",
+    ],
+    [
+      "$0 stream libraries create my-library --no-features",
+      "Skip the library features step (free encoding, no transcribing)",
     ],
     [
       "$0 stream libraries create my-library --transcribing --transcribing-languages en,de",
@@ -91,6 +111,11 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
           type: "number",
           choices: [1, 2],
           describe: "Player to use: 1 = legacy, 2 = current",
+        })
+        .option("features", {
+          type: "boolean",
+          describe:
+            "Ask which library features to enable (premium encoding, transcribing) after the regions; on by default in a terminal unless an encoding or transcribing flag is passed. --no-features skips it.",
         })
         .option("link", {
           type: "boolean",
@@ -130,23 +155,31 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
     }
     const name = nameInput;
 
+    // Step 1: storage regions. Step 2: library features, as the dashboard
+    // orders them; flags for either step skip its prompt.
     const regions = await resolveReplicationRegions(replicationRegions, output);
     const warnings = librarySettingsWarnings(args);
+    const flagSettings = librarySettingsFromFlags({ ...args, name: undefined });
+    await checkTranscribingLanguages(
+      config,
+      flagSettings.TranscribingCaptionLanguages,
+      verbose,
+    );
+    const features =
+      args.features !== false && !hasLibrarySettingsFlags(args)
+        ? await promptLibraryFeatures(toolContext(config, { verbose }), output)
+        : undefined;
 
     // The encoding/transcribing flags are shared with `library update`; Name is
     // set explicitly here because create takes it from the positional too.
     const body: VideoLibraryCreateModel = {
-      ...librarySettingsFromFlags({ ...args, name: undefined }),
+      ...flagSettings,
+      ...libraryFeaturesBody(features),
       Name: name,
     };
     body.ReplicationRegions = regions;
     if (args.playerVersion !== undefined)
       body.PlayerVersion = args.playerVersion;
-    await checkTranscribingLanguages(
-      config,
-      body.TranscribingCaptionLanguages,
-      verbose,
-    );
 
     const spin = spinner("Creating video library...");
     spin.start();
@@ -196,7 +229,10 @@ export const streamLibraryCreateCommand = defineCommand<LibraryCreateArgs>({
         ? `Created video library ${name} (ID: ${created.Id}), ${where}.`
         : `Created video library ${name}, ${where}.`,
     );
-    for (const warning of warnings) logger.warn(warning);
+    for (const line of describeFeatures(features))
+      logger.dim(`Enabled: ${line}`);
+    for (const warning of [...featureBillingWarnings(features), ...warnings])
+      logger.warn(warning);
     if (!created?.Id) return;
 
     await offerLink(created, args.link, output);

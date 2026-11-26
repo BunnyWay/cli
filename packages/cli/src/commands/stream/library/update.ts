@@ -35,6 +35,17 @@ interface LibraryUpdateArgs extends LibrarySettingsArgs {
 const FLAG_HINT =
   "Pass at least one of --name, --encoding-tier, --jit/--no-jit, --codecs, --resolutions, --mp4-fallback, --early-play, --keep-original, --multi-audio, --content-tagging, --transcribing/--no-transcribing, --transcribing-languages, --transcribing-title, --transcribing-description, --transcribing-chapters, --transcribing-moments, --add-replication-regions.";
 
+/**
+ * The flags `update` sends: `--encoding-plan` without `--codecs` gets
+ * `--codecs x264`, so the codecs are always explicit with a plan. Returns the
+ * same object when nothing was added.
+ */
+export function planCodecs<T extends LibrarySettingsArgs>(args: T): T {
+  return args.encodingPlan !== undefined && args.codecs === undefined
+    ? { ...args, codecs: "x264" }
+    : args;
+}
+
 function hasAnyFlag(args: LibraryUpdateArgs): boolean {
   return (
     args.name !== undefined ||
@@ -219,14 +230,19 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
       throw new UserError("No changes requested.", FLAG_HINT);
     }
 
+    // A plan sends its output codecs explicitly on update, as the dashboard
+    // does: H.264 (AVC) unless --codecs names them. (On create the API
+    // defaults to H.264 by itself.) The billing warning then counts them too.
+    const flags = planCodecs(args);
+
     // Parse and validate the flags before any network call.
     const fromFlags: VideoLibraryUpdateModel | undefined = hasFlags
-      ? librarySettingsFromFlags(args)
+      ? librarySettingsFromFlags(flags)
       : undefined;
     if (fromFlags && args.contentTagging !== undefined)
       fromFlags.EnableContentTagging = args.contentTagging;
     // Rejects contradictory flags before any network call; the warnings are printed later.
-    if (hasFlags) librarySettingsWarnings(args);
+    if (hasFlags) librarySettingsWarnings(flags);
     const addRegions = args.addReplicationRegions
       ?.flatMap((value) => parseCsvFlag(value))
       .filter(Boolean);
@@ -248,8 +264,12 @@ export const streamLibraryUpdateCommand = defineCommand<LibraryUpdateArgs>({
 
     // Checked against the library's current state, so Early-Play advice is accurate.
     const warnings = hasFlags
-      ? librarySettingsWarnings(args, lib.KeepOriginalFiles ?? false)
+      ? librarySettingsWarnings(flags, lib.KeepOriginalFiles ?? false)
       : [];
+    if (flags !== args)
+      warnings.push(
+        "Output codecs set to H.264 (AVC) only, replacing the library's current ones; pass --codecs to enable others too.",
+      );
 
     // Flags take full precedence over the editor: a partial set of flags is a partial update.
     const settings: VideoLibraryUpdateModel =
