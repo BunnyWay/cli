@@ -1121,7 +1121,7 @@ Every deploy publishes: the files land in an immutable `deploys/<id>/` directory
 
 > **Preview**: `bunny stream` is in public preview; commands and flags may still change.
 
-Manage bunny.net Stream through three resource groups: **`bunny stream libraries`** (the library itself: create, list, inspect, update, delete, plus its **`player`** and **`security`** settings; aliases `library`, `lib`), **`bunny stream videos`** (the videos inside one library, their **`captions`** files, and the paid `encode`, `transcribe`, and `smart`; alias `video`), and **`bunny stream collections`** (groups of videos within a library; alias `collection`). **`bunny stream link`** and **`unlink`** mirror `libraries link` and `unlink`, and **`bunny stream regions`** lists the region codes a library can replicate to. Library management uses the account API key on the core API; each library also carries its own Stream API key for the video-level API, which the CLI never prints unless you ask for it with `credentials`. Video commands use that per-library key, resolved automatically from the library, so there is nothing extra to configure. **`bunny stream import`** moves an existing video library in from another platform; see [below](#bunny-stream-import).
+Manage bunny.net Stream through four resource groups: **`bunny stream libraries`** (the library itself: create, list, inspect, update, delete, plus its **`player`** and **`security`** settings; aliases `library`, `lib`), **`bunny stream videos`** (the videos inside one library, their **`captions`** files, and the paid `encode`, `transcribe`, and `smart`; alias `video`), **`bunny stream collections`** (groups of videos within a library; alias `collection`), and **`bunny stream live`** (live streams: create, broadcast, go live, monitor, end; closed preview, see [below](#bunny-stream-live)). **`bunny stream link`** and **`unlink`** mirror `libraries link` and `unlink`, and **`bunny stream regions`** lists the region codes a library can replicate to. Library management uses the account API key on the core API; each library also carries its own Stream API key for the video-level API, which the CLI never prints unless you ask for it with `credentials`. Video commands use that per-library key, resolved automatically from the library, so there is nothing extra to configure. **`bunny stream import`** moves an existing video library in from another platform; see [below](#bunny-stream-import).
 
 `libraries` commands take the library as an optional positional (name or numeric ID); every other stream command takes it as the `--lib`/`--library` flag, since their positional is the video GUID, the collection ID, or a local file path. When the library is omitted it resolves from the directory's linked library (`bunny stream link`, stored in `.bunny/stream.json`), then an interactive picker, which offers to link the directory to the picked library (destructive commands never offer it). Non-interactive runs (`--output json`, no TTY, or `--force`) error with a hint instead of prompting: pass a library or link the directory. A `videos`, `collections`, or `videos captions` command with no ID behaves the same way, offering a picker interactively and erroring otherwise. `videos upload [file]` and `videos captions add [file] [video] [lang]` offer the matching files in the working directory (or a typed path) when the file is omitted, and `videos fetch [url]` asks for the URL. `videos captions add` then asks for the language code, and `videos captions remove [video] [lang]` offers the video's caption languages to pick from; unattended runs need the video and the language.
 
@@ -1313,6 +1313,77 @@ Paid video command flags (`bunny stream videos ...`):
 | `--transcribe`                                                                            | `smart`      | Transcribe a captionless video first without asking (paid); required to do so unattended                     |
 | `--overwrite`                                                                             | `transcribe` | Overwrite the existing transcription and override the library's transcribing defaults (the API's force flag) |
 | `--force`, `-f`                                                                           | `smart`      | Disable the library and video pickers, so nothing is guessed                                                 |
+
+#### `bunny stream live`
+
+> **Closed preview**: Stream Live works on video libraries created during the preview, and its API, limits and pricing may change before general availability. See the [Stream Live docs](https://bunny.net/docs/stream/live).
+
+Create a live stream, point an encoder (OBS, vMix, FFmpeg, hardware) at it, go live, watch its health, and end it, optionally saving the recording as a video. Every command takes `--lib`/`--library` and the live stream ID as an optional positional; without an ID, a terminal offers a picker (filtered to the streams the command applies to, such as only running ones for `stop`), and unattended runs error with a hint.
+
+```bash
+# Create, then connect the encoder
+bunny stream live create "Launch keynote"            # interactive: prompts for the title and the type when omitted
+bunny stream live create "Launch keynote" --record --dvr 1h --start +30m --countdown   # recorded, 1-hour DVR, scheduled with a countdown
+bunny stream live create "24/7 radio" --type channel --auto-start   # a 24/7 channel that goes live whenever the encoder connects
+bunny stream live create "Simulcast" --restream rtmps://a.rtmp.youtube.com/live2/<key>   # also forward it to another platform
+bunny stream live ingest 0f4e5d6c-...                # RTMPS, RTMP and SRT servers; stream key masked
+bunny stream live ingest 0f4e5d6c-... --show-secret  # reveal the key to paste into the encoder
+bunny stream live ingest --auto-create --show-secret # library ingest: publishing creates and starts a new stream
+
+# Check before going live, then go live
+bunny stream live status 0f4e5d6c-... --watch        # encoder connections, bitrate, duration; refreshes until Ctrl-C
+bunny stream live preview 0f4e5d6c-...               # signed playlist to watch privately before going public
+bunny stream live preview 0f4e5d6c-... --sign --expires 2h   # sign the preview token yourself with the stream key
+bunny stream live start 0f4e5d6c-...                 # take it public; asks first if no encoder is publishing yet
+
+# While live, and after
+bunny stream live update 0f4e5d6c-... --end +1h      # stop it automatically in an hour
+bunny stream live bitrate 0f4e5d6c-... --since 15m   # ingest bitrate history, primary and backup
+bunny stream live stop 0f4e5d6c-...                  # end it; the recording, if on, becomes a video. Can't be undone
+bunny stream live list                               # ID, title, status, type, schedule, duration
+bunny stream live show 0f4e5d6c-...                  # settings, playback URL, restream targets, and any issues it ran into
+bunny stream live stats --from 2026-11-01            # live encoding minutes by encoder, stream, codec and resolution
+bunny stream live thumbnail 0f4e5d6c-... --file ./poster.jpg
+bunny stream live rotate-key 0f4e5d6c-...            # new stream key; connected encoders are disconnected
+bunny stream live delete 0f4e5d6c-...                # confirms first; --force skips it
+```
+
+A stream starts in **Created** (or **Scheduled**). When an encoder connects it enters **Preview**: only you can see it (`live preview`) and nothing is recorded. `live start` takes it **Live**, overriding any scheduled start; with `--auto-start`, connecting the encoder does that instead. `live stop` ends it for good, disconnecting the encoder and, for a recorded event, saving everything after the start as a video. Playback is ready 15-20 seconds after the encoder connects and after the start.
+
+An **event** (the default `--type`) runs at most 12 hours and ends 30 minutes after its encoder disconnects; it can be recorded with `--record`. A **channel** runs 24/7 with no time limit, survives disconnects (reconnect with the same key), and is never recorded, so `--type channel --record` is refused before any request. Settings you leave out on `create` use the library's live defaults.
+
+**Private preview links** are token-protected, so a leaked link stops working when it expires. `live preview` offers two ways to get one, and both print a player URL (`https://player.mediadelivery.net/embed/{libraryId}/{streamId}?…`, or `/play/…` for a standalone page):
+
+- **Option 1, from the API (default, recommended):** requests access with the library key. The player query carries `previewToken` and `previewExpires`, plus the view `token` and `expires` when the library requires embed tokens, and the HLS playlist comes back CDN-signed when the library uses CDN token authentication. Access lasts 10 hours.
+- **Option 2, `--sign`:** signs the token locally with the stream key (HMAC-SHA256 over `/live/{streamId}/preview/{expires}`, base64url, prefixed `HS256-`), valid for `--expires` (default `1h`, at most `10h5m`). Rotating the stream key invalidates every token signed this way. It adds no view token, so on a library that requires embed tokens the CLI warns that you must add `token` and `expires` yourself. It returns no raw playlist, which would also need a CDN token; use the player URL. Auto-created streams, and API keys without Update permission, have no stream key to sign with.
+
+Either way the stream must be Created, Scheduled or in Preview, and the link stops working when the stream goes public: the player then switches to the public playlist. An invalid or expired token is ignored rather than rejected, so the viewer simply sees the public, not-yet-live view; referrer and view-token checks still apply, and preview pages are never cached for other viewers.
+
+The stream key is a publishing credential, so `create`, `ingest` and `rotate-key` mask it, including inside SRT URLs, which carry it, unless you pass `--show-secret`, in every output format. For RTMP and RTMPS, the encoder takes the server and the stream key as two fields; SRT takes the whole URL. `live show` and `live list` never include the key, and report restream destinations without theirs. The encoder must send H.264 (8-bit 4:2:0) with stereo AAC at 48 kHz, at constant bitrate with a 2-second keyframe interval; `create` and `ingest` print those settings.
+
+| Flag                                                  | Commands                                | Description                                                                                                       |
+| ----------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `--type` (`event` \| `channel`)                       | `create`, `update`                      | Event (up to 12 h, can be recorded) or 24/7 channel; on `update`, only before the start with no encoder connected |
+| `--record` / `--no-record`                            | `create`, `update`                      | Save the stream as a video when it stops (events only)                                                            |
+| `--auto-start` / `--no-auto-start`                    | `create`, `update`                      | Go live as soon as an encoder connects, skipping preview                                                          |
+| `--dvr`                                               | `create`, `update`                      | DVR (rewind) window, e.g. `30m` or `2h`, up to `12h`; `0` turns it off                                            |
+| `--start`, `--end`                                    | `create`, `update`                      | Scheduled start and end (the end stops the stream): ISO 8601 UTC or `+30m` from now; `none` removes on `update`   |
+| `--countdown` / `--no-countdown`                      | `create`, `update`                      | Countdown in the player before a scheduled start                                                                  |
+| `--trailer`                                           | `create`, `update`                      | Video GUID to loop before the stream starts; `none` removes on `update`                                           |
+| `--restream`                                          | `create`, `update`                      | Forward to another platform: its RTMP(S) URL ending in the stream key; repeatable, up to 4; `none` removes all    |
+| `--description`, `--collection`                       | `create`, `update`                      | Description and collection ID; `none` removes on `update`                                                         |
+| `--title`                                             | `update`                                | New title (`create` takes it as its positional)                                                                   |
+| `--show-secret`                                       | `create`, `ingest`, `rotate-key`        | Print the stream key in full                                                                                      |
+| `--sign`, `--expires`                                 | `preview`                               | Option 2: sign the preview token with the stream key, valid for `--expires` (default `1h`, max `10h5m`)           |
+| `--auto-create`                                       | `ingest`                                | The library's auto-create ingest instead of one stream's                                                          |
+| `--watch`, `-w`, `--interval`                         | `status`                                | Refresh until Ctrl-C or the stream ends (not with `--output json`)                                                |
+| `--search`, `--collection`, `--sort`                  | `list`                                  | Filter by title or ID and by collection; order by `date`, `title`, `status`, `started`, `ended` or `planned`      |
+| `--since`, `--from`, `--to`, `--limit`                | `bitrate`                               | Time range, and how many recent samples to list                                                                   |
+| `--from`, `--to`, `--hourly`, `--stream`              | `stats`                                 | Range (14 days by default), hourly buckets, and up to 50 stream IDs                                               |
+| `--file`, `--url`, `--remove`, `--no-restore-default` | `thumbnail`                             | Image to upload or download, or remove the custom one                                                             |
+| `--force`, `-f`                                       | `start`, `stop`, `rotate-key`, `delete` | Skip the prompts (required unattended); on `start`, start even with no encoder publishing                         |
+
+While a stream is live, only `--title`, `--description` and `--end` can change. During the closed preview an account can run 3 live streams at once; live encoding is free, and the proposed pricing is per minute by the highest output resolution, with primary and backup encoders billed separately.
 
 #### `bunny stream import`
 
