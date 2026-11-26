@@ -1348,7 +1348,7 @@ bunny stream live rotate-key 0f4e5d6c-...            # new stream key; connected
 bunny stream live delete 0f4e5d6c-...                # confirms first; --force skips it
 ```
 
-A stream starts in **Created** (or **Scheduled**). When an encoder connects it enters **Preview**: only you can see it (`live preview`) and nothing is recorded. `live start` takes it **Live**, overriding any scheduled start; with `--auto-start`, connecting the encoder does that instead. `live stop` ends it for good, disconnecting the encoder and, for a recorded event, saving everything after the start as a video. Playback is ready 15-20 seconds after the encoder connects and after the start.
+A stream starts in **Created** (or **Scheduled**). When an encoder connects it enters **Preview**: only you can see it (`live preview`) and nothing is recorded. `live start` takes it **Live**; with `--auto-start`, connecting the encoder does that instead. A stream with `--start` goes **Live** by itself at that time (an encoder connected earlier leaves it in Scheduled); `live start` before then takes it live early. `live stop` ends it for good, disconnecting the encoder and, for a recorded event, saving everything after the start as a video. Playback is ready 15-20 seconds after the encoder connects and after the start.
 
 An **event** (the default `--type`) runs at most 12 hours and ends 30 minutes after its encoder disconnects; it can be recorded with `--record`. A **channel** runs 24/7 with no time limit, survives disconnects (reconnect with the same key), and is never recorded, so `--type channel --record` is refused before any request. Settings you leave out on `create` use the library's live defaults.
 
@@ -1368,7 +1368,7 @@ The stream key is a publishing credential, so `create`, `ingest` and `rotate-key
 | `--auto-start` / `--no-auto-start`                    | `create`, `update`                      | Go live as soon as an encoder connects, skipping preview                                                          |
 | `--dvr`                                               | `create`, `update`                      | DVR (rewind) window, e.g. `30m` or `2h`, up to `12h`; `0` turns it off                                            |
 | `--start`, `--end`                                    | `create`, `update`                      | Scheduled start and end (the end stops the stream): ISO 8601 UTC or `+30m` from now; `none` removes on `update`   |
-| `--countdown` / `--no-countdown`                      | `create`, `update`                      | Countdown in the player before a scheduled start                                                                  |
+| `--countdown` / `--no-countdown`                      | `create`, `update`                      | Countdown in the player before a scheduled start; scheduled streams default to the library's setting              |
 | `--trailer`                                           | `create`, `update`                      | Video GUID to loop before the stream starts; `none` removes on `update`                                           |
 | `--restream`                                          | `create`, `update`                      | Forward to another platform: its RTMP(S) URL ending in the stream key; repeatable, up to 4; `none` removes all    |
 | `--description`, `--collection`                       | `create`, `update`                      | Description and collection ID; `none` removes on `update`                                                         |

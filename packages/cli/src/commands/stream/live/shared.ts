@@ -375,7 +375,7 @@ export function withLiveSettingsOptions<T>(
     })
     .option("start", {
       type: "string",
-      describe: `Scheduled start: ISO 8601 UTC or +30m from now${clear}`,
+      describe: `Scheduled start, when the stream goes live by itself: ISO 8601 UTC or +30m from now${clear}`,
     })
     .option("end", {
       type: "string",
@@ -383,7 +383,8 @@ export function withLiveSettingsOptions<T>(
     })
     .option("countdown", {
       type: "boolean",
-      describe: "Show a countdown in the player before a scheduled start",
+      describe:
+        "Show a countdown in the player before a scheduled start (default: the library's setting; --no-countdown turns it off)",
     })
     .option("trailer", {
       type: "string",

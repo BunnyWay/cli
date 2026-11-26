@@ -17,7 +17,7 @@ bunny stream live stop <id> --force                  # ends for good; recording 
 
 Statuses: `created`, `scheduled`, `preview` (encoder connected, not public), `running` (live), `ended`, `vodProcessing`, `error`.
 
-- `start` overrides a scheduled start. Start while the encoder publishes: nothing before the start is recorded. Without an encoder it asks first; `--force` starts anyway.
+- A stream with `--start` goes live by itself at that time, no `start` needed; `start` before then takes it live early. Start while the encoder publishes: nothing before the start is recorded. Without an encoder it asks first; `--force` starts anyway.
 - `stop` only works on a running stream and can't be undone. To drop one that never went live, `delete` it.
 - `--auto-start` makes connecting the encoder take the stream live, skipping preview.
 - Playback is ready 15-20 seconds after the encoder connects and after the start.
@@ -33,7 +33,7 @@ bunny stream live update <id> --start none --restream none     # "none" removes 
 ```
 
 - `--type event` (default): at most 12 hours, ends 30 minutes after the encoder disconnects, can be recorded. `--type channel`: 24/7, survives disconnects, never recorded; `--type channel --record` is refused.
-- `--dvr` takes `30m`, `2h` (max `12h`); `0` turns DVR off. `--start`/`--end` take ISO 8601 UTC or `+30m`.
+- `--dvr` takes `30m`, `2h` (max `12h`); `0` turns DVR off. `--start`/`--end` take ISO 8601 UTC or `+30m`. Scheduled streams show a countdown when the library's setting has it on; `--countdown`/`--no-countdown` override it.
 - `--restream` is the destination's full RTMP(S) URL ending in its stream key; up to 4. On `update` it replaces the list.
 - While live, only `--title`, `--description` and `--end` can change. `--type` changes only before the start, with no encoder connected.
 - Settings left out on `create` use the library's live defaults.

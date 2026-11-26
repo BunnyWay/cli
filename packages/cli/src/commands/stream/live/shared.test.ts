@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { toLiveStream } from "@/tools/stream/index.ts";
-import { nextSteps } from "./create.ts";
+import { nextSteps, startFact } from "./create.ts";
 import {
   formatPingAgo,
   liveSettingsFromFlags,
@@ -177,7 +177,7 @@ test("maskIngest hides the key, including inside SRT URLs", () => {
 });
 
 test("next steps name the library unless it's the linked one", () => {
-  // nextSteps reads only the ID and auto-start.
+  // nextSteps reads the ID, auto-start and the scheduled start.
   const stream = toLiveStream({
     videoLibraryId: 12345,
     guid: "abc",
@@ -195,6 +195,35 @@ test("next steps name the library unless it's the linked one", () => {
   expect(nextSteps(stream, ref)).toContain(
     "Reveal the key:   bunny stream live ingest abc --lib 12345 --show-secret",
   );
+});
+
+// A scheduled stream goes live by itself; the summary and steps must not say it waits for `live start`.
+test("startFact and nextSteps describe how the stream goes live", () => {
+  const base = {
+    videoLibraryId: 12345,
+    guid: "abc",
+    title: "Keynote",
+    autoStartOnIngestDetected: false,
+  } as Parameters<typeof toLiveStream>[0];
+
+  const manual = toLiveStream(base);
+  expect(startFact(manual)).toBe("starts when you run `live start`");
+
+  const auto = toLiveStream({ ...base, autoStartOnIngestDetected: true });
+  expect(startFact(auto)).toBe("starts when the encoder connects");
+
+  const scheduled = toLiveStream({
+    ...base,
+    scheduledStartTime: "2026-12-01T18:00:00",
+  });
+  expect(startFact(scheduled)).toMatch(/^starts by itself at Dec 0?1, 2026 /);
+  expect(startFact(scheduled)).not.toContain("live start");
+  const steps = nextSteps(scheduled);
+  expect(
+    steps.some((step) => step.startsWith("Go live:          automatic at")),
+  ).toBe(true);
+  expect(steps).toContain("Go live early:    bunny stream live start abc");
+  expect(steps).not.toContain("Go live:          bunny stream live start abc");
 });
 
 test("status hints carry the stream reference", () => {

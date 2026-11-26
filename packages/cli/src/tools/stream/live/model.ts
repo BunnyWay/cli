@@ -554,7 +554,9 @@ export const LiveSettingsSchema = z.object({
   countdown: z
     .boolean()
     .optional()
-    .describe("Show a countdown in the player before a scheduled start."),
+    .describe(
+      "Show a countdown in the player before a scheduled start. Left out, a scheduled stream uses the library's setting.",
+    ),
   trailerVideoId: z
     .string()
     .nullable()

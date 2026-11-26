@@ -34,6 +34,20 @@ interface LiveCreateArgs extends LiveSettingsArgs {
 }
 
 /**
+ * How a new stream goes live, for the create summary: at its scheduled start
+ * (no `live start` needed), when the encoder connects (auto-start), or on
+ * `live start`.
+ */
+export function startFact(
+  stream: Pick<LiveStream, "scheduledStart" | "autoStart">,
+): string {
+  if (stream.scheduledStart)
+    return `starts by itself at ${formatDateTime(stream.scheduledStart)}`;
+  if (stream.autoStart) return "starts when the encoder connects";
+  return "starts when you run `live start`";
+}
+
+/**
  * The steps from a new stream to going live, as the docs' quickstart walks them.
  * `id` is the stream reference from {@link streamRef}, so the steps work when
  * pasted as they are.
@@ -51,6 +65,12 @@ export function nextSteps(
     steps.push(
       "Go live:          auto-start is on, so connecting the encoder takes it live",
     );
+  } else if (stream.scheduledStart) {
+    steps.push(`Watch privately:  bunny stream live preview ${id}`);
+    steps.push(
+      `Go live:          automatic at ${formatDateTime(stream.scheduledStart)}`,
+    );
+    steps.push(`Go live early:    bunny stream live start ${id}`);
   } else {
     steps.push(`Watch privately:  bunny stream live preview ${id}`);
     steps.push(`Go live:          bunny stream live start ${id}`);
@@ -211,10 +231,13 @@ export const streamLiveCreateCommand = defineCommand<LiveCreateArgs>({
       stream.dvr.enabled
         ? `DVR ${formatDuration(stream.dvr.windowSeconds)}`
         : "no DVR",
-      stream.autoStart ? "auto-start on" : "starts when you run `live start`",
+      startFact(stream),
     ];
-    if (stream.scheduledStart)
-      facts.push(`scheduled ${formatDateTime(stream.scheduledStart)}`);
+    // startFact names the schedule, so auto-start and the countdown are listed separately.
+    if (stream.scheduledStart) {
+      if (stream.autoStart) facts.push("auto-start on");
+      facts.push(stream.countdown ? "countdown on" : "no countdown");
+    }
     logger.dim(facts.join(" · "));
 
     logger.log();
