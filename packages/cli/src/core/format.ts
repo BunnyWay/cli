@@ -154,16 +154,16 @@ export function progressBar(fraction: number, width = 20): string {
   return chalk.green(bar);
 }
 
-/** Format a byte count into a human-readable string (e.g. 25600000 → "24 MB"). */
+/** Format a byte count in SI (decimal) units (e.g. 25600000 → "26 MB"). */
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
 
   const units = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
+    Math.floor(Math.log(bytes) / Math.log(1000)),
     units.length - 1,
   );
-  const value = bytes / 1024 ** i;
+  const value = bytes / 1000 ** i;
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`;
 }
 
