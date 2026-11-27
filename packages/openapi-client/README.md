@@ -53,8 +53,15 @@ interface ClientOptions {
   verbose?: boolean;
   userAgent?: string;
   onDebug?: (msg: string) => void;
+  maxRetries?: number; // retries after a 429: a non-negative integer, default 4, 0 disables (Stream never retries)
 }
 ```
+
+## Rate Limits
+
+bunny.net answers a burst of requests with `429 Too Many Requests`, usually with no body and no `Retry-After`. Every client retries those itself, up to `maxRetries` times: it waits as long as `Retry-After` asks (and returns the 429 if that is over 30 seconds), otherwise 1, 2, 4 and 8 seconds with jitter. A 429 means the request was not processed, so every method is retried, except requests with a binary body, which can't be replayed without buffering them. An aborted request's signal stops the wait and nothing is resent. With `verbose`, each retry is reported through `onDebug`.
+
+The Stream client is the exception: it does not retry, because its bursty callers (`@bunny.net/stream-import` and tus uploads) retry 429s themselves with their own deadlines.
 
 ## Error Handling
 
@@ -113,6 +120,19 @@ import type { paths } from "@bunny.net/openapi-client/core";
 const client = createClient<paths>({ baseUrl: "https://api.bunny.net" });
 client.use(authMiddleware({ apiKey: "bny_xxxxxxxxxxxx" }));
 client.use(myLoggingMiddleware);
+```
+
+To keep the 429 retries in a custom client, pass `retryingFetch` the same options as its `fetch`:
+
+```typescript
+import { authMiddleware, type ClientOptions, retryingFetch } from "@bunny.net/openapi-client";
+
+const options: ClientOptions = { apiKey: "bny_xxxxxxxxxxxx" };
+const client = createClient<paths>({
+  baseUrl: "https://api.bunny.net",
+  fetch: retryingFetch(options),
+});
+client.use(authMiddleware(options));
 ```
 
 ## Updating Specs

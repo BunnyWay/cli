@@ -1,6 +1,7 @@
 import createClient from "openapi-fetch";
 import type { paths } from "./generated/storage.d.ts";
 import { authMiddleware, type ClientOptions } from "./middleware.ts";
+import { retryingFetch } from "./retry.ts";
 
 const STORAGE_BASE_URL = "https://storage.bunnycdn.com";
 
@@ -14,6 +15,7 @@ const STORAGE_BASE_URL = "https://storage.bunnycdn.com";
 export function createStorageClient(options: ClientOptions) {
   const client = createClient<paths>({
     baseUrl: options.baseUrl ?? STORAGE_BASE_URL,
+    fetch: retryingFetch(options),
   });
   client.use(authMiddleware(options));
   return client;

@@ -1,6 +1,7 @@
 import createClient from "openapi-fetch";
 import type { paths } from "./generated/database.d.ts";
 import { authMiddleware, type ClientOptions } from "./middleware.ts";
+import { retryingFetch } from "./retry.ts";
 
 const DB_BASE_URL = "https://api.bunny.net/database";
 
@@ -8,6 +9,7 @@ const DB_BASE_URL = "https://api.bunny.net/database";
 export function createDbClient(options: ClientOptions) {
   const client = createClient<paths>({
     baseUrl: options.baseUrl ?? DB_BASE_URL,
+    fetch: retryingFetch(options),
   });
   client.use(authMiddleware(options));
   return client;

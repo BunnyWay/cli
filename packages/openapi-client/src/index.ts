@@ -15,6 +15,7 @@ export {
   UNAUTHORIZED_MESSAGE,
 } from "./middleware.ts";
 export { createOriginErrorsClient } from "./origin-errors-client.ts";
+export { type RetryOptions, retryingFetch } from "./retry.ts";
 export { createShieldClient } from "./shield-client.ts";
 export { createStorageClient } from "./storage-client.ts";
 export { createStreamClient } from "./stream-client.ts";
