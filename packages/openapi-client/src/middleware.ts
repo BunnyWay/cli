@@ -9,6 +9,8 @@ export interface ClientOptions {
   userAgent?: string;
   /** Debug logger callback. Called with request/response details when verbose is true. */
   onDebug?: (msg: string) => void;
+  /** Retries after a 429 Too Many Requests: a non-negative integer, 0 disables. Default 4. */
+  maxRetries?: number;
 }
 
 /**

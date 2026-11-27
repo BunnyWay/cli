@@ -1,6 +1,7 @@
 import createClient from "openapi-fetch";
 import type { paths } from "./generated/core.d.ts";
 import { authMiddleware, type ClientOptions } from "./middleware.ts";
+import { retryingFetch } from "./retry.ts";
 
 /**
  * Undocumented endpoints not present in the generated OpenAPI spec.
@@ -33,6 +34,7 @@ const CORE_BASE_URL = "https://api.bunny.net";
 export function createCoreClient(options: ClientOptions) {
   const client = createClient<paths & CustomPaths>({
     baseUrl: options.baseUrl ?? CORE_BASE_URL,
+    fetch: retryingFetch(options),
   });
   client.use(authMiddleware(options));
   return client;
