@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  formatBytes,
   formatDuration,
   formatKeyValue,
   formatTable,
@@ -116,6 +117,19 @@ describe("formatKeyValue", () => {
   test("empty entries", () => {
     const result = formatKeyValue([], "csv");
     expect(result).toBe("Key,Value");
+  });
+});
+
+describe("formatBytes", () => {
+  test("returns 0 B for zero", () => {
+    expect(formatBytes(0)).toBe("0 B");
+  });
+
+  test("divides by 1000 to match the SI labels", () => {
+    expect(formatBytes(1000)).toBe("1.0 KB");
+    expect(formatBytes(1024)).toBe("1.0 KB");
+    expect(formatBytes(1_000_000)).toBe("1.0 MB");
+    expect(formatBytes(1_500_000_000)).toBe("1.5 GB");
   });
 });
 
