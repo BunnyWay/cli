@@ -7,8 +7,13 @@ export const CONNECT_TIMEOUT_MS = 15_000;
 // How long a detach waits for the server to acknowledge the close before dropping the socket.
 const CLOSE_GRACE_MS = 1_000;
 
-// Signals that kill the process without firing "exit", so raw mode has to be undone by hand.
-const FATAL_SIGNALS = { SIGTERM: 15, SIGHUP: 1 } as const;
+// Signals that kill the process without firing "exit", so raw mode has to be undone by hand. In raw mode the keyboard can't raise SIGINT or SIGQUIT, so those come from another process.
+const FATAL_SIGNALS = {
+  SIGHUP: 1,
+  SIGINT: 2,
+  SIGQUIT: 3,
+  SIGTERM: 15,
+} as const;
 
 /** The parts of `process.stdin` the session uses, so tests can pass plain streams. */
 export interface TerminalInput {
