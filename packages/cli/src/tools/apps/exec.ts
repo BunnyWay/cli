@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { McClient } from "@/tools/context.ts";
 import { defineTool } from "@/tools/define-tool.ts";
 
+type OverviewRegion = components["schemas"]["OverviewRegion"];
 type OverviewPod = components["schemas"]["OverviewPod"];
 type OverviewContainer = components["schemas"]["OverviewContainer"];
 
@@ -15,9 +16,10 @@ export type PodContainer = Required<Pick<OverviewContainer, "id" | "name">> &
   Pick<OverviewContainer, "status">;
 
 /** One running instance of an app, flattened out of its region. */
-export interface Pod extends Pick<OverviewPod, "status"> {
-  name: string;
-  region: string;
+export interface Pod
+  extends Required<Pick<OverviewPod, "name">>,
+    Pick<OverviewPod, "status">,
+    Required<Pick<OverviewRegion, "region">> {
   containers: PodContainer[];
 }
 
