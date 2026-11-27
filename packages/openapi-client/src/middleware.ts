@@ -86,11 +86,13 @@ export function redactSecrets(value: unknown, depth = 0): unknown {
 }
 
 export const UNAUTHORIZED_MESSAGE = "Unauthorized. Check your API key.";
+/** What an ApiError says for a 404 whose body explains nothing. */
+export const NOT_FOUND_MESSAGE = "Not found.";
 
 const STATUS_MESSAGES: Record<number, string> = {
   401: UNAUTHORIZED_MESSAGE,
   403: "Forbidden. You don't have permission for this action.",
-  404: "Not found.",
+  404: NOT_FOUND_MESSAGE,
   409: "Conflict. The resource already exists or is in use.",
   500: "Internal server error.",
 };

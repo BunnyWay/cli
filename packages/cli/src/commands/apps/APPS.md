@@ -246,6 +246,34 @@ bunny apps scale --min 1 --max 3
 bunny apps scale --max 5
 ```
 
+## `bunny apps exec`
+
+Open an interactive shell in a running container. It uses the app this directory is linked to; with no `--id` and no linked app, it lists your account's apps to pick from. Without `--pod` or `--container`, it lists the app's pods and the pod's containers to pick from; when there is only one, it picks it for you. Everything you type goes to the container, Ctrl-C included. Press Ctrl-] to disconnect from this side.
+
+Put a command after `--` to run just that instead of opening a shell. Its output streams to stdout and the CLI exits with the command's exit code, so it works in scripts and doesn't need a terminal (pass `--pod` and `--container` there when there's more than one). The arguments reach the container as given, without being expanded by its shell; for pipes, redirects, or variables, use `sh -c '...'`. The command runs in a remote terminal: its stderr arrives mixed into stdout, and tools that color their output keep doing so when you pipe it. Nothing is sent to its input, so a command that reads input or prompts (a bare `cat`, `apt install` without `-y`) waits until you press Ctrl-C; in scripts, pass flags that skip prompts or use `sh -c '... </dev/null'`. Ctrl-C sends Ctrl-C to it, prints what arrives in the next second, and exits 130. The command is typed into the container's shell as one line, so it can't contain newlines or other control characters (join lines with `;`) and is limited to about 1 KB; longer scripts belong in a file in the image.
+
+```bash
+bunny apps exec
+bunny apps exec --pod <pod> --container api
+bunny apps exec --id <app-id> --container worker
+
+# Run one command instead of opening a shell
+bunny apps exec -- whoami
+bunny apps exec --container api -- sh -c 'ls /app | head'
+bunny apps exec --pod <pod> --container api --output json -- cat /etc/os-release
+
+# Print the session's WebSocket URL instead of connecting
+bunny apps exec --pod <pod> --container api --output json
+```
+
+| Flag          | Description                                            |
+| ------------- | ------------------------------------------------------ |
+| `--id`        | App ID (defaults to the linked app; prompts when none) |
+| `--pod`       | Pod (instance) name; prompts when left out             |
+| `--container` | Container name or ID; prompts when left out            |
+
+Without a command, `exec` needs an interactive terminal on both stdin and stdout, so piping a shell session (`bunny apps exec | tee log`) fails early. With a command and `--output json`, it prints `{ app, pod, container, command, exitCode, output }` once the command finishes. With `--output json` and no command, it prints the session instead of connecting: its `token` grants a shell in the container, so treat it like a credential. Connect to `url` and send the token as the first text frame. In that mode it never prompts, so pass `--id` when the directory isn't linked, and `--pod` and `--container` when there's more than one; a missing one fails with the names to choose from. A session that closes with an error code exits non-zero; exiting the remote shell, or a dropped connection, counts as a normal end. Exec has to be enabled for your account.
+
 ## `bunny apps env`
 
 Manage environment variables per container.

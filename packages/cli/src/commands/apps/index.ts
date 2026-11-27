@@ -4,6 +4,7 @@ import { appsDeleteCommand } from "./delete.ts";
 import { appsDeployCommand } from "./deploy.ts";
 import { appsEndpointsNamespace } from "./endpoints/index.ts";
 import { appsEnvNamespace } from "./env/index.ts";
+import { appsExecCommand } from "./exec.ts";
 import { appsInitCommand } from "./init.ts";
 import { appsLinkCommand } from "./link.ts";
 import { appsListCommand } from "./list.ts";
@@ -24,6 +25,7 @@ export const appsNamespace = withPreviewNotice(
     appsDeployCommand,
     appsEndpointsNamespace,
     appsEnvNamespace,
+    appsExecCommand,
     appsInitCommand,
     appsLinkCommand,
     appsListCommand,
