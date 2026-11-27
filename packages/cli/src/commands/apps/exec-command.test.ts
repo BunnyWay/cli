@@ -1,27 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
 import type { Server, ServerWebSocket } from "bun";
-import {
-  commandLine,
-  MarkedOutput,
-  runExecCommand,
-  shellQuote,
-} from "./exec-command.ts";
+import { commandLine, MarkedOutput, runExecCommand } from "./exec-command.ts";
 
 const RS = "\x1e";
 
-test("quotes only the arguments that need it", () => {
-  expect(shellQuote("whoami")).toBe("whoami");
-  expect(shellQuote("/app/data.json")).toBe("/app/data.json");
-  expect(shellQuote("a b")).toBe("'a b'");
-  expect(shellQuote("$HOME")).toBe("'$HOME'");
-  expect(shellQuote("it's")).toBe(`'it'\\''s'`);
-  expect(shellQuote("")).toBe("''");
-});
-
-test("the typed line spells markers as escapes, so its echo never matches them", () => {
-  const line = commandLine(["echo", "a b"], "n1");
+test("the typed line quotes arguments and spells markers as escapes, so its echo never matches them", () => {
+  const line = commandLine(["echo", "a b", "it's"], "n1");
   expect(line).toBe(
-    `printf '\\036Bn1\\036'; echo 'a b'; printf '\\036En1:%d\\036' $?; exit\r`,
+    `printf '\\036Bn1\\036'; echo 'a b' 'it'\\''s'; printf '\\036En1:%d\\036' $?; exit\r`,
   );
   expect(line).not.toContain(RS);
 });

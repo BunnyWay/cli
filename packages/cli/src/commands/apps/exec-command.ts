@@ -1,21 +1,15 @@
 import { randomBytes } from "node:crypto";
 import { UserError } from "@/core/errors.ts";
+import { shellQuoteIfNeeded } from "@/core/shell.ts";
 import { CONNECT_TIMEOUT_MS, terminate } from "./exec-session.ts";
 
 // A session is a shell, so a command is typed into it between printf markers; typed as `\036` escapes, they never match the shell's echo.
 
 const RS = "\x1e";
 
-/** Quote one argument for a POSIX shell. */
-export function shellQuote(arg: string): string {
-  return /^[A-Za-z0-9_@%+=:,./-]+$/.test(arg)
-    ? arg
-    : `'${arg.replaceAll("'", `'\\''`)}'`;
-}
-
 /** The line typed into the remote shell: start marker, the command, end marker with `$?`, then exit. */
 export function commandLine(argv: string[], nonce: string): string {
-  return `printf '\\036B${nonce}\\036'; ${argv.map(shellQuote).join(" ")}; printf '\\036E${nonce}:%d\\036' $?; exit\r`;
+  return `printf '\\036B${nonce}\\036'; ${argv.map(shellQuoteIfNeeded).join(" ")}; printf '\\036E${nonce}:%d\\036' $?; exit\r`;
 }
 
 /** Pulls the command's output and exit code out of the terminal stream, which also carries the prompt and the echo. */
