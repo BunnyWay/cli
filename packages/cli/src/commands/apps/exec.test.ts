@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import promptsLib from "prompts";
+import { logger } from "@/core/logger.ts";
 import { createToolContext, type McClient } from "@/tools/context.ts";
 import { endedNormally, resolveApp, resolveTarget } from "./exec.ts";
 
@@ -121,6 +122,33 @@ test("passes both flags through without an API call", async () => {
     await resolveTarget(mc, "app1", { pod: "pod-a", container: "api" }, true),
   ).toEqual({ pod: "pod-a", container: "api" });
   expect(fetched()).toBe(0);
+});
+
+test("warns when the only pod isn't ready yet", async () => {
+  const { mc } = mcWith([
+    {
+      region: "DE",
+      pods: [
+        {
+          name: "pod-new",
+          status: "scheduled",
+          containers: [{ id: "ct-api", name: "api" }],
+        },
+      ],
+    },
+  ]);
+  const warn = spyOn(logger, "warn").mockImplementation(() => {});
+  try {
+    expect(await resolveTarget(mc, "app1", {}, false)).toEqual({
+      pod: "pod-new",
+      container: "ct-api",
+    });
+    expect(warn).toHaveBeenCalledWith(
+      "Pod pod-new is scheduled, not ready yet.",
+    );
+  } finally {
+    warn.mockRestore();
+  }
 });
 
 test("prompts for the pod, then the container", async () => {

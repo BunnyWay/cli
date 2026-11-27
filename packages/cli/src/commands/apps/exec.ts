@@ -106,6 +106,10 @@ async function pickPod(
   if (pods.length === 1) {
     const [only] = pods as [Pod];
     logger.dim(`Pod: ${only.name}`);
+    // Mid-redeploy the only pod may still be starting; say so rather than fail with a less obvious error.
+    if (only.status && only.status !== "ready") {
+      logger.warn(`Pod ${only.name} is ${only.status}, not ready yet.`);
+    }
     return only;
   }
   if (!interactive)
