@@ -187,11 +187,11 @@ export const appsExec = defineTool({
         );
       }
       if (error instanceof ApiError && error.status === 404) {
-        // The pod was just listed, so a 404 with no body (ApiError falls back to NOT_FOUND_MESSAGE) means the route is missing.
+        // A 404 with no body (ApiError falls back to NOT_FOUND_MESSAGE) can mean a replaced pod or a missing route; it doesn't say which.
         if (error.message === NOT_FOUND_MESSAGE) {
           throw new UserError(
-            "This API has no exec endpoint.",
-            "Container exec isn't available on this API yet. If the pod was replaced in the meantime, run the command again.",
+            `Couldn't open a session in ${container.name} on pod ${pod.name} (not found).`,
+            "The pod may have been replaced; run the command again. If it keeps happening, exec may not be available on this API.",
           );
         }
         throw new UserError(

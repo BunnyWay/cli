@@ -138,7 +138,7 @@ test("apps.exec passes on the API's explanation of a 404", async () => {
 });
 
 // Runs through the real middleware, so it covers the empty-body fallback message the check relies on.
-test("apps.exec reads a real empty 404 as a missing exec endpoint", async () => {
+test("apps.exec explains a real empty 404 without blaming the route", async () => {
   const server = Bun.serve({
     port: 0,
     fetch: (req) =>
@@ -154,7 +154,7 @@ test("apps.exec reads a real empty 404 as a missing exec endpoint", async () => 
     const ctx = createToolContext({ clients: { mc } });
     await expect(
       appsExec.invoke(ctx, { app: "a", pod: "app-de-1", container: "api" }),
-    ).rejects.toThrow("This API has no exec endpoint.");
+    ).rejects.toThrow("(not found)");
   } finally {
     server.stop(true);
   }
