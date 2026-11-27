@@ -130,7 +130,7 @@ test("fails when the session closes before the command reports back", async () =
       },
       nonce: "n",
     }),
-  ).rejects.toThrow("The session closed before the command finished.");
+  ).rejects.toThrow("The session ended before the command finished.");
   expect(output).toBe("partial");
 });
 

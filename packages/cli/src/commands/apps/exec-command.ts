@@ -225,11 +225,12 @@ export function runExecCommand(
         finish(130);
         return;
       }
+      // 1006 is also what exiting the shell gives, so a drop and a command that ran `exit` look the same.
       finish(
         new UserError(
-          "The session closed before the command finished.",
+          "The session ended before the command finished.",
           event.code === 1000 || event.code === 1006
-            ? "The command may have exited the shell itself; wrap it in `sh -c '...'`."
+            ? "The connection may have dropped, or the command exited the shell (wrap a bare `exit` in `sh -c '...'`). Run it again."
             : `Closed with ${event.code}${event.reason ? `: ${event.reason}` : ""}.`,
         ),
       );
