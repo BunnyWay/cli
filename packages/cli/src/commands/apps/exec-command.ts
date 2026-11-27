@@ -11,6 +11,8 @@ const NONCE_BYTES = 6;
 export const MAX_LINE_BYTES = 1024;
 // The start marker prints before the command runs, so silence this long means the shell never ran the line.
 const START_TIMEOUT_MS = 15_000;
+// After Ctrl-C, how long to keep printing output that is already on its way.
+const ABORT_GRACE_MS = 1_000;
 
 /** The line typed into the remote shell: start marker, the command, end marker with `$?`, then exit. */
 export function commandLine(argv: string[], nonce: string): string {
@@ -102,11 +104,12 @@ export interface ExecCommandOptions {
   write: (text: string) => void;
   /** Terminal size to give the remote command, when there is one. */
   size?: { cols: number; rows: number };
-  /** Aborting sends Ctrl-C to the command and closes the session. */
+  /** Aborting sends Ctrl-C to the command, prints what arrives in the next moment, then closes the session. */
   signal?: AbortSignal;
   /** Overrides for tests. */
   connectTimeoutMs?: number;
   startTimeoutMs?: number;
+  abortGraceMs?: number;
   /** Overrides the random marker, for tests. */
   nonce?: string;
 }
@@ -127,13 +130,16 @@ export function runExecCommand(
     socket.binaryType = "arraybuffer";
     let opened = false;
     let settled = false;
+    let aborted = false;
     let startTimer: ReturnType<typeof setTimeout> | undefined;
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
 
     const finish = (outcome: number | UserError) => {
       if (settled) return;
       settled = true;
       clearTimeout(connectTimer);
       clearTimeout(startTimer);
+      clearTimeout(graceTimer);
       options.signal?.removeEventListener("abort", onAbort);
       // Also abandons a socket still connecting, e.g. Ctrl-C before it opened, so it can't keep the process alive.
       if (socket.readyState === WebSocket.OPEN) socket.close(1000, "done");
@@ -143,8 +149,17 @@ export function runExecCommand(
     };
 
     function onAbort() {
-      if (socket.readyState === WebSocket.OPEN) socket.send("\x03");
-      finish(130);
+      if (socket.readyState !== WebSocket.OPEN) {
+        finish(130);
+        return;
+      }
+      aborted = true;
+      clearTimeout(startTimer);
+      socket.send("\x03");
+      graceTimer = setTimeout(
+        () => finish(130),
+        options.abortGraceMs ?? ABORT_GRACE_MS,
+      );
     }
     options.signal?.addEventListener("abort", onAbort, { once: true });
 
@@ -191,7 +206,9 @@ export function runExecCommand(
           : String(data);
       const printable = output.feed(text);
       if (printable) options.write(printable);
-      if (output.exitCode !== undefined) finish(output.exitCode);
+      if (output.exitCode !== undefined) {
+        finish(aborted ? 130 : output.exitCode);
+      }
     });
 
     socket.addEventListener("close", (event) => {
@@ -202,6 +219,10 @@ export function runExecCommand(
             event.reason || "The session may have expired; try again.",
           ),
         );
+        return;
+      }
+      if (aborted) {
+        finish(130);
         return;
       }
       finish(

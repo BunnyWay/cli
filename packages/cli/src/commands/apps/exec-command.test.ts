@@ -63,7 +63,10 @@ afterEach(() => {
 });
 
 // Acts like the exec endpoint's shell: echoes the typed line, then answers with the marked output.
-function fakeShell(reply: (ws: ServerWebSocket<undefined>) => void) {
+function fakeShell(
+  reply: (ws: ServerWebSocket<undefined>) => void,
+  onText?: (ws: ServerWebSocket<undefined>, text: string) => void,
+) {
   const received: string[] = [];
   server = Bun.serve({
     port: 0,
@@ -74,6 +77,7 @@ function fakeShell(reply: (ws: ServerWebSocket<undefined>) => void) {
       message(ws, message) {
         if (typeof message === "string") {
           received.push(message);
+          onText?.(ws, message);
           return;
         }
         const line = Buffer.from(message).toString();
@@ -130,20 +134,29 @@ test("fails when the session closes before the command reports back", async () =
   expect(output).toBe("partial");
 });
 
-test("aborting sends Ctrl-C and resolves with 130", async () => {
+test("aborting sends Ctrl-C, prints what still arrives, and resolves with 130", async () => {
   const controller = new AbortController();
-  const { url, received } = fakeShell((ws) => {
-    ws.send(new TextEncoder().encode(`${RS}Bn${RS}tick\r\n`));
-  });
+  const { url, received } = fakeShell(
+    (ws) => ws.send(new TextEncoder().encode(`${RS}Bn${RS}tick\r\n`)),
+    (ws, text) => {
+      if (text === "\x03") ws.send(new TextEncoder().encode("late\r\n"));
+    },
+  );
+  let output = "";
 
-  const run = runExecCommand(url, "tok", ["sleep", "100"], {
-    write: () => controller.abort(),
+  const code = await runExecCommand(url, "tok", ["sleep", "100"], {
+    write: (text) => {
+      output += text;
+      controller.abort();
+    },
     signal: controller.signal,
+    abortGraceMs: 100,
     nonce: "n",
   });
 
-  expect(await run).toBe(130);
-  while (!received.includes("\x03")) await Bun.sleep(5);
+  expect(code).toBe(130);
+  expect(received).toContain("\x03");
+  expect(output).toBe("tick\nlate\n");
 });
 
 test("gives up when the shell never starts the command", async () => {
