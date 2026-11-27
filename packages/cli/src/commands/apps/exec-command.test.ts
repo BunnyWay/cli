@@ -1,6 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
 import type { Server, ServerWebSocket } from "bun";
-import { commandLine, MarkedOutput, runExecCommand } from "./exec-command.ts";
+import {
+  assertTypeable,
+  commandLine,
+  MAX_LINE_BYTES,
+  MarkedOutput,
+  runExecCommand,
+} from "./exec-command.ts";
 
 const RS = "\x1e";
 
@@ -10,6 +16,17 @@ test("the typed line quotes arguments and spells markers as escapes, so its echo
     `printf '\\036Bn1\\036'; echo 'a b' 'it'\\''s'; printf '\\036En1:%d\\036' $?; exit\r`,
   );
   expect(line).not.toContain(RS);
+});
+
+test("refuses commands a shell can't take as one typed line", () => {
+  expect(() => assertTypeable(["sh", "-c", "echo ok"])).not.toThrow();
+  expect(() => assertTypeable(["sh", "-c", "echo a\necho b"])).toThrow(
+    "control character",
+  );
+  expect(() => assertTypeable(["printf", "\x03"])).toThrow("control character");
+  expect(() => assertTypeable(["echo", "x".repeat(MAX_LINE_BYTES)])).toThrow(
+    "too long",
+  );
 });
 
 test("keeps only what's between the markers, and reads the exit code", () => {
@@ -127,6 +144,17 @@ test("aborting sends Ctrl-C and resolves with 130", async () => {
 
   expect(await run).toBe(130);
   while (!received.includes("\x03")) await Bun.sleep(5);
+});
+
+test("gives up when the shell never starts the command", async () => {
+  const { url } = fakeShell(() => {});
+  await expect(
+    runExecCommand(url, "tok", ["whoami"], {
+      write: () => {},
+      startTimeoutMs: 50,
+      nonce: "n",
+    }),
+  ).rejects.toThrow("The container's shell didn't start the command.");
 });
 
 test("aborting before the socket opens leaves no session open", async () => {

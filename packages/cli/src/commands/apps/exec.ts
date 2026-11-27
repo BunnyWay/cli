@@ -15,7 +15,7 @@ import {
 } from "@/tools/apps/index.ts";
 import type { ToolContext } from "@/tools/context.ts";
 import { findLinkedAppId } from "./config.ts";
-import { runExecCommand } from "./exec-command.ts";
+import { assertTypeable, runExecCommand } from "./exec-command.ts";
 import { runExecSession } from "./exec-session.ts";
 
 /** Close codes that end a session normally; 1006 is included because exiting the shell can't be told apart from a network drop. */
@@ -278,7 +278,12 @@ export const appsExecCommand = defineToolCommand({
 
   // Checked before any API call, so a piped run fails fast instead of starting a session nobody can type into.
   preRun: async (args: ExecArgs & { output?: string }) => {
-    if (!args["--"] && args.output !== "json" && !process.stdin.isTTY) {
+    const command = args["--"];
+    if (command) {
+      assertTypeable(command);
+      return;
+    }
+    if (args.output !== "json" && !process.stdin.isTTY) {
       throw new UserError(
         "apps exec needs an interactive terminal.",
         "Run one command with `bunny apps exec -- <command>`, or pass --output json to get the session URL for another client.",

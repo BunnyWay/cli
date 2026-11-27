@@ -6,17 +6,44 @@ import { CONNECT_TIMEOUT_MS, terminate } from "./exec-session.ts";
 // A session is a shell, so a command is typed into it between printf markers; typed as `\036` escapes, they never match the shell's echo.
 
 const RS = "\x1e";
+const NONCE_BYTES = 6;
+// Shells' line editors cap a typed line (busybox: often 1024 bytes); past it the line is cut and the end marker never arrives.
+export const MAX_LINE_BYTES = 1024;
+// The start marker prints before the command runs, so silence this long means the shell never ran the line.
+const START_TIMEOUT_MS = 15_000;
 
 /** The line typed into the remote shell: start marker, the command, end marker with `$?`, then exit. */
 export function commandLine(argv: string[], nonce: string): string {
   return `printf '\\036B${nonce}\\036'; ${argv.map(shellQuoteIfNeeded).join(" ")}; printf '\\036E${nonce}:%d\\036' $?; exit\r`;
 }
 
+/** Refuse a command the remote shell can't take as one typed line, before any session is opened. */
+export function assertTypeable(argv: string[]): void {
+  // Control characters are keystrokes to a line editor: a newline submits early, Ctrl-C/Ctrl-D cancel, a tab completes.
+  const isControl = (char: string) =>
+    char.charCodeAt(0) < 0x20 || char.charCodeAt(0) === 0x7f;
+  if (argv.some((arg) => [...arg].some(isControl))) {
+    throw new UserError(
+      "The command contains a newline or another control character.",
+      "It's typed into the container's shell, which would act on them as keys. Join lines with `;`.",
+    );
+  }
+  const bytes = Buffer.byteLength(
+    commandLine(argv, "0".repeat(NONCE_BYTES * 2)),
+  );
+  if (bytes > MAX_LINE_BYTES) {
+    throw new UserError(
+      `The command is too long (${bytes} of ${MAX_LINE_BYTES} bytes once typed).`,
+      "It's typed into the container's shell, whose line limit would cut it off. Put longer scripts in a file in the image and run that.",
+    );
+  }
+}
+
 /** Pulls the command's output and exit code out of the terminal stream, which also carries the prompt and the echo. */
 export class MarkedOutput {
   private readonly begin: string;
   private readonly end: string;
-  private started = false;
+  started = false;
   private pending = "";
   exitCode: number | undefined;
 
@@ -77,7 +104,9 @@ export interface ExecCommandOptions {
   size?: { cols: number; rows: number };
   /** Aborting sends Ctrl-C to the command and closes the session. */
   signal?: AbortSignal;
+  /** Overrides for tests. */
   connectTimeoutMs?: number;
+  startTimeoutMs?: number;
   /** Overrides the random marker, for tests. */
   nonce?: string;
 }
@@ -89,7 +118,7 @@ export function runExecCommand(
   argv: string[],
   options: ExecCommandOptions,
 ): Promise<number> {
-  const nonce = options.nonce ?? randomBytes(6).toString("hex");
+  const nonce = options.nonce ?? randomBytes(NONCE_BYTES).toString("hex");
   const output = new MarkedOutput(nonce);
   const decoder = new TextDecoder();
 
@@ -98,11 +127,13 @@ export function runExecCommand(
     socket.binaryType = "arraybuffer";
     let opened = false;
     let settled = false;
+    let startTimer: ReturnType<typeof setTimeout> | undefined;
 
     const finish = (outcome: number | UserError) => {
       if (settled) return;
       settled = true;
       clearTimeout(connectTimer);
+      clearTimeout(startTimer);
       options.signal?.removeEventListener("abort", onAbort);
       // Also abandons a socket still connecting, e.g. Ctrl-C before it opened, so it can't keep the process alive.
       if (socket.readyState === WebSocket.OPEN) socket.close(1000, "done");
@@ -140,6 +171,15 @@ export function runExecCommand(
         socket.send(JSON.stringify({ type: "resize", ...options.size }));
       }
       socket.send(new TextEncoder().encode(commandLine(argv, nonce)));
+      startTimer = setTimeout(() => {
+        if (output.started) return;
+        finish(
+          new UserError(
+            "The container's shell didn't start the command.",
+            "Run it again. If it keeps happening, the container may not have a POSIX shell with printf.",
+          ),
+        );
+      }, options.startTimeoutMs ?? START_TIMEOUT_MS);
     });
 
     socket.addEventListener("message", (event) => {
