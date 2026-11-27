@@ -283,7 +283,11 @@ export const appsExecCommand = defineToolCommand({
       assertTypeable(command);
       return;
     }
-    if (args.output !== "json" && !process.stdin.isTTY) {
+    // Both ends must be a terminal: `apps exec | tee log` would otherwise write escape codes into the log.
+    if (
+      args.output !== "json" &&
+      !(process.stdin.isTTY && process.stdout.isTTY)
+    ) {
       throw new UserError(
         "apps exec needs an interactive terminal.",
         "Run one command with `bunny apps exec -- <command>`, or pass --output json to get the session URL for another client.",
